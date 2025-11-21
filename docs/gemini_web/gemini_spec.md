@@ -31,7 +31,7 @@ Prioritized user journeys for the Amelia system.
 
 User Story 1 - Flexible Profile Configuration (Priority: P1)
 
-As a user, I want to define profiles in settings.amelia.yaml that mix-and-match drivers (CLI vs. API), tools (Jira vs. GitHub), and strategies (Single vs. Competitive), so that I am not arbitrarily locked out of features just because I am in a "Work" environment.
+As a user, I want to define profiles in settings.yaml that mix-and-match drivers (CLI vs. API), tools (Jira vs. GitHub), and strategies (Single vs. Competitive), so that I am not arbitrarily locked out of features just because I am in a "Work" environment.
 
 Why this priority: This prevents technical debt where features are hardcoded to specific environments. It ensures "Work" is just a set of constraints (e.g., "Use CLI"), not a lack of capability.
 
@@ -39,7 +39,7 @@ Independent Test: Create a hybrid profile in settings and verify the system load
 
 Acceptance Scenarios:
 
-Given a settings.amelia.yaml with a custom profile hybrid_mode (Driver: CLI, Tracker: GitHub), When I run amelia start --profile hybrid_mode, Then the system initializes the ClaudeCliDriver (for coding) and GitHubTool (for issues).
+Given a settings.yaml with a custom profile hybrid_mode (Driver: CLI, Tracker: GitHub), When I run amelia start --profile hybrid_mode, Then the system initializes the ClaudeCliDriver (for coding) and GitHubTool (for issues).
 
 Given the "Work" profile, When I toggle enable_competitive_review: true in config, Then the system attempts to run the competitive review phase (possibly sequentially via CLI) rather than skipping it.
 
@@ -115,7 +115,7 @@ Requirements (mandatory)
 
 Functional Requirements
 
-FR-001: System MUST load configuration from a settings.amelia.yaml file that defines granular options: driver_type (CLI/API), tracker_type (Jira/GitHub/None), review_strategy (Single/Competitive).
+FR-001: System MUST load configuration from a settings.yaml file that defines granular options: driver_type (CLI/API), tracker_type (Jira/GitHub/None), review_strategy (Single/Competitive).
 
 FR-002: The ClaudeCliDriver MUST support the same abstract interface as LangChainDriver, ensuring that any Agent (Architect, Developer, Reviewer) can run on either driver.
 
@@ -139,7 +139,7 @@ FR-011 (Feature Parity): All major agentic capabilities (Design, Plan, Review) M
 
 Key Entities
 
-Profile: A named configuration set in settings.amelia.yaml.
+Profile: A named configuration set in settings.yaml.
 
 TaskDAG: Implementation plan graph.
 
