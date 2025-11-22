@@ -6,7 +6,7 @@
 
 **Architecture:** Profiles in `settings.yaml` instantiate drivers and trackers; LangGraph coordinates Plan → Execute → Review with human-approval gates; agents (Architect/Developer/Reviewer) use PydanticAI schemas; CLI driver provides sequential fallback with timeouts/retries, API driver enables parallelism; reviewer supports local `git diff` input.
 
-**Tech Stack:** Python, LangGraph, PydanticAI, Typer, pytest, logfire, git.
+**Tech Stack:** Python, LangGraph, PydanticAI, Typer, pytest, loguru, git.
 
 ---
 
