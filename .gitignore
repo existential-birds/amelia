@@ -126,3 +126,7 @@ site/
 # Distribution
 *.tar.gz
 *.whl
+
+# IDE/Tool config
+.codex/
+.specify/

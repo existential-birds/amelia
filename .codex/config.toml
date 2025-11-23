@@ -1,7 +1,0 @@
-model = "gpt-5.1-codex-max"
-model_reasoning_effort = "high"
-[projects."/Users/ka/github/amelia"]
-trust_level = "trusted"
-
-[notice]
-"hide_gpt-5.1-codex-max_migration_prompt" = true
