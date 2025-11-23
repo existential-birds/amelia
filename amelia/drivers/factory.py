@@ -1,4 +1,3 @@
-from typing import Union
 from amelia.drivers.base import DriverInterface
 from amelia.drivers.cli.claude import ClaudeCliDriver
 from amelia.drivers.api.openai import ApiDriver

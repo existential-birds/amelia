@@ -1,0 +1,7 @@
+active_profile: test
+profiles:
+  test:
+    name: test
+    driver: cli:claude
+    tracker: github
+    strategy: single

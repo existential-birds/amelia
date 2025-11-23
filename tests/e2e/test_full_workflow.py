@@ -1,11 +1,10 @@
 import pytest
 import yaml
-from unittest.mock import patch, AsyncMock, MagicMock
+from unittest.mock import patch, AsyncMock
 from typer.testing import CliRunner
 from amelia.main import app
 from amelia.core.state import Task, ReviewResult
 from amelia.agents.architect import TaskListResponse
-from amelia.core.types import Issue
 
 runner = CliRunner()
 
@@ -22,7 +21,7 @@ def settings_file(tmp_path):
             }
         }
     }
-    p = tmp_path / "settings.yaml"
+    p = tmp_path / "settings.amelia.yaml"
     with open(p, "w") as f:
         yaml.dump(settings, f)
     return p
@@ -65,8 +64,8 @@ def test_full_workflow(settings_file):
 
     with patch("amelia.drivers.factory.DriverFactory.get_driver", return_value=mock_driver):
          with runner.isolated_filesystem(temp_dir=settings_file.parent):
-             # Ensure settings.yaml is in the CWD
-             with open("settings.yaml", "w") as f:
+             # Ensure settings.amelia.yaml is in the CWD
+             with open("settings.amelia.yaml", "w") as f:
                 with open(settings_file) as src:
                     f.write(src.read())
              

@@ -23,7 +23,7 @@ class ApiDriver(DriverInterface):
         # pydantic-ai Agent instantiation
         # We create a new agent for each call or reuse? 
         # Reusing might be better but for now per-call is safer for state isolation.
-        agent = Agent(self.model_name, result_type=schema if schema else str)
+        agent = Agent(self.model_name, output_type=schema if schema else str)
         
         # Convert AgentMessage to prompt string or pydantic-ai messages
         # pydantic-ai 'run' takes a string prompt usually, or sequence of messages?
@@ -39,7 +39,7 @@ class ApiDriver(DriverInterface):
         
         try:
             result = await agent.run(full_prompt)
-            return result.data
+            return result.output
         except Exception as e:
             raise RuntimeError(f"ApiDriver generation failed: {e}")
 

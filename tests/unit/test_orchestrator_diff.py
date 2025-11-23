@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from amelia.core.orchestrator import get_code_changes_for_review
 from amelia.core.state import ExecutionState
 

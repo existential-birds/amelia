@@ -13,7 +13,7 @@ Amelia is a local agentic coding system designed to orchestrate software develop
 
 **Language/Version**: Python 3.12+
 **Primary Dependencies**: LangGraph (>=1.0.3), PydanticAI (>=1.20.0), Pydantic (>=2.12.4), Rich (>=14.1.0), Typer (>=0.15.1), PyYAML (>=6.0.2), Loguru (>=0.7.2), HTTPX (>=0.27.2)
-**Storage**: Local File System (Configuration `settings.yaml`, Logs), Git (for `diff` reading)
+**Storage**: Local File System (Configuration `settings.amelia.yaml`, Logs), Git (for `diff` reading)
 **Testing**: pytest (>=8.3.4), pytest-asyncio (>=0.24.0)
 **Target Platform**: CLI (macOS, likely adaptable to Linux)
 **Project Type**: Python CLI Application

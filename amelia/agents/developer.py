@@ -29,7 +29,6 @@ class Developer:
             
             # Basic parsing for the test: "write file: <path> with <content>"
             # This is fragile but sufficient for the current string-based protocol without LLM function calling
-            content_part = task.description
             if " with " in task.description:
                 parts = task.description.split(" with ", 1)
                 path_part = parts[0]

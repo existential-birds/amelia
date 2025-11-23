@@ -1,5 +1,4 @@
 import pytest
-import os
 from amelia.drivers.api.openai import ApiDriver
 
 @pytest.mark.asyncio

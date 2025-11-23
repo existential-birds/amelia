@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 from amelia.agents.developer import Developer
 from amelia.core.state import Task
 

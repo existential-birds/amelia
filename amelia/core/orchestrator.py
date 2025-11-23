@@ -1,6 +1,6 @@
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
-from amelia.core.state import ExecutionState, AgentMessage, TaskStatus, Task, TaskDAG
+from amelia.core.state import ExecutionState, AgentMessage, Task, TaskDAG
 from amelia.agents.architect import Architect
 from amelia.agents.developer import Developer
 from amelia.agents.reviewer import Reviewer
@@ -14,7 +14,12 @@ async def call_architect_node(state: ExecutionState) -> ExecutionState:
     """
     Orchestrator node for the Architect agent to generate a plan.
     """
-    print(f"Orchestrator: Calling Architect for issue {state.issue.id}")
+    issue_id_for_log = state.issue.id if state.issue else "No Issue Provided"
+    print(f"Orchestrator: Calling Architect for issue {issue_id_for_log}")
+    
+    if state.issue is None:
+        raise ValueError("Cannot call Architect: no issue provided in state.")
+        
     driver = DriverFactory.get_driver(state.profile.driver)
     architect = Architect(driver)
     plan = await architect.plan(state.issue)
@@ -36,7 +41,7 @@ async def human_approval_node(state: ExecutionState) -> ExecutionState:
     """
     typer.secho("\n--- HUMAN APPROVAL REQUIRED ---", fg=typer.colors.BRIGHT_YELLOW)
     typer.echo("Review the proposed plan before proceeding. State snapshot (for debug):")
-    typer.echo(f"Plan for issue {state.issue.id}:")
+    typer.echo(f"Plan for issue {state.issue.id if state.issue else 'N/A'}:")
     if state.plan:
         for task in state.plan.tasks:
             typer.echo(f"  - [{task.id}] {task.description} (Dependencies: {', '.join(task.dependencies)})")
@@ -82,7 +87,7 @@ async def call_reviewer_node(state: ExecutionState) -> ExecutionState:
     """
     Orchestrator node for the Reviewer agent to review code changes.
     """
-    print(f"Orchestrator: Calling Reviewer for issue {state.issue.id}")
+    print(f"Orchestrator: Calling Reviewer for issue {state.issue.id if state.issue else 'N/A'}")
     driver = DriverFactory.get_driver(state.profile.driver)
     reviewer = Reviewer(driver)
 
@@ -123,7 +128,7 @@ async def call_developer_node(state: ExecutionState) -> ExecutionState:
     """
     Orchestrator node for the Developer agent to execute tasks, potentially in parallel.
     """
-    print(f"Orchestrator: Calling Developer to execute tasks.")
+    print("Orchestrator: Calling Developer to execute tasks.")
     
     if not state.plan or not state.plan.tasks:
         print("Orchestrator: No plan or tasks to execute.")
@@ -161,7 +166,8 @@ async def call_developer_node(state: ExecutionState) -> ExecutionState:
             updated_messages.append(AgentMessage(role="assistant", content=f"Task {executed_task.id} failed. Error: {result}"))
         else:
             executed_task.status = "completed"
-            updated_messages.append(AgentMessage(role="assistant", content=f"Task {executed_task.id} completed. Output: {result.get('output', 'No output')}"))
+            output_content = result.get('output', 'No output') if isinstance(result, dict) else str(result)
+            updated_messages.append(AgentMessage(role="assistant", content=f"Task {executed_task.id} completed. Output: {output_content}"))
             
     # Update the overall plan in the state to reflect completed/failed tasks
     updated_plan = TaskDAG(tasks=state.plan.tasks, original_issue=state.plan.original_issue)

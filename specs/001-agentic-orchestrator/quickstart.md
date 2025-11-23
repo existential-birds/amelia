@@ -3,7 +3,7 @@
 ## Prerequisites
 
 - Python 3.12+
-- `uv` ([install](https://docs.astral.sh/uv/getting-started/installation/))
+- `uv` (recommended) or `pip`
 - `git`
 - **CLI Tools** (for Work Profile):
     - `claude` (Anthropic CLI): `npm install -g @anthropic-ai/claude-code`
@@ -18,6 +18,8 @@ cd amelia
 
 # Install dependencies
 uv sync
+# OR
+pip install -e .
 ```
 
 ## Configuration
@@ -44,17 +46,17 @@ profiles:
 ### 1. Start the Orchestrator
 Run the interactive loop:
 ```bash
-uv run amelia start
+amelia start
 ```
 
 ### 2. Run a Specific Phase
 Execute only the planning phase for an issue:
 ```bash
-uv run amelia plan --issue PROJ-123
+amelia plan --issue PROJ-123
 ```
 
 ### 3. Local Review
 Review uncommitted changes using the "Reviewer" agent:
 ```bash
-uv run amelia review --local
+amelia review --local
 ```

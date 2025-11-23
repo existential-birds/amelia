@@ -40,12 +40,12 @@
 - [x] T056 [P] [Foundational] Create `tests/unit/test_driver_factory.py` verifying `DriverFactory` returns the correct concrete driver (`ClaudeCliDriver`, `ApiDriver`) for keys `cli:claude`, `api:openai` and raises clear errors for unknown types (FR-001, FR-002, SC-001).
 - [x] T057 [P] [Foundational] Create `tests/unit/test_project_manager.py` to verify `ProjectManager` reads issues via `jira`/`github`/`noop` trackers, switches based on `Profile`, and passes normalized issues to Architect/Orchestrator (FR-006, FR-006b, SC-001).
 - [x] T006 [P] Define `Profile` and `Settings` Pydantic models in `amelia/core/types.py`
-- [x] T007 [P] Implement `load_settings` in `amelia/config.py` (reads `settings.yaml`)
+- [x] T007 [P] Implement `load_settings` in `amelia/config.py` (reads `settings.amelia.yaml`)
 - [x] T008 Define `DriverInterface` protocol in `amelia/drivers/base.py`
 - [x] T009 Define `AgentMessage`, `Task`, `TaskDAG`, `ExecutionState` in `amelia/core/state.py`
 - [x] T010 Create `amelia/core/orchestrator.py` stub for LangGraph state machine
 - [x] T011 Implement basic logging configuration using `loguru` in `amelia/main.py`
-- [x] T061 [P] [Foundational] Create `tests/unit/test_config_validation.py` to verify settings.yaml schema validation (missing required fields, invalid types, unknown profiles), assert defaults are applied for optional fields, and error messages are clear (FR-001).
+- [x] T061 [P] [Foundational] Create `tests/unit/test_config_validation.py` to verify settings.amelia.yaml schema validation (missing required fields, invalid types, unknown profiles), assert defaults are applied for optional fields, and error messages are clear (FR-001).
 - [x] T062 [P] [Foundational] Create `tests/integration/test_pydantic_errors.py` to verify PydanticAI validation failures (invalid agent response schemas, missing required fields, type mismatches) are caught, logged with context, and don't crash the orchestrator (FR-003).
 - [x] T064 [P] [Foundational] Create `tests/unit/test_profile_constraints.py` to verify Work profile rejects direct API driver usage (Constitution Operational Constraint).
 - [x] T065 [Foundational] Implement validation logic in `amelia/config.py` or `DriverFactory` to enforce Work profile constraints (CLI-only).
@@ -60,7 +60,7 @@
 
 ## Phase 3: User Story 1 - Flexible Profile Configuration (Priority: P1) 🎯 MVP
 
-**Goal**: Allow defining and loading profiles (CLI/API, Tools) via `settings.yaml`
+**Goal**: Allow defining and loading profiles (CLI/API, Tools) via `settings.amelia.yaml`
 
 **Independent Test**: Verify `amelia start --profile hybrid` loads correct configuration
 
@@ -77,7 +77,7 @@
 - [x] T015 [P] [US1] Implement base `CliDriver` abstraction in `amelia/drivers/cli/base.py` (shared logic for CLI interactions)
 - [x] T016 [P] [US1] Implement stub `ApiDriver` in `amelia/drivers/api/openai.py` (to support factory loading tests)
 - [x] T017 [US1] Connect CLI `start` command to `load_settings` and `DriverFactory`
-- [x] T042 [P] [US1] Add tracker abstraction and drivers in `amelia/trackers/{base,github,jira,noop}.py`; wire `settings.yaml` profile selection (mapping 'none' to 'noop') and add `tests/unit/test_trackers.py` to verify swapping (ensure Jira tracker wraps `acli`) (FR-006, US1).
+- [x] T042 [P] [US1] Add tracker abstraction and drivers in `amelia/trackers/{base,github,jira,noop}.py`; wire `settings.amelia.yaml` profile selection (mapping 'none' to 'noop') and add `tests/unit/test_trackers.py` to verify swapping (ensure Jira tracker wraps `acli`) (FR-006, US1).
 
 **Checkpoint**: Application can start and load different driver stubs based on config
 
@@ -92,7 +92,7 @@
 ### Tests for User Story 2 ⚠️
 
 - [x] T018 [P] [US2] Create `tests/integration/test_orchestrator.py` verifying full loop execution through LangGraph (Plan -> Execute) with planner coverage (FR-004, FR-005)
-- [x] T018b [P] [US2] Add multi-profile planning coverage driven by `settings.yaml` ensuring task planning works under CLI and API profiles (`tests/integration/test_orchestrator.py::test_planning_parity_profiles`) (FR-001, FR-002).
+- [x] T018b [P] [US2] Add multi-profile planning coverage driven by `settings.amelia.yaml` ensuring task planning works under CLI and API profiles (`tests/integration/test_orchestrator.py::test_planning_parity_profiles`) (FR-001, FR-002).
 - [x] T019 [P] [US2] Create `tests/unit/test_agents.py` for Architect and Developer prompts
 - [x] T020c [P] [US2] Create `tests/unit/test_task_dag.py` for DAG validation (cycle detection, dependency resolution, invalid graph handling) (FR-005)
 - [x] T024c [P] [US2] Create `tests/unit/test_orchestrator_memory.py` to verify state persistence across interruptions and restarts (FR-004)

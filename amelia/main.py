@@ -8,7 +8,7 @@ from amelia.config import load_settings, validate_profile
 from amelia.core.types import Profile, Settings, Issue
 from amelia.core.orchestrator import create_orchestrator_graph, call_reviewer_node
 from amelia.agents.project_manager import create_project_manager
-from amelia.core.state import ExecutionState, AgentMessage
+from amelia.core.state import ExecutionState
 from amelia.agents.architect import Architect
 from amelia.drivers.factory import DriverFactory
 from langgraph.checkpoint.memory import MemorySaver
@@ -54,7 +54,7 @@ def start(
         None,
         "--profile",
         "-p",
-        help="Specify the profile to use from settings.yaml."
+        help="Specify the profile to use from settings.amelia.yaml."
     ),
 ):
     """
@@ -89,8 +89,7 @@ def start(
     # Run the orchestrator
     try:
         try:
-            # Check if an event loop is already running (e.g., during tests)
-            loop = asyncio.get_running_loop()
+            asyncio.get_running_loop()
         except RuntimeError:
             # No running event loop, safe to use asyncio.run
             pass
@@ -115,7 +114,7 @@ def plan_only_command(
     ctx: typer.Context,
     issue_id: str = typer.Argument(..., help="The ID of the issue to generate a plan for."),
     profile_name: Optional[str] = typer.Option(
-        None, "--profile", "-p", help="Specify the profile to use from settings.yaml."
+        None, "--profile", "-p", help="Specify the profile to use from settings.amelia.yaml."
     ),
 ):
     """
@@ -147,6 +146,34 @@ def plan_only_command(
         if plan and plan.tasks:
             for task in plan.tasks:
                 typer.echo(f"  - [{task.id}] {task.description} (Dependencies: {', '.join(task.dependencies)})")
+            
+            # Persist plan to file
+            try:
+                output_path_str = active_profile.plan_output_template.format(issue_id=issue_id)
+                from pathlib import Path
+                output_path = Path(output_path_str)
+                output_path.parent.mkdir(parents=True, exist_ok=True)
+                
+                md_content = f"# Plan for Issue {issue.id}\n\n"
+                md_content += f"**Title:** {issue.title}\n"
+                md_content += f"**Description:** {issue.description}\n\n"
+                md_content += "## Tasks\n\n"
+                
+                for task in plan.tasks:
+                    md_content += f"### [{task.id}] {task.description}\n"
+                    if task.dependencies:
+                        md_content += f"- **Dependencies:** {', '.join(task.dependencies)}\n"
+                    if task.files_changed:
+                         md_content += f"- **Files Changed:** {', '.join(task.files_changed)}\n"
+                    md_content += "\n"
+                
+                with open(output_path, "w") as f:
+                    f.write(md_content)
+                    
+                typer.echo(f"\nPlan saved to: {output_path}")
+
+            except Exception as e:
+                typer.echo(f"\nError saving plan to file: {e}", err=True)
         else:
             typer.echo("No plan generated.")
 
@@ -165,7 +192,7 @@ def review(
         None,
         "--profile",
         "-p",
-        help="Specify the profile to use from settings.yaml."
+        help="Specify the profile to use from settings.amelia.yaml."
     ),
 ):
     """
