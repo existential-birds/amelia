@@ -1,19 +1,23 @@
 import pytest
 from amelia.drivers.factory import DriverFactory
-# Note: These imports will fail until implemented. 
-# We mock them or rely on the fact that we will implement them next.
-# For TDD, the test exists but fails.
 from amelia.drivers.cli.claude import ClaudeCliDriver
 from amelia.drivers.api.openai import ApiDriver
 
-def test_driver_factory_create_cli():
-    driver = DriverFactory.get_driver("cli:claude")
-    assert isinstance(driver, ClaudeCliDriver)
 
-def test_driver_factory_create_api():
-    driver = DriverFactory.get_driver("api:openai")
-    assert isinstance(driver, ApiDriver)
+@pytest.mark.parametrize("driver_spec,expected_type", [
+    ("cli:claude", ClaudeCliDriver),
+    ("api:openai", ApiDriver),
+    # Aliases
+    ("cli", ClaudeCliDriver),
+    ("api", ApiDriver),
+])
+def test_driver_factory_create(driver_spec, expected_type):
+    """Test that DriverFactory creates the correct driver type for various specs."""
+    driver = DriverFactory.get_driver(driver_spec)
+    assert isinstance(driver, expected_type)
+
 
 def test_driver_factory_unknown():
+    """Test that DriverFactory raises ValueError for unknown driver specs."""
     with pytest.raises(ValueError):
         DriverFactory.get_driver("foo:bar")
