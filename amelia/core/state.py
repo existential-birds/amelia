@@ -44,11 +44,18 @@ class TaskDAG(BaseModel):
 
     @field_validator("tasks")
     @classmethod
-    def validate_no_cycles(cls, tasks: list[Task]) -> list[Task]:
-        """Detect cyclic dependencies using DFS."""
+    def validate_task_graph(cls, tasks: list[Task]) -> list[Task]:
+        """Validate task graph: check dependencies exist and no cycles."""
         task_ids = {t.id for t in tasks}
-        adjacency = {t.id: t.dependencies for t in tasks}
 
+        # Check all dependencies exist BEFORE checking for cycles
+        for task in tasks:
+            for dep in task.dependencies:
+                if dep not in task_ids:
+                    raise ValueError(f"Task '{dep}' not found")
+
+        # Check for cycles using DFS
+        adjacency = {t.id: t.dependencies for t in tasks}
         WHITE, GRAY, BLACK = 0, 1, 2
         color = {tid: WHITE for tid in task_ids}
 
@@ -56,8 +63,6 @@ class TaskDAG(BaseModel):
             """Returns True if cycle detected."""
             color[node] = GRAY
             for neighbor in adjacency.get(node, []):
-                if neighbor not in task_ids:
-                    continue  # Invalid dep handled elsewhere
                 if color[neighbor] == GRAY:
                     return True  # Back edge = cycle
                 if color[neighbor] == WHITE and dfs(neighbor):
@@ -68,6 +73,7 @@ class TaskDAG(BaseModel):
         for tid in task_ids:
             if color[tid] == WHITE and dfs(tid):
                 raise ValueError("Cyclic dependency detected")
+
         return tasks
 
 class ReviewResult(BaseModel):

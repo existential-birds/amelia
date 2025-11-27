@@ -40,7 +40,6 @@ def test_task_dag_dependency_resolution():
     # assert set(t.id for t in ready_tasks) == {"1"}
     pass
 
-@pytest.mark.skip(reason="Invalid graph handling for TaskDAG is not yet implemented")
 def test_task_dag_invalid_graph_handling():
     # Task with a dependency that does not exist in the DAG
     task1 = Task(id="1", description="Task 1", dependencies=["non-existent"])
