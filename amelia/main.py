@@ -118,6 +118,9 @@ def plan_only_command(
     profile_name: str | None = typer.Option(
         None, "--profile", "-p", help="Specify the profile to use from settings.amelia.yaml."
     ),
+    design_path: str | None = typer.Option(
+        None, "--design", "-d", help="Path to design markdown file from brainstorming."
+    ),
 ) -> None:
     """
     Generates a plan for the specified issue using the Architect agent without execution.
@@ -141,41 +144,28 @@ def plan_only_command(
             typer.echo(f"Error fetching issue: {e}", err=True)
             raise typer.Exit(code=1) from None
 
+        # Parse design if provided
+        design = None
+        if design_path:
+            from amelia.utils.design_parser import parse_design
+            try:
+                driver = DriverFactory.get_driver(active_profile.driver)
+                design = await parse_design(design_path, driver)
+                typer.echo(f"Loaded design from: {design_path}")
+            except FileNotFoundError:
+                typer.echo(f"Error: Design file not found: {design_path}", err=True)
+                raise typer.Exit(code=1) from None
+
         architect = Architect(DriverFactory.get_driver(active_profile.driver))
-        plan = await architect.plan(issue)
+        result = await architect.plan(issue, design=design, output_dir=active_profile.plan_output_dir)
         
         typer.echo("\n--- GENERATED PLAN ---")
-        if plan and plan.tasks:
-            for task in plan.tasks:
-                typer.echo(f"  - [{task.id}] {task.description} (Dependencies: {', '.join(task.dependencies)})")
-            
-            # Persist plan to file
-            try:
-                output_path_str = active_profile.plan_output_template.format(issue_id=issue_id)
-                from pathlib import Path
-                output_path = Path(output_path_str)
-                output_path.parent.mkdir(parents=True, exist_ok=True)
-                
-                md_content = f"# Plan for Issue {issue.id}\n\n"
-                md_content += f"**Title:** {issue.title}\n"
-                md_content += f"**Description:** {issue.description}\n\n"
-                md_content += "## Tasks\n\n"
-                
-                for task in plan.tasks:
-                    md_content += f"### [{task.id}] {task.description}\n"
-                    if task.dependencies:
-                        md_content += f"- **Dependencies:** {', '.join(task.dependencies)}\n"
-                    if task.files:
-                         md_content += f"- **Files:** {', '.join([f'{f.operation}:{f.path}' for f in task.files])}\n"
-                    md_content += "\n"
-                
-                with open(output_path, "w") as f:
-                    f.write(md_content)
-                    
-                typer.echo(f"\nPlan saved to: {output_path}")
+        if result.task_dag and result.task_dag.tasks:
+            for task in result.task_dag.tasks:
+                deps = f" (Dependencies: {', '.join(task.dependencies)})" if task.dependencies else ""
+                typer.echo(f"  - [{task.id}] {task.description}{deps}")
 
-            except Exception as e:
-                typer.echo(f"\nError saving plan to file: {e}", err=True)
+            typer.echo(f"\nPlan saved to: {result.markdown_path}")
         else:
             typer.echo("No plan generated.")
 
