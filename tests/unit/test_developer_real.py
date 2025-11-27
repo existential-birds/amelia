@@ -15,8 +15,8 @@ async def test_developer_executes_tool_not_simulation():
     # Using a description that triggers the existing logic path but we want to ensure it calls the driver
     task = Task(id="1", description="write file: test.py with print('hi')", status="pending", dependencies=[])
     
-    result = await dev.execute_task(task)
-    
+    await dev.execute_task(task)
+
     # Verify execute_tool was CALLED, not just printed/simulated
     # The current code has 'write file:' logic but it returns "File write simulated"
     # We want it to call execute_tool("write_file", ...)

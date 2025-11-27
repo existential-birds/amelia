@@ -29,7 +29,7 @@ async def test_cli_driver_execute_tool_timeout_retry():
         
         driver = ClaudeCliDriver(timeout=1, max_retries=1)
         
-        result = await driver.execute_tool("run_shell_command", command="echo test")
+        await driver.execute_tool("run_shell_command", command="echo test")
 
         # Verify retry happened (2 calls = initial + 1 retry)
         assert mock_run.call_count == 2
@@ -61,7 +61,7 @@ async def test_cli_driver_generate_retry():
         "Generated Content"
     ])
     
-    result = await driver.generate([AgentMessage(role="user", content="hi")])
+    await driver.generate([AgentMessage(role="user", content="hi")])
 
     # Verify retry happened (2 calls = initial + 1 retry)
     assert driver._generate_impl.call_count == 2
