@@ -1,5 +1,7 @@
+from unittest.mock import AsyncMock
+from unittest.mock import MagicMock
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock
 
 from amelia.core.types import Design
 from amelia.utils.design_parser import parse_design

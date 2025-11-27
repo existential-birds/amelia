@@ -165,8 +165,8 @@ def plan_only_command(
                     md_content += f"### [{task.id}] {task.description}\n"
                     if task.dependencies:
                         md_content += f"- **Dependencies:** {', '.join(task.dependencies)}\n"
-                    if task.files_changed:
-                         md_content += f"- **Files Changed:** {', '.join(task.files_changed)}\n"
+                    if task.files:
+                         md_content += f"- **Files:** {', '.join([f'{f.operation}:{f.path}' for f in task.files])}\n"
                     md_content += "\n"
                 
                 with open(output_path, "w") as f:

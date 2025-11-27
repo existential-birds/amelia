@@ -27,7 +27,7 @@ async def test_task_execution_with_cli_driver_commands():
     
     profile_cli = Profile(name="work", driver="cli:claude")
     # Assume a task that implies a shell command, e.g., 'run_shell_command' tool
-    task_shell = Task(id="T1", description="Execute 'ls -la'", files_changed=[])
+    task_shell = Task(id="T1", description="Execute 'ls -la'")
     dag = TaskDAG(tasks=[task_shell], original_issue="ISSUE-SHELL")
     
     _initial_state = ExecutionState(profile=profile_cli, plan=dag)
@@ -48,7 +48,7 @@ async def test_task_execution_with_api_driver_calls():
     
     profile_api = Profile(name="home", driver="api:openai")
     # Assume a task that implies an API call (e.g., generate code)
-    task_api = Task(id="T2", description="Generate Python function", files_changed=[])
+    task_api = Task(id="T2", description="Generate Python function")
     dag = TaskDAG(tasks=[task_api], original_issue="ISSUE-API")
     
     _initial_state = ExecutionState(profile=profile_api, plan=dag)
