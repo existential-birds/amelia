@@ -1,10 +1,22 @@
 from typing import Any
+from typing import Literal
 
 from loguru import logger
+from pydantic import BaseModel
 
 from amelia.core.state import AgentMessage
 from amelia.core.state import Task
 from amelia.drivers.base import DriverInterface
+
+
+DeveloperStatus = Literal["completed", "failed", "in_progress"]
+
+
+class DeveloperResponse(BaseModel):
+    """Schema for Developer agent's task execution output."""
+    status: DeveloperStatus
+    output: str
+    error: str | None = None
 
 
 class Developer:

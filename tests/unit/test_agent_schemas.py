@@ -66,10 +66,33 @@ def test_reviewer_response_schema_invalid_severity():
     with pytest.raises(ValidationError):
         ReviewResponse(**invalid_data)
 
-@pytest.mark.skip(reason="Developer agent's output schema not yet defined.")
 def test_developer_output_schema_validation():
     """
     Tests validation for the Developer agent's output schema.
     """
-    pass
+    from amelia.agents.developer import DeveloperResponse
+
+    valid_data = {
+        "status": "completed",
+        "output": "Task executed successfully",
+        "error": None
+    }
+    response = DeveloperResponse(**valid_data)
+    assert response.status == "completed"
+    assert response.output == "Task executed successfully"
+    assert response.error is None
+
+    # Test failed status
+    failed_data = {
+        "status": "failed",
+        "output": "",
+        "error": "Command returned non-zero exit code"
+    }
+    response = DeveloperResponse(**failed_data)
+    assert response.status == "failed"
+    assert response.error == "Command returned non-zero exit code"
+
+    # Test invalid status
+    with pytest.raises(ValidationError):
+        DeveloperResponse(status="invalid", output="test")
 
