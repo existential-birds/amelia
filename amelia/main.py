@@ -1,33 +1,39 @@
-import typer
-import sys
-from loguru import logger
 import asyncio
-from typing import Optional
+import contextlib
+import sys
 
-from amelia.config import load_settings, validate_profile
-from amelia.core.types import Profile, Settings, Issue
-from amelia.core.orchestrator import create_orchestrator_graph, call_reviewer_node
-from amelia.agents.project_manager import create_project_manager
-from amelia.core.state import ExecutionState
-from amelia.agents.architect import Architect
-from amelia.drivers.factory import DriverFactory
+import typer
 from langgraph.checkpoint.memory import MemorySaver
+from loguru import logger
+
+from amelia.agents.architect import Architect
+from amelia.agents.project_manager import create_project_manager
+from amelia.config import load_settings
+from amelia.config import validate_profile
+from amelia.core.orchestrator import call_reviewer_node
+from amelia.core.orchestrator import create_orchestrator_graph
+from amelia.core.state import ExecutionState
+from amelia.core.types import Issue
+from amelia.core.types import Profile
+from amelia.core.types import Settings
+from amelia.drivers.factory import DriverFactory
 from amelia.tools.git import get_git_diff
+
 
 app = typer.Typer(help="Amelia Agentic Orchestrator CLI")
 
-def configure_logging():
+def configure_logging() -> None:
     logger.remove()
     logger.add(sys.stderr, level="INFO")
 
 @app.callback()
-def main_callback():
+def main_callback() -> None:
     """
     Amelia: A local agentic coding system.
     """
     configure_logging()
 
-def _get_active_profile(settings: Settings, profile_name: Optional[str]) -> Profile:
+def _get_active_profile(settings: Settings, profile_name: str | None) -> Profile:
     if profile_name:
         if profile_name not in settings.profiles:
             typer.echo(f"Error: Profile '{profile_name}' not found in settings.", err=True)
@@ -41,22 +47,22 @@ def _safe_load_settings() -> Settings:
         return load_settings()
     except FileNotFoundError as e:
         typer.echo(f"Error: {e}", err=True)
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from None
     except Exception as e:
         typer.echo(f"Error loading settings: {e}", err=True)
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from None
 
 @app.command()
 def start(
     ctx: typer.Context,
     issue_id: str = typer.Argument(..., help="The ID of the issue to work on (e.g., PROJ-123)."),
-    profile_name: Optional[str] = typer.Option(
+    profile_name: str | None = typer.Option(
         None,
         "--profile",
         "-p",
         help="Specify the profile to use from settings.amelia.yaml."
     ),
-):
+) -> None:
     """
     Starts the Amelia orchestrator with the specified or default profile.
     """
@@ -67,7 +73,7 @@ def start(
         validate_profile(active_profile)
     except ValueError as e:
         typer.echo(f"Profile validation failed: {e}", err=True)
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from None
 
     typer.echo(f"Starting Amelia with profile: {active_profile.name} (Driver: {active_profile.driver}, Tracker: {active_profile.tracker})")
 
@@ -81,46 +87,42 @@ def start(
         issue = project_manager.get_issue(issue_id)
     except ValueError as e:
         typer.echo(f"Error fetching issue: {e}", err=True)
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from None
 
     # Prepare initial state
     initial_state = ExecutionState(profile=active_profile, issue=issue)
     
     # Run the orchestrator
     try:
-        try:
+        with contextlib.suppress(RuntimeError):
             asyncio.get_running_loop()
-        except RuntimeError:
             # No running event loop, safe to use asyncio.run
-            pass
-            
-        try:
+
+        with contextlib.suppress(RuntimeError):
             asyncio.get_running_loop()
-        except RuntimeError:
-            pass
 
         asyncio.run(app_graph.ainvoke(initial_state))
     except RuntimeError as e:
         if "asyncio.run() cannot be called from a running event loop" in str(e):
             raise e
         typer.echo(f"An unexpected error occurred during orchestration: {e}", err=True)
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from None
     except Exception as e:
         typer.echo(f"An unexpected error occurred during orchestration: {e}", err=True)
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from None
     
 @app.command(name="plan-only")
 def plan_only_command(
     ctx: typer.Context,
     issue_id: str = typer.Argument(..., help="The ID of the issue to generate a plan for."),
-    profile_name: Optional[str] = typer.Option(
+    profile_name: str | None = typer.Option(
         None, "--profile", "-p", help="Specify the profile to use from settings.amelia.yaml."
     ),
-):
+) -> None:
     """
     Generates a plan for the specified issue using the Architect agent without execution.
     """
-    async def _run():
+    async def _run() -> None:
         settings = _safe_load_settings()
         active_profile = _get_active_profile(settings, profile_name)
         
@@ -128,7 +130,7 @@ def plan_only_command(
             validate_profile(active_profile)
         except ValueError as e:
             typer.echo(f"Profile validation failed: {e}", err=True)
-            raise typer.Exit(code=1)
+            raise typer.Exit(code=1) from None
 
         typer.echo(f"Generating plan for issue {issue_id} with profile: {active_profile.name}")
 
@@ -137,7 +139,7 @@ def plan_only_command(
             issue = project_manager.get_issue(issue_id)
         except ValueError as e:
             typer.echo(f"Error fetching issue: {e}", err=True)
-            raise typer.Exit(code=1)
+            raise typer.Exit(code=1) from None
 
         architect = Architect(DriverFactory.get_driver(active_profile.driver))
         plan = await architect.plan(issue)
@@ -188,17 +190,17 @@ def review(
         "-l",
         help="Review local uncommitted changes (git diff)."
     ),
-    profile_name: Optional[str] = typer.Option(
+    profile_name: str | None = typer.Option(
         None,
         "--profile",
         "-p",
         help="Specify the profile to use from settings.amelia.yaml."
     ),
-):
+) -> None:
     """
     Triggers a review process for the current project.
     """
-    async def _run():
+    async def _run() -> None:
         typer.echo("Starting Amelia Review process...")
         
         settings = _safe_load_settings()
@@ -215,7 +217,7 @@ def review(
             validate_profile(active_profile)
         except ValueError as e:
             typer.echo(f"Profile validation failed: {e}", err=True)
-            raise typer.Exit(code=1)
+            raise typer.Exit(code=1) from None
 
         if local:
             typer.echo("Reviewing local uncommitted changes...")
@@ -252,7 +254,7 @@ def review(
 
             except RuntimeError as e:
                 typer.echo(f"Error getting local changes: {e}", err=True)
-                raise typer.Exit(code=1)
+                raise typer.Exit(code=1) from None
         else:
             typer.echo("Please specify '--local' to review local changes or an issue ID for an orchestrator review (not yet implemented).", err=True)
             raise typer.Exit(code=1)

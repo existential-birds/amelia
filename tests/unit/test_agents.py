@@ -1,5 +1,6 @@
 import pytest
 
+
 @pytest.mark.skip(reason="Architect agent not yet implemented")
 def test_architect_generates_plan():
     """

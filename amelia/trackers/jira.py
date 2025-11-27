@@ -1,7 +1,10 @@
-from amelia.trackers.base import BaseTracker
-from amelia.core.types import Issue
-import httpx
 import os
+
+import httpx
+
+from amelia.core.types import Issue
+from amelia.trackers.base import BaseTracker
+
 
 class JiraTracker(BaseTracker):
     def get_issue(self, issue_id: str) -> Issue:
@@ -37,4 +40,4 @@ class JiraTracker(BaseTracker):
              # If we are running tests without mocks, this might fail.
              # But with mocks it should pass.
              # If it fails in production, we re-raise or handle.
-             raise ValueError(f"Failed to fetch issue {issue_id} from Jira: {e}")
+             raise ValueError(f"Failed to fetch issue {issue_id} from Jira: {e}") from e

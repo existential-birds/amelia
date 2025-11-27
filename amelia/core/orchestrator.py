@@ -1,13 +1,21 @@
-from langgraph.graph import StateGraph, END
+import asyncio
+from typing import Any
+
+import typer
 from langgraph.checkpoint.memory import MemorySaver
-from amelia.core.state import ExecutionState, AgentMessage, Task, TaskDAG
+from langgraph.graph import END
+from langgraph.graph import StateGraph
+from loguru import logger
+
 from amelia.agents.architect import Architect
 from amelia.agents.developer import Developer
 from amelia.agents.reviewer import Reviewer
+from amelia.core.state import AgentMessage
+from amelia.core.state import ExecutionState
+from amelia.core.state import Task
+from amelia.core.state import TaskDAG
 from amelia.drivers.factory import DriverFactory
-from typing import Optional, List
-import asyncio
-import typer
+
 
 # Define nodes for the graph
 async def call_architect_node(state: ExecutionState) -> ExecutionState:
@@ -15,7 +23,7 @@ async def call_architect_node(state: ExecutionState) -> ExecutionState:
     Orchestrator node for the Architect agent to generate a plan.
     """
     issue_id_for_log = state.issue.id if state.issue else "No Issue Provided"
-    print(f"Orchestrator: Calling Architect for issue {issue_id_for_log}")
+    logger.info(f"Orchestrator: Calling Architect for issue {issue_id_for_log}")
     
     if state.issue is None:
         raise ValueError("Cannot call Architect: no issue provided in state.")
@@ -87,7 +95,7 @@ async def call_reviewer_node(state: ExecutionState) -> ExecutionState:
     """
     Orchestrator node for the Reviewer agent to review code changes.
     """
-    print(f"Orchestrator: Calling Reviewer for issue {state.issue.id if state.issue else 'N/A'}")
+    logger.info(f"Orchestrator: Calling Reviewer for issue {state.issue.id if state.issue else 'N/A'}")
     driver = DriverFactory.get_driver(state.profile.driver)
     reviewer = Reviewer(driver)
 
@@ -95,7 +103,7 @@ async def call_reviewer_node(state: ExecutionState) -> ExecutionState:
     review_result = await reviewer.review(state, code_changes)
 
     review_msg = f"Reviewer completed review: {review_result.severity}, Approved: {review_result.approved}."
-    print(review_msg)
+    logger.info(review_msg)
     messages = state.messages + [AgentMessage(role="assistant", content=review_msg)]
     
     # Update state with review results
@@ -110,7 +118,7 @@ async def call_reviewer_node(state: ExecutionState) -> ExecutionState:
         review_results=review_results
     )
 
-def get_ready_tasks(plan: TaskDAG, current_tasks: List[Task]) -> List[Task]:
+def get_ready_tasks(plan: TaskDAG, current_tasks: list[Task]) -> list[Task]:
     """
     Identifies tasks that are pending and have all their dependencies met.
     """
@@ -128,10 +136,10 @@ async def call_developer_node(state: ExecutionState) -> ExecutionState:
     """
     Orchestrator node for the Developer agent to execute tasks, potentially in parallel.
     """
-    print("Orchestrator: Calling Developer to execute tasks.")
-    
+    logger.info("Orchestrator: Calling Developer to execute tasks.")
+
     if not state.plan or not state.plan.tasks:
-        print("Orchestrator: No plan or tasks to execute.")
+        logger.info("Orchestrator: No plan or tasks to execute.")
         return state
     
     driver = DriverFactory.get_driver(state.profile.driver)
@@ -140,15 +148,15 @@ async def call_developer_node(state: ExecutionState) -> ExecutionState:
     ready_tasks = get_ready_tasks(state.plan, state.plan.tasks)
     
     if not ready_tasks:
-        print("Orchestrator: No ready tasks found to execute in this iteration.")
-        return state # No tasks to run in this step
-        
-    print(f"Orchestrator: Executing {len(ready_tasks)} ready tasks.")
+        logger.info("Orchestrator: No ready tasks found to execute in this iteration.")
+        return state  # No tasks to run in this step
+
+    logger.info(f"Orchestrator: Executing {len(ready_tasks)} ready tasks.")
     
     # Mark tasks as in-progress before execution
     for task in ready_tasks:
         task.status = "in_progress"
-        print(f"Orchestrator: Developer executing task {task.id}")
+        logger.info(f"Orchestrator: Developer executing task {task.id}")
     
     # Execute tasks concurrently if driver supports it, otherwise sequentially
     # This logic assumes the driver's generate/execute_tool handles concurrency,
@@ -196,7 +204,7 @@ def should_continue_review_loop(state: ExecutionState) -> str:
         return "re_evaluate"
     return "end"
 
-def create_orchestrator_graph(checkpoint_saver: Optional[MemorySaver] = None):
+def create_orchestrator_graph(checkpoint_saver: MemorySaver | None = None) -> Any:
     """
     Creates and compiles the LangGraph state machine for the orchestrator.
     Configures checkpointing if a saver is provided.

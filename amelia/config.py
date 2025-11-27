@@ -1,9 +1,12 @@
-import yaml
 from pathlib import Path
-from typing import Optional
-from amelia.core.types import Settings, Profile
 
-def load_settings(config_path: Optional[Path] = None) -> Settings:
+import yaml
+
+from amelia.core.types import Profile
+from amelia.core.types import Settings
+
+
+def load_settings(config_path: Path | None = None) -> Settings:
     """
     Load settings from a YAML file.
     If config_path is not provided, looks for 'settings.amelia.yaml' in the current directory.
@@ -14,7 +17,7 @@ def load_settings(config_path: Optional[Path] = None) -> Settings:
     if not config_path.exists():
         raise FileNotFoundError(f"Configuration file not found at {config_path}")
         
-    with open(config_path, "r") as f:
+    with open(config_path) as f:
         data = yaml.safe_load(f)
         
     # Basic validation is handled by Pydantic

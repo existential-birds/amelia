@@ -1,9 +1,17 @@
-import pytest
 import asyncio
-from unittest.mock import AsyncMock, patch
-from amelia.core.orchestrator import create_orchestrator_graph
-from amelia.core.state import ExecutionState, Profile, Issue, Task, TaskDAG, TaskStatus
+from unittest.mock import AsyncMock
+from unittest.mock import patch
+
+import pytest
+
 from amelia.agents.architect import Architect
+from amelia.core.orchestrator import create_orchestrator_graph
+from amelia.core.state import ExecutionState
+from amelia.core.state import Issue
+from amelia.core.state import Profile
+from amelia.core.state import Task
+from amelia.core.state import TaskDAG
+from amelia.core.state import TaskStatus
 
 
 @pytest.fixture

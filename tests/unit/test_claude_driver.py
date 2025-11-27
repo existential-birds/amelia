@@ -1,12 +1,12 @@
 import json
+from unittest.mock import AsyncMock
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import patch, AsyncMock
-
 from pydantic import BaseModel
-from typing import List
 
-from amelia.drivers.cli.claude import ClaudeCliDriver
 from amelia.core.state import AgentMessage
+from amelia.drivers.cli.claude import ClaudeCliDriver
 
 
 class _TestModel(BaseModel):
@@ -15,7 +15,7 @@ class _TestModel(BaseModel):
 
 
 class _TestListModel(BaseModel):
-    tasks: List[str]
+    tasks: list[str]
 
 
 @pytest.fixture

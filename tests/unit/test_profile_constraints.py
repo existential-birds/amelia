@@ -1,5 +1,8 @@
 import pytest
+
 from amelia.core.types import Profile
+
+
 # from amelia.config import validate_constraints
 
 @pytest.mark.skip(reason="Constraint validation logic TBD in T065")

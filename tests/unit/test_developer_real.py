@@ -1,7 +1,10 @@
-import pytest
 from unittest.mock import AsyncMock
+
+import pytest
+
 from amelia.agents.developer import Developer
 from amelia.core.state import Task
+
 
 @pytest.mark.asyncio
 async def test_developer_executes_tool_not_simulation():

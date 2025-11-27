@@ -1,13 +1,15 @@
-import pytest
 import subprocess
-import yaml
-from unittest.mock import patch, AsyncMock
+from unittest.mock import AsyncMock
+from unittest.mock import patch
 
+import pytest
+import yaml
 from typer.testing import CliRunner
 
-from amelia.main import app
 from amelia.agents.architect import TaskListResponse
 from amelia.core.state import Task
+from amelia.main import app
+
 
 runner = CliRunner()
 

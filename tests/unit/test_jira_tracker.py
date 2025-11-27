@@ -1,5 +1,7 @@
 from unittest.mock import patch
+
 from amelia.trackers.jira import JiraTracker
+
 
 def test_jira_get_issue():
     tracker = JiraTracker()

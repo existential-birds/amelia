@@ -1,4 +1,6 @@
 from amelia.trackers.noop import NoopTracker
+
+
 # from amelia.trackers.github import GithubTracker # Not yet implemented
 # from amelia.trackers.jira import JiraTracker # Not yet implemented
 

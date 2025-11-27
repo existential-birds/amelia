@@ -1,6 +1,10 @@
 import pytest
-from amelia.core.state import ExecutionState, Profile, Issue
 from langgraph.checkpoint.memory import MemorySaver
+
+from amelia.core.state import ExecutionState
+from amelia.core.state import Issue
+from amelia.core.state import Profile
+
 
 @pytest.mark.skip(reason="LangGraph checkpointing is not yet configured in orchestrator.py (T024b)")
 def test_orchestrator_state_persistence():

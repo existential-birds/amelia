@@ -1,7 +1,11 @@
 import pytest
 from pydantic import ValidationError
+
+from amelia.core.state import ExecutionState
+from amelia.core.state import Task
+from amelia.core.state import TaskDAG
 from amelia.core.types import Profile
-from amelia.core.state import Task, TaskDAG, ExecutionState
+
 
 def test_profile_validation():
     # Valid

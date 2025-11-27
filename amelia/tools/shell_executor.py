@@ -1,7 +1,7 @@
 import asyncio
-from typing import Optional
 
-async def run_shell_command(command: str, timeout: Optional[int] = 30) -> str:
+
+async def run_shell_command(command: str, timeout: int | None = 30) -> str:
     """
     Executes a shell command and returns its stdout.
     Raises an exception if the command returns a non-zero exit code or times out.
@@ -14,10 +14,10 @@ async def run_shell_command(command: str, timeout: Optional[int] = 30) -> str:
     
     try:
         stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
-    except asyncio.TimeoutError:
+    except TimeoutError as e:
         process.kill()
         stdout, stderr = await process.communicate()
-        raise RuntimeError(f"Command timed out after {timeout} seconds. Stderr: {stderr.decode().strip()}")
+        raise RuntimeError(f"Command timed out after {timeout} seconds. Stderr: {stderr.decode().strip()}") from e
 
     if process.returncode != 0:
         error_message = f"Command failed with exit code {process.returncode}:\n{stderr.decode().strip()}"
@@ -34,4 +34,4 @@ async def write_file(file_path: str, content: str) -> str:
             f.write(content)
         return f"Successfully wrote to {file_path}"
     except Exception as e:
-        raise RuntimeError(f"Error writing to file {file_path}: {e}")
+        raise RuntimeError(f"Error writing to file {file_path}: {e}") from e

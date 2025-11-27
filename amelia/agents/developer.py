@@ -1,12 +1,17 @@
-from typing import Dict, Any
+from typing import Any
+
+from loguru import logger
+
+from amelia.core.state import AgentMessage
+from amelia.core.state import Task
 from amelia.drivers.base import DriverInterface
-from amelia.core.state import Task, AgentMessage
+
 
 class Developer:
     def __init__(self, driver: DriverInterface):
         self.driver = driver
 
-    async def execute_task(self, task: Task) -> Dict[str, Any]:
+    async def execute_task(self, task: Task) -> dict[str, Any]:
         """
         Executes a single development task.
         """
@@ -17,7 +22,7 @@ class Developer:
         # Example: if task description implies a shell command
         if task.description.lower().startswith("run shell command:"):
             command = task.description[len("run shell command:"):].strip()
-            print(f"Developer executing shell command: {command}")
+            logger.info(f"Developer executing shell command: {command}")
             # The driver's execute_tool needs to map to actual shell execution
             result = await self.driver.execute_tool("run_shell_command", command=command)
             return {"status": "completed", "output": result}
@@ -25,7 +30,7 @@ class Developer:
         # Example: if task description implies writing a file
         elif task.description.lower().startswith("write file:"):
             # This would need more structure in the task for file_path and content
-            print(f"Developer executing write file task: {task.description}")
+            logger.info(f"Developer executing write file task: {task.description}")
             
             # Basic parsing for the test: "write file: <path> with <content>"
             # This is fragile but sufficient for the current string-based protocol without LLM function calling
@@ -44,7 +49,7 @@ class Developer:
 
         # Fallback: if no specific tool is identified, use LLM to generate response
         else:
-            print(f"Developer generating response for task: {task.description}")
+            logger.info(f"Developer generating response for task: {task.description}")
             messages = [
                 AgentMessage(role="system", content="You are a skilled software developer. Execute the given task."),
                 AgentMessage(role="user", content=f"Task to execute: {task.description}")

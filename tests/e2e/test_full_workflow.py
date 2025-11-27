@@ -1,10 +1,15 @@
+from unittest.mock import AsyncMock
+from unittest.mock import patch
+
 import pytest
 import yaml
-from unittest.mock import patch, AsyncMock
 from typer.testing import CliRunner
-from amelia.main import app
-from amelia.core.state import Task, ReviewResult
+
 from amelia.agents.architect import TaskListResponse
+from amelia.core.state import ReviewResult
+from amelia.core.state import Task
+from amelia.main import app
+
 
 runner = CliRunner()
 
@@ -62,19 +67,20 @@ def test_full_workflow(settings_file):
     mock_driver.generate.side_effect = generate_side_effect
     mock_driver.execute_tool.return_value = "Tool output"
 
-    with patch("amelia.drivers.factory.DriverFactory.get_driver", return_value=mock_driver):
-         with runner.isolated_filesystem(temp_dir=settings_file.parent):
-             # Ensure settings.amelia.yaml is in the CWD
-             with open("settings.amelia.yaml", "w") as f:
-                with open(settings_file) as src:
-                    f.write(src.read())
-             
-             # Run amelia start PROJ-123
-             # Providing "y\n\n" for potential plan approval prompt and optional comment
-             result = runner.invoke(app, ["start", "PROJ-123"], input="y\n\n")
-             
-             if result.exit_code != 0:
-                 print("STDOUT:", result.stdout)
-                 print("STDERR:", result.stderr)
-             
-             assert result.exit_code == 0
+    with (
+        patch("amelia.drivers.factory.DriverFactory.get_driver", return_value=mock_driver),
+        runner.isolated_filesystem(temp_dir=settings_file.parent),
+    ):
+        # Ensure settings.amelia.yaml is in the CWD
+        with open("settings.amelia.yaml", "w") as f, open(settings_file) as src:
+            f.write(src.read())
+
+        # Run amelia start PROJ-123
+        # Providing "y\n\n" for potential plan approval prompt and optional comment
+        result = runner.invoke(app, ["start", "PROJ-123"], input="y\n\n")
+
+        if result.exit_code != 0:
+            print("STDOUT:", result.stdout)
+            print("STDERR:", result.stderr)
+
+        assert result.exit_code == 0

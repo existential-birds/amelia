@@ -1,6 +1,10 @@
-from typing import Protocol, Any, List, Type, Optional
+from typing import Any
+from typing import Protocol
+
 from pydantic import BaseModel
+
 from amelia.core.state import AgentMessage
+
 
 class DriverInterface(Protocol):
     """
@@ -8,7 +12,7 @@ class DriverInterface(Protocol):
     Must be implemented by both CliDriver and ApiDriver.
     """
 
-    async def generate(self, messages: List[AgentMessage], schema: Optional[Type[BaseModel]] = None) -> Any:
+    async def generate(self, messages: list[AgentMessage], schema: type[BaseModel] | None = None) -> Any:
         """
         Generate a response from the model.
         
@@ -21,7 +25,7 @@ class DriverInterface(Protocol):
         """
         ...
 
-    async def execute_tool(self, tool_name: str, **kwargs) -> Any:
+    async def execute_tool(self, tool_name: str, **kwargs: Any) -> Any:
         """
         Execute a local tool (if driver supports tool calling).
         """

@@ -1,8 +1,10 @@
-import pytest
 from unittest.mock import patch
 
+import pytest
+
 from amelia.core.orchestrator import create_orchestrator_graph
-from amelia.core.state import ExecutionState, Profile
+from amelia.core.state import ExecutionState
+from amelia.core.state import Profile
 from amelia.core.types import Issue
 
 

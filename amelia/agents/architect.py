@@ -1,13 +1,17 @@
-from typing import List
-from pydantic import BaseModel, Field
 
-from amelia.drivers.base import DriverInterface
+from pydantic import BaseModel
+from pydantic import Field
+
+from amelia.core.state import AgentMessage
+from amelia.core.state import Task
+from amelia.core.state import TaskDAG
 from amelia.core.types import Issue
-from amelia.core.state import TaskDAG, AgentMessage, Task
+from amelia.drivers.base import DriverInterface
+
 
 class TaskListResponse(BaseModel):
     """Schema for LLM-generated list of tasks."""
-    tasks: List[Task] = Field(description="A list of actionable development tasks.")
+    tasks: list[Task] = Field(description="A list of actionable development tasks.")
 
 class Architect:
     def __init__(self, driver: DriverInterface):

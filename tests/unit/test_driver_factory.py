@@ -1,7 +1,8 @@
 import pytest
-from amelia.drivers.factory import DriverFactory
-from amelia.drivers.cli.claude import ClaudeCliDriver
+
 from amelia.drivers.api.openai import ApiDriver
+from amelia.drivers.cli.claude import ClaudeCliDriver
+from amelia.drivers.factory import DriverFactory
 
 
 @pytest.mark.parametrize("driver_spec,expected_type", [

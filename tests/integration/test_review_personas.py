@@ -1,9 +1,14 @@
-import pytest
 from unittest.mock import AsyncMock
 
-from amelia.agents.reviewer import Reviewer, ReviewResponse
-from amelia.core.state import ExecutionState, Profile, Issue
+import pytest
+
+from amelia.agents.reviewer import Reviewer
+from amelia.agents.reviewer import ReviewResponse
+from amelia.core.state import ExecutionState
+from amelia.core.state import Issue
+from amelia.core.state import Profile
 from amelia.drivers.base import DriverInterface
+
 
 @pytest.mark.skip(reason="Reviewer competitive strategy and error handling need further refinement.")
 async def test_competitive_review_multiple_personas_called():

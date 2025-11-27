@@ -1,5 +1,7 @@
 import pytest
+
 from amelia.drivers.api.openai import ApiDriver
+
 
 @pytest.mark.asyncio
 async def test_api_driver_write_file(tmp_path):

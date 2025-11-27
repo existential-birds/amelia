@@ -1,6 +1,9 @@
 import pytest
 from pydantic import ValidationError
-from amelia.core.state import Task, TaskDAG
+
+from amelia.core.state import Task
+from amelia.core.state import TaskDAG
+
 
 def test_task_dag_creation():
     task1 = Task(id="1", description="Task 1")

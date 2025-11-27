@@ -1,8 +1,13 @@
+from unittest.mock import AsyncMock
+from unittest.mock import MagicMock
+
 import pytest
-from amelia.core.types import Issue, Profile
+
+from amelia.core.types import Issue
+from amelia.core.types import Profile
 from amelia.drivers.base import DriverInterface
 from amelia.trackers.noop import NoopTracker
-from unittest.mock import AsyncMock, MagicMock
+
 
 @pytest.fixture
 def mock_issue_proj_123():

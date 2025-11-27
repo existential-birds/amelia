@@ -2,7 +2,8 @@ import pytest
 from pydantic import ValidationError
 
 from amelia.agents.architect import TaskListResponse
-from amelia.agents.reviewer import ReviewResponse # Import ReviewResponse
+from amelia.agents.reviewer import ReviewResponse  # Import ReviewResponse
+
 
 def test_architect_task_list_response_valid():
     """

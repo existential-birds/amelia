@@ -1,18 +1,22 @@
 import asyncio
 import json
-from typing import List, Any, Type, Optional
-from pydantic import BaseModel, ValidationError
+from typing import Any
 
-from amelia.drivers.cli.base import CliDriver
+from pydantic import BaseModel
+from pydantic import ValidationError
+
 from amelia.core.state import AgentMessage
-from amelia.tools.shell_executor import run_shell_command, write_file
+from amelia.drivers.cli.base import CliDriver
+from amelia.tools.shell_executor import run_shell_command
+from amelia.tools.shell_executor import write_file
+
 
 class ClaudeCliDriver(CliDriver):
     """
     Claude CLI Driver interacts with the Claude model via the local 'claude' CLI tool.
     """
 
-    def _convert_messages_to_prompt(self, messages: List[AgentMessage]) -> str:
+    def _convert_messages_to_prompt(self, messages: list[AgentMessage]) -> str:
         """
         Converts a list of AgentMessages into a single string prompt.
         """
@@ -25,7 +29,7 @@ class ClaudeCliDriver(CliDriver):
         # Join with newlines to create a transcript-like format
         return "\n\n".join(prompt_parts)
 
-    async def _generate_impl(self, messages: List[AgentMessage], schema: Optional[Type[BaseModel]] = None) -> Any:
+    async def _generate_impl(self, messages: list[AgentMessage], schema: type[BaseModel] | None = None) -> Any:
         """
         Generates a response using the 'claude' CLI.
         """
@@ -62,18 +66,20 @@ class ClaudeCliDriver(CliDriver):
             stdout_buffer = []
             stderr_buffer = []
 
-            async def read_stdout():
-                while True:
-                    line = await process.stdout.readline()
-                    if not line:
-                        break
-                    text = line.decode()
-                    print(text, end='', flush=True)  # Stream to console
-                    stdout_buffer.append(text)
+            async def read_stdout() -> None:
+                if process.stdout is not None:
+                    while True:
+                        line = await process.stdout.readline()
+                        if not line:
+                            break
+                        text = line.decode()
+                        print(text, end='', flush=True)  # Stream to console
+                        stdout_buffer.append(text)
 
-            async def read_stderr():
-                data = await process.stderr.read()
-                stderr_buffer.append(data.decode())
+            async def read_stderr() -> None:
+                if process.stderr is not None:
+                    data = await process.stderr.read()
+                    stderr_buffer.append(data.decode())
 
             # Run readers concurrently
             await asyncio.gather(read_stdout(), read_stderr())
@@ -114,9 +120,9 @@ class ClaudeCliDriver(CliDriver):
 
                     return schema.model_validate(data)
                 except json.JSONDecodeError as e:
-                    raise RuntimeError(f"Failed to parse JSON from Claude CLI output: {stdout_str}. Error: {e}")
+                    raise RuntimeError(f"Failed to parse JSON from Claude CLI output: {stdout_str}. Error: {e}") from e
                 except ValidationError as e:
-                    raise RuntimeError(f"Claude CLI output did not match schema: {e}")
+                    raise RuntimeError(f"Claude CLI output did not match schema: {e}") from e
             else:
                 # Return raw text
                 return stdout_str
@@ -126,7 +132,7 @@ class ClaudeCliDriver(CliDriver):
             # For the driver interface, we might want to wrap it or just let it bubble up.
             raise RuntimeError(f"Error executing Claude CLI: {e}") from e
 
-    async def _execute_tool_impl(self, tool_name: str, **kwargs) -> Any:
+    async def _execute_tool_impl(self, tool_name: str, **kwargs: Any) -> Any:
         """
         Executes a tool locally.
         """

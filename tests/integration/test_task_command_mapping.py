@@ -1,8 +1,13 @@
-import pytest
 from unittest.mock import AsyncMock
 
-from amelia.core.state import ExecutionState, Profile, Task, TaskDAG
+import pytest
+
+from amelia.core.state import ExecutionState
+from amelia.core.state import Profile
+from amelia.core.state import Task
+from amelia.core.state import TaskDAG
 from amelia.drivers.base import DriverInterface
+
 
 class MockDriver(DriverInterface):
     def __init__(self):

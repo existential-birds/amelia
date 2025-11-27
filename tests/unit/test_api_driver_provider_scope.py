@@ -2,6 +2,7 @@ import pytest
 
 from amelia.drivers.api.openai import ApiDriver
 
+
 @pytest.mark.skip(reason="ApiDriver provider validation logic not yet implemented in ApiDriver (T035).")
 def test_api_driver_openai_only_scope():
     """

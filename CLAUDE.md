@@ -69,7 +69,6 @@ Profile-based configuration via `settings.amelia.yaml`:
 
 ## Code Conventions
 
-- **Test-Driven Development (TDD)** - Always write tests first, then implementation. Follow the red-green-refactor cycle.
 - **Python 3.12+** with type hints everywhere
 - **Pydantic models** for all data structures - use validators/defaults, not ad-hoc dicts
 - **Async throughout** - agents/drivers expose async methods, avoid blocking calls in async functions
@@ -91,6 +90,3 @@ tests/
 ```
 
 Tests use `pytest-asyncio` with `asyncio_mode = "auto"`.
-
-**Test Principles:**
-- **Don't Repeat Yourself (DRY)** - Extract common setup, assertions, and utilities into fixtures and helper functions. Avoid duplicating test logic across test files.

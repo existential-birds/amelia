@@ -1,7 +1,9 @@
-import subprocess
 import json
-from amelia.trackers.base import BaseTracker
+import subprocess
+
 from amelia.core.types import Issue
+from amelia.trackers.base import BaseTracker
+
 
 class GithubTracker(BaseTracker):
     def get_issue(self, issue_id: str) -> Issue:
@@ -21,6 +23,6 @@ class GithubTracker(BaseTracker):
             )
         except subprocess.CalledProcessError as e:
             # Fallback or re-raise with more info
-            raise ValueError(f"Failed to fetch issue {issue_id} from GitHub: {e.stderr}")
-        except json.JSONDecodeError:
-             raise ValueError(f"Failed to parse GitHub CLI output for issue {issue_id}")
+            raise ValueError(f"Failed to fetch issue {issue_id} from GitHub: {e.stderr}") from e
+        except json.JSONDecodeError as e:
+             raise ValueError(f"Failed to parse GitHub CLI output for issue {issue_id}") from e

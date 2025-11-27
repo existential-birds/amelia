@@ -1,5 +1,6 @@
 import pytest
 
+
 @pytest.mark.skip(reason="PydanticAI agents implementation pending")
 def test_pydantic_ai_validation_failure():
     """

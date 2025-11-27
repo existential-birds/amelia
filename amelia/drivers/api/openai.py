@@ -1,9 +1,15 @@
-from amelia.drivers.base import DriverInterface
-from amelia.core.state import AgentMessage
-from typing import List, Any, Type, Optional
+import os
+import shlex
+import subprocess
+from pathlib import Path
+from typing import Any
+
 from pydantic import BaseModel
 from pydantic_ai import Agent
-import os
+
+from amelia.core.state import AgentMessage
+from amelia.drivers.base import DriverInterface
+
 
 class ApiDriver(DriverInterface):
     """
@@ -12,7 +18,7 @@ class ApiDriver(DriverInterface):
     def __init__(self, model: str = 'openai:gpt-4o'):
         self.model_name = model
 
-    async def generate(self, messages: List[AgentMessage], schema: Optional[Type[BaseModel]] = None) -> Any:
+    async def generate(self, messages: list[AgentMessage], schema: type[BaseModel] | None = None) -> Any:
         if not os.environ.get("OPENAI_API_KEY"):
              # Fail fast if no key, or maybe fallback? For now, fail.
              # But for tests, we might need to mock this. 
@@ -41,38 +47,56 @@ class ApiDriver(DriverInterface):
             result = await agent.run(full_prompt)
             return result.output
         except Exception as e:
-            raise RuntimeError(f"ApiDriver generation failed: {e}")
+            raise RuntimeError(f"ApiDriver generation failed: {e}") from e
 
-    async def execute_tool(self, tool_name: str, **kwargs) -> Any:
-        import subprocess
-        from pathlib import Path
-
+    async def execute_tool(self, tool_name: str, **kwargs: Any) -> Any:
         if tool_name == "write_file":
             file_path = kwargs.get("file_path")
             content = kwargs.get("content")
             if not file_path or content is None:
                 raise ValueError("Missing required arguments for write_file: file_path, content")
-            
+
+            # Validate path to prevent traversal attacks
             path = Path(file_path)
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(content)
+            # Check for path traversal attempts using '..' to escape directories
+            if ".." in path.parts:
+                # Resolve and verify the path doesn't escape unexpectedly
+                resolved = path.resolve()
+                # For relative paths with '..', ensure they stay within cwd
+                if not path.is_absolute():
+                    cwd = Path.cwd().resolve()
+                    if not str(resolved).startswith(str(cwd)):
+                        raise ValueError(f"Path traversal detected: {file_path} escapes working directory")
+
+            resolved_path = path.resolve()
+            resolved_path.parent.mkdir(parents=True, exist_ok=True)
+            resolved_path.write_text(content)
             return f"Successfully wrote to {file_path}"
-            
+
         elif tool_name == "run_shell_command":
             command = kwargs.get("command")
             if not command:
-                 raise ValueError("Missing required argument for run_shell_command: command")
-            
+                raise ValueError("Missing required argument for run_shell_command: command")
+
+            # Parse command safely without shell=True
+            try:
+                args = shlex.split(command)
+            except ValueError as e:
+                raise ValueError(f"Invalid command syntax: {e}") from e
+
+            if not args:
+                raise ValueError("Empty command after parsing")
+
             result = subprocess.run(
-                command, 
-                shell=True, 
-                capture_output=True, 
+                args,
+                shell=False,
+                capture_output=True,
                 text=True,
                 check=False
             )
             if result.returncode != 0:
-                 return f"Command failed with exit code {result.returncode}. Stderr: {result.stderr}"
+                return f"Command failed with exit code {result.returncode}. Stderr: {result.stderr}"
             return result.stdout
-            
+
         else:
-             raise NotImplementedError(f"Tool '{tool_name}' not implemented in ApiDriver.")
+            raise NotImplementedError(f"Tool '{tool_name}' not implemented in ApiDriver.")

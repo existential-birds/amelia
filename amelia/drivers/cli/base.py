@@ -1,9 +1,14 @@
 import asyncio
+from collections.abc import Awaitable
+from collections.abc import Callable
+from typing import Any
+
 from loguru import logger
-from amelia.drivers.base import DriverInterface
-from amelia.core.state import AgentMessage
-from typing import List, Any, Type, Optional, Callable, Awaitable
 from pydantic import BaseModel
+
+from amelia.core.state import AgentMessage
+from amelia.drivers.base import DriverInterface
+
 
 class CliDriver(DriverInterface):
     """
@@ -16,7 +21,7 @@ class CliDriver(DriverInterface):
         self.timeout = timeout
         self.max_retries = max_retries
 
-    async def _execute_with_retry(self, func: Callable[..., Awaitable[Any]], *args, **kwargs) -> Any:
+    async def _execute_with_retry(self, func: Callable[..., Awaitable[Any]], *args: Any, **kwargs: Any) -> Any:
         """
         Executes an async function with retry logic for timeouts.
         """
@@ -24,7 +29,7 @@ class CliDriver(DriverInterface):
         while True:
             try:
                 return await func(*args, **kwargs)
-            except (RuntimeError, asyncio.TimeoutError) as e:
+            except (TimeoutError, RuntimeError) as e:
                 # specific check for timeout message from shell_executor or generic TimeoutError
                 is_timeout = isinstance(e, asyncio.TimeoutError) or (isinstance(e, RuntimeError) and "timed out" in str(e))
                 
@@ -38,16 +43,16 @@ class CliDriver(DriverInterface):
                 else:
                     raise
 
-    async def generate(self, messages: List[AgentMessage], schema: Optional[Type[BaseModel]] = None) -> Any:
+    async def generate(self, messages: list[AgentMessage], schema: type[BaseModel] | None = None) -> Any:
         async with self._semaphore:
             return await self._execute_with_retry(self._generate_impl, messages, schema)
 
-    async def _generate_impl(self, messages: List[AgentMessage], schema: Optional[Type[BaseModel]] = None) -> Any:
+    async def _generate_impl(self, messages: list[AgentMessage], schema: type[BaseModel] | None = None) -> Any:
         raise NotImplementedError("Subclasses must implement _generate_impl")
     
-    async def execute_tool(self, tool_name: str, **kwargs) -> Any:
+    async def execute_tool(self, tool_name: str, **kwargs: Any) -> Any:
         async with self._semaphore:
             return await self._execute_with_retry(self._execute_tool_impl, tool_name, **kwargs)
 
-    async def _execute_tool_impl(self, tool_name: str, **kwargs) -> Any:
+    async def _execute_tool_impl(self, tool_name: str, **kwargs: Any) -> Any:
         raise NotImplementedError("Subclasses must implement _execute_tool_impl")

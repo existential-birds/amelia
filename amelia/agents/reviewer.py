@@ -1,14 +1,19 @@
 import asyncio
-from typing import List, cast
-from pydantic import BaseModel, Field
 
+from pydantic import BaseModel
+from pydantic import Field
+
+from amelia.core.state import AgentMessage
+from amelia.core.state import ExecutionState
+from amelia.core.state import ReviewResult
+from amelia.core.state import Severity
 from amelia.drivers.base import DriverInterface
-from amelia.core.state import ExecutionState, ReviewResult, AgentMessage, Severity
+
 
 class ReviewResponse(BaseModel):
     """Schema for LLM-generated review response."""
     approved: bool = Field(description="Whether the changes are acceptable.")
-    comments: List[str] = Field(description="Specific feedback items.")
+    comments: list[str] = Field(description="Specific feedback items.")
     severity: Severity = Field(description="Overall severity of the review findings.")
 
 class Reviewer:
@@ -77,9 +82,10 @@ class Reviewer:
         all_comments = [comment for res in results for comment in res.comments]
         
         # Determine overall severity (e.g., highest severity from any review)
-        severity_order = {"low": 0, "medium": 1, "high": 2, "critical": 3}
+        severity_order: dict[Severity, int] = {"low": 0, "medium": 1, "high": 2, "critical": 3}
+        severity_from_value: dict[int, Severity] = {v: k for k, v in severity_order.items()}
         overall_severity_value = max(severity_order.get(res.severity, 0) for res in results)
-        overall_severity: Severity = next(cast(Severity, key) for key, value in severity_order.items() if value == overall_severity_value)
+        overall_severity = severity_from_value[overall_severity_value]
 
         return ReviewResult(
             reviewer_persona="Competitive-Aggregated",

@@ -1,7 +1,11 @@
+from unittest.mock import AsyncMock
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import AsyncMock, patch
-from amelia.drivers.cli.claude import ClaudeCliDriver
+
 from amelia.core.state import AgentMessage
+from amelia.drivers.cli.claude import ClaudeCliDriver
+
 
 @pytest.mark.asyncio
 async def test_cli_driver_timeout_configuration():

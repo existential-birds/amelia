@@ -1,11 +1,15 @@
-import pytest
 from unittest.mock import patch
+
+import pytest
+
 from amelia.core.orchestrator import get_code_changes_for_review
 from amelia.core.state import ExecutionState
 
+
 @pytest.mark.asyncio
 async def test_get_real_git_diff():
-    from amelia.core.types import Profile, Issue
+    from amelia.core.types import Issue
+    from amelia.core.types import Profile
     
     # Setup valid Profile and Issue
     profile = Profile(name="test", driver="cli", tracker="none", strategy="single")

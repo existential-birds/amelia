@@ -45,8 +45,11 @@ flowchart LR
 ## Quick Start
 
 ```bash
-# Install
-pip install -e .
+# Install uv (if not already installed)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Install dependencies
+uv sync
 
 # Create settings.amelia.yaml
 cat > settings.amelia.yaml << 'EOF'
@@ -60,7 +63,7 @@ profiles:
 EOF
 
 # Run first command
-amelia plan-only ISSUE-123
+uv run amelia plan-only ISSUE-123
 ```
 
 ## CLI Commands

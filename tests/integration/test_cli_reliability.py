@@ -1,9 +1,14 @@
-import pytest
 import asyncio
 import time
-from unittest.mock import patch, AsyncMock, MagicMock
-from amelia.drivers.cli.claude import ClaudeCliDriver
+from unittest.mock import AsyncMock
+from unittest.mock import MagicMock
+from unittest.mock import patch
+
+import pytest
+
 from amelia.core.state import AgentMessage
+from amelia.drivers.cli.claude import ClaudeCliDriver
+
 
 @pytest.mark.asyncio
 async def test_cli_driver_reliability_loop():

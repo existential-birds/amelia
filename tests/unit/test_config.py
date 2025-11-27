@@ -1,8 +1,11 @@
+from pathlib import Path
+
 import pytest
 import yaml
-from pathlib import Path
+
 from amelia.config import load_settings
 from amelia.core.types import Settings
+
 
 def test_load_settings_valid(tmp_path):
     config_data = {

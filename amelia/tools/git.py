@@ -1,5 +1,6 @@
 import asyncio
 
+
 async def get_git_diff(staged: bool = False) -> str:
     """
     Retrieves the git diff for the current repository.
@@ -22,4 +23,4 @@ async def get_git_diff(staged: bool = False) -> str:
         
         return stdout.decode().strip()
     except Exception as e:
-        raise RuntimeError(f"Error getting git diff: {e}")
+        raise RuntimeError(f"Error getting git diff: {e}") from e

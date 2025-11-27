@@ -1,6 +1,12 @@
-from typing import List, Optional, Literal, Any
-from pydantic import BaseModel, Field
-from amelia.core.types import Profile, Issue
+from typing import Any
+from typing import Literal
+
+from pydantic import BaseModel
+from pydantic import Field
+
+from amelia.core.types import Issue
+from amelia.core.types import Profile
+
 
 TaskStatus = Literal["pending", "in_progress", "completed", "failed"]
 Severity = Literal["low", "medium", "high", "critical"]
@@ -9,30 +15,30 @@ class Task(BaseModel):
     id: str
     description: str
     status: TaskStatus = "pending"
-    dependencies: List[str] = Field(default_factory=list)
-    files_changed: List[str] = Field(default_factory=list)
+    dependencies: list[str] = Field(default_factory=list)
+    files_changed: list[str] = Field(default_factory=list)
 
 class TaskDAG(BaseModel):
-    tasks: List[Task]
+    tasks: list[Task]
     original_issue: str
 
 class ReviewResult(BaseModel):
     reviewer_persona: str
     approved: bool
-    comments: List[str]
+    comments: list[str]
     severity: Severity
 
 class AgentMessage(BaseModel):
     role: str
     content: str
-    tool_calls: Optional[List[Any]] = None
+    tool_calls: list[Any] | None = None
 
 class ExecutionState(BaseModel):
     profile: Profile
-    issue: Optional[Issue] = None
-    plan: Optional[TaskDAG] = None
-    current_task_id: Optional[str] = None
-    human_approved: Optional[bool] = None # Field to store human approval status
-    review_results: List[ReviewResult] = Field(default_factory=list)
-    messages: List[AgentMessage] = Field(default_factory=list)
-    code_changes_for_review: Optional[str] = None # For local review or specific review contexts
+    issue: Issue | None = None
+    plan: TaskDAG | None = None
+    current_task_id: str | None = None
+    human_approved: bool | None = None # Field to store human approval status
+    review_results: list[ReviewResult] = Field(default_factory=list)
+    messages: list[AgentMessage] = Field(default_factory=list)
+    code_changes_for_review: str | None = None # For local review or specific review contexts

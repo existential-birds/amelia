@@ -1,8 +1,10 @@
+from amelia.core.types import Issue
+from amelia.core.types import Profile
 from amelia.trackers.base import BaseTracker
-from amelia.core.types import Issue, Profile
-from amelia.trackers.noop import NoopTracker
 from amelia.trackers.github import GithubTracker
 from amelia.trackers.jira import JiraTracker
+from amelia.trackers.noop import NoopTracker
+
 
 class ProjectManager:
     def __init__(self, tracker: BaseTracker):

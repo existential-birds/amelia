@@ -1,6 +1,9 @@
 import pytest
+
 from amelia.agents.project_manager import ProjectManager
-from amelia.trackers.base import BaseTracker, Issue
+from amelia.trackers.base import BaseTracker
+from amelia.trackers.base import Issue
+
 
 class MockTracker(BaseTracker):
     def get_issue(self, issue_id: str) -> Issue:

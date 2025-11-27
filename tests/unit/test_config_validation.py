@@ -1,6 +1,9 @@
 import pytest
 from pydantic import ValidationError
-from amelia.core.types import Settings, Profile
+
+from amelia.core.types import Profile
+from amelia.core.types import Settings
+
 
 def test_settings_validation_required_fields():
     # Missing active_profile

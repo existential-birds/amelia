@@ -1,5 +1,7 @@
-from typing import Dict, Literal
+from typing import Literal
+
 from pydantic import BaseModel
+
 
 DriverType = Literal["cli:claude", "api:openai", "cli", "api"]
 TrackerType = Literal["jira", "github", "none", "noop"]
@@ -14,7 +16,7 @@ class Profile(BaseModel):
 
 class Settings(BaseModel):
     active_profile: str
-    profiles: Dict[str, Profile]
+    profiles: dict[str, Profile]
 
 class Issue(BaseModel):
     id: str
