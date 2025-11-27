@@ -66,3 +66,28 @@ def test_file_operation_create():
 def test_file_operation_modify_with_range():
     op = FileOperation(operation="modify", path="src/existing.py", line_range="10-25")
     assert op.line_range == "10-25"
+
+
+def test_task_with_steps_and_files():
+    step = TaskStep(description="Write test", code="def test(): pass")
+    file_op = FileOperation(operation="create", path="src/foo.py")
+
+    task = Task(
+        id="1",
+        description="Add foo feature",
+        files=[file_op],
+        steps=[step],
+        commit_message="feat: add foo"
+    )
+
+    assert len(task.files) == 1
+    assert len(task.steps) == 1
+    assert task.commit_message == "feat: add foo"
+
+
+def test_task_without_new_fields():
+    """Ensure defaults work for minimal task creation."""
+    task = Task(id="1", description="Simple task")
+    assert task.files == []
+    assert task.steps == []
+    assert task.commit_message is None

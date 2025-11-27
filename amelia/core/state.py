@@ -28,11 +28,14 @@ class FileOperation(BaseModel):
 
 
 class Task(BaseModel):
+    """Task with TDD structure."""
     id: str
     description: str
     status: TaskStatus = "pending"
     dependencies: list[str] = Field(default_factory=list)
-    files_changed: list[str] = Field(default_factory=list)
+    files: list[FileOperation] = Field(default_factory=list)
+    steps: list[TaskStep] = Field(default_factory=list)
+    commit_message: str | None = None
 
 class TaskDAG(BaseModel):
     tasks: list[Task]
