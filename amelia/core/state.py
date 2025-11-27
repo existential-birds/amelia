@@ -11,6 +11,22 @@ from amelia.core.types import Profile
 TaskStatus = Literal["pending", "in_progress", "completed", "failed"]
 Severity = Literal["low", "medium", "high", "critical"]
 
+
+class TaskStep(BaseModel):
+    """A single step within a task (2-5 minutes of work)."""
+    description: str
+    code: str | None = None
+    command: str | None = None
+    expected_output: str | None = None
+
+
+class FileOperation(BaseModel):
+    """A file to be created, modified, or tested."""
+    operation: Literal["create", "modify", "test"]
+    path: str
+    line_range: str | None = None
+
+
 class Task(BaseModel):
     id: str
     description: str
