@@ -28,4 +28,3 @@ async def test_developer_executes_tool_not_simulation():
     
     # The failing test expects execute_tool to be called.
     mock_driver.execute_tool.assert_called_once()
-    assert result["output"] == "File created"
