@@ -71,9 +71,17 @@ async def test_architect_plan_with_design(mock_driver_for_architect, tmp_path):
     assert "Auth Feature" in prompt_content or "JWT auth" in prompt_content
 
 
-@pytest.mark.skip(reason="Developer agent not yet implemented")
-def test_developer_executes_task():
+async def test_developer_executes_task(mock_driver):
     """
     Test that the Developer agent can execute a given task.
     """
-    pass
+    from amelia.agents.developer import Developer
+
+    developer = Developer(driver=mock_driver)
+    task = Task(id="DEV-1", description="Write a hello world function")
+
+    result = await developer.execute_task(task)
+
+    assert result["status"] == "completed"
+    assert "output" in result
+    mock_driver.generate.assert_called_once()
