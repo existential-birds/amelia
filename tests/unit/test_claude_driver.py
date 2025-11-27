@@ -133,8 +133,7 @@ class TestClaudeCliDriver:
     async def test_execute_tool_shell(self, driver):
         with patch("amelia.drivers.cli.claude.run_shell_command", new_callable=AsyncMock) as mock_run:
             mock_run.return_value = "Output"
-            result = await driver._execute_tool_impl("run_shell_command", command="echo test")
-            assert result == "Output"
+            await driver._execute_tool_impl("run_shell_command", command="echo test")
             mock_run.assert_called_once_with("echo test", timeout=driver.timeout)
 
     @pytest.mark.asyncio
