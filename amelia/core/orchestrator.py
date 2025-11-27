@@ -12,7 +12,6 @@ from amelia.agents.developer import Developer
 from amelia.agents.reviewer import Reviewer
 from amelia.core.state import AgentMessage
 from amelia.core.state import ExecutionState
-from amelia.core.state import Task
 from amelia.core.state import TaskDAG
 from amelia.drivers.factory import DriverFactory
 
@@ -118,20 +117,6 @@ async def call_reviewer_node(state: ExecutionState) -> ExecutionState:
         review_results=review_results
     )
 
-def get_ready_tasks(plan: TaskDAG, current_tasks: list[Task]) -> list[Task]:
-    """
-    Identifies tasks that are pending and have all their dependencies met.
-    """
-    completed_task_ids = {t.id for t in current_tasks if t.status == "completed"}
-    
-    ready_tasks = []
-    for task in current_tasks:
-        if task.status == "pending":
-            dependencies_met = all(dep in completed_task_ids for dep in task.dependencies)
-            if dependencies_met:
-                ready_tasks.append(task)
-    return ready_tasks
-
 async def call_developer_node(state: ExecutionState) -> ExecutionState:
     """
     Orchestrator node for the Developer agent to execute tasks, potentially in parallel.
@@ -145,7 +130,7 @@ async def call_developer_node(state: ExecutionState) -> ExecutionState:
     driver = DriverFactory.get_driver(state.profile.driver)
     developer = Developer(driver)
     
-    ready_tasks = get_ready_tasks(state.plan, state.plan.tasks)
+    ready_tasks = state.plan.get_ready_tasks()
     
     if not ready_tasks:
         logger.info("Orchestrator: No ready tasks found to execute in this iteration.")
