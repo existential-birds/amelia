@@ -138,3 +138,19 @@ See [Configuration Reference](docs/configuration.md) for full details.
 **Limitations/Coming Soon:**
 - CLI driver (`cli:claude`) is currently a stub for LLM interactions (tool execution works)
 - TaskDAG doesn't validate cyclic dependencies
+
+## Roadmap
+
+### Phase 1: Core Orchestration (Current)
+- Full agent orchestration with human approval gates
+- Multi-driver support (API and CLI)
+- Issue tracker integrations (Jira, GitHub)
+
+### Phase 2: Web UI
+- **Observability dashboard** using [AI Elements](https://github.com/ai-elements) library for real-time agent activity monitoring, task progress, and execution logs
+- **Full control interface** to approve/reject plans, intervene in agent workflows, and manage configurations through the browser
+
+### Phase 3: Local RAG Integration
+- Spin up local RAG infrastructure for agents to query codebase context
+- Enable agents to use extended thinking (ultrathink) for complex reasoning
+- Interactive clarification flow where agents can ask targeted questions before proceeding
