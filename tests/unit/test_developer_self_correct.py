@@ -7,7 +7,6 @@ from amelia.core.state import Task
 from amelia.drivers.base import DriverInterface
 
 
-@pytest.mark.skip(reason="Developer agent's self-correction and stderr parsing logic not yet fully implemented.")
 async def test_developer_self_correction_on_command_failure():
     """
     Verifies that the Developer agent can detect and react to command failures
