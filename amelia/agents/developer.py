@@ -4,6 +4,7 @@ from typing import Literal
 from loguru import logger
 from pydantic import BaseModel
 
+from amelia.core.constants import ToolName
 from amelia.core.state import AgentMessage
 from amelia.core.state import Task
 from amelia.drivers.base import DriverInterface
@@ -37,7 +38,7 @@ class Developer:
                 command = task.description[len("run shell command:"):].strip()
                 logger.info(f"Developer executing shell command: {command}")
                 # The driver's execute_tool needs to map to actual shell execution
-                result = await self.driver.execute_tool("run_shell_command", command=command)
+                result = await self.driver.execute_tool(ToolName.RUN_SHELL_COMMAND, command=command)
                 return {"status": "completed", "output": result}
 
             # Example: if task description implies writing a file
@@ -57,7 +58,7 @@ class Developer:
 
                 file_path = path_part[len("write file:"):].strip()
 
-                result = await self.driver.execute_tool("write_file", file_path=file_path, content=content)
+                result = await self.driver.execute_tool(ToolName.WRITE_FILE, file_path=file_path, content=content)
                 return {"status": "completed", "output": result}
 
             # Fallback: if no specific tool is identified, use LLM to generate response
