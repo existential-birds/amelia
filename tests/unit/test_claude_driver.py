@@ -7,6 +7,8 @@ from pydantic import BaseModel
 
 from amelia.core.state import AgentMessage
 from amelia.drivers.cli.claude import ClaudeCliDriver
+from amelia.tools.safe_file import SafeFileWriter
+from amelia.tools.safe_shell import SafeShellExecutor
 
 
 class _TestModel(BaseModel):
@@ -131,14 +133,14 @@ class TestClaudeCliDriver:
 
     @pytest.mark.asyncio
     async def test_execute_tool_shell(self, driver):
-        with patch("amelia.drivers.cli.claude.run_shell_command", new_callable=AsyncMock) as mock_run:
+        with patch.object(SafeShellExecutor, "execute", new_callable=AsyncMock) as mock_run:
             mock_run.return_value = "Output"
             await driver._execute_tool_impl("run_shell_command", command="echo test")
             mock_run.assert_called_once_with("echo test", timeout=driver.timeout)
 
     @pytest.mark.asyncio
     async def test_execute_tool_write_file(self, driver):
-        with patch("amelia.drivers.cli.claude.write_file", new_callable=AsyncMock) as mock_write:
+        with patch.object(SafeFileWriter, "write", new_callable=AsyncMock) as mock_write:
             mock_write.return_value = "Success"
             await driver._execute_tool_impl("write_file", file_path="test.txt", content="data")
             mock_write.assert_called_once_with("test.txt", "data")

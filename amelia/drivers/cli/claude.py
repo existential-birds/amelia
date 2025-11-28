@@ -2,13 +2,15 @@ import asyncio
 import json
 from typing import Any
 
+from loguru import logger
 from pydantic import BaseModel
 from pydantic import ValidationError
 
+from amelia.core.constants import ToolName
 from amelia.core.state import AgentMessage
 from amelia.drivers.cli.base import CliDriver
-from amelia.tools.shell_executor import run_shell_command
-from amelia.tools.shell_executor import write_file
+from amelia.tools.safe_file import SafeFileWriter
+from amelia.tools.safe_shell import SafeShellExecutor
 
 
 class ClaudeCliDriver(CliDriver):
@@ -73,7 +75,7 @@ class ClaudeCliDriver(CliDriver):
                         if not line:
                             break
                         text = line.decode()
-                        print(text, end='', flush=True)  # Stream to console
+                        logger.opt(raw=True).debug(text)
                         stdout_buffer.append(text)
 
             async def read_stderr() -> None:
@@ -134,18 +136,20 @@ class ClaudeCliDriver(CliDriver):
 
     async def _execute_tool_impl(self, tool_name: str, **kwargs: Any) -> Any:
         """
-        Executes a tool locally.
+        Executes a tool locally using safe utilities.
         """
-        if tool_name == "run_shell_command":
+        if tool_name == ToolName.RUN_SHELL_COMMAND:
             command = kwargs.get("command")
             if not command:
                 raise ValueError("run_shell_command requires a 'command' argument.")
-            return await run_shell_command(command, timeout=self.timeout)
-        elif tool_name == "write_file":
+            return await SafeShellExecutor.execute(command, timeout=self.timeout)
+
+        elif tool_name == ToolName.WRITE_FILE:
             file_path = kwargs.get("file_path")
             content = kwargs.get("content", "")
             if not file_path:
                 raise ValueError("write_file requires a 'file_path' argument.")
-            return await write_file(file_path, content)
+            return await SafeFileWriter.write(file_path, content)
+
         else:
             raise NotImplementedError(f"Tool '{tool_name}' not implemented for ClaudeCliDriver.")
