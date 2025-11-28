@@ -4,7 +4,9 @@ from amelia.drivers.api.openai import ApiDriver
 
 
 @pytest.mark.asyncio
-async def test_api_driver_write_file(tmp_path):
+async def test_api_driver_write_file(tmp_path, monkeypatch):
+    # SafeFileWriter restricts writes to cwd by default, so we chdir to tmp_path
+    monkeypatch.chdir(tmp_path)
     driver = ApiDriver()
     test_file = tmp_path / "test.txt"
     await driver.execute_tool("write_file", file_path=str(test_file), content="Hello World")

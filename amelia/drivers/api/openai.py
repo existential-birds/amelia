@@ -1,14 +1,14 @@
 import os
-import shlex
-import subprocess
-from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel
 from pydantic_ai import Agent
 
+from amelia.core.constants import ToolName
 from amelia.core.state import AgentMessage
 from amelia.drivers.base import DriverInterface
+from amelia.tools.safe_file import SafeFileWriter
+from amelia.tools.safe_shell import SafeShellExecutor
 
 
 class ApiDriver(DriverInterface):
@@ -53,53 +53,18 @@ class ApiDriver(DriverInterface):
             raise RuntimeError(f"ApiDriver generation failed: {e}") from e
 
     async def execute_tool(self, tool_name: str, **kwargs: Any) -> Any:
-        if tool_name == "write_file":
+        if tool_name == ToolName.WRITE_FILE:
             file_path = kwargs.get("file_path")
             content = kwargs.get("content")
             if not file_path or content is None:
                 raise ValueError("Missing required arguments for write_file: file_path, content")
+            return await SafeFileWriter.write(file_path, content)
 
-            # Validate path to prevent traversal attacks
-            path = Path(file_path)
-            # Check for path traversal attempts using '..' to escape directories
-            if ".." in path.parts:
-                # Resolve and verify the path doesn't escape unexpectedly
-                resolved = path.resolve()
-                # For relative paths with '..', ensure they stay within cwd
-                if not path.is_absolute():
-                    cwd = Path.cwd().resolve()
-                    if not str(resolved).startswith(str(cwd)):
-                        raise ValueError(f"Path traversal detected: {file_path} escapes working directory")
-
-            resolved_path = path.resolve()
-            resolved_path.parent.mkdir(parents=True, exist_ok=True)
-            resolved_path.write_text(content)
-            return f"Successfully wrote to {file_path}"
-
-        elif tool_name == "run_shell_command":
+        elif tool_name == ToolName.RUN_SHELL_COMMAND:
             command = kwargs.get("command")
             if not command:
                 raise ValueError("Missing required argument for run_shell_command: command")
-
-            # Parse command safely without shell=True
-            try:
-                args = shlex.split(command)
-            except ValueError as e:
-                raise ValueError(f"Invalid command syntax: {e}") from e
-
-            if not args:
-                raise ValueError("Empty command after parsing")
-
-            result = subprocess.run(
-                args,
-                shell=False,
-                capture_output=True,
-                text=True,
-                check=False
-            )
-            if result.returncode != 0:
-                return f"Command failed with exit code {result.returncode}. Stderr: {result.stderr}"
-            return result.stdout
+            return await SafeShellExecutor.execute(command)
 
         else:
             raise NotImplementedError(f"Tool '{tool_name}' not implemented in ApiDriver.")
