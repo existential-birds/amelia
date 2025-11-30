@@ -4,19 +4,23 @@ from pydantic import ValidationError
 from amelia.core.types import Profile
 
 
-def test_work_profile_cli_constraint():
+@pytest.mark.parametrize(
+    "name,driver,should_raise",
+    [
+        pytest.param("work", "cli:claude", False, id="work_cli_valid"),
+        pytest.param("work", "api:openai", True, id="work_api_invalid"),
+        pytest.param("home", "api:openai", False, id="home_api_valid"),
+        pytest.param("home", "cli:claude", False, id="home_cli_valid"),
+    ],
+)
+def test_profile_driver_constraints(name, driver, should_raise):
     """
-    Ensure that a profile named 'work' cannot use API drivers.
-    This is a business rule for enterprise compliance.
+    Ensure that 'work' profile cannot use API drivers (enterprise compliance).
+    Other profiles can use any driver.
     """
-    # Work profile with CLI driver should be valid
-    work_profile_cli = Profile(name="work", driver="cli:claude", tracker="jira", strategy="single")
-    assert work_profile_cli.driver == "cli:claude"
-
-    # Work profile with API driver should raise
-    with pytest.raises(ValidationError, match="work.*cannot use.*api"):
-        Profile(name="work", driver="api:openai", tracker="jira", strategy="single")
-
-    # Non-work profiles can use any driver
-    home_profile = Profile(name="home", driver="api:openai", tracker="github", strategy="single")
-    assert home_profile.driver == "api:openai"
+    if should_raise:
+        with pytest.raises(ValidationError, match="work.*cannot use.*api"):
+            Profile(name=name, driver=driver, tracker="jira", strategy="single")
+    else:
+        profile = Profile(name=name, driver=driver, tracker="jira", strategy="single")
+        assert profile.driver == driver
