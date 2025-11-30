@@ -3,7 +3,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from amelia.core.state import Task, TaskDAG
+from amelia.core.state import ExecutionState, Task, TaskDAG
 from amelia.core.types import Issue
 from amelia.core.types import Profile
 from amelia.drivers.base import DriverInterface
@@ -102,6 +102,31 @@ def mock_task_dag_factory(mock_task_factory):
                 deps = [str(i-1)] if linear and i > 1 else []
                 tasks.append(mock_task_factory(id=str(i), dependencies=deps))
         return TaskDAG(tasks=tasks, original_issue=original_issue)
+    return _create
+
+
+@pytest.fixture
+def mock_execution_state_factory(mock_profile_factory, mock_issue_factory):
+    """Factory fixture for creating ExecutionState instances."""
+    def _create(
+        profile: Profile | None = None,
+        profile_preset: str = "cli_single",
+        issue: Issue | None = None,
+        plan: TaskDAG | None = None,
+        code_changes_for_review: str | None = None,
+        **kwargs
+    ) -> ExecutionState:
+        if profile is None:
+            profile = mock_profile_factory(preset=profile_preset)
+        if issue is None:
+            issue = mock_issue_factory()
+        return ExecutionState(
+            profile=profile,
+            issue=issue,
+            plan=plan,
+            code_changes_for_review=code_changes_for_review,
+            **kwargs
+        )
     return _create
 
 

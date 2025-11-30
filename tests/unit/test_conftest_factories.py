@@ -69,3 +69,17 @@ def test_task_dag_factory_linear(mock_task_dag_factory):
     dag = mock_task_dag_factory(num_tasks=3, linear=True)
     assert dag.tasks[1].dependencies == ["1"]
     assert dag.tasks[2].dependencies == ["2"]
+
+
+def test_execution_state_factory_defaults(mock_execution_state_factory):
+    """Test that execution_state_factory creates state with defaults."""
+    state = mock_execution_state_factory()
+    assert state.profile is not None
+    assert state.issue is not None
+    assert state.plan is None
+
+
+def test_execution_state_factory_with_preset(mock_execution_state_factory):
+    """Test that execution_state_factory accepts profile presets."""
+    state = mock_execution_state_factory(profile_preset="api_competitive")
+    assert state.profile.strategy == "competitive"
