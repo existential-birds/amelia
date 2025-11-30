@@ -83,3 +83,19 @@ def test_execution_state_factory_with_preset(mock_execution_state_factory):
     """Test that execution_state_factory accepts profile presets."""
     state = mock_execution_state_factory(profile_preset="api_competitive")
     assert state.profile.strategy == "competitive"
+
+
+def test_async_driver_factory_defaults(mock_async_driver_factory):
+    """Test that async_driver_factory creates mock driver."""
+    from unittest.mock import AsyncMock
+    driver = mock_async_driver_factory()
+    assert hasattr(driver, 'generate')
+    assert hasattr(driver, 'execute_tool')
+    assert isinstance(driver.generate, AsyncMock)
+
+
+def test_async_driver_factory_custom_return(mock_async_driver_factory):
+    """Test that async_driver_factory accepts custom return values."""
+    driver = mock_async_driver_factory(generate_return="custom response")
+    # The return_value should be set
+    assert driver.generate.return_value == "custom response"

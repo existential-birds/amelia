@@ -144,6 +144,21 @@ def mock_driver():
 
 
 @pytest.fixture
+def mock_async_driver_factory():
+    """Factory fixture for creating mock DriverInterface instances."""
+    from typing import Any
+    def _create(
+        generate_return: Any = "mocked AI response",
+        execute_tool_return: Any = "mocked tool output",
+    ) -> AsyncMock:
+        mock = AsyncMock(spec=DriverInterface)
+        mock.generate = AsyncMock(return_value=generate_return)
+        mock.execute_tool = AsyncMock(return_value=execute_tool_return)
+        return mock
+    return _create
+
+
+@pytest.fixture
 def mock_subprocess_process_factory():
     """
     Factory fixture for creating mock subprocess processes.
