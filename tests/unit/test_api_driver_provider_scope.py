@@ -3,22 +3,20 @@ import pytest
 from amelia.drivers.api.openai import ApiDriver
 
 
-def test_api_driver_openai_only_scope():
-    """
-    Verifies that the ApiDriver, in its MVP form, is scoped to OpenAI only
-    and raises an error for unsupported providers.
-    """
-    # Valid OpenAI models should work
-    valid_driver = ApiDriver(model="openai:gpt-4o")
-    assert valid_driver is not None
-
-    # Also accept shorthand
-    valid_driver2 = ApiDriver(model="openai:gpt-4o-mini")
-    assert valid_driver2 is not None
-
-    # Non-OpenAI providers should raise
-    with pytest.raises(ValueError, match="Unsupported provider"):
-        ApiDriver(model="anthropic:claude-3")
-
-    with pytest.raises(ValueError, match="Unsupported provider"):
-        ApiDriver(model="gemini:pro")
+@pytest.mark.parametrize(
+    "model,should_succeed",
+    [
+        pytest.param("openai:gpt-4o", True, id="openai_gpt4o"),
+        pytest.param("openai:gpt-4o-mini", True, id="openai_gpt4o_mini"),
+        pytest.param("anthropic:claude-3", False, id="anthropic_rejected"),
+        pytest.param("gemini:pro", False, id="gemini_rejected"),
+    ],
+)
+def test_api_driver_provider_validation(model, should_succeed):
+    """Verifies ApiDriver's provider validation - only OpenAI providers allowed."""
+    if should_succeed:
+        driver = ApiDriver(model=model)
+        assert driver is not None
+    else:
+        with pytest.raises(ValueError, match="Unsupported provider"):
+            ApiDriver(model=model)
