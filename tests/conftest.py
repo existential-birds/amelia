@@ -5,8 +5,7 @@ import pytest
 
 from amelia.agents.reviewer import ReviewResponse
 from amelia.core.state import ExecutionState, Task, TaskDAG
-from amelia.core.types import Issue
-from amelia.core.types import Profile
+from amelia.core.types import Design, Issue, Profile
 from amelia.drivers.base import DriverInterface
 from amelia.trackers.noop import NoopTracker
 
@@ -171,6 +170,30 @@ def mock_review_response_factory():
             approved=approved,
             comments=comments or (["Looks good"] if approved else ["Needs changes"]),
             severity=severity
+        )
+    return _create
+
+
+@pytest.fixture
+def mock_design_factory():
+    """Factory fixture for creating Design instances."""
+    def _create(
+        title: str = "Test Feature",
+        goal: str = "Build test feature",
+        architecture: str = "Simple architecture",
+        tech_stack: list[str] | None = None,
+        components: list[str] | None = None,
+        raw_content: str = "",
+        **kwargs
+    ) -> Design:
+        return Design(
+            title=title,
+            goal=goal,
+            architecture=architecture,
+            tech_stack=tech_stack or ["Python"],
+            components=components or ["ComponentA"],
+            raw_content=raw_content,
+            **kwargs
         )
     return _create
 

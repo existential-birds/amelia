@@ -113,3 +113,18 @@ def test_review_response_factory_rejected(mock_review_response_factory):
     response = mock_review_response_factory(approved=False, severity="high")
     assert response.approved is False
     assert response.severity == "high"
+
+
+def test_design_factory_defaults(mock_design_factory):
+    """Test that design_factory creates Design with defaults."""
+    design = mock_design_factory()
+    assert design.title == "Test Feature"
+    assert design.goal == "Build test feature"
+    assert design.tech_stack == ["Python"]
+
+
+def test_design_factory_custom(mock_design_factory):
+    """Test that design_factory accepts custom values."""
+    design = mock_design_factory(title="Auth Feature", tech_stack=["FastAPI", "PyJWT"])
+    assert design.title == "Auth Feature"
+    assert design.tech_stack == ["FastAPI", "PyJWT"]
