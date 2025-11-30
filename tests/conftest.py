@@ -3,7 +3,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from amelia.core.state import Task
+from amelia.core.state import Task, TaskDAG
 from amelia.core.types import Issue
 from amelia.core.types import Profile
 from amelia.drivers.base import DriverInterface
@@ -84,6 +84,24 @@ def mock_task_factory():
             steps=steps or [],
             commit_message=commit_message
         )
+    return _create
+
+
+@pytest.fixture
+def mock_task_dag_factory(mock_task_factory):
+    """Factory fixture for creating test TaskDAG instances."""
+    def _create(
+        tasks: list[Task] | None = None,
+        num_tasks: int = 1,
+        original_issue: str = "TEST-123",
+        linear: bool = True
+    ) -> TaskDAG:
+        if tasks is None:
+            tasks = []
+            for i in range(1, num_tasks + 1):
+                deps = [str(i-1)] if linear and i > 1 else []
+                tasks.append(mock_task_factory(id=str(i), dependencies=deps))
+        return TaskDAG(tasks=tasks, original_issue=original_issue)
     return _create
 
 

@@ -55,3 +55,17 @@ def test_task_factory_custom(mock_task_factory):
     task = mock_task_factory(id="2", description="Custom task", dependencies=["1"])
     assert task.description == "Custom task"
     assert task.dependencies == ["1"]
+
+
+def test_task_dag_factory_simple(mock_task_dag_factory):
+    """Test that task_dag_factory creates simple DAG."""
+    dag = mock_task_dag_factory(num_tasks=2)
+    assert len(dag.tasks) == 2
+    assert dag.original_issue == "TEST-123"
+
+
+def test_task_dag_factory_linear(mock_task_dag_factory):
+    """Test that task_dag_factory creates linear dependencies."""
+    dag = mock_task_dag_factory(num_tasks=3, linear=True)
+    assert dag.tasks[1].dependencies == ["1"]
+    assert dag.tasks[2].dependencies == ["2"]
