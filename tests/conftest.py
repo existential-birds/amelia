@@ -5,6 +5,7 @@ import pytest
 
 from amelia.agents.reviewer import ReviewResponse
 from amelia.core.state import ExecutionState
+from amelia.core.state import ReviewResult
 from amelia.core.state import Task
 from amelia.core.state import TaskDAG
 from amelia.core.types import Design
@@ -174,6 +175,24 @@ def mock_review_response_factory():
             approved=approved,
             comments=comments or (["Looks good"] if approved else ["Needs changes"]),
             severity=severity
+        )
+    return _create
+
+
+@pytest.fixture
+def mock_review_result_factory():
+    """Factory fixture for creating ReviewResult instances."""
+    def _create(
+        approved: bool = True,
+        comments: list[str] | None = None,
+        severity: str = "low",
+        reviewer_persona: str = "Test Reviewer",
+    ) -> ReviewResult:
+        return ReviewResult(
+            approved=approved,
+            comments=comments or (["Looks good"] if approved else ["Needs changes"]),
+            severity=severity,
+            reviewer_persona=reviewer_persona
         )
     return _create
 

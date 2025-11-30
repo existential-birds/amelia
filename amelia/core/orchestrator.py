@@ -29,7 +29,7 @@ async def call_architect_node(state: ExecutionState) -> ExecutionState:
         
     driver = DriverFactory.get_driver(state.profile.driver)
     architect = Architect(driver)
-    plan_output = await architect.plan(state.issue)
+    plan_output = await architect.plan(state.issue, output_dir=state.profile.plan_output_dir)
 
     # Add a message to the state history
     messages = state.messages + [AgentMessage(role="assistant", content=f"Architect generated plan with {len(plan_output.task_dag.tasks)} tasks.")]
@@ -196,9 +196,23 @@ def should_continue_developer(state: ExecutionState) -> str:
     return "end"
 
 def should_continue_review_loop(state: ExecutionState) -> str:
-    # If the last review result is not approved, loop back to developer for fixes
+    """Determine whether to continue the review loop.
+
+    Returns 're_evaluate' if review was not approved AND there are tasks to execute.
+    Returns 'end' if:
+    - Review was approved
+    - Review was not approved but no tasks are ready (workflow is stuck)
+    """
     if state.review_results and not state.review_results[-1].approved:
-        return "re_evaluate"
+        # Only re-evaluate if there are tasks that can be executed
+        if state.plan and state.plan.get_ready_tasks():
+            return "re_evaluate"
+        # No tasks available - log and exit to prevent infinite loop
+        logger.warning(
+            "Review not approved but no tasks available to execute. "
+            "Ending workflow - manual intervention may be required."
+        )
+        return "end"
     return "end"
 
 def create_orchestrator_graph(checkpoint_saver: MemorySaver | None = None) -> Any:
