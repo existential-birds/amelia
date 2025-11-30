@@ -177,9 +177,21 @@ async def call_developer_node(state: ExecutionState) -> ExecutionState:
 
 # Define a conditional edge to decide if more tasks need to be run
 def should_continue_developer(state: ExecutionState) -> str:
-    # Continue if there are any pending tasks, regardless of dependencies
-    # The get_ready_tasks will ensure only ready ones are executed.
-    if state.plan and any(task.status == "pending" for task in state.plan.tasks):
+    """Determine whether to continue the developer loop.
+    
+    Returns 'continue' if there are ready tasks to execute.
+    Returns 'end' if:
+    - No plan exists
+    - All tasks are completed
+    - Pending tasks exist but none are ready (blocked by failed dependencies)
+    """
+    if not state.plan:
+        return "end"
+    
+    # Check for ready tasks, not just pending tasks.
+    # This prevents infinite loops when tasks are blocked by failed dependencies.
+    ready_tasks = state.plan.get_ready_tasks()
+    if ready_tasks:
         return "continue"
     return "end"
 

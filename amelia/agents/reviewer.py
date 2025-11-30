@@ -79,7 +79,13 @@ class Reviewer:
 
         # Aggregate results (simple aggregation: if any disapproves, overall disapproves)
         overall_approved = all(res.approved for res in results)
-        all_comments = [comment for res in results for comment in res.comments]
+        
+        # Prefix comments with persona name to preserve attribution
+        all_comments = [
+            f"[{res.reviewer_persona}] {comment}"
+            for res in results
+            for comment in res.comments
+        ]
         
         # Determine overall severity (e.g., highest severity from any review)
         severity_order: dict[Severity, int] = {"low": 0, "medium": 1, "high": 2, "critical": 3}
