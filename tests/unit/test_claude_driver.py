@@ -150,6 +150,52 @@ class TestClaudeCliDriver:
             await driver._execute_tool_impl("unknown_tool")
 
 
+class TestClaudeCliDriverPermissions:
+    """Tests for permission management in ClaudeCliDriver."""
+
+    def test_skip_permissions_default_false(self):
+        driver = ClaudeCliDriver()
+        assert driver.skip_permissions is False
+
+    def test_skip_permissions_configurable(self):
+        driver = ClaudeCliDriver(skip_permissions=True)
+        assert driver.skip_permissions is True
+
+    def test_allowed_tools_default_none(self):
+        driver = ClaudeCliDriver()
+        assert driver.allowed_tools is None
+
+    @pytest.mark.asyncio
+    async def test_skip_permissions_flag_added(self, messages, mock_subprocess_process_factory):
+        driver = ClaudeCliDriver(skip_permissions=True)
+        mock_process = mock_subprocess_process_factory(
+            stdout_lines=[b"response", b""],
+            return_code=0
+        )
+
+        with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=mock_process) as mock_exec:
+            await driver._generate_impl(messages)
+
+            args = mock_exec.call_args[0]
+            assert "--dangerously-skip-permissions" in args
+
+    @pytest.mark.asyncio
+    async def test_allowed_tools_flag_added(self, messages, mock_subprocess_process_factory):
+        driver = ClaudeCliDriver(allowed_tools=["Read", "Write", "Bash"])
+        mock_process = mock_subprocess_process_factory(
+            stdout_lines=[b"response", b""],
+            return_code=0
+        )
+
+        with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=mock_process) as mock_exec:
+            await driver._generate_impl(messages)
+
+            args = mock_exec.call_args[0]
+            assert "--allowedTools" in args
+            idx = args.index("--allowedTools")
+            assert args[idx + 1] == "Read,Write,Bash"
+
+
 class TestClaudeCliDriverSystemPrompt:
     """Tests for system prompt handling in ClaudeCliDriver."""
 

@@ -89,6 +89,9 @@ class ClaudeCliDriver(CliDriver):
 
     Attributes:
         model: Claude model to use (sonnet, opus, haiku).
+        skip_permissions: Whether to use --dangerously-skip-permissions flag.
+        allowed_tools: List of allowed tool names (passed via --allowedTools).
+        disallowed_tools: List of disallowed tool names (passed via --disallowedTools).
     """
 
     def __init__(
@@ -96,6 +99,9 @@ class ClaudeCliDriver(CliDriver):
         model: str = "sonnet",
         timeout: int = 30,
         max_retries: int = 0,
+        skip_permissions: bool = False,
+        allowed_tools: list[str] | None = None,
+        disallowed_tools: list[str] | None = None,
     ):
         """Initialize the Claude CLI driver.
 
@@ -103,9 +109,15 @@ class ClaudeCliDriver(CliDriver):
             model: Claude model to use. Defaults to "sonnet".
             timeout: Maximum execution time in seconds. Defaults to 30.
             max_retries: Number of retry attempts. Defaults to 0.
+            skip_permissions: Skip permission prompts. Defaults to False.
+            allowed_tools: List of allowed tool names. Defaults to None.
+            disallowed_tools: List of disallowed tool names. Defaults to None.
         """
         super().__init__(timeout, max_retries)
         self.model = model
+        self.skip_permissions = skip_permissions
+        self.allowed_tools = allowed_tools
+        self.disallowed_tools = disallowed_tools
 
     def _convert_messages_to_prompt(self, messages: list[AgentMessage]) -> str:
         """Converts a list of AgentMessages into a single string prompt.
@@ -139,6 +151,14 @@ class ClaudeCliDriver(CliDriver):
 
         # Build the command - we use -p for print mode (non-interactive)
         cmd_args = ["claude", "-p", "--model", self.model]
+
+        # Add permission flags
+        if self.skip_permissions:
+            cmd_args.append("--dangerously-skip-permissions")
+        if self.allowed_tools:
+            cmd_args.extend(["--allowedTools", ",".join(self.allowed_tools)])
+        if self.disallowed_tools:
+            cmd_args.extend(["--disallowedTools", ",".join(self.disallowed_tools)])
 
         # Add system prompt if present
         if system_messages:
