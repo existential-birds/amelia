@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field, model_validator
 DriverType = Literal["cli:claude", "cli:claude:agentic", "api:openai", "cli", "api"]
 TrackerType = Literal["jira", "github", "none", "noop"]
 StrategyType = Literal["single", "competitive"]
+ExecutionMode = Literal["structured", "agentic"]
 
 class Profile(BaseModel):
     """Configuration profile for Amelia execution.
