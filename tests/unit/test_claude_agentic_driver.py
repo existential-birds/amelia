@@ -1,10 +1,10 @@
 """Tests for ClaudeAgenticCliDriver."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
 from amelia.drivers.cli.agentic import ClaudeAgenticCliDriver
-from amelia.drivers.cli.claude import ClaudeStreamEvent
 
 
 class TestClaudeAgenticCliDriver:

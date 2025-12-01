@@ -2,10 +2,10 @@
 
 import pytest
 
-from amelia.drivers.factory import DriverFactory
-from amelia.drivers.cli.claude import ClaudeCliDriver
-from amelia.drivers.cli.agentic import ClaudeAgenticCliDriver
 from amelia.drivers.api.openai import ApiDriver
+from amelia.drivers.cli.agentic import ClaudeAgenticCliDriver
+from amelia.drivers.cli.claude import ClaudeCliDriver
+from amelia.drivers.factory import DriverFactory
 
 
 class TestDriverFactory:

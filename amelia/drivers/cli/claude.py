@@ -12,6 +12,7 @@ from amelia.drivers.cli.base import CliDriver
 from amelia.tools.safe_file import SafeFileWriter
 from amelia.tools.safe_shell import SafeShellExecutor
 
+
 ClaudeStreamEventType = Literal["assistant", "tool_use", "result", "error", "system"]
 
 

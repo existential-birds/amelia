@@ -2,27 +2,324 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Enhance the Claude CLI driver to leverage the full capabilities of the Claude Code CLI including system prompts, model selection, permission management, timeout enforcement, and max turns control.
+**Goal:** Enhance Amelia's Claude CLI driver with streaming support, session continuity, working directory control, and tool observability - inspired by remote-agentic-coding-system patterns while also adding model selection, system prompts, and permission management.
 
-**Architecture:** The `ClaudeCliDriver` wraps the `claude` CLI binary using async subprocess execution. We will add configuration parameters to the constructor and build CLI arguments dynamically based on these settings. All changes maintain backward compatibility with existing callers.
+**Architecture:** Add streaming JSON output parsing via async generators, session persistence through state, and optional agentic mode driver. All changes are backward compatible with existing `generate()` API. New capabilities exposed via `generate_stream()` method. Driver constructor gains configuration for model, permissions, and timeouts.
 
-**Tech Stack:** Python 3.12+, asyncio, Pydantic, pytest, pytest-asyncio
+**Tech Stack:** Python 3.12+, asyncio, Pydantic, pytest-asyncio, loguru
 
 ---
 
-## Task 1: Add Model Selection Support
+## Phase 1: Foundation - Streaming & Event Models
+
+### Task 1: Add ClaudeStreamEvent Model
 
 **Files:**
-- Modify: `amelia/drivers/cli/claude.py:16-19` (constructor)
-- Modify: `amelia/drivers/cli/claude.py:34-51` (`_generate_impl` command building)
-- Modify: `amelia/drivers/factory.py:12-13` (pass model to constructor)
+- Modify: `amelia/drivers/cli/claude.py:1-15`
 - Test: `tests/unit/test_claude_driver.py`
 
-**Step 1: Write the failing test for model parameter**
-
-Add to `tests/unit/test_claude_driver.py`:
+**Step 1: Write the failing test**
 
 ```python
+# tests/unit/test_claude_driver.py - add at top after existing imports
+
+from amelia.drivers.cli.claude import ClaudeStreamEvent, ClaudeStreamEventType
+
+
+class TestClaudeStreamEvent:
+    """Tests for ClaudeStreamEvent model."""
+
+    def test_assistant_event(self):
+        event = ClaudeStreamEvent(type="assistant", content="Hello world")
+        assert event.type == "assistant"
+        assert event.content == "Hello world"
+        assert event.tool_name is None
+        assert event.session_id is None
+
+    def test_tool_use_event(self):
+        event = ClaudeStreamEvent(
+            type="tool_use",
+            tool_name="Read",
+            tool_input={"file_path": "/test.py"}
+        )
+        assert event.type == "tool_use"
+        assert event.tool_name == "Read"
+        assert event.tool_input == {"file_path": "/test.py"}
+
+    def test_result_event_with_session(self):
+        event = ClaudeStreamEvent(type="result", session_id="sess_abc123")
+        assert event.type == "result"
+        assert event.session_id == "sess_abc123"
+
+    def test_error_event(self):
+        event = ClaudeStreamEvent(type="error", content="Something went wrong")
+        assert event.type == "error"
+        assert event.content == "Something went wrong"
+```
+
+**Step 2: Run test to verify it fails**
+
+Run: `uv run pytest tests/unit/test_claude_driver.py::TestClaudeStreamEvent -v`
+Expected: FAIL with "cannot import name 'ClaudeStreamEvent'"
+
+**Step 3: Write minimal implementation**
+
+```python
+# amelia/drivers/cli/claude.py - add after existing imports, before ClaudeCliDriver class
+
+from typing import Any, Literal
+
+ClaudeStreamEventType = Literal["assistant", "tool_use", "result", "error", "system"]
+
+
+class ClaudeStreamEvent(BaseModel):
+    """Event from Claude CLI stream-json output.
+
+    Attributes:
+        type: Event type (assistant, tool_use, result, error, system).
+        content: Text content for assistant/error/system events.
+        tool_name: Tool name for tool_use events.
+        tool_input: Tool input parameters for tool_use events.
+        session_id: Session ID from result events for session continuity.
+    """
+    type: ClaudeStreamEventType
+    content: str | None = None
+    tool_name: str | None = None
+    tool_input: dict[str, Any] | None = None
+    session_id: str | None = None
+```
+
+**Step 4: Run test to verify it passes**
+
+Run: `uv run pytest tests/unit/test_claude_driver.py::TestClaudeStreamEvent -v`
+Expected: PASS (4 tests)
+
+**Step 5: Commit**
+
+```bash
+git add amelia/drivers/cli/claude.py tests/unit/test_claude_driver.py
+git commit -m "feat(drivers): add ClaudeStreamEvent model for stream parsing"
+```
+
+---
+
+### Task 2: Add Stream Event Parsing Utility
+
+**Files:**
+- Modify: `amelia/drivers/cli/claude.py`
+- Test: `tests/unit/test_claude_driver.py`
+
+**Step 1: Write the failing test**
+
+```python
+# tests/unit/test_claude_driver.py - add to TestClaudeStreamEvent class
+
+def test_parse_assistant_message(self):
+    """Test parsing assistant message from stream-json."""
+    raw = '{"type":"assistant","message":{"content":[{"type":"text","text":"Hello"}]}}'
+    event = ClaudeStreamEvent.from_stream_json(raw)
+    assert event.type == "assistant"
+    assert event.content == "Hello"
+
+def test_parse_tool_use(self):
+    """Test parsing tool_use from stream-json."""
+    raw = '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Read","input":{"file_path":"/x.py"}}]}}'
+    event = ClaudeStreamEvent.from_stream_json(raw)
+    assert event.type == "tool_use"
+    assert event.tool_name == "Read"
+    assert event.tool_input == {"file_path": "/x.py"}
+
+def test_parse_result_with_session(self):
+    """Test parsing result event with session_id."""
+    raw = '{"type":"result","session_id":"sess_123","subtype":"success"}'
+    event = ClaudeStreamEvent.from_stream_json(raw)
+    assert event.type == "result"
+    assert event.session_id == "sess_123"
+
+def test_parse_malformed_json_returns_error(self):
+    """Test that malformed JSON returns error event."""
+    raw = 'not valid json'
+    event = ClaudeStreamEvent.from_stream_json(raw)
+    assert event.type == "error"
+    assert "parse" in event.content.lower()
+
+def test_parse_empty_line_returns_none(self):
+    """Test that empty lines return None."""
+    event = ClaudeStreamEvent.from_stream_json("")
+    assert event is None
+    event = ClaudeStreamEvent.from_stream_json("   ")
+    assert event is None
+```
+
+**Step 2: Run test to verify it fails**
+
+Run: `uv run pytest tests/unit/test_claude_driver.py::TestClaudeStreamEvent::test_parse_assistant_message -v`
+Expected: FAIL with "ClaudeStreamEvent has no attribute 'from_stream_json'"
+
+**Step 3: Write minimal implementation**
+
+```python
+# amelia/drivers/cli/claude.py - add class method to ClaudeStreamEvent
+
+class ClaudeStreamEvent(BaseModel):
+    """Event from Claude CLI stream-json output.
+
+    Attributes:
+        type: Event type (assistant, tool_use, result, error, system).
+        content: Text content for assistant/error/system events.
+        tool_name: Tool name for tool_use events.
+        tool_input: Tool input parameters for tool_use events.
+        session_id: Session ID from result events for session continuity.
+    """
+    type: ClaudeStreamEventType
+    content: str | None = None
+    tool_name: str | None = None
+    tool_input: dict[str, Any] | None = None
+    session_id: str | None = None
+
+    @classmethod
+    def from_stream_json(cls, line: str) -> "ClaudeStreamEvent | None":
+        """Parse a line from Claude CLI stream-json output.
+
+        Args:
+            line: Raw JSON line from stream output.
+
+        Returns:
+            Parsed event or None for empty lines, error event for malformed JSON.
+        """
+        stripped = line.strip()
+        if not stripped:
+            return None
+
+        try:
+            data = json.loads(stripped)
+        except json.JSONDecodeError as e:
+            return cls(type="error", content=f"Failed to parse stream JSON: {e}")
+
+        msg_type = data.get("type", "")
+
+        # Handle result events (contain session_id)
+        if msg_type == "result":
+            return cls(
+                type="result",
+                session_id=data.get("session_id")
+            )
+
+        # Handle assistant messages (contain content blocks)
+        if msg_type == "assistant":
+            message = data.get("message", {})
+            content_blocks = message.get("content", [])
+
+            for block in content_blocks:
+                block_type = block.get("type", "")
+
+                if block_type == "text":
+                    return cls(type="assistant", content=block.get("text", ""))
+
+                if block_type == "tool_use":
+                    return cls(
+                        type="tool_use",
+                        tool_name=block.get("name"),
+                        tool_input=block.get("input")
+                    )
+
+        # Handle system messages
+        if msg_type == "system":
+            return cls(type="system", content=data.get("message", ""))
+
+        # Unknown type - return as system event
+        return cls(type="system", content=f"Unknown event type: {msg_type}")
+```
+
+**Step 4: Run test to verify it passes**
+
+Run: `uv run pytest tests/unit/test_claude_driver.py::TestClaudeStreamEvent -v`
+Expected: PASS (9 tests)
+
+**Step 5: Commit**
+
+```bash
+git add amelia/drivers/cli/claude.py tests/unit/test_claude_driver.py
+git commit -m "feat(drivers): add stream-json parsing to ClaudeStreamEvent"
+```
+
+---
+
+### Task 3: Add session_id to ExecutionState
+
+**Files:**
+- Modify: `amelia/core/state.py:160-181`
+- Test: `tests/unit/test_state_models.py`
+
+**Step 1: Write the failing test**
+
+```python
+# tests/unit/test_state_models.py - add new test class
+
+class TestExecutionStateSession:
+    """Tests for session_id in ExecutionState."""
+
+    def test_execution_state_has_session_id(self, mock_profile_factory, mock_issue_factory):
+        state = ExecutionState(
+            profile=mock_profile_factory(),
+            issue=mock_issue_factory(),
+            claude_session_id="sess_abc123"
+        )
+        assert state.claude_session_id == "sess_abc123"
+
+    def test_execution_state_session_id_defaults_none(self, mock_profile_factory, mock_issue_factory):
+        state = ExecutionState(
+            profile=mock_profile_factory(),
+            issue=mock_issue_factory()
+        )
+        assert state.claude_session_id is None
+```
+
+**Step 2: Run test to verify it fails**
+
+Run: `uv run pytest tests/unit/test_state_models.py::TestExecutionStateSession -v`
+Expected: FAIL with "unexpected keyword argument 'claude_session_id'"
+
+**Step 3: Write minimal implementation**
+
+```python
+# amelia/core/state.py - add field to ExecutionState class (after code_changes_for_review)
+
+    claude_session_id: str | None = None
+```
+
+Update the docstring to include:
+```
+        claude_session_id: Session ID for Claude CLI session continuity.
+```
+
+**Step 4: Run test to verify it passes**
+
+Run: `uv run pytest tests/unit/test_state_models.py::TestExecutionStateSession -v`
+Expected: PASS (2 tests)
+
+**Step 5: Commit**
+
+```bash
+git add amelia/core/state.py tests/unit/test_state_models.py
+git commit -m "feat(state): add claude_session_id to ExecutionState for session continuity"
+```
+
+---
+
+## Phase 2: Driver Configuration Enhancements
+
+### Task 4: Add Model Selection Support
+
+**Files:**
+- Modify: `amelia/drivers/cli/claude.py` (constructor and `_generate_impl`)
+- Test: `tests/unit/test_claude_driver.py`
+
+**Step 1: Write the failing test**
+
+```python
+# tests/unit/test_claude_driver.py - add new test class
+
 class TestClaudeCliDriverModelSelection:
 
     def test_default_model_is_sonnet(self):
@@ -55,14 +352,16 @@ class TestClaudeCliDriverModelSelection:
 Run: `uv run pytest tests/unit/test_claude_driver.py::TestClaudeCliDriverModelSelection -v`
 Expected: FAIL with `AttributeError: 'ClaudeCliDriver' object has no attribute 'model'`
 
-**Step 3: Add model parameter to constructor**
-
-In `amelia/drivers/cli/claude.py`, modify the class:
+**Step 3: Write minimal implementation**
 
 ```python
+# amelia/drivers/cli/claude.py - modify constructor
+
 class ClaudeCliDriver(CliDriver):
-    """
-    Claude CLI Driver interacts with the Claude model via the local 'claude' CLI tool.
+    """Claude CLI Driver interacts with the Claude model via the local 'claude' CLI tool.
+
+    Attributes:
+        model: Claude model to use (sonnet, opus, haiku).
     """
 
     def __init__(
@@ -71,40 +370,32 @@ class ClaudeCliDriver(CliDriver):
         timeout: int = 30,
         max_retries: int = 0,
     ):
+        """Initialize the Claude CLI driver.
+
+        Args:
+            model: Claude model to use. Defaults to "sonnet".
+            timeout: Maximum execution time in seconds. Defaults to 30.
+            max_retries: Number of retry attempts. Defaults to 0.
+        """
         super().__init__(timeout, max_retries)
         self.model = model
 ```
 
-**Step 4: Add model flag to command building**
-
-In `amelia/drivers/cli/claude.py`, modify `_generate_impl`:
-
+In `_generate_impl`, change:
 ```python
-async def _generate_impl(self, messages: list[AgentMessage], schema: type[BaseModel] | None = None) -> Any:
-    """
-    Generates a response using the 'claude' CLI.
-    """
-    full_prompt = self._convert_messages_to_prompt(messages)
-
-    # Build the command
-    # We use -p for print mode (non-interactive)
-    cmd_args = ["claude", "-p", "--model", self.model]
-
-    if schema:
-        # ... rest unchanged
+cmd_args = ["claude", "-p"]
+```
+to:
+```python
+cmd_args = ["claude", "-p", "--model", self.model]
 ```
 
-**Step 5: Run test to verify it passes**
+**Step 4: Run test to verify it passes**
 
 Run: `uv run pytest tests/unit/test_claude_driver.py::TestClaudeCliDriverModelSelection -v`
 Expected: PASS
 
-**Step 6: Run full test suite to check for regressions**
-
-Run: `uv run pytest tests/unit/test_claude_driver.py -v`
-Expected: All tests PASS
-
-**Step 7: Commit**
+**Step 5: Commit**
 
 ```bash
 git add amelia/drivers/cli/claude.py tests/unit/test_claude_driver.py
@@ -113,18 +404,17 @@ git commit -m "feat(cli-driver): add model selection support"
 
 ---
 
-## Task 2: Add System Prompt Handling
+### Task 5: Add System Prompt Handling
 
 **Files:**
-- Modify: `amelia/drivers/cli/claude.py:21-32` (`_convert_messages_to_prompt`)
-- Modify: `amelia/drivers/cli/claude.py:34-51` (`_generate_impl`)
+- Modify: `amelia/drivers/cli/claude.py`
 - Test: `tests/unit/test_claude_driver.py`
 
-**Step 1: Write the failing tests for system prompt handling**
-
-Add to `tests/unit/test_claude_driver.py`:
+**Step 1: Write the failing test**
 
 ```python
+# tests/unit/test_claude_driver.py - add new test class
+
 class TestClaudeCliDriverSystemPrompt:
 
     @pytest.fixture
@@ -160,28 +450,6 @@ class TestClaudeCliDriverSystemPrompt:
             assert args[sys_idx + 1] == "You are a helpful assistant."
 
     @pytest.mark.asyncio
-    async def test_multiple_system_messages_concatenated(self, mock_subprocess_process_factory):
-        driver = ClaudeCliDriver()
-        messages = [
-            AgentMessage(role="system", content="Rule 1: Be helpful."),
-            AgentMessage(role="system", content="Rule 2: Be concise."),
-            AgentMessage(role="user", content="Hello"),
-        ]
-        mock_process = mock_subprocess_process_factory(
-            stdout_lines=[b"response", b""],
-            return_code=0
-        )
-
-        with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=mock_process) as mock_exec:
-            await driver._generate_impl(messages)
-
-            args = mock_exec.call_args[0]
-            sys_idx = args.index("--append-system-prompt")
-            system_prompt = args[sys_idx + 1]
-            assert "Rule 1: Be helpful." in system_prompt
-            assert "Rule 2: Be concise." in system_prompt
-
-    @pytest.mark.asyncio
     async def test_no_system_prompt_flag_when_no_system_messages(self, messages, mock_subprocess_process_factory):
         driver = ClaudeCliDriver()
         mock_process = mock_subprocess_process_factory(
@@ -201,14 +469,13 @@ class TestClaudeCliDriverSystemPrompt:
 Run: `uv run pytest tests/unit/test_claude_driver.py::TestClaudeCliDriverSystemPrompt -v`
 Expected: FAIL
 
-**Step 3: Modify `_convert_messages_to_prompt` to filter system messages**
+**Step 3: Write minimal implementation**
 
-In `amelia/drivers/cli/claude.py`:
-
+Modify `_convert_messages_to_prompt` to filter system messages:
 ```python
 def _convert_messages_to_prompt(self, messages: list[AgentMessage]) -> str:
-    """
-    Converts a list of AgentMessages into a single string prompt.
+    """Converts a list of AgentMessages into a single string prompt.
+
     System messages are excluded as they are handled separately via CLI flags.
     """
     prompt_parts = []
@@ -219,26 +486,17 @@ def _convert_messages_to_prompt(self, messages: list[AgentMessage]) -> str:
         content = msg.content or ""
         prompt_parts.append(f"{role_str}: {content}")
 
-    # Join with newlines to create a transcript-like format
     return "\n\n".join(prompt_parts)
 ```
 
-**Step 4: Modify `_generate_impl` to extract and pass system prompts**
-
-In `amelia/drivers/cli/claude.py`:
-
+Modify `_generate_impl` to extract and pass system prompts:
 ```python
 async def _generate_impl(self, messages: list[AgentMessage], schema: type[BaseModel] | None = None) -> Any:
-    """
-    Generates a response using the 'claude' CLI.
-    """
     # Extract system messages
     system_messages = [m for m in messages if m.role == "system"]
 
     full_prompt = self._convert_messages_to_prompt(messages)
 
-    # Build the command
-    # We use -p for print mode (non-interactive)
     cmd_args = ["claude", "-p", "--model", self.model]
 
     # Add system prompt if present
@@ -246,26 +504,15 @@ async def _generate_impl(self, messages: list[AgentMessage], schema: type[BaseMo
         system_prompt = "\n\n".join(m.content for m in system_messages)
         cmd_args.extend(["--append-system-prompt", system_prompt])
 
-    if schema:
-        # Generate JSON schema
-        json_schema = json.dumps(schema.model_json_schema())
-        cmd_args.extend(["--json-schema", json_schema])
-        cmd_args.extend(["--output-format", "json"])
-
-    # ... rest unchanged from line 53 onwards
+    # ... rest unchanged
 ```
 
-**Step 5: Run test to verify it passes**
+**Step 4: Run test to verify it passes**
 
 Run: `uv run pytest tests/unit/test_claude_driver.py::TestClaudeCliDriverSystemPrompt -v`
 Expected: PASS
 
-**Step 6: Run full test suite**
-
-Run: `uv run pytest tests/unit/test_claude_driver.py -v`
-Expected: All tests PASS
-
-**Step 7: Commit**
+**Step 5: Commit**
 
 ```bash
 git add amelia/drivers/cli/claude.py tests/unit/test_claude_driver.py
@@ -274,18 +521,17 @@ git commit -m "feat(cli-driver): add system prompt handling via --append-system-
 
 ---
 
-## Task 3: Add Permission Management
+### Task 6: Add Permission Management
 
 **Files:**
-- Modify: `amelia/drivers/cli/claude.py:16-30` (constructor)
-- Modify: `amelia/drivers/cli/claude.py:34-60` (`_generate_impl`)
+- Modify: `amelia/drivers/cli/claude.py`
 - Test: `tests/unit/test_claude_driver.py`
 
-**Step 1: Write the failing tests for permission management**
-
-Add to `tests/unit/test_claude_driver.py`:
+**Step 1: Write the failing test**
 
 ```python
+# tests/unit/test_claude_driver.py - add new test class
+
 class TestClaudeCliDriverPermissions:
 
     def test_skip_permissions_default_false(self):
@@ -299,10 +545,6 @@ class TestClaudeCliDriverPermissions:
     def test_allowed_tools_default_none(self):
         driver = ClaudeCliDriver()
         assert driver.allowed_tools is None
-
-    def test_disallowed_tools_default_none(self):
-        driver = ClaudeCliDriver()
-        assert driver.disallowed_tools is None
 
     @pytest.mark.asyncio
     async def test_skip_permissions_flag_added(self, messages, mock_subprocess_process_factory):
@@ -319,20 +561,6 @@ class TestClaudeCliDriverPermissions:
             assert "--dangerously-skip-permissions" in args
 
     @pytest.mark.asyncio
-    async def test_skip_permissions_flag_not_added_when_false(self, messages, mock_subprocess_process_factory):
-        driver = ClaudeCliDriver(skip_permissions=False)
-        mock_process = mock_subprocess_process_factory(
-            stdout_lines=[b"response", b""],
-            return_code=0
-        )
-
-        with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=mock_process) as mock_exec:
-            await driver._generate_impl(messages)
-
-            args = mock_exec.call_args[0]
-            assert "--dangerously-skip-permissions" not in args
-
-    @pytest.mark.asyncio
     async def test_allowed_tools_flag_added(self, messages, mock_subprocess_process_factory):
         driver = ClaudeCliDriver(allowed_tools=["Read", "Write", "Bash"])
         mock_process = mock_subprocess_process_factory(
@@ -347,86 +575,52 @@ class TestClaudeCliDriverPermissions:
             assert "--allowedTools" in args
             idx = args.index("--allowedTools")
             assert args[idx + 1] == "Read,Write,Bash"
-
-    @pytest.mark.asyncio
-    async def test_disallowed_tools_flag_added(self, messages, mock_subprocess_process_factory):
-        driver = ClaudeCliDriver(disallowed_tools=["Bash"])
-        mock_process = mock_subprocess_process_factory(
-            stdout_lines=[b"response", b""],
-            return_code=0
-        )
-
-        with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=mock_process) as mock_exec:
-            await driver._generate_impl(messages)
-
-            args = mock_exec.call_args[0]
-            assert "--disallowedTools" in args
-            idx = args.index("--disallowedTools")
-            assert args[idx + 1] == "Bash"
 ```
 
 **Step 2: Run test to verify it fails**
 
 Run: `uv run pytest tests/unit/test_claude_driver.py::TestClaudeCliDriverPermissions -v`
-Expected: FAIL with `AttributeError: 'ClaudeCliDriver' object has no attribute 'skip_permissions'`
+Expected: FAIL
 
-**Step 3: Add permission parameters to constructor**
+**Step 3: Write minimal implementation**
 
-In `amelia/drivers/cli/claude.py`:
-
+Update constructor:
 ```python
-class ClaudeCliDriver(CliDriver):
-    """
-    Claude CLI Driver interacts with the Claude model via the local 'claude' CLI tool.
-    """
-
-    def __init__(
-        self,
-        model: str = "sonnet",
-        timeout: int = 30,
-        max_retries: int = 0,
-        skip_permissions: bool = False,
-        allowed_tools: list[str] | None = None,
-        disallowed_tools: list[str] | None = None,
-    ):
-        super().__init__(timeout, max_retries)
-        self.model = model
-        self.skip_permissions = skip_permissions
-        self.allowed_tools = allowed_tools
-        self.disallowed_tools = disallowed_tools
+def __init__(
+    self,
+    model: str = "sonnet",
+    timeout: int = 30,
+    max_retries: int = 0,
+    skip_permissions: bool = False,
+    allowed_tools: list[str] | None = None,
+    disallowed_tools: list[str] | None = None,
+):
+    super().__init__(timeout, max_retries)
+    self.model = model
+    self.skip_permissions = skip_permissions
+    self.allowed_tools = allowed_tools
+    self.disallowed_tools = disallowed_tools
 ```
 
-**Step 4: Add permission flags to command building**
-
-In `amelia/drivers/cli/claude.py`, add after the model flag in `_generate_impl`:
-
+Add permission flags in `_generate_impl`:
 ```python
-    # Build the command
-    cmd_args = ["claude", "-p", "--model", self.model]
+cmd_args = ["claude", "-p", "--model", self.model]
 
-    # Add permission flags
-    if self.skip_permissions:
-        cmd_args.append("--dangerously-skip-permissions")
-    if self.allowed_tools:
-        cmd_args.extend(["--allowedTools", ",".join(self.allowed_tools)])
-    if self.disallowed_tools:
-        cmd_args.extend(["--disallowedTools", ",".join(self.disallowed_tools)])
-
-    # Add system prompt if present
-    # ... rest unchanged
+# Add permission flags
+if self.skip_permissions:
+    cmd_args.append("--dangerously-skip-permissions")
+if self.allowed_tools:
+    cmd_args.extend(["--allowedTools", ",".join(self.allowed_tools)])
+if self.disallowed_tools:
+    cmd_args.extend(["--disallowedTools", ",".join(self.disallowed_tools)])
 ```
 
-**Step 5: Run test to verify it passes**
+**Step 4: Run test to verify it passes**
 
 Run: `uv run pytest tests/unit/test_claude_driver.py::TestClaudeCliDriverPermissions -v`
 Expected: PASS
 
-**Step 6: Run full test suite**
-
-Run: `uv run pytest tests/unit/test_claude_driver.py -v`
-Expected: All tests PASS
-
-**Step 7: Commit**
+**Step 5: Commit**
 
 ```bash
 git add amelia/drivers/cli/claude.py tests/unit/test_claude_driver.py
@@ -435,270 +629,586 @@ git commit -m "feat(cli-driver): add permission management (skip_permissions, al
 
 ---
 
-## Task 4: Add Timeout Enforcement
+## Phase 3: Streaming & Session Continuity
+
+### Task 7: Add generate_stream() Method
 
 **Files:**
-- Modify: `amelia/drivers/cli/claude.py:86-88` (subprocess wait)
+- Modify: `amelia/drivers/cli/claude.py`
 - Test: `tests/unit/test_claude_driver.py`
 
-**Step 1: Write the failing test for timeout enforcement**
-
-Add to `tests/unit/test_claude_driver.py`:
+**Step 1: Write the failing test**
 
 ```python
-class TestClaudeCliDriverTimeout:
+# tests/unit/test_claude_driver.py - add new test class
+
+class TestClaudeCliDriverStreaming:
+    """Tests for streaming generate method."""
+
+    @pytest.fixture
+    def stream_lines(self):
+        """Fixture providing mock stream-json output lines."""
+        return [
+            b'{"type":"assistant","message":{"content":[{"type":"text","text":"Hello"}]}}\n',
+            b'{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Read","input":{"file_path":"/x.py"}}]}}\n',
+            b'{"type":"assistant","message":{"content":[{"type":"text","text":"Done!"}]}}\n',
+            b'{"type":"result","session_id":"sess_xyz789","subtype":"success"}\n',
+            b''  # EOF
+        ]
 
     @pytest.mark.asyncio
-    async def test_timeout_kills_process(self, messages):
-        driver = ClaudeCliDriver(timeout=1)
-
-        # Create a process that hangs
+    async def test_generate_stream_yields_events(self, driver, messages, stream_lines):
+        """Test that generate_stream yields ClaudeStreamEvent objects."""
         mock_process = AsyncMock()
         mock_process.stdin = MagicMock()
         mock_process.stdin.drain = AsyncMock()
-
-        # stdout.readline() hangs forever
-        async def hang_forever():
-            await asyncio.sleep(100)
-            return b""
-        mock_process.stdout.readline = hang_forever
+        mock_process.stdout.readline = AsyncMock(side_effect=stream_lines)
         mock_process.stderr.read = AsyncMock(return_value=b"")
-        mock_process.kill = MagicMock()
-        mock_process.wait = AsyncMock()
+        mock_process.returncode = 0
+        mock_process.wait = AsyncMock(return_value=0)
 
         with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=mock_process):
-            with pytest.raises(RuntimeError, match="timed out"):
-                await driver._generate_impl(messages)
+            events = []
+            async for event in driver.generate_stream(messages):
+                events.append(event)
 
-            mock_process.kill.assert_called_once()
+            assert len(events) == 4
+            assert events[0].type == "assistant"
+            assert events[0].content == "Hello"
+            assert events[1].type == "tool_use"
+            assert events[1].tool_name == "Read"
+            assert events[2].type == "assistant"
+            assert events[2].content == "Done!"
+            assert events[3].type == "result"
+            assert events[3].session_id == "sess_xyz789"
+
+    @pytest.mark.asyncio
+    async def test_generate_stream_captures_session_id(self, driver, messages, stream_lines):
+        """Test that generate_stream captures session_id from result event."""
+        mock_process = AsyncMock()
+        mock_process.stdin = MagicMock()
+        mock_process.stdin.drain = AsyncMock()
+        mock_process.stdout.readline = AsyncMock(side_effect=stream_lines)
+        mock_process.stderr.read = AsyncMock(return_value=b"")
+        mock_process.returncode = 0
+        mock_process.wait = AsyncMock(return_value=0)
+
+        with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=mock_process):
+            session_id = None
+            async for event in driver.generate_stream(messages):
+                if event.type == "result" and event.session_id:
+                    session_id = event.session_id
+
+            assert session_id == "sess_xyz789"
 ```
 
 **Step 2: Run test to verify it fails**
 
-Run: `uv run pytest tests/unit/test_claude_driver.py::TestClaudeCliDriverTimeout -v`
-Expected: FAIL (test hangs or doesn't raise RuntimeError with "timed out")
+Run: `uv run pytest tests/unit/test_claude_driver.py::TestClaudeCliDriverStreaming -v`
+Expected: FAIL with "'ClaudeCliDriver' object has no attribute 'generate_stream'"
 
-**Step 3: Add timeout enforcement to subprocess execution**
-
-In `amelia/drivers/cli/claude.py`, modify the gathering section:
+**Step 3: Write minimal implementation**
 
 ```python
-            # Run readers concurrently with timeout
-            try:
-                await asyncio.wait_for(
-                    asyncio.gather(read_stdout(), read_stderr()),
-                    timeout=self.timeout
-                )
-            except asyncio.TimeoutError:
-                process.kill()
-                await process.wait()
-                raise RuntimeError(f"Claude CLI timed out after {self.timeout}s")
+# amelia/drivers/cli/claude.py - add imports and method
+
+from collections.abc import AsyncIterator
+
+class ClaudeCliDriver(CliDriver):
+    # ... existing code ...
+
+    async def generate_stream(
+        self,
+        messages: list[AgentMessage],
+        session_id: str | None = None,
+        cwd: str | None = None
+    ) -> AsyncIterator[ClaudeStreamEvent]:
+        """Generate a streaming response from Claude CLI.
+
+        Args:
+            messages: History of conversation messages.
+            session_id: Optional session ID to resume a previous conversation.
+            cwd: Optional working directory for Claude CLI context.
+
+        Yields:
+            ClaudeStreamEvent objects as they are parsed from the stream.
+        """
+        # Extract system messages
+        system_messages = [m for m in messages if m.role == "system"]
+        full_prompt = self._convert_messages_to_prompt(messages)
+
+        cmd_args = ["claude", "-p", "--model", self.model, "--output-format", "stream-json"]
+
+        # Add permission flags
+        if self.skip_permissions:
+            cmd_args.append("--dangerously-skip-permissions")
+        if self.allowed_tools:
+            cmd_args.extend(["--allowedTools", ",".join(self.allowed_tools)])
+        if self.disallowed_tools:
+            cmd_args.extend(["--disallowedTools", ",".join(self.disallowed_tools)])
+
+        # Add system prompt if present
+        if system_messages:
+            system_prompt = "\n\n".join(m.content for m in system_messages)
+            cmd_args.extend(["--append-system-prompt", system_prompt])
+
+        if session_id:
+            cmd_args.extend(["--resume", session_id])
+            logger.info(f"Resuming Claude session: {session_id}")
+
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *cmd_args,
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                cwd=cwd
+            )
+
+            if process.stdin:
+                process.stdin.write(full_prompt.encode())
+                await process.stdin.drain()
+                process.stdin.close()
+
+            # Stream stdout line by line
+            if process.stdout:
+                while True:
+                    line = await process.stdout.readline()
+                    if not line:
+                        break
+
+                    event = ClaudeStreamEvent.from_stream_json(line.decode())
+                    if event:
+                        yield event
 
             await process.wait()
+
+            if process.returncode != 0:
+                stderr_data = await process.stderr.read() if process.stderr else b""
+                logger.error(f"Claude CLI failed: {stderr_data.decode()}")
+
+        except Exception as e:
+            logger.error(f"Error in Claude CLI streaming: {e}")
+            yield ClaudeStreamEvent(type="error", content=str(e))
 ```
 
 **Step 4: Run test to verify it passes**
 
-Run: `uv run pytest tests/unit/test_claude_driver.py::TestClaudeCliDriverTimeout -v`
-Expected: PASS
+Run: `uv run pytest tests/unit/test_claude_driver.py::TestClaudeCliDriverStreaming -v`
+Expected: PASS (2 tests)
 
-**Step 5: Run full test suite**
-
-Run: `uv run pytest tests/unit/test_claude_driver.py -v`
-Expected: All tests PASS
-
-**Step 6: Commit**
+**Step 5: Commit**
 
 ```bash
 git add amelia/drivers/cli/claude.py tests/unit/test_claude_driver.py
-git commit -m "feat(cli-driver): enforce timeout on subprocess execution"
+git commit -m "feat(drivers): add generate_stream() method for streaming Claude responses"
 ```
 
 ---
 
-## Task 5: Add Max Turns Control
+### Task 8: Add --resume and cwd Support to generate()
 
 **Files:**
-- Modify: `amelia/drivers/cli/claude.py` (constructor and `_generate_impl`)
+- Modify: `amelia/drivers/cli/claude.py`
 - Test: `tests/unit/test_claude_driver.py`
 
-**Step 1: Write the failing tests for max turns**
-
-Add to `tests/unit/test_claude_driver.py`:
+**Step 1: Write the failing test**
 
 ```python
-class TestClaudeCliDriverMaxTurns:
+# tests/unit/test_claude_driver.py - add to TestClaudeCliDriver class
 
-    def test_max_turns_default_none(self):
-        driver = ClaudeCliDriver()
-        assert driver.max_turns is None
+@pytest.mark.asyncio
+async def test_generate_with_session_resume(self, driver, messages, mock_subprocess_process_factory):
+    """Test that generate passes --resume when session_id provided."""
+    mock_process = mock_subprocess_process_factory(
+        stdout_lines=[b"Resumed response", b""],
+        return_code=0
+    )
 
-    def test_max_turns_configurable(self):
-        driver = ClaudeCliDriver(max_turns=5)
-        assert driver.max_turns == 5
+    with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=mock_process) as mock_exec:
+        response = await driver._generate_impl(messages, session_id="sess_resume123")
 
-    @pytest.mark.asyncio
-    async def test_max_turns_flag_added_when_set(self, messages, mock_subprocess_process_factory):
-        driver = ClaudeCliDriver(max_turns=10)
-        mock_process = mock_subprocess_process_factory(
-            stdout_lines=[b"response", b""],
-            return_code=0
-        )
+        assert response == "Resumed response"
+        mock_exec.assert_called_once()
+        args = mock_exec.call_args[0]
+        assert "--resume" in args
+        assert "sess_resume123" in args
 
-        with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=mock_process) as mock_exec:
-            await driver._generate_impl(messages)
+@pytest.mark.asyncio
+async def test_generate_with_working_directory(self, driver, messages, mock_subprocess_process_factory):
+    """Test that generate passes cwd to subprocess."""
+    mock_process = mock_subprocess_process_factory(
+        stdout_lines=[b"Response from cwd", b""],
+        return_code=0
+    )
 
-            args = mock_exec.call_args[0]
-            assert "--max-turns" in args
-            idx = args.index("--max-turns")
-            assert args[idx + 1] == "10"
+    with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=mock_process) as mock_exec:
+        response = await driver._generate_impl(messages, cwd="/workspace/project")
 
-    @pytest.mark.asyncio
-    async def test_max_turns_flag_not_added_when_none(self, messages, mock_subprocess_process_factory):
-        driver = ClaudeCliDriver(max_turns=None)
-        mock_process = mock_subprocess_process_factory(
-            stdout_lines=[b"response", b""],
-            return_code=0
-        )
-
-        with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=mock_process) as mock_exec:
-            await driver._generate_impl(messages)
-
-            args = mock_exec.call_args[0]
-            assert "--max-turns" not in args
+        assert response == "Response from cwd"
+        kwargs = mock_exec.call_args[1]
+        assert kwargs.get("cwd") == "/workspace/project"
 ```
 
 **Step 2: Run test to verify it fails**
 
-Run: `uv run pytest tests/unit/test_claude_driver.py::TestClaudeCliDriverMaxTurns -v`
-Expected: FAIL with `AttributeError: 'ClaudeCliDriver' object has no attribute 'max_turns'`
+Run: `uv run pytest tests/unit/test_claude_driver.py::TestClaudeCliDriver::test_generate_with_session_resume -v`
+Expected: FAIL with "got an unexpected keyword argument 'session_id'"
 
-**Step 3: Add max_turns parameter to constructor**
+**Step 3: Write minimal implementation**
 
-In `amelia/drivers/cli/claude.py`, update constructor:
+Update `_generate_impl` signature and add --resume/cwd handling:
 
 ```python
+async def _generate_impl(
+    self,
+    messages: list[AgentMessage],
+    schema: type[BaseModel] | None = None,
+    session_id: str | None = None,
+    cwd: str | None = None
+) -> Any:
+    """Generates a response using the 'claude' CLI.
+
+    Args:
+        messages: Conversation history.
+        schema: Optional Pydantic model for structured output.
+        session_id: Optional session ID to resume a previous conversation.
+        cwd: Optional working directory for Claude CLI context.
+
+    Returns:
+        Either a string (if no schema) or an instance of the schema.
+    """
+    # ... existing setup code ...
+
+    # Add resume support
+    if session_id:
+        cmd_args.extend(["--resume", session_id])
+        logger.info(f"Resuming Claude session: {session_id}")
+
+    # ... rest of method, update subprocess call:
+    process = await asyncio.create_subprocess_exec(
+        *cmd_args,
+        stdin=asyncio.subprocess.PIPE,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        cwd=cwd  # Add cwd parameter
+    )
+```
+
+**Step 4: Run test to verify it passes**
+
+Run: `uv run pytest tests/unit/test_claude_driver.py::TestClaudeCliDriver::test_generate_with_session_resume tests/unit/test_claude_driver.py::TestClaudeCliDriver::test_generate_with_working_directory -v`
+Expected: PASS
+
+**Step 5: Commit**
+
+```bash
+git add amelia/drivers/cli/claude.py tests/unit/test_claude_driver.py
+git commit -m "feat(drivers): add --resume and cwd support to Claude CLI driver"
+```
+
+---
+
+## Phase 4: Agentic Driver Mode
+
+### Task 9: Create ClaudeAgenticCliDriver Class
+
+**Files:**
+- Create: `amelia/drivers/cli/agentic.py`
+- Test: `tests/unit/test_claude_agentic_driver.py`
+
+**Step 1: Write the failing test**
+
+```python
+# tests/unit/test_claude_agentic_driver.py - create new file
+
+import pytest
+from unittest.mock import AsyncMock, MagicMock, patch
+
+from amelia.drivers.cli.agentic import ClaudeAgenticCliDriver
+from amelia.drivers.cli.claude import ClaudeStreamEvent
+
+
+class TestClaudeAgenticCliDriver:
+    """Tests for ClaudeAgenticCliDriver."""
+
+    @pytest.fixture
+    def agentic_driver(self):
+        return ClaudeAgenticCliDriver()
+
+    @pytest.fixture
+    def agentic_stream_lines(self):
+        """Stream output including tool execution."""
+        return [
+            b'{"type":"assistant","message":{"content":[{"type":"text","text":"Let me read the file"}]}}\n',
+            b'{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Read","input":{"file_path":"/test.py"}}]}}\n',
+            b'{"type":"assistant","message":{"content":[{"type":"text","text":"The file contains..."}]}}\n',
+            b'{"type":"result","session_id":"agentic_sess_001","subtype":"success"}\n',
+            b''
+        ]
+
+    @pytest.mark.asyncio
+    async def test_execute_agentic_uses_skip_permissions(self, agentic_driver, agentic_stream_lines):
+        """Test that execute_agentic uses --dangerously-skip-permissions."""
+        mock_process = AsyncMock()
+        mock_process.stdin = MagicMock()
+        mock_process.stdin.drain = AsyncMock()
+        mock_process.stdout.readline = AsyncMock(side_effect=agentic_stream_lines)
+        mock_process.stderr.read = AsyncMock(return_value=b"")
+        mock_process.returncode = 0
+        mock_process.wait = AsyncMock(return_value=0)
+
+        with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=mock_process) as mock_exec:
+            events = []
+            async for event in agentic_driver.execute_agentic(
+                prompt="Read the test file",
+                cwd="/workspace"
+            ):
+                events.append(event)
+
+            args = mock_exec.call_args[0]
+            assert "--dangerously-skip-permissions" in args
+
+    @pytest.mark.asyncio
+    async def test_execute_agentic_tracks_tool_calls(self, agentic_driver, agentic_stream_lines):
+        """Test that tool calls are tracked in history."""
+        mock_process = AsyncMock()
+        mock_process.stdin = MagicMock()
+        mock_process.stdin.drain = AsyncMock()
+        mock_process.stdout.readline = AsyncMock(side_effect=agentic_stream_lines)
+        mock_process.stderr.read = AsyncMock(return_value=b"")
+        mock_process.returncode = 0
+        mock_process.wait = AsyncMock(return_value=0)
+
+        with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=mock_process):
+            async for _ in agentic_driver.execute_agentic(
+                prompt="Read the test file",
+                cwd="/workspace"
+            ):
+                pass
+
+            assert len(agentic_driver.tool_call_history) == 1
+            assert agentic_driver.tool_call_history[0].tool_name == "Read"
+```
+
+**Step 2: Run test to verify it fails**
+
+Run: `uv run pytest tests/unit/test_claude_agentic_driver.py -v`
+Expected: FAIL with "No module named 'amelia.drivers.cli.agentic'"
+
+**Step 3: Write minimal implementation**
+
+```python
+# amelia/drivers/cli/agentic.py - create new file
+
+"""Claude Agentic CLI Driver for autonomous code execution."""
+
+import asyncio
+from collections.abc import AsyncIterator
+
+from loguru import logger
+
+from amelia.drivers.cli.base import CliDriver
+from amelia.drivers.cli.claude import ClaudeStreamEvent
+
+
+class ClaudeAgenticCliDriver(CliDriver):
+    """Claude CLI Driver for fully autonomous agentic execution.
+
+    Uses --dangerously-skip-permissions for YOLO mode where Claude
+    executes tools autonomously. Tracks tool calls for observability.
+
+    Attributes:
+        tool_call_history: List of tool call events for audit logging.
+        model: Claude model to use.
+    """
+
     def __init__(
         self,
         model: str = "sonnet",
-        timeout: int = 30,
-        max_retries: int = 0,
-        skip_permissions: bool = False,
-        allowed_tools: list[str] | None = None,
-        disallowed_tools: list[str] | None = None,
-        max_turns: int | None = None,
+        timeout: int = 300,
+        max_retries: int = 0
     ):
-        super().__init__(timeout, max_retries)
+        """Initialize the agentic driver.
+
+        Args:
+            model: Claude model to use. Defaults to "sonnet".
+            timeout: Maximum execution time in seconds. Defaults to 300 (5 min).
+            max_retries: Number of retry attempts. Defaults to 0.
+        """
+        super().__init__(timeout=timeout, max_retries=max_retries)
         self.model = model
-        self.skip_permissions = skip_permissions
-        self.allowed_tools = allowed_tools
-        self.disallowed_tools = disallowed_tools
-        self.max_turns = max_turns
+        self.tool_call_history: list[ClaudeStreamEvent] = []
+
+    async def execute_agentic(
+        self,
+        prompt: str,
+        cwd: str,
+        session_id: str | None = None
+    ) -> AsyncIterator[ClaudeStreamEvent]:
+        """Execute a prompt with full Claude Code tool access.
+
+        Args:
+            prompt: The task or instruction for Claude.
+            cwd: Working directory for Claude Code context.
+            session_id: Optional session ID to resume.
+
+        Yields:
+            ClaudeStreamEvent objects including tool executions.
+        """
+        cmd_args = [
+            "claude", "-p",
+            "--model", self.model,
+            "--output-format", "stream-json",
+            "--dangerously-skip-permissions"  # YOLO mode
+        ]
+
+        if session_id:
+            cmd_args.extend(["--resume", session_id])
+            logger.info(f"Resuming agentic session: {session_id}")
+
+        logger.info(f"Starting agentic execution in {cwd}")
+
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *cmd_args,
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                cwd=cwd
+            )
+
+            if process.stdin:
+                process.stdin.write(prompt.encode())
+                await process.stdin.drain()
+                process.stdin.close()
+
+            if process.stdout:
+                while True:
+                    line = await process.stdout.readline()
+                    if not line:
+                        break
+
+                    event = ClaudeStreamEvent.from_stream_json(line.decode())
+                    if event:
+                        # Track tool calls for observability
+                        if event.type == "tool_use":
+                            self.tool_call_history.append(event)
+                            logger.info(f"Tool call: {event.tool_name}")
+
+                        yield event
+
+            await process.wait()
+
+            if process.returncode != 0:
+                stderr_data = await process.stderr.read() if process.stderr else b""
+                logger.error(f"Agentic execution failed: {stderr_data.decode()}")
+
+        except Exception as e:
+            logger.error(f"Error in agentic execution: {e}")
+            yield ClaudeStreamEvent(type="error", content=str(e))
+
+    def clear_tool_history(self) -> None:
+        """Clear the tool call history."""
+        self.tool_call_history = []
 ```
 
-**Step 4: Add max_turns flag to command building**
+**Step 4: Run test to verify it passes**
 
-In `amelia/drivers/cli/claude.py`, add after permission flags in `_generate_impl`:
+Run: `uv run pytest tests/unit/test_claude_agentic_driver.py -v`
+Expected: PASS (2 tests)
 
-```python
-    # Add max turns if specified
-    if self.max_turns is not None:
-        cmd_args.extend(["--max-turns", str(self.max_turns)])
-```
-
-**Step 5: Run test to verify it passes**
-
-Run: `uv run pytest tests/unit/test_claude_driver.py::TestClaudeCliDriverMaxTurns -v`
-Expected: PASS
-
-**Step 6: Run full test suite**
-
-Run: `uv run pytest tests/unit/test_claude_driver.py -v`
-Expected: All tests PASS
-
-**Step 7: Commit**
+**Step 5: Commit**
 
 ```bash
-git add amelia/drivers/cli/claude.py tests/unit/test_claude_driver.py
-git commit -m "feat(cli-driver): add max_turns control for agentic loops"
+git add amelia/drivers/cli/agentic.py tests/unit/test_claude_agentic_driver.py
+git commit -m "feat(drivers): add ClaudeAgenticCliDriver for autonomous execution"
 ```
 
 ---
 
-## Task 6: Update DriverFactory to Support New Parameters
+### Task 10: Register Agentic Driver in Factory
 
 **Files:**
+- Modify: `amelia/core/types.py`
 - Modify: `amelia/drivers/factory.py`
-- Modify: `amelia/core/types.py` (if Profile needs new fields)
-- Test: `tests/unit/test_driver_factory.py` (create if doesn't exist)
+- Test: `tests/unit/test_driver_factory.py`
 
-**Step 1: Write the failing test for factory with parameters**
-
-Create or add to `tests/unit/test_driver_factory.py`:
+**Step 1: Write the failing test**
 
 ```python
+# tests/unit/test_driver_factory.py - create or add to file
+
 import pytest
 from amelia.drivers.factory import DriverFactory
 from amelia.drivers.cli.claude import ClaudeCliDriver
+from amelia.drivers.cli.agentic import ClaudeAgenticCliDriver
+from amelia.drivers.api.openai import ApiDriver
 
 
 class TestDriverFactory:
+    """Tests for DriverFactory."""
 
-    def test_cli_claude_default(self):
+    def test_get_cli_claude_driver(self):
         driver = DriverFactory.get_driver("cli:claude")
         assert isinstance(driver, ClaudeCliDriver)
-        assert driver.model == "sonnet"
-        assert driver.skip_permissions is False
 
-    def test_cli_claude_with_model(self):
-        driver = DriverFactory.get_driver("cli:claude", model="opus")
-        assert isinstance(driver, ClaudeCliDriver)
-        assert driver.model == "opus"
+    def test_get_cli_claude_agentic_driver(self):
+        driver = DriverFactory.get_driver("cli:claude:agentic")
+        assert isinstance(driver, ClaudeAgenticCliDriver)
 
-    def test_cli_claude_with_permissions(self):
-        driver = DriverFactory.get_driver("cli:claude", skip_permissions=True)
-        assert isinstance(driver, ClaudeCliDriver)
-        assert driver.skip_permissions is True
-
-    def test_cli_claude_with_max_turns(self):
-        driver = DriverFactory.get_driver("cli:claude", max_turns=5)
-        assert isinstance(driver, ClaudeCliDriver)
-        assert driver.max_turns == 5
+    def test_get_api_openai_driver(self):
+        driver = DriverFactory.get_driver("api:openai")
+        assert isinstance(driver, ApiDriver)
 
     def test_unknown_driver_raises(self):
         with pytest.raises(ValueError, match="Unknown driver key"):
-            DriverFactory.get_driver("unknown:driver")
+            DriverFactory.get_driver("invalid:driver")
 ```
 
 **Step 2: Run test to verify it fails**
 
-Run: `uv run pytest tests/unit/test_driver_factory.py -v`
-Expected: FAIL with `TypeError: get_driver() got an unexpected keyword argument`
+Run: `uv run pytest tests/unit/test_driver_factory.py::TestDriverFactory::test_get_cli_claude_agentic_driver -v`
+Expected: FAIL with "Unknown driver key: cli:claude:agentic"
 
-**Step 3: Update factory to accept kwargs**
+**Step 3: Write minimal implementation**
 
-In `amelia/drivers/factory.py`:
+Update `amelia/core/types.py`:
+```python
+DriverType = Literal["cli:claude", "cli:claude:agentic", "api:openai", "cli", "api"]
+```
 
+Update `amelia/drivers/factory.py`:
 ```python
 from typing import Any
 
 from amelia.drivers.api.openai import ApiDriver
 from amelia.drivers.base import DriverInterface
+from amelia.drivers.cli.agentic import ClaudeAgenticCliDriver
 from amelia.drivers.cli.claude import ClaudeCliDriver
 
 
 class DriverFactory:
+    """Factory class for creating driver instances based on configuration keys."""
+
     @staticmethod
     def get_driver(driver_key: str, **kwargs: Any) -> DriverInterface:
-        """
-        Factory method to get a concrete driver implementation based on a key.
+        """Factory method to get a concrete driver implementation.
 
         Args:
-            driver_key: Driver identifier (e.g., "cli:claude", "api:openai")
-            **kwargs: Driver-specific configuration passed to constructor
+            driver_key: Driver identifier (e.g., "cli:claude", "api:openai").
+            **kwargs: Driver-specific configuration passed to constructor.
+
+        Returns:
+            Configured driver instance.
+
+        Raises:
+            ValueError: If driver_key is not recognized.
         """
         if driver_key == "cli:claude" or driver_key == "cli":
             return ClaudeCliDriver(**kwargs)
+        elif driver_key == "cli:claude:agentic":
+            return ClaudeAgenticCliDriver(**kwargs)
         elif driver_key == "api:openai" or driver_key == "api":
             return ApiDriver(**kwargs)
         else:
@@ -708,42 +1218,39 @@ class DriverFactory:
 **Step 4: Run test to verify it passes**
 
 Run: `uv run pytest tests/unit/test_driver_factory.py -v`
-Expected: PASS
+Expected: PASS (4 tests)
 
-**Step 5: Run full test suite**
-
-Run: `uv run pytest tests/unit/ -v`
-Expected: All tests PASS
-
-**Step 6: Commit**
+**Step 5: Commit**
 
 ```bash
-git add amelia/drivers/factory.py tests/unit/test_driver_factory.py
-git commit -m "feat(factory): update DriverFactory to pass kwargs to driver constructors"
+git add amelia/core/types.py amelia/drivers/factory.py tests/unit/test_driver_factory.py
+git commit -m "feat(drivers): register cli:claude:agentic driver in factory"
 ```
 
 ---
 
-## Task 7: Run Full Verification and Lint
+## Phase 5: Final Verification
+
+### Task 11: Run Full Verification and Lint
 
 **Files:** None (verification only)
 
 **Step 1: Run type checker**
 
-Run: `uv run mypy amelia/drivers/`
+Run: `uv run mypy amelia/drivers/ amelia/core/state.py amelia/core/types.py`
 Expected: No errors
 
 **Step 2: Run linter**
 
-Run: `uv run ruff check amelia/drivers/ tests/unit/test_claude_driver.py tests/unit/test_driver_factory.py`
-Expected: No errors (or fix any that appear)
+Run: `uv run ruff check amelia tests/unit/test_claude_driver.py tests/unit/test_claude_agentic_driver.py tests/unit/test_driver_factory.py tests/unit/test_state_models.py`
+Expected: No errors (or fix any)
 
 **Step 3: Run full test suite**
 
 Run: `uv run pytest tests/unit/ -v`
 Expected: All tests PASS
 
-**Step 4: Final commit if any fixes needed**
+**Step 4: Final commit if fixes needed**
 
 ```bash
 git add -A
@@ -754,16 +1261,26 @@ git commit -m "chore: fix lint/type issues from claude driver improvements"
 
 ## Summary
 
-| Task | Description | Key Changes |
-|------|-------------|-------------|
-| 1 | Model Selection | Add `model` param, `--model` flag |
-| 2 | System Prompt Handling | Extract system messages, use `--append-system-prompt` |
-| 3 | Permission Management | Add `skip_permissions`, `allowed_tools`, `disallowed_tools` |
-| 4 | Timeout Enforcement | Use `asyncio.wait_for`, kill on timeout |
-| 5 | Max Turns Control | Add `max_turns` param, `--max-turns` flag |
-| 6 | Factory Update | Pass kwargs through to driver constructors |
-| 7 | Verification | mypy, ruff, pytest |
+| Phase | Task | Description | Key Changes |
+|-------|------|-------------|-------------|
+| 1 | 1 | ClaudeStreamEvent model | New model for stream parsing |
+| 1 | 2 | Stream parsing utility | `from_stream_json()` class method |
+| 1 | 3 | session_id in state | `claude_session_id` field in ExecutionState |
+| 2 | 4 | Model selection | `model` param, `--model` flag |
+| 2 | 5 | System prompt handling | `--append-system-prompt` flag |
+| 2 | 6 | Permission management | `skip_permissions`, `allowed_tools`, `disallowed_tools` |
+| 3 | 7 | generate_stream() | Async generator for streaming |
+| 3 | 8 | --resume and cwd | Session continuity and working directory |
+| 4 | 9 | ClaudeAgenticCliDriver | YOLO mode autonomous execution |
+| 4 | 10 | Factory registration | `cli:claude:agentic` driver key |
+| 5 | 11 | Verification | mypy, ruff, pytest |
 
-**Total estimated tasks:** 7 (each with 5-7 steps)
+**Total tasks:** 11 (each with 5 steps following TDD)
 
-**Dependencies:** Tasks 1-5 can be done in any order. Task 6 depends on Tasks 1-5. Task 7 is always last.
+**Dependencies:**
+- Tasks 1-2 are foundation for Tasks 7-9
+- Task 3 supports session continuity in Tasks 7-8
+- Tasks 4-6 enhance driver configuration
+- Task 9 depends on Tasks 1-2
+- Task 10 depends on Task 9
+- Task 11 is always last

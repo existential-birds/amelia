@@ -5,7 +5,7 @@ import pytest
 from pydantic import BaseModel
 
 from amelia.core.state import AgentMessage
-from amelia.drivers.cli.claude import ClaudeCliDriver, ClaudeStreamEvent, ClaudeStreamEventType
+from amelia.drivers.cli.claude import ClaudeCliDriver, ClaudeStreamEvent
 from amelia.tools.safe_file import SafeFileWriter
 from amelia.tools.safe_shell import SafeShellExecutor
 
