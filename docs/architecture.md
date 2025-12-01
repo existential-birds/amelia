@@ -5,49 +5,59 @@ This document provides a technical deep dive into Amelia's architecture, compone
 ## System Overview
 
 ```mermaid
-flowchart TB
-    subgraph CLI["CLI (main.py)"]
-        start[amelia start]
-        review[amelia review]
-        plan[amelia plan-only]
+flowchart LR
+    subgraph CLI["CLI"]
+        start[start]
+        review[review]
+        plan[plan-only]
     end
 
-    subgraph Core["Core (amelia/core/)"]
-        orch[orchestrator.py<br/>LangGraph StateGraph]
-        state[state.py<br/>ExecutionState, TaskDAG]
-        types[types.py<br/>Profile, Issue, Settings]
+    subgraph Core["Core"]
+        orch[Orchestrator]
     end
 
-    subgraph Agents["Agents (amelia/agents/)"]
+    subgraph Agents["Agents"]
         arch[Architect]
         dev[Developer]
         rev[Reviewer]
         pm[Project Manager]
     end
 
-    subgraph Drivers["Drivers (amelia/drivers/)"]
-        factory[factory.py]
-        api[api/openai.py<br/>pydantic-ai]
-        cli[cli/claude.py]
+    subgraph Drivers["Drivers"]
+        api[OpenAI API]
+        claude[Claude CLI]
     end
 
-    subgraph Trackers["Trackers (amelia/trackers/)"]
-        jira[jira.py]
-        github[github.py]
-        noop[noop.py]
+    subgraph Trackers["Trackers"]
+        jira[Jira]
+        github[GitHub]
     end
 
-    subgraph Tools["Tools (amelia/tools/)"]
-        git[git.py]
-        shell[shell_executor.py]
+    subgraph Tools["Tools"]
+        git[Git]
+        shell[Shell]
     end
 
-    start & review & plan --> orch
+    CLI --> orch
     orch --> arch & dev & rev
-    pm --> jira & github & noop
-    arch & dev & rev --> factory
-    factory --> api & cli
-    dev --> shell & git
+    orch --> pm
+    pm --> Trackers
+    arch & dev & rev --> Drivers
+    dev --> Tools
+
+    classDef cliStyle fill:#e3f2fd,stroke:#1976d2
+    classDef coreStyle fill:#f3e5f5,stroke:#7b1fa2
+    classDef agentStyle fill:#e8f5e9,stroke:#388e3c
+    classDef driverStyle fill:#fff3e0,stroke:#f57c00
+    classDef trackerStyle fill:#fce4ec,stroke:#c2185b
+    classDef toolStyle fill:#eceff1,stroke:#546e7a
+
+    class start,review,plan cliStyle
+    class orch coreStyle
+    class arch,dev,rev,pm agentStyle
+    class api,claude driverStyle
+    class jira,github trackerStyle
+    class git,shell toolStyle
 ```
 
 ## Component Breakdown
