@@ -29,10 +29,50 @@ class Developer:
         Executes a single development task with error handling.
         """
         try:
-            # This is a very simplified execution logic.
-            # A real implementation would parse the task description more intelligently
-            # or rely on structured tool calls from an LLM.
+            # If the task has defined steps (TDD pattern), execute them sequentially
+            if task.steps:
+                logger.info(f"Developer executing {len(task.steps)} steps for task {task.id}")
+                results = []
+                for i, step in enumerate(task.steps, 1):
+                    logger.info(f"Executing step {i}: {step.description}")
+                    step_output = ""
+                    
+                    # 1. Write code if provided
+                    if step.code:
+                        # Identify file path from task.files or infer? 
+                        # For now, we look for a matching file operation in task.files
+                        # This is a simplification; ideally the step knows which file it touches.
+                        # If task has files, use the first one for now or try to find context.
+                        # But task.files has 'path'.
+                        
+                        # Heuristic: if we have code, we need a file to write to.
+                        # If the task has explicit file operations, use the first one that matches 'create' or 'modify'.
+                        target_file = None
+                        if task.files:
+                            for f in task.files:
+                                if f.operation in ("create", "modify"):
+                                    target_file = f.path
+                                    break
+                        
+                        if target_file:
+                            logger.info(f"Writing code to {target_file}")
+                            await self.driver.execute_tool(ToolName.WRITE_FILE, file_path=target_file, content=step.code)
+                            step_output += f"Wrote to {target_file}. "
+                        else:
+                            # If no file specified, maybe it's a test file?
+                            logger.warning("Step has code but no target file could be determined from task.files.")
 
+                    # 2. Run command if provided
+                    if step.command:
+                        logger.info(f"Running command: {step.command}")
+                        cmd_result = await self.driver.execute_tool(ToolName.RUN_SHELL_COMMAND, command=step.command)
+                        step_output += f"Command output: {cmd_result}"
+
+                    results.append(f"Step {i}: {step_output}")
+
+                return {"status": "completed", "output": "\n".join(results)}
+
+            # Fallback: Existing logic for simple tasks
             # Example: if task description implies a shell command
             if task.description.lower().startswith("run shell command:"):
                 command = task.description[len("run shell command:"):].strip()

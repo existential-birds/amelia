@@ -94,19 +94,24 @@ def start(
     
     # Run the orchestrator
     try:
-        with contextlib.suppress(RuntimeError):
-            asyncio.get_running_loop()
-            # No running event loop, safe to use asyncio.run
+        # check if there is a running event loop
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
 
-        with contextlib.suppress(RuntimeError):
-            asyncio.get_running_loop()
-
+        if loop and loop.is_running():
+            # If we are already in an async environment (e.g. tests), use the existing loop
+            # This technically shouldn't happen with standard Typer usage but good for safety
+             typer.echo("Warning: event loop already running, using existing loop", err=True)
+             # We can't await here easily because start() is sync. 
+             # But Typer/Click commands are usually sync entry points.
+             # If we really are in a loop, we might need a different approach or just fail.
+             # For now, let's assume standard CLI usage where no loop exists yet.
+             raise RuntimeError("Async event loop already running. Cannot use asyncio.run()")
+        
         asyncio.run(app_graph.ainvoke(initial_state))
-    except RuntimeError as e:
-        if "asyncio.run() cannot be called from a running event loop" in str(e):
-            raise e
-        typer.echo(f"An unexpected error occurred during orchestration: {e}", err=True)
-        raise typer.Exit(code=1) from None
+
     except Exception as e:
         typer.echo(f"An unexpected error occurred during orchestration: {e}", err=True)
         raise typer.Exit(code=1) from None
