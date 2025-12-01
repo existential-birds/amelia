@@ -1,10 +1,15 @@
 """Tests for conftest.py factory fixtures - validates test infrastructure."""
 
-import pytest
 from unittest.mock import AsyncMock
 
-from amelia.core.state import ExecutionState, TaskDAG, Task
-from amelia.core.types import Profile, Issue, Design
+import pytest
+
+from amelia.core.state import ExecutionState
+from amelia.core.state import Task
+from amelia.core.state import TaskDAG
+from amelia.core.types import Design
+from amelia.core.types import Issue
+from amelia.core.types import Profile
 
 
 class TestFactoryDefaults:

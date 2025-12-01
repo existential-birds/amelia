@@ -2,7 +2,8 @@
 
 import pytest
 
-from amelia.core.orchestrator import should_continue_developer, should_continue_review_loop
+from amelia.core.orchestrator import should_continue_developer
+from amelia.core.orchestrator import should_continue_review_loop
 
 
 class TestReviewLoopLogic:

@@ -2,10 +2,7 @@
 
 from unittest.mock import AsyncMock
 
-import pytest
-
 from amelia.agents.developer import Developer
-from amelia.core.state import Task
 from amelia.drivers.base import DriverInterface
 
 
