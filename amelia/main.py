@@ -16,7 +16,7 @@ from amelia.core.types import Issue
 from amelia.core.types import Profile
 from amelia.core.types import Settings
 from amelia.drivers.factory import DriverFactory
-from amelia.tools.git import get_git_diff
+from amelia.tools.shell_executor import run_shell_command
 from amelia.trackers.factory import create_tracker
 from amelia.utils.design_parser import parse_design
 
@@ -211,7 +211,7 @@ def review(
         if local:
             typer.echo("Reviewing local uncommitted changes...")
             try:
-                code_changes = await get_git_diff(staged=False)
+                code_changes = await run_shell_command("git diff")
                 if not code_changes:
                     typer.echo("No local uncommitted changes found to review.", err=True)
                     raise typer.Exit(code=0) # Exit gracefully if nothing to review

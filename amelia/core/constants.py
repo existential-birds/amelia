@@ -11,7 +11,6 @@ class ToolName(StrEnum):
     RUN_SHELL_COMMAND = "run_shell_command"
     WRITE_FILE = "write_file"
     READ_FILE = "read_file"
-    GIT_DIFF = "git_diff"
 
 
 # Shell metacharacters that indicate shell injection attempts
