@@ -1,4 +1,5 @@
 import asyncio
+import os
 import subprocess
 from typing import Any
 
@@ -141,7 +142,7 @@ async def call_reviewer_node(state: ExecutionState) -> ExecutionState:
 async def call_developer_node(state: ExecutionState) -> ExecutionState:
     """Orchestrator node for the Developer agent to execute tasks.
 
-    Executes ready tasks concurrently using asyncio.gather.
+    Executes ready tasks, passing execution_mode and working directory from profile.
 
     Args:
         state: Current execution state containing the plan and tasks.
@@ -154,53 +155,84 @@ async def call_developer_node(state: ExecutionState) -> ExecutionState:
     if not state.plan or not state.plan.tasks:
         logger.info("Orchestrator: No plan or tasks to execute.")
         return state
-    
+
     driver = DriverFactory.get_driver(state.profile.driver)
-    developer = Developer(driver)
-    
+    developer = Developer(driver, execution_mode=state.profile.execution_mode)
+
+    # Get working directory for agentic execution
+    cwd = state.profile.working_dir or os.getcwd()
+
     ready_tasks = state.plan.get_ready_tasks()
-    
+
     if not ready_tasks:
         logger.info("Orchestrator: No ready tasks found to execute in this iteration.")
-        return state  # No tasks to run in this step
+        return state
 
     logger.info(f"Orchestrator: Executing {len(ready_tasks)} ready tasks.")
-    
-    # Mark tasks as in-progress before execution
+
+    updated_messages = list(state.messages)
+
     for task in ready_tasks:
         task.status = "in_progress"
         logger.info(f"Orchestrator: Developer executing task {task.id}")
-    
-    # Execute tasks concurrently if driver supports it, otherwise sequentially
-    # This logic assumes the driver's generate/execute_tool handles concurrency,
-    # or that asyncio.gather provides the concurrency when the driver is async.
-    task_execution_futures = [developer.execute_task(task) for task in ready_tasks]
-    results = await asyncio.gather(*task_execution_futures, return_exceptions=True) # Gather results, including exceptions
-    
-    updated_messages = list(state.messages)
-    # The tasks in state.plan.tasks list are modified directly in the loop.
-    
-    for i, result in enumerate(results):
-        executed_task = ready_tasks[i]
-        if isinstance(result, Exception):
-            executed_task.status = "failed"
-            updated_messages.append(AgentMessage(role="assistant", content=f"Task {executed_task.id} failed. Error: {result}"))
-        else:
-            executed_task.status = "completed"
-            output_content = result.get('output', 'No output') if isinstance(result, dict) else str(result)
-            updated_messages.append(AgentMessage(role="assistant", content=f"Task {executed_task.id} completed. Output: {output_content}"))
-            
-    # Update the overall plan in the state to reflect completed/failed tasks
-    updated_plan = TaskDAG(tasks=state.plan.tasks, original_issue=state.plan.original_issue)
-            
+
+        try:
+            result = await developer.execute_task(task, cwd=cwd)
+
+            if result.get("status") == "completed":
+                task.status = "completed"
+                output_content = result.get("output", "No output")
+                updated_messages.append(
+                    AgentMessage(
+                        role="assistant",
+                        content=f"Task {task.id} completed. Output: {output_content}",
+                    )
+                )
+            else:
+                task.status = "failed"
+                updated_messages.append(
+                    AgentMessage(
+                        role="assistant",
+                        content=f"Task {task.id} failed. Error: {result.get('error', 'Unknown')}",
+                    )
+                )
+
+        except Exception as e:
+            task.status = "failed"
+            updated_messages.append(
+                AgentMessage(
+                    role="assistant", content=f"Task {task.id} failed. Error: {e}"
+                )
+            )
+            logger.error(f"Task {task.id} failed: {e}")
+
+            # For agentic mode, fail fast
+            if state.profile.execution_mode == "agentic":
+                updated_plan = TaskDAG(
+                    tasks=state.plan.tasks, original_issue=state.plan.original_issue
+                )
+                return ExecutionState(
+                    profile=state.profile,
+                    issue=state.issue,
+                    plan=updated_plan,
+                    messages=updated_messages,
+                    human_approved=state.human_approved,
+                    review_results=state.review_results,
+                    workflow_status="failed",
+                )
+
+    updated_plan = TaskDAG(
+        tasks=state.plan.tasks, original_issue=state.plan.original_issue
+    )
+
     return ExecutionState(
         profile=state.profile,
         issue=state.issue,
         plan=updated_plan,
-        current_task_id=ready_tasks[0].id if ready_tasks else state.current_task_id, # Can be multiple, pick one for current_task_id or make it a list
+        current_task_id=ready_tasks[0].id if ready_tasks else state.current_task_id,
         messages=updated_messages,
         human_approved=state.human_approved,
-        review_results=state.review_results
+        review_results=state.review_results,
     )
 
 # Define a conditional edge to decide if more tasks need to be run
