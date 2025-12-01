@@ -16,13 +16,17 @@ class Profile(BaseModel):
         driver: LLM driver type (e.g., 'api:openai', 'cli:claude').
         tracker: Issue tracker type (jira, github, none, noop).
         strategy: Review strategy (single or competitive).
+        execution_mode: Execution mode (structured or agentic).
         plan_output_dir: Directory for storing generated plans.
+        working_dir: Working directory for agentic execution.
     """
     name: str
     driver: DriverType
     tracker: TrackerType = "none"
     strategy: StrategyType = "single"
+    execution_mode: ExecutionMode = "structured"
     plan_output_dir: str = "docs/plans"
+    working_dir: str | None = None
 
     @model_validator(mode="after")
     def validate_work_profile_constraints(self) -> "Profile":
