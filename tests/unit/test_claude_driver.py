@@ -1,5 +1,5 @@
 import json
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from pydantic import BaseModel
@@ -272,6 +272,66 @@ class TestClaudeCliDriverModelSelection:
             assert "--model" in args
             model_idx = args.index("--model")
             assert args[model_idx + 1] == "opus"
+
+
+class TestClaudeCliDriverStreaming:
+    """Tests for streaming generate method."""
+
+    @pytest.fixture
+    def stream_lines(self):
+        """Fixture providing mock stream-json output lines."""
+        return [
+            b'{"type":"assistant","message":{"content":[{"type":"text","text":"Hello"}]}}\n',
+            b'{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Read","input":{"file_path":"/x.py"}}]}}\n',
+            b'{"type":"assistant","message":{"content":[{"type":"text","text":"Done!"}]}}\n',
+            b'{"type":"result","session_id":"sess_xyz789","subtype":"success"}\n',
+            b''  # EOF
+        ]
+
+    @pytest.mark.asyncio
+    async def test_generate_stream_yields_events(self, driver, messages, stream_lines):
+        """Test that generate_stream yields ClaudeStreamEvent objects."""
+        mock_process = AsyncMock()
+        mock_process.stdin = MagicMock()
+        mock_process.stdin.drain = AsyncMock()
+        mock_process.stdout.readline = AsyncMock(side_effect=stream_lines)
+        mock_process.stderr.read = AsyncMock(return_value=b"")
+        mock_process.returncode = 0
+        mock_process.wait = AsyncMock(return_value=0)
+
+        with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=mock_process):
+            events = []
+            async for event in driver.generate_stream(messages):
+                events.append(event)
+
+            assert len(events) == 4
+            assert events[0].type == "assistant"
+            assert events[0].content == "Hello"
+            assert events[1].type == "tool_use"
+            assert events[1].tool_name == "Read"
+            assert events[2].type == "assistant"
+            assert events[2].content == "Done!"
+            assert events[3].type == "result"
+            assert events[3].session_id == "sess_xyz789"
+
+    @pytest.mark.asyncio
+    async def test_generate_stream_captures_session_id(self, driver, messages, stream_lines):
+        """Test that generate_stream captures session_id from result event."""
+        mock_process = AsyncMock()
+        mock_process.stdin = MagicMock()
+        mock_process.stdin.drain = AsyncMock()
+        mock_process.stdout.readline = AsyncMock(side_effect=stream_lines)
+        mock_process.stderr.read = AsyncMock(return_value=b"")
+        mock_process.returncode = 0
+        mock_process.wait = AsyncMock(return_value=0)
+
+        with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=mock_process):
+            session_id = None
+            async for event in driver.generate_stream(messages):
+                if event.type == "result" and event.session_id:
+                    session_id = event.session_id
+
+            assert session_id == "sess_xyz789"
 
 
 class TestClaudeStreamEvent:

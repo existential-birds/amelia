@@ -1,5 +1,6 @@
 import asyncio
 import json
+from collections.abc import AsyncIterator
 from typing import Any, Literal
 
 from loguru import logger
@@ -279,3 +280,77 @@ class ClaudeCliDriver(CliDriver):
 
         else:
             raise NotImplementedError(f"Tool '{tool_name}' not implemented for ClaudeCliDriver.")
+
+    async def generate_stream(
+        self,
+        messages: list[AgentMessage],
+        session_id: str | None = None,
+        cwd: str | None = None
+    ) -> AsyncIterator[ClaudeStreamEvent]:
+        """Generate a streaming response from Claude CLI.
+
+        Args:
+            messages: History of conversation messages.
+            session_id: Optional session ID to resume a previous conversation.
+            cwd: Optional working directory for Claude CLI context.
+
+        Yields:
+            ClaudeStreamEvent objects as they are parsed from the stream.
+        """
+        # Extract system messages
+        system_messages = [m for m in messages if m.role == "system"]
+        full_prompt = self._convert_messages_to_prompt(messages)
+
+        cmd_args = ["claude", "-p", "--model", self.model, "--output-format", "stream-json"]
+
+        # Add permission flags
+        if self.skip_permissions:
+            cmd_args.append("--dangerously-skip-permissions")
+        if self.allowed_tools:
+            cmd_args.extend(["--allowedTools", ",".join(self.allowed_tools)])
+        if self.disallowed_tools:
+            cmd_args.extend(["--disallowedTools", ",".join(self.disallowed_tools)])
+
+        # Add system prompt if present
+        if system_messages:
+            system_prompt = "\n\n".join(m.content for m in system_messages if m.content)
+            cmd_args.extend(["--append-system-prompt", system_prompt])
+
+        if session_id:
+            cmd_args.extend(["--resume", session_id])
+            logger.info(f"Resuming Claude session: {session_id}")
+
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *cmd_args,
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                cwd=cwd
+            )
+
+            if process.stdin:
+                process.stdin.write(full_prompt.encode())
+                await process.stdin.drain()
+                process.stdin.close()
+
+            # Stream stdout line by line
+            if process.stdout:
+                while True:
+                    line = await process.stdout.readline()
+                    if not line:
+                        break
+
+                    event = ClaudeStreamEvent.from_stream_json(line.decode())
+                    if event:
+                        yield event
+
+            await process.wait()
+
+            if process.returncode != 0:
+                stderr_data = await process.stderr.read() if process.stderr else b""
+                logger.error(f"Claude CLI failed: {stderr_data.decode()}")
+
+        except Exception as e:
+            logger.error(f"Error in Claude CLI streaming: {e}")
+            yield ClaudeStreamEvent(type="error", content=str(e))
