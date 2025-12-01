@@ -1,4 +1,3 @@
-from amelia.core.types import Issue
 from amelia.core.types import Profile
 from amelia.trackers.base import BaseTracker
 from amelia.trackers.github import GithubTracker
@@ -6,28 +5,15 @@ from amelia.trackers.jira import JiraTracker
 from amelia.trackers.noop import NoopTracker
 
 
-class ProjectManager:
-    def __init__(self, tracker: BaseTracker):
-        self.tracker = tracker
-
-    def get_issue(self, issue_id: str) -> Issue:
-        """
-        Retrieves an issue from the configured tracker.
-        """
-        return self.tracker.get_issue(issue_id)
-
-def create_project_manager(profile: Profile) -> ProjectManager:
+def create_tracker(profile: Profile) -> BaseTracker:
     """
-    Factory to create a ProjectManager based on the profile settings.
+    Factory to create a tracker based on the profile settings.
     """
     if profile.tracker == "jira":
-        tracker: BaseTracker = JiraTracker()
+        return JiraTracker()
     elif profile.tracker == "github":
-        tracker = GithubTracker()
+        return GithubTracker()
     elif profile.tracker == "none" or profile.tracker == "noop":
-        tracker = NoopTracker()
+        return NoopTracker()
     else:
         raise ValueError(f"Unknown tracker type: {profile.tracker}")
-    
-    return ProjectManager(tracker=tracker)
-

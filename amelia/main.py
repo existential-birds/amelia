@@ -7,7 +7,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from loguru import logger
 
 from amelia.agents.architect import Architect
-from amelia.agents.project_manager import create_project_manager
+from amelia.agents.project_manager import create_tracker
 from amelia.config import load_settings
 from amelia.config import validate_profile
 from amelia.core.orchestrator import call_reviewer_node
@@ -82,10 +82,9 @@ def start(
     
     app_graph = create_orchestrator_graph(checkpoint_saver=checkpoint_saver)
     
-    # Get issue using ProjectManager
-    project_manager = create_project_manager(active_profile)
+    tracker = create_tracker(active_profile)
     try:
-        issue = project_manager.get_issue(issue_id)
+        issue = tracker.get_issue(issue_id)
     except ValueError as e:
         typer.echo(f"Error fetching issue: {e}", err=True)
         raise typer.Exit(code=1) from None
@@ -138,9 +137,9 @@ def plan_only_command(
 
         typer.echo(f"Generating plan for issue {issue_id} with profile: {active_profile.name}")
 
-        project_manager = create_project_manager(active_profile)
+        tracker = create_tracker(active_profile)
         try:
-            issue = project_manager.get_issue(issue_id)
+            issue = tracker.get_issue(issue_id)
         except ValueError as e:
             typer.echo(f"Error fetching issue: {e}", err=True)
             raise typer.Exit(code=1) from None
