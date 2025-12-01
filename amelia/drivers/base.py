@@ -11,13 +11,14 @@ class DriverInterface(Protocol):
     Must be implemented by both CliDriver and ApiDriver.
     """
 
-    async def generate(self, messages: list[AgentMessage], schema: type[BaseModel] | None = None) -> Any:
+    async def generate(self, messages: list[AgentMessage], schema: type[BaseModel] | None = None, **kwargs: Any) -> Any:
         """
         Generate a response from the model.
         
         Args:
             messages: History of conversation.
             schema: Optional Pydantic model to validate/parse the output.
+            **kwargs: Driver-specific parameters (e.g., cwd, session_id).
             
         Returns:
             Either a string (if no schema) or an instance of the schema.

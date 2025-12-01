@@ -316,7 +316,7 @@ class ClaudeCliDriver(CliDriver):
         system_messages = [m for m in messages if m.role == "system"]
         full_prompt = self._convert_messages_to_prompt(messages)
 
-        cmd_args = ["claude", "-p", "--model", self.model, "--output-format", "stream-json"]
+        cmd_args = ["claude", "-p", "--verbose", "--model", self.model, "--output-format", "stream-json"]
 
         # Add permission flags
         if self.skip_permissions:

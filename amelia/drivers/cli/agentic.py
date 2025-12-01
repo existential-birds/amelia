@@ -57,6 +57,7 @@ class ClaudeAgenticCliDriver(CliDriver):
             "claude", "-p",
             "--model", self.model,
             "--output-format", "stream-json",
+            "--verbose",  # Required for stream-json with --print
             "--dangerously-skip-permissions"  # YOLO mode
         ]
 

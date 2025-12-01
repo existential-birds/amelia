@@ -48,11 +48,11 @@ class CliDriver(DriverInterface):
                 else:
                     raise
 
-    async def generate(self, messages: list[AgentMessage], schema: type[BaseModel] | None = None) -> Any:
+    async def generate(self, messages: list[AgentMessage], schema: type[BaseModel] | None = None, **kwargs: Any) -> Any:
         async with self._semaphore:
-            return await self._execute_with_retry(self._generate_impl, messages, schema)
+            return await self._execute_with_retry(self._generate_impl, messages, schema, **kwargs)
 
-    async def _generate_impl(self, messages: list[AgentMessage], schema: type[BaseModel] | None = None) -> Any:
+    async def _generate_impl(self, messages: list[AgentMessage], schema: type[BaseModel] | None = None, **kwargs: Any) -> Any:
         raise NotImplementedError("Subclasses must implement _generate_impl")
     
     async def execute_tool(self, tool_name: str, **kwargs: Any) -> Any:
