@@ -48,3 +48,9 @@ class CommandNotAllowedError(SecurityError):
     """Raised when in strict mode and command is not in allowlist."""
 
     pass
+
+
+class AgenticExecutionError(AmeliaError):
+    """Raised when agentic execution fails."""
+
+    pass
