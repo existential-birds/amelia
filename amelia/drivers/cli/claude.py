@@ -68,6 +68,7 @@ class ClaudeCliDriver(CliDriver):
             stderr_buffer = []
 
             async def read_stdout() -> None:
+                """Read stdout line by line and append to buffer with debug logging."""
                 if process.stdout is not None:
                     while True:
                         line = await process.stdout.readline()
@@ -78,6 +79,7 @@ class ClaudeCliDriver(CliDriver):
                         stdout_buffer.append(text)
 
             async def read_stderr() -> None:
+                """Read stderr stream and append to buffer."""
                 if process.stderr is not None:
                     data = await process.stderr.read()
                     stderr_buffer.append(data.decode())

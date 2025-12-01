@@ -4,6 +4,8 @@ from amelia.drivers.cli.claude import ClaudeCliDriver
 
 
 class DriverFactory:
+    """Factory class for creating driver instances based on configuration keys."""
+
     @staticmethod
     def get_driver(driver_key: str) -> DriverInterface:
         """

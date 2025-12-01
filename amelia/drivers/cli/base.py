@@ -16,6 +16,12 @@ class CliDriver(DriverInterface):
     Also handles timeout and retries.
     """
     def __init__(self, timeout: int = 30, max_retries: int = 0):
+        """Initialize the CLI driver with timeout and retry settings.
+
+        Args:
+            timeout: Maximum execution time in seconds for operations. Defaults to 30.
+            max_retries: Number of retry attempts for timed-out operations. Defaults to 0.
+        """
         self._semaphore = asyncio.Semaphore(1) # Limit to 1 concurrent operation
         self.timeout = timeout
         self.max_retries = max_retries

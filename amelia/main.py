@@ -19,6 +19,7 @@ from amelia.utils.design_parser import parse_design
 app = typer.Typer(help="Amelia Agentic Orchestrator CLI")
 
 def configure_logging() -> None:
+    """Configure loguru logging to output to stderr at INFO level."""
     logger.remove()
     logger.add(sys.stderr, level="INFO")
 
@@ -30,6 +31,18 @@ def main_callback() -> None:
     configure_logging()
 
 def _get_active_profile(settings: Settings, profile_name: str | None) -> Profile:
+    """Get the active profile from settings, either specified or default.
+
+    Args:
+        settings: Application settings containing profile configurations.
+        profile_name: Optional specific profile name to use, or None for default.
+
+    Returns:
+        The requested Profile object.
+
+    Raises:
+        typer.Exit: If the specified profile name is not found in settings.
+    """
     if profile_name:
         if profile_name not in settings.profiles:
             typer.echo(f"Error: Profile '{profile_name}' not found in settings.", err=True)
@@ -39,6 +52,14 @@ def _get_active_profile(settings: Settings, profile_name: str | None) -> Profile
         return settings.profiles[settings.active_profile]
 
 def _safe_load_settings() -> Settings:
+    """Load settings from configuration file with error handling.
+
+    Returns:
+        Application settings loaded from YAML configuration.
+
+    Raises:
+        typer.Exit: If settings file is not found or fails to load.
+    """
     try:
         return load_settings()
     except FileNotFoundError as e:

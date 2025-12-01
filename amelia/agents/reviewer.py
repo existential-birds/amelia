@@ -13,7 +13,18 @@ class ReviewResponse(BaseModel):
     severity: Severity = Field(description="Overall severity of the review findings.")
 
 class Reviewer:
+    """Agent responsible for reviewing code changes against requirements.
+
+    Attributes:
+        driver: LLM driver interface for generating reviews.
+    """
+
     def __init__(self, driver: DriverInterface):
+        """Initialize the Reviewer agent.
+
+        Args:
+            driver: LLM driver interface for generating reviews.
+        """
         self.driver = driver
 
     async def review(self, state: ExecutionState, code_changes: str) -> ReviewResult:
@@ -27,8 +38,15 @@ class Reviewer:
             return await self._single_review(state, code_changes, persona="General")
 
     async def _single_review(self, state: ExecutionState, code_changes: str, persona: str) -> ReviewResult:
-        """
-        Performs a single review with a specified persona.
+        """Performs a single review with a specified persona.
+
+        Args:
+            state: Current execution state containing issue context.
+            code_changes: Diff or description of code changes to review.
+            persona: Review perspective (e.g., "Security", "Performance").
+
+        Returns:
+            ReviewResult with approval status, comments, and severity.
         """
         system_prompt = (
             f"You are an expert code reviewer with a focus on {persona} aspects. "
@@ -63,8 +81,14 @@ class Reviewer:
         )
 
     async def _competitive_review(self, state: ExecutionState, code_changes: str) -> ReviewResult:
-        """
-        Performs competitive review using multiple personas.
+        """Performs competitive review using multiple personas in parallel.
+
+        Args:
+            state: Current execution state containing issue context.
+            code_changes: Diff or description of code changes to review.
+
+        Returns:
+            Aggregated ReviewResult combining feedback from all personas.
         """
         personas = ["Security", "Performance", "Usability"] # Example personas
         

@@ -16,6 +16,14 @@ class ApiDriver(DriverInterface):
     Real OpenAI API-based driver using pydantic-ai.
     """
     def __init__(self, model: str = 'openai:gpt-4o'):
+        """Initialize the API driver with an OpenAI model.
+
+        Args:
+            model: Model identifier in format 'openai:model-name'. Defaults to 'openai:gpt-4o'.
+
+        Raises:
+            ValueError: If model does not start with 'openai:'.
+        """
         # Validate that model is OpenAI
         if not model.startswith("openai:"):
             raise ValueError(f"Unsupported provider in model '{model}'. ApiDriver only supports 'openai:' models.")
@@ -53,6 +61,19 @@ class ApiDriver(DriverInterface):
             raise RuntimeError(f"ApiDriver generation failed: {e}") from e
 
     async def execute_tool(self, tool_name: str, **kwargs: Any) -> Any:
+        """Execute a local tool by delegating to safe utilities.
+
+        Args:
+            tool_name: Name of the tool to execute (from ToolName constants).
+            **kwargs: Tool-specific arguments.
+
+        Returns:
+            Tool execution result.
+
+        Raises:
+            ValueError: If required arguments are missing.
+            NotImplementedError: If tool is not supported.
+        """
         if tool_name == ToolName.WRITE_FILE:
             file_path = kwargs.get("file_path")
             content = kwargs.get("content")

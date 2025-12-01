@@ -41,7 +41,17 @@ class JiraTracker(BaseTracker):
             )
 
     def get_issue(self, issue_id: str) -> Issue:
-        """Fetch an issue from Jira."""
+        """Fetch an issue from Jira.
+
+        Args:
+            issue_id: The Jira issue key (e.g., 'PROJECT-123').
+
+        Returns:
+            An Issue object containing the Jira issue's metadata and description.
+
+        Raises:
+            ValueError: If the issue cannot be fetched or does not exist.
+        """
         url = f"{self.jira_url}/rest/api/3/issue/{issue_id}"
 
         try:

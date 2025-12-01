@@ -16,8 +16,16 @@ from amelia.drivers.factory import DriverFactory
 
 # Define nodes for the graph
 async def call_architect_node(state: ExecutionState) -> ExecutionState:
-    """
-    Orchestrator node for the Architect agent to generate a plan.
+    """Orchestrator node for the Architect agent to generate a plan.
+
+    Args:
+        state: Current execution state containing the issue and profile.
+
+    Returns:
+        Updated execution state with the generated plan and messages.
+
+    Raises:
+        ValueError: If no issue is provided in the state.
     """
     issue_id_for_log = state.issue.id if state.issue else "No Issue Provided"
     logger.info(f"Orchestrator: Calling Architect for issue {issue_id_for_log}")
@@ -41,8 +49,13 @@ async def call_architect_node(state: ExecutionState) -> ExecutionState:
     )
 
 async def human_approval_node(state: ExecutionState) -> ExecutionState:
-    """
-    Node to prompt for human approval before proceeding.
+    """Node to prompt for human approval before proceeding.
+
+    Args:
+        state: Current execution state containing the plan to be reviewed.
+
+    Returns:
+        Updated execution state with approval status and messages.
     """
     typer.secho("\n--- HUMAN APPROVAL REQUIRED ---", fg=typer.colors.BRIGHT_YELLOW)
     typer.echo("Review the proposed plan before proceeding. State snapshot (for debug):")
@@ -66,9 +79,15 @@ async def human_approval_node(state: ExecutionState) -> ExecutionState:
     )
 
 async def get_code_changes_for_review(state: ExecutionState) -> str:
-    """
-    Retrieves code changes for review. Prioritizes changes from state,
-    otherwise attempts to get git diff.
+    """Retrieves code changes for review.
+
+    Prioritizes changes from state, otherwise attempts to get git diff.
+
+    Args:
+        state: Current execution state that may contain code changes.
+
+    Returns:
+        Code changes as a string, either from state or from git diff.
     """
     if state.code_changes_for_review:
         return state.code_changes_for_review
@@ -88,8 +107,13 @@ async def get_code_changes_for_review(state: ExecutionState) -> str:
         return f"Failed to execute git diff: {str(e)}"
 
 async def call_reviewer_node(state: ExecutionState) -> ExecutionState:
-    """
-    Orchestrator node for the Reviewer agent to review code changes.
+    """Orchestrator node for the Reviewer agent to review code changes.
+
+    Args:
+        state: Current execution state containing issue and plan information.
+
+    Returns:
+        Updated execution state with review results and messages.
     """
     logger.info(f"Orchestrator: Calling Reviewer for issue {state.issue.id if state.issue else 'N/A'}")
     driver = DriverFactory.get_driver(state.profile.driver)
@@ -115,8 +139,15 @@ async def call_reviewer_node(state: ExecutionState) -> ExecutionState:
     )
 
 async def call_developer_node(state: ExecutionState) -> ExecutionState:
-    """
-    Orchestrator node for the Developer agent to execute tasks, potentially in parallel.
+    """Orchestrator node for the Developer agent to execute tasks.
+
+    Executes ready tasks concurrently using asyncio.gather.
+
+    Args:
+        state: Current execution state containing the plan and tasks.
+
+    Returns:
+        Updated execution state with task results and messages.
     """
     logger.info("Orchestrator: Calling Developer to execute tasks.")
 
@@ -175,12 +206,13 @@ async def call_developer_node(state: ExecutionState) -> ExecutionState:
 # Define a conditional edge to decide if more tasks need to be run
 def should_continue_developer(state: ExecutionState) -> str:
     """Determine whether to continue the developer loop.
-    
-    Returns 'continue' if there are ready tasks to execute.
-    Returns 'end' if:
-    - No plan exists
-    - All tasks are completed
-    - Pending tasks exist but none are ready (blocked by failed dependencies)
+
+    Args:
+        state: Current execution state containing the plan and task status.
+
+    Returns:
+        'continue' if there are ready tasks to execute.
+        'end' if no plan exists, all tasks are completed, or pending tasks are blocked.
     """
     if not state.plan:
         return "end"
@@ -195,10 +227,12 @@ def should_continue_developer(state: ExecutionState) -> str:
 def should_continue_review_loop(state: ExecutionState) -> str:
     """Determine whether to continue the review loop.
 
-    Returns 're_evaluate' if review was not approved AND there are tasks to execute.
-    Returns 'end' if:
-    - Review was approved
-    - Review was not approved but no tasks are ready (workflow is stuck)
+    Args:
+        state: Current execution state containing review results and plan.
+
+    Returns:
+        're_evaluate' if review was not approved AND there are tasks to execute.
+        'end' if review was approved or no tasks are ready (workflow is stuck).
     """
     if state.review_results and not state.review_results[-1].approved:
         # Only re-evaluate if there are tasks that can be executed
@@ -213,9 +247,15 @@ def should_continue_review_loop(state: ExecutionState) -> str:
     return "end"
 
 def create_orchestrator_graph(checkpoint_saver: MemorySaver | None = None) -> Any:
-    """
-    Creates and compiles the LangGraph state machine for the orchestrator.
+    """Creates and compiles the LangGraph state machine for the orchestrator.
+
     Configures checkpointing if a saver is provided.
+
+    Args:
+        checkpoint_saver: Optional memory saver for checkpointing graph state.
+
+    Returns:
+        Compiled LangGraph application ready for execution.
     """
     workflow = StateGraph(ExecutionState)
     

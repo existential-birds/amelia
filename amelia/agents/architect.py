@@ -27,7 +27,18 @@ def _slugify(text: str) -> str:
 
 
 class Architect:
+    """Agent responsible for creating implementation plans from issues and designs.
+
+    Attributes:
+        driver: LLM driver interface for generating plans.
+    """
+
     def __init__(self, driver: DriverInterface):
+        """Initialize the Architect agent.
+
+        Args:
+            driver: LLM driver interface for generating plans.
+        """
         self.driver = driver
 
     async def plan(
@@ -72,7 +83,15 @@ class Architect:
         return context
 
     async def _generate_task_dag(self, context: str, issue: Issue) -> TaskDAG:
-        """Generate TaskDAG using LLM."""
+        """Generate TaskDAG using LLM.
+
+        Args:
+            context: Formatted context string containing issue and design information.
+            issue: Original issue being planned.
+
+        Returns:
+            TaskDAG containing structured tasks with TDD steps.
+        """
         system_prompt = """You are an expert software architect creating implementation plans.
 
 Your role is to break down the given context into a sequence of actionable development tasks.
@@ -119,7 +138,17 @@ Ensure exact file paths, complete code in steps, and commands with expected outp
         design: Design | None,
         output_dir: str
     ) -> Path:
-        """Save plan as markdown file."""
+        """Save plan as markdown file.
+
+        Args:
+            task_dag: Structured task DAG to render.
+            issue: Original issue being planned.
+            design: Optional design context.
+            output_dir: Directory path for saving the markdown file.
+
+        Returns:
+            Path to the saved markdown file.
+        """
         output_path = Path(output_dir)
         output_path.mkdir(parents=True, exist_ok=True)
 
@@ -138,7 +167,16 @@ Ensure exact file paths, complete code in steps, and commands with expected outp
         issue: Issue,
         design: Design | None
     ) -> str:
-        """Render TaskDAG as markdown following writing-plans format."""
+        """Render TaskDAG as markdown following writing-plans format.
+
+        Args:
+            task_dag: Structured task DAG to render.
+            issue: Original issue being planned.
+            design: Optional design context.
+
+        Returns:
+            Markdown-formatted string representation of the plan.
+        """
         title = design.title if design else issue.title
         goal = design.goal if design else issue.description
         architecture = design.architecture if design else "See task descriptions below."

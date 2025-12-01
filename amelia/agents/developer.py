@@ -19,7 +19,18 @@ class DeveloperResponse(BaseModel):
 
 
 class Developer:
+    """Agent responsible for executing development tasks following TDD principles.
+
+    Attributes:
+        driver: LLM driver interface for task execution and tool access.
+    """
+
     def __init__(self, driver: DriverInterface):
+        """Initialize the Developer agent.
+
+        Args:
+            driver: LLM driver interface for task execution and tool access.
+        """
         self.driver = driver
 
     async def execute_task(self, task: Task) -> dict[str, Any]:

@@ -41,7 +41,17 @@ class GithubTracker(BaseTracker):
             ) from e
 
     def get_issue(self, issue_id: str) -> Issue:
-        """Fetch an issue from GitHub."""
+        """Fetch an issue from GitHub.
+
+        Args:
+            issue_id: The GitHub issue number (e.g., '123') or full reference (e.g., 'owner/repo#123').
+
+        Returns:
+            An Issue object containing the GitHub issue's metadata and description.
+
+        Raises:
+            ValueError: If the issue cannot be fetched, does not exist, or CLI output is invalid.
+        """
         try:
             result = subprocess.run(
                 ["gh", "issue", "view", issue_id, "--json", "title,body,state"],
