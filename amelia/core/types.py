@@ -3,7 +3,7 @@ from typing import Literal
 from pydantic import BaseModel, Field, model_validator
 
 
-DriverType = Literal["cli:claude", "api:openai", "cli", "api"]
+DriverType = Literal["cli:claude", "cli:claude:agentic", "api:openai", "cli", "api"]
 TrackerType = Literal["jira", "github", "none", "noop"]
 StrategyType = Literal["single", "competitive"]
 
