@@ -1,4 +1,5 @@
 import os
+from collections.abc import AsyncIterator
 from typing import Any
 
 from pydantic import BaseModel
@@ -89,3 +90,21 @@ class ApiDriver(DriverInterface):
 
         else:
             raise NotImplementedError(f"Tool '{tool_name}' not implemented in ApiDriver.")
+
+    async def execute_agentic(
+        self,
+        prompt: str,
+        cwd: str,
+        session_id: str | None = None
+    ) -> AsyncIterator[Any]:
+        """Execute prompt with autonomous tool access (agentic mode).
+
+        Note:
+            Agentic execution is not supported by API drivers.
+
+        Raises:
+            NotImplementedError: Always, as API drivers don't support agentic mode.
+        """
+        raise NotImplementedError("Agentic execution is not supported by ApiDriver. Use CLI drivers for agentic mode.")
+        # This is an async generator stub - yield is never reached but makes the signature correct
+        yield
