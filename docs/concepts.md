@@ -69,15 +69,17 @@ Amelia uses **LangGraph's StateGraph** for orchestration:
 ### State Machine
 
 ```mermaid
-stateDiagram-v2
-    [*] --> Architect
-    Architect --> HumanApproval
-    HumanApproval --> Developer: approved
-    HumanApproval --> [*]: rejected
-    Developer --> Developer: pending tasks remain
-    Developer --> Reviewer: all tasks complete
-    Reviewer --> Developer: not approved (needs fixes)
-    Reviewer --> [*]: approved
+flowchart TD
+    Start([Issue]) --> Architect
+    Architect --> Approval{Human Approval?}
+    Approval -->|rejected| End1([Rejected])
+    Approval -->|approved| Developer
+    Developer --> TaskCheck{Tasks remaining?}
+    TaskCheck -->|yes| Developer
+    TaskCheck -->|no| Reviewer
+    Reviewer --> ReviewCheck{Approved?}
+    ReviewCheck -->|no| Developer
+    ReviewCheck -->|yes| End2([Complete])
 ```
 
 **ExecutionState** tracks everything:
