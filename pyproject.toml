@@ -1,7 +1,7 @@
 [project]
 name = "amelia"
 version = "0.1.0"
-description = "A local agentic coding system supporting Dual Profiles (Work/Home)."
+description = "A local agentic coding system with configurable profiles."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [

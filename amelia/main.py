@@ -1,5 +1,4 @@
 import asyncio
-import contextlib
 import sys
 
 import typer
