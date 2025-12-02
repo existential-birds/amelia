@@ -163,6 +163,7 @@ dev = [
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "ruff" },
+    { name = "types-psutil" },
     { name = "types-pyyaml" },
 ]
 
@@ -193,6 +194,7 @@ dev = [
     { name = "pytest", specifier = ">=8.3.4" },
     { name = "pytest-asyncio", specifier = ">=0.24.0" },
     { name = "ruff", specifier = ">=0.8.0" },
+    { name = "types-psutil", specifier = ">=6.1.0" },
     { name = "types-pyyaml", specifier = ">=6.0.0" },
 ]
 
@@ -2918,6 +2920,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/f3/ab/0dce6a9841b5ebf3e37401879bb8cc20724ad9c770a7649bee997696cc75/types_protobuf-6.32.1.20251105.tar.gz", hash = "sha256:641002611ff87dd9fedc38a39a29cacb9907ae5ce61489b53e99ca2074bef764", size = 63846, upload-time = "2025-11-05T03:04:43.456Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/ed/57/3a0d89b33b7485b7ffd99ec7cf53b0c5c89194c481f0bd673fd67e5f273f/types_protobuf-6.32.1.20251105-py3-none-any.whl", hash = "sha256:a15109d38f7cfefd2539ef86d3f93a6a41c7cad53924f8aa1a51eaddbb72a660", size = 77890, upload-time = "2025-11-05T03:04:42.067Z" },
+]
+
+[[package]]
+name = "types-psutil"
+version = "7.1.3.20251202"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/56/38/fe935d9e9e70f9f0aaa04b743673a72acafcb6410d7a565c7c333348faa3/types_psutil-7.1.3.20251202.tar.gz", hash = "sha256:5cfecaced7c486fb3995bb290eab45043d697a261718aca01b9b340d1ab7968a", size = 24948, upload-time = "2025-12-02T03:10:58.301Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/1b/c3/7452fb13e3322885aa1f3c4b754fbb325eb666185656cb5982d720cc8fec/types_psutil-7.1.3.20251202-py3-none-any.whl", hash = "sha256:39bfc44780de7ab686c65169e36a7969db09e7f39d92de643b55789292953400", size = 31843, upload-time = "2025-12-02T03:10:57.153Z" },
 ]
 
 [[package]]

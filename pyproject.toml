@@ -33,6 +33,7 @@ dev = [
     "ruff>=0.8.0",
     "mypy>=1.13.0",
     "types-PyYAML>=6.0.0",
+    "types-psutil>=6.1.0",
     "httpx>=0.28.0",
 ]
 

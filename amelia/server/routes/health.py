@@ -1,5 +1,6 @@
 """Health check endpoints for liveness and readiness probes."""
 from datetime import UTC, datetime
+from typing import Any
 
 import psutil
 from fastapi import APIRouter, Request, Response
@@ -12,7 +13,7 @@ router = APIRouter(prefix="/health", tags=["health"])
 
 
 @router.get("/live")
-async def liveness() -> dict:
+async def liveness() -> dict[str, str]:
     """Minimal liveness check - is the server responding?
 
     Returns:
@@ -33,7 +34,7 @@ async def readiness() -> Response:
 
 
 @router.get("")
-async def health(request: Request) -> dict:
+async def health(request: Request) -> dict[str, Any]:
     """Detailed health check with server metrics.
 
     Returns:
