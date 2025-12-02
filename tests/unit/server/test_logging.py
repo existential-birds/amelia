@@ -1,5 +1,7 @@
 """Tests for structured logging configuration."""
-from amelia.server.logging import capture_logs, configure_logging
+from amelia.server.logging import configure_logging
+
+from .conftest import capture_logs, configure_test_logging
 
 
 class TestStructuredLogging:
@@ -14,7 +16,7 @@ class TestStructuredLogging:
 
     def test_log_output_is_json(self):
         """Log output is JSON formatted."""
-        logger = configure_logging()
+        logger = configure_test_logging()
 
         with capture_logs() as logs:
             logger.info("test message", key="value")
@@ -27,7 +29,7 @@ class TestStructuredLogging:
 
     def test_log_includes_timestamp(self):
         """Log entries include ISO timestamp."""
-        logger = configure_logging()
+        logger = configure_test_logging()
 
         with capture_logs() as logs:
             logger.info("test")
@@ -38,7 +40,7 @@ class TestStructuredLogging:
 
     def test_log_includes_level(self):
         """Log entries include log level."""
-        logger = configure_logging()
+        logger = configure_test_logging()
 
         with capture_logs() as logs:
             logger.warning("test warning")

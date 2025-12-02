@@ -1,25 +1,7 @@
 """Structured logging configuration for the server."""
-from collections.abc import Generator
-from contextlib import contextmanager
 from typing import Any
 
 import structlog
-
-
-# Captured logs for testing
-_captured_logs: list[dict[str, Any]] = []
-_capturing = False
-
-
-def _capture_processor(
-    logger: structlog.types.WrappedLogger,
-    method_name: str,
-    event_dict: dict[str, Any],
-) -> dict[str, Any]:
-    """Processor that captures logs for testing."""
-    if _capturing:
-        _captured_logs.append(event_dict.copy())
-    return event_dict
 
 
 def configure_logging(json_output: bool = True) -> Any:
@@ -39,7 +21,6 @@ def configure_logging(json_output: bool = True) -> Any:
         structlog.processors.TimeStamper(fmt="iso", key="timestamp"),
         structlog.processors.StackInfoRenderer(),
         structlog.processors.format_exc_info,
-        _capture_processor,
     ]
 
     if json_output:
@@ -56,22 +37,6 @@ def configure_logging(json_output: bool = True) -> Any:
     )
 
     return structlog.get_logger()
-
-
-@contextmanager
-def capture_logs() -> Generator[list[dict[str, Any]], None, None]:
-    """Context manager to capture log entries for testing.
-
-    Yields:
-        List of captured log entries as dicts.
-    """
-    global _capturing, _captured_logs
-    _captured_logs = []
-    _capturing = True
-    try:
-        yield _captured_logs
-    finally:
-        _capturing = False
 
 
 # Default logger instance

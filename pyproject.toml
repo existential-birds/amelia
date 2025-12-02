@@ -12,7 +12,7 @@ dependencies = [
     "rich-click>=1.9.4",
     "pyyaml>=6.0.2",
     "loguru>=0.7.2",
-    "httpx>=0.27.2",
+    "httpx>=0.28.0",
     "typer>=0.15.1",
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.32.0",
@@ -20,7 +20,7 @@ dependencies = [
     "structlog>=24.4.0",
     "psutil>=6.1.0",
     "aiosqlite>=0.20.0",
-    "prometheus-client>=0.21.0",
+    "prometheus-client>=0.21.0",  # Future use: metrics endpoint (see docs/plans/2025-12-01-web-dashboard-design.md)
 ]
 
 [project.scripts]
@@ -34,7 +34,6 @@ dev = [
     "mypy>=1.13.0",
     "types-PyYAML>=6.0.0",
     "types-psutil>=6.1.0",
-    "httpx>=0.28.0",
 ]
 
 [build-system]
