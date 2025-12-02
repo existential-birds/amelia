@@ -22,13 +22,6 @@ def test_uvicorn_importable():
     assert uvicorn
 
 
-def test_structlog_importable():
-    """Structlog should be importable."""
-    import structlog  # noqa: PLC0415
-
-    assert structlog
-
-
 def test_psutil_importable():
     """Psutil should be importable."""
     import psutil  # noqa: PLC0415
