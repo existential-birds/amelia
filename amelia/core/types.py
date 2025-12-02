@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field
 
 
 DriverType = Literal["cli:claude", "api:openai", "cli", "api"]
@@ -27,20 +27,6 @@ class Profile(BaseModel):
     execution_mode: ExecutionMode = "structured"
     plan_output_dir: str = "docs/plans"
     working_dir: str | None = None
-
-    @model_validator(mode="after")
-    def validate_work_profile_constraints(self) -> "Profile":
-        """Enterprise constraint: 'work' profiles cannot use API drivers.
-
-        Returns:
-            The validated profile.
-
-        Raises:
-            ValueError: If 'work' profile attempts to use an API driver.
-        """
-        if self.name.lower() == "work" and self.driver.startswith("api"):
-            raise ValueError(f"Profile 'work' cannot use API drivers (got '{self.driver}'). Use CLI drivers for enterprise compliance.")
-        return self
 
 class Settings(BaseModel):
     """Global settings for Amelia.

@@ -31,7 +31,9 @@ def load_settings(config_path: Path | None = None) -> Settings:
 def validate_profile(profile: "Profile") -> None:
     """
     Enforce constraints on profiles.
+
+    Currently a no-op. Profile constraints are now fully configurable
+    by the user via settings.amelia.yaml.
     """
-    if profile.name.lower() == "work" and profile.driver.startswith("api"):
-        raise ValueError("Configuration Error: 'work' profile must use CLI drivers (security constraint).")
+    pass
 
