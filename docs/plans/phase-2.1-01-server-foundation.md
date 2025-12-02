@@ -73,6 +73,12 @@ dependencies = [
     "aiosqlite>=0.20.0",
     "prometheus-client>=0.21.0",
 ]
+
+[project.optional-dependencies]
+dev = [
+    # ... existing dev deps ...
+    "httpx>=0.28.0",
+]
 ```
 
 **Step 4: Sync dependencies**
@@ -417,19 +423,16 @@ __all__ = ["health_router"]
 ```python
 # amelia/server/routes/health.py
 """Health check endpoints for liveness and readiness probes."""
-from datetime import datetime
+from datetime import datetime, timezone
 
 import psutil
-from fastapi import APIRouter, Response
+from fastapi import APIRouter, Request, Response
 from fastapi.responses import JSONResponse
 
 from amelia import __version__
 
 
 router = APIRouter(prefix="/health", tags=["health"])
-
-# Server start time for uptime calculation
-_start_time = datetime.utcnow()
 
 
 @router.get("/live")
@@ -454,7 +457,7 @@ async def readiness() -> Response:
 
 
 @router.get("")
-async def health() -> dict:
+async def health(request: Request) -> dict:
     """Detailed health check with server metrics.
 
     Returns:
@@ -468,7 +471,8 @@ async def health() -> dict:
         - Database status
     """
     process = psutil.Process()
-    uptime = (datetime.utcnow() - _start_time).total_seconds()
+    start_time: datetime = request.app.state.start_time
+    uptime = (datetime.now(timezone.utc) - start_time).total_seconds()
 
     # TODO: Get actual counts when services are implemented
     active_workflows = 0
@@ -496,10 +500,24 @@ async def health() -> dict:
 ```python
 # amelia/server/main.py
 """FastAPI application setup and configuration."""
+from contextlib import asynccontextmanager
+from datetime import datetime, timezone
+from typing import AsyncIterator
+
 from fastapi import FastAPI
 
 from amelia import __version__
 from amelia.server.routes import health_router
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Manage application lifespan events.
+
+    Sets start_time on startup for uptime calculation.
+    """
+    app.state.start_time = datetime.now(timezone.utc)
+    yield
 
 
 def create_app() -> FastAPI:
@@ -515,6 +533,7 @@ def create_app() -> FastAPI:
         docs_url="/api/docs",
         redoc_url="/api/redoc",
         openapi_url="/api/openapi.json",
+        lifespan=lifespan,
     )
 
     # Mount health routes
@@ -552,8 +571,10 @@ git commit -m "feat(server): add FastAPI app with health endpoints"
 ```python
 # tests/unit/server/test_cli.py
 """Tests for server CLI commands."""
+import os
+
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from typer.testing import CliRunner
 
 
@@ -628,6 +649,30 @@ class TestServerCLI:
 
             call_kwargs = mock_run.call_args.kwargs
             assert call_kwargs["host"] == "127.0.0.1"
+
+    def test_server_respects_env_port(self, runner):
+        """Server respects AMELIA_PORT environment variable."""
+        from amelia.main import app
+
+        with patch.dict(os.environ, {"AMELIA_PORT": "9999"}):
+            with patch("uvicorn.run") as mock_run:
+                mock_run.side_effect = KeyboardInterrupt()
+                result = runner.invoke(app, ["server"])
+
+                call_kwargs = mock_run.call_args.kwargs
+                assert call_kwargs["port"] == 9999
+
+    def test_cli_port_overrides_env(self, runner):
+        """CLI --port flag overrides AMELIA_PORT env var."""
+        from amelia.main import app
+
+        with patch.dict(os.environ, {"AMELIA_PORT": "9999"}):
+            with patch("uvicorn.run") as mock_run:
+                mock_run.side_effect = KeyboardInterrupt()
+                result = runner.invoke(app, ["server", "--port", "8000"])
+
+                call_kwargs = mock_run.call_args.kwargs
+                assert call_kwargs["port"] == 8000
 ```
 
 **Step 2: Run test to verify it fails**
@@ -640,7 +685,7 @@ Expected: FAIL (server command not found)
 ```python
 # amelia/server/cli.py
 """CLI commands for the Amelia server."""
-from typing import Annotated
+from typing import Annotated, Optional
 
 import typer
 import uvicorn
@@ -661,9 +706,9 @@ server_app = typer.Typer(
 def server(
     ctx: typer.Context,
     port: Annotated[
-        int,
-        typer.Option("--port", "-p", help="Port to listen on"),
-    ] = 8420,
+        Optional[int],
+        typer.Option("--port", "-p", help="Port to listen on (default: from config/env)"),
+    ] = None,
     bind_all: Annotated[
         bool,
         typer.Option(
@@ -680,12 +725,19 @@ def server(
 
     By default, binds to localhost (127.0.0.1) only.
     Use --bind-all to expose to the network (not recommended without auth).
+
+    Port and host can be configured via AMELIA_PORT and AMELIA_HOST env vars.
     """
     # Skip if subcommand is invoked
     if ctx.invoked_subcommand is not None:
         return
 
-    host = "0.0.0.0" if bind_all else "127.0.0.1"
+    # Load config (respects environment variables)
+    config = ServerConfig()
+
+    # CLI flags override config
+    effective_port = port if port is not None else config.port
+    effective_host = "0.0.0.0" if bind_all else config.host
 
     if bind_all:
         console.print(
@@ -694,14 +746,14 @@ def server(
             style="bold yellow",
         )
 
-    console.print(f"Starting Amelia server on http://{host}:{port}")
-    console.print(f"API docs: http://{host}:{port}/api/docs")
+    console.print(f"Starting Amelia server on http://{effective_host}:{effective_port}")
+    console.print(f"API docs: http://{effective_host}:{effective_port}/api/docs")
 
     try:
         uvicorn.run(
             "amelia.server.main:app",
-            host=host,
-            port=port,
+            host=effective_host,
+            port=effective_port,
             reload=reload,
             log_level="info",
         )
@@ -945,10 +997,18 @@ git commit -m "feat(server): add structured logging with structlog"
 ```python
 # tests/integration/test_server_startup.py
 """Integration tests for server startup."""
+import socket
+
 import pytest
 import asyncio
-from unittest.mock import patch
 import httpx
+
+
+def find_free_port() -> int:
+    """Find an available port for testing."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
 
 
 class TestServerStartup:
@@ -960,24 +1020,26 @@ class TestServerStartup:
         import uvicorn
         from amelia.server.main import app
 
-        config = uvicorn.Config(app, host="127.0.0.1", port=8421, log_level="warning")
+        port = find_free_port()
+        config = uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning")
         server = uvicorn.Server(config)
 
         # Run server in background task
         task = asyncio.create_task(server.serve())
 
         # Wait for server to be ready
+        base_url = f"http://127.0.0.1:{port}"
         async with httpx.AsyncClient() as client:
             for _ in range(50):  # 5 second timeout
                 try:
-                    response = await client.get("http://127.0.0.1:8421/api/health/live")
+                    response = await client.get(f"{base_url}/api/health/live")
                     if response.status_code == 200:
                         break
                 except httpx.ConnectError:
                     pass
                 await asyncio.sleep(0.1)
 
-        yield "http://127.0.0.1:8421"
+        yield base_url
 
         # Shutdown
         server.should_exit = True
