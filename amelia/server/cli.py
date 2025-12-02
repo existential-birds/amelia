@@ -5,6 +5,7 @@ import typer
 import uvicorn
 from rich.console import Console
 
+from amelia.server.banner import print_banner
 from amelia.server.config import ServerConfig
 
 
@@ -52,6 +53,9 @@ def server(
     # CLI flags override config
     effective_port = port if port is not None else config.port
     effective_host = "0.0.0.0" if bind_all else config.host
+
+    # Print ASCII banner
+    print_banner(console)
 
     if bind_all:
         console.print(
