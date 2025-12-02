@@ -178,7 +178,16 @@ class TestDatabaseConnection:
 Run: `uv run pytest tests/unit/server/database/test_connection.py -v`
 Expected: FAIL with ModuleNotFoundError
 
-**Step 3: Create database package**
+**Step 3: Create database and test packages**
+
+```bash
+# Create source package
+mkdir -p amelia/server/database
+
+# Create test package
+mkdir -p tests/unit/server/database
+touch tests/unit/server/database/__init__.py
+```
 
 ```python
 # amelia/server/database/__init__.py
@@ -277,9 +286,13 @@ class Database:
 
         Returns:
             Number of rows affected (for INSERT/UPDATE/DELETE).
+
+        Note:
+            With isolation_level=None (autocommit mode), statements are
+            automatically committed. Do not add explicit commit() here
+            as it would break explicit transactions started with transaction().
         """
         cursor = await self.connection.execute(sql, parameters)
-        await self.connection.commit()
         return cursor.rowcount
 
     async def execute_many(
@@ -295,9 +308,13 @@ class Database:
 
         Returns:
             Total rows affected.
+
+        Note:
+            With isolation_level=None (autocommit mode), statements are
+            automatically committed. Do not add explicit commit() here
+            as it would break explicit transactions started with transaction().
         """
         cursor = await self.connection.executemany(sql, parameters)
-        await self.connection.commit()
         return cursor.rowcount
 
     async def fetch_one(
@@ -357,7 +374,8 @@ Expected: PASS
 **Step 6: Commit**
 
 ```bash
-git add amelia/server/database/__init__.py amelia/server/database/connection.py tests/unit/server/database/test_connection.py
+git add amelia/server/database/__init__.py amelia/server/database/connection.py \
+        tests/unit/server/database/__init__.py tests/unit/server/database/test_connection.py
 git commit -m "feat(database): add SQLite connection manager with WAL mode"
 ```
 
@@ -544,8 +562,7 @@ Expected: FAIL with ModuleNotFoundError
 from pathlib import Path
 
 import aiosqlite
-
-from amelia.server.logging import logger
+from loguru import logger
 
 
 class MigrationRunner:
@@ -739,7 +756,8 @@ class TestInitialSchema:
     @pytest.fixture
     def production_migrations_dir(self):
         """Path to actual migrations directory."""
-        return Path(__file__).parent.parent.parent.parent.parent / "amelia" / "server" / "database" / "migrations"
+        import amelia.server.database
+        return Path(amelia.server.database.__file__).parent / "migrations"
 
     @pytest.mark.asyncio
     async def test_workflows_table_exists(self, temp_db_path, production_migrations_dir):
@@ -1016,13 +1034,12 @@ class TestAppDatabaseIntegration:
             app = create_app()
             client = TestClient(app)
 
-            # Trigger startup event
+            # Trigger startup event and make request within context
             with client:
                 response = client.get("/api/health")
-
-            data = response.json()
-            assert "database" in data
-            assert data["database"]["status"] in ("healthy", "degraded")
+                data = response.json()
+                assert "database" in data
+                assert data["database"]["status"] in ("healthy", "degraded")
 
     def test_database_health_check_writes_and_reads(self, temp_db_path):
         """Database health check performs write/read cycle."""
@@ -1035,10 +1052,32 @@ class TestAppDatabaseIntegration:
 
             with client:
                 response = client.get("/api/health")
+                data = response.json()
+                # Should be healthy after successful write/read
+                assert data["database"]["status"] == "healthy"
 
-            data = response.json()
-            # Should be healthy after successful write/read
-            assert data["database"]["status"] == "healthy"
+    def test_database_health_reports_error_on_failure(self, temp_db_path):
+        """Database health check reports error message when degraded."""
+        import os
+        with patch.dict(os.environ, {"AMELIA_DATABASE_PATH": str(temp_db_path)}):
+            from amelia.server.main import create_app
+
+            app = create_app()
+            client = TestClient(app)
+
+            with client:
+                # Mock database to simulate failure after startup
+                with patch('amelia.server.routes.health.get_database') as mock_get_db:
+                    mock_db = AsyncMock()
+                    mock_db.execute.side_effect = Exception("Connection lost")
+                    mock_get_db.return_value = mock_db
+
+                    response = client.get("/api/health")
+                    data = response.json()
+
+                    assert data["database"]["status"] == "degraded"
+                    assert data["database"]["error"] is not None
+                    assert "Connection lost" in data["database"]["error"]
 ```
 
 **Step 2: Run test to verify it fails**
@@ -1048,65 +1087,106 @@ Expected: FAIL (database not integrated)
 
 **Step 3: Update server main.py with database lifecycle**
 
+Modify the existing `amelia/server/main.py` to add database support. The key changes are:
+1. Add imports for Database and MigrationRunner
+2. Add `_database` global and `get_database()` function (alongside existing `_config`/`get_config()`)
+3. Update `lifespan()` to run migrations and connect to database
+
 ```python
 # amelia/server/main.py
 """FastAPI application setup and configuration."""
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import AsyncGenerator
 
 from fastapi import FastAPI
+from loguru import logger
 
 from amelia import __version__
 from amelia.server.config import ServerConfig
 from amelia.server.database.connection import Database
 from amelia.server.database.migrate import MigrationRunner
-from amelia.server.logging import logger
 from amelia.server.routes import health_router
 
 
+# Module-level config storage for DI
+_config: ServerConfig | None = None
 # Global database instance
 _database: Database | None = None
+
+
+def get_config() -> ServerConfig:
+    """FastAPI dependency that provides the server configuration.
+
+    Returns:
+        The current ServerConfig instance.
+
+    Raises:
+        RuntimeError: If config is not initialized (server not started).
+    """
+    if _config is None:
+        raise RuntimeError("Server config not initialized. Is the server running?")
+    return _config
 
 
 def get_database() -> Database:
     """Get the database instance.
 
+    Returns:
+        The current Database instance.
+
     Raises:
         RuntimeError: If database not initialized.
     """
     if _database is None:
-        raise RuntimeError("Database not initialized")
+        raise RuntimeError("Database not initialized. Is the server running?")
     return _database
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    """Application lifespan manager for startup/shutdown."""
-    global _database
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Manage application lifespan events.
 
-    config = ServerConfig()
-    logger.info("Starting Amelia server", version=__version__)
+    Sets start_time on startup for uptime calculation.
+    Initializes configuration, runs migrations, and connects to database.
+    """
+    global _config, _database
+
+    # Initialize configuration
+    _config = ServerConfig()
+
+    # Ensure database directory exists
+    db_dir = _config.database_path.parent
+    db_dir.mkdir(parents=True, exist_ok=True)
+    logger.debug(f"Ensured database directory exists: {db_dir}")
 
     # Run migrations
     migrations_dir = Path(__file__).parent / "database" / "migrations"
-    runner = MigrationRunner(config.database_path, migrations_dir)
+    runner = MigrationRunner(_config.database_path, migrations_dir)
     applied = await runner.run_migrations()
     if applied:
         logger.info(f"Applied {applied} database migrations")
 
     # Connect to database
-    _database = Database(config.database_path)
+    _database = Database(_config.database_path)
     await _database.connect()
-    logger.info("Database connected", path=str(config.database_path))
+    logger.info(f"Database connected: {_config.database_path}")
 
+    # Log effective configuration
+    logger.info(
+        f"Server starting: host={_config.host}, port={_config.port}, "
+        f"database={_config.database_path}"
+    )
+
+    app.state.start_time = datetime.now(UTC)
     yield
 
-    # Shutdown
-    logger.info("Shutting down Amelia server")
+    # Cleanup
     if _database:
         await _database.close()
         _database = None
+    _config = None
 
 
 def create_app() -> FastAPI:
@@ -1137,30 +1217,70 @@ app = create_app()
 
 **Step 4: Update health endpoint with real database check**
 
+Modify the existing `amelia/server/routes/health.py` to add real database health checks. The key changes are:
+1. Add `check_database_health()` async function
+2. Update `health()` endpoint to use real database check instead of hardcoded status
+3. Preserve existing Pydantic models and `request.app.state.start_time` pattern
+
 ```python
-# amelia/server/routes/health.py (update the health function)
+# amelia/server/routes/health.py
 """Health check endpoints for liveness and readiness probes."""
-from datetime import datetime
+from datetime import UTC, datetime
+from typing import Literal
 from uuid import uuid4
 
 import psutil
-from fastapi import APIRouter, Depends, Response
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Request
+from loguru import logger
+from pydantic import BaseModel, Field
 
 from amelia import __version__
 
 
 router = APIRouter(prefix="/health", tags=["health"])
 
-# Server start time for uptime calculation
-_start_time = datetime.utcnow()
+
+class LivenessResponse(BaseModel):
+    """Response model for liveness probe."""
+
+    status: Literal["alive"] = "alive"
 
 
-async def check_database_health() -> dict:
+class ReadinessResponse(BaseModel):
+    """Response model for readiness probe."""
+
+    status: Literal["ready", "not_ready"]
+
+
+class DatabaseStatus(BaseModel):
+    """Database health status."""
+
+    status: Literal["healthy", "degraded", "unhealthy"]
+    mode: str = Field(description="Database mode (e.g., 'wal')")
+    error: str | None = Field(default=None, description="Error message if degraded")
+
+
+class HealthResponse(BaseModel):
+    """Response model for detailed health check."""
+
+    status: Literal["healthy", "degraded"]
+    version: str
+    uptime_seconds: float
+    active_workflows: int
+    websocket_connections: int
+    memory_mb: float
+    cpu_percent: float
+    database: DatabaseStatus
+
+
+async def check_database_health() -> DatabaseStatus:
     """Verify database read and write capability.
 
     Performs a lightweight write/read cycle to ensure the database
     is fully operational, not just connected.
+
+    Returns:
+        DatabaseStatus with health check results.
     """
     try:
         from amelia.server.main import get_database
@@ -1171,43 +1291,42 @@ async def check_database_health() -> dict:
         test_id = str(uuid4())
         await db.execute(
             "INSERT INTO health_check (id, checked_at) VALUES (?, ?)",
-            (test_id, datetime.utcnow()),
+            (test_id, datetime.now(UTC)),
         )
         # Cleanup test row
         await db.execute("DELETE FROM health_check WHERE id = ?", (test_id,))
         # Test read capability
         await db.fetch_one("SELECT 1")
 
-        return {"status": "healthy", "mode": "wal"}
+        return DatabaseStatus(status="healthy", mode="wal")
     except Exception as e:
-        from amelia.server.logging import logger
-        logger.warning("Database health check failed", error=str(e))
-        return {"status": "degraded", "error": str(e)}
+        logger.warning(f"Database health check failed: {e}")
+        return DatabaseStatus(status="degraded", mode="wal", error=str(e))
 
 
-@router.get("/live")
-async def liveness() -> dict:
+@router.get("/live", response_model=LivenessResponse)
+async def liveness() -> LivenessResponse:
     """Minimal liveness check - is the server responding?
 
     Returns:
         Simple alive status.
     """
-    return {"status": "alive"}
+    return LivenessResponse()
 
 
-@router.get("/ready")
-async def readiness() -> Response:
+@router.get("/ready", response_model=ReadinessResponse)
+async def readiness() -> ReadinessResponse:
     """Readiness check - is the server ready to accept requests?
 
     Returns:
         Ready status or 503 if shutting down.
     """
     # TODO: Check lifecycle.is_shutting_down when implemented
-    return JSONResponse(content={"status": "ready"})
+    return ReadinessResponse(status="ready")
 
 
-@router.get("")
-async def health() -> dict:
+@router.get("", response_model=HealthResponse)
+async def health(request: Request) -> HealthResponse:
     """Detailed health check with server metrics.
 
     Returns:
@@ -1221,7 +1340,8 @@ async def health() -> dict:
         - Database status
     """
     process = psutil.Process()
-    uptime = (datetime.utcnow() - _start_time).total_seconds()
+    start_time: datetime = request.app.state.start_time
+    uptime = (datetime.now(UTC) - start_time).total_seconds()
 
     # TODO: Get actual counts when services are implemented
     active_workflows = 0
@@ -1230,18 +1350,20 @@ async def health() -> dict:
     # Real database health check
     db_status = await check_database_health()
 
-    overall_status = "healthy" if db_status["status"] == "healthy" else "degraded"
+    overall_status: Literal["healthy", "degraded"] = (
+        "healthy" if db_status.status == "healthy" else "degraded"
+    )
 
-    return {
-        "status": overall_status,
-        "version": __version__,
-        "uptime_seconds": uptime,
-        "active_workflows": active_workflows,
-        "websocket_connections": websocket_connections,
-        "memory_mb": round(process.memory_info().rss / 1024 / 1024, 2),
-        "cpu_percent": process.cpu_percent(),
-        "database": db_status,
-    }
+    return HealthResponse(
+        status=overall_status,
+        version=__version__,
+        uptime_seconds=uptime,
+        active_workflows=active_workflows,
+        websocket_connections=websocket_connections,
+        memory_mb=round(process.memory_info().rss / 1024 / 1024, 2),
+        cpu_percent=process.cpu_percent(),
+        database=db_status,
+    )
 ```
 
 **Step 5: Run test to verify it passes**
@@ -1312,14 +1434,11 @@ __all__ = ["Database", "MigrationRunner"]
 """Amelia FastAPI server package."""
 from amelia.server.config import ServerConfig
 from amelia.server.database import Database, MigrationRunner
-from amelia.server.logging import configure_logging, logger
 
 __all__ = [
     "ServerConfig",
     "Database",
     "MigrationRunner",
-    "configure_logging",
-    "logger",
 ]
 ```
 
@@ -1341,18 +1460,19 @@ git commit -m "feat(database): update package exports for Database and Migration
 
 After completing all tasks, verify:
 
+- [ ] `tests/unit/server/database/__init__.py` exists
 - [ ] `uv run pytest tests/unit/server/database/ -v` - All database tests pass
 - [ ] `uv run pytest tests/unit/server/test_app_database.py -v` - Integration tests pass
 - [ ] `uv run ruff check amelia/server/database` - No linting errors
 - [ ] `uv run mypy amelia/server/database` - No type errors
 - [ ] `uv run amelia server` starts and creates database at `~/.amelia/amelia.db`
 - [ ] Database has tables: `workflows`, `events`, `token_usage`, `health_check`, `schema_version`
-- [ ] Health endpoint reports database status
+- [ ] Health endpoint reports database status (including `error` field when degraded)
 
 ```bash
 # Manual verification
 curl http://127.0.0.1:8420/api/health | jq .database
-# Expected: {"status": "healthy", "mode": "wal"}
+# Expected: {"status": "healthy", "mode": "wal", "error": null}
 ```
 
 ---
