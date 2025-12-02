@@ -1,5 +1,5 @@
 """Health check endpoints for liveness and readiness probes."""
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import psutil
 from fastapi import APIRouter, Request, Response
@@ -48,7 +48,7 @@ async def health(request: Request) -> dict:
     """
     process = psutil.Process()
     start_time: datetime = request.app.state.start_time
-    uptime = (datetime.now(timezone.utc) - start_time).total_seconds()
+    uptime = (datetime.now(UTC) - start_time).total_seconds()
 
     # TODO: Get actual counts when services are implemented
     active_workflows = 0

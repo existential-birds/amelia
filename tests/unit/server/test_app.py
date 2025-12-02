@@ -14,8 +14,8 @@ class TestAppSetup:
 
     def test_app_version(self):
         """App has version set."""
-        from amelia.server.main import app
         from amelia import __version__
+        from amelia.server.main import app
 
         assert app.version == __version__
 

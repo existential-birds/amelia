@@ -1,6 +1,5 @@
 """Tests for server configuration."""
 import os
-import pytest
 from unittest.mock import patch
 
 
@@ -55,8 +54,9 @@ class TestServerConfig:
 
     def test_database_path_default(self):
         """Database path defaults to ~/.amelia/amelia.db."""
-        from amelia.server.config import ServerConfig
         from pathlib import Path
+
+        from amelia.server.config import ServerConfig
 
         config = ServerConfig()
         expected = Path.home() / ".amelia" / "amelia.db"
@@ -64,8 +64,9 @@ class TestServerConfig:
 
     def test_database_path_override(self):
         """Database path can be overridden."""
-        from amelia.server.config import ServerConfig
         from pathlib import Path
+
+        from amelia.server.config import ServerConfig
 
         with patch.dict(os.environ, {"AMELIA_DATABASE_PATH": "/tmp/test.db"}):
             config = ServerConfig()

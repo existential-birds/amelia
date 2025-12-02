@@ -1,7 +1,7 @@
 """FastAPI application setup and configuration."""
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
-from typing import AsyncIterator
+from datetime import UTC, datetime
 
 from fastapi import FastAPI
 
@@ -15,7 +15,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     Sets start_time on startup for uptime calculation.
     """
-    app.state.start_time = datetime.now(timezone.utc)
+    app.state.start_time = datetime.now(UTC)
     yield
 
 

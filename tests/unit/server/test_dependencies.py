@@ -1,5 +1,4 @@
 """Verify server dependencies are available."""
-import pytest
 
 
 def test_fastapi_importable():
