@@ -5,7 +5,11 @@ import pytest
 from pydantic import BaseModel
 
 from amelia.core.state import AgentMessage
-from amelia.drivers.cli.claude import ClaudeCliDriver, ClaudeStreamEvent
+from amelia.drivers.cli.claude import (
+    ClaudeCliDriver,
+    ClaudeStreamEvent,
+    _is_clarification_request,
+)
 from amelia.tools.safe_file import SafeFileWriter
 from amelia.tools.safe_shell import SafeShellExecutor
 
@@ -100,6 +104,89 @@ class TestClaudeCliDriver:
             mock_process.stdin.write.assert_called_once()
             mock_process.stdin.drain.assert_called_once()
             mock_process.stdin.close.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_generate_json_from_result_envelope_structured_output(self, driver, messages, mock_subprocess_process_factory):
+        """Test unwrapping structured_output from Claude CLI result envelope."""
+        envelope = json.dumps({
+            "type": "result",
+            "subtype": "success",
+            "structured_output": {"reasoning": "from envelope", "answer": "structured"},
+            "session_id": "test-session"
+        })
+        mock_process = mock_subprocess_process_factory(
+            stdout_lines=[envelope.encode(), b""],
+            return_code=0
+        )
+
+        with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=mock_process):
+            response = await driver._generate_impl(messages, schema=_TestModel)
+
+            assert isinstance(response, _TestModel)
+            assert response.reasoning == "from envelope"
+            assert response.answer == "structured"
+
+    @pytest.mark.asyncio
+    async def test_generate_json_from_result_envelope_result_field(self, driver, messages, mock_subprocess_process_factory):
+        """Test parsing JSON from result field when structured_output is missing."""
+        inner_json = json.dumps({"reasoning": "from result", "answer": "parsed"})
+        envelope = json.dumps({
+            "type": "result",
+            "subtype": "success",
+            "result": inner_json,
+            "session_id": "test-session"
+        })
+        mock_process = mock_subprocess_process_factory(
+            stdout_lines=[envelope.encode(), b""],
+            return_code=0
+        )
+
+        with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=mock_process):
+            response = await driver._generate_impl(messages, schema=_TestModel)
+
+            assert isinstance(response, _TestModel)
+            assert response.reasoning == "from result"
+            assert response.answer == "parsed"
+
+    @pytest.mark.asyncio
+    async def test_generate_json_from_result_envelope_text_raises_error(self, driver, messages, mock_subprocess_process_factory):
+        """Test that plain text in result field raises clear error."""
+        envelope = json.dumps({
+            "type": "result",
+            "subtype": "success",
+            "result": "Here is some plain text that is not a clarification request.",
+            "session_id": "test-session"
+        })
+        mock_process = mock_subprocess_process_factory(
+            stdout_lines=[envelope.encode(), b""],
+            return_code=0
+        )
+
+        with (
+            patch("asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=mock_process),
+            pytest.raises(RuntimeError, match="Claude CLI returned text instead of structured JSON"),
+        ):
+            await driver._generate_impl(messages, schema=_TestModel)
+
+    @pytest.mark.asyncio
+    async def test_generate_json_clarification_request_raises_specific_error(self, driver, messages, mock_subprocess_process_factory):
+        """Test that clarification requests raise a specific, helpful error."""
+        envelope = json.dumps({
+            "type": "result",
+            "subtype": "success",
+            "result": "I need more information to create a plan. Could you clarify what type of tracker you need?",
+            "session_id": "test-session"
+        })
+        mock_process = mock_subprocess_process_factory(
+            stdout_lines=[envelope.encode(), b""],
+            return_code=0
+        )
+
+        with (
+            patch("asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=mock_process),
+            pytest.raises(RuntimeError, match="Claude requested clarification"),
+        ):
+            await driver._generate_impl(messages, schema=_TestModel)
 
     @pytest.mark.asyncio
     async def test_generate_failure_stderr(self, driver, messages, mock_subprocess_process_factory):
@@ -475,3 +562,55 @@ class TestClaudeCliDriverAgentic:
 
             assert len(driver.tool_call_history) == 1
             assert driver.tool_call_history[0].tool_name == "Read"
+
+
+class TestClarificationDetection:
+    """Tests for clarification request detection."""
+
+    def test_detects_could_you_clarify(self):
+        text = "Could you clarify what type of database you're using?"
+        assert _is_clarification_request(text) is True
+
+    def test_detects_can_you_provide(self):
+        text = "Can you provide more details about the requirements?"
+        assert _is_clarification_request(text) is True
+
+    def test_detects_i_need_more(self):
+        text = "I need more information before I can create a plan."
+        assert _is_clarification_request(text) is True
+
+    def test_detects_multiple_questions(self):
+        text = "What framework are you using? What is the target platform?"
+        assert _is_clarification_request(text) is True
+
+    def test_detects_numbered_questions(self):
+        text = """I have a few questions:
+        1. What is the tech stack?
+        2. Are there any constraints?
+        """
+        assert _is_clarification_request(text) is True
+
+    def test_does_not_flag_normal_response(self):
+        text = "Here is the implementation plan for your feature."
+        assert _is_clarification_request(text) is False
+
+    def test_does_not_flag_single_rhetorical_question(self):
+        text = "The implementation looks good. What else would you like me to do?"
+        # Single question mark, no clarification phrases - should not flag
+        assert _is_clarification_request(text) is False
+
+    def test_does_not_flag_code_with_question_marks(self):
+        text = "def check(x): return True if x else False"
+        assert _is_clarification_request(text) is False
+
+    def test_case_insensitive_detection(self):
+        text = "COULD YOU CLARIFY the requirements?"
+        assert _is_clarification_request(text) is True
+
+    def test_detects_before_i_can(self):
+        text = "Before I can proceed, I need to understand the architecture."
+        assert _is_clarification_request(text) is True
+
+    def test_detects_what_type_of(self):
+        text = "What type of authentication system do you want?"
+        assert _is_clarification_request(text) is True

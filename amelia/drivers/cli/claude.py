@@ -15,6 +15,45 @@ from amelia.tools.safe_shell import SafeShellExecutor
 
 ClaudeStreamEventType = Literal["assistant", "tool_use", "result", "error", "system"]
 
+# Phrases that indicate Claude is asking for clarification rather than producing output
+_CLARIFICATION_PHRASES = [
+    "could you clarify",
+    "can you provide",
+    "i need more",
+    "please provide",
+    "before i can",
+    "to help me understand",
+    "i have a few questions",
+    "could you tell me",
+    "what type of",
+    "which approach",
+    "i need to know",
+    "can you tell me",
+    "i'd like to understand",
+    "could you explain",
+    "what is the",
+    "what are the",
+]
+
+
+def _is_clarification_request(text: str) -> bool:
+    """Detect if Claude is asking for clarification instead of producing output.
+
+    Args:
+        text: The text response from Claude.
+
+    Returns:
+        True if the response appears to be asking for clarification.
+    """
+    text_lower = text.lower()
+
+    # Check for clarification phrases
+    if any(phrase in text_lower for phrase in _CLARIFICATION_PHRASES):
+        return True
+
+    # Multiple questions strongly suggest a clarification request
+    return text.count("?") >= 2
+
 
 class ClaudeStreamEvent(BaseModel):
     """Event from Claude CLI stream-json output.
@@ -248,13 +287,40 @@ class ClaudeCliDriver(CliDriver):
                     if isinstance(data, dict) and data.get("type") == "result":
                         if data.get("subtype") == "success":
                             # Extract the actual model output
-                            # It seems to be in 'structured_output' for --json-schema calls
+                            # It should be in 'structured_output' for --json-schema calls
                             if "structured_output" in data:
                                 data = data["structured_output"]
                             elif "result" in data:
-                                # Fallback for non-structured or different format?
-                                # But for now, structured_output is what we saw
-                                pass 
+                                # Fallback: try to parse result as JSON
+                                result_content = data["result"]
+                                if isinstance(result_content, str):
+                                    try:
+                                        data = json.loads(result_content)
+                                    except json.JSONDecodeError:
+                                        # Model returned text instead of structured JSON
+                                        preview = result_content[:500] + "..." if len(result_content) > 500 else result_content
+                                        session_id = data.get("session_id")
+
+                                        if _is_clarification_request(result_content):
+                                            # Claude is asking for clarification
+                                            session_info = f" (session_id: {session_id})" if session_id else ""
+                                            raise RuntimeError(
+                                                f"Claude requested clarification instead of producing structured output{session_info}.\n\n"
+                                                f"This typically happens when the issue/prompt lacks sufficient detail.\n"
+                                                f"Consider providing more context in the issue description.\n\n"
+                                                f"Claude's questions:\n{preview}"
+                                            ) from None
+                                        else:
+                                            # Generic text response (not clarification)
+                                            raise RuntimeError(
+                                                f"Claude CLI returned text instead of structured JSON.\n"
+                                                f"Expected: JSON matching the requested schema\n"
+                                                f"Received: {preview}"
+                                            ) from None
+                                elif isinstance(result_content, (dict, list)):
+                                    data = result_content
+                                else:
+                                    raise RuntimeError(f"Unexpected result type from Claude CLI: {type(result_content)}")
                         else:
                             # If subtype is error or something else, we should probably error out
                             # using the error info in the wrapper
