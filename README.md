@@ -97,6 +97,7 @@ See [Configuration Reference](docs/configuration.md) for full details.
 - [Concepts: Understanding Agentic AI](docs/concepts.md) - How agents, drivers, and orchestration work
 - [Architecture & Data Flow](docs/architecture.md) - Technical deep dive with diagrams
 - [Configuration Reference](docs/configuration.md) - Full settings documentation
+- [Benchmarking LLM Agents](docs/benchmarking.md) - How to systematically evaluate and iterate on agents
 
 > **Note:** `docs/plans/` contains temporary planning documents for in-progress work. These should be deleted once their corresponding plans are executed and merged.
 
@@ -119,6 +120,7 @@ See [Configuration Reference](docs/configuration.md) for full details.
 - Full agent orchestration with human approval gates
 - Multi-driver support (API and CLI)
 - Issue tracker integrations (Jira, GitHub)
+- [Reviewer agent benchmark framework](https://github.com/anderskev/amelia/issues/8) for data-driven prompt iteration
 
 ### Phase 2: Web UI
 - **Observability dashboard** using [AI Elements](https://github.com/ai-elements) library for real-time agent activity monitoring, task progress, and execution logs
