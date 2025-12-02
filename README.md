@@ -1,6 +1,6 @@
 # Amelia: Agentic Orchestrator
 
-Amelia is a local agentic coding system that orchestrates software development tasks through multiple AI agents with specialized roles.
+[Amelia](https://en.wikipedia.org/wiki/Amelia_Earhart) is a local agentic coding system that orchestrates software development tasks through multiple AI agents with specialized roles.
 
 ## What is Amelia?
 
@@ -9,6 +9,8 @@ Amelia automates development workflows (issue analysis, planning, coding, review
 - **Architect** analyzes issues and creates plans
 - **Developer** writes code and executes commands
 - **Reviewer** evaluates changes and provides feedback
+
+![Amelia Dashboard Design Mock](docs/plans/design_mock.jpg)
 
 ## Quick Start
 
