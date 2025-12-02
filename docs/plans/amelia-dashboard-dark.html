@@ -135,11 +135,11 @@
       ];
 
       const nodes = [
-        { id: 'issue', label: 'Issue', subtitle: 'Origin', x: 100, y: 160, status: 'completed', tokens: null },
-        { id: 'architect', label: 'Architect', subtitle: 'Planning', x: 250, y: 160, status: 'completed', tokens: '12.4k' },
-        { id: 'developer', label: 'Developer', subtitle: 'Implementation', x: 400, y: 160, status: 'active', tokens: '48.2k' },
-        { id: 'reviewer', label: 'Reviewer', subtitle: 'Code Review', x: 550, y: 160, status: 'pending', tokens: null },
-        { id: 'done', label: 'Done', subtitle: 'Complete', x: 700, y: 160, status: 'pending', tokens: null },
+        { id: 'issue', label: 'Issue', subtitle: 'Origin', status: 'completed', tokens: null },
+        { id: 'architect', label: 'Architect', subtitle: 'Planning', status: 'completed', tokens: '12.4k' },
+        { id: 'developer', label: 'Developer', subtitle: 'Implementation', status: 'active', tokens: '48.2k' },
+        { id: 'reviewer', label: 'Reviewer', subtitle: 'Code Review', status: 'pending', tokens: null },
+        { id: 'done', label: 'Done', subtitle: 'Complete', status: 'pending', tokens: null },
       ];
 
       const edges = [
@@ -218,186 +218,69 @@
             <div style={styles.graphSection}>
               <div style={styles.gridBackground} />
 
-              <svg style={styles.graphSvg} viewBox="0 0 800 320">
-                <defs>
-                  <pattern id="bearingGrid" width="40" height="40" patternUnits="userSpaceOnUse">
-                    <path d="M 0 40 L 40 0" fill="none" stroke="#EFF8E2" strokeWidth="0.5" opacity="0.04"/>
-                    <path d="M 0 0 L 40 40" fill="none" stroke="#EFF8E2" strokeWidth="0.5" opacity="0.04"/>
-                  </pattern>
-                  <pattern id="navGrid" width="80" height="80" patternUnits="userSpaceOnUse">
-                    <rect width="80" height="80" fill="url(#bearingGrid)"/>
-                    <path d="M 80 0 L 0 0 0 80" fill="none" stroke="#EFF8E2" strokeWidth="0.8" opacity="0.08"/>
-                  </pattern>
-                  <filter id="instrumentGlow" x="-50%" y="-50%" width="200%" height="200%">
-                    <feGaussianBlur stdDeviation="3" result="blur"/>
-                    <feComposite in="SourceGraphic" in2="blur" operator="over"/>
-                  </filter>
-                </defs>
-
-                <rect width="800" height="320" fill="url(#navGrid)"/>
-
-                <g opacity="0.06" transform="translate(400, 160)">
-                  <circle r="100" fill="none" stroke="#EFF8E2" strokeWidth="1"/>
-                  <circle r="70" fill="none" stroke="#EFF8E2" strokeWidth="0.5"/>
-                  <path d="M 0 -110 L 0 110" stroke="#EFF8E2" strokeWidth="1"/>
-                  <path d="M -110 0 L 110 0" stroke="#EFF8E2" strokeWidth="1"/>
-                  <path d="M -78 -78 L 78 78" stroke="#EFF8E2" strokeWidth="0.5"/>
-                  <path d="M -78 78 L 78 -78" stroke="#EFF8E2" strokeWidth="0.5"/>
-                  <text x="0" y="-85" textAnchor="middle" fontSize="12" fill="#EFF8E2" fontFamily="'Barlow Condensed', sans-serif">N</text>
-                </g>
-
-                {edges.map((edge, i) => {
-                  const fromNode = nodes.find(n => n.id === edge.from);
-                  const toNode = nodes.find(n => n.id === edge.to);
-                  const isCompleted = edge.status === 'completed';
-                  const isPending = edge.status === 'pending';
-                  const isActive = edge.status === 'active';
-                  const pathLength = Math.abs(toNode.x - fromNode.x);
-                  const midX = (fromNode.x + toNode.x) / 2;
-
-                  return (
-                    <g key={`edge-${i}`}>
-                      <line
-                        x1={fromNode.x}
-                        y1={fromNode.y}
-                        x2={toNode.x}
-                        y2={toNode.y}
-                        stroke={isActive ? '#FFC857' : '#EFF8E2'}
-                        strokeWidth={isCompleted || isActive ? '2' : '1.5'}
-                        strokeDasharray={isCompleted ? 'none' : '8 4'}
-                        opacity={isPending ? 0.2 : (isCompleted ? 0.5 : 0.8)}
-                        strokeDashoffset={edgesDrawn ? 0 : pathLength}
-                        filter={isActive ? 'url(#instrumentGlow)' : 'none'}
-                        style={{
-                          transition: 'stroke-dashoffset 0.8s ease-out',
-                          transitionDelay: `${i * 0.15}s`
-                        }}
-                      />
-
-                      {isCompleted && (
-                        <line
-                          x1={fromNode.x}
-                          y1={fromNode.y}
-                          x2={toNode.x}
-                          y2={toNode.y}
-                          stroke="#5B8A72"
-                          strokeWidth="2"
-                          opacity="0.6"
-                        />
-                      )}
-
-                      <g
-                        opacity={edgesDrawn ? 1 : 0}
-                        style={{ transition: 'opacity 0.3s ease-out', transitionDelay: `${0.8 + i * 0.1}s` }}
-                      >
-                        <rect
-                          x={midX - 18}
-                          y={fromNode.y - 32}
-                          width="36"
-                          height="16"
-                          fill="#0D1A12"
-                          stroke="rgba(239, 248, 226, 0.2)"
-                          strokeWidth="0.5"
-                        />
-                        <text
-                          x={midX}
-                          y={fromNode.y - 21}
-                          fill="#88A896"
-                          fontSize="10"
-                          fontFamily="'IBM Plex Mono', monospace"
-                          textAnchor="middle"
-                        >
-                          {edge.label}
-                        </text>
-                      </g>
-
-                      <polygon
-                        points={`${midX + 20},${fromNode.y} ${midX + 12},${fromNode.y - 4} ${midX + 12},${fromNode.y + 4}`}
-                        fill="#EFF8E2"
-                        opacity={edgesDrawn ? (isPending ? 0.15 : 0.4) : 0}
-                        style={{ transition: 'opacity 0.3s ease-out', transitionDelay: `${0.6 + i * 0.1}s` }}
-                      />
-                    </g>
-                  );
-                })}
-
+              {/* Workflow Progress - Flexbox Layout */}
+              <div style={styles.workflowContainer}>
                 {nodes.map((node, i) => {
                   const isActive = node.status === 'active';
                   const isCompleted = node.status === 'completed';
                   const isPending = node.status === 'pending';
                   const isBlocked = node.status === 'blocked';
+                  const edge = edges[i];
 
                   return (
-                    <g
-                      key={node.id}
-                      style={{
-                        opacity: nodesVisible ? 1 : 0,
-                        transform: nodesVisible ? 'translateY(0)' : 'translateY(8px)',
-                        transition: 'all 0.4s ease-out',
-                        transitionDelay: `${i * 0.08}s`,
-                      }}
-                      className="workflow-node"
-                    >
-                      <foreignObject
-                        x={node.x - 16}
-                        y={node.y - 40}
-                        width="32"
-                        height="40"
+                    <React.Fragment key={node.id}>
+                      <div
+                        style={{
+                          ...styles.workflowNode,
+                          opacity: nodesVisible ? 1 : 0,
+                          transform: nodesVisible ? 'translateY(0)' : 'translateY(8px)',
+                          transition: 'all 0.4s ease-out',
+                          transitionDelay: `${i * 0.08}s`,
+                        }}
+                        className="workflow-node"
                       >
-                        <div style={{
-                          width: '100%',
-                          height: '100%',
-                          display: 'flex',
-                          alignItems: 'flex-start',
-                          justifyContent: 'center',
-                        }}>
-                          <MapPinIcon
-                            size={32}
-                            fill={isCompleted ? '#5B8A72' : isActive ? '#FFC857' : isBlocked ? '#C94A3A' : '#4A5C54'}
-                            color={isCompleted ? '#3D5E4B' : isActive ? '#D4A53D' : isBlocked ? '#922A1E' : '#2D3B35'}
-                            className={isActive ? 'beacon-pulse' : ''}
-                          />
-                        </div>
-                      </foreignObject>
+                        <MapPinIcon
+                          size={32}
+                          fill={isCompleted ? '#5B8A72' : isActive ? '#FFC857' : isBlocked ? '#A33D2E' : '#4A5C54'}
+                          color={isCompleted ? '#3D5E4B' : isActive ? '#D4A53D' : isBlocked ? '#6B1F14' : '#2D3B35'}
+                          className={isActive ? 'beacon-pulse' : ''}
+                        />
+                        <span style={styles.nodeLabel}>{node.label}</span>
+                        <span style={styles.nodeSubtitle}>{node.subtitle}</span>
+                        {node.tokens && (
+                          <span style={{
+                            ...styles.nodeTokens,
+                            color: isActive ? '#FFC857' : '#5B8A72',
+                          }}>
+                            {node.tokens} tokens
+                          </span>
+                        )}
+                      </div>
 
-                      <text
-                        x={node.x}
-                        y={node.y + 18}
-                        fill="#EFF8E2"
-                        fontSize="14"
-                        fontFamily="'Barlow Condensed', sans-serif"
-                        fontWeight="600"
-                        textAnchor="middle"
-                        letterSpacing="0.05em"
-                      >
-                        {node.label}
-                      </text>
-                      <text
-                        x={node.x}
-                        y={node.y + 32}
-                        fill="#88A896"
-                        fontSize="11"
-                        fontFamily="'Source Sans 3', sans-serif"
-                        textAnchor="middle"
-                      >
-                        {node.subtitle}
-                      </text>
-                      {node.tokens && (
-                        <text
-                          x={node.x}
-                          y={node.y + 46}
-                          fill={isActive ? '#FFC857' : '#5B8A72'}
-                          fontSize="10"
-                          fontFamily="'IBM Plex Mono', monospace"
-                          textAnchor="middle"
+                      {/* Edge connector */}
+                      {edge && (
+                        <div
+                          style={{
+                            ...styles.workflowEdge,
+                            opacity: edgesDrawn ? 1 : 0,
+                            transition: 'opacity 0.5s ease-out',
+                            transitionDelay: `${0.3 + i * 0.1}s`,
+                          }}
                         >
-                          {node.tokens} tokens
-                        </text>
+                          <div style={{
+                            ...styles.edgeLine,
+                            backgroundColor: edge.status === 'active' ? '#FFC857' :
+                                           edge.status === 'completed' ? '#5B8A72' : 'rgba(239, 248, 226, 0.2)',
+                            boxShadow: edge.status === 'active' ? '0 0 8px rgba(255, 200, 87, 0.4)' : 'none',
+                          }} />
+                          <span style={styles.edgeLabel}>{edge.label}</span>
+                          <div style={styles.edgeArrow}>▸</div>
+                        </div>
                       )}
-                    </g>
+                    </React.Fragment>
                   );
                 })}
-              </svg>
+              </div>
             </div>
 
             <div style={styles.bottomSection}>
@@ -455,9 +338,9 @@
     const StatusBadge = ({ status }) => {
       const colors = {
         'in-progress': { bg: '#FFC857', text: '#1F332E' },
-        'completed': { bg: '#5B8A72', text: '#EFF8E2' },
+        'completed': { bg: '#5B8A72', text: '#0D1A12' },
         'queued': { bg: '#4A5C54', text: '#EFF8E2' },
-        'blocked': { bg: '#C94A3A', text: '#EFF8E2' },
+        'blocked': { bg: '#A33D2E', text: '#EFF8E2' },
       };
       const labels = {
         'in-progress': 'RUNNING',
@@ -583,7 +466,7 @@
         fontSize: '12px',
         fontWeight: 600,
         letterSpacing: '0.15em',
-        color: '#5B8A72',
+        color: '#88A896',
         padding: '0 20px 8px',
       },
       navItem: {
@@ -627,7 +510,7 @@
       footerText: {
         fontFamily: "'IBM Plex Mono', monospace",
         fontSize: '9px',
-        color: '#5B8A72',
+        color: '#88A896',
         letterSpacing: '0.05em',
       },
       main: {
@@ -710,10 +593,8 @@
       },
       graphSection: {
         position: 'relative',
-        padding: '8px 16px',
-        flex: '1 1 auto',
-        minHeight: '200px',
-        maxHeight: '320px',
+        padding: '24px 48px',
+        flex: '0 0 auto',
       },
       gridBackground: {
         position: 'absolute',
@@ -723,9 +604,70 @@
         bottom: 0,
         opacity: 0.5,
       },
-      graphSvg: {
+      workflowContainer: {
+        display: 'flex',
+        alignItems: 'flex-start',
+        justifyContent: 'center',
+        gap: '0',
+        position: 'relative',
+        zIndex: 1,
+      },
+      workflowNode: {
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: '8px',
+        minWidth: '100px',
+        flexShrink: 0,
+      },
+      nodeLabel: {
+        color: '#EFF8E2',
+        fontSize: '18px',
+        fontFamily: "'Barlow Condensed', sans-serif",
+        fontWeight: 600,
+        letterSpacing: '0.05em',
+        textAlign: 'center',
+        marginTop: '12px',
+      },
+      nodeSubtitle: {
+        color: '#88A896',
+        fontSize: '14px',
+        fontFamily: "'Source Sans 3', sans-serif",
+        textAlign: 'center',
+      },
+      nodeTokens: {
+        fontSize: '13px',
+        fontFamily: "'IBM Plex Mono', monospace",
+        textAlign: 'center',
+      },
+      workflowEdge: {
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'flex-start',
+        paddingTop: '14px',
+        flex: '1 1 auto',
+        minWidth: '60px',
+        maxWidth: '200px',
+      },
+      edgeLine: {
+        height: '2px',
         width: '100%',
-        height: '100%',
+        borderRadius: '1px',
+      },
+      edgeLabel: {
+        color: '#88A896',
+        fontSize: '12px',
+        fontFamily: "'IBM Plex Mono', monospace",
+        marginTop: '8px',
+        padding: '2px 8px',
+        backgroundColor: 'rgba(13, 26, 18, 0.8)',
+        border: '1px solid rgba(239, 248, 226, 0.15)',
+      },
+      edgeArrow: {
+        color: 'rgba(239, 248, 226, 0.4)',
+        fontSize: '10px',
+        marginTop: '4px',
       },
       bottomSection: {
         display: 'grid',
@@ -839,7 +781,7 @@
         borderBottom: '1px solid rgba(239, 248, 226, 0.04)',
       },
       logTime: {
-        color: '#5B8A72',
+        color: '#88A896',
       },
       logAgent: {
         color: '#5B9BD5',
