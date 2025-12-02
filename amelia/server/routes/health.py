@@ -57,7 +57,8 @@ async def check_database_health() -> DatabaseStatus:
         DatabaseStatus with health check results.
     """
     try:
-        from amelia.server.main import get_database
+        # Import here to avoid circular import (main.py imports routes)
+        from amelia.server.main import get_database  # noqa: PLC0415
 
         db = get_database()
 

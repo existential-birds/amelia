@@ -1,7 +1,8 @@
 """Tests for database integration with FastAPI app."""
+from unittest.mock import AsyncMock, patch
+
 import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import patch, AsyncMock
 
 
 class TestAppDatabaseIntegration:
@@ -52,16 +53,15 @@ class TestAppDatabaseIntegration:
             app = create_app()
             client = TestClient(app)
 
-            with client:
-                # Mock database to simulate failure after startup
-                with patch('amelia.server.main.get_database') as mock_get_db:
-                    mock_db = AsyncMock()
-                    mock_db.execute.side_effect = Exception("Connection lost")
-                    mock_get_db.return_value = mock_db
+            # Mock database to simulate failure after startup
+            with client, patch('amelia.server.main.get_database') as mock_get_db:
+                mock_db = AsyncMock()
+                mock_db.execute.side_effect = Exception("Connection lost")
+                mock_get_db.return_value = mock_db
 
-                    response = client.get("/api/health")
-                    data = response.json()
+                response = client.get("/api/health")
+                data = response.json()
 
-                    assert data["database"]["status"] == "degraded"
-                    assert data["database"]["error"] is not None
-                    assert "Connection lost" in data["database"]["error"]
+                assert data["database"]["status"] == "degraded"
+                assert data["database"]["error"] is not None
+                assert "Connection lost" in data["database"]["error"]
