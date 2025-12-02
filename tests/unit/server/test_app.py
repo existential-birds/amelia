@@ -1,5 +1,5 @@
 """Tests for FastAPI application setup."""
-from typing import Generator
+from collections.abc import Generator
 
 import pytest
 from fastapi.testclient import TestClient
