@@ -31,14 +31,6 @@ class ServerConfig(BaseSettings):
         description="Port to bind the server to",
     )
 
-    # Concurrency
-    max_concurrent_workflows: int = Field(
-        default=5,
-        ge=1,
-        le=100,
-        description="Maximum concurrent workflows",
-    )
-
     # Log retention
     log_retention_days: int = Field(
         default=30,
@@ -52,11 +44,6 @@ class ServerConfig(BaseSettings):
     )
 
     # Timeouts
-    request_timeout_seconds: float = Field(
-        default=30.0,
-        gt=0,
-        description="HTTP request timeout",
-    )
     websocket_idle_timeout_seconds: float = Field(
         default=300.0,
         gt=0,
@@ -66,18 +53,6 @@ class ServerConfig(BaseSettings):
         default=60.0,
         gt=0,
         description="Max time to start a workflow",
-    )
-
-    # Rate limiting
-    rate_limit_requests_per_minute: int = Field(
-        default=60,
-        ge=1,
-        description="Rate limit: requests per minute",
-    )
-    rate_limit_burst_size: int = Field(
-        default=10,
-        ge=1,
-        description="Rate limit: burst size",
     )
 
     # Database

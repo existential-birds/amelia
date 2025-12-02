@@ -3,7 +3,11 @@ import os
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
+import amelia.server.main as main_module
 from amelia.server.config import ServerConfig
+from amelia.server.main import get_config
 
 
 class TestServerConfig:
@@ -17,8 +21,6 @@ class TestServerConfig:
         assert config.port == 8420
         assert config.log_retention_days == 30
         assert config.log_retention_max_events == 100_000
-        assert config.max_concurrent_workflows == 5
-        assert config.request_timeout_seconds == 30.0
         assert config.websocket_idle_timeout_seconds == 300.0
 
     def test_env_override_port(self):
@@ -32,12 +34,6 @@ class TestServerConfig:
         with patch.dict(os.environ, {"AMELIA_HOST": "0.0.0.0"}):
             config = ServerConfig()
             assert config.host == "0.0.0.0"
-
-    def test_env_override_max_concurrent(self):
-        """Max concurrent workflows can be overridden."""
-        with patch.dict(os.environ, {"AMELIA_MAX_CONCURRENT_WORKFLOWS": "10"}):
-            config = ServerConfig()
-            assert config.max_concurrent_workflows == 10
 
     def test_env_override_retention_days(self):
         """Log retention days can be overridden."""
@@ -56,3 +52,18 @@ class TestServerConfig:
         with patch.dict(os.environ, {"AMELIA_DATABASE_PATH": "/tmp/test.db"}):
             config = ServerConfig()
             assert config.database_path == Path("/tmp/test.db")
+
+
+class TestGetConfig:
+    """Tests for get_config dependency."""
+
+    def test_get_config_raises_when_not_initialized(self):
+        """get_config raises RuntimeError before server starts."""
+        # Ensure _config is None (it should be by default, but be explicit)
+        original = main_module._config
+        main_module._config = None
+        try:
+            with pytest.raises(RuntimeError, match="Server config not initialized"):
+                get_config()
+        finally:
+            main_module._config = original

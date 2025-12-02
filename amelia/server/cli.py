@@ -75,7 +75,7 @@ def server(
         console.print("\nServer stopped.")
 
 
-@server_app.command("cleanup")
+@server_app.command("cleanup", hidden=True)
 def cleanup(
     retention_days: Annotated[
         int,
