@@ -7,18 +7,6 @@ import pytest
 class TestMigrationRunner:
     """Tests for MigrationRunner."""
 
-    @pytest.fixture
-    def temp_db_path(self, tmp_path):
-        """Temporary database path."""
-        return tmp_path / "test.db"
-
-    @pytest.fixture
-    def migrations_dir(self, tmp_path):
-        """Temporary migrations directory."""
-        migrations = tmp_path / "migrations"
-        migrations.mkdir()
-        return migrations
-
     @pytest.mark.asyncio
     async def test_creates_version_table(self, temp_db_path, migrations_dir):
         """Migration runner creates schema_version table."""

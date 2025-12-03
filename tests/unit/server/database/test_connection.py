@@ -10,11 +10,6 @@ from amelia.server.database.connection import Database
 class TestDatabaseConnection:
     """Tests for Database class."""
 
-    @pytest.fixture
-    def temp_db_path(self, tmp_path):
-        """Temporary database path for testing."""
-        return tmp_path / "test.db"
-
     @pytest.mark.asyncio
     async def test_database_creates_directory(self, temp_db_path):
         """Database creates parent directory if it doesn't exist."""
@@ -36,54 +31,35 @@ class TestDatabaseConnection:
         assert temp_db_path.exists()
 
     @pytest.mark.asyncio
-    async def test_database_wal_mode_enabled(self, temp_db_path):
+    async def test_database_wal_mode_enabled(self, connected_db):
         """WAL mode is enabled for concurrent access."""
-        db = Database(temp_db_path)
-        await db.connect()
-
-        result = await db.fetch_one("PRAGMA journal_mode")
-        await db.close()
-
+        result = await connected_db.fetch_one("PRAGMA journal_mode")
         assert result[0].lower() == "wal"
 
     @pytest.mark.asyncio
-    async def test_database_foreign_keys_enabled(self, temp_db_path):
+    async def test_database_foreign_keys_enabled(self, connected_db):
         """Foreign keys are enforced."""
-        db = Database(temp_db_path)
-        await db.connect()
-
-        result = await db.fetch_one("PRAGMA foreign_keys")
-        await db.close()
-
+        result = await connected_db.fetch_one("PRAGMA foreign_keys")
         assert result[0] == 1
 
     @pytest.mark.asyncio
-    async def test_database_execute(self, temp_db_path):
+    async def test_database_execute(self, connected_db):
         """Execute runs SQL statements."""
-        db = Database(temp_db_path)
-        await db.connect()
+        await connected_db.execute("CREATE TABLE test (id INTEGER PRIMARY KEY, name TEXT)")
+        await connected_db.execute("INSERT INTO test (name) VALUES (?)", ("hello",))
 
-        await db.execute("CREATE TABLE test (id INTEGER PRIMARY KEY, name TEXT)")
-        await db.execute("INSERT INTO test (name) VALUES (?)", ("hello",))
-
-        result = await db.fetch_one("SELECT name FROM test WHERE id = 1")
-        await db.close()
-
+        result = await connected_db.fetch_one("SELECT name FROM test WHERE id = 1")
         assert result[0] == "hello"
 
     @pytest.mark.asyncio
-    async def test_database_fetch_all(self, temp_db_path):
+    async def test_database_fetch_all(self, connected_db):
         """Fetch_all returns all matching rows."""
-        db = Database(temp_db_path)
-        await db.connect()
+        await connected_db.execute("CREATE TABLE test (id INTEGER PRIMARY KEY, name TEXT)")
+        await connected_db.execute("INSERT INTO test (name) VALUES (?)", ("a",))
+        await connected_db.execute("INSERT INTO test (name) VALUES (?)", ("b",))
+        await connected_db.execute("INSERT INTO test (name) VALUES (?)", ("c",))
 
-        await db.execute("CREATE TABLE test (id INTEGER PRIMARY KEY, name TEXT)")
-        await db.execute("INSERT INTO test (name) VALUES (?)", ("a",))
-        await db.execute("INSERT INTO test (name) VALUES (?)", ("b",))
-        await db.execute("INSERT INTO test (name) VALUES (?)", ("c",))
-
-        results = await db.fetch_all("SELECT name FROM test ORDER BY name")
-        await db.close()
+        results = await connected_db.fetch_all("SELECT name FROM test ORDER BY name")
 
         assert len(results) == 3
         assert [r[0] for r in results] == ["a", "b", "c"]
