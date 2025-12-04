@@ -303,7 +303,7 @@ async def cancel_workflow(
 async def approve_workflow(
     workflow_id: str,
     repository: WorkflowRepository = Depends(get_repository),
-) -> dict:
+) -> dict[str, str]:
     """Approve a blocked workflow's plan.
 
     Args:
@@ -339,7 +339,7 @@ async def reject_workflow(
     workflow_id: str,
     request: RejectRequest,
     repository: WorkflowRepository = Depends(get_repository),
-) -> dict:
+) -> dict[str, str]:
     """Reject a blocked workflow's plan.
 
     Args:

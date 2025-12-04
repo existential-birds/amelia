@@ -116,6 +116,7 @@ class TestWorkflowDetailResponse:
         detail = WorkflowDetailResponse(
             id="wf-123",
             issue_id="PROJ-123",
+            worktree_path="/path/to/worktree",
             worktree_name="worktree-123",
             status="pending",
             recent_events=[],
@@ -140,6 +141,7 @@ class TestWorkflowDetailResponse:
         detail = WorkflowDetailResponse(
             id="wf-123",
             issue_id="PROJ-123",
+            worktree_path="/path/to/worktree",
             worktree_name="worktree-123",
             status="in_progress",
             started_at=started,
