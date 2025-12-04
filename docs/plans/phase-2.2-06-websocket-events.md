@@ -1419,13 +1419,19 @@ class TestEventBusWebSocketIntegration:
         await asyncio.sleep(0.01)
 
     async def test_subscribe_still_works_with_websocket(self, event_bus, mock_connection_manager):
-        """Local subscribers still receive events when WebSocket enabled."""
+        """Local subscribers still receive events when WebSocket enabled.
+
+        Note: Subscribers MUST be non-blocking. If you need to perform I/O
+        or slow operations, dispatch them as background tasks.
+        """
         from amelia.server.models.events import WorkflowEvent, EventType
 
         received_events = []
 
         async def handler(event: WorkflowEvent):
+            # Example of non-blocking subscriber - quick operation only
             received_events.append(event)
+            # If you need I/O: asyncio.create_task(slow_operation(event))
 
         event_bus.subscribe(handler)
 
@@ -1474,7 +1480,17 @@ def set_connection_manager(self, manager: ConnectionManager) -> None:
     self._connection_manager = manager
 
 def emit(self, event: WorkflowEvent) -> None:
-    """Emit event to all subscribers AND WebSocket clients.
+    """Emit event to all subscribers AND WebSocket clients synchronously.
+
+    Subscribers are called in registration order. Exceptions in individual
+    subscribers are logged but don't prevent other subscribers from
+    receiving the event.
+
+    Warning:
+        Subscribers MUST be non-blocking. Since emit() runs synchronously
+        in the caller's context, any blocking operation in a subscriber
+        will halt the orchestrator. If you need to perform I/O or slow
+        operations, dispatch them as background tasks within your callback.
 
     Args:
         event: The workflow event to emit.
@@ -1864,5 +1880,22 @@ This plan implements WebSocket real-time event streaming:
 - Graceful shutdown with proper close codes
 - Thread-safe connection management with asyncio.Lock
 - Integration with EventBus for real-time broadcasts
+
+**IMPORTANT - Non-Blocking Subscriber Requirement:**
+
+EventBus subscribers MUST be non-blocking because `emit()` runs synchronously in the caller's context. Any blocking operation in a subscriber will halt the orchestrator.
+
+**Pattern for subscribers with I/O:**
+```python
+async def my_subscriber(event: WorkflowEvent):
+    # Fast operations are OK
+    log_event(event)
+
+    # For I/O or slow operations, dispatch as background task
+    if needs_heavy_processing(event):
+        asyncio.create_task(process_event_async(event))
+```
+
+This is enforced by the `emit()` docstring warning and demonstrated in test examples.
 
 **Next PR:** Dashboard UI Foundation (Plan 7)

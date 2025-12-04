@@ -702,6 +702,9 @@ class OrchestratorService:
         # Remove from active tasks on completion
         def cleanup_task(_: asyncio.Task) -> None:
             self._active_tasks.pop(worktree_path, None)
+            # Clean up workflow tracking data to prevent memory leaks
+            self._sequence_counters.pop(workflow_id, None)
+            self._sequence_locks.pop(workflow_id, None)
             logger.debug(
                 "Workflow task completed",
                 workflow_id=workflow_id,
@@ -731,6 +734,24 @@ class OrchestratorService:
             List of worktree paths with active workflows.
         """
         return list(self._active_tasks.keys())
+
+    async def cancel_all_workflows(self, timeout: float = 5.0) -> None:
+        """Cancel all running workflows.
+
+        Used during server shutdown to cleanly cancel active workflows.
+        Encapsulates access to _active_tasks for proper separation of concerns.
+
+        Args:
+            timeout: Seconds to wait for each task to cancel.
+        """
+        for worktree_path in list(self._active_tasks.keys()):
+            task = self._active_tasks.get(worktree_path)
+            if task:
+                task.cancel()
+                try:
+                    await asyncio.wait_for(task, timeout=timeout)
+                except (asyncio.TimeoutError, asyncio.CancelledError):
+                    pass
 
     async def _run_workflow(
         self,
@@ -1924,14 +1945,9 @@ class ServerLifecycle:
                 logger.warning("Shutdown timeout - cancelling remaining workflows")
 
         # Cancel any still-running workflows
-        for worktree_path in self._orchestrator.get_active_workflows():
-            task = self._orchestrator._active_tasks.get(worktree_path)
-            if task:
-                task.cancel()
-                try:
-                    await asyncio.wait_for(task, timeout=5)
-                except (asyncio.TimeoutError, asyncio.CancelledError):
-                    pass
+        # Uses OrchestratorService.cancel_all_workflows() for proper encapsulation
+        # instead of accessing _active_tasks directly
+        await self._orchestrator.cancel_all_workflows(timeout=5.0)
 
         # Persist final state (already done via repository on each update)
         logger.info("Final state persisted to database")
@@ -2222,17 +2238,18 @@ class WorktreeHealthChecker:
                         reason="Worktree directory no longer exists",
                     )
 
-    async def _is_worktree_healthy(self, worktree_path: str) -> bool:
-        """Check if worktree directory still exists and is valid.
+    def _check_worktree_sync(self, path: Path) -> bool:
+        """Synchronous helper to check if worktree is valid.
+
+        Performs all Path operations synchronously. Called via asyncio.to_thread()
+        to prevent blocking the event loop on slow/network filesystems.
 
         Args:
-            worktree_path: Absolute path to worktree.
+            path: Path object to check.
 
         Returns:
             True if worktree is healthy, False otherwise.
         """
-        path = Path(worktree_path)
-
         if not path.exists():
             return False
 
@@ -2242,6 +2259,22 @@ class WorktreeHealthChecker:
         # Check .git exists (file for worktrees, dir for main repo)
         git_path = path / ".git"
         return git_path.exists()
+
+    async def _is_worktree_healthy(self, worktree_path: str) -> bool:
+        """Check if worktree directory still exists and is valid.
+
+        Uses asyncio.to_thread() to avoid blocking the event loop on filesystem I/O,
+        which can be slow on network filesystems or when many files exist.
+
+        Args:
+            worktree_path: Absolute path to worktree.
+
+        Returns:
+            True if worktree is healthy, False otherwise.
+        """
+        path = Path(worktree_path)
+        # Run sync Path operations in thread pool to prevent blocking event loop
+        return await asyncio.to_thread(self._check_worktree_sync, path)
 ```
 
 **Step 4: Add get_workflow_by_worktree stub to OrchestratorService**
