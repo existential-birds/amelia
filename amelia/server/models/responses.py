@@ -138,6 +138,18 @@ class WorkflowDetailResponse(BaseModel):
     ]
 
 
+class ActionResponse(BaseModel):
+    """Response for workflow action endpoints (approve/reject/cancel).
+
+    Attributes:
+        status: Action status (approved, rejected, cancelled)
+        workflow_id: ID of the affected workflow
+    """
+
+    status: Annotated[str, Field(description="Action status")]
+    workflow_id: Annotated[str, Field(description="Workflow ID")]
+
+
 class ErrorResponse(BaseModel):
     """Error response for failed requests.
 

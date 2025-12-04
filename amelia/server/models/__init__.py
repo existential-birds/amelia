@@ -3,6 +3,7 @@
 from amelia.server.models.events import EventType, WorkflowEvent
 from amelia.server.models.requests import CreateWorkflowRequest, RejectRequest
 from amelia.server.models.responses import (
+    ActionResponse,
     CreateWorkflowResponse,
     ErrorResponse,
     TokenSummary,
@@ -28,6 +29,7 @@ __all__ = [
     "CreateWorkflowRequest",
     "RejectRequest",
     # Responses
+    "ActionResponse",
     "CreateWorkflowResponse",
     "ErrorResponse",
     "TokenSummary",

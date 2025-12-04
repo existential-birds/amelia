@@ -3,6 +3,7 @@
 from datetime import UTC, datetime
 
 from amelia.server.models.responses import (
+    ActionResponse,
     CreateWorkflowResponse,
     ErrorResponse,
     TokenSummary,
@@ -170,6 +171,17 @@ class TestTokenSummary:
         )
         assert summary.total_tokens == 1500
         assert summary.total_cost_usd == 0.075
+
+
+class TestActionResponse:
+    """Tests for ActionResponse schema."""
+
+    def test_create_action_response(self):
+        """ActionResponse includes status and workflow_id."""
+        resp = ActionResponse(status="approved", workflow_id="wf-123")
+
+        assert resp.status == "approved"
+        assert resp.workflow_id == "wf-123"
 
 
 class TestErrorResponse:

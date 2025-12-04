@@ -206,6 +206,26 @@ class TestListWorkflows:
         call_kwargs = mock_repository.list_workflows.call_args.kwargs
         assert call_kwargs["status"] == "completed"
 
+    async def test_list_workflows_with_worktree_filter(
+        self, client: AsyncClient, mock_repository: AsyncMock
+    ):
+        """Worktree parameter filters workflows by worktree path."""
+        mock_repository.list_workflows.return_value = []
+        mock_repository.count_workflows.return_value = 0
+
+        response = await client.get("/workflows?worktree=/path/to/worktree")
+        assert response.status_code == 200
+
+        # Verify the repository was called with correct worktree_path
+        mock_repository.list_workflows.assert_called_once()
+        call_kwargs = mock_repository.list_workflows.call_args.kwargs
+        assert call_kwargs["worktree_path"] == "/path/to/worktree"
+
+        # Verify count also uses worktree filter
+        mock_repository.count_workflows.assert_called_once()
+        count_kwargs = mock_repository.count_workflows.call_args.kwargs
+        assert count_kwargs["worktree_path"] == "/path/to/worktree"
+
     async def test_list_workflows_pagination(
         self, client: AsyncClient, mock_repository: AsyncMock
     ):

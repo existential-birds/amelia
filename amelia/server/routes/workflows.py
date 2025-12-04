@@ -12,6 +12,7 @@ from loguru import logger
 from pydantic_core import ValidationError
 
 from amelia.server.database import WorkflowRepository
+from amelia.server.dependencies import get_repository
 from amelia.server.exceptions import (
     ConcurrencyLimitError,
     InvalidStateError,
@@ -20,6 +21,7 @@ from amelia.server.exceptions import (
 )
 from amelia.server.models.requests import CreateWorkflowRequest, RejectRequest
 from amelia.server.models.responses import (
+    ActionResponse,
     CreateWorkflowResponse,
     ErrorResponse,
     WorkflowDetailResponse,
@@ -34,21 +36,6 @@ router = APIRouter(prefix="/workflows", tags=["workflows"])
 
 # Max concurrent workflows
 MAX_CONCURRENT_WORKFLOWS = int(os.environ.get("AMELIA_MAX_CONCURRENT", "5"))
-
-
-def get_repository() -> WorkflowRepository:
-    """Get the workflow repository dependency.
-
-    This is a placeholder that will be implemented when database
-    lifecycle management is added.
-
-    Returns:
-        WorkflowRepository instance.
-
-    Raises:
-        NotImplementedError: Always (not yet implemented).
-    """
-    raise NotImplementedError("Repository dependency not yet implemented")
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
@@ -266,7 +253,7 @@ async def get_workflow(
 async def cancel_workflow(
     workflow_id: str,
     repository: WorkflowRepository = Depends(get_repository),
-) -> dict[str, str]:
+) -> ActionResponse:
     """Cancel an active workflow.
 
     Args:
@@ -274,7 +261,7 @@ async def cancel_workflow(
         repository: Workflow repository dependency.
 
     Returns:
-        Dict with status and workflow_id.
+        ActionResponse with status and workflow_id.
 
     Raises:
         WorkflowNotFoundError: If workflow doesn't exist.
@@ -296,14 +283,14 @@ async def cancel_workflow(
     await repository.set_status(workflow_id, "cancelled")
     logger.info(f"Cancelled workflow {workflow_id}")
 
-    return {"status": "cancelled", "workflow_id": workflow_id}
+    return ActionResponse(status="cancelled", workflow_id=workflow_id)
 
 
 @router.post("/{workflow_id}/approve")
 async def approve_workflow(
     workflow_id: str,
     repository: WorkflowRepository = Depends(get_repository),
-) -> dict[str, str]:
+) -> ActionResponse:
     """Approve a blocked workflow's plan.
 
     Args:
@@ -311,7 +298,7 @@ async def approve_workflow(
         repository: Workflow repository dependency.
 
     Returns:
-        Dict with status and workflow_id.
+        ActionResponse with status and workflow_id.
 
     Raises:
         WorkflowNotFoundError: If workflow doesn't exist.
@@ -331,7 +318,7 @@ async def approve_workflow(
     await repository.set_status(workflow_id, "in_progress")
     logger.info(f"Approved workflow {workflow_id}")
 
-    return {"status": "approved", "workflow_id": workflow_id}
+    return ActionResponse(status="approved", workflow_id=workflow_id)
 
 
 @router.post("/{workflow_id}/reject")
@@ -339,7 +326,7 @@ async def reject_workflow(
     workflow_id: str,
     request: RejectRequest,
     repository: WorkflowRepository = Depends(get_repository),
-) -> dict[str, str]:
+) -> ActionResponse:
     """Reject a blocked workflow's plan.
 
     Args:
@@ -348,7 +335,7 @@ async def reject_workflow(
         repository: Workflow repository dependency.
 
     Returns:
-        Dict with status and workflow_id.
+        ActionResponse with status and workflow_id.
 
     Raises:
         WorkflowNotFoundError: If workflow doesn't exist.
@@ -368,7 +355,7 @@ async def reject_workflow(
     await repository.set_status(workflow_id, "failed", failure_reason=request.feedback)
     logger.info(f"Rejected workflow {workflow_id}: {request.feedback}")
 
-    return {"status": "rejected", "workflow_id": workflow_id}
+    return ActionResponse(status="rejected", workflow_id=workflow_id)
 
 
 def configure_exception_handlers(app: FastAPI) -> None:
