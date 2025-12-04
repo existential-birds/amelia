@@ -112,17 +112,26 @@ class OrchestratorService:
 
         return workflow_id
 
-    async def cancel_workflow(self, workflow_id: str) -> None:
+    async def cancel_workflow(
+        self,
+        workflow_id: str,
+        reason: str | None = None,
+    ) -> None:
         """Cancel a running workflow.
 
         Args:
             workflow_id: The workflow to cancel.
+            reason: Optional cancellation reason.
         """
         workflow = await self._repository.get(workflow_id)
         if workflow and workflow.worktree_path in self._active_tasks:
             task = self._active_tasks[workflow.worktree_path]
             task.cancel()
-            logger.info("Workflow cancelled", workflow_id=workflow_id)
+            logger.info(
+                "Workflow cancelled",
+                workflow_id=workflow_id,
+                reason=reason,
+            )
 
     def get_active_workflows(self) -> list[str]:
         """Return list of active worktree paths.
@@ -131,6 +140,30 @@ class OrchestratorService:
             List of worktree paths with active workflows.
         """
         return list(self._active_tasks.keys())
+
+    async def get_workflow_by_worktree(
+        self,
+        worktree_path: str,
+    ) -> ServerExecutionState | None:
+        """Get workflow by worktree path.
+
+        Args:
+            worktree_path: The worktree path.
+
+        Returns:
+            Workflow state if found, None otherwise.
+        """
+        # Find workflow ID from active tasks
+        if worktree_path not in self._active_tasks:
+            return None
+
+        # Search repository for workflow with this worktree_path
+        workflows = await self._repository.list_active()
+        for workflow in workflows:
+            if workflow.worktree_path == worktree_path:
+                return workflow
+
+        return None
 
     async def _run_workflow(
         self,
@@ -324,3 +357,14 @@ class OrchestratorService:
         finally:
             # Cleanup - event should already be removed by approve/reject
             self._approval_events.pop(workflow_id, None)
+
+    async def recover_interrupted_workflows(self) -> None:
+        """Recover workflows that were running when server crashed.
+
+        This is a placeholder - full implementation will be added
+        when LangGraph integration is complete.
+        """
+        logger.info("Checking for interrupted workflows...")
+        # TODO: Query for workflows with status=in_progress or blocked
+        # and mark them as failed with appropriate reason
+        logger.info("No interrupted workflows to recover")
