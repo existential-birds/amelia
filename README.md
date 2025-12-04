@@ -6,22 +6,36 @@
 
 Amelia automates development workflows (issue analysis, planning, coding, review) while respecting enterprise constraints. It uses **agentic orchestration** - multiple AI agents coordinate to accomplish complex tasks:
 
-- **Architect** analyzes issues and creates plans
-- **Developer** writes code and executes commands
-- **Reviewer** evaluates changes and provides feedback
+```
+Issue → Architect (plan) → Human Approval → Developer (execute) ↔ Reviewer (review) → Done
+```
 
 ![Amelia Dashboard Design Mock](docs/plans/design_mock.jpg)
+
+## Prerequisites
+
+- **Python 3.12+** - Required for type hints and async features
+- **uv** - Fast Python package manager ([install guide](https://docs.astral.sh/uv/getting-started/installation/))
+- **Git** - For version control operations
+- **LLM access** - Either:
+  - OpenAI API key (for `api:openai` driver)
+  - Claude CLI installed (for `cli:claude` driver)
 
 ## Quick Start
 
 ```bash
-# Install uv (if not already installed)
+# Install uv (Linux/macOS)
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Install dependencies
+# Clone and install
+git clone https://github.com/anderskev/amelia.git
+cd amelia
 uv sync
 
-# Create settings.amelia.yaml
+# Set your API key (for api:openai driver)
+export OPENAI_API_KEY="sk-..."
+
+# Create minimal config
 cat > settings.amelia.yaml << 'EOF'
 active_profile: dev
 profiles:
@@ -32,8 +46,35 @@ profiles:
     strategy: single
 EOF
 
-# Run first command
-uv run amelia plan-only ISSUE-123
+# Test with a dry run
+uv run amelia plan-only TEST-001
+```
+
+## How It Works
+
+### Agent Roles
+
+| Agent | Input | Output | Example |
+|-------|-------|--------|---------|
+| **Architect** | Issue description + codebase context | TaskDAG (ordered tasks with dependencies) | "Add login feature" → 5 tasks: create model, add routes, write tests... |
+| **Developer** | Single task from TaskDAG | Code changes via shell/git tools | Executes `git checkout -b`, writes files, runs tests |
+| **Reviewer** | Git diff of changes | Approval or rejection with feedback | "Missing input validation in login handler" |
+
+### Why Drivers?
+
+Enterprise environments often prohibit direct API calls to external LLMs. The driver abstraction lets you:
+
+- **`api:openai`** - Direct API calls via pydantic-ai (fastest, requires API key)
+- **`cli:claude`** - Wraps Claude CLI (works with enterprise SSO, no API key needed)
+
+Switch drivers without code changes:
+
+```yaml
+profiles:
+  work:
+    driver: cli:claude  # Uses approved enterprise CLI
+  home:
+    driver: api:openai  # Direct API access
 ```
 
 ## CLI Commands
@@ -92,6 +133,25 @@ profiles:
 
 See [Configuration Reference](docs/configuration.md) for full details.
 
+## Troubleshooting
+
+### "No module named 'amelia'"
+Run `uv sync` to install dependencies.
+
+### "Invalid API key"
+Set `OPENAI_API_KEY` environment variable or use `cli:claude` driver.
+
+### "Issue not found"
+Check your tracker configuration. Use `tracker: noop` for testing without a real issue tracker.
+
+### Pre-push hook failing
+Run checks manually to see detailed errors:
+```bash
+uv run ruff check amelia tests
+uv run mypy amelia
+uv run pytest
+```
+
 ## Learn More
 
 - [Concepts: Understanding Agentic AI](docs/concepts.md) - How agents, drivers, and orchestration work
@@ -110,23 +170,28 @@ See [Configuration Reference](docs/configuration.md) for full details.
 - Local code review with competitive strategy
 - Jira and GitHub tracker integrations
 - Real tool execution in Developer agent
+- FastAPI server with SQLite persistence
+- Workflow state machine with event tracking
 
 **Limitations/Coming Soon:**
 - TaskDAG doesn't validate cyclic dependencies
 
 ## Roadmap
 
-### Phase 1: Core Orchestration (Current)
+### Phase 1: Core Orchestration ✅ Complete
 - Full agent orchestration with human approval gates
 - Multi-driver support (API and CLI)
 - Issue tracker integrations (Jira, GitHub)
 - [Reviewer agent benchmark framework](https://github.com/anderskev/amelia/issues/8) for data-driven prompt iteration
 
-### Phase 2: Web UI
-- **Observability dashboard** using [AI Elements](https://github.com/ai-elements) library for real-time agent activity monitoring, task progress, and execution logs
-- **Full control interface** to approve/reject plans, intervene in agent workflows, and manage configurations through the browser
+### Phase 2: Web Dashboard (In Progress)
+- **Server foundation** - FastAPI backend with SQLite persistence ✅
+- **Workflow models** - State machine for tracking execution status ✅
+- **REST API** - Endpoints for workflows, tasks, and events
+- **WebSocket events** - Real-time updates to dashboard
+- **React dashboard** - Observability UI with Zustand state management
 
 ### Phase 3: Local RAG Integration
-- Spin up local RAG infrastructure for agents to query codebase context
-- Enable agents to use extended thinking (ultrathink) for complex reasoning
+- Local RAG infrastructure for agents to query codebase context
+- Extended thinking (ultrathink) for complex reasoning
 - Interactive clarification flow where agents can ask targeted questions before proceeding
