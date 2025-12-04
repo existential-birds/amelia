@@ -16,7 +16,13 @@
 
 **Files:**
 - Create: `amelia/server/exceptions.py`
-- Create: `amelia/server/__init__.py`
+- Modify: `amelia/server/__init__.py`
+- Modify: `amelia/server/database/repository.py`
+- Modify: `amelia/server/database/__init__.py`
+
+**Step 0: Migrate existing WorkflowNotFoundError**
+
+> **Note:** `WorkflowNotFoundError` already exists in `amelia/server/database/repository.py`. We will migrate it to `exceptions.py` and update imports for consistency.
 
 **Step 1: Write the failing test**
 
@@ -135,11 +141,12 @@ class TestWorkflowNotFoundError:
 Run: `uv run pytest tests/unit/server/test_exceptions.py -v`
 Expected: FAIL with ModuleNotFoundError
 
-**Step 3: Create server package init**
+**Step 3: Modify server package init**
+
+> **Note:** The file `amelia/server/__init__.py` already exists with imports for `ServerConfig` and `Database`. We will APPEND exception exports, not replace the file.
 
 ```python
-# amelia/server/__init__.py
-"""Amelia server package."""
+# Append to amelia/server/__init__.py
 from amelia.server.exceptions import (
     ConcurrencyLimitError,
     InvalidStateError,
@@ -148,6 +155,10 @@ from amelia.server.exceptions import (
 )
 
 __all__ = [
+    # Existing exports...
+    "ServerConfig",
+    "Database",
+    # Exception exports
     "WorkflowConflictError",
     "ConcurrencyLimitError",
     "InvalidStateError",
@@ -156,6 +167,8 @@ __all__ = [
 ```
 
 **Step 4: Implement exception classes**
+
+> **Note:** Move `WorkflowNotFoundError` from `repository.py` to `exceptions.py`, then update `repository.py` to import from `exceptions.py`. Keep `database/__init__.py` re-exporting it for backward compatibility.
 
 ```python
 # amelia/server/exceptions.py
@@ -1144,14 +1157,17 @@ class TestExceptionHandlers:
 Run: `uv run pytest tests/unit/server/routes/test_workflows.py::TestExceptionHandlers -v`
 Expected: FAIL with ModuleNotFoundError
 
-**Step 3: Create routes package**
+**Step 3: Modify routes package init**
+
+> **Note:** The file `amelia/server/routes/__init__.py` already exists with `health_router` export. We will add `workflows_router` alongside it.
 
 ```python
-# amelia/server/routes/__init__.py
+# Modify amelia/server/routes/__init__.py
 """API routes for Amelia server."""
+from amelia.server.routes.health import router as health_router
 from amelia.server.routes.workflows import router as workflows_router
 
-__all__ = ["workflows_router"]
+__all__ = ["health_router", "workflows_router"]
 ```
 
 **Step 4: Implement router with exception handlers**
@@ -1762,6 +1778,8 @@ Expected: FAIL (endpoints not implemented)
 
 **Step 3: Add pagination methods to repository**
 
+> **Note:** `started_at` can be NULL for pending workflows. The cursor-based pagination query should handle NULLs appropriately. Consider using `COALESCE(started_at, '9999-12-31T23:59:59')` for sorting, or `ORDER BY started_at IS NULL, started_at DESC` to sort NULLs last.
+
 ```python
 # Add to amelia/server/database/repository.py
 
@@ -1788,6 +1806,10 @@ from amelia.server.database.connection import SqliteValue
 
         Returns:
             List of workflows ordered by started_at DESC, id DESC.
+
+        Note:
+            started_at can be NULL for pending workflows. The ORDER BY clause
+            handles NULLs appropriately to ensure consistent pagination.
         """
         conditions = []
         params: list[SqliteValue] = []
@@ -2154,6 +2176,10 @@ class TestApproveWorkflow:
         """Approve nonexistent workflow returns 404."""
         from amelia.server.database import WorkflowNotFoundError
 
+        # Note: After Task 1 migration, WorkflowNotFoundError is imported from
+        # amelia.server.database, which re-exports it from amelia.server.exceptions
+        # for backward compatibility.
+
         mock_repository.get = AsyncMock(return_value=None)
         mock_repository.set_status = AsyncMock(
             side_effect=WorkflowNotFoundError("wf-missing")
@@ -2233,6 +2259,10 @@ class TestRejectWorkflow:
     async def test_reject_workflow_not_found(self, client, mock_repository):
         """Reject nonexistent workflow returns 404."""
         from amelia.server.database import WorkflowNotFoundError
+
+        # Note: After Task 1 migration, WorkflowNotFoundError is imported from
+        # amelia.server.database, which re-exports it from amelia.server.exceptions
+        # for backward compatibility.
 
         mock_repository.get = AsyncMock(return_value=None)
         mock_repository.set_status = AsyncMock(
@@ -2459,6 +2489,10 @@ class TestCancelWorkflow:
     async def test_cancel_workflow_not_found(self, client, mock_repository):
         """Cancel nonexistent workflow returns 404."""
         from amelia.server.database import WorkflowNotFoundError
+
+        # Note: After Task 1 migration, WorkflowNotFoundError is imported from
+        # amelia.server.database, which re-exports it from amelia.server.exceptions
+        # for backward compatibility.
 
         mock_repository.get = AsyncMock(return_value=None)
         mock_repository.set_status = AsyncMock(
