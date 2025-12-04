@@ -24,49 +24,16 @@
 # tests/unit/server/models/test_events.py
 """Tests for event models."""
 import pytest
-from datetime import datetime
+from datetime import datetime, UTC
+
+from amelia.server.models.events import EventType, WorkflowEvent
 
 
 class TestEventType:
     """Tests for EventType enum."""
 
-    def test_all_lifecycle_events_defined(self):
-        """All workflow lifecycle events are defined."""
-        from amelia.server.models.events import EventType
-
-        lifecycle = [
-            EventType.WORKFLOW_STARTED,
-            EventType.WORKFLOW_COMPLETED,
-            EventType.WORKFLOW_FAILED,
-            EventType.WORKFLOW_CANCELLED,
-        ]
-        assert len(lifecycle) == 4
-
-    def test_all_stage_events_defined(self):
-        """All stage events are defined."""
-        from amelia.server.models.events import EventType
-
-        stages = [
-            EventType.STAGE_STARTED,
-            EventType.STAGE_COMPLETED,
-        ]
-        assert len(stages) == 2
-
-    def test_all_approval_events_defined(self):
-        """All approval events are defined."""
-        from amelia.server.models.events import EventType
-
-        approval = [
-            EventType.APPROVAL_REQUIRED,
-            EventType.APPROVAL_GRANTED,
-            EventType.APPROVAL_REJECTED,
-        ]
-        assert len(approval) == 3
-
     def test_event_type_values_are_strings(self):
         """Event type values are lowercase strings."""
-        from amelia.server.models.events import EventType
-
         assert EventType.WORKFLOW_STARTED.value == "workflow_started"
         assert EventType.STAGE_COMPLETED.value == "stage_completed"
 
@@ -76,13 +43,11 @@ class TestWorkflowEvent:
 
     def test_create_event_with_required_fields(self):
         """Event can be created with required fields."""
-        from amelia.server.models.events import WorkflowEvent, EventType
-
         event = WorkflowEvent(
             id="event-123",
             workflow_id="wf-456",
             sequence=1,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
             agent="architect",
             event_type=EventType.STAGE_STARTED,
             message="Starting plan creation",
@@ -96,13 +61,11 @@ class TestWorkflowEvent:
 
     def test_event_optional_fields_default_none(self):
         """Optional fields default to None."""
-        from amelia.server.models.events import WorkflowEvent, EventType
-
         event = WorkflowEvent(
             id="event-123",
             workflow_id="wf-456",
             sequence=1,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
             agent="system",
             event_type=EventType.WORKFLOW_STARTED,
             message="Started",
@@ -113,13 +76,11 @@ class TestWorkflowEvent:
 
     def test_event_with_data_payload(self):
         """Event can include structured data payload."""
-        from amelia.server.models.events import WorkflowEvent, EventType
-
         event = WorkflowEvent(
             id="event-123",
             workflow_id="wf-456",
             sequence=1,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
             agent="developer",
             event_type=EventType.FILE_CREATED,
             message="Created file",
@@ -131,13 +92,11 @@ class TestWorkflowEvent:
 
     def test_event_with_correlation_id(self):
         """Event can include correlation ID for tracing."""
-        from amelia.server.models.events import WorkflowEvent, EventType
-
         event = WorkflowEvent(
             id="event-123",
             workflow_id="wf-456",
             sequence=1,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
             agent="system",
             event_type=EventType.APPROVAL_GRANTED,
             message="Approved",
@@ -148,8 +107,6 @@ class TestWorkflowEvent:
 
     def test_event_serialization_to_json(self):
         """Event can be serialized to JSON."""
-        from amelia.server.models.events import WorkflowEvent, EventType
-
         event = WorkflowEvent(
             id="event-123",
             workflow_id="wf-456",
@@ -166,8 +123,6 @@ class TestWorkflowEvent:
 
     def test_event_deserialization_from_json(self):
         """Event can be deserialized from JSON."""
-        from amelia.server.models.events import WorkflowEvent, EventType
-
         json_str = '''
         {
             "id": "event-123",
@@ -205,7 +160,7 @@ __all__ = ["EventType", "WorkflowEvent"]
 ```python
 # amelia/server/models/events.py
 """Event models for workflow activity tracking."""
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
@@ -332,7 +287,9 @@ git commit -m "feat(models): add EventType enum and WorkflowEvent model"
 # tests/unit/server/models/test_tokens.py
 """Tests for token usage models."""
 import pytest
-from datetime import datetime
+from datetime import datetime, UTC
+
+from amelia.server.models.tokens import TokenUsage, MODEL_PRICING, calculate_token_cost
 
 
 class TestTokenUsage:
@@ -340,14 +297,12 @@ class TestTokenUsage:
 
     def test_create_basic_token_usage(self):
         """TokenUsage can be created with required fields."""
-        from amelia.server.models.tokens import TokenUsage
-
         usage = TokenUsage(
             workflow_id="wf-123",
             agent="architect",
             input_tokens=1000,
             output_tokens=500,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
         )
 
         assert usage.workflow_id == "wf-123"
@@ -357,28 +312,24 @@ class TestTokenUsage:
 
     def test_default_model_is_sonnet(self):
         """Default model is claude-sonnet-4."""
-        from amelia.server.models.tokens import TokenUsage
-
         usage = TokenUsage(
             workflow_id="wf-123",
             agent="architect",
             input_tokens=1000,
             output_tokens=500,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
         )
 
         assert usage.model == "claude-sonnet-4-20250514"
 
     def test_cache_tokens_default_zero(self):
         """Cache tokens default to zero."""
-        from amelia.server.models.tokens import TokenUsage
-
         usage = TokenUsage(
             workflow_id="wf-123",
             agent="architect",
             input_tokens=1000,
             output_tokens=500,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
         )
 
         assert usage.cache_read_tokens == 0
@@ -386,8 +337,6 @@ class TestTokenUsage:
 
     def test_token_usage_with_cache(self):
         """TokenUsage can include cache token counts."""
-        from amelia.server.models.tokens import TokenUsage
-
         usage = TokenUsage(
             workflow_id="wf-123",
             agent="developer",
@@ -395,7 +344,7 @@ class TestTokenUsage:
             output_tokens=1000,
             cache_read_tokens=500,
             cache_creation_tokens=100,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
         )
 
         assert usage.cache_read_tokens == 500
@@ -407,8 +356,6 @@ class TestModelPricing:
 
     def test_sonnet_pricing_defined(self):
         """Sonnet pricing is defined."""
-        from amelia.server.models.tokens import MODEL_PRICING
-
         assert "claude-sonnet-4-20250514" in MODEL_PRICING
         sonnet = MODEL_PRICING["claude-sonnet-4-20250514"]
         assert sonnet["input"] == 3.0
@@ -418,8 +365,6 @@ class TestModelPricing:
 
     def test_opus_pricing_defined(self):
         """Opus pricing is defined."""
-        from amelia.server.models.tokens import MODEL_PRICING
-
         assert "claude-opus-4-20250514" in MODEL_PRICING
         opus = MODEL_PRICING["claude-opus-4-20250514"]
         assert opus["input"] == 15.0
@@ -431,15 +376,13 @@ class TestCostCalculation:
 
     def test_basic_cost_calculation(self):
         """Basic cost calculation without cache."""
-        from amelia.server.models.tokens import TokenUsage, calculate_token_cost
-
         usage = TokenUsage(
             workflow_id="wf-123",
             agent="architect",
             model="claude-sonnet-4-20250514",
             input_tokens=1_000_000,  # 1M tokens
             output_tokens=1_000_000,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
         )
 
         cost = calculate_token_cost(usage)
@@ -450,8 +393,6 @@ class TestCostCalculation:
 
     def test_cost_with_cache_reads(self):
         """Cost calculation with cache reads (discounted)."""
-        from amelia.server.models.tokens import TokenUsage, calculate_token_cost
-
         usage = TokenUsage(
             workflow_id="wf-123",
             agent="architect",
@@ -459,7 +400,7 @@ class TestCostCalculation:
             input_tokens=1_000_000,
             output_tokens=0,
             cache_read_tokens=500_000,  # Half from cache
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
         )
 
         cost = calculate_token_cost(usage)
@@ -470,8 +411,6 @@ class TestCostCalculation:
 
     def test_cost_with_cache_writes(self):
         """Cost calculation with cache creation (premium rate)."""
-        from amelia.server.models.tokens import TokenUsage, calculate_token_cost
-
         usage = TokenUsage(
             workflow_id="wf-123",
             agent="architect",
@@ -479,7 +418,7 @@ class TestCostCalculation:
             input_tokens=1_000_000,
             output_tokens=0,
             cache_creation_tokens=100_000,  # 100K cache writes
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
         )
 
         cost = calculate_token_cost(usage)
@@ -490,15 +429,13 @@ class TestCostCalculation:
 
     def test_cost_with_opus_model(self):
         """Cost calculation uses correct model pricing."""
-        from amelia.server.models.tokens import TokenUsage, calculate_token_cost
-
         usage = TokenUsage(
             workflow_id="wf-123",
             agent="architect",
             model="claude-opus-4-20250514",
             input_tokens=1_000_000,
             output_tokens=1_000_000,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
         )
 
         cost = calculate_token_cost(usage)
@@ -509,15 +446,13 @@ class TestCostCalculation:
 
     def test_cost_with_unknown_model_uses_sonnet(self):
         """Unknown models fall back to Sonnet pricing."""
-        from amelia.server.models.tokens import TokenUsage, calculate_token_cost
-
         usage = TokenUsage(
             workflow_id="wf-123",
             agent="architect",
             model="unknown-model-2025",
             input_tokens=1_000_000,
             output_tokens=0,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
         )
 
         cost = calculate_token_cost(usage)
@@ -526,15 +461,13 @@ class TestCostCalculation:
 
     def test_cost_rounds_to_micro_dollars(self):
         """Cost is rounded to 6 decimal places (micro-dollars)."""
-        from amelia.server.models.tokens import TokenUsage, calculate_token_cost
-
         usage = TokenUsage(
             workflow_id="wf-123",
             agent="architect",
             model="claude-sonnet-4-20250514",
             input_tokens=1,  # Very small
             output_tokens=1,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
         )
 
         cost = calculate_token_cost(usage)
@@ -552,7 +485,7 @@ Expected: FAIL with ModuleNotFoundError
 ```python
 # amelia/server/models/tokens.py
 """Token usage tracking and cost calculation."""
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
@@ -706,26 +639,14 @@ git commit -m "feat(models): add TokenUsage model with cost calculation"
 # tests/unit/server/models/test_state.py
 """Tests for workflow state models."""
 import pytest
-from datetime import datetime
+from datetime import datetime, UTC
 
-
-class TestWorkflowStatus:
-    """Tests for WorkflowStatus enum/literal."""
-
-    def test_all_statuses_defined(self):
-        """All workflow statuses are defined."""
-        from amelia.server.models.state import WorkflowStatus
-
-        # Type alias should allow these values
-        statuses: list[WorkflowStatus] = [
-            "pending",
-            "in_progress",
-            "blocked",
-            "completed",
-            "failed",
-            "cancelled",
-        ]
-        assert len(statuses) == 6
+from amelia.server.models.state import (
+    WorkflowStatus,
+    validate_transition,
+    InvalidStateTransitionError,
+    ServerExecutionState,
+)
 
 
 class TestStateTransitions:
@@ -733,23 +654,14 @@ class TestStateTransitions:
 
     def test_pending_can_go_to_in_progress(self):
         """pending -> in_progress is valid."""
-        from amelia.server.models.state import validate_transition
-
         validate_transition("pending", "in_progress")  # Should not raise
 
     def test_pending_can_go_to_cancelled(self):
         """pending -> cancelled is valid."""
-        from amelia.server.models.state import validate_transition
-
         validate_transition("pending", "cancelled")
 
     def test_pending_cannot_go_to_completed(self):
         """pending -> completed is invalid (must go through in_progress)."""
-        from amelia.server.models.state import (
-            validate_transition,
-            InvalidStateTransitionError,
-        )
-
         with pytest.raises(InvalidStateTransitionError) as exc:
             validate_transition("pending", "completed")
 
@@ -758,74 +670,44 @@ class TestStateTransitions:
 
     def test_in_progress_can_go_to_blocked(self):
         """in_progress -> blocked is valid (awaiting approval)."""
-        from amelia.server.models.state import validate_transition
-
         validate_transition("in_progress", "blocked")
 
     def test_in_progress_can_go_to_completed(self):
         """in_progress -> completed is valid."""
-        from amelia.server.models.state import validate_transition
-
         validate_transition("in_progress", "completed")
 
     def test_in_progress_can_go_to_failed(self):
         """in_progress -> failed is valid."""
-        from amelia.server.models.state import validate_transition
-
         validate_transition("in_progress", "failed")
 
     def test_blocked_can_go_to_in_progress(self):
         """blocked -> in_progress is valid (approval granted)."""
-        from amelia.server.models.state import validate_transition
-
         validate_transition("blocked", "in_progress")
 
     def test_blocked_can_go_to_failed(self):
         """blocked -> failed is valid (approval rejected)."""
-        from amelia.server.models.state import validate_transition
-
         validate_transition("blocked", "failed")
 
     def test_completed_is_terminal(self):
         """completed is terminal - cannot transition."""
-        from amelia.server.models.state import (
-            validate_transition,
-            InvalidStateTransitionError,
-        )
-
         for target in ["pending", "in_progress", "blocked", "failed", "cancelled"]:
             with pytest.raises(InvalidStateTransitionError):
                 validate_transition("completed", target)
 
     def test_failed_is_terminal(self):
         """failed is terminal - cannot transition."""
-        from amelia.server.models.state import (
-            validate_transition,
-            InvalidStateTransitionError,
-        )
-
         for target in ["pending", "in_progress", "blocked", "completed", "cancelled"]:
             with pytest.raises(InvalidStateTransitionError):
                 validate_transition("failed", target)
 
     def test_cancelled_is_terminal(self):
         """cancelled is terminal - cannot transition."""
-        from amelia.server.models.state import (
-            validate_transition,
-            InvalidStateTransitionError,
-        )
-
         for target in ["pending", "in_progress", "blocked", "completed", "failed"]:
             with pytest.raises(InvalidStateTransitionError):
                 validate_transition("cancelled", target)
 
     def test_same_state_transition_invalid(self):
         """Cannot transition to same state."""
-        from amelia.server.models.state import (
-            validate_transition,
-            InvalidStateTransitionError,
-        )
-
         with pytest.raises(InvalidStateTransitionError):
             validate_transition("in_progress", "in_progress")
 
@@ -835,8 +717,6 @@ class TestServerExecutionState:
 
     def test_create_with_required_fields(self):
         """ServerExecutionState requires id, issue_id, worktree fields."""
-        from amelia.server.models.state import ServerExecutionState
-
         state = ServerExecutionState(
             id="wf-123",
             issue_id="ISSUE-456",
@@ -851,8 +731,6 @@ class TestServerExecutionState:
 
     def test_default_status_is_pending(self):
         """Default workflow status is pending."""
-        from amelia.server.models.state import ServerExecutionState
-
         state = ServerExecutionState(
             id="wf-123",
             issue_id="ISSUE-456",
@@ -864,8 +742,6 @@ class TestServerExecutionState:
 
     def test_timestamps_default_none(self):
         """Timestamps default to None."""
-        from amelia.server.models.state import ServerExecutionState
-
         state = ServerExecutionState(
             id="wf-123",
             issue_id="ISSUE-456",
@@ -878,8 +754,6 @@ class TestServerExecutionState:
 
     def test_stage_timestamps_default_empty(self):
         """Stage timestamps default to empty dict."""
-        from amelia.server.models.state import ServerExecutionState
-
         state = ServerExecutionState(
             id="wf-123",
             issue_id="ISSUE-456",
@@ -891,8 +765,6 @@ class TestServerExecutionState:
 
     def test_serialization_to_json(self):
         """State can be serialized to JSON."""
-        from amelia.server.models.state import ServerExecutionState
-
         state = ServerExecutionState(
             id="wf-123",
             issue_id="ISSUE-456",
@@ -908,8 +780,6 @@ class TestServerExecutionState:
 
     def test_deserialization_from_json(self):
         """State can be deserialized from JSON."""
-        from amelia.server.models.state import ServerExecutionState
-
         json_str = '''
         {
             "id": "wf-123",
@@ -935,7 +805,7 @@ Expected: FAIL with ModuleNotFoundError
 ```python
 # amelia/server/models/state.py
 """Workflow state models and state machine validation."""
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -1110,46 +980,24 @@ git commit -m "feat(models): add WorkflowStatus and state machine validation"
 # tests/unit/server/database/test_repository.py
 """Tests for WorkflowRepository."""
 import pytest
-from datetime import datetime
+from datetime import datetime, UTC
 from uuid import uuid4
+
+from amelia.server.database.repository import WorkflowRepository
+from amelia.server.models.state import ServerExecutionState, InvalidStateTransitionError
 
 
 class TestWorkflowRepository:
     """Tests for WorkflowRepository CRUD operations."""
 
     @pytest.fixture
-    def temp_db_path(self, tmp_path):
-        """Temporary database path."""
-        return tmp_path / "test.db"
-
-    @pytest.fixture
-    async def setup_db(self, temp_db_path):
-        """Set up database with schema."""
-        from pathlib import Path
-        from amelia.server.database.migrate import MigrationRunner
-
-        migrations_dir = Path(__file__).parent.parent.parent.parent.parent / "amelia" / "server" / "database" / "migrations"
-        runner = MigrationRunner(temp_db_path, migrations_dir)
-        await runner.run_migrations()
-        return temp_db_path
-
-    @pytest.fixture
-    async def repository(self, setup_db):
+    async def repository(self, db_with_schema):
         """WorkflowRepository instance."""
-        from amelia.server.database.connection import Database
-        from amelia.server.database.repository import WorkflowRepository
-
-        db = Database(setup_db)
-        await db.connect()
-        repo = WorkflowRepository(db)
-        yield repo
-        await db.close()
+        return WorkflowRepository(db_with_schema)
 
     @pytest.mark.asyncio
     async def test_create_workflow(self, repository):
         """Can create a workflow."""
-        from amelia.server.models.state import ServerExecutionState
-
         state = ServerExecutionState(
             id=str(uuid4()),
             issue_id="ISSUE-123",
@@ -1173,8 +1021,6 @@ class TestWorkflowRepository:
     @pytest.mark.asyncio
     async def test_get_by_worktree(self, repository):
         """Can get active workflow by worktree path."""
-        from amelia.server.models.state import ServerExecutionState
-
         state = ServerExecutionState(
             id=str(uuid4()),
             issue_id="ISSUE-123",
@@ -1191,8 +1037,6 @@ class TestWorkflowRepository:
     @pytest.mark.asyncio
     async def test_get_by_worktree_only_active(self, repository):
         """get_by_worktree only returns active workflows."""
-        from amelia.server.models.state import ServerExecutionState
-
         # Create completed workflow
         completed = ServerExecutionState(
             id=str(uuid4()),
@@ -1210,8 +1054,6 @@ class TestWorkflowRepository:
     @pytest.mark.asyncio
     async def test_update_workflow(self, repository):
         """Can update workflow state."""
-        from amelia.server.models.state import ServerExecutionState
-
         state = ServerExecutionState(
             id=str(uuid4()),
             issue_id="ISSUE-123",
@@ -1222,7 +1064,7 @@ class TestWorkflowRepository:
 
         # Update status
         state.workflow_status = "in_progress"
-        state.started_at = datetime.utcnow()
+        state.started_at = datetime.now(UTC)
         await repository.update(state)
 
         retrieved = await repository.get(state.id)
@@ -1232,8 +1074,6 @@ class TestWorkflowRepository:
     @pytest.mark.asyncio
     async def test_set_status_validates_transition(self, repository):
         """set_status validates state machine transitions."""
-        from amelia.server.models.state import ServerExecutionState, InvalidStateTransitionError
-
         state = ServerExecutionState(
             id=str(uuid4()),
             issue_id="ISSUE-123",
@@ -1250,8 +1090,6 @@ class TestWorkflowRepository:
     @pytest.mark.asyncio
     async def test_set_status_valid_transition(self, repository):
         """set_status allows valid transitions."""
-        from amelia.server.models.state import ServerExecutionState
-
         state = ServerExecutionState(
             id=str(uuid4()),
             issue_id="ISSUE-123",
@@ -1269,8 +1107,6 @@ class TestWorkflowRepository:
     @pytest.mark.asyncio
     async def test_set_status_with_failure_reason(self, repository):
         """set_status can set failure reason."""
-        from amelia.server.models.state import ServerExecutionState
-
         state = ServerExecutionState(
             id=str(uuid4()),
             issue_id="ISSUE-123",
@@ -1289,8 +1125,6 @@ class TestWorkflowRepository:
     @pytest.mark.asyncio
     async def test_list_active_workflows(self, repository):
         """Can list all active workflows."""
-        from amelia.server.models.state import ServerExecutionState
-
         # Create various workflows
         active1 = ServerExecutionState(
             id=str(uuid4()),
@@ -1327,8 +1161,6 @@ class TestWorkflowRepository:
     @pytest.mark.asyncio
     async def test_count_active_workflows(self, repository):
         """Can count active workflows."""
-        from amelia.server.models.state import ServerExecutionState
-
         for i in range(3):
             state = ServerExecutionState(
                 id=str(uuid4()),
@@ -1353,7 +1185,7 @@ Expected: FAIL with ModuleNotFoundError
 ```python
 # amelia/server/database/repository.py
 """Repository for workflow persistence operations."""
-from datetime import datetime
+from datetime import UTC, datetime
 
 from amelia.server.database.connection import Database
 from amelia.server.models.state import (
@@ -1393,7 +1225,7 @@ class WorkflowRepository:
         Args:
             state: Initial workflow state.
         """
-        await self._db.execute_insert(
+        await self._db.execute(
             """
             INSERT INTO workflows (
                 id, issue_id, worktree_path, worktree_name,
@@ -1506,7 +1338,7 @@ class WorkflowRepository:
         # Set completed_at for terminal states
         completed_at = None
         if new_status in ("completed", "failed", "cancelled"):
-            completed_at = datetime.utcnow()
+            completed_at = datetime.now(UTC)
 
         await self._db.execute(
             """
@@ -1584,29 +1416,48 @@ class WorkflowRepository:
         return [ServerExecutionState.model_validate_json(row[0]) for row in rows]
 ```
 
-**Step 4: Update database package init**
+**Step 4: Add fetch_scalar to Database**
+
+First, add the `fetch_scalar()` method to the Database class:
+
+```python
+# Add to amelia/server/database/connection.py in the Database class
+
+async def fetch_scalar(self, query: str, params: tuple = ()) -> Any:
+    """Fetch a single scalar value (first column of first row).
+
+    Args:
+        query: SQL query to execute.
+        params: Query parameters.
+
+    Returns:
+        Single value or None if no result.
+    """
+    row = await self.fetch_one(query, params)
+    return row[0] if row else None
+```
+
+**Step 5: Update database package init**
 
 ```python
 # amelia/server/database/__init__.py
 """Database package for Amelia server."""
 from amelia.server.database.connection import Database
-from amelia.server.database.migrate import MigrationRunner
 from amelia.server.database.repository import WorkflowNotFoundError, WorkflowRepository
 
 __all__ = [
     "Database",
-    "MigrationRunner",
     "WorkflowRepository",
     "WorkflowNotFoundError",
 ]
 ```
 
-**Step 5: Run test to verify it passes**
+**Step 6: Run test to verify it passes**
 
 Run: `uv run pytest tests/unit/server/database/test_repository.py -v`
 Expected: PASS
 
-**Step 6: Commit**
+**Step 7: Commit**
 
 ```bash
 git add amelia/server/database/repository.py amelia/server/database/__init__.py tests/unit/server/database/test_repository.py
@@ -1626,6 +1477,7 @@ After completing all tasks, verify:
 
 ```python
 # Quick verification in Python REPL
+from datetime import datetime, UTC
 from amelia.server.models import (
     EventType, WorkflowEvent, TokenUsage, calculate_token_cost,
     ServerExecutionState, validate_transition
@@ -1634,7 +1486,7 @@ from amelia.server.models import (
 # Event creation
 event = WorkflowEvent(
     id="test", workflow_id="wf-1", sequence=1,
-    timestamp=datetime.utcnow(), agent="system",
+    timestamp=datetime.now(UTC), agent="system",
     event_type=EventType.WORKFLOW_STARTED, message="Test"
 )
 

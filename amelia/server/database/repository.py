@@ -4,7 +4,6 @@ from datetime import UTC, datetime
 
 from amelia.server.database.connection import Database
 from amelia.server.models.state import (
-    InvalidStateTransitionError,
     ServerExecutionState,
     WorkflowStatus,
     validate_transition,
@@ -200,13 +199,15 @@ class WorkflowRepository:
         Returns:
             Number of active workflows.
         """
-        count = await self._db.fetch_scalar(
+        result = await self._db.fetch_scalar(
             """
             SELECT COUNT(*) FROM workflows
             WHERE status IN ('pending', 'in_progress', 'blocked')
             """
         )
-        return count if count is not None else 0
+        # COUNT(*) always returns an integer
+        assert isinstance(result, int) or result is None
+        return result if result is not None else 0
 
     async def find_by_status(
         self,
