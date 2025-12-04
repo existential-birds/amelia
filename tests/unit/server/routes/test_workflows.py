@@ -35,7 +35,6 @@ def app(mock_repository: AsyncMock) -> FastAPI:
     test_app.include_router(router)
 
     # Override the repository dependency
-    from amelia.server.routes.workflows import get_repository
     test_app.dependency_overrides[get_repository] = lambda: mock_repository
 
     return test_app
@@ -115,8 +114,6 @@ class TestExceptionHandlers:
         @app.get("/test-validation")
         async def trigger_validation():
             # Trigger a Pydantic validation error
-            from pydantic import BaseModel, field_validator
-
             class TestModel(BaseModel):
                 value: int
 
@@ -371,7 +368,6 @@ class TestCreateWorkflow:
 
         # Verify repository calls
         # Path is canonicalized by validator (e.g., /tmp -> /private/tmp on macOS)
-        from pathlib import Path
         expected_path = str(Path("/tmp/worktree-123").resolve())
         mock_repository.get_by_worktree.assert_called_once_with(expected_path)
         mock_repository.count_active.assert_called_once()
