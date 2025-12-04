@@ -154,6 +154,7 @@ uv run pytest
 
 ## Learn More
 
+- [Roadmap](docs/roadmap.md) - Detailed development phases and vision
 - [Concepts: Understanding Agentic AI](docs/concepts.md) - How agents, drivers, and orchestration work
 - [Architecture & Data Flow](docs/architecture.md) - Technical deep dive with diagrams
 - [Configuration Reference](docs/configuration.md) - Full settings documentation
@@ -178,65 +179,19 @@ uv run pytest
 
 ## Roadmap
 
-> **Vision:** Complete end-to-end workflow control without ever opening GitHub, Jira, or any tracker web UI.
+> **Vision:** Complete end-to-end workflow control without ever opening GitHub, Jira, or any tracker web UI—with agents that maintain context across sessions and verify their own work.
 
-### Phase 1: Core Orchestration ✅ Complete
-- Full agent orchestration with human approval gates
-- Multi-driver support (API and CLI)
-- Issue tracker integrations (Jira, GitHub)
-- [Reviewer agent benchmark framework](https://github.com/anderskev/amelia/issues/8) for data-driven prompt iteration
+See [**docs/roadmap.md**](docs/roadmap.md) for the full roadmap with implementation details.
 
-### Phase 2: Web Dashboard (In Progress)
-- **Server foundation** - FastAPI backend with SQLite persistence ✅
-- **Workflow models** - State machine for tracking execution status ✅
-- **REST API** - Endpoints for workflows, tasks, and events
-- **WebSocket events** - Real-time updates to dashboard
-- **React dashboard** - Observability UI with Zustand state management
-
-### Phase 3: Local RAG Integration
-- Local RAG infrastructure for agents to query codebase context
-- Extended thinking (ultrathink) for complex reasoning
-- Interactive clarification flow where agents can ask targeted questions before proceeding
-
-### Phase 4: Bidirectional Tracker Sync
-*Eliminate tracker web UI entirely*
-- **Issue lifecycle** - Create, update, transition, and comment on issues via CLI/dashboard
-- **Status transitions** - Move issues through workflow states (To Do → In Progress → Review → Done)
-- **Label/milestone management** - Organize work without leaving terminal
-- **Related issue linking** - Automatically link dependent issues
-
-### Phase 5: Pull Request Lifecycle
-*Eliminate GitHub web for code review*
-- **PR creation** - Generate PRs with title, description, and reviewers from TaskDAG metadata
-- **Review comment handling** - Respond to feedback, push fixup commits automatically
-- **CI status monitoring** - Wait for checks, retry on flaky failures
-- **Auto-merge** - Merge when approved and checks pass, delete branch
-
-### Phase 6: Quality Gates
-*Objective verification before subjective review*
-- **Pre-merge orchestration** - Run lint, type check, tests, security scans as first gate
-- **Coverage enforcement** - Configurable thresholds with intelligent baseline detection
-- **Architecture rules** - Enforce module boundaries, import restrictions, naming conventions
-- **Mutation testing** - Verify test effectiveness, not just coverage percentage
-- **Specialized reviewers** - Security, Performance, Accessibility agents run in parallel
-
-### Phase 7: Parallel Execution
-*Multiply throughput without proportional attention cost*
-- **Concurrent workflows** - Work on multiple independent issues simultaneously
-- **Task-level parallelism** - Execute non-dependent TaskDAG nodes in parallel
-- **Resource management** - LLM rate limiting, compute allocation, queue prioritization
-- **Background execution** - Fire-and-forget with notification on completion
-
-### Phase 8: Chat Integration
-*Async/mobile workflow management*
-- **Slack integration** - Receive tasks, send status updates, request approvals via DM
-- **Discord integration** - Channel-based workflows with thread isolation
-- **Notification preferences** - Configure verbosity per channel/user
-- **Command interface** - "@amelia start PROJ-123" triggers full workflow
-
-### Phase 9: Continuous Improvement
-*Quality flywheel that compounds over time*
-- **Outcome tracking** - Success/failure rates per agent, per project, per task type
-- **Feedback learning** - Adapt to reviewer patterns ("always asks for tests" → include preemptively)
-- **Style guide evolution** - Learn from corrections, enforce project-specific conventions
-- **Knowledge base** - Accumulate project-specific patterns, common pitfalls, architectural decisions
+| Phase | Focus | Status |
+|-------|-------|--------|
+| 1 | Core Orchestration | ✅ Complete |
+| 2 | Web Dashboard | 🔄 In Progress |
+| 3 | Session Continuity | Planned |
+| 4 | Verification Framework | Planned |
+| 5 | Bidirectional Tracker Sync | Planned |
+| 6 | Pull Request Lifecycle | Planned |
+| 7 | Quality Gates | Planned |
+| 8 | Parallel Execution | Planned |
+| 9 | Chat Integration | Planned |
+| 10 | Continuous Improvement | Planned |
