@@ -3,19 +3,12 @@
 from datetime import UTC, datetime
 
 from amelia.server.database.connection import Database
+from amelia.server.exceptions import WorkflowNotFoundError
 from amelia.server.models.state import (
     ServerExecutionState,
     WorkflowStatus,
     validate_transition,
 )
-
-
-class WorkflowNotFoundError(Exception):
-    """Raised when workflow ID doesn't exist."""
-
-    def __init__(self, workflow_id: str):
-        self.workflow_id = workflow_id
-        super().__init__(f"Workflow not found: {workflow_id}")
 
 
 class WorkflowRepository:
