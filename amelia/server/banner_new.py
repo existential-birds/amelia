@@ -3,6 +3,7 @@ from rich.console import Console
 from rich.style import Style
 from rich.text import Text
 
+
 # --- Color Palette ---
 NAVY = "#0a2463"
 RUST = "#a0311c"

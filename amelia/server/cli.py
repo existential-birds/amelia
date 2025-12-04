@@ -6,7 +6,7 @@ import uvicorn
 from rich.console import Console
 
 from amelia.logging import configure_logging
-from amelia.server.banner_new import print_banner
+from amelia.server.banner import print_banner
 from amelia.server.config import ServerConfig
 
 
