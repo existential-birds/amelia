@@ -73,6 +73,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     orchestrator = OrchestratorService(
         event_bus=event_bus,
         repository=repository,
+        max_concurrent=_config.max_concurrent,
     )
     set_orchestrator(orchestrator)
 

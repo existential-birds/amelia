@@ -46,6 +46,7 @@ class OrchestratorService:
         self._active_tasks: dict[str, asyncio.Task[None]] = {}  # worktree_path -> task
         self._approval_events: dict[str, asyncio.Event] = {}  # workflow_id -> event
         self._approval_lock = asyncio.Lock()  # Prevents race conditions on approvals
+        self._start_lock = asyncio.Lock()  # Prevents race conditions on workflow start
         self._sequence_counters: dict[str, int] = {}  # workflow_id -> next sequence
         self._sequence_locks: dict[str, asyncio.Lock] = {}  # workflow_id -> lock
 
@@ -73,40 +74,47 @@ class OrchestratorService:
             WorkflowConflictError: If worktree already has active workflow.
             ConcurrencyLimitError: If at max concurrent workflows.
         """
-        # Check worktree conflict - need to find existing workflow_id
-        if worktree_path in self._active_tasks:
-            # Find the existing workflow_id for this worktree
-            existing_workflow = await self.get_workflow_by_worktree(worktree_path)
-            existing_id = existing_workflow.id if existing_workflow else "unknown"
-            raise WorkflowConflictError(worktree_path, existing_id)
+        async with self._start_lock:
+            # Check worktree conflict - need to find existing workflow_id
+            if worktree_path in self._active_tasks:
+                # Find the existing workflow_id for this worktree
+                existing_workflow = await self.get_workflow_by_worktree(worktree_path)
+                existing_id = existing_workflow.id if existing_workflow else "unknown"
+                raise WorkflowConflictError(worktree_path, existing_id)
 
-        # Check concurrency limit
-        current_count = len(self._active_tasks)
-        if current_count >= self._max_concurrent:
-            raise ConcurrencyLimitError(self._max_concurrent, current_count)
+            # Check concurrency limit
+            current_count = len(self._active_tasks)
+            if current_count >= self._max_concurrent:
+                raise ConcurrencyLimitError(self._max_concurrent, current_count)
 
-        # Create workflow record
-        workflow_id = str(uuid4())
-        state = ServerExecutionState(
-            id=workflow_id,
-            issue_id=issue_id,
-            worktree_path=worktree_path,
-            worktree_name=worktree_name or worktree_path.split("/")[-1],
-            workflow_status="pending",
-            started_at=datetime.now(UTC),
-        )
-        await self._repository.create(state)
+            # Create workflow record
+            workflow_id = str(uuid4())
+            state = ServerExecutionState(
+                id=workflow_id,
+                issue_id=issue_id,
+                worktree_path=worktree_path,
+                worktree_name=worktree_name or worktree_path.split("/")[-1],
+                workflow_status="pending",
+                started_at=datetime.now(UTC),
+            )
+            try:
+                await self._repository.create(state)
+            except Exception as e:
+                # Handle DB constraint violation (e.g., crash recovery scenario)
+                if "UNIQUE constraint failed" in str(e):
+                    raise WorkflowConflictError(worktree_path, "existing") from e
+                raise
 
-        logger.info(
-            "Starting workflow",
-            workflow_id=workflow_id,
-            issue_id=issue_id,
-            worktree_path=worktree_path,
-        )
+            logger.info(
+                "Starting workflow",
+                workflow_id=workflow_id,
+                issue_id=issue_id,
+                worktree_path=worktree_path,
+            )
 
-        # Start async task
-        task = asyncio.create_task(self._run_workflow(workflow_id, state, profile))
-        self._active_tasks[worktree_path] = task
+            # Start async task
+            task = asyncio.create_task(self._run_workflow(workflow_id, state, profile))
+            self._active_tasks[worktree_path] = task
 
         # Remove from active tasks on completion
         def cleanup_task(_: asyncio.Task[None]) -> None:

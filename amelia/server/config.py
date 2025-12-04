@@ -60,3 +60,10 @@ class ServerConfig(BaseSettings):
         default_factory=lambda: Path.home() / ".amelia" / "amelia.db",
         description="Path to SQLite database file",
     )
+
+    # Concurrency
+    max_concurrent: int = Field(
+        default=5,
+        ge=1,
+        description="Maximum number of concurrent workflows",
+    )
