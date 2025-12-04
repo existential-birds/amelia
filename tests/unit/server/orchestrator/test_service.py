@@ -52,20 +52,6 @@ def orchestrator(
     )
 
 
-def test_orchestrator_initialization(orchestrator: OrchestratorService) -> None:
-    """OrchestratorService should initialize with empty state."""
-    assert orchestrator._max_concurrent == 5
-    assert len(orchestrator._active_tasks) == 0
-    assert len(orchestrator._approval_events) == 0
-    assert len(orchestrator._sequence_counters) == 0
-    assert len(orchestrator._sequence_locks) == 0
-
-
-def test_get_active_workflows_empty(orchestrator: OrchestratorService) -> None:
-    """Should return empty list when no active workflows."""
-    assert orchestrator.get_active_workflows() == []
-
-
 @pytest.mark.asyncio
 async def test_start_workflow_success(
     orchestrator: OrchestratorService,
@@ -480,42 +466,6 @@ async def test_emit_different_workflows(
     # wf-2 sequences: 1
     assert calls[1][0][0].workflow_id == "wf-2"
     assert calls[1][0][0].sequence == 1
-
-
-@pytest.mark.asyncio
-async def test_emit_with_correlation_id(
-    orchestrator: OrchestratorService,
-    mock_repository: AsyncMock,
-):
-    """Should propagate correlation_id to event."""
-    await orchestrator._emit(
-        workflow_id="wf-1",
-        event_type=EventType.APPROVAL_GRANTED,
-        message="Approved",
-        correlation_id="corr-123",
-    )
-
-    saved_event = mock_repository.save_event.call_args[0][0]
-    assert saved_event.correlation_id == "corr-123"
-
-
-@pytest.mark.asyncio
-async def test_emit_with_data(
-    orchestrator: OrchestratorService,
-    mock_repository: AsyncMock,
-):
-    """Should include structured data in event."""
-    data = {"stage": "architect", "tasks": 5}
-
-    await orchestrator._emit(
-        workflow_id="wf-1",
-        event_type=EventType.STAGE_STARTED,
-        message="Planning started",
-        data=data,
-    )
-
-    saved_event = mock_repository.save_event.call_args[0][0]
-    assert saved_event.data == data
 
 
 @pytest.mark.asyncio

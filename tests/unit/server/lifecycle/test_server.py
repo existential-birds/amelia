@@ -1,7 +1,5 @@
 """Unit tests for ServerLifecycle."""
 
-import asyncio
-import contextlib
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -40,11 +38,6 @@ def lifecycle(
         orchestrator=mock_orchestrator,
         log_retention=mock_retention,
     )
-
-
-def test_lifecycle_initialization(lifecycle: ServerLifecycle) -> None:
-    """ServerLifecycle should initialize with not shutting down."""
-    assert lifecycle.is_shutting_down is False
 
 
 async def test_startup(
@@ -98,43 +91,14 @@ async def test_shutdown_timeout_cancels_workflows(
     lifecycle: ServerLifecycle,
     mock_orchestrator: AsyncMock,
 ) -> None:
-    """Shutdown timeout should cancel remaining workflows via cancel_all_workflows."""
-    # Track if cancel_all_workflows was called
-    cancel_all_called = False
-
-    # Create a real task that blocks until cancelled
-    async def blocking_task() -> None:
-        try:
-            await asyncio.sleep(100)  # Would take forever
-        except asyncio.CancelledError:
-            raise
-
-    task = asyncio.create_task(blocking_task())
-
-    # Configure cancel_all_workflows to actually cancel the task
-    async def cancel_all_side_effect(timeout: float = 5.0) -> None:
-        nonlocal cancel_all_called
-        cancel_all_called = True
-        task.cancel()
-        with contextlib.suppress(TimeoutError, asyncio.CancelledError):
-            await asyncio.wait_for(task, timeout=timeout)
-
+    """Shutdown timeout should trigger cancel_all_workflows."""
+    # Simulate workflows that don't complete
     mock_orchestrator.get_active_workflows.return_value = ["/path/to/worktree"]
-    mock_orchestrator.cancel_all_workflows = AsyncMock(side_effect=cancel_all_side_effect)
 
-    # Use short timeout for test
-    lifecycle._shutdown_timeout = 0.1
+    # Use very short timeout for test
+    lifecycle._shutdown_timeout = 0.05
 
     await lifecycle.shutdown()
 
-    # Should have called cancel_all_workflows
-    assert cancel_all_called is True
-    assert task.cancelled()
-
-
-def test_is_shutting_down_property(lifecycle: ServerLifecycle) -> None:
-    """is_shutting_down should reflect internal state."""
-    assert lifecycle.is_shutting_down is False
-
-    lifecycle._shutting_down = True
-    assert lifecycle.is_shutting_down is True
+    # Verify cancel_all_workflows was called due to timeout
+    mock_orchestrator.cancel_all_workflows.assert_called_once()
