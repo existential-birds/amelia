@@ -1,10 +1,7 @@
 """Workflow management routes and exception handlers."""
 
 import base64
-import os
 from datetime import datetime
-from pathlib import Path
-from uuid import uuid4
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request, status
 from fastapi.responses import JSONResponse
@@ -12,7 +9,7 @@ from loguru import logger
 from pydantic_core import ValidationError
 
 from amelia.server.database import WorkflowRepository
-from amelia.server.dependencies import get_repository
+from amelia.server.dependencies import get_orchestrator, get_repository
 from amelia.server.exceptions import (
     ConcurrencyLimitError,
     InvalidStateError,
@@ -28,26 +25,24 @@ from amelia.server.models.responses import (
     WorkflowListResponse,
     WorkflowSummary,
 )
-from amelia.server.models.state import ServerExecutionState, WorkflowStatus
+from amelia.server.models.state import WorkflowStatus
+from amelia.server.orchestrator.service import OrchestratorService
 
 
 # Create the workflows router
 router = APIRouter(prefix="/workflows", tags=["workflows"])
 
-# Max concurrent workflows
-MAX_CONCURRENT_WORKFLOWS = int(os.environ.get("AMELIA_MAX_CONCURRENT", "5"))
-
 
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def create_workflow(
     request: CreateWorkflowRequest,
-    repository: WorkflowRepository = Depends(get_repository),
+    orchestrator: OrchestratorService = Depends(get_orchestrator),
 ) -> CreateWorkflowResponse:
     """Create a new workflow.
 
     Args:
         request: Workflow creation request.
-        repository: Workflow repository dependency.
+        orchestrator: Orchestrator service dependency.
 
     Returns:
         CreateWorkflowResponse with workflow ID and initial status.
@@ -56,36 +51,14 @@ async def create_workflow(
         WorkflowConflictError: If worktree is already in use.
         ConcurrencyLimitError: If concurrent workflow limit is reached.
     """
-    # Check for worktree conflict
-    existing = await repository.get_by_worktree(request.worktree_path)
-    if existing is not None:
-        raise WorkflowConflictError(
-            worktree_path=request.worktree_path,
-            workflow_id=existing.id,
-        )
-
-    # Check concurrency limit
-    active_count = await repository.count_active()
-    if active_count >= MAX_CONCURRENT_WORKFLOWS:
-        raise ConcurrencyLimitError(
-            max_concurrent=MAX_CONCURRENT_WORKFLOWS,
-            current_count=active_count,
-        )
-
-    # Derive worktree name from path if not provided
-    worktree_name = request.worktree_name or Path(request.worktree_path).name
-
-    # Create workflow record
-    workflow_id = str(uuid4())
-    state = ServerExecutionState(
-        id=workflow_id,
+    # Let orchestrator handle everything - it will raise appropriate exceptions
+    workflow_id = await orchestrator.start_workflow(
         issue_id=request.issue_id,
         worktree_path=request.worktree_path,
-        worktree_name=worktree_name,
-        workflow_status="pending",
+        worktree_name=request.worktree_name,
+        profile=request.profile,
+        driver=request.driver,
     )
-
-    await repository.create(state)
 
     logger.info(f"Created workflow {workflow_id} for issue {request.issue_id}")
 
@@ -252,13 +225,13 @@ async def get_workflow(
 @router.post("/{workflow_id}/cancel")
 async def cancel_workflow(
     workflow_id: str,
-    repository: WorkflowRepository = Depends(get_repository),
+    orchestrator: OrchestratorService = Depends(get_orchestrator),
 ) -> ActionResponse:
     """Cancel an active workflow.
 
     Args:
         workflow_id: Unique workflow identifier.
-        repository: Workflow repository dependency.
+        orchestrator: Orchestrator service dependency.
 
     Returns:
         ActionResponse with status and workflow_id.
@@ -267,35 +240,21 @@ async def cancel_workflow(
         WorkflowNotFoundError: If workflow doesn't exist.
         InvalidStateError: If workflow is not in a cancellable state.
     """
-    workflow = await repository.get(workflow_id)
-    if workflow is None:
-        raise WorkflowNotFoundError(workflow_id=workflow_id)
-
-    # Can only cancel active workflows (pending, in_progress, blocked)
-    cancellable_states = {"pending", "in_progress", "blocked"}
-    if workflow.workflow_status not in cancellable_states:
-        raise InvalidStateError(
-            message=f"Cannot cancel: workflow is {workflow.workflow_status}",
-            workflow_id=workflow_id,
-            current_status=workflow.workflow_status,
-        )
-
-    await repository.set_status(workflow_id, "cancelled")
+    await orchestrator.cancel_workflow(workflow_id)
     logger.info(f"Cancelled workflow {workflow_id}")
-
     return ActionResponse(status="cancelled", workflow_id=workflow_id)
 
 
 @router.post("/{workflow_id}/approve")
 async def approve_workflow(
     workflow_id: str,
-    repository: WorkflowRepository = Depends(get_repository),
+    orchestrator: OrchestratorService = Depends(get_orchestrator),
 ) -> ActionResponse:
     """Approve a blocked workflow's plan.
 
     Args:
         workflow_id: Unique workflow identifier.
-        repository: Workflow repository dependency.
+        orchestrator: Orchestrator service dependency.
 
     Returns:
         ActionResponse with status and workflow_id.
@@ -304,20 +263,8 @@ async def approve_workflow(
         WorkflowNotFoundError: If workflow doesn't exist.
         InvalidStateError: If workflow is not in blocked state.
     """
-    workflow = await repository.get(workflow_id)
-    if workflow is None:
-        raise WorkflowNotFoundError(workflow_id=workflow_id)
-
-    if workflow.workflow_status != "blocked":
-        raise InvalidStateError(
-            message=f"Cannot approve: workflow is {workflow.workflow_status}, not blocked",
-            workflow_id=workflow_id,
-            current_status=workflow.workflow_status,
-        )
-
-    await repository.set_status(workflow_id, "in_progress")
+    await orchestrator.approve_workflow(workflow_id)
     logger.info(f"Approved workflow {workflow_id}")
-
     return ActionResponse(status="approved", workflow_id=workflow_id)
 
 
@@ -325,14 +272,14 @@ async def approve_workflow(
 async def reject_workflow(
     workflow_id: str,
     request: RejectRequest,
-    repository: WorkflowRepository = Depends(get_repository),
+    orchestrator: OrchestratorService = Depends(get_orchestrator),
 ) -> ActionResponse:
     """Reject a blocked workflow's plan.
 
     Args:
         workflow_id: Unique workflow identifier.
         request: Rejection request with feedback.
-        repository: Workflow repository dependency.
+        orchestrator: Orchestrator service dependency.
 
     Returns:
         ActionResponse with status and workflow_id.
@@ -341,20 +288,8 @@ async def reject_workflow(
         WorkflowNotFoundError: If workflow doesn't exist.
         InvalidStateError: If workflow is not in blocked state.
     """
-    workflow = await repository.get(workflow_id)
-    if workflow is None:
-        raise WorkflowNotFoundError(workflow_id=workflow_id)
-
-    if workflow.workflow_status != "blocked":
-        raise InvalidStateError(
-            message=f"Cannot reject: workflow is {workflow.workflow_status}, not blocked",
-            workflow_id=workflow_id,
-            current_status=workflow.workflow_status,
-        )
-
-    await repository.set_status(workflow_id, "failed", failure_reason=request.feedback)
+    await orchestrator.reject_workflow(workflow_id, request.feedback)
     logger.info(f"Rejected workflow {workflow_id}: {request.feedback}")
-
     return ActionResponse(status="rejected", workflow_id=workflow_id)
 
 

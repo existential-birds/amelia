@@ -1,11 +1,20 @@
 """FastAPI dependency injection providers."""
 
+from typing import TYPE_CHECKING
+
 from amelia.server.database import WorkflowRepository
 from amelia.server.database.connection import Database
 
 
+if TYPE_CHECKING:
+    from amelia.server.orchestrator.service import OrchestratorService
+
+
 # Module-level database instance
 _database: Database | None = None
+
+# Module-level orchestrator instance
+_orchestrator: "OrchestratorService | None" = None
 
 
 def set_database(db: Database) -> None:
@@ -51,3 +60,38 @@ def get_repository() -> WorkflowRepository:
     """
     db = get_database()
     return WorkflowRepository(db)
+
+
+def set_orchestrator(orch: "OrchestratorService") -> None:
+    """Set the global orchestrator instance.
+
+    This should be called during application startup.
+
+    Args:
+        orch: OrchestratorService instance to set.
+    """
+    global _orchestrator
+    _orchestrator = orch
+
+
+def clear_orchestrator() -> None:
+    """Clear the global orchestrator instance.
+
+    This should be called during application shutdown.
+    """
+    global _orchestrator
+    _orchestrator = None
+
+
+def get_orchestrator() -> "OrchestratorService":
+    """Get the orchestrator instance.
+
+    Returns:
+        The current OrchestratorService instance.
+
+    Raises:
+        RuntimeError: If orchestrator not initialized.
+    """
+    if _orchestrator is None:
+        raise RuntimeError("Orchestrator not initialized. Is the server running?")
+    return _orchestrator

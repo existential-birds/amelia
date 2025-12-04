@@ -9,12 +9,14 @@ from loguru import logger
 
 from amelia.server.database.repository import WorkflowRepository
 from amelia.server.events.bus import EventBus
+from amelia.server.exceptions import (
+    ConcurrencyLimitError,
+    InvalidStateError,
+    WorkflowConflictError,
+    WorkflowNotFoundError,
+)
 from amelia.server.models import ServerExecutionState
 from amelia.server.models.events import EventType, WorkflowEvent
-from amelia.server.orchestrator.exceptions import (
-    ConcurrencyLimitError,
-    WorkflowConflictError,
-)
 
 
 class OrchestratorService:
@@ -51,16 +53,18 @@ class OrchestratorService:
         self,
         issue_id: str,
         worktree_path: str,
-        worktree_name: str,
+        worktree_name: str | None = None,
         profile: str | None = None,
+        driver: str | None = None,
     ) -> str:
         """Start a new workflow.
 
         Args:
             issue_id: The issue ID to work on.
             worktree_path: Absolute path to the worktree.
-            worktree_name: Human-readable worktree name.
+            worktree_name: Human-readable worktree name (optional).
             profile: Optional profile name.
+            driver: Optional driver override.
 
         Returns:
             The workflow ID (UUID).
@@ -69,13 +73,17 @@ class OrchestratorService:
             WorkflowConflictError: If worktree already has active workflow.
             ConcurrencyLimitError: If at max concurrent workflows.
         """
-        # Check worktree conflict
+        # Check worktree conflict - need to find existing workflow_id
         if worktree_path in self._active_tasks:
-            raise WorkflowConflictError(worktree_path)
+            # Find the existing workflow_id for this worktree
+            existing_workflow = await self.get_workflow_by_worktree(worktree_path)
+            existing_id = existing_workflow.id if existing_workflow else "unknown"
+            raise WorkflowConflictError(worktree_path, existing_id)
 
         # Check concurrency limit
-        if len(self._active_tasks) >= self._max_concurrent:
-            raise ConcurrencyLimitError(self._max_concurrent)
+        current_count = len(self._active_tasks)
+        if current_count >= self._max_concurrent:
+            raise ConcurrencyLimitError(self._max_concurrent, current_count)
 
         # Create workflow record
         workflow_id = str(uuid4())
@@ -83,7 +91,7 @@ class OrchestratorService:
             id=workflow_id,
             issue_id=issue_id,
             worktree_path=worktree_path,
-            worktree_name=worktree_name,
+            worktree_name=worktree_name or worktree_path.split("/")[-1],
             workflow_status="pending",
             started_at=datetime.now(UTC),
         )
@@ -268,69 +276,82 @@ class OrchestratorService:
 
         return event
 
-    async def approve_workflow(
-        self,
-        workflow_id: str,
-        correlation_id: str | None = None,
-    ) -> bool:
+    async def approve_workflow(self, workflow_id: str) -> None:
         """Approve a blocked workflow.
 
         Args:
             workflow_id: The workflow to approve.
-            correlation_id: Optional ID for tracing this action.
 
-        Returns:
-            True if approval was processed, False if already handled or not blocked.
-
-        Thread-safe: Uses atomic pop to prevent race conditions when multiple
-        clients approve simultaneously.
+        Raises:
+            WorkflowNotFoundError: If workflow doesn't exist.
+            InvalidStateError: If workflow is not in "blocked" state.
         """
-        async with self._approval_lock:
-            # Atomic check-and-remove prevents duplicate approvals
-            event = self._approval_events.pop(workflow_id, None)
-            if not event:
-                # Already approved, rejected, or not blocked
-                return False
+        # Validate workflow exists and get current state
+        workflow = await self._repository.get(workflow_id)
+        if not workflow:
+            raise WorkflowNotFoundError(workflow_id)
 
+        # Validate workflow is in blocked state
+        if workflow.workflow_status != "blocked":
+            raise InvalidStateError(
+                f"Cannot approve workflow in '{workflow.workflow_status}' state",
+                workflow_id=workflow_id,
+                current_status=workflow.workflow_status,
+            )
+
+        async with self._approval_lock:
+            # Signal the approval event if it exists
+            event = self._approval_events.get(workflow_id)
+            if event:
+                event.set()
+                self._approval_events.pop(workflow_id, None)
+
+            # Update workflow status
             await self._repository.set_status(workflow_id, "in_progress")
             await self._emit(
                 workflow_id,
                 EventType.APPROVAL_GRANTED,
                 "Plan approved",
-                correlation_id=correlation_id,
             )
-            event.set()
 
             logger.info(
                 "Workflow approved",
                 workflow_id=workflow_id,
-                correlation_id=correlation_id,
             )
-            return True
 
     async def reject_workflow(
         self,
         workflow_id: str,
         feedback: str,
-    ) -> bool:
+    ) -> None:
         """Reject a blocked workflow.
 
         Args:
             workflow_id: The workflow to reject.
             feedback: Reason for rejection.
 
-        Returns:
-            True if rejection was processed, False if already handled or not blocked.
-
-        Thread-safe: Uses atomic pop to prevent race conditions.
+        Raises:
+            WorkflowNotFoundError: If workflow doesn't exist.
+            InvalidStateError: If workflow is not in "blocked" state.
         """
-        async with self._approval_lock:
-            # Atomic check-and-remove prevents duplicate rejections
-            event = self._approval_events.pop(workflow_id, None)
-            if not event:
-                # Already approved, rejected, or not blocked
-                return False
+        # Validate workflow exists and get current state
+        workflow = await self._repository.get(workflow_id)
+        if not workflow:
+            raise WorkflowNotFoundError(workflow_id)
 
+        # Validate workflow is in blocked state
+        if workflow.workflow_status != "blocked":
+            raise InvalidStateError(
+                f"Cannot reject workflow in '{workflow.workflow_status}' state",
+                workflow_id=workflow_id,
+                current_status=workflow.workflow_status,
+            )
+
+        async with self._approval_lock:
+            # Remove approval event if it exists
+            self._approval_events.pop(workflow_id, None)
+
+            # Update workflow status to failed with feedback
             await self._repository.set_status(
                 workflow_id, "failed", failure_reason=feedback
             )
@@ -341,8 +362,7 @@ class OrchestratorService:
             )
 
             # Cancel the waiting task
-            workflow = await self._repository.get(workflow_id)
-            if workflow and workflow.worktree_path in self._active_tasks:
+            if workflow.worktree_path in self._active_tasks:
                 self._active_tasks[workflow.worktree_path].cancel()
 
             logger.info(
@@ -350,7 +370,6 @@ class OrchestratorService:
                 workflow_id=workflow_id,
                 feedback=feedback,
             )
-            return True
 
     async def _wait_for_approval(self, workflow_id: str) -> None:
         """Block until workflow is approved or rejected.

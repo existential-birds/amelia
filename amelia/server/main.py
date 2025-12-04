@@ -8,8 +8,19 @@ from fastapi import FastAPI
 from amelia import __version__
 from amelia.logging import log_server_startup
 from amelia.server.config import ServerConfig
+from amelia.server.database import WorkflowRepository
 from amelia.server.database.connection import Database
-from amelia.server.dependencies import clear_database, set_database
+from amelia.server.dependencies import (
+    clear_database,
+    clear_orchestrator,
+    set_database,
+    set_orchestrator,
+)
+from amelia.server.events.bus import EventBus
+from amelia.server.lifecycle.health_checker import WorktreeHealthChecker
+from amelia.server.lifecycle.retention import LogRetentionService
+from amelia.server.lifecycle.server import ServerLifecycle
+from amelia.server.orchestrator.service import OrchestratorService
 from amelia.server.routes import health_router, workflows_router
 from amelia.server.routes.workflows import configure_exception_handlers
 
@@ -37,7 +48,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Manage application lifespan events.
 
     Sets start_time on startup for uptime calculation.
-    Initializes configuration and connects to database.
+    Initializes configuration, database, orchestrator, and lifecycle components.
     """
     global _config
 
@@ -52,6 +63,31 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Set the database in dependencies module for DI
     set_database(database)
 
+    # Create repository for orchestrator
+    repository = WorkflowRepository(database)
+
+    # Create event bus
+    event_bus = EventBus()
+
+    # Create and register orchestrator
+    orchestrator = OrchestratorService(
+        event_bus=event_bus,
+        repository=repository,
+    )
+    set_orchestrator(orchestrator)
+
+    # Create lifecycle components
+    log_retention = LogRetentionService(db=database, config=_config)
+    lifecycle = ServerLifecycle(
+        orchestrator=orchestrator,
+        log_retention=log_retention,
+    )
+    health_checker = WorktreeHealthChecker(orchestrator=orchestrator)
+
+    # Start lifecycle components
+    await lifecycle.startup()
+    await health_checker.start()
+
     # Log server startup with styled banner
     log_server_startup(
         host=_config.host,
@@ -63,7 +99,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.start_time = datetime.now(UTC)
     yield
 
-    # Cleanup
+    # Shutdown - stop components in reverse order
+    await health_checker.stop()
+    await lifecycle.shutdown()
+    clear_orchestrator()
     await database.close()
     clear_database()
     _config = None

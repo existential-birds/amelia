@@ -9,12 +9,14 @@ import pytest
 
 from amelia.server.database.repository import WorkflowRepository
 from amelia.server.events.bus import EventBus
+from amelia.server.exceptions import (
+    ConcurrencyLimitError,
+    InvalidStateError,
+    WorkflowConflictError,
+    WorkflowNotFoundError,
+)
 from amelia.server.models import ServerExecutionState
 from amelia.server.models.events import EventType
-from amelia.server.orchestrator.exceptions import (
-    ConcurrencyLimitError,
-    WorkflowConflictError,
-)
 from amelia.server.orchestrator.service import OrchestratorService
 
 
@@ -247,14 +249,24 @@ async def test_approve_workflow_success(
     received_events = []
     mock_event_bus.subscribe(lambda e: received_events.append(e))
 
+    # Create mock blocked workflow
+    mock_state = ServerExecutionState(
+        id="wf-1",
+        issue_id="ISSUE-123",
+        worktree_path="/path/to/worktree",
+        worktree_name="feat-123",
+        workflow_status="blocked",
+        started_at=datetime.now(UTC),
+    )
+    mock_repository.get.return_value = mock_state
+
     # Simulate workflow waiting for approval
     orchestrator._approval_events["wf-1"] = asyncio.Event()
 
-    success = await orchestrator.approve_workflow("wf-1", correlation_id="corr-123")
+    # New API returns None, raises on error
+    await orchestrator.approve_workflow("wf-1")
 
-    assert success is True
-
-    # Should remove from approval events
+    # Should remove the approval event after setting it
     assert "wf-1" not in orchestrator._approval_events
 
     # Should update status
@@ -263,35 +275,38 @@ async def test_approve_workflow_success(
     # Should emit APPROVAL_GRANTED
     approval_granted = [e for e in received_events if e.event_type == EventType.APPROVAL_GRANTED]
     assert len(approval_granted) == 1
-    assert approval_granted[0].correlation_id == "corr-123"
+
+
+@pytest.mark.asyncio
+async def test_approve_workflow_not_found(
+    orchestrator: OrchestratorService,
+    mock_repository: AsyncMock,
+):
+    """Approve non-existent workflow should raise WorkflowNotFoundError."""
+    mock_repository.get.return_value = None
+
+    with pytest.raises(WorkflowNotFoundError):
+        await orchestrator.approve_workflow("wf-1")
 
 
 @pytest.mark.asyncio
 async def test_approve_workflow_not_blocked(
     orchestrator: OrchestratorService,
-):
-    """Approve non-blocked workflow should return False."""
-    success = await orchestrator.approve_workflow("wf-1")
-    assert success is False
-
-
-@pytest.mark.asyncio
-async def test_approve_workflow_race_condition(
-    orchestrator: OrchestratorService,
     mock_repository: AsyncMock,
 ):
-    """Concurrent approvals should be idempotent."""
-    orchestrator._approval_events["wf-1"] = asyncio.Event()
-
-    # Simulate concurrent approvals
-    results = await asyncio.gather(
-        orchestrator.approve_workflow("wf-1"),
-        orchestrator.approve_workflow("wf-1"),
+    """Approve non-blocked workflow should raise InvalidStateError."""
+    mock_state = ServerExecutionState(
+        id="wf-1",
+        issue_id="ISSUE-123",
+        worktree_path="/path/to/worktree",
+        worktree_name="feat-123",
+        workflow_status="in_progress",  # Not blocked
+        started_at=datetime.now(UTC),
     )
+    mock_repository.get.return_value = mock_state
 
-    # Only one should succeed
-    assert results.count(True) == 1
-    assert results.count(False) == 1
+    with pytest.raises(InvalidStateError):
+        await orchestrator.approve_workflow("wf-1")
 
 
 @pytest.mark.asyncio
@@ -320,9 +335,8 @@ async def test_reject_workflow_success(
     orchestrator._active_tasks["/path/to/worktree"] = task
     orchestrator._approval_events["wf-1"] = asyncio.Event()
 
-    success = await orchestrator.reject_workflow("wf-1", feedback="Plan too complex")
-
-    assert success is True
+    # New API returns None, raises on error
+    await orchestrator.reject_workflow("wf-1", feedback="Plan too complex")
 
     # Should update status to failed
     mock_repository.set_status.assert_called_once_with(
@@ -341,12 +355,35 @@ async def test_reject_workflow_success(
 
 
 @pytest.mark.asyncio
+async def test_reject_workflow_not_found(
+    orchestrator: OrchestratorService,
+    mock_repository: AsyncMock,
+):
+    """Reject non-existent workflow should raise WorkflowNotFoundError."""
+    mock_repository.get.return_value = None
+
+    with pytest.raises(WorkflowNotFoundError):
+        await orchestrator.reject_workflow("wf-1", feedback="Nope")
+
+
+@pytest.mark.asyncio
 async def test_reject_workflow_not_blocked(
     orchestrator: OrchestratorService,
+    mock_repository: AsyncMock,
 ):
-    """Reject non-blocked workflow should return False."""
-    success = await orchestrator.reject_workflow("wf-1", feedback="Nope")
-    assert success is False
+    """Reject non-blocked workflow should raise InvalidStateError."""
+    mock_state = ServerExecutionState(
+        id="wf-1",
+        issue_id="ISSUE-123",
+        worktree_path="/path/to/worktree",
+        worktree_name="feat-123",
+        workflow_status="in_progress",  # Not blocked
+        started_at=datetime.now(UTC),
+    )
+    mock_repository.get.return_value = mock_state
+
+    with pytest.raises(InvalidStateError):
+        await orchestrator.reject_workflow("wf-1", feedback="Nope")
 
 
 # =============================================================================

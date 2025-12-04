@@ -19,7 +19,13 @@ from amelia.server.exceptions import (
     WorkflowNotFoundError,
 )
 from amelia.server.models.state import ServerExecutionState
-from amelia.server.routes.workflows import configure_exception_handlers, get_repository, router
+from amelia.server.orchestrator.service import OrchestratorService
+from amelia.server.routes.workflows import (
+    configure_exception_handlers,
+    get_orchestrator,
+    get_repository,
+    router,
+)
 
 
 @pytest.fixture
@@ -29,12 +35,19 @@ def mock_repository() -> AsyncMock:
 
 
 @pytest.fixture
-def app(mock_repository: AsyncMock) -> FastAPI:
+def mock_orchestrator() -> AsyncMock:
+    """Create a mock orchestrator service."""
+    return AsyncMock(spec=OrchestratorService)
+
+
+@pytest.fixture
+def app(mock_repository: AsyncMock, mock_orchestrator: AsyncMock) -> FastAPI:
     """Create a test FastAPI app."""
     test_app = FastAPI()
     configure_exception_handlers(test_app)
     test_app.include_router(router)
     test_app.dependency_overrides[get_repository] = lambda: mock_repository
+    test_app.dependency_overrides[get_orchestrator] = lambda: mock_orchestrator
     return test_app
 
 
@@ -372,26 +385,26 @@ class TestApproveWorkflow:
     async def test_approve_blocked_workflow(
         self,
         client: AsyncClient,
-        mock_repository: AsyncMock,
-        make_workflow: Callable[..., ServerExecutionState],
+        mock_orchestrator: AsyncMock,
     ):
         """Approve a blocked workflow."""
-        workflow = make_workflow(status="blocked")
-        mock_repository.get = AsyncMock(return_value=workflow)
-        mock_repository.set_status = AsyncMock()
+        mock_orchestrator.approve_workflow.return_value = None
 
         response = await client.post("/workflows/wf-123/approve")
 
         assert response.status_code == 200
         body = response.json()
         assert body["status"] == "approved"
-        mock_repository.set_status.assert_called_once_with("wf-123", "in_progress")
+        mock_orchestrator.approve_workflow.assert_called_once_with("wf-123")
 
     async def test_approve_workflow_not_found(
-        self, client: AsyncClient, mock_repository: AsyncMock
+        self, client: AsyncClient, mock_orchestrator: AsyncMock
     ):
         """Approve nonexistent workflow returns 404."""
-        mock_repository.get = AsyncMock(return_value=None)
+
+        mock_orchestrator.approve_workflow.side_effect = WorkflowNotFoundError(
+            "wf-missing"
+        )
 
         response = await client.post("/workflows/wf-missing/approve")
 
@@ -400,12 +413,13 @@ class TestApproveWorkflow:
     async def test_approve_workflow_wrong_state(
         self,
         client: AsyncClient,
-        mock_repository: AsyncMock,
-        make_workflow: Callable[..., ServerExecutionState],
+        mock_orchestrator: AsyncMock,
     ):
         """Approve workflow not in blocked state returns 422."""
-        workflow = make_workflow(status="in_progress")  # Not blocked
-        mock_repository.get = AsyncMock(return_value=workflow)
+
+        mock_orchestrator.approve_workflow.side_effect = InvalidStateError(
+            "Workflow not in blocked state", "wf-123", "in_progress"
+        )
 
         response = await client.post("/workflows/wf-123/approve")
 
@@ -420,13 +434,10 @@ class TestRejectWorkflow:
     async def test_reject_blocked_workflow(
         self,
         client: AsyncClient,
-        mock_repository: AsyncMock,
-        make_workflow: Callable[..., ServerExecutionState],
+        mock_orchestrator: AsyncMock,
     ):
         """Reject a blocked workflow."""
-        workflow = make_workflow(status="blocked")
-        mock_repository.get = AsyncMock(return_value=workflow)
-        mock_repository.set_status = AsyncMock()
+        mock_orchestrator.reject_workflow.return_value = None
 
         response = await client.post(
             "/workflows/wf-123/reject",
@@ -436,12 +447,12 @@ class TestRejectWorkflow:
         assert response.status_code == 200
         body = response.json()
         assert body["status"] == "rejected"
-        mock_repository.set_status.assert_called_once_with(
-            "wf-123", "failed", failure_reason="Plan needs more tests"
+        mock_orchestrator.reject_workflow.assert_called_once_with(
+            "wf-123", "Plan needs more tests"
         )
 
     async def test_reject_requires_feedback(
-        self, client: AsyncClient, mock_repository: AsyncMock
+        self, client: AsyncClient, mock_orchestrator: AsyncMock
     ):
         """Reject requires feedback field."""
         response = await client.post(
@@ -450,12 +461,16 @@ class TestRejectWorkflow:
         )
 
         assert response.status_code == 422  # Pydantic validation
+        mock_orchestrator.reject_workflow.assert_not_called()
 
     async def test_reject_workflow_not_found(
-        self, client: AsyncClient, mock_repository: AsyncMock
+        self, client: AsyncClient, mock_orchestrator: AsyncMock
     ):
         """Reject nonexistent workflow returns 404."""
-        mock_repository.get = AsyncMock(return_value=None)
+
+        mock_orchestrator.reject_workflow.side_effect = WorkflowNotFoundError(
+            "wf-missing"
+        )
 
         response = await client.post(
             "/workflows/wf-missing/reject",
@@ -469,12 +484,10 @@ class TestCreateWorkflow:
     """Test POST /workflows endpoint."""
 
     async def test_create_workflow_success(
-        self, client: AsyncClient, mock_repository: AsyncMock
+        self, client: AsyncClient, mock_orchestrator: AsyncMock
     ):
         """POST /workflows should return 201 with id, status, and message."""
-        mock_repository.get_by_worktree.return_value = None
-        mock_repository.count_active.return_value = 0
-        mock_repository.create.return_value = None
+        mock_orchestrator.start_workflow.return_value = "wf-123"
 
         response = await client.post(
             "/workflows",
@@ -486,23 +499,22 @@ class TestCreateWorkflow:
 
         assert response.status_code == 201
         data = response.json()
-        assert "id" in data
+        assert data["id"] == "wf-123"
         assert data["status"] == "pending"
         assert "ISSUE-123" in data["message"]
 
-        # Path is canonicalized by validator (e.g., /tmp -> /private/tmp on macOS)
+        # Verify orchestrator was called with canonicalized path
         expected_path = str(Path("/tmp/worktree-123").resolve())
-        mock_repository.get_by_worktree.assert_called_once_with(expected_path)
-        mock_repository.count_active.assert_called_once()
-        mock_repository.create.assert_called_once()
+        mock_orchestrator.start_workflow.assert_called_once()
+        call_kwargs = mock_orchestrator.start_workflow.call_args.kwargs
+        assert call_kwargs["issue_id"] == "ISSUE-123"
+        assert call_kwargs["worktree_path"] == expected_path
 
     async def test_create_workflow_with_optional_fields(
-        self, client: AsyncClient, mock_repository: AsyncMock
+        self, client: AsyncClient, mock_orchestrator: AsyncMock
     ):
         """POST /workflows should accept optional profile, driver, and worktree_name."""
-        mock_repository.get_by_worktree.return_value = None
-        mock_repository.count_active.return_value = 0
-        mock_repository.create.return_value = None
+        mock_orchestrator.start_workflow.return_value = "wf-456"
 
         response = await client.post(
             "/workflows",
@@ -519,24 +531,23 @@ class TestCreateWorkflow:
         data = response.json()
         assert data["status"] == "pending"
 
-        create_call = mock_repository.create.call_args
-        created_state: ServerExecutionState = create_call[0][0]
-        assert created_state.worktree_name == "custom-name"
+        # Verify orchestrator received optional fields
+        call_kwargs = mock_orchestrator.start_workflow.call_args.kwargs
+        assert call_kwargs["worktree_name"] == "custom-name"
+        assert call_kwargs["profile"] == "work"
+        assert call_kwargs["driver"] == "api:openai"
 
     async def test_create_workflow_conflict(
         self,
         client: AsyncClient,
-        mock_repository: AsyncMock,
-        make_workflow: Callable[..., ServerExecutionState],
+        mock_orchestrator: AsyncMock,
     ):
         """POST /workflows should return 409 when worktree is busy."""
-        existing_workflow = make_workflow(
-            id="existing-id",
-            issue_id="ISSUE-999",
-            worktree_path="/tmp/worktree-123",
-            worktree_name="worktree-123",
+
+        expected_path = str(Path("/tmp/worktree-123").resolve())
+        mock_orchestrator.start_workflow.side_effect = WorkflowConflictError(
+            expected_path, "existing-id"
         )
-        mock_repository.get_by_worktree.return_value = existing_workflow
 
         response = await client.post(
             "/workflows",
@@ -549,17 +560,13 @@ class TestCreateWorkflow:
         assert response.status_code == 409
         data = response.json()
         assert data["code"] == "WORKFLOW_CONFLICT"
-        assert "existing-id" in data["error"]
-
-        mock_repository.count_active.assert_not_called()
-        mock_repository.create.assert_not_called()
 
     async def test_create_workflow_at_concurrency_limit(
-        self, client: AsyncClient, mock_repository: AsyncMock
+        self, client: AsyncClient, mock_orchestrator: AsyncMock
     ):
         """POST /workflows should return 429 when at concurrency limit."""
-        mock_repository.get_by_worktree.return_value = None
-        mock_repository.count_active.return_value = 5  # At limit (default is 5)
+
+        mock_orchestrator.start_workflow.side_effect = ConcurrencyLimitError(5, 5)
 
         response = await client.post(
             "/workflows",
@@ -574,10 +581,8 @@ class TestCreateWorkflow:
         assert data["code"] == "CONCURRENCY_LIMIT"
         assert response.headers.get("Retry-After") == "30"
 
-        mock_repository.create.assert_not_called()
-
     async def test_create_workflow_validation_error(
-        self, client: AsyncClient, mock_repository: AsyncMock
+        self, client: AsyncClient, mock_orchestrator: AsyncMock
     ):
         """POST /workflows should return 422 for invalid issue_id."""
         response = await client.post(
@@ -593,17 +598,14 @@ class TestCreateWorkflow:
         data = response.json()
         assert "detail" in data
 
-        mock_repository.get_by_worktree.assert_not_called()
-        mock_repository.count_active.assert_not_called()
-        mock_repository.create.assert_not_called()
+        # Orchestrator should not be called if validation fails
+        mock_orchestrator.start_workflow.assert_not_called()
 
     async def test_create_workflow_derives_worktree_name(
-        self, client: AsyncClient, mock_repository: AsyncMock
+        self, client: AsyncClient, mock_orchestrator: AsyncMock
     ):
-        """POST /workflows should derive worktree_name from path if not provided."""
-        mock_repository.get_by_worktree.return_value = None
-        mock_repository.count_active.return_value = 0
-        mock_repository.create.return_value = None
+        """POST /workflows passes None for worktree_name if not provided."""
+        mock_orchestrator.start_workflow.return_value = "wf-789"
 
         response = await client.post(
             "/workflows",
@@ -615,9 +617,9 @@ class TestCreateWorkflow:
 
         assert response.status_code == 201
 
-        create_call = mock_repository.create.call_args
-        created_state: ServerExecutionState = create_call[0][0]
-        assert created_state.worktree_name == "my-custom-worktree"
+        # Verify worktree_name is None when not provided (orchestrator will derive it)
+        call_kwargs = mock_orchestrator.start_workflow.call_args.kwargs
+        assert call_kwargs["worktree_name"] is None
 
 
 class TestCancelWorkflow:
@@ -626,33 +628,27 @@ class TestCancelWorkflow:
     async def test_cancel_active_workflow(
         self,
         client: AsyncClient,
-        mock_repository: AsyncMock,
-        make_workflow: Callable[..., ServerExecutionState],
+        mock_orchestrator: AsyncMock,
     ):
         """Cancel an active workflow."""
-        workflow = make_workflow(status="in_progress")
-        mock_repository.get = AsyncMock(return_value=workflow)
-        mock_repository.set_status = AsyncMock()
+        mock_orchestrator.cancel_workflow.return_value = None
 
         response = await client.post("/workflows/wf-123/cancel")
 
         assert response.status_code == 200
         body = response.json()
         assert body["status"] == "cancelled"
-        mock_repository.set_status.assert_called_once_with("wf-123", "cancelled")
+        mock_orchestrator.cancel_workflow.assert_called_once_with("wf-123")
 
     @pytest.mark.parametrize("status", ["pending", "blocked"])
     async def test_cancel_cancellable_states(
         self,
         client: AsyncClient,
-        mock_repository: AsyncMock,
-        make_workflow: Callable[..., ServerExecutionState],
+        mock_orchestrator: AsyncMock,
         status: str,
     ):
         """Cancel works for pending and blocked workflows."""
-        workflow = make_workflow(status=status)
-        mock_repository.get = AsyncMock(return_value=workflow)
-        mock_repository.set_status = AsyncMock()
+        mock_orchestrator.cancel_workflow.return_value = None
 
         response = await client.post("/workflows/wf-123/cancel")
 
@@ -661,12 +657,13 @@ class TestCancelWorkflow:
     async def test_cancel_completed_workflow_fails(
         self,
         client: AsyncClient,
-        mock_repository: AsyncMock,
-        make_workflow: Callable[..., ServerExecutionState],
+        mock_orchestrator: AsyncMock,
     ):
         """Cannot cancel completed workflow."""
-        workflow = make_workflow(status="completed")
-        mock_repository.get = AsyncMock(return_value=workflow)
+
+        mock_orchestrator.cancel_workflow.side_effect = InvalidStateError(
+            "Cannot cancel completed workflow", "wf-123", "completed"
+        )
 
         response = await client.post("/workflows/wf-123/cancel")
 
@@ -675,10 +672,13 @@ class TestCancelWorkflow:
         assert body["code"] == "INVALID_STATE"
 
     async def test_cancel_workflow_not_found(
-        self, client: AsyncClient, mock_repository: AsyncMock
+        self, client: AsyncClient, mock_orchestrator: AsyncMock
     ):
         """Cancel nonexistent workflow returns 404."""
-        mock_repository.get = AsyncMock(return_value=None)
+
+        mock_orchestrator.cancel_workflow.side_effect = WorkflowNotFoundError(
+            "wf-missing"
+        )
 
         response = await client.post("/workflows/wf-missing/cancel")
 
