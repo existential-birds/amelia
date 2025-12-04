@@ -154,6 +154,9 @@ class WorkflowRepository:
         if new_status in ("completed", "failed", "cancelled"):
             completed_at = datetime.now(UTC)
 
+        # NOTE: We update both indexed columns AND the JSON blob in one query.
+        # This is more efficient than loading the full state and re-serializing.
+        # If adding new fields, update both places to prevent drift.
         await self._db.execute(
             """
             UPDATE workflows SET
@@ -205,9 +208,8 @@ class WorkflowRepository:
             WHERE status IN ('pending', 'in_progress', 'blocked')
             """
         )
-        # COUNT(*) always returns an integer
-        assert isinstance(result, int) or result is None
-        return result if result is not None else 0
+        # COUNT(*) always returns int; use isinstance for type narrowing
+        return result if isinstance(result, int) else 0
 
     async def find_by_status(
         self,
