@@ -1,4 +1,7 @@
-"""Tests for request schemas."""
+"""Tests for request schema validation.
+
+These tests verify security validators and format constraints.
+"""
 
 import pytest
 from pydantic import ValidationError
@@ -30,28 +33,28 @@ class TestCreateWorkflowRequest:
             profile="work",
             driver="sdk:claude",
         )
-        assert req.issue_id == "PROJ-123"
-        assert req.worktree_path == "/absolute/path/to/worktree"
         assert req.worktree_name == "my-worktree"
         assert req.profile == "work"
         assert req.driver == "sdk:claude"
 
-    def test_issue_id_valid_patterns(self):
-        """Test issue_id accepts valid patterns."""
-        valid_ids = [
+    @pytest.mark.parametrize(
+        "issue_id",
+        [
             "A",
             "PROJ-123",
             "my_issue_123",
             "FEATURE-456-update",
             "bug_fix_789",
             "a" * 100,  # Max length
-        ]
-        for issue_id in valid_ids:
-            req = CreateWorkflowRequest(
-                issue_id=issue_id,
-                worktree_path="/absolute/path",
-            )
-            assert req.issue_id == issue_id
+        ],
+    )
+    def test_issue_id_valid_patterns(self, issue_id):
+        """Test issue_id accepts valid patterns."""
+        req = CreateWorkflowRequest(
+            issue_id=issue_id,
+            worktree_path="/absolute/path",
+        )
+        assert req.issue_id == issue_id
 
     def test_issue_id_too_short(self):
         """Test issue_id rejects empty string."""
@@ -69,9 +72,9 @@ class TestCreateWorkflowRequest:
                 worktree_path="/absolute/path",
             )
 
-    def test_issue_id_rejects_dangerous_characters(self):
-        """Test issue_id rejects path traversal and injection characters."""
-        dangerous_ids = [
+    @pytest.mark.parametrize(
+        "dangerous_id",
+        [
             "../etc/passwd",
             "issue/123",
             "issue;rm -rf",
@@ -84,28 +87,32 @@ class TestCreateWorkflowRequest:
             "issue with spaces",
             "issue@host",
             "issue#anchor",
-        ]
-        for issue_id in dangerous_ids:
-            with pytest.raises(ValidationError):
-                CreateWorkflowRequest(
-                    issue_id=issue_id,
-                    worktree_path="/absolute/path",
-                )
+        ],
+    )
+    def test_issue_id_rejects_dangerous_characters(self, dangerous_id):
+        """Test issue_id rejects path traversal and injection characters."""
+        with pytest.raises(ValidationError):
+            CreateWorkflowRequest(
+                issue_id=dangerous_id,
+                worktree_path="/absolute/path",
+            )
 
-    def test_worktree_path_must_be_absolute(self):
-        """Test worktree_path rejects relative paths."""
-        relative_paths = [
+    @pytest.mark.parametrize(
+        "relative_path",
+        [
             "relative/path",
             "./current/dir",
             "../parent/dir",
             "~/home/path",
-        ]
-        for path in relative_paths:
-            with pytest.raises(ValidationError, match="worktree_path.*must be absolute"):
-                CreateWorkflowRequest(
-                    issue_id="PROJ-123",
-                    worktree_path=path,
-                )
+        ],
+    )
+    def test_worktree_path_must_be_absolute(self, relative_path):
+        """Test worktree_path rejects relative paths."""
+        with pytest.raises(ValidationError, match="worktree_path.*must be absolute"):
+            CreateWorkflowRequest(
+                issue_id="PROJ-123",
+                worktree_path=relative_path,
+            )
 
     def test_worktree_path_resolves_canonical_form(self):
         """Test worktree_path is resolved to canonical form."""
@@ -113,7 +120,6 @@ class TestCreateWorkflowRequest:
             issue_id="PROJ-123",
             worktree_path="/path/with/../canonical",
         )
-        # Should be resolved to /path/canonical
         assert ".." not in req.worktree_path
         assert req.worktree_path == "/path/canonical"
 
@@ -125,66 +131,57 @@ class TestCreateWorkflowRequest:
                 worktree_path="/path/with\0null",
             )
 
-    def test_profile_valid_patterns(self):
+    @pytest.mark.parametrize(
+        "profile",
+        ["work", "personal", "my-profile", "profile_123"],
+    )
+    def test_profile_valid_patterns(self, profile):
         """Test profile accepts valid patterns."""
-        valid_profiles = ["work", "personal", "my-profile", "profile_123"]
-        for profile in valid_profiles:
-            req = CreateWorkflowRequest(
-                issue_id="PROJ-123",
-                worktree_path="/absolute/path",
-                profile=profile,
-            )
-            assert req.profile == profile
+        req = CreateWorkflowRequest(
+            issue_id="PROJ-123",
+            worktree_path="/absolute/path",
+            profile=profile,
+        )
+        assert req.profile == profile
 
-    def test_profile_rejects_invalid_patterns(self):
+    @pytest.mark.parametrize(
+        "invalid_profile",
+        ["UPPERCASE", "has spaces", "has/slash", "has@symbol", ""],
+    )
+    def test_profile_rejects_invalid_patterns(self, invalid_profile):
         """Test profile rejects invalid patterns."""
-        invalid_profiles = [
-            "UPPERCASE",
-            "has spaces",
-            "has/slash",
-            "has@symbol",
-            "",
-        ]
-        for profile in invalid_profiles:
-            with pytest.raises(ValidationError):
-                CreateWorkflowRequest(
-                    issue_id="PROJ-123",
-                    worktree_path="/absolute/path",
-                    profile=profile,
-                )
-
-    def test_driver_valid_patterns(self):
-        """Test driver accepts valid type:name patterns."""
-        valid_drivers = [
-            "sdk:claude",
-            "api:openai",
-            "cli:claude",
-            "custom:my-driver",
-        ]
-        for driver in valid_drivers:
-            req = CreateWorkflowRequest(
+        with pytest.raises(ValidationError):
+            CreateWorkflowRequest(
                 issue_id="PROJ-123",
                 worktree_path="/absolute/path",
-                driver=driver,
+                profile=invalid_profile,
             )
-            assert req.driver == driver
 
-    def test_driver_rejects_invalid_patterns(self):
+    @pytest.mark.parametrize(
+        "driver",
+        ["sdk:claude", "api:openai", "cli:claude", "custom:my-driver"],
+    )
+    def test_driver_valid_patterns(self, driver):
+        """Test driver accepts valid type:name patterns."""
+        req = CreateWorkflowRequest(
+            issue_id="PROJ-123",
+            worktree_path="/absolute/path",
+            driver=driver,
+        )
+        assert req.driver == driver
+
+    @pytest.mark.parametrize(
+        "invalid_driver",
+        ["no-colon", ":missing-type", "missing-name:", "too:many:colons", ""],
+    )
+    def test_driver_rejects_invalid_patterns(self, invalid_driver):
         """Test driver rejects patterns without type:name format."""
-        invalid_drivers = [
-            "no-colon",
-            ":missing-type",
-            "missing-name:",
-            "too:many:colons",
-            "",
-        ]
-        for driver in invalid_drivers:
-            with pytest.raises(ValidationError):
-                CreateWorkflowRequest(
-                    issue_id="PROJ-123",
-                    worktree_path="/absolute/path",
-                    driver=driver,
-                )
+        with pytest.raises(ValidationError):
+            CreateWorkflowRequest(
+                issue_id="PROJ-123",
+                worktree_path="/absolute/path",
+                driver=invalid_driver,
+            )
 
 
 class TestRejectRequest:
