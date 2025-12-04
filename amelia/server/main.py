@@ -9,13 +9,13 @@ from amelia import __version__
 from amelia.logging import log_server_startup
 from amelia.server.config import ServerConfig
 from amelia.server.database.connection import Database
-from amelia.server.routes import health_router
+from amelia.server.dependencies import clear_database, set_database
+from amelia.server.routes import health_router, workflows_router
+from amelia.server.routes.workflows import configure_exception_handlers
 
 
 # Module-level config storage for DI
 _config: ServerConfig | None = None
-# Global database instance
-_database: Database | None = None
 
 
 def get_config() -> ServerConfig:
@@ -32,20 +32,6 @@ def get_config() -> ServerConfig:
     return _config
 
 
-def get_database() -> Database:
-    """Get the database instance.
-
-    Returns:
-        The current Database instance.
-
-    Raises:
-        RuntimeError: If database not initialized.
-    """
-    if _database is None:
-        raise RuntimeError("Database not initialized. Is the server running?")
-    return _database
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Manage application lifespan events.
@@ -53,15 +39,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     Sets start_time on startup for uptime calculation.
     Initializes configuration and connects to database.
     """
-    global _config, _database
+    global _config
 
     # Initialize configuration
     _config = ServerConfig()
 
     # Connect to database and ensure schema exists
-    _database = Database(_config.database_path)
-    await _database.connect()
-    await _database.ensure_schema()
+    database = Database(_config.database_path)
+    await database.connect()
+    await database.ensure_schema()
+
+    # Set the database in dependencies module for DI
+    set_database(database)
 
     # Log server startup with styled banner
     log_server_startup(
@@ -75,9 +64,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     yield
 
     # Cleanup
-    if _database:
-        await _database.close()
-        _database = None
+    await database.close()
+    clear_database()
     _config = None
 
 
@@ -97,8 +85,12 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # Mount health routes
+    # Configure exception handlers
+    configure_exception_handlers(application)
+
+    # Mount routes
     application.include_router(health_router, prefix="/api")
+    application.include_router(workflows_router, prefix="/api")
 
     return application
 

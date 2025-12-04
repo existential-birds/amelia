@@ -37,10 +37,14 @@ Observable orchestration through a local web interface.
 
 ### In Progress
 - [ ] **REST API endpoints** - CRUD operations for workflows, tasks, and events
-  - `GET /workflows` - List workflows with filtering/pagination
-  - `GET /workflows/{id}` - Workflow detail with task tree
-  - `POST /workflows/{id}/approve` - Human approval endpoint
-  - `GET /workflows/{id}/events` - Event stream for a workflow
+  - [x] `POST /workflows` - Create new workflow with validation
+  - [x] `GET /workflows` - List workflows with filtering/pagination
+  - [x] `GET /workflows/active` - List active workflows
+  - [x] `GET /workflows/{id}` - Workflow detail with task tree
+  - [x] `POST /workflows/{id}/approve` - Human approval endpoint
+  - [x] `POST /workflows/{id}/reject` - Reject with feedback
+  - [x] `POST /workflows/{id}/cancel` - Cancel active workflow
+  - [ ] `GET /workflows/{id}/events` - Event stream for a workflow
 
 ### Planned
 - [ ] **WebSocket events** - Real-time updates pushed to connected clients

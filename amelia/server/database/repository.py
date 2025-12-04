@@ -2,20 +2,13 @@
 
 from datetime import UTC, datetime
 
-from amelia.server.database.connection import Database
+from amelia.server.database.connection import Database, SqliteValue
+from amelia.server.exceptions import WorkflowNotFoundError
 from amelia.server.models.state import (
     ServerExecutionState,
     WorkflowStatus,
     validate_transition,
 )
-
-
-class WorkflowNotFoundError(Exception):
-    """Raised when workflow ID doesn't exist."""
-
-    def __init__(self, workflow_id: str):
-        self.workflow_id = workflow_id
-        super().__init__(f"Workflow not found: {workflow_id}")
 
 
 class WorkflowRepository:
@@ -232,3 +225,85 @@ class WorkflowRepository:
             statuses,
         )
         return [ServerExecutionState.model_validate_json(row[0]) for row in rows]
+
+    async def list_workflows(
+        self,
+        status: WorkflowStatus | None = None,
+        worktree_path: str | None = None,
+        limit: int = 20,
+        after_started_at: datetime | None = None,
+        after_id: str | None = None,
+    ) -> list[ServerExecutionState]:
+        """List workflows with cursor-based pagination.
+
+        Args:
+            status: Optional status filter.
+            worktree_path: Optional worktree path filter.
+            limit: Maximum number of workflows to return.
+            after_started_at: Cursor for pagination (started_at).
+            after_id: Cursor for pagination (id).
+
+        Returns:
+            List of workflows matching filters.
+        """
+        conditions = []
+        params: list[SqliteValue] = []
+
+        if status:
+            conditions.append("status = ?")
+            params.append(status)
+
+        if worktree_path:
+            conditions.append("worktree_path = ?")
+            params.append(worktree_path)
+
+        # Cursor-based pagination
+        if after_started_at and after_id:
+            conditions.append(
+                "(started_at < ? OR (started_at = ? AND id < ?))"
+            )
+            params.extend([after_started_at.isoformat(), after_started_at.isoformat(), after_id])
+
+        where_clause = " AND ".join(conditions) if conditions else "1=1"
+
+        query = f"""
+            SELECT state_json FROM workflows
+            WHERE {where_clause}
+            ORDER BY started_at DESC NULLS LAST, id DESC
+            LIMIT ?
+        """
+        params.append(limit)
+
+        rows = await self._db.fetch_all(query, params)
+        return [ServerExecutionState.model_validate_json(row[0]) for row in rows]
+
+    async def count_workflows(
+        self,
+        status: WorkflowStatus | None = None,
+        worktree_path: str | None = None,
+    ) -> int:
+        """Count workflows matching filters.
+
+        Args:
+            status: Optional status filter.
+            worktree_path: Optional worktree path filter.
+
+        Returns:
+            Number of workflows matching filters.
+        """
+        conditions = []
+        params: list[SqliteValue] = []
+
+        if status:
+            conditions.append("status = ?")
+            params.append(status)
+
+        if worktree_path:
+            conditions.append("worktree_path = ?")
+            params.append(worktree_path)
+
+        where_clause = " AND ".join(conditions) if conditions else "1=1"
+
+        query = f"SELECT COUNT(*) FROM workflows WHERE {where_clause}"
+        count = await self._db.fetch_scalar(query, params)
+        return count if isinstance(count, int) else 0
