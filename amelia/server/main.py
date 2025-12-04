@@ -2,16 +2,13 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
-from pathlib import Path
 
 from fastapi import FastAPI
-from loguru import logger
 
 from amelia import __version__
 from amelia.logging import log_server_startup
 from amelia.server.config import ServerConfig
 from amelia.server.database.connection import Database
-from amelia.server.database.migrate import MigrationRunner
 from amelia.server.routes import health_router
 
 
@@ -54,28 +51,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Manage application lifespan events.
 
     Sets start_time on startup for uptime calculation.
-    Initializes configuration, runs migrations, and connects to database.
+    Initializes configuration and connects to database.
     """
     global _config, _database
 
     # Initialize configuration
     _config = ServerConfig()
 
-    # Ensure database directory exists
-    db_dir = _config.database_path.parent
-    db_dir.mkdir(parents=True, exist_ok=True)
-    logger.debug(f"Ensured database directory exists: {db_dir}")
-
-    # Run migrations
-    migrations_dir = Path(__file__).parent / "database" / "migrations"
-    runner = MigrationRunner(_config.database_path, migrations_dir)
-    applied = await runner.run_migrations()
-    if applied:
-        logger.info(f"Applied {applied} database migrations")
-
-    # Connect to database
+    # Connect to database and ensure schema exists
     _database = Database(_config.database_path)
     await _database.connect()
+    await _database.ensure_schema()
 
     # Log server startup with styled banner
     log_server_startup(

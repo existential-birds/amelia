@@ -247,3 +247,89 @@ class Database:
         except Exception:
             await self.connection.execute("ROLLBACK")
             raise
+
+    async def ensure_schema(self) -> None:
+        """Create database schema if it doesn't exist.
+
+        Uses CREATE TABLE IF NOT EXISTS for idempotent schema creation.
+        Call this after connect() to ensure tables exist.
+        """
+        # Tables
+        await self.execute("""
+            CREATE TABLE IF NOT EXISTS workflows (
+                id TEXT PRIMARY KEY,
+                issue_id TEXT NOT NULL,
+                worktree_path TEXT NOT NULL,
+                worktree_name TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending',
+                started_at TIMESTAMP,
+                completed_at TIMESTAMP,
+                failure_reason TEXT,
+                state_json TEXT NOT NULL
+            )
+        """)
+
+        await self.execute("""
+            CREATE TABLE IF NOT EXISTS events (
+                id TEXT PRIMARY KEY,
+                workflow_id TEXT NOT NULL REFERENCES workflows(id) ON DELETE CASCADE,
+                sequence INTEGER NOT NULL,
+                timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                agent TEXT NOT NULL,
+                event_type TEXT NOT NULL,
+                message TEXT NOT NULL,
+                data_json TEXT,
+                correlation_id TEXT
+            )
+        """)
+
+        await self.execute("""
+            CREATE TABLE IF NOT EXISTS token_usage (
+                id TEXT PRIMARY KEY,
+                workflow_id TEXT NOT NULL REFERENCES workflows(id) ON DELETE CASCADE,
+                agent TEXT NOT NULL,
+                model TEXT NOT NULL DEFAULT 'claude-sonnet-4-20250514',
+                input_tokens INTEGER NOT NULL,
+                output_tokens INTEGER NOT NULL,
+                cache_read_tokens INTEGER DEFAULT 0,
+                cache_creation_tokens INTEGER DEFAULT 0,
+                cost_usd REAL,
+                timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # Indexes
+        await self.execute(
+            "CREATE INDEX IF NOT EXISTS idx_workflows_issue_id ON workflows(issue_id)"
+        )
+        await self.execute(
+            "CREATE INDEX IF NOT EXISTS idx_workflows_status ON workflows(status)"
+        )
+        await self.execute(
+            "CREATE INDEX IF NOT EXISTS idx_workflows_worktree ON workflows(worktree_path)"
+        )
+        await self.execute(
+            "CREATE INDEX IF NOT EXISTS idx_workflows_started_at ON workflows(started_at DESC)"
+        )
+        # Unique constraint: one active workflow per worktree
+        await self.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_workflows_active_worktree
+                ON workflows(worktree_path)
+                WHERE status IN ('pending', 'in_progress', 'blocked')
+        """)
+        await self.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_events_workflow_sequence
+                ON events(workflow_id, sequence)
+        """)
+        await self.execute(
+            "CREATE INDEX IF NOT EXISTS idx_events_workflow ON events(workflow_id, timestamp)"
+        )
+        await self.execute(
+            "CREATE INDEX IF NOT EXISTS idx_events_type ON events(event_type)"
+        )
+        await self.execute(
+            "CREATE INDEX IF NOT EXISTS idx_tokens_workflow ON token_usage(workflow_id)"
+        )
+        await self.execute(
+            "CREATE INDEX IF NOT EXISTS idx_tokens_agent ON token_usage(agent)"
+        )
