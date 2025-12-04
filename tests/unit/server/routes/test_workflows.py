@@ -1,9 +1,9 @@
 """Tests for workflow routes and exception handlers."""
 
 import base64
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Callable
 from unittest.mock import AsyncMock
 
 import pytest
