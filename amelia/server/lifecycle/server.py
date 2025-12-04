@@ -1,7 +1,6 @@
 """Server lifecycle management for startup and shutdown."""
 
 import asyncio
-import contextlib
 from typing import TYPE_CHECKING
 
 from loguru import logger
@@ -84,12 +83,7 @@ class ServerLifecycle:
                 logger.warning("Shutdown timeout - cancelling remaining workflows")
 
         # Cancel any still-running workflows
-        for worktree_path in self._orchestrator.get_active_workflows():
-            task = self._orchestrator._active_tasks.get(worktree_path)
-            if task:
-                task.cancel()
-                with contextlib.suppress(TimeoutError, asyncio.CancelledError):
-                    await asyncio.wait_for(task, timeout=5)
+        await self._orchestrator.cancel_all_workflows()
 
         # Persist final state (already done via repository on each update)
         logger.info("Final state persisted to database")

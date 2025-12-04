@@ -1,6 +1,7 @@
 """Unit tests for ServerLifecycle."""
 
 import asyncio
+import contextlib
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -15,7 +16,7 @@ def mock_orchestrator() -> AsyncMock:
     orch = AsyncMock()
     orch.recover_interrupted_workflows = AsyncMock()
     orch.get_active_workflows = MagicMock(return_value=[])
-    orch._active_tasks = {}
+    orch.cancel_all_workflows = AsyncMock()
     return orch
 
 
@@ -97,31 +98,37 @@ async def test_shutdown_timeout_cancels_workflows(
     lifecycle: ServerLifecycle,
     mock_orchestrator: AsyncMock,
 ) -> None:
-    """Shutdown timeout should cancel remaining workflows."""
-    # Track if cancel was called
-    cancel_called = False
+    """Shutdown timeout should cancel remaining workflows via cancel_all_workflows."""
+    # Track if cancel_all_workflows was called
+    cancel_all_called = False
 
     # Create a real task that blocks until cancelled
     async def blocking_task() -> None:
         try:
             await asyncio.sleep(100)  # Would take forever
         except asyncio.CancelledError:
-            nonlocal cancel_called
-            cancel_called = True
             raise
 
     task = asyncio.create_task(blocking_task())
 
+    # Configure cancel_all_workflows to actually cancel the task
+    async def cancel_all_side_effect(timeout: float = 5.0) -> None:
+        nonlocal cancel_all_called
+        cancel_all_called = True
+        task.cancel()
+        with contextlib.suppress(TimeoutError, asyncio.CancelledError):
+            await asyncio.wait_for(task, timeout=timeout)
+
     mock_orchestrator.get_active_workflows.return_value = ["/path/to/worktree"]
-    mock_orchestrator._active_tasks = {"/path/to/worktree": task}
+    mock_orchestrator.cancel_all_workflows = AsyncMock(side_effect=cancel_all_side_effect)
 
     # Use short timeout for test
     lifecycle._shutdown_timeout = 0.1
 
     await lifecycle.shutdown()
 
-    # Should have cancelled the task
-    assert cancel_called is True
+    # Should have called cancel_all_workflows
+    assert cancel_all_called is True
     assert task.cancelled()
 
 

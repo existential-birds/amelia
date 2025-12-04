@@ -1,9 +1,10 @@
 """Unit tests for LogRetentionService."""
-import pytest
-from datetime import datetime, timedelta
 from unittest.mock import AsyncMock
+
+import pytest
 from pydantic import BaseModel
-from amelia.server.lifecycle.retention import LogRetentionService, CleanupResult
+
+from amelia.server.lifecycle.retention import CleanupResult, LogRetentionService
 
 
 class MockConfig(BaseModel):

@@ -74,17 +74,15 @@ class WorktreeHealthChecker:
                         reason="Worktree directory no longer exists",
                     )
 
-    async def _is_worktree_healthy(self, worktree_path: str) -> bool:
-        """Check if worktree directory still exists and is valid.
+    def _check_worktree_sync(self, path: Path) -> bool:
+        """Synchronous filesystem checks for worktree health.
 
         Args:
-            worktree_path: Absolute path to worktree.
+            path: Path to worktree directory.
 
         Returns:
             True if worktree is healthy, False otherwise.
         """
-        path = Path(worktree_path)
-
         if not path.exists():
             return False
 
@@ -94,3 +92,18 @@ class WorktreeHealthChecker:
         # Check .git exists (file for worktrees, dir for main repo)
         git_path = path / ".git"
         return git_path.exists()
+
+    async def _is_worktree_healthy(self, worktree_path: str) -> bool:
+        """Check if worktree directory still exists and is valid.
+
+        Performs async filesystem check using thread pool to avoid blocking
+        the event loop on slow/network filesystems.
+
+        Args:
+            worktree_path: Absolute path to worktree.
+
+        Returns:
+            True if worktree is healthy, False otherwise.
+        """
+        path = Path(worktree_path)
+        return await asyncio.to_thread(self._check_worktree_sync, path)

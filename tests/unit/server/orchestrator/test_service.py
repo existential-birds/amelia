@@ -1,6 +1,7 @@
 """Unit tests for OrchestratorService."""
 
 import asyncio
+import contextlib
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -69,7 +70,7 @@ async def test_start_workflow_success(
     mock_repository: AsyncMock,
 ) -> None:
     """Should start workflow and return workflow ID."""
-    with patch.object(orchestrator, "_run_workflow", new=AsyncMock()) as mock_run:
+    with patch.object(orchestrator, "_run_workflow", new=AsyncMock()):
         workflow_id = await orchestrator.start_workflow(
             issue_id="ISSUE-123",
             worktree_path="/path/to/worktree",
@@ -111,10 +112,8 @@ async def test_start_workflow_conflict(
 
     # Cleanup
     orchestrator._active_tasks["/path/to/worktree"].cancel()
-    try:
+    with contextlib.suppress(asyncio.CancelledError):
         await orchestrator._active_tasks["/path/to/worktree"]
-    except asyncio.CancelledError:
-        pass
 
 
 @pytest.mark.asyncio
@@ -141,10 +140,8 @@ async def test_start_workflow_concurrency_limit(
     # Cleanup
     for task in tasks:
         task.cancel()
-        try:
+        with contextlib.suppress(asyncio.CancelledError):
             await task
-        except asyncio.CancelledError:
-            pass
 
 
 @pytest.mark.asyncio
@@ -171,10 +168,8 @@ async def test_cancel_workflow(
     await orchestrator.cancel_workflow("wf-1")
 
     # Wait for the cancellation to complete
-    try:
+    with contextlib.suppress(asyncio.CancelledError):
         await task
-    except asyncio.CancelledError:
-        pass
 
     # Task should be cancelled
     assert task.cancelled()
@@ -335,10 +330,8 @@ async def test_reject_workflow_success(
     )
 
     # Should cancel task - wait for cancellation to complete
-    try:
+    with contextlib.suppress(asyncio.CancelledError):
         await task
-    except asyncio.CancelledError:
-        pass
     assert task.cancelled()
 
     # Should emit APPROVAL_REJECTED

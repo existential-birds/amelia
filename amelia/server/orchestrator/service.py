@@ -1,6 +1,7 @@
 """Orchestrator service for managing concurrent workflow execution."""
 
 import asyncio
+import contextlib
 from datetime import UTC, datetime
 from uuid import uuid4
 
@@ -102,6 +103,8 @@ class OrchestratorService:
         # Remove from active tasks on completion
         def cleanup_task(_: asyncio.Task[None]) -> None:
             self._active_tasks.pop(worktree_path, None)
+            self._sequence_counters.pop(workflow_id, None)
+            self._sequence_locks.pop(workflow_id, None)
             logger.debug(
                 "Workflow task completed",
                 workflow_id=workflow_id,
@@ -132,6 +135,19 @@ class OrchestratorService:
                 workflow_id=workflow_id,
                 reason=reason,
             )
+
+    async def cancel_all_workflows(self, timeout: float = 5.0) -> None:
+        """Cancel all active workflows gracefully.
+
+        Args:
+            timeout: Seconds to wait for each workflow to finish after cancellation.
+        """
+        for worktree_path in list(self._active_tasks.keys()):
+            task = self._active_tasks.get(worktree_path)
+            if task:
+                task.cancel()
+                with contextlib.suppress(TimeoutError, asyncio.CancelledError):
+                    await asyncio.wait_for(task, timeout=timeout)
 
     def get_active_workflows(self) -> list[str]:
         """Return list of active worktree paths.

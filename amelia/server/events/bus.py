@@ -14,6 +14,11 @@ class EventBus:
     Exceptions in subscribers are logged but don't prevent other
     subscribers from receiving events.
 
+    Warning:
+        All subscribers MUST be non-blocking. Since emit() runs
+        synchronously in the caller's context, blocking operations
+        in subscribers will halt the orchestrator.
+
     Attributes:
         _subscribers: List of callback functions to notify on emit.
     """
@@ -40,10 +45,17 @@ class EventBus:
             self._subscribers.remove(callback)
 
     def emit(self, event: WorkflowEvent) -> None:
-        """Emit event to all subscribers.
+        """Emit event to all subscribers synchronously.
 
-        Exceptions in individual subscribers are logged but don't
-        prevent other subscribers from receiving the event.
+        Subscribers are called in registration order. Exceptions in individual
+        subscribers are logged but don't prevent other subscribers from
+        receiving the event.
+
+        Warning:
+            Subscribers MUST be non-blocking. Since emit() runs synchronously
+            in the caller's context, any blocking operation in a subscriber
+            will halt the orchestrator. If you need to perform I/O or slow
+            operations, dispatch them as background tasks within your callback.
 
         Args:
             event: The workflow event to broadcast.
