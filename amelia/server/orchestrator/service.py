@@ -43,7 +43,7 @@ class OrchestratorService:
         self._event_bus = event_bus
         self._repository = repository
         self._max_concurrent = max_concurrent
-        self._active_tasks: dict[str, asyncio.Task[None]] = {}  # worktree_path -> task
+        self._active_tasks: dict[str, tuple[str, asyncio.Task[None]]] = {}  # worktree_path -> (workflow_id, task)
         self._approval_events: dict[str, asyncio.Event] = {}  # workflow_id -> event
         self._approval_lock = asyncio.Lock()  # Prevents race conditions on approvals
         self._start_lock = asyncio.Lock()  # Prevents race conditions on workflow start
@@ -75,11 +75,9 @@ class OrchestratorService:
             ConcurrencyLimitError: If at max concurrent workflows.
         """
         async with self._start_lock:
-            # Check worktree conflict - need to find existing workflow_id
+            # Check worktree conflict - workflow_id is cached in tuple
             if worktree_path in self._active_tasks:
-                # Find the existing workflow_id for this worktree
-                existing_workflow = await self.get_workflow_by_worktree(worktree_path)
-                existing_id = existing_workflow.id if existing_workflow else "unknown"
+                existing_id, _ = self._active_tasks[worktree_path]
                 raise WorkflowConflictError(worktree_path, existing_id)
 
             # Check concurrency limit
@@ -114,7 +112,7 @@ class OrchestratorService:
 
             # Start async task
             task = asyncio.create_task(self._run_workflow(workflow_id, state, profile))
-            self._active_tasks[worktree_path] = task
+            self._active_tasks[worktree_path] = (workflow_id, task)
 
         # Remove from active tasks on completion
         def cleanup_task(_: asyncio.Task[None]) -> None:
@@ -161,7 +159,7 @@ class OrchestratorService:
 
         # Cancel the in-memory task if running
         if workflow.worktree_path in self._active_tasks:
-            task = self._active_tasks[workflow.worktree_path]
+            _, task = self._active_tasks[workflow.worktree_path]
             task.cancel()
 
         # Persist the cancelled status to database
@@ -180,8 +178,9 @@ class OrchestratorService:
             timeout: Seconds to wait for each workflow to finish after cancellation.
         """
         for worktree_path in list(self._active_tasks.keys()):
-            task = self._active_tasks.get(worktree_path)
-            if task:
+            entry = self._active_tasks.get(worktree_path)
+            if entry:
+                _, task = entry
                 task.cancel()
                 with contextlib.suppress(TimeoutError, asyncio.CancelledError):
                     await asyncio.wait_for(task, timeout=timeout)
@@ -206,17 +205,13 @@ class OrchestratorService:
         Returns:
             Workflow state if found, None otherwise.
         """
-        # Find workflow ID from active tasks
-        if worktree_path not in self._active_tasks:
+        # Use cached workflow_id for O(1) lookup
+        entry = self._active_tasks.get(worktree_path)
+        if not entry:
             return None
 
-        # Search repository for workflow with this worktree_path
-        workflows = await self._repository.list_active()
-        for workflow in workflows:
-            if workflow.worktree_path == worktree_path:
-                return workflow
-
-        return None
+        workflow_id, _ = entry
+        return await self._repository.get(workflow_id)
 
     async def _run_workflow(
         self,
@@ -391,7 +386,8 @@ class OrchestratorService:
 
             # Cancel the waiting task
             if workflow.worktree_path in self._active_tasks:
-                self._active_tasks[workflow.worktree_path].cancel()
+                _, task = self._active_tasks[workflow.worktree_path]
+                task.cancel()
 
             logger.info(
                 "Workflow rejected",

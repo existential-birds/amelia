@@ -85,8 +85,9 @@ async def test_start_workflow_conflict(
 ) -> None:
     """Should raise WorkflowConflictError when worktree already active."""
     # Create a fake task to simulate active workflow
-    orchestrator._active_tasks["/path/to/worktree"] = asyncio.create_task(
-        asyncio.sleep(1)
+    orchestrator._active_tasks["/path/to/worktree"] = (
+        "existing-wf",
+        asyncio.create_task(asyncio.sleep(1)),
     )
 
     with pytest.raises(WorkflowConflictError) as exc_info:
@@ -99,9 +100,10 @@ async def test_start_workflow_conflict(
     assert "/path/to/worktree" in str(exc_info.value)
 
     # Cleanup
-    orchestrator._active_tasks["/path/to/worktree"].cancel()
+    _, task = orchestrator._active_tasks["/path/to/worktree"]
+    task.cancel()
     with contextlib.suppress(asyncio.CancelledError):
-        await orchestrator._active_tasks["/path/to/worktree"]
+        await task
 
 
 @pytest.mark.asyncio
@@ -113,7 +115,7 @@ async def test_start_workflow_concurrency_limit(
     tasks = []
     for i in range(5):
         task = asyncio.create_task(asyncio.sleep(1))
-        orchestrator._active_tasks[f"/path/to/worktree{i}"] = task
+        orchestrator._active_tasks[f"/path/to/worktree{i}"] = (f"wf-{i}", task)
         tasks.append(task)
 
     with pytest.raises(ConcurrencyLimitError) as exc_info:
@@ -151,7 +153,7 @@ async def test_cancel_workflow(
 
     # Create a fake running task
     task = asyncio.create_task(asyncio.sleep(100))
-    orchestrator._active_tasks["/path/to/worktree"] = task
+    orchestrator._active_tasks["/path/to/worktree"] = ("wf-1", task)
 
     await orchestrator.cancel_workflow("wf-1")
 
@@ -200,8 +202,8 @@ async def test_cancel_workflow_invalid_state(
 
 def test_get_active_workflows(orchestrator: OrchestratorService) -> None:
     """Should return list of active worktree paths."""
-    orchestrator._active_tasks["/path/1"] = MagicMock()
-    orchestrator._active_tasks["/path/2"] = MagicMock()
+    orchestrator._active_tasks["/path/1"] = ("wf-1", MagicMock())
+    orchestrator._active_tasks["/path/2"] = ("wf-2", MagicMock())
 
     active = orchestrator.get_active_workflows()
     assert set(active) == {"/path/1", "/path/2"}
@@ -341,7 +343,7 @@ async def test_reject_workflow_success(
 
     # Create fake task
     task = asyncio.create_task(asyncio.sleep(100))
-    orchestrator._active_tasks["/path/to/worktree"] = task
+    orchestrator._active_tasks["/path/to/worktree"] = ("wf-1", task)
     orchestrator._approval_events["wf-1"] = asyncio.Event()
 
     # New API returns None, raises on error
@@ -534,3 +536,46 @@ async def test_emit_concurrent_lock_creation_race(
     sequences = [call[0][0].sequence for call in calls]
     assert len(set(sequences)) == 10, f"Duplicate sequences found: {sequences}"
     assert set(sequences) == set(range(1, 11))
+
+
+@pytest.mark.asyncio
+async def test_get_workflow_by_worktree_uses_cache(
+    orchestrator: OrchestratorService,
+    mock_repository: AsyncMock,
+):
+    """get_workflow_by_worktree should use cached workflow_id, not DB."""
+    # Create workflow state
+    mock_state = ServerExecutionState(
+        id="wf-cached",
+        issue_id="ISSUE-123",
+        worktree_path="/cached/worktree",
+        worktree_name="cached",
+        workflow_status="in_progress",
+        started_at=datetime.now(UTC),
+    )
+    mock_repository.get.return_value = mock_state
+
+    # Simulate active workflow with cached ID
+    task = asyncio.create_task(asyncio.sleep(100))
+    orchestrator._active_tasks["/cached/worktree"] = ("wf-cached", task)
+
+    # Reset mock to track calls
+    mock_repository.list_active.reset_mock()
+
+    # Get workflow by worktree
+    result = await orchestrator.get_workflow_by_worktree("/cached/worktree")
+
+    # Should NOT call list_active (O(n) query)
+    mock_repository.list_active.assert_not_called()
+
+    # Should call get() with cached workflow_id
+    mock_repository.get.assert_called_once_with("wf-cached")
+
+    # Should return the workflow
+    assert result is not None
+    assert result.id == "wf-cached"
+
+    # Cleanup
+    task.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await task
