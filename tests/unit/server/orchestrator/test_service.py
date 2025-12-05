@@ -505,3 +505,32 @@ async def test_emit_resumes_from_db_max_sequence(
     # Next sequence should be 43
     saved_event = mock_repository.save_event.call_args[0][0]
     assert saved_event.sequence == 43
+
+
+@pytest.mark.asyncio
+async def test_emit_concurrent_lock_creation_race(
+    orchestrator: OrchestratorService,
+    mock_repository: AsyncMock,
+):
+    """Concurrent first emits for same workflow should not create duplicate locks."""
+    # Slow down the lock acquisition to increase race window
+    original_get_max = mock_repository.get_max_event_sequence
+
+    async def slow_get_max(workflow_id: str) -> int:
+        await asyncio.sleep(0.01)  # Create race window
+        return await original_get_max(workflow_id)
+
+    mock_repository.get_max_event_sequence = slow_get_max
+
+    # Fire many concurrent emits for a NEW workflow (no lock exists yet)
+    tasks = [
+        orchestrator._emit("race-wf", EventType.FILE_CREATED, f"File {i}")
+        for i in range(10)
+    ]
+    await asyncio.gather(*tasks)
+
+    # All sequences must be unique (1-10)
+    calls = mock_repository.save_event.call_args_list
+    sequences = [call[0][0].sequence for call in calls]
+    assert len(set(sequences)) == 10, f"Duplicate sequences found: {sequences}"
+    assert set(sequences) == set(range(1, 11))

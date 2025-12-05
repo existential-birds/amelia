@@ -266,11 +266,10 @@ class OrchestratorService:
         Returns:
             The emitted WorkflowEvent.
         """
-        # Get or create lock for this workflow
-        if workflow_id not in self._sequence_locks:
-            self._sequence_locks[workflow_id] = asyncio.Lock()
+        # Get or create lock atomically (setdefault is atomic for dict operations)
+        lock = self._sequence_locks.setdefault(workflow_id, asyncio.Lock())
 
-        async with self._sequence_locks[workflow_id]:
+        async with lock:
             # Initialize or get sequence counter
             if workflow_id not in self._sequence_counters:
                 max_seq = await self._repository.get_max_event_sequence(workflow_id)
