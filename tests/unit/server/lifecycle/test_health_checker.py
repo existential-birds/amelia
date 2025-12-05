@@ -87,51 +87,33 @@ async def test_check_deleted_worktree(
 
 
 @pytest.mark.asyncio
-async def test_is_worktree_healthy_directory_exists(
+@pytest.mark.parametrize(
+    "setup,expected",
+    [
+        pytest.param("git_file", True, id="valid_worktree_with_git_file"),
+        pytest.param("git_dir", True, id="valid_repo_with_git_directory"),
+        pytest.param("no_git", False, id="directory_missing_git"),
+        pytest.param("nonexistent", False, id="nonexistent_directory"),
+    ],
+)
+async def test_is_worktree_healthy(
     health_checker: WorktreeHealthChecker,
     tmp_path: Path,
+    setup: str,
+    expected: bool,
 ) -> None:
-    """Should return True for valid worktree directory."""
-    worktree_path = tmp_path / "worktree"
-    worktree_path.mkdir()
-    (worktree_path / ".git").touch()
+    """Worktree health depends on directory existence and .git presence."""
+    if setup == "nonexistent":
+        path = "/nonexistent"
+    else:
+        worktree_path = tmp_path / "worktree"
+        worktree_path.mkdir()
+        if setup == "git_file":
+            (worktree_path / ".git").touch()
+        elif setup == "git_dir":
+            (worktree_path / ".git").mkdir()
+        # setup == "no_git" leaves directory without .git
+        path = str(worktree_path)
 
-    is_healthy = await health_checker._is_worktree_healthy(str(worktree_path))
-    assert is_healthy is True
-
-
-@pytest.mark.asyncio
-async def test_is_worktree_healthy_no_directory(
-    health_checker: WorktreeHealthChecker,
-) -> None:
-    """Should return False for nonexistent directory."""
-    is_healthy = await health_checker._is_worktree_healthy("/nonexistent")
-    assert is_healthy is False
-
-
-@pytest.mark.asyncio
-async def test_is_worktree_healthy_no_git(
-    health_checker: WorktreeHealthChecker,
-    tmp_path: Path,
-) -> None:
-    """Should return False if .git missing."""
-    worktree_path = tmp_path / "worktree"
-    worktree_path.mkdir()
-    # No .git file/dir
-
-    is_healthy = await health_checker._is_worktree_healthy(str(worktree_path))
-    assert is_healthy is False
-
-
-@pytest.mark.asyncio
-async def test_is_worktree_healthy_git_directory(
-    health_checker: WorktreeHealthChecker,
-    tmp_path: Path,
-) -> None:
-    """Should return True for main repo with .git directory."""
-    worktree_path = tmp_path / "main"
-    worktree_path.mkdir()
-    (worktree_path / ".git").mkdir()
-
-    is_healthy = await health_checker._is_worktree_healthy(str(worktree_path))
-    assert is_healthy is True
+    is_healthy = await health_checker._is_worktree_healthy(path)
+    assert is_healthy is expected
