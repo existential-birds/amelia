@@ -2,6 +2,7 @@
 
 import base64
 from datetime import datetime
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request, status
 from fastapi.responses import JSONResponse
@@ -107,10 +108,13 @@ async def list_workflows(
                 detail="Invalid cursor format",
             ) from e
 
+    # Resolve worktree path to canonical form (e.g., /tmp -> /private/tmp on macOS)
+    resolved_worktree = str(Path(worktree).resolve()) if worktree else None
+
     # Fetch limit+1 to detect has_more
     workflows = await repository.list_workflows(
         status=status,
-        worktree_path=worktree,
+        worktree_path=resolved_worktree,
         limit=limit + 1,
         after_started_at=after_started_at,
         after_id=after_id,
@@ -128,7 +132,7 @@ async def list_workflows(
             cursor_data = f"{last.started_at.isoformat()}|{last.id}"
             next_cursor = base64.b64encode(cursor_data.encode()).decode()
 
-    total = await repository.count_workflows(status=status, worktree_path=worktree)
+    total = await repository.count_workflows(status=status, worktree_path=resolved_worktree)
 
     return WorkflowListResponse(
         workflows=[
