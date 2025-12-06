@@ -5,6 +5,8 @@ from typing import Any
 
 import pytest
 
+from amelia.core.state import ExecutionState
+from amelia.core.types import Profile
 from amelia.server.models.state import (
     InvalidStateTransitionError,
     ServerExecutionState,
@@ -112,3 +114,32 @@ class TestServerExecutionState:
         assert restored.issue_id == original.issue_id
         assert restored.workflow_status == original.workflow_status
         assert restored.started_at == original.started_at
+
+
+class TestServerExecutionStateComposition:
+    """Test ServerExecutionState with embedded ExecutionState."""
+
+    def test_server_state_accepts_execution_state(self) -> None:
+        """ServerExecutionState can hold an ExecutionState."""
+        core_state = ExecutionState(
+            profile=Profile(name="test", driver="cli:claude"),
+        )
+        server_state = ServerExecutionState(
+            id="wf-123",
+            issue_id="ISSUE-456",
+            worktree_path="/tmp/test",
+            worktree_name="test-branch",
+            execution_state=core_state,
+        )
+        assert server_state.execution_state is not None
+        assert server_state.execution_state.profile.name == "test"
+
+    def test_server_state_execution_state_is_optional(self) -> None:
+        """execution_state field is optional for backward compatibility."""
+        server_state = ServerExecutionState(
+            id="wf-123",
+            issue_id="ISSUE-456",
+            worktree_path="/tmp/test",
+            worktree_name="test-branch",
+        )
+        assert server_state.execution_state is None

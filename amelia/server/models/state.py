@@ -5,6 +5,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from amelia.core.state import ExecutionState
+
 
 # Type alias for workflow status
 WorkflowStatus = Literal[
@@ -62,6 +64,7 @@ class ServerExecutionState(BaseModel):
         issue_id: Issue being worked on.
         worktree_path: Absolute path to git worktree root.
         worktree_name: Human-readable worktree name (branch or directory).
+        execution_state: Core orchestration state.
         workflow_status: Current workflow status.
         started_at: When workflow started.
         completed_at: When workflow ended (success or failure).
@@ -75,6 +78,10 @@ class ServerExecutionState(BaseModel):
     worktree_path: str = Field(..., description="Absolute path to worktree")
     worktree_name: str = Field(..., description="Human-readable worktree name")
 
+    execution_state: ExecutionState | None = Field(
+        default=None,
+        description="Core orchestration state",
+    )
     workflow_status: WorkflowStatus = Field(
         default="pending",
         description="Current workflow status",
