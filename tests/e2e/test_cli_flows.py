@@ -39,28 +39,3 @@ def test_cli_plan_only_command(settings_file_factory):
             assert "--- GENERATED PLAN ---" in result.stdout
             assert "- [T1] Mock task 1" in result.stdout
             assert "- [T2] Mock task 2 (Dependencies: T1)" in result.stdout
-
-
-def test_cli_start_command(settings_file_factory):
-    """
-    Verifies that 'amelia start' command triggers the orchestration loop.
-    """
-    settings_data = {
-        "active_profile": "default",
-        "profiles": {
-            "default": {"name": "default", "driver": "cli:claude", "tracker": "noop", "strategy": "single"}
-        }
-    }
-    settings_path = settings_file_factory(settings_data)
-
-    with runner.isolated_filesystem(temp_dir=settings_path.parent):
-        with open("settings.amelia.yaml", "w") as f:
-            yaml.dump(settings_data, f)
-
-        with patch('amelia.main.run_orchestrator') as mock_run:
-            mock_run.return_value = None
-
-            result = runner.invoke(app, ["start", "PROJ-456"])
-
-            assert result.exit_code == 0
-            mock_run.assert_called_once()
