@@ -187,7 +187,6 @@ See [**docs/roadmap.md**](docs/roadmap.md) for the full roadmap with implementat
 |-------|-------|--------|
 | 1 | Core Orchestration | ✅ Complete |
 | 2 | Web Dashboard | 🔄 In Progress |
-| 2.5 | Spec Builder | Planned |
 | 3 | Session Continuity | Planned |
 | 4 | Verification Framework | Planned |
 | 5 | Bidirectional Tracker Sync | Planned |
@@ -196,3 +195,4 @@ See [**docs/roadmap.md**](docs/roadmap.md) for the full roadmap with implementat
 | 8 | Parallel Execution | Planned |
 | 9 | Chat Integration | Planned |
 | 10 | Continuous Improvement | Planned |
+| 11 | Spec Builder | Planned |
