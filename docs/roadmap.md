@@ -1,16 +1,17 @@
 # Amelia Roadmap
 
-> **Vision:** Complete end-to-end workflow control without ever opening GitHub, Jira, or any tracker web UI—with agents that maintain context across sessions and verify their own work.
+> **Vision:** Complete end-to-end workflow control without ever opening GitHub, Jira, or any tracker web UI—with agents that maintain context across sessions and verify their own work. Built on the assumption that LLMs will continually improve, so Amelia automatically gets better as models advance.
 
 ## Design Principles
 
 These principles, informed by [Anthropic's research on long-running agent harnesses](https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents), guide all roadmap decisions:
 
-1. **Structured Handoffs** - Agents working across sessions need explicit state transfer mechanisms, not implicit memory
-2. **One Feature at a Time** - Context exhaustion is the enemy; focused work with clear completion criteria prevents scope creep
-3. **Verify Before Declaring Done** - Agents must test as humans would, not just claim completion
-4. **Incremental Accountability** - Every change is committed, logged, and recoverable
-5. **Environment as Truth** - Git history and progress artifacts are the source of truth, not agent memory
+1. **Model Improvement as Tailwind** - Build features assuming LLMs will get smarter; prefer prompts over code, delegation over hardcoding, and flexible architectures that let better models do more with less scaffolding
+2. **Structured Handoffs** - Agents working across sessions need explicit state transfer mechanisms, not implicit memory
+3. **One Feature at a Time** - Context exhaustion is the enemy; focused work with clear completion criteria prevents scope creep
+4. **Verify Before Declaring Done** - Agents must test as humans would, not just claim completion
+5. **Incremental Accountability** - Every change is committed, logged, and recoverable
+6. **Environment as Truth** - Git history and progress artifacts are the source of truth, not agent memory
 
 ---
 

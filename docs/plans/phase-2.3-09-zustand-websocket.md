@@ -4,9 +4,9 @@
 
 **Status:** ⏳ Not Started
 
-**Goal:** Implement Zustand store for workflow state management, WebSocket connection hook with reconnection logic, API client module, and optimistic UI update pattern for workflow actions.
+**Goal:** Implement a hybrid data architecture using React Router v7 loaders for initial data, Zustand for real-time state, WebSocket connection hook with reconnection logic, and React Router actions for mutations.
 
-**Architecture:** Zustand store with sessionStorage persistence for UI state, WebSocket hook with exponential backoff reconnection and sequence gap detection, REST API client using fetch, custom hooks for workflows and actions with optimistic updates and rollback on failure.
+**Architecture:** React Router v7 loaders for initial data fetching and revalidation, Zustand store for real-time WebSocket events and UI state (with sessionStorage persistence), WebSocket hook with exponential backoff reconnection and sequence gap detection, REST API client using fetch, React Router actions with useFetcher for mutations.
 
 **Tech Stack:** Zustand, TypeScript, Vitest, React Testing Library, native fetch API
 
@@ -273,6 +273,21 @@ export type WebSocketClientMessage =
   | { type: 'unsubscribe'; workflow_id: string }
   | { type: 'subscribe_all' }
   | { type: 'pong' };
+
+// React Router loader/action types
+export interface WorkflowsLoaderData {
+  workflows: WorkflowSummary[];
+}
+
+export interface WorkflowDetailLoaderData {
+  workflow: WorkflowDetailResponse;
+}
+
+export interface ActionResult {
+  success: boolean;
+  action: 'approved' | 'rejected' | 'cancelled';
+  error?: string;
+}
 ```
 
 ```typescript
@@ -555,7 +570,201 @@ Run: `git add dashboard/src/api && git commit -m "feat(dashboard): add REST API 
 
 ---
 
-## Task 3: Implement Zustand Workflow Store
+## Task 3: Implement Route Loaders for Data Fetching
+
+**Files:**
+- Create: `dashboard/src/loaders/workflows.ts`
+- Create: `dashboard/src/loaders/__tests__/workflows.test.ts`
+- Create: `dashboard/src/loaders/index.ts`
+
+**Step 1: Write the failing test**
+
+```typescript
+// dashboard/src/loaders/__tests__/workflows.test.ts
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { workflowsLoader, workflowDetailLoader, historyLoader } from '../workflows';
+import { api } from '../../api/client';
+
+vi.mock('../../api/client');
+
+describe('Workflow Loaders', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  describe('workflowsLoader', () => {
+    it('should fetch active workflows', async () => {
+      const mockWorkflows = [
+        {
+          id: 'wf-1',
+          issue_id: 'ISSUE-1',
+          worktree_name: 'main',
+          status: 'in_progress' as const,
+          started_at: '2025-12-01T10:00:00Z',
+          current_stage: 'architect',
+        },
+      ];
+
+      vi.mocked(api.getWorkflows).mockResolvedValueOnce(mockWorkflows);
+
+      const result = await workflowsLoader();
+
+      expect(api.getWorkflows).toHaveBeenCalledTimes(1);
+      expect(result).toEqual({ workflows: mockWorkflows });
+    });
+
+    it('should propagate API errors', async () => {
+      vi.mocked(api.getWorkflows).mockRejectedValueOnce(new Error('Network error'));
+
+      await expect(workflowsLoader()).rejects.toThrow('Network error');
+    });
+  });
+
+  describe('workflowDetailLoader', () => {
+    it('should fetch workflow by ID from params', async () => {
+      const mockWorkflow = {
+        id: 'wf-1',
+        issue_id: 'ISSUE-1',
+        worktree_path: '/path',
+        worktree_name: 'main',
+        status: 'in_progress' as const,
+        started_at: '2025-12-01T10:00:00Z',
+        completed_at: null,
+        failure_reason: null,
+        current_stage: 'architect',
+        plan: null,
+        token_usage: {},
+        recent_events: [],
+      };
+
+      vi.mocked(api.getWorkflow).mockResolvedValueOnce(mockWorkflow);
+
+      const result = await workflowDetailLoader({
+        params: { id: 'wf-1' },
+        request: new Request('http://localhost/workflows/wf-1'),
+      } as any);
+
+      expect(api.getWorkflow).toHaveBeenCalledWith('wf-1');
+      expect(result).toEqual({ workflow: mockWorkflow });
+    });
+
+    it('should throw 400 if ID is missing', async () => {
+      try {
+        await workflowDetailLoader({
+          params: {},
+          request: new Request('http://localhost/workflows'),
+        } as any);
+        expect.fail('Should have thrown');
+      } catch (error) {
+        expect(error).toBeInstanceOf(Response);
+        expect((error as Response).status).toBe(400);
+      }
+    });
+  });
+
+  describe('historyLoader', () => {
+    it('should fetch workflow history', async () => {
+      const mockHistory = [
+        {
+          id: 'wf-old',
+          issue_id: 'ISSUE-OLD',
+          worktree_name: 'old-branch',
+          status: 'completed' as const,
+          started_at: '2025-11-01T10:00:00Z',
+          current_stage: null,
+        },
+      ];
+
+      vi.mocked(api.getWorkflowHistory).mockResolvedValueOnce(mockHistory);
+
+      const result = await historyLoader();
+
+      expect(api.getWorkflowHistory).toHaveBeenCalledTimes(1);
+      expect(result).toEqual({ workflows: mockHistory });
+    });
+  });
+});
+```
+
+**Step 2: Run test to verify it fails**
+
+Run: `cd dashboard && npm test -- src/loaders/__tests__/workflows.test.ts`
+Expected: FAIL with module not found
+
+**Step 3: Add getWorkflowHistory to API client**
+
+```typescript
+// dashboard/src/api/client.ts (add to existing api object)
+export const api = {
+  // ... existing methods ...
+
+  /**
+   * Get workflow history (completed, failed, cancelled).
+   */
+  async getWorkflowHistory(): Promise<WorkflowSummary[]> {
+    const response = await fetch(`${API_BASE_URL}/workflows?status=completed,failed,cancelled`);
+    const data = await handleResponse<WorkflowListResponse>(response);
+    return data.workflows;
+  },
+};
+```
+
+**Step 4: Implement route loaders**
+
+```typescript
+// dashboard/src/loaders/workflows.ts
+import { api } from '@/api/client';
+import type { LoaderFunctionArgs } from 'react-router-dom';
+
+/**
+ * Loader for active workflows page.
+ * Fetches in_progress and blocked workflows.
+ */
+export async function workflowsLoader() {
+  const workflows = await api.getWorkflows();
+  return { workflows };
+}
+
+/**
+ * Loader for workflow detail page.
+ * Fetches full workflow details including events and token usage.
+ */
+export async function workflowDetailLoader({ params }: LoaderFunctionArgs) {
+  if (!params.id) {
+    throw new Response('Workflow ID required', { status: 400 });
+  }
+
+  const workflow = await api.getWorkflow(params.id);
+  return { workflow };
+}
+
+/**
+ * Loader for workflow history page.
+ * Fetches completed, failed, and cancelled workflows.
+ */
+export async function historyLoader() {
+  const workflows = await api.getWorkflowHistory();
+  return { workflows };
+}
+```
+
+```typescript
+// dashboard/src/loaders/index.ts
+export { workflowsLoader, workflowDetailLoader, historyLoader } from './workflows';
+```
+
+**Step 5: Run test to verify it passes**
+
+Run: `cd dashboard && npm test -- src/loaders/__tests__/workflows.test.ts`
+Expected: PASS
+
+**Step 6: Commit**
+
+Run: `git add dashboard/src/loaders dashboard/src/api && git commit -m "feat(dashboard): add React Router loaders for workflow data"`
+
+---
+
+## Task 4: Implement Zustand Workflow Store (Real-time & UI State Only)
 
 **Files:**
 - Create: `dashboard/src/store/workflowStore.ts`
@@ -591,84 +800,14 @@ Object.defineProperty(window, 'sessionStorage', { value: sessionStorageMock });
 describe('workflowStore', () => {
   beforeEach(() => {
     useWorkflowStore.setState({
-      workflows: {},
       selectedWorkflowId: null,
       eventsByWorkflow: {},
       lastEventId: null,
-      isLoading: false,
-      error: null,
       isConnected: false,
-      lastSyncAt: null,
-      pendingActions: [],
+      connectionError: null,
+      pendingActions: new Set(),
     });
     sessionStorageMock.clear();
-  });
-
-  describe('setWorkflows', () => {
-    it('should convert array to Record and set lastSyncAt', () => {
-      const workflows: WorkflowSummary[] = [
-        {
-          id: 'wf-1',
-          issue_id: 'ISSUE-1',
-          worktree_name: 'main',
-          status: 'in_progress',
-          started_at: '2025-12-01T10:00:00Z',
-          current_stage: 'architect',
-        },
-        {
-          id: 'wf-2',
-          issue_id: 'ISSUE-2',
-          worktree_name: 'feature',
-          status: 'blocked',
-          started_at: '2025-12-01T11:00:00Z',
-          current_stage: 'architect',
-        },
-      ];
-
-      useWorkflowStore.getState().setWorkflows(workflows);
-
-      const state = useWorkflowStore.getState();
-      expect(state.workflows['wf-1']).toEqual(workflows[0]);
-      expect(state.workflows['wf-2']).toEqual(workflows[1]);
-      expect(state.lastSyncAt).not.toBeNull();
-      expect(state.isLoading).toBe(false);
-    });
-
-    it('should auto-select first workflow if none selected', () => {
-      const workflows: WorkflowSummary[] = [
-        {
-          id: 'wf-1',
-          issue_id: 'ISSUE-1',
-          worktree_name: 'main',
-          status: 'in_progress',
-          started_at: '2025-12-01T10:00:00Z',
-          current_stage: 'architect',
-        },
-      ];
-
-      useWorkflowStore.getState().setWorkflows(workflows);
-
-      expect(useWorkflowStore.getState().selectedWorkflowId).toBe('wf-1');
-    });
-
-    it('should preserve selectedWorkflowId if already set', () => {
-      useWorkflowStore.setState({ selectedWorkflowId: 'wf-2' });
-
-      const workflows: WorkflowSummary[] = [
-        {
-          id: 'wf-1',
-          issue_id: 'ISSUE-1',
-          worktree_name: 'main',
-          status: 'in_progress',
-          started_at: '2025-12-01T10:00:00Z',
-          current_stage: 'architect',
-        },
-      ];
-
-      useWorkflowStore.getState().setWorkflows(workflows);
-
-      expect(useWorkflowStore.getState().selectedWorkflowId).toBe('wf-2');
-    });
   });
 
   describe('selectWorkflow', () => {
@@ -840,21 +979,21 @@ describe('workflowStore', () => {
     it('should add pending action', () => {
       useWorkflowStore.getState().addPendingAction('approve-wf-1');
 
-      expect(useWorkflowStore.getState().pendingActions).toContain('approve-wf-1');
+      expect(useWorkflowStore.getState().pendingActions.has('approve-wf-1')).toBe(true);
     });
 
     it('should not duplicate pending action', () => {
       useWorkflowStore.getState().addPendingAction('approve-wf-1');
       useWorkflowStore.getState().addPendingAction('approve-wf-1');
 
-      expect(useWorkflowStore.getState().pendingActions).toHaveLength(1);
+      expect(useWorkflowStore.getState().pendingActions.size).toBe(1);
     });
 
     it('should remove pending action', () => {
       useWorkflowStore.getState().addPendingAction('approve-wf-1');
       useWorkflowStore.getState().removePendingAction('approve-wf-1');
 
-      expect(useWorkflowStore.getState().pendingActions).toHaveLength(0);
+      expect(useWorkflowStore.getState().pendingActions.size).toBe(0);
     });
   });
 
@@ -869,30 +1008,39 @@ describe('workflowStore', () => {
     });
 
     it('should persist lastEventId to sessionStorage', () => {
-      useWorkflowStore.getState().setLastEventId('evt-999');
+      useWorkflowStore.getState().addEvent({
+        id: 'evt-999',
+        workflow_id: 'wf-1',
+        sequence: 1,
+        timestamp: '2025-12-01T10:00:00Z',
+        agent: 'architect',
+        event_type: 'workflow_started',
+        message: 'Started',
+        data: null,
+        correlation_id: null,
+      });
 
       const stored = sessionStorageMock.getItem('amelia-workflow-state');
       const parsed = JSON.parse(stored!);
       expect(parsed.state.lastEventId).toBe('evt-999');
     });
 
-    it('should NOT persist workflows to sessionStorage', () => {
-      const workflows: WorkflowSummary[] = [
-        {
-          id: 'wf-1',
-          issue_id: 'ISSUE-1',
-          worktree_name: 'main',
-          status: 'in_progress',
-          started_at: '2025-12-01T10:00:00Z',
-          current_stage: 'architect',
-        },
-      ];
-
-      useWorkflowStore.getState().setWorkflows(workflows);
+    it('should NOT persist events to sessionStorage', () => {
+      useWorkflowStore.getState().addEvent({
+        id: 'evt-1',
+        workflow_id: 'wf-1',
+        sequence: 1,
+        timestamp: '2025-12-01T10:00:00Z',
+        agent: 'architect',
+        event_type: 'workflow_started',
+        message: 'Started',
+        data: null,
+        correlation_id: null,
+      });
 
       const stored = sessionStorageMock.getItem('amelia-workflow-state');
       const parsed = JSON.parse(stored!);
-      expect(parsed.state.workflows).toBeUndefined();
+      expect(parsed.state.eventsByWorkflow).toBeUndefined();
     });
   });
 });
@@ -913,65 +1061,54 @@ Run: `cd dashboard && npm install zustand`
 // dashboard/src/store/workflowStore.ts
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { WorkflowSummary, WorkflowEvent } from '../types';
+import type { WorkflowEvent } from '../types';
 
 const MAX_EVENTS_PER_WORKFLOW = 500;
 
+/**
+ * Zustand store for real-time WebSocket events and UI state.
+ *
+ * Note: Workflow data comes from React Router loaders, not this store.
+ * This store only manages:
+ * - Real-time events from WebSocket
+ * - UI state (selected workflow)
+ * - Connection state
+ * - Pending actions for optimistic UI
+ */
 interface WorkflowState {
-  // All active workflows (one per worktree)
-  workflows: Record<string, WorkflowSummary>;
-
-  // Currently selected workflow for detail view
+  // UI State
   selectedWorkflowId: string | null;
 
-  // Events grouped by workflow
+  // Real-time events from WebSocket (grouped by workflow)
   eventsByWorkflow: Record<string, WorkflowEvent[]>;
 
   // Last seen event ID for reconnection backfill
   lastEventId: string | null;
 
-  // Request/connection states
-  isLoading: boolean;
-  error: string | null;
+  // Connection state
   isConnected: boolean;
-  lastSyncAt: Date | null;
-  pendingActions: string[]; // Action IDs currently in flight
+  connectionError: string | null;
+
+  // Pending actions for optimistic UI tracking
+  pendingActions: Set<string>; // Action IDs currently in flight
 
   // Actions
-  setWorkflows: (workflows: WorkflowSummary[]) => void;
   selectWorkflow: (id: string | null) => void;
   addEvent: (event: WorkflowEvent) => void;
-  updateWorkflow: (id: string, update: Partial<WorkflowSummary>) => void;
-  setLastEventId: (id: string) => void;
-  setLoading: (loading: boolean) => void;
-  setError: (error: string | null) => void;
-  setConnected: (connected: boolean) => void;
+  setConnected: (connected: boolean, error?: string) => void;
   addPendingAction: (actionId: string) => void;
   removePendingAction: (actionId: string) => void;
-  clearError: () => void;
 }
 
 export const useWorkflowStore = create<WorkflowState>()(
   persist(
-    (set, get) => ({
-      workflows: {},
+    (set) => ({
       selectedWorkflowId: null,
       eventsByWorkflow: {},
       lastEventId: null,
-      isLoading: false,
-      error: null,
       isConnected: false,
-      lastSyncAt: null,
-      pendingActions: [],
-
-      setWorkflows: (workflows) =>
-        set({
-          workflows: Object.fromEntries(workflows.map((w) => [w.id, w])),
-          // Auto-select first workflow if none selected
-          selectedWorkflowId: get().selectedWorkflowId ?? workflows[0]?.id ?? null,
-          lastSyncAt: new Date(),
-          isLoading: false,
-        }),
+      connectionError: null,
+      pendingActions: new Set(),
 
       selectWorkflow: (id) => set({ selectedWorkflowId: id }),
 
@@ -995,43 +1132,25 @@ export const useWorkflowStore = create<WorkflowState>()(
           };
         }),
 
-      updateWorkflow: (id, update) =>
-        set((state) => {
-          const workflow = state.workflows[id];
-          if (!workflow) return state;
-          return {
-            workflows: {
-              ...state.workflows,
-              [id]: { ...workflow, ...update },
-            },
-          };
-        }),
-
-      setLastEventId: (id) => set({ lastEventId: id }),
-
-      setLoading: (loading) => set({ isLoading: loading }),
-
-      setError: (error) => set({ error, isLoading: false }),
-
-      setConnected: (connected) =>
+      setConnected: (connected, error) =>
         set({
           isConnected: connected,
-          error: connected ? null : 'Connection lost',
+          connectionError: error ?? null,
         }),
 
       addPendingAction: (actionId) =>
-        set((state) => ({
-          pendingActions: state.pendingActions.includes(actionId)
-            ? state.pendingActions
-            : [...state.pendingActions, actionId],
-        })),
+        set((state) => {
+          const newSet = new Set(state.pendingActions);
+          newSet.add(actionId);
+          return { pendingActions: newSet };
+        }),
 
       removePendingAction: (actionId) =>
-        set((state) => ({
-          pendingActions: state.pendingActions.filter((id) => id !== actionId),
-        })),
-
-      clearError: () => set({ error: null }),
+        set((state) => {
+          const newSet = new Set(state.pendingActions);
+          newSet.delete(actionId);
+          return { pendingActions: newSet };
+        }),
     }),
     {
       name: 'amelia-workflow-state',
@@ -1047,7 +1166,7 @@ export const useWorkflowStore = create<WorkflowState>()(
           sessionStorage.removeItem(name);
         },
       },
-      // Only persist UI state, not workflow data (re-fetched on reconnect)
+      // Only persist UI state - events are ephemeral
       partialize: (state) => ({
         selectedWorkflowId: state.selectedWorkflowId,
         lastEventId: state.lastEventId,
@@ -1064,11 +1183,11 @@ Expected: PASS
 
 **Step 6: Commit**
 
-Run: `git add dashboard/src/store dashboard/package.json dashboard/package-lock.json && git commit -m "feat(dashboard): add Zustand store with sessionStorage persistence"`
+Run: `git add dashboard/src/store dashboard/package.json dashboard/package-lock.json && git commit -m "feat(dashboard): add Zustand store for real-time events and UI state"`
 
 ---
 
-## Task 4: Implement WebSocket Connection Hook
+## Task 5: Implement WebSocket Connection Hook
 
 **Files:**
 - Create: `dashboard/src/hooks/useWebSocket.ts`
@@ -1471,6 +1590,9 @@ export function useWebSocket() {
 
     lastSequenceRef.current.set(event.workflow_id, event.sequence);
     addEvent(event);
+
+    // Dispatch custom event for pages to listen to for revalidation hints
+    window.dispatchEvent(new CustomEvent('workflow-event', { detail: event }));
   };
 
   const scheduleReconnect = () => {
@@ -1533,7 +1655,7 @@ Run: `git add dashboard/src/hooks && git commit -m "feat(dashboard): add WebSock
 
 ---
 
-## Task 5: Implement useWorkflows Hook
+## Task 6: Implement useWorkflows Hook (Hybrid Loader + Real-time)
 
 **Files:**
 - Create: `dashboard/src/hooks/useWorkflows.ts`
@@ -1547,27 +1669,34 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 import { useWorkflows } from '../useWorkflows';
 import { useWorkflowStore } from '../../store/workflowStore';
-import { api } from '../../api/client';
+import { useLoaderData, useRevalidator } from 'react-router-dom';
 
-vi.mock('../../api/client');
+vi.mock('react-router-dom', () => ({
+  useLoaderData: vi.fn(),
+  useRevalidator: vi.fn(),
+}));
 
 describe('useWorkflows', () => {
+  const mockRevalidate = vi.fn();
+  const mockRevalidator = {
+    state: 'idle' as const,
+    revalidate: mockRevalidate,
+  };
+
   beforeEach(() => {
     vi.clearAllMocks();
     useWorkflowStore.setState({
-      workflows: {},
       selectedWorkflowId: null,
       eventsByWorkflow: {},
       lastEventId: null,
-      isLoading: false,
-      error: null,
       isConnected: false,
-      lastSyncAt: null,
-      pendingActions: [],
+      connectionError: null,
+      pendingActions: new Set(),
     });
+    vi.mocked(useRevalidator).mockReturnValue(mockRevalidator);
   });
 
-  it('should fetch workflows on mount', async () => {
+  it('should return workflows from loader data', () => {
     const mockWorkflows = [
       {
         id: 'wf-1',
@@ -1579,109 +1708,101 @@ describe('useWorkflows', () => {
       },
     ];
 
-    vi.mocked(api.getWorkflows).mockResolvedValueOnce(mockWorkflows);
-
-    renderHook(() => useWorkflows());
-
-    await waitFor(() => {
-      expect(api.getWorkflows).toHaveBeenCalledTimes(1);
-    });
-
-    await waitFor(() => {
-      const state = useWorkflowStore.getState();
-      expect(state.workflows['wf-1']).toEqual(mockWorkflows[0]);
-      expect(state.isLoading).toBe(false);
-    });
-  });
-
-  it('should set loading state during fetch', async () => {
-    vi.mocked(api.getWorkflows).mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          setTimeout(() => resolve([]), 100);
-        })
-    );
-
-    renderHook(() => useWorkflows());
-
-    // Should be loading initially
-    expect(useWorkflowStore.getState().isLoading).toBe(true);
-
-    await waitFor(() => {
-      expect(useWorkflowStore.getState().isLoading).toBe(false);
-    });
-  });
-
-  it('should handle fetch errors', async () => {
-    const errorMessage = 'Network error';
-    vi.mocked(api.getWorkflows).mockRejectedValueOnce(new Error(errorMessage));
-
-    renderHook(() => useWorkflows());
-
-    await waitFor(() => {
-      const state = useWorkflowStore.getState();
-      expect(state.error).toBe(errorMessage);
-      expect(state.isLoading).toBe(false);
-    });
-  });
-
-  it('should provide refresh function', async () => {
-    const mockWorkflows = [
-      {
-        id: 'wf-1',
-        issue_id: 'ISSUE-1',
-        worktree_name: 'main',
-        status: 'in_progress' as const,
-        started_at: '2025-12-01T10:00:00Z',
-        current_stage: 'architect',
-      },
-    ];
-
-    vi.mocked(api.getWorkflows).mockResolvedValue(mockWorkflows);
+    vi.mocked(useLoaderData).mockReturnValue({ workflows: mockWorkflows });
 
     const { result } = renderHook(() => useWorkflows());
 
-    await waitFor(() => {
-      expect(api.getWorkflows).toHaveBeenCalledTimes(1);
-    });
-
-    // Call refresh
-    result.current.refresh();
-
-    await waitFor(() => {
-      expect(api.getWorkflows).toHaveBeenCalledTimes(2);
-    });
+    expect(result.current.workflows).toEqual(mockWorkflows);
+    expect(result.current.isConnected).toBe(false);
   });
 
-  it('should return workflow array from store', async () => {
-    const mockWorkflows = [
-      {
-        id: 'wf-1',
-        issue_id: 'ISSUE-1',
-        worktree_name: 'main',
-        status: 'in_progress' as const,
-        started_at: '2025-12-01T10:00:00Z',
-        current_stage: 'architect',
-      },
-      {
-        id: 'wf-2',
-        issue_id: 'ISSUE-2',
-        worktree_name: 'feature',
-        status: 'blocked' as const,
-        started_at: '2025-12-01T11:00:00Z',
-        current_stage: 'architect',
-      },
-    ];
-
-    vi.mocked(api.getWorkflows).mockResolvedValueOnce(mockWorkflows);
+  it('should return connection state from Zustand store', () => {
+    useWorkflowStore.setState({ isConnected: true });
+    vi.mocked(useLoaderData).mockReturnValue({ workflows: [] });
 
     const { result } = renderHook(() => useWorkflows());
 
-    await waitFor(() => {
-      expect(result.current.workflows).toHaveLength(2);
-      expect(result.current.workflows[0].id).toBe('wf-1');
-      expect(result.current.workflows[1].id).toBe('wf-2');
+    expect(result.current.isConnected).toBe(true);
+  });
+
+  it('should revalidate when status-changing events are received', async () => {
+    vi.mocked(useLoaderData).mockReturnValue({ workflows: [] });
+
+    const { rerender } = renderHook(() => useWorkflows());
+
+    // Add a status-changing event
+    useWorkflowStore.setState({
+      eventsByWorkflow: {
+        'wf-1': [
+          {
+            id: 'evt-1',
+            workflow_id: 'wf-1',
+            sequence: 1,
+            timestamp: new Date().toISOString(),
+            agent: 'architect',
+            event_type: 'workflow_completed',
+            message: 'Completed',
+            data: null,
+            correlation_id: null,
+          },
+        ],
+      },
     });
+
+    rerender();
+
+    await waitFor(() => {
+      expect(mockRevalidate).toHaveBeenCalled();
+    });
+  });
+
+  it('should not revalidate for non-status-changing events', () => {
+    vi.mocked(useLoaderData).mockReturnValue({ workflows: [] });
+
+    renderHook(() => useWorkflows());
+
+    // Add a non-status-changing event
+    useWorkflowStore.setState({
+      eventsByWorkflow: {
+        'wf-1': [
+          {
+            id: 'evt-1',
+            workflow_id: 'wf-1',
+            sequence: 1,
+            timestamp: new Date().toISOString(),
+            agent: 'architect',
+            event_type: 'file_created',
+            message: 'File created',
+            data: null,
+            correlation_id: null,
+          },
+        ],
+      },
+    });
+
+    expect(mockRevalidate).not.toHaveBeenCalled();
+  });
+
+  it('should provide revalidation state', () => {
+    vi.mocked(useLoaderData).mockReturnValue({ workflows: [] });
+    vi.mocked(useRevalidator).mockReturnValue({
+      state: 'loading',
+      revalidate: mockRevalidate,
+    });
+
+    const { result } = renderHook(() => useWorkflows());
+
+    expect(result.current.isRevalidating).toBe(true);
+  });
+
+  it('should provide manual revalidate function', () => {
+    vi.mocked(useLoaderData).mockReturnValue({ workflows: [] });
+
+    const { result } = renderHook(() => useWorkflows());
+
+    result.current.revalidate();
+
+    expect(mockRevalidate).toHaveBeenCalled();
   });
 });
 ```
@@ -1695,34 +1816,46 @@ Expected: FAIL with module not found
 
 ```typescript
 // dashboard/src/hooks/useWorkflows.ts
-import { useEffect, useCallback } from 'react';
+import { useLoaderData, useRevalidator } from 'react-router-dom';
 import { useWorkflowStore } from '../store/workflowStore';
-import { api } from '../api/client';
+import { useEffect } from 'react';
+import type { WorkflowsLoaderData } from '../types';
 
+/**
+ * Hook that combines loader data with real-time updates.
+ *
+ * Data Flow:
+ * - Initial data comes from route loader (via useLoaderData)
+ * - Real-time updates come from WebSocket via Zustand store
+ * - Revalidation is triggered for status-changing events
+ *
+ * This is a hybrid approach: loaders for initial data, Zustand for real-time state.
+ */
 export function useWorkflows() {
-  const { workflows, isLoading, error, setWorkflows, setLoading, setError } = useWorkflowStore();
+  const { workflows } = useLoaderData() as WorkflowsLoaderData;
+  const { eventsByWorkflow, isConnected } = useWorkflowStore();
+  const revalidator = useRevalidator();
 
-  const fetchWorkflows = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      const data = await api.getWorkflows();
-      setWorkflows(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch workflows');
-    }
-  }, [setWorkflows, setLoading, setError]);
-
+  // Revalidate when we receive status-changing events
   useEffect(() => {
-    fetchWorkflows();
-  }, [fetchWorkflows]);
+    const statusEvents = ['workflow_completed', 'workflow_failed', 'workflow_started'];
+    const recentEvents = Object.values(eventsByWorkflow).flat();
+    const hasStatusChange = recentEvents.some(
+      (e) =>
+        statusEvents.includes(e.event_type) &&
+        Date.now() - new Date(e.timestamp).getTime() < 5000 // Within last 5 seconds
+    );
+
+    if (hasStatusChange && revalidator.state === 'idle') {
+      revalidator.revalidate();
+    }
+  }, [eventsByWorkflow, revalidator]);
 
   return {
-    workflows: Object.values(workflows),
-    isLoading,
-    error,
-    refresh: fetchWorkflows,
+    workflows,
+    isConnected,
+    isRevalidating: revalidator.state === 'loading',
+    revalidate: () => revalidator.revalidate(),
   };
 }
 ```
@@ -1734,11 +1867,215 @@ Expected: PASS
 
 **Step 5: Commit**
 
-Run: `git add dashboard/src/hooks && git commit -m "feat(dashboard): add useWorkflows hook for fetching active workflows"`
+Run: `git add dashboard/src/hooks && git commit -m "feat(dashboard): add useWorkflows hook combining loaders with real-time updates"`
 
 ---
 
-## Task 6: Implement useWorkflowActions Hook with Optimistic Updates
+## Task 7: Implement Route Actions for Mutations
+
+**Files:**
+- Create: `dashboard/src/actions/workflows.ts`
+- Create: `dashboard/src/actions/__tests__/workflows.test.ts`
+- Create: `dashboard/src/actions/index.ts`
+
+**Step 1: Write the failing test**
+
+```typescript
+// dashboard/src/actions/__tests__/workflows.test.ts
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { approveAction, rejectAction, cancelAction } from '../workflows';
+import { api } from '../../api/client';
+
+vi.mock('../../api/client');
+
+describe('Workflow Actions', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  describe('approveAction', () => {
+    it('should approve workflow by ID from params', async () => {
+      vi.mocked(api.approveWorkflow).mockResolvedValueOnce(undefined);
+
+      const result = await approveAction({
+        params: { id: 'wf-1' },
+        request: new Request('http://localhost/workflows/wf-1/approve', { method: 'POST' }),
+      } as any);
+
+      expect(api.approveWorkflow).toHaveBeenCalledWith('wf-1');
+      expect(result).toEqual({ success: true, action: 'approved' });
+    });
+
+    it('should throw 400 if ID is missing', async () => {
+      try {
+        await approveAction({
+          params: {},
+          request: new Request('http://localhost/workflows/approve', { method: 'POST' }),
+        } as any);
+        expect.fail('Should have thrown');
+      } catch (error) {
+        expect(error).toBeInstanceOf(Response);
+        expect((error as Response).status).toBe(400);
+      }
+    });
+
+    it('should propagate API errors', async () => {
+      vi.mocked(api.approveWorkflow).mockRejectedValueOnce(new Error('Server error'));
+
+      await expect(
+        approveAction({
+          params: { id: 'wf-1' },
+          request: new Request('http://localhost/workflows/wf-1/approve', { method: 'POST' }),
+        } as any)
+      ).rejects.toThrow('Server error');
+    });
+  });
+
+  describe('rejectAction', () => {
+    it('should reject workflow with feedback from form data', async () => {
+      vi.mocked(api.rejectWorkflow).mockResolvedValueOnce(undefined);
+
+      const formData = new FormData();
+      formData.append('feedback', 'Plan needs revision');
+
+      const request = new Request('http://localhost/workflows/wf-1/reject', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const result = await rejectAction({
+        params: { id: 'wf-1' },
+        request,
+      } as any);
+
+      expect(api.rejectWorkflow).toHaveBeenCalledWith('wf-1', 'Plan needs revision');
+      expect(result).toEqual({ success: true, action: 'rejected' });
+    });
+
+    it('should throw 400 if ID is missing', async () => {
+      const formData = new FormData();
+      formData.append('feedback', 'Test');
+
+      const request = new Request('http://localhost/workflows/reject', {
+        method: 'POST',
+        body: formData,
+      });
+
+      try {
+        await rejectAction({
+          params: {},
+          request,
+        } as any);
+        expect.fail('Should have thrown');
+      } catch (error) {
+        expect(error).toBeInstanceOf(Response);
+        expect((error as Response).status).toBe(400);
+      }
+    });
+  });
+
+  describe('cancelAction', () => {
+    it('should cancel workflow by ID from params', async () => {
+      vi.mocked(api.cancelWorkflow).mockResolvedValueOnce(undefined);
+
+      const result = await cancelAction({
+        params: { id: 'wf-1' },
+        request: new Request('http://localhost/workflows/wf-1/cancel', { method: 'POST' }),
+      } as any);
+
+      expect(api.cancelWorkflow).toHaveBeenCalledWith('wf-1');
+      expect(result).toEqual({ success: true, action: 'cancelled' });
+    });
+
+    it('should throw 400 if ID is missing', async () => {
+      try {
+        await cancelAction({
+          params: {},
+          request: new Request('http://localhost/workflows/cancel', { method: 'POST' }),
+        } as any);
+        expect.fail('Should have thrown');
+      } catch (error) {
+        expect(error).toBeInstanceOf(Response);
+        expect((error as Response).status).toBe(400);
+      }
+    });
+  });
+});
+```
+
+**Step 2: Run test to verify it fails**
+
+Run: `cd dashboard && npm test -- src/actions/__tests__/workflows.test.ts`
+Expected: FAIL with module not found
+
+**Step 3: Implement route actions**
+
+```typescript
+// dashboard/src/actions/workflows.ts
+import { api } from '@/api/client';
+import type { ActionFunctionArgs } from 'react-router-dom';
+import type { ActionResult } from '@/types';
+
+/**
+ * Action for approving a workflow's plan.
+ * Triggered by POST to /workflows/:id/approve
+ */
+export async function approveAction({ params }: ActionFunctionArgs): Promise<ActionResult> {
+  if (!params.id) {
+    throw new Response('Workflow ID required', { status: 400 });
+  }
+
+  await api.approveWorkflow(params.id);
+  return { success: true, action: 'approved' };
+}
+
+/**
+ * Action for rejecting a workflow's plan with feedback.
+ * Triggered by POST to /workflows/:id/reject
+ */
+export async function rejectAction({ params, request }: ActionFunctionArgs): Promise<ActionResult> {
+  if (!params.id) {
+    throw new Response('Workflow ID required', { status: 400 });
+  }
+
+  const formData = await request.formData();
+  const feedback = formData.get('feedback') as string;
+
+  await api.rejectWorkflow(params.id, feedback);
+  return { success: true, action: 'rejected' };
+}
+
+/**
+ * Action for cancelling a running workflow.
+ * Triggered by POST to /workflows/:id/cancel
+ */
+export async function cancelAction({ params }: ActionFunctionArgs): Promise<ActionResult> {
+  if (!params.id) {
+    throw new Response('Workflow ID required', { status: 400 });
+  }
+
+  await api.cancelWorkflow(params.id);
+  return { success: true, action: 'cancelled' };
+}
+```
+
+```typescript
+// dashboard/src/actions/index.ts
+export { approveAction, rejectAction, cancelAction } from './workflows';
+```
+
+**Step 4: Run test to verify it passes**
+
+Run: `cd dashboard && npm test -- src/actions/__tests__/workflows.test.ts`
+Expected: PASS
+
+**Step 5: Commit**
+
+Run: `git add dashboard/src/actions && git commit -m "feat(dashboard): add React Router actions for workflow mutations"`
+
+---
+
+## Task 8: Implement useWorkflowActions Hook with useFetcher
 
 **Files:**
 - Create: `dashboard/src/hooks/useWorkflowActions.ts`
@@ -1750,14 +2087,13 @@ Run: `git add dashboard/src/hooks && git commit -m "feat(dashboard): add useWork
 ```typescript
 // dashboard/src/hooks/__tests__/useWorkflowActions.test.tsx
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { renderHook, waitFor } from '@testing-library/react';
+import { renderHook } from '@testing-library/react';
 import { useWorkflowActions } from '../useWorkflowActions';
-import { useWorkflowStore } from '../../store/workflowStore';
-import { api } from '../../api/client';
-import * as Toast from '../../components/Toast';
+import { useFetcher } from 'react-router-dom';
 
-vi.mock('../../api/client');
-vi.mock('../../components/Toast');
+vi.mock('react-router-dom', () => ({
+  useFetcher: vi.fn(),
+}));
 
 describe('useWorkflowActions', () => {
   beforeEach(() => {
@@ -2145,11 +2481,72 @@ Expected: PASS
 
 **Step 6: Commit**
 
-Run: `git add dashboard/src/hooks dashboard/src/components/Toast.tsx && git commit -m "feat(dashboard): add useWorkflowActions with optimistic updates"`
+Run: `git add dashboard/src/hooks dashboard/src/components/Toast.tsx && git commit -m "feat(dashboard): add useWorkflowActions hook using useFetcher"`
 
 ---
 
-## Task 7: Add Barrel Exports for Hooks and Components
+## Task 9: Add Router Configuration Reference
+
+**Description:** Document how loaders and actions connect to routes in the router configuration from Plan 08.
+
+```typescript
+// Example router configuration showing loader/action integration
+// (Full implementation in Plan 10 - Dashboard Components)
+
+{
+  path: 'workflows',
+  lazy: async () => {
+    const { default: Component } = await import('@/pages/WorkflowsPage');
+    const { workflowsLoader } = await import('@/loaders/workflows');
+    return { Component, loader: workflowsLoader };
+  },
+  children: [
+    {
+      path: ':id',
+      lazy: async () => {
+        const { default: Component } = await import('@/pages/WorkflowDetailPage');
+        const { workflowDetailLoader } = await import('@/loaders/workflows');
+        return { Component, loader: workflowDetailLoader };
+      },
+      children: [
+        {
+          path: 'approve',
+          lazy: async () => {
+            const { approveAction } = await import('@/actions/workflows');
+            return { action: approveAction };
+          },
+        },
+        {
+          path: 'reject',
+          lazy: async () => {
+            const { rejectAction } = await import('@/actions/workflows');
+            return { action: rejectAction };
+          },
+        },
+        {
+          path: 'cancel',
+          lazy: async () => {
+            const { cancelAction } = await import('@/actions/workflows');
+            return { action: cancelAction };
+          },
+        },
+      ],
+    },
+  ],
+},
+{
+  path: 'history',
+  lazy: async () => {
+    const { default: Component } = await import('@/pages/HistoryPage');
+    const { historyLoader } = await import('@/loaders/workflows');
+    return { Component, loader: historyLoader };
+  },
+}
+```
+
+---
+
+## Task 10: Add Barrel Exports for Hooks, Actions, Loaders, and Components
 
 **Files:**
 - Create: `dashboard/src/hooks/index.ts`
@@ -2182,16 +2579,23 @@ After completing all tasks, verify:
 - [ ] All TypeScript types compile without errors (`npm run type-check`)
 - [ ] All tests pass (`npm test`)
 - [ ] API client handles errors gracefully with proper error messages
+- [ ] React Router loaders fetch data before render
+- [ ] useLoaderData returns typed data in components
 - [ ] Zustand store persists only UI state (selectedWorkflowId, lastEventId) to sessionStorage
+- [ ] Zustand store does NOT store workflow data (comes from loaders)
 - [ ] Zustand store enforces MAX_EVENTS_PER_WORKFLOW limit (500 events)
 - [ ] WebSocket hook connects on mount and disconnects on unmount
 - [ ] WebSocket hook reconnects with exponential backoff (1s, 2s, 4s, ..., max 30s)
 - [ ] WebSocket hook includes `?since=` parameter when reconnecting with lastEventId
 - [ ] WebSocket hook detects sequence gaps and logs warnings
 - [ ] WebSocket hook handles backfill_expired by clearing lastEventId
-- [ ] useWorkflows hook fetches active workflows on mount
-- [ ] useWorkflowActions applies optimistic updates immediately
-- [ ] useWorkflowActions rolls back on API errors
+- [ ] WebSocket hook dispatches 'workflow-event' custom events for revalidation hints
+- [ ] useWorkflows hook combines loader data with real-time event state
+- [ ] useWorkflows hook triggers revalidation for status-changing events
+- [ ] React Router actions handle mutations (approve, reject, cancel)
+- [ ] Revalidation works after actions complete
+- [ ] useFetcher handles mutations with loading states
+- [ ] No duplicate data fetching between loader and Zustand
 - [ ] Pending actions prevent duplicate requests
 - [ ] Toast notifications appear for action success/failure
 - [ ] No console errors in browser during normal operation
@@ -2201,14 +2605,44 @@ After completing all tasks, verify:
 
 ## Summary
 
-This plan implements the complete state management and real-time communication layer for the Amelia dashboard:
+This plan implements a **hybrid data architecture** for the Amelia dashboard, combining React Router v7's data features with Zustand for real-time state:
 
-1. **Type Safety**: Comprehensive TypeScript types mirroring the FastAPI server models
+### Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     Data Flow                                │
+├─────────────────────────────────────────────────────────────┤
+│  React Router v7              │  Zustand Store              │
+│  ────────────────────────     │  ────────────────────────   │
+│  • Loaders for initial data   │  • WebSocket events         │
+│  • Actions for mutations      │  • Connection state         │
+│  • Automatic revalidation     │  • Selected workflow ID     │
+│  • Type-safe data loading     │  • Pending actions          │
+│                               │  • Real-time updates        │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Key Components
+
+1. **Type Safety**: Comprehensive TypeScript types mirroring the FastAPI server models, including loader/action return types
 2. **API Client**: Clean REST API abstraction with error handling
-3. **State Management**: Zustand store with sessionStorage persistence for UI state only
-4. **Real-time Updates**: WebSocket hook with connection management, backfill, and sequence gap detection
-5. **Data Fetching**: Custom hooks for workflows with loading and error states
-6. **Optimistic UI**: Action hooks with immediate updates and rollback on failure
-7. **User Feedback**: Toast notifications for action outcomes
+3. **Route Loaders**: Initial data fetching for workflows, workflow detail, and history pages
+4. **Zustand Store**: Real-time WebSocket events and UI state only (no workflow data)
+5. **WebSocket Hook**: Connection management, backfill, sequence gap detection, and revalidation hints
+6. **Hybrid Hook (useWorkflows)**: Combines loader data with real-time events, triggers revalidation
+7. **Route Actions**: Type-safe mutations with automatic revalidation
+8. **useFetcher Hook**: Background mutations without navigation
+9. **User Feedback**: Toast notifications for action outcomes
 
-The architecture supports multi-workflow monitoring, graceful reconnection, and responsive UI updates while maintaining a single source of truth on the server.
+### Benefits of Hybrid Approach
+
+- **Best of Both Worlds**: Route loaders for initial data, Zustand for real-time updates
+- **Automatic Revalidation**: Actions trigger re-fetching of loader data
+- **Type Safety**: End-to-end type safety from API to components
+- **Optimistic UI**: Pending states via useFetcher, real-time events via Zustand
+- **No Duplication**: Single source of truth - loader for data, Zustand for events
+- **Server Authority**: Loaders always fetch fresh data from server
+- **Real-time**: WebSocket events update UI instantly between revalidations
+
+The architecture supports multi-workflow monitoring, graceful reconnection, responsive UI updates, and maintains React Router v7 best practices while leveraging Zustand's strengths for real-time state management.
