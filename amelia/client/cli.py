@@ -231,8 +231,8 @@ def status_command(
                 wf.id,
                 wf.issue_id,
                 wf.status,
-                wf.worktree_name or wf.worktree_path,
-                wf.started_at.strftime("%Y-%m-%d %H:%M"),
+                wf.worktree_name,
+                wf.started_at.strftime("%Y-%m-%d %H:%M") if wf.started_at else "-",
             )
 
         console.print(table)

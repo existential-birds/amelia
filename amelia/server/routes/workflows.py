@@ -154,6 +154,7 @@ async def list_workflows(
 
 @router.get("/active")
 async def list_active_workflows(
+    worktree: str | None = None,
     repository: WorkflowRepository = Depends(get_repository),
 ) -> WorkflowListResponse:
     """List all active workflows.
@@ -161,12 +162,16 @@ async def list_active_workflows(
     Active workflows are those in pending, in_progress, or blocked status.
 
     Args:
+        worktree: Filter by worktree path.
         repository: Workflow repository dependency.
 
     Returns:
         WorkflowListResponse with active workflows.
     """
-    workflows = await repository.list_active()
+    # Resolve worktree path to canonical form (e.g., /tmp -> /private/tmp on macOS)
+    resolved_worktree = str(Path(worktree).resolve()) if worktree else None
+
+    workflows = await repository.list_active(worktree_path=resolved_worktree)
 
     return WorkflowListResponse(
         workflows=[

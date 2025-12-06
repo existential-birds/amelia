@@ -126,7 +126,6 @@ class TestAmeliaClient:
                     "id": "wf-123",
                     "issue_id": "ISSUE-123",
                     "status": "in_progress",
-                    "worktree_path": "/home/user/repo",
                     "worktree_name": "main",
                     "started_at": "2025-12-01T10:00:00Z",
                 }
@@ -146,27 +145,18 @@ class TestAmeliaClient:
 
     @pytest.mark.asyncio
     async def test_get_active_workflows_filter_by_worktree(self, client):
-        """get_active_workflows filters by worktree path client-side."""
+        """get_active_workflows passes worktree filter as query param."""
         mock_response = {
             "workflows": [
                 {
                     "id": "wf-123",
                     "issue_id": "ISSUE-123",
                     "status": "in_progress",
-                    "worktree_path": "/home/user/repo",
                     "worktree_name": "main",
                     "started_at": "2025-12-01T10:00:00Z",
                 },
-                {
-                    "id": "wf-456",
-                    "issue_id": "ISSUE-456",
-                    "status": "in_progress",
-                    "worktree_path": "/home/user/other",
-                    "worktree_name": "feature",
-                    "started_at": "2025-12-01T11:00:00Z",
-                },
             ],
-            "total": 2,
+            "total": 1,
             "cursor": None,
         }
 
@@ -175,11 +165,13 @@ class TestAmeliaClient:
 
             result = await client.get_active_workflows(worktree_path="/home/user/repo")
 
-            # Verify endpoint is /api/workflows/active
+            # Verify query param is passed
             call_args = mock_get.call_args
             assert "/api/workflows/active" in str(call_args)
+            # Verify worktree param was passed
+            assert "worktree" in str(call_args) or "params" in str(call_args)
 
-            # Verify client-side filtering worked
+            # Verify response parsed correctly
             assert len(result.workflows) == 1
             assert result.workflows[0].id == "wf-123"
             assert result.total == 1

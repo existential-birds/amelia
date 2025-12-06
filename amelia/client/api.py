@@ -1,5 +1,4 @@
 """REST API client for Amelia server."""
-from pathlib import Path
 from typing import Any
 
 import httpx
@@ -248,7 +247,7 @@ class AmeliaClient:
         """Get list of active workflows.
 
         Args:
-            worktree_path: Optional filter by worktree path
+            worktree_path: Optional filter by worktree path (server-side filtering)
 
         Returns:
             WorkflowListResponse with list of workflows
@@ -258,25 +257,17 @@ class AmeliaClient:
         """
         try:
             async with httpx.AsyncClient(timeout=self._timeout) as client:
+                params = {}
+                if worktree_path:
+                    params["worktree"] = worktree_path
+
                 response = await client.get(
                     f"{self.base_url}/api/workflows/active",
+                    params=params,
                 )
 
                 if response.status_code == 200:
-                    result = WorkflowListResponse.model_validate(response.json())
-
-                    # Filter by worktree if specified
-                    if worktree_path:
-                        resolved = Path(worktree_path).resolve()
-                        filtered = [
-                            w for w in result.workflows
-                            if Path(w.worktree_path).resolve() == resolved
-                        ]
-                        return WorkflowListResponse(
-                            workflows=filtered,
-                            total=len(filtered),
-                        )
-                    return result
+                    return WorkflowListResponse.model_validate(response.json())
                 else:
                     response.raise_for_status()
 
