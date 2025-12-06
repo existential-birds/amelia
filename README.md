@@ -211,6 +211,7 @@ uv run pytest
 - [Configuration Reference](docs/configuration.md) - Full settings documentation
 - [Benchmarking LLM Agents](docs/benchmarking.md) - How to systematically evaluate and iterate on agents
 - [12-Factor Agents Compliance](docs/analysis/12-factor-agents-compliance.md) - How Amelia aligns with the 12-Factor Agents methodology
+- [Brainstorming](docs/brainstorming/) - Design explorations created using the superpowers:brainstorming skill
 
 > **Note:** `docs/plans/` contains temporary planning documents for in-progress work. These should be deleted once their corresponding plans are executed and merged.
 

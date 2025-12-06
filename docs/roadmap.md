@@ -334,7 +334,7 @@ A document-assisted design tool integrated into the dashboard. Upload reference 
 - [ ] **Sources panel** - Upload documents, add repo paths
 - [ ] **Spec preview** - Rendered markdown with version history
 
-See [Spec Builder Design](plans/2025-12-05-spec-builder-design.md) for full specification.
+See [Spec Builder Design](brainstorming/2025-12-05-spec-builder-design.md) for full specification.
 
 ---
 
@@ -387,7 +387,7 @@ Moderator synthesizes → Full synthesis document
 - [ ] **Token budgets** - Per-round limits (configurable, or unlimited)
 - [ ] **Timeouts** - Round, checkpoint, and total debate timeouts
 
-See [Debate Mode Design](plans/2025-12-05-debate-mode-design.md) for full specification.
+See [Debate Mode Design](brainstorming/2025-12-05-debate-mode-design.md) for full specification.
 
 ---
 
