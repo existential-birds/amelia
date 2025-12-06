@@ -60,6 +60,40 @@ Observable orchestration through a local web interface.
 
 ---
 
+## Phase 2.5: Spec Builder 🆕
+
+*Local NotebookLM for technical design documents*
+
+A document-assisted design tool integrated into the dashboard. Upload reference materials, explore them through guided chat, and generate structured design specs that feed directly into Architect.
+
+### Document Ingestion
+- [ ] **Docling integration** - Parse PDF, DOCX, PPTX, Markdown, HTML
+- [ ] **Chunking pipeline** - Semantic text splitting for retrieval
+- [ ] **sqlite-vec embeddings** - Vector storage in existing SQLite database
+- [ ] **Git repo references** - On-demand filesystem access to local codebases
+
+### Conversation Engine
+- [ ] **Semantic search** - Retrieve relevant chunks based on query
+- [ ] **Multiple choice suggestions** - Guided exploration with concrete options
+- [ ] **Source citations** - Ground responses in uploaded documents
+- [ ] **Full persistence** - Resume conversations across sessions
+
+### Spec Generation
+- [ ] **Template system** - Markdown templates with YAML frontmatter
+- [ ] **Section-by-section generation** - Build specs incrementally from sources
+- [ ] **Built-in templates** - Feature spec, API design, ADR, refactoring plan
+- [ ] **Architect integration** - Auto-attach specs to issues for seamless handoff
+
+### Frontend
+- [ ] **Dashboard tab** - New "Spec Builder" section in web UI
+- [ ] **AI SDK chat** - Streaming responses with Vercel AI SDK patterns
+- [ ] **Sources panel** - Upload documents, add repo paths
+- [ ] **Spec preview** - Rendered markdown with version history
+
+See [Spec Builder Design](plans/2025-12-05-spec-builder-design.md) for full specification.
+
+---
+
 ## Phase 3: Session Continuity 🆕
 
 *Inspired by Anthropic's "engineers working in shifts" pattern*
