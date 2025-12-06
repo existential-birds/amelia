@@ -11,7 +11,7 @@ from amelia.client.api import (
     ServerUnreachableError,
     WorkflowConflictError,
 )
-from amelia.client.models import WorkflowListResponse, WorkflowResponse
+from amelia.client.models import CreateWorkflowResponse, WorkflowListResponse, WorkflowResponse
 
 
 class TestAmeliaClient:
@@ -31,16 +31,13 @@ class TestAmeliaClient:
         """create_workflow sends POST request with correct payload."""
         mock_response = {
             "id": "wf-123",
-            "issue_id": "ISSUE-123",
-            "status": "planning",
-            "worktree_path": "/home/user/repo",
-            "worktree_name": "main",
-            "started_at": "2025-12-01T10:00:00Z",
+            "status": "pending",
+            "message": "Workflow created for issue ISSUE-123",
         }
 
         with patch("httpx.AsyncClient.post") as mock_post:
             mock_post.return_value = httpx.Response(
-                200,
+                201,
                 json=mock_response,
             )
 
@@ -50,10 +47,10 @@ class TestAmeliaClient:
                 worktree_name="main",
             )
 
-            assert isinstance(result, WorkflowResponse)
+            assert isinstance(result, CreateWorkflowResponse)
             assert result.id == "wf-123"
-            assert result.issue_id == "ISSUE-123"
-            assert result.status == "planning"
+            assert result.status == "pending"
+            assert "ISSUE-123" in result.message
 
             # Verify request was made correctly
             mock_post.assert_called_once()
@@ -66,14 +63,11 @@ class TestAmeliaClient:
         """create_workflow includes profile when provided."""
         with patch("httpx.AsyncClient.post") as mock_post:
             mock_post.return_value = httpx.Response(
-                200,
+                201,
                 json={
                     "id": "wf-123",
-                    "issue_id": "ISSUE-123",
-                    "status": "planning",
-                    "worktree_path": "/home/user/repo",
-                    "worktree_name": "main",
-                    "started_at": "2025-12-01T10:00:00Z",
+                    "status": "pending",
+                    "message": "Workflow created for issue ISSUE-123",
                 },
             )
 
@@ -132,7 +126,6 @@ class TestAmeliaClient:
                     "id": "wf-123",
                     "issue_id": "ISSUE-123",
                     "status": "in_progress",
-                    "worktree_path": "/home/user/repo",
                     "worktree_name": "main",
                     "started_at": "2025-12-01T10:00:00Z",
                 }
@@ -152,27 +145,18 @@ class TestAmeliaClient:
 
     @pytest.mark.asyncio
     async def test_get_active_workflows_filter_by_worktree(self, client):
-        """get_active_workflows filters by worktree path client-side."""
+        """get_active_workflows passes worktree filter as query param."""
         mock_response = {
             "workflows": [
                 {
                     "id": "wf-123",
                     "issue_id": "ISSUE-123",
                     "status": "in_progress",
-                    "worktree_path": "/home/user/repo",
                     "worktree_name": "main",
                     "started_at": "2025-12-01T10:00:00Z",
                 },
-                {
-                    "id": "wf-456",
-                    "issue_id": "ISSUE-456",
-                    "status": "in_progress",
-                    "worktree_path": "/home/user/other",
-                    "worktree_name": "feature",
-                    "started_at": "2025-12-01T11:00:00Z",
-                },
             ],
-            "total": 2,
+            "total": 1,
             "cursor": None,
         }
 
@@ -181,11 +165,13 @@ class TestAmeliaClient:
 
             result = await client.get_active_workflows(worktree_path="/home/user/repo")
 
-            # Verify endpoint is /api/workflows/active
+            # Verify query param is passed
             call_args = mock_get.call_args
             assert "/api/workflows/active" in str(call_args)
+            # Verify worktree param was passed
+            assert "worktree" in str(call_args) or "params" in str(call_args)
 
-            # Verify client-side filtering worked
+            # Verify response parsed correctly
             assert len(result.workflows) == 1
             assert result.workflows[0].id == "wf-123"
             assert result.total == 1

@@ -178,19 +178,35 @@ class WorkflowRepository:
             ),
         )
 
-    async def list_active(self) -> list[ServerExecutionState]:
+    async def list_active(
+        self, worktree_path: str | None = None
+    ) -> list[ServerExecutionState]:
         """List all active workflows.
+
+        Args:
+            worktree_path: Optional filter by worktree path.
 
         Returns:
             List of active workflows (pending, in_progress, blocked).
         """
-        rows = await self._db.fetch_all(
-            """
-            SELECT state_json FROM workflows
-            WHERE status IN ('pending', 'in_progress', 'blocked')
-            ORDER BY started_at DESC
-            """
-        )
+        if worktree_path:
+            rows = await self._db.fetch_all(
+                """
+                SELECT state_json FROM workflows
+                WHERE status IN ('pending', 'in_progress', 'blocked')
+                AND worktree_path = ?
+                ORDER BY started_at DESC
+                """,
+                (worktree_path,),
+            )
+        else:
+            rows = await self._db.fetch_all(
+                """
+                SELECT state_json FROM workflows
+                WHERE status IN ('pending', 'in_progress', 'blocked')
+                ORDER BY started_at DESC
+                """
+            )
         return [ServerExecutionState.model_validate_json(row[0]) for row in rows]
 
     async def count_active(self) -> int:

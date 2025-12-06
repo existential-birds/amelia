@@ -1,11 +1,11 @@
 """REST API client for Amelia server."""
-from pathlib import Path
 from typing import Any
 
 import httpx
 
 from amelia.client.models import (
     CreateWorkflowRequest,
+    CreateWorkflowResponse,
     RejectWorkflowRequest,
     WorkflowListResponse,
     WorkflowResponse,
@@ -85,7 +85,7 @@ class AmeliaClient:
         worktree_path: str,
         worktree_name: str | None = None,
         profile: str | None = None,
-    ) -> WorkflowResponse:
+    ) -> CreateWorkflowResponse:
         """Create a new workflow.
 
         Args:
@@ -95,7 +95,7 @@ class AmeliaClient:
             profile: Optional profile name for configuration
 
         Returns:
-            WorkflowResponse with created workflow details
+            CreateWorkflowResponse with workflow id and initial status
 
         Raises:
             WorkflowConflictError: If workflow already active in this worktree
@@ -118,7 +118,7 @@ class AmeliaClient:
                 )
 
                 if response.status_code in (200, 201):
-                    return WorkflowResponse.model_validate(response.json())
+                    return CreateWorkflowResponse.model_validate(response.json())
                 elif response.status_code == 409:
                     data = response.json()
                     detail = data.get("detail", {})
@@ -247,7 +247,7 @@ class AmeliaClient:
         """Get list of active workflows.
 
         Args:
-            worktree_path: Optional filter by worktree path
+            worktree_path: Optional filter by worktree path (server-side filtering)
 
         Returns:
             WorkflowListResponse with list of workflows
@@ -257,25 +257,17 @@ class AmeliaClient:
         """
         try:
             async with httpx.AsyncClient(timeout=self._timeout) as client:
+                params = {}
+                if worktree_path:
+                    params["worktree"] = worktree_path
+
                 response = await client.get(
                     f"{self.base_url}/api/workflows/active",
+                    params=params,
                 )
 
                 if response.status_code == 200:
-                    result = WorkflowListResponse.model_validate(response.json())
-
-                    # Filter by worktree if specified
-                    if worktree_path:
-                        resolved = Path(worktree_path).resolve()
-                        filtered = [
-                            w for w in result.workflows
-                            if Path(w.worktree_path).resolve() == resolved
-                        ]
-                        return WorkflowListResponse(
-                            workflows=filtered,
-                            total=len(filtered),
-                        )
-                    return result
+                    return WorkflowListResponse.model_validate(response.json())
                 else:
                     response.raise_for_status()
 

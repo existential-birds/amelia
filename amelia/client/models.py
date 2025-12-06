@@ -20,6 +20,20 @@ class CreateWorkflowRequest(BaseModel):
     profile: str | None = Field(default=None, max_length=64)
 
 
+class CreateWorkflowResponse(BaseModel):
+    """Response from creating a new workflow.
+
+    Attributes:
+        id: Unique workflow identifier.
+        status: Initial workflow status (typically 'pending').
+        message: Human-readable status message.
+    """
+
+    id: str
+    status: str
+    message: str
+
+
 class RejectWorkflowRequest(BaseModel):
     """Request to reject a workflow plan.
 
@@ -31,7 +45,7 @@ class RejectWorkflowRequest(BaseModel):
 
 
 class WorkflowResponse(BaseModel):
-    """Workflow detail response.
+    """Workflow detail response (aligned with server's WorkflowDetailResponse).
 
     Attributes:
         id: Unique workflow identifier (UUID).
@@ -39,21 +53,21 @@ class WorkflowResponse(BaseModel):
         status: Current workflow status (pending, in_progress, completed, failed).
         worktree_path: Absolute path to the git worktree directory.
         worktree_name: Human-readable name for the worktree.
-        profile: Profile name used for this workflow.
-        started_at: Timestamp when the workflow started.
+        started_at: Timestamp when the workflow started (optional).
         completed_at: Timestamp when the workflow completed (if finished).
-        error: Error message if the workflow failed.
+        failure_reason: Error message if the workflow failed.
+        current_stage: Current agent stage in the workflow.
     """
 
     id: str
     issue_id: str
     status: str
     worktree_path: str
-    worktree_name: str | None = None
-    profile: str | None = None
-    started_at: datetime
+    worktree_name: str
+    started_at: datetime | None = None
     completed_at: datetime | None = None
-    error: str | None = None
+    failure_reason: str | None = None
+    current_stage: str | None = None
 
 
 class WorkflowSummary(BaseModel):
@@ -63,7 +77,6 @@ class WorkflowSummary(BaseModel):
         id: Unique workflow identifier (UUID).
         issue_id: The issue identifier this workflow is processing.
         status: Current workflow status.
-        worktree_path: Absolute path to the git worktree directory.
         worktree_name: Human-readable name for the worktree.
         started_at: Timestamp when the workflow started.
         current_stage: Current stage in the workflow pipeline (if in progress).
@@ -72,9 +85,8 @@ class WorkflowSummary(BaseModel):
     id: str
     issue_id: str
     status: str
-    worktree_path: str
-    worktree_name: str | None = None
-    started_at: datetime
+    worktree_name: str
+    started_at: datetime | None = None
     current_stage: str | None = None
 
 
