@@ -1,7 +1,8 @@
 """Tests for LangGraph to WorkflowEvent mapping."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 from amelia.server.models.events import EventType
 from amelia.server.orchestrator.service import STAGE_NODES, OrchestratorService
@@ -13,7 +14,7 @@ class TestStageNodesConstant:
     def test_stage_nodes_contains_expected_nodes(self):
         """STAGE_NODES contains all workflow stage nodes."""
         expected = {"architect_node", "human_approval_node", "developer_node", "reviewer_node"}
-        assert STAGE_NODES == expected
+        assert expected == STAGE_NODES
 
     def test_stage_nodes_is_frozenset(self):
         """STAGE_NODES is immutable."""

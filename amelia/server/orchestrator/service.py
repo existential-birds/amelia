@@ -18,6 +18,7 @@ from amelia.server.exceptions import (
 from amelia.server.models import ServerExecutionState
 from amelia.server.models.events import EventType, WorkflowEvent
 
+
 # Nodes that emit stage events
 STAGE_NODES: frozenset[str] = frozenset({
     "architect_node",
