@@ -19,6 +19,18 @@ from amelia.server.models.state import (
     validate_transition,
 )
 from amelia.server.models.tokens import MODEL_PRICING, TokenUsage, calculate_token_cost
+from amelia.server.models.websocket import (
+    BackfillCompleteMessage,
+    BackfillExpiredMessage,
+    ClientMessage,
+    EventMessage,
+    PingMessage,
+    PongMessage,
+    ServerMessage,
+    SubscribeAllMessage,
+    SubscribeMessage,
+    UnsubscribeMessage,
+)
 
 
 __all__ = [
@@ -46,4 +58,15 @@ __all__ = [
     "TokenUsage",
     "MODEL_PRICING",
     "calculate_token_cost",
+    # WebSocket
+    "BackfillCompleteMessage",
+    "BackfillExpiredMessage",
+    "ClientMessage",
+    "EventMessage",
+    "PingMessage",
+    "PongMessage",
+    "ServerMessage",
+    "SubscribeAllMessage",
+    "SubscribeMessage",
+    "UnsubscribeMessage",
 ]
