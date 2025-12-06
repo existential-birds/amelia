@@ -14,11 +14,12 @@
 
 ---
 
-## Task 1: Create TypeScript Types for API Models
+## Task 1: Extend TypeScript Types for React Router
+
+> **Depends on:** This task extends types created in Plan 08 Task 8. Those types must exist first.
 
 **Files:**
-- Create: `dashboard/src/types/index.ts`
-- Create: `dashboard/src/types/api.ts`
+- Create: `dashboard/src/types/api.ts` (additional React Router specific types)
 
 **Step 1: Write the failing test**
 
@@ -26,106 +27,61 @@
 // dashboard/src/types/__tests__/api.test.ts
 import { describe, it, expect } from 'vitest';
 import type {
-  WorkflowStatus,
-  EventType,
-  WorkflowSummary,
-  WorkflowEvent,
-  TokenUsage,
-  WorkflowDetailResponse,
+  WorkflowsLoaderData,
+  WorkflowDetailLoaderData,
+  ActionResult,
 } from '../api';
 
-describe('API Type Definitions', () => {
-  it('should define WorkflowStatus as literal union', () => {
-    const statuses: WorkflowStatus[] = [
-      'pending',
-      'in_progress',
-      'blocked',
-      'completed',
-      'failed',
-      'cancelled',
-    ];
-
-    statuses.forEach((status) => {
-      expect(['pending', 'in_progress', 'blocked', 'completed', 'failed', 'cancelled']).toContain(
-        status
-      );
-    });
-  });
-
-  it('should create valid WorkflowSummary object', () => {
-    const summary: WorkflowSummary = {
-      id: 'wf-123',
-      issue_id: 'ISSUE-456',
-      worktree_name: 'feature-branch',
-      status: 'in_progress',
-      started_at: '2025-12-01T10:00:00Z',
-      current_stage: 'architect',
-    };
-
-    expect(summary.id).toBe('wf-123');
-    expect(summary.status).toBe('in_progress');
-  });
-
-  it('should create valid WorkflowEvent object', () => {
-    const event: WorkflowEvent = {
-      id: 'evt-789',
-      workflow_id: 'wf-123',
-      sequence: 5,
-      timestamp: '2025-12-01T10:05:00Z',
-      agent: 'architect',
-      event_type: 'stage_started',
-      message: 'Planning started',
-      data: { stage: 'architect' },
-      correlation_id: null,
-    };
-
-    expect(event.id).toBe('evt-789');
-    expect(event.sequence).toBe(5);
-    expect(event.event_type).toBe('stage_started');
-  });
-
-  it('should create valid TokenUsage object', () => {
-    const usage: TokenUsage = {
-      workflow_id: 'wf-123',
-      agent: 'architect',
-      model: 'claude-sonnet-4-20250514',
-      input_tokens: 1000,
-      output_tokens: 500,
-      cache_read_tokens: 200,
-      cache_creation_tokens: 50,
-      cost_usd: 0.015,
-      timestamp: '2025-12-01T10:00:00Z',
-    };
-
-    expect(usage.input_tokens).toBe(1000);
-    expect(usage.cache_read_tokens).toBe(200);
-  });
-
-  it('should create valid WorkflowDetailResponse object', () => {
-    const detail: WorkflowDetailResponse = {
-      id: 'wf-123',
-      issue_id: 'ISSUE-456',
-      worktree_path: '/home/user/project',
-      worktree_name: 'feature-branch',
-      status: 'blocked',
-      started_at: '2025-12-01T10:00:00Z',
-      completed_at: null,
-      failure_reason: null,
-      current_stage: 'architect',
-      plan: null,
-      token_usage: {
-        architect: {
-          input_tokens: 1000,
-          output_tokens: 500,
-          total_tokens: 1500,
-          estimated_cost_usd: 0.015,
+describe('React Router Type Definitions', () => {
+  it('should create valid WorkflowsLoaderData object', () => {
+    const loaderData: WorkflowsLoaderData = {
+      workflows: [
+        {
+          id: 'wf-123',
+          issue_id: 'ISSUE-456',
+          worktree_path: '/path',
+          worktree_name: 'feature-branch',
+          status: 'in_progress',
+          started_at: '2025-12-01T10:00:00Z',
+          completed_at: null,
+          current_stage: 'architect',
         },
-      },
-      recent_events: [],
+      ],
     };
 
-    expect(detail.status).toBe('blocked');
-    expect(detail.token_usage.architect.total_tokens).toBe(1500);
+    expect(loaderData.workflows).toHaveLength(1);
+    expect(loaderData.workflows[0].id).toBe('wf-123');
+  });
+
+  it('should create valid WorkflowDetailLoaderData object', () => {
+    const loaderData: WorkflowDetailLoaderData = {
+      workflow: {
+        id: 'wf-123',
+        issue_id: 'ISSUE-456',
+        worktree_path: '/path',
+        worktree_name: 'feature-branch',
+        status: 'in_progress',
+        started_at: '2025-12-01T10:00:00Z',
+        completed_at: null,
+        failure_reason: null,
+        current_stage: 'architect',
+        plan: null,
+        token_usage: {},
+        recent_events: [],
+      },
+    };
+
+    expect(loaderData.workflow.id).toBe('wf-123');
+  });
+
+  it('should create valid ActionResult object', () => {
+    const result: ActionResult = {
+      success: true,
+      action: 'approved',
+    };
+
+    expect(result.success).toBe(true);
+    expect(result.action).toBe('approved');
   });
 });
 ```
@@ -135,135 +91,37 @@ describe('API Type Definitions', () => {
 Run: `cd dashboard && pnpm test -- src/types/__tests__/api.test.ts`
 Expected: FAIL with module not found or type errors
 
-**Step 3: Implement TypeScript type definitions**
+**Step 3: Implement additional TypeScript types**
 
 ```typescript
 // dashboard/src/types/api.ts
 /**
- * TypeScript types mirroring the FastAPI server models.
+ * Additional TypeScript types for React Router loaders and actions.
+ * Re-exports base types from Plan 08.
  * Keep in sync with amelia/server/models/*.py
  */
 
-export type WorkflowStatus =
-  | 'pending'
-  | 'in_progress'
-  | 'blocked'
-  | 'completed'
-  | 'failed'
-  | 'cancelled';
+// Re-export all types from Plan 08 Task 8
+export * from './index';
 
-export type EventType =
-  // Lifecycle
-  | 'workflow_started'
-  | 'workflow_completed'
-  | 'workflow_failed'
-  | 'workflow_cancelled'
-  // Stages
-  | 'stage_started'
-  | 'stage_completed'
-  // Approval
-  | 'approval_required'
-  | 'approval_granted'
-  | 'approval_rejected'
-  // Artifacts
-  | 'file_created'
-  | 'file_modified'
-  | 'file_deleted'
-  // Review cycle
-  | 'review_requested'
-  | 'review_completed'
-  | 'revision_requested'
-  // System
-  | 'system_error'
-  | 'system_warning';
-
-export interface WorkflowSummary {
-  id: string;
-  issue_id: string;
-  worktree_name: string;
-  status: WorkflowStatus;
-  started_at: string | null; // ISO 8601 datetime
-  current_stage: string | null;
-}
-
-export interface WorkflowEvent {
-  id: string;
-  workflow_id: string;
-  sequence: number;
-  timestamp: string; // ISO 8601 datetime
-  agent: string;
-  event_type: EventType;
-  message: string;
-  data: Record<string, unknown> | null;
-  correlation_id: string | null;
-}
-
-export interface TokenSummary {
-  input_tokens: number;
-  output_tokens: number;
-  total_tokens: number;
-  estimated_cost_usd: number | null;
-}
-
-export interface TokenUsage {
-  workflow_id: string;
-  agent: string;
-  model: string;
-  input_tokens: number;
-  output_tokens: number;
-  cache_read_tokens: number;
-  cache_creation_tokens: number;
-  cost_usd: number | null;
-  timestamp: string; // ISO 8601 datetime
-}
-
-export interface WorkflowDetailResponse {
-  id: string;
-  issue_id: string;
-  worktree_path: string;
-  worktree_name: string;
-  status: WorkflowStatus;
-  started_at: string | null;
-  completed_at: string | null;
-  failure_reason: string | null;
-  current_stage: string | null;
-  plan: unknown | null; // TaskDAG - complex type, use unknown for now
-  token_usage: Record<string, TokenSummary>;
-  recent_events: WorkflowEvent[];
-}
-
-export interface WorkflowListResponse {
+// React Router loader/action types (NEW in this plan)
+export interface WorkflowsLoaderData {
   workflows: WorkflowSummary[];
-  total: number;
-  cursor: string | null;
-  has_more: boolean;
 }
 
-export interface CreateWorkflowRequest {
-  issue_id: string;
-  worktree_path: string;
-  worktree_name: string | null;
+export interface WorkflowDetailLoaderData {
+  workflow: WorkflowDetail;
 }
 
-export interface CreateWorkflowResponse {
-  id: string;
-  status: WorkflowStatus;
-  message: string;
+export interface ActionResult {
+  success: boolean;
+  action: 'approved' | 'rejected' | 'cancelled';
+  error?: string;
 }
 
-export interface RejectRequest {
-  feedback: string;
-}
-
-export interface ErrorResponse {
-  error: string;
-  code: string;
-  details?: Record<string, unknown>;
-}
-
-// WebSocket message types
+// WebSocket message types (updated to use 'data' instead of 'payload')
 export type WebSocketMessage =
-  | { type: 'event'; payload: WorkflowEvent }
+  | { type: 'event'; data: WorkflowEvent }  // Changed from 'payload' to 'data'
   | { type: 'ping' }
   | { type: 'backfill_complete'; count: number }
   | { type: 'backfill_expired'; message: string };
@@ -273,26 +131,6 @@ export type WebSocketClientMessage =
   | { type: 'unsubscribe'; workflow_id: string }
   | { type: 'subscribe_all' }
   | { type: 'pong' };
-
-// React Router loader/action types
-export interface WorkflowsLoaderData {
-  workflows: WorkflowSummary[];
-}
-
-export interface WorkflowDetailLoaderData {
-  workflow: WorkflowDetailResponse;
-}
-
-export interface ActionResult {
-  success: boolean;
-  action: 'approved' | 'rejected' | 'cancelled';
-  error?: string;
-}
-```
-
-```typescript
-// dashboard/src/types/index.ts
-export * from './api';
 ```
 
 **Step 4: Run test to verify it passes**
@@ -302,7 +140,11 @@ Expected: PASS
 
 **Step 5: Commit**
 
-Run: `git add dashboard/src/types && git commit -m "feat(dashboard): add TypeScript types for API models"`
+Run: `git add dashboard/src/types/api.ts && git commit -m "feat(dashboard): extend TypeScript types for React Router loaders and actions
+
+- WorkflowsLoaderData, WorkflowDetailLoaderData, ActionResult
+- Re-exports base types from Plan 08
+- WebSocket message types with 'data' field (not 'payload')"`
 
 ---
 
@@ -1309,7 +1151,7 @@ describe('useWebSocket', () => {
 
     ws.onmessage?.(
       new MessageEvent('message', {
-        data: JSON.stringify({ type: 'event', payload: event }),
+        data: JSON.stringify({ type: 'event', data: event }),
       })
     );
 
@@ -1401,7 +1243,7 @@ describe('useWebSocket', () => {
       new MessageEvent('message', {
         data: JSON.stringify({
           type: 'event',
-          payload: {
+          data: {
             id: 'evt-1',
             workflow_id: 'wf-1',
             sequence: 1,
@@ -1421,7 +1263,7 @@ describe('useWebSocket', () => {
       new MessageEvent('message', {
         data: JSON.stringify({
           type: 'event',
-          payload: {
+          data: {
             id: 'evt-5',
             workflow_id: 'wf-1',
             sequence: 5,
@@ -1545,7 +1387,7 @@ export function useWebSocket() {
 
       switch (message.type) {
         case 'event':
-          handleEvent(message.payload);
+          handleEvent(message.data);
           break;
 
         case 'ping':

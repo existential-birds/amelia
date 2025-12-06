@@ -2069,13 +2069,23 @@ export interface RejectRequest {
 // WebSocket Message Types
 // ============================================================================
 
+// Server → Client messages (messages received by the dashboard)
 export type WebSocketMessage =
   | { type: 'subscribe'; workflow_id: string }
   | { type: 'unsubscribe'; workflow_id: string }
   | { type: 'subscribe_all' }
   | { type: 'pong' }
   | { type: 'ping' }
-  | { type: 'event'; data: WorkflowEvent };
+  | { type: 'event'; data: WorkflowEvent }
+  | { type: 'backfill_complete'; count: number }
+  | { type: 'backfill_expired'; message: string };
+
+// Client → Server messages (messages sent by the dashboard)
+export type WebSocketClientMessage =
+  | { type: 'subscribe'; workflow_id: string }
+  | { type: 'unsubscribe'; workflow_id: string }
+  | { type: 'subscribe_all' }
+  | { type: 'pong' };
 
 // ============================================================================
 // UI State Types
@@ -2098,7 +2108,9 @@ git commit -m "feat(dashboard): add TypeScript type definitions
 - Plan types (TaskDAG, TaskNode)
 - Token usage types
 - API request/response types
-- WebSocket message types
+- WebSocket message types (server→client and client→server)
+  - WebSocketMessage: server→client (includes backfill_complete, backfill_expired)
+  - WebSocketClientMessage: client→server (subscribe, unsubscribe, pong)
 - UI state types
 
 Types mirror Python Pydantic models for API compatibility"
