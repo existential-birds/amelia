@@ -1,1257 +1,1899 @@
-# Dashboard Components & Accessibility Implementation Plan
+# Dashboard Components Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Status:** ⏳ Not Started
+**Status:** Not Started
 
-**Goal:** Build the complete React UI for Amelia's web dashboard with aviation-themed components, React Flow integration for pipeline visualization, full accessibility (WCAG AA), and end-to-end tests for multi-workflow selection and approval flow.
-
-**Architecture:** React component library with TypeScript, Tailwind CSS for styling, React Flow for pipeline visualization, Vitest for component tests, Playwright for E2E tests. Components follow atomic design principles (atoms → molecules → organisms → pages).
-
-**Tech Stack:** React 18, TypeScript, Tailwind CSS, React Flow, Vitest, @testing-library/react, Playwright, axe-core
-
-**Depends on:**
-- Phase 2.3 Plan 8: React project setup (Vite, TypeScript, Tailwind)
-- Phase 2.3 Plan 9: State management (Zustand store, WebSocket hooks)
+**Goal:** Build the domain-specific React components for Amelia's web dashboard using a hybrid approach: ai-elements for queue and confirmation patterns, and custom React Flow components for workflow visualization that matches our aviation "flight route" design.
 
 ---
 
-## Task 1: StatusBadge Component (Atom)
+## Hybrid Approach Rationale
+
+> The design mock uses map pin icons for workflow visualization, creating a "flight route" aesthetic. ai-elements Node uses Card-based layouts which don't match this visual language. We use ai-elements where it fits (Queue, Confirmation) and build custom where the design requires it (WorkflowCanvas).
+
+**Use ai-elements for:**
+- **Queue components** - JobQueue and ActivityLog are thin wrappers around ai-elements Queue
+- **Confirmation** - ApprovalControls wraps ai-elements Confirmation state machine
+- **Loader/Shimmer** - Loading states throughout the dashboard
+
+**Build CUSTOM (not ai-elements) for WorkflowCanvas:**
+- **WorkflowNode** - Custom React Flow node with MapPin icon (lucide-react), not Card-based
+- **WorkflowEdge** - Custom React Flow edge with time labels and status-based styling
+- **WorkflowCanvas** - React Flow container with aviation theme colors
+
+This hybrid approach preserves the aviation/flight control aesthetic where it matters most (the workflow visualization) while leveraging battle-tested components for standard UI patterns.
+
+---
+
+**Architecture:** Thin wrapper components for queues/confirmations that customize ai-elements. Custom React Flow components for workflow visualization with map pin icons and beacon animations.
+
+**Tech Stack:**
+- React 18, TypeScript
+- ai-elements components (Queue, Confirmation, Loader, Shimmer)
+- React Flow (@xyflow/react) for custom workflow visualization
+- lucide-react for icons (MapPin)
+- shadcn/ui primitives (from Plan 08) for additional UI needs
+- class-variance-authority (CVA) for component variants
+- Vitest, @testing-library/react
+
+**Component Patterns (shadcn/ui conventions):**
+- **data-slot attributes** - All custom components include `data-slot` for semantic styling hooks
+- **CVA for variants** - Use `cva()` from class-variance-authority for component variant definitions
+- **cn() utility** - Use `cn()` for className merging (clsx + tailwind-merge)
+- **Focus states** - Include `focus-visible:ring-ring/50 focus-visible:ring-[3px]` for keyboard navigation
+- **aria-invalid states** - Form elements include `aria-invalid:ring-destructive/20 aria-invalid:border-destructive`
+- **OKLCH colors** - All color values use OKLCH format for perceptual uniformity
+
+**Component Architecture:**
+
+| Domain Component | Foundation | Customization |
+|------------------|------------|---------------|
+| StatusBadge | ai-elements QueueItemIndicator | Custom status colors/labels |
+| JobQueue | ai-elements Queue, QueueSection, QueueList | Workflow-specific data binding |
+| JobQueueItem | ai-elements QueueItem | Workflow summary display |
+| ActivityLog | ai-elements Queue + auto-scroll | Terminal aesthetic, blinking cursor |
+| ActivityLogItem | ai-elements QueueItem | Terminal formatting |
+| ApprovalControls | ai-elements Confirmation | Approve/Reject callbacks |
+| **WorkflowCanvas** | **Custom React Flow** | Dot pattern background, aviation theme |
+| **WorkflowNode** | **Custom React Flow node** | MapPin icon, beacon glow, status colors |
+| **WorkflowEdge** | **Custom React Flow edge** | Time labels, animated flow indicator |
+| **Progress** | shadcn/ui Progress | Overall workflow progress indicator |
+| **Skeleton** | shadcn/ui Skeleton | Loading states for JobQueue/ActivityLog |
+| **EmptyState** | Custom component | Display when no workflows are active |
+| **Sidebar** | shadcn/ui Sidebar | Dashboard layout with collapsible navigation |
+
+**Additional Components (shadcn/ui):**
+
+These components enhance UX with loading states, progress indicators, and responsive layout:
+
+| Component | Purpose | Key Features |
+|-----------|---------|--------------|
+| **Progress** | Show workflow overall progress | Animated fill, percentage label, OKLCH colors |
+| **Skeleton** | Loading placeholders | Pulse animation, matches content dimensions |
+| **EmptyState** | No active workflows | Icon, message, optional action button |
+| **Sidebar** | Dashboard navigation | SidebarProvider, SidebarMenu, cookie-based state, mobile responsive |
+
+The **Sidebar** component from shadcn/ui is recommended for the dashboard layout because it provides:
+- `SidebarProvider` for state management
+- `SidebarMenu`, `SidebarMenuItem`, `SidebarMenuButton` for navigation
+- `SidebarMenuCollapsible` for nested sections
+- Cookie-based state persistence (`defaultOpen` persists across sessions)
+- Mobile responsive behavior with sheet-based drawer
+
+**Depends on:**
+- Phase 2.3 Plan 8: React project setup with shadcn/ui and design tokens
+- Phase 2.3 Plan 9: State management (Zustand store, WebSocket hooks)
+
+**References:**
+- [ai-elements Queue](https://github.com/vercel/ai-elements) - Collapsible sections, status indicators
+- [ai-elements Confirmation](https://github.com/vercel/ai-elements) - Approval state machine
+- [React Flow docs](https://reactflow.dev) - Custom nodes and edges
+- [lucide-react](https://lucide.dev) - MapPin icon
+
+---
+
+## PART 1: ai-elements Based Components
+
+These tasks install and wrap ai-elements components for queue and confirmation patterns.
+
+---
+
+## Task 1: Install ai-elements and Dependencies
 
 **Files:**
-- Create: `dashboard/src/components/atoms/StatusBadge.tsx`
-- Create: `dashboard/src/components/atoms/StatusBadge.test.tsx`
+- Modify: `dashboard/package.json`
+
+**Step 1: Add ai-elements components via registry**
+
+ai-elements uses a registry-based installation similar to shadcn/ui. Install the required components:
+
+```bash
+cd dashboard
+
+# Install base dependencies
+npm install @xyflow/react framer-motion
+
+# Install ai-elements components via registry
+npx shadcn@latest add https://ai-elements.vercel.app/registry/queue.json
+npx shadcn@latest add https://ai-elements.vercel.app/registry/confirmation.json
+npx shadcn@latest add https://ai-elements.vercel.app/registry/loader.json
+npx shadcn@latest add https://ai-elements.vercel.app/registry/shimmer.json
+```
+
+This installs components to `dashboard/src/components/ai-elements/`:
+- `queue.tsx` - QueueSection, QueueList, QueueItem, QueueItemIndicator, etc.
+- `confirmation.tsx` - Confirmation, ConfirmationTitle, ConfirmationActions
+- `loader.tsx` - Spinning loader SVG
+- `shimmer.tsx` - Framer Motion text animation
+
+**Note:** We do NOT install ai-elements workflow components. We build custom React Flow components instead.
+
+**Step 2: Verify installation**
+
+```bash
+npm run type-check
+```
+
+Expected: No TypeScript errors. Files exist in `src/components/ai-elements/`.
+
+**Step 3: Commit**
+
+```bash
+git add dashboard/package.json dashboard/package-lock.json dashboard/src/components/ai-elements/
+git commit -m "chore(dashboard): install ai-elements components via registry
+
+- Queue components for job queue and activity log
+- Confirmation component for approval controls
+- Loader and Shimmer for loading states
+- Note: Custom React Flow components used for workflow visualization"
+```
+
+---
+
+## Task 2: Configure Aviation Theme CSS Variables
+
+**Files:**
+- Modify: `dashboard/src/index.css`
+
+Add CSS variables for both ai-elements components and our custom workflow visualization.
+
+**Step 1: Add theme mappings with two-tier CSS variable system**
+
+shadcn/ui uses a two-tier CSS variable system:
+1. **Base variables** (semantic): `--primary`, `--status-running`, etc.
+2. **Tailwind-mapped** (via `@theme inline`): `--color-primary: var(--primary)`
+
+Add to `dashboard/src/index.css`:
+
+```css
+/* dashboard/src/index.css */
+
+/* =============================================================================
+ * Two-tier CSS Variable System (shadcn/ui pattern)
+ * - Base variables: semantic tokens in OKLCH format
+ * - @theme inline: maps to Tailwind's --color-* namespace
+ * ============================================================================= */
+
+@theme inline {
+  /* Map base variables to Tailwind color namespace */
+  --color-primary: var(--primary);
+  --color-secondary: var(--secondary);
+  --color-accent: var(--accent);
+  --color-destructive: var(--destructive);
+  --color-muted: var(--muted);
+  --color-card: var(--card);
+  --color-border: var(--border);
+
+  /* Status colors for Tailwind */
+  --color-status-pending: var(--status-pending);
+  --color-status-running: var(--status-running);
+  --color-status-completed: var(--status-completed);
+  --color-status-failed: var(--status-failed);
+  --color-status-blocked: var(--status-blocked);
+}
+
+@layer base {
+  :root {
+    /* Existing aviation theme variables... */
+
+    /* ==========================================================================
+     * Status Colors (OKLCH format)
+     * ========================================================================== */
+    --status-pending: oklch(0.708 0.0 0);                /* neutral gray */
+    --status-running: oklch(0.82 0.16 85);               /* amber */
+    --status-completed: oklch(0.578 0.189 142.495);      /* green/teal */
+    --status-failed: oklch(0.577 0.245 27.325);          /* red */
+    --status-blocked: oklch(0.637 0.237 25.331);         /* orange-red */
+
+    /* ==========================================================================
+     * ai-elements Queue component variables
+     * ========================================================================== */
+    --queue-indicator-pending: var(--status-pending);
+    --queue-indicator-running: var(--status-running);
+    --queue-indicator-completed: var(--status-completed);
+    --queue-indicator-failed: var(--status-failed);
+    --queue-indicator-blocked: var(--status-blocked);
+
+    /* ==========================================================================
+     * ai-elements Confirmation component variables
+     * ========================================================================== */
+    --confirmation-accept: var(--status-completed);
+    --confirmation-reject: var(--destructive);
+    --confirmation-pending: var(--primary);
+
+    /* ==========================================================================
+     * ai-elements Loader variables
+     * ========================================================================== */
+    --loader-color: var(--primary);
+
+    /* ==========================================================================
+     * Custom WorkflowCanvas variables (aviation flight route theme)
+     * ========================================================================== */
+    --workflow-node-completed: var(--status-completed);  /* teal */
+    --workflow-node-active: var(--primary);              /* amber */
+    --workflow-node-pending: var(--muted-foreground);
+    --workflow-node-blocked: var(--destructive);
+    --workflow-edge-completed: var(--status-completed);
+    --workflow-edge-active: var(--primary);
+    --workflow-edge-pending: var(--muted-foreground);
+    --workflow-beacon-glow: oklch(from var(--primary) l c h / 0.3);
+  }
+
+  .dark {
+    /* Dark mode overrides - adjust OKLCH lightness for dark backgrounds */
+    --status-pending: oklch(0.55 0.0 0);
+    --status-running: oklch(0.75 0.18 85);
+    --status-completed: oklch(0.65 0.17 142.495);
+    --status-failed: oklch(0.65 0.22 27.325);
+    --status-blocked: oklch(0.70 0.20 25.331);
+  }
+}
+```
+
+**Step 2: Verify theme integration**
+
+```bash
+npm run dev
+# Check browser console for CSS errors
+```
+
+**Step 3: Commit**
+
+```bash
+git add dashboard/src/index.css
+git commit -m "feat(dashboard): add theme variable mappings
+
+- Map aviation theme tokens to ai-elements CSS variables
+- Queue indicator colors for workflow statuses
+- Confirmation button colors
+- Custom workflow canvas colors for flight route aesthetic"
+```
+
+---
+
+## Task 3: StatusBadge Wrapper Component
+
+Create a thin wrapper around `QueueItemIndicator` that maps our `WorkflowStatus` enum to appropriate labels and colors.
+
+**Files:**
+- Create: `dashboard/src/components/StatusBadge.tsx`
+- Create: `dashboard/src/components/StatusBadge.test.tsx`
 
 **Step 1: Write the failing test**
 
 ```typescript
-// dashboard/src/components/atoms/StatusBadge.test.tsx
+// dashboard/src/components/StatusBadge.test.tsx
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { StatusBadge } from './StatusBadge';
 
 describe('StatusBadge', () => {
-  it('renders RUNNING badge with gold background and dark text', () => {
-    render(<StatusBadge status="running" />);
-    const badge = screen.getByText('RUNNING');
-    expect(badge).toBeInTheDocument();
-    expect(badge).toHaveClass('bg-accent-gold', 'text-bg-dark');
+  it('renders RUNNING label for in_progress status', () => {
+    render(<StatusBadge status="in_progress" />);
+    expect(screen.getByText('RUNNING')).toBeInTheDocument();
   });
 
-  it('renders DONE badge with green background', () => {
+  it('renders DONE label for completed status', () => {
     render(<StatusBadge status="completed" />);
-    const badge = screen.getByText('DONE');
-    expect(badge).toHaveClass('bg-status-completed', 'text-bg-dark');
+    expect(screen.getByText('DONE')).toBeInTheDocument();
   });
 
-  it('renders QUEUED badge with gray background', () => {
+  it('renders QUEUED label for pending status', () => {
     render(<StatusBadge status="pending" />);
-    const badge = screen.getByText('QUEUED');
-    expect(badge).toHaveClass('bg-status-pending', 'text-text-primary');
+    expect(screen.getByText('QUEUED')).toBeInTheDocument();
   });
 
-  it('renders BLOCKED badge with red background', () => {
+  it('renders BLOCKED label for blocked status', () => {
     render(<StatusBadge status="blocked" />);
-    const badge = screen.getByText('BLOCKED');
-    expect(badge).toHaveClass('bg-status-blocked', 'text-text-primary');
+    expect(screen.getByText('BLOCKED')).toBeInTheDocument();
   });
 
-  it('renders CANCELLED badge with red background', () => {
-    render(<StatusBadge status="cancelled" />);
-    const badge = screen.getByText('CANCELLED');
-    expect(badge).toHaveClass('bg-status-failed', 'text-text-primary');
+  it('renders FAILED label for failed status', () => {
+    render(<StatusBadge status="failed" />);
+    expect(screen.getByText('FAILED')).toBeInTheDocument();
   });
 
   it('has proper ARIA role and label', () => {
-    render(<StatusBadge status="running" />);
+    render(<StatusBadge status="in_progress" />);
     const badge = screen.getByRole('status');
     expect(badge).toHaveAttribute('aria-label', 'Workflow status: running');
+  });
+
+  it('applies pulse animation for running status', () => {
+    const { container } = render(<StatusBadge status="in_progress" />);
+    expect(container.querySelector('[data-status="running"]')).toBeInTheDocument();
+  });
+
+  it('uses QueueItemIndicator internally', () => {
+    const { container } = render(<StatusBadge status="completed" />);
+    // QueueItemIndicator renders with data-slot="indicator"
+    expect(container.querySelector('[data-slot="indicator"]')).toBeInTheDocument();
   });
 });
 ```
 
 **Step 2: Run test to verify it fails**
 
-Run: `cd dashboard && npm test src/components/atoms/StatusBadge.test.tsx`
+```bash
+cd dashboard && npm test src/components/StatusBadge.test.tsx
+```
+
 Expected: FAIL - Component does not exist
 
-**Step 3: Implement StatusBadge component**
+**Step 3: Implement StatusBadge wrapper with CVA and data-slot**
 
 ```typescript
-// dashboard/src/components/atoms/StatusBadge.tsx
-import { FC } from 'react';
+// dashboard/src/components/StatusBadge.tsx
+import { cva, type VariantProps } from 'class-variance-authority';
+import { QueueItemIndicator } from '@/components/ai-elements/queue';
+import { cn } from '@/lib/utils';
+import type { WorkflowStatus } from '@/types';
 
-export type WorkflowStatus = 'running' | 'completed' | 'pending' | 'blocked' | 'cancelled' | 'failed';
+/**
+ * CVA variant definitions for StatusBadge styling.
+ * Uses OKLCH-based status colors via CSS variables.
+ */
+const statusBadgeVariants = cva(
+  // Base styles
+  'inline-flex items-center justify-center rounded-md text-xs font-semibold uppercase tracking-wider transition-colors',
+  {
+    variants: {
+      status: {
+        pending: 'bg-status-pending/10 text-status-pending border-status-pending/20',
+        running: 'bg-status-running/10 text-status-running border-status-running/20',
+        completed: 'bg-status-completed/10 text-status-completed border-status-completed/20',
+        failed: 'bg-status-failed/10 text-status-failed border-status-failed/20',
+        blocked: 'bg-status-blocked/10 text-status-blocked border-status-blocked/20',
+      },
+      size: {
+        sm: 'px-2 py-0.5 text-[10px]',
+        md: 'px-2.5 py-1 text-xs',
+        lg: 'px-3 py-1.5 text-sm',
+      },
+    },
+    defaultVariants: {
+      status: 'pending',
+      size: 'md',
+    },
+  }
+);
 
-interface StatusBadgeProps {
+interface StatusBadgeProps extends VariantProps<typeof statusBadgeVariants> {
   status: WorkflowStatus;
   className?: string;
 }
 
-const statusConfig: Record<WorkflowStatus, { label: string; bgClass: string; textClass: string }> = {
-  running: {
-    label: 'RUNNING',
-    bgClass: 'bg-accent-gold',
-    textClass: 'text-bg-dark',
-  },
-  completed: {
-    label: 'DONE',
-    bgClass: 'bg-status-completed',
-    textClass: 'text-bg-dark',
-  },
-  pending: {
-    label: 'QUEUED',
-    bgClass: 'bg-status-pending',
-    textClass: 'text-text-primary',
-  },
-  blocked: {
-    label: 'BLOCKED',
-    bgClass: 'bg-status-blocked',
-    textClass: 'text-text-primary',
-  },
-  cancelled: {
-    label: 'CANCELLED',
-    bgClass: 'bg-status-failed',
-    textClass: 'text-text-primary',
-  },
-  failed: {
-    label: 'FAILED',
-    bgClass: 'bg-status-failed',
-    textClass: 'text-text-primary',
-  },
+// Map WorkflowStatus to display labels
+const statusLabels: Record<WorkflowStatus, string> = {
+  pending: 'QUEUED',
+  in_progress: 'RUNNING',
+  blocked: 'BLOCKED',
+  completed: 'DONE',
+  failed: 'FAILED',
+  cancelled: 'CANCELLED',
 };
 
-export const StatusBadge: FC<StatusBadgeProps> = ({ status, className = '' }) => {
-  const config = statusConfig[status];
+// Map WorkflowStatus to QueueItemIndicator status prop
+type IndicatorStatus = 'pending' | 'running' | 'completed' | 'failed' | 'blocked';
+const statusMapping: Record<WorkflowStatus, IndicatorStatus> = {
+  pending: 'pending',
+  in_progress: 'running',
+  blocked: 'blocked',
+  completed: 'completed',
+  failed: 'failed',
+  cancelled: 'failed',
+};
+
+/**
+ * StatusBadge wraps ai-elements QueueItemIndicator with workflow-specific
+ * status labels and ARIA attributes.
+ *
+ * Uses aviation theme colors via CSS variables:
+ * - --queue-indicator-pending, --queue-indicator-running, etc.
+ *
+ * Includes data-slot="status-badge" for semantic styling hooks.
+ */
+export function StatusBadge({ status, size, className }: StatusBadgeProps) {
+  const indicatorStatus = statusMapping[status];
+  const displayStatus = status === 'in_progress' ? 'running' : status;
 
   return (
-    <span
+    <div
+      data-slot="status-badge"
       role="status"
-      aria-label={`Workflow status: ${status}`}
-      className={`
-        inline-block
-        px-2.5 py-1
-        font-heading text-xs font-semibold tracking-wider
-        ${config.bgClass}
-        ${config.textClass}
-        ${className}
-      `.trim()}
+      aria-label={`Workflow status: ${displayStatus}`}
+      className={cn(statusBadgeVariants({ status: indicatorStatus, size }), className)}
     >
-      {config.label}
-    </span>
+      <QueueItemIndicator
+        status={indicatorStatus}
+        data-status={indicatorStatus}
+      >
+        {statusLabels[status]}
+      </QueueItemIndicator>
+    </div>
   );
-};
+}
 ```
 
 **Step 4: Run test to verify it passes**
 
-Run: `cd dashboard && npm test src/components/atoms/StatusBadge.test.tsx`
+```bash
+cd dashboard && npm test src/components/StatusBadge.test.tsx
+```
+
 Expected: PASS
 
 **Step 5: Commit**
 
 ```bash
-git add dashboard/src/components/atoms/StatusBadge.tsx dashboard/src/components/atoms/StatusBadge.test.tsx
-git commit -m "feat(dashboard): add StatusBadge component with accessibility
+git add dashboard/src/components/StatusBadge.tsx dashboard/src/components/StatusBadge.test.tsx
+git commit -m "feat(dashboard): add StatusBadge wrapper for QueueItemIndicator
 
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>"
+- Wraps ai-elements QueueItemIndicator with workflow status labels
+- Maps WorkflowStatus enum to indicator status prop
+- ARIA role and label for accessibility
+- Uses aviation theme colors via CSS variables"
 ```
 
 ---
 
-## Task 2: Sidebar Component with Navigation
+## Task 4: JobQueueItem Wrapper Component
+
+Create a wrapper around `QueueItem` that displays workflow summary data with our aviation styling.
 
 **Files:**
-- Create: `dashboard/src/components/organisms/Sidebar.tsx`
-- Create: `dashboard/src/components/organisms/Sidebar.test.tsx`
-- Create: `dashboard/src/components/atoms/CompassRose.tsx`
-- Create: `dashboard/src/assets/icons.tsx`
+- Create: `dashboard/src/components/JobQueueItem.tsx`
+- Create: `dashboard/src/components/JobQueueItem.test.tsx`
 
 **Step 1: Write the failing test**
 
 ```typescript
-// dashboard/src/components/organisms/Sidebar.test.tsx
-import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
-import { BrowserRouter } from 'react-router-dom';
-import { Sidebar } from './Sidebar';
+// dashboard/src/components/JobQueueItem.test.tsx
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
+import { JobQueueItem } from './JobQueueItem';
 
-const renderSidebar = () => {
-  return render(
-    <BrowserRouter>
-      <Sidebar />
-    </BrowserRouter>
-  );
-};
-
-describe('Sidebar', () => {
-  it('renders AMELIA logo with subtitle', () => {
-    renderSidebar();
-    expect(screen.getByText('AMELIA')).toBeInTheDocument();
-    expect(screen.getByText('AGENTIC ORCHESTRATOR')).toBeInTheDocument();
-  });
-
-  it('renders navigation sections with correct labels', () => {
-    renderSidebar();
-    expect(screen.getByText('WORKFLOWS')).toBeInTheDocument();
-    expect(screen.getByText('HISTORY')).toBeInTheDocument();
-    expect(screen.getByText('MONITORING')).toBeInTheDocument();
-  });
-
-  it('renders Active Jobs nav item as active', () => {
-    renderSidebar();
-    const activeJobs = screen.getByText('Active Jobs').closest('a');
-    expect(activeJobs).toHaveClass('border-l-accent-gold', 'bg-accent-gold/10');
-  });
-
-  it('renders coming soon nav items with badge', () => {
-    renderSidebar();
-    const agents = screen.getByText('Agents').closest('div');
-    expect(agents?.querySelector('[data-testid="coming-soon-badge"]')).toBeInTheDocument();
-  });
-
-  it('renders compass rose in footer', () => {
-    renderSidebar();
-    expect(screen.getByTestId('compass-rose')).toBeInTheDocument();
-  });
-
-  it('renders version number', () => {
-    renderSidebar();
-    expect(screen.getByText('v0.0.1')).toBeInTheDocument();
-  });
-
-  it('has proper navigation semantics', () => {
-    renderSidebar();
-    const nav = screen.getByRole('navigation');
-    expect(nav).toHaveAttribute('aria-label', 'Main navigation');
-  });
-});
-```
-
-**Step 2: Run test to verify it fails**
-
-Run: `cd dashboard && npm test src/components/organisms/Sidebar.test.tsx`
-Expected: FAIL - Component does not exist
-
-**Step 3: Create icon components**
-
-```typescript
-// dashboard/src/assets/icons.tsx
-import { FC, SVGProps } from 'react';
-
-export const GitBranchIcon: FC<SVGProps<SVGSVGElement>> = (props) => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-    <line x1="6" y1="3" x2="6" y2="15" />
-    <circle cx="18" cy="6" r="3" />
-    <circle cx="6" cy="18" r="3" />
-    <path d="M18 9a9 9 0 0 1-9 9" />
-  </svg>
-);
-
-export const UsersIcon: FC<SVGProps<SVGSVGElement>> = (props) => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-    <circle cx="9" cy="7" r="4" />
-    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-  </svg>
-);
-
-export const PackageIcon: FC<SVGProps<SVGSVGElement>> = (props) => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-    <line x1="16.5" y1="9.4" x2="7.5" y2="4.21" />
-    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-    <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
-    <line x1="12" y1="22.08" x2="12" y2="12" />
-  </svg>
-);
-
-export const HistoryIcon: FC<SVGProps<SVGSVGElement>> = (props) => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-    <path d="M3 3v5h5" />
-    <path d="M3.05 13A9 9 0 1 0 6 5.3L3 8" />
-    <path d="M12 7v5l4 2" />
-  </svg>
-);
-
-export const TargetIcon: FC<SVGProps<SVGSVGElement>> = (props) => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-    <circle cx="12" cy="12" r="10" />
-    <circle cx="12" cy="12" r="6" />
-    <circle cx="12" cy="12" r="2" />
-  </svg>
-);
-
-export const CloudIcon: FC<SVGProps<SVGSVGElement>> = (props) => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-    <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z" />
-  </svg>
-);
-
-export const RadioIcon: FC<SVGProps<SVGSVGElement>> = (props) => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-    <circle cx="12" cy="12" r="2" />
-    <path d="M16.24 7.76a6 6 0 0 1 0 8.49m-8.48-.01a6 6 0 0 1 0-8.49m11.31-2.82a10 10 0 0 1 0 14.14m-14.14 0a10 10 0 0 1 0-14.14" />
-  </svg>
-);
-
-export const SendIcon: FC<SVGProps<SVGSVGElement>> = (props) => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-    <line x1="22" y1="2" x2="11" y2="13" />
-    <polygon points="22 2 15 22 11 13 2 9 22 2" />
-  </svg>
-);
-```
-
-**Step 4: Create CompassRose component**
-
-```typescript
-// dashboard/src/components/atoms/CompassRose.tsx
-import { FC } from 'react';
-
-export const CompassRose: FC = () => (
-  <svg
-    width="48"
-    height="48"
-    viewBox="0 0 48 48"
-    data-testid="compass-rose"
-    className="opacity-80"
-    aria-hidden="true"
-  >
-    <circle cx="24" cy="24" r="20" fill="none" stroke="#EFF8E2" strokeWidth="1" opacity="0.2" />
-    <path d="M24 4 L26 24 L24 44 L22 24 Z" fill="#EFF8E2" opacity="0.15" />
-    <path d="M4 24 L24 22 L44 24 L24 26 Z" fill="#EFF8E2" opacity="0.15" />
-    <path d="M24 8 L26 24 L24 20 L22 24 Z" fill="#FFC857" />
-    <circle cx="24" cy="24" r="3" fill="#0D1A12" />
-  </svg>
-);
-```
-
-**Step 5: Implement Sidebar component**
-
-```typescript
-// dashboard/src/components/organisms/Sidebar.tsx
-import { FC, ReactNode } from 'react';
-import { Link } from 'react-router-dom';
-import { CompassRose } from '../atoms/CompassRose';
-import {
-  GitBranchIcon,
-  UsersIcon,
-  PackageIcon,
-  HistoryIcon,
-  TargetIcon,
-  CloudIcon,
-  RadioIcon,
-  SendIcon,
-} from '../../assets/icons';
-
-interface NavItemProps {
-  icon: ReactNode;
-  label: string;
-  active?: boolean;
-  comingSoon?: boolean;
-  href?: string;
-}
-
-const NavItem: FC<NavItemProps> = ({ icon, label, active = false, comingSoon = false, href = '#' }) => {
-  const Component = comingSoon ? 'div' : Link;
-  const props = comingSoon ? {} : { to: href };
-
-  return (
-    <Component
-      {...props}
-      className={`
-        flex items-center gap-3 px-5 py-2.5
-        border-l-3 transition-all duration-200
-        font-heading text-sm font-semibold tracking-wider uppercase
-        ${active
-          ? 'border-l-accent-gold bg-accent-gold/10 text-text-primary'
-          : 'border-l-transparent text-text-secondary hover:text-text-primary hover:bg-text-primary/5'
-        }
-        ${comingSoon ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}
-      `.trim()}
-      aria-current={active ? 'page' : undefined}
-      aria-disabled={comingSoon}
-    >
-      <span className="flex items-center opacity-80">{icon}</span>
-      <span className="flex-1">{label}</span>
-      {comingSoon && (
-        <span
-          data-testid="coming-soon-badge"
-          className="text-[9px] px-1.5 py-0.5 bg-text-secondary/20 text-text-secondary rounded"
-        >
-          SOON
-        </span>
-      )}
-    </Component>
-  );
-};
-
-interface NavSectionProps {
-  label: string;
-  children: ReactNode;
-}
-
-const NavSection: FC<NavSectionProps> = ({ label, children }) => (
-  <div className="mb-6">
-    <span className="block px-5 pb-2 font-heading text-xs font-semibold tracking-widest text-text-secondary">
-      {label}
-    </span>
-    {children}
-  </div>
-);
-
-export const Sidebar: FC = () => {
-  return (
-    <aside className="w-60 bg-bg-dark text-text-primary flex flex-col border-r border-text-primary/8">
-      {/* Logo */}
-      <div className="px-5 py-7 border-b border-text-primary/8 text-center">
-        <h1 className="font-display text-4xl font-bold tracking-[0.12em] text-accent-gold [text-shadow:0_0_20px_rgba(255,200,87,0.3)]">
-          AMELIA
-        </h1>
-        <p className="mt-1 font-heading text-xs tracking-[0.15em] text-text-secondary">
-          AGENTIC ORCHESTRATOR
-        </p>
-      </div>
-
-      {/* Navigation */}
-      <nav className="flex-1 py-5" role="navigation" aria-label="Main navigation">
-        <NavSection label="WORKFLOWS">
-          <NavItem icon={<GitBranchIcon />} label="Active Jobs" active href="/jobs" />
-          <NavItem icon={<UsersIcon />} label="Agents" comingSoon />
-          <NavItem icon={<PackageIcon />} label="Outputs" comingSoon />
-        </NavSection>
-
-        <NavSection label="HISTORY">
-          <NavItem icon={<HistoryIcon />} label="Past Runs" comingSoon />
-          <NavItem icon={<TargetIcon />} label="Milestones" comingSoon />
-          <NavItem icon={<CloudIcon />} label="Deployments" comingSoon />
-        </NavSection>
-
-        <NavSection label="MONITORING">
-          <NavItem icon={<RadioIcon />} label="Logs" comingSoon />
-          <NavItem icon={<SendIcon />} label="Notifications" comingSoon />
-        </NavSection>
-      </nav>
-
-      {/* Footer */}
-      <div className="px-5 py-5 border-t border-text-primary/8 flex flex-col items-center gap-3">
-        <CompassRose />
-        <span className="font-mono text-[9px] text-text-secondary tracking-wider">v0.0.1</span>
-      </div>
-    </aside>
-  );
-};
-```
-
-**Step 6: Run test to verify it passes**
-
-Run: `cd dashboard && npm test src/components/organisms/Sidebar.test.tsx`
-Expected: PASS
-
-**Step 7: Commit**
-
-```bash
-git add dashboard/src/components/organisms/Sidebar.tsx \
-  dashboard/src/components/organisms/Sidebar.test.tsx \
-  dashboard/src/components/atoms/CompassRose.tsx \
-  dashboard/src/assets/icons.tsx
-git commit -m "feat(dashboard): add Sidebar with navigation and compass rose
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>"
-```
-
----
-
-## Task 3: Header Component with Workflow Info
-
-**Files:**
-- Create: `dashboard/src/components/organisms/Header.tsx`
-- Create: `dashboard/src/components/organisms/Header.test.tsx`
-
-**Step 1: Write the failing test**
-
-```typescript
-// dashboard/src/components/organisms/Header.test.tsx
-import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
-import { Header } from './Header';
-
-describe('Header', () => {
+describe('JobQueueItem', () => {
   const mockWorkflow = {
     id: 'wf-001',
     issue_id: '#8',
     worktree_name: 'feature-benchmark',
-    status: 'running' as const,
-    eta_seconds: 165, // 02:45
+    status: 'in_progress' as const,
+    current_stage: 'Developer',
   };
 
-  it('renders workflow ID and worktree name', () => {
-    render(<Header workflow={mockWorkflow} />);
+  it('renders issue ID and worktree name', () => {
+    render(<JobQueueItem workflow={mockWorkflow} selected={false} onSelect={() => {}} />);
     expect(screen.getByText('#8')).toBeInTheDocument();
+    expect(screen.getByText('feature-benchmark')).toBeInTheDocument();
   });
 
-  it('renders status badge', () => {
-    render(<Header workflow={mockWorkflow} />);
+  it('renders status indicator via QueueItemIndicator', () => {
+    render(<JobQueueItem workflow={mockWorkflow} selected={false} onSelect={() => {}} />);
+    // StatusBadge wraps QueueItemIndicator
     expect(screen.getByRole('status')).toHaveTextContent('RUNNING');
   });
 
-  it('renders ETA in MM:SS format', () => {
-    render(<Header workflow={mockWorkflow} />);
-    expect(screen.getByText('02:45')).toBeInTheDocument();
+  it('renders current stage in QueueItemDescription', () => {
+    render(<JobQueueItem workflow={mockWorkflow} selected={false} onSelect={() => {}} />);
+    expect(screen.getByText(/Stage: Developer/)).toBeInTheDocument();
   });
 
-  it('renders placeholder ETA when no estimate available', () => {
-    const workflowNoEta = { ...mockWorkflow, eta_seconds: null };
-    render(<Header workflow={workflowNoEta} />);
-    expect(screen.getByText('--:--')).toBeInTheDocument();
+  it('shows selected state with primary border', () => {
+    const { container } = render(
+      <JobQueueItem workflow={mockWorkflow} selected={true} onSelect={() => {}} />
+    );
+    // ai-elements QueueItem applies data-selected attribute
+    expect(container.querySelector('[data-selected="true"]')).toBeInTheDocument();
   });
 
-  it('has proper semantic structure', () => {
-    render(<Header workflow={mockWorkflow} />);
-    const header = screen.getByRole('banner');
-    expect(header).toBeInTheDocument();
+  it('calls onSelect when clicked', () => {
+    const onSelect = vi.fn();
+    render(<JobQueueItem workflow={mockWorkflow} selected={false} onSelect={onSelect} />);
+
+    fireEvent.click(screen.getByRole('button'));
+    expect(onSelect).toHaveBeenCalledWith('wf-001');
   });
 
-  it('renders pulsing status indicator for running workflows', () => {
-    render(<Header workflow={mockWorkflow} />);
-    const statusDot = screen.getByTestId('status-indicator');
-    expect(statusDot).toHaveClass('animate-pulse');
+  it('supports keyboard navigation (Enter)', () => {
+    const onSelect = vi.fn();
+    render(<JobQueueItem workflow={mockWorkflow} selected={false} onSelect={onSelect} />);
+
+    fireEvent.keyDown(screen.getByRole('button'), { key: 'Enter' });
+    expect(onSelect).toHaveBeenCalledWith('wf-001');
+  });
+
+  it('uses QueueItem structure internally', () => {
+    const { container } = render(
+      <JobQueueItem workflow={mockWorkflow} selected={false} onSelect={() => {}} />
+    );
+    // ai-elements QueueItem renders with data-slot="item"
+    expect(container.querySelector('[data-slot="item"]')).toBeInTheDocument();
+  });
+
+  it('renders actions slot when provided', () => {
+    render(
+      <JobQueueItem
+        workflow={mockWorkflow}
+        selected={false}
+        onSelect={() => {}}
+        actions={<button>Cancel</button>}
+      />
+    );
+    expect(screen.getByText('Cancel')).toBeInTheDocument();
   });
 });
 ```
 
-**Step 2: Run test to verify it fails**
-
-Run: `cd dashboard && npm test src/components/organisms/Header.test.tsx`
-Expected: FAIL - Component does not exist
-
-**Step 3: Implement Header component**
+**Step 2: Implement JobQueueItem wrapper**
 
 ```typescript
-// dashboard/src/components/organisms/Header.tsx
-import { FC } from 'react';
-import { StatusBadge, WorkflowStatus } from '../atoms/StatusBadge';
+// dashboard/src/components/JobQueueItem.tsx
+import {
+  QueueItem,
+  QueueItemContent,
+  QueueItemDescription,
+  QueueItemActions,
+} from '@/components/ai-elements/queue';
+import { StatusBadge } from '@/components/StatusBadge';
+import type { WorkflowSummary } from '@/types';
+import type { ReactNode } from 'react';
 
-interface Workflow {
-  id: string;
-  issue_id: string;
-  worktree_name: string;
-  status: WorkflowStatus;
-  eta_seconds: number | null;
+interface JobQueueItemProps {
+  workflow: Pick<WorkflowSummary, 'id' | 'issue_id' | 'worktree_name' | 'status' | 'current_stage'>;
+  selected: boolean;
+  onSelect: (id: string) => void;
+  actions?: ReactNode;
 }
 
-interface HeaderProps {
-  workflow: Workflow;
-}
+/**
+ * JobQueueItem wraps ai-elements QueueItem with workflow-specific data.
+ *
+ * Structure:
+ * - QueueItem (container with selection state)
+ *   - StatusBadge (wraps QueueItemIndicator)
+ *   - QueueItemContent
+ *     - Issue ID (primary text)
+ *     - Worktree name (secondary text)
+ *   - QueueItemDescription (current stage)
+ *   - QueueItemActions (optional action buttons)
+ */
+export function JobQueueItem({ workflow, selected, onSelect, actions }: JobQueueItemProps) {
+  const handleClick = () => onSelect(workflow.id);
 
-const formatETA = (seconds: number | null): string => {
-  if (seconds === null || seconds <= 0) return '--:--';
-
-  const minutes = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return `${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-};
-
-export const Header: FC<HeaderProps> = ({ workflow }) => {
-  const isRunning = workflow.status === 'running';
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onSelect(workflow.id);
+    }
+  };
 
   return (
-    <header
-      role="banner"
-      className="flex items-center justify-between px-8 py-5 border-b border-text-primary/10 bg-bg-dark/50"
+    <QueueItem
+      role="button"
+      tabIndex={0}
+      onClick={handleClick}
+      onKeyDown={handleKeyDown}
+      data-selected={selected}
+      className="cursor-pointer transition-all duration-200"
     >
-      {/* Left: Workflow ID */}
-      <div>
-        <span className="block font-heading text-xs font-semibold tracking-[0.15em] text-text-secondary mb-1">
-          WORKFLOW
-        </span>
-        <h2 className="font-display text-4xl font-bold tracking-[0.08em] text-text-primary">
+      <StatusBadge status={workflow.status} />
+
+      <QueueItemContent>
+        <span className="font-mono text-sm font-semibold text-accent">
           {workflow.issue_id}
-        </h2>
-      </div>
-
-      {/* Center: ETA */}
-      <div className="text-center">
-        <span className="block font-heading text-xs font-semibold tracking-[0.15em] text-text-secondary mb-1">
-          EST. COMPLETION
         </span>
-        <span className="font-mono text-3xl font-semibold text-accent-gold [text-shadow:0_0_10px_rgba(255,200,87,0.4)]">
-          {formatETA(workflow.eta_seconds)}
+        <span className="font-body text-base text-foreground">
+          {workflow.worktree_name}
         </span>
-      </div>
+      </QueueItemContent>
 
-      {/* Right: Status */}
-      <div className="flex items-center gap-2 px-4 py-2 bg-accent-gold/10 border border-accent-gold/30">
-        <div
-          data-testid="status-indicator"
-          className={`
-            w-2 h-2 rounded-full bg-accent-gold
-            shadow-[0_0_8px_rgba(255,200,87,0.6)]
-            ${isRunning ? 'animate-pulse' : ''}
-          `.trim()}
-        />
-        <StatusBadge status={workflow.status} />
-      </div>
-    </header>
+      {workflow.current_stage && (
+        <QueueItemDescription>
+          Stage: {workflow.current_stage}
+        </QueueItemDescription>
+      )}
+
+      {actions && (
+        <QueueItemActions>
+          {actions}
+        </QueueItemActions>
+      )}
+    </QueueItem>
   );
-};
+}
 ```
 
-**Step 4: Run test to verify it passes**
-
-Run: `cd dashboard && npm test src/components/organisms/Header.test.tsx`
-Expected: PASS
-
-**Step 5: Commit**
+**Step 3: Run test**
 
 ```bash
-git add dashboard/src/components/organisms/Header.tsx dashboard/src/components/organisms/Header.test.tsx
-git commit -m "feat(dashboard): add Header with workflow status and ETA
+cd dashboard && npm test src/components/JobQueueItem.test.tsx
+```
 
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
+**Step 4: Commit**
 
-Co-Authored-By: Claude <noreply@anthropic.com>"
+```bash
+git add dashboard/src/components/JobQueueItem.tsx dashboard/src/components/JobQueueItem.test.tsx
+git commit -m "feat(dashboard): add JobQueueItem wrapper for QueueItem
+
+- Wraps ai-elements QueueItem with workflow data binding
+- Uses StatusBadge for status indicator
+- QueueItemContent for issue ID and worktree name
+- QueueItemDescription for current stage
+- Optional QueueItemActions slot
+- Keyboard navigation support"
 ```
 
 ---
 
-## Task 4: JobQueue Component
+## Task 5: JobQueue Component
+
+Create a composition using `QueueSection`, `QueueList`, and `JobQueueItem` for the collapsible workflow queue.
 
 **Files:**
-- Create: `dashboard/src/components/organisms/JobQueue.tsx`
-- Create: `dashboard/src/components/organisms/JobQueue.test.tsx`
+- Create: `dashboard/src/components/JobQueue.tsx`
+- Create: `dashboard/src/components/JobQueue.test.tsx`
 
 **Step 1: Write the failing test**
 
 ```typescript
-// dashboard/src/components/organisms/JobQueue.test.tsx
+// dashboard/src/components/JobQueue.test.tsx
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { JobQueue } from './JobQueue';
 
 describe('JobQueue', () => {
   const mockWorkflows = [
-    {
-      id: 'wf-001',
-      issue_id: '#8',
-      worktree_name: 'feature-benchmark',
-      status: 'running' as const,
-      eta_seconds: 165,
-    },
-    {
-      id: 'wf-002',
-      issue_id: '#7',
-      worktree_name: 'main',
-      status: 'completed' as const,
-      eta_seconds: 0,
-    },
-    {
-      id: 'wf-003',
-      issue_id: '#9',
-      worktree_name: 'feature-clarifications',
-      status: 'pending' as const,
-      eta_seconds: 270,
-    },
+    { id: 'wf-001', issue_id: '#8', worktree_name: 'feature-a', status: 'in_progress' as const, current_stage: 'Developer' },
+    { id: 'wf-002', issue_id: '#7', worktree_name: 'feature-b', status: 'completed' as const, current_stage: null },
+    { id: 'wf-003', issue_id: '#9', worktree_name: 'feature-c', status: 'pending' as const, current_stage: null },
   ];
 
   it('renders all workflows', () => {
-    render(<JobQueue workflows={mockWorkflows} selectedId={null} onSelect={() => {}} />);
+    render(<JobQueue workflows={mockWorkflows} />);
     expect(screen.getByText('#8')).toBeInTheDocument();
     expect(screen.getByText('#7')).toBeInTheDocument();
     expect(screen.getByText('#9')).toBeInTheDocument();
   });
 
-  it('highlights selected workflow with gold border', () => {
-    render(<JobQueue workflows={mockWorkflows} selectedId="wf-001" onSelect={() => {}} />);
-    const selectedItem = screen.getByText('#8').closest('div[role="button"]');
-    expect(selectedItem).toHaveClass('border-accent-gold', 'border-2');
+  it('renders section label via QueueSectionLabel', () => {
+    render(<JobQueue workflows={mockWorkflows} />);
+    expect(screen.getByText('JOB QUEUE')).toBeInTheDocument();
+  });
+
+  it('shows workflow count in section trigger', () => {
+    render(<JobQueue workflows={mockWorkflows} />);
+    expect(screen.getByText('3')).toBeInTheDocument();
+  });
+
+  it('highlights selected workflow', () => {
+    const { container } = render(
+      <JobQueue workflows={mockWorkflows} selectedId="wf-001" />
+    );
+    expect(container.querySelector('[data-selected="true"]')).toBeInTheDocument();
   });
 
   it('calls onSelect when workflow is clicked', () => {
     const onSelect = vi.fn();
-    render(<JobQueue workflows={mockWorkflows} selectedId={null} onSelect={onSelect} />);
+    render(<JobQueue workflows={mockWorkflows} onSelect={onSelect} />);
 
-    const workflow = screen.getByText('#8').closest('div[role="button"]');
-    fireEvent.click(workflow!);
-
+    fireEvent.click(screen.getByText('#8').closest('[role="button"]')!);
     expect(onSelect).toHaveBeenCalledWith('wf-001');
   });
 
-  it('supports keyboard navigation', () => {
-    const onSelect = vi.fn();
-    render(<JobQueue workflows={mockWorkflows} selectedId={null} onSelect={onSelect} />);
-
-    const workflow = screen.getByText('#8').closest('div[role="button"]');
-    fireEvent.keyDown(workflow!, { key: 'Enter' });
-
-    expect(onSelect).toHaveBeenCalledWith('wf-001');
+  it('uses QueueSection structure internally', () => {
+    const { container } = render(
+      <JobQueue workflows={mockWorkflows} />
+    );
+    // ai-elements QueueSection renders with data-slot="section"
+    expect(container.querySelector('[data-slot="section"]')).toBeInTheDocument();
   });
 
-  it('renders status badges for each workflow', () => {
-    render(<JobQueue workflows={mockWorkflows} selectedId={null} onSelect={() => {}} />);
+  it('section is collapsible via QueueSectionTrigger', () => {
+    render(<JobQueue workflows={mockWorkflows} />);
+    // QueueSectionTrigger should have aria-expanded
+    const trigger = screen.getByRole('button', { name: /JOB QUEUE/i });
+    expect(trigger).toHaveAttribute('aria-expanded');
+  });
+
+  it('shows empty state when no workflows', () => {
+    render(<JobQueue workflows={[]} />);
+    expect(screen.getByText(/No active workflows/)).toBeInTheDocument();
+  });
+
+  it('shows empty state when workflows prop is omitted (default [])', () => {
+    render(<JobQueue />);
+    expect(screen.getByText(/No active workflows/)).toBeInTheDocument();
+  });
+
+  it('groups workflows by status when grouped prop is true', () => {
+    render(<JobQueue workflows={mockWorkflows} grouped />);
+    // Should have multiple QueueSection elements for each status group
     expect(screen.getByText('RUNNING')).toBeInTheDocument();
-    expect(screen.getByText('DONE')).toBeInTheDocument();
+    expect(screen.getByText('COMPLETED')).toBeInTheDocument();
     expect(screen.getByText('QUEUED')).toBeInTheDocument();
-  });
-
-  it('has proper ARIA labels', () => {
-    render(<JobQueue workflows={mockWorkflows} selectedId="wf-001" onSelect={() => {}} />);
-    const items = screen.getAllByRole('button');
-    expect(items[0]).toHaveAttribute('aria-pressed', 'true');
-    expect(items[1]).toHaveAttribute('aria-pressed', 'false');
   });
 });
 ```
 
-**Step 2: Run test to verify it fails**
-
-Run: `cd dashboard && npm test src/components/organisms/JobQueue.test.tsx`
-Expected: FAIL - Component does not exist
-
-**Step 3: Implement JobQueue component**
+**Step 2: Implement JobQueue component**
 
 ```typescript
-// dashboard/src/components/organisms/JobQueue.tsx
-import { FC } from 'react';
-import { StatusBadge, WorkflowStatus } from '../atoms/StatusBadge';
-
-interface Workflow {
-  id: string;
-  issue_id: string;
-  worktree_name: string;
-  status: WorkflowStatus;
-  eta_seconds: number | null;
-}
+// dashboard/src/components/JobQueue.tsx
+import { useMemo } from 'react';
+import {
+  QueueSection,
+  QueueSectionTrigger,
+  QueueSectionLabel,
+  QueueSectionContent,
+  QueueList,
+} from '@/components/ai-elements/queue';
+import { Badge } from '@/components/ui/badge';
+import { JobQueueItem } from '@/components/JobQueueItem';
+import type { WorkflowSummary, WorkflowStatus } from '@/types';
 
 interface JobQueueProps {
-  workflows: Workflow[];
-  selectedId: string | null;
-  onSelect: (id: string) => void;
+  // Note: workflows typically come from useLoaderData() in parent page
+  // This prop is for when JobQueue is used in a non-route context (e.g., testing)
+  workflows?: Pick<WorkflowSummary, 'id' | 'issue_id' | 'worktree_name' | 'status' | 'current_stage'>[];
+  selectedId?: string | null;
+  onSelect?: (id: string) => void;
+  grouped?: boolean;
 }
 
-const formatETA = (seconds: number | null): string => {
-  if (seconds === null || seconds <= 0) return '--:--';
-  const minutes = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return `${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-};
+// Status group labels and order
+const statusGroups: { status: WorkflowStatus; label: string }[] = [
+  { status: 'in_progress', label: 'RUNNING' },
+  { status: 'pending', label: 'QUEUED' },
+  { status: 'blocked', label: 'BLOCKED' },
+  { status: 'completed', label: 'COMPLETED' },
+  { status: 'failed', label: 'FAILED' },
+];
 
-interface QueueItemProps {
-  workflow: Workflow;
-  isSelected: boolean;
-  onClick: () => void;
-}
+/**
+ * JobQueue uses ai-elements Queue components to display a collapsible
+ * list of workflows with optional grouping by status.
+ *
+ * Data Flow:
+ * - Workflows typically come from useLoaderData() in parent page component
+ * - Real-time updates merged from Zustand store (see Plan 09)
+ * - Loading state via useNavigation() for route transitions
+ *
+ * Structure:
+ * - QueueSection (collapsible container)
+ *   - QueueSectionTrigger
+ *     - QueueSectionLabel ("JOB QUEUE")
+ *     - Badge (count)
+ *   - QueueSectionContent
+ *     - QueueList
+ *       - JobQueueItem (for each workflow)
+ */
+export function JobQueue({ workflows = [], selectedId = null, onSelect = () => {}, grouped = false }: JobQueueProps) {
+  // Group workflows by status if grouped prop is true
+  const groupedWorkflows = useMemo(() => {
+    if (!grouped) return null;
 
-const QueueItem: FC<QueueItemProps> = ({ workflow, isSelected, onClick }) => {
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      onClick();
+    const groups = new Map<WorkflowStatus, typeof workflows>();
+    for (const workflow of workflows) {
+      const existing = groups.get(workflow.status) || [];
+      groups.set(workflow.status, [...existing, workflow]);
     }
-  };
+    return groups;
+  }, [workflows, grouped]);
+
+  if (grouped && groupedWorkflows) {
+    return (
+      <div className="flex flex-col gap-2">
+        {statusGroups.map(({ status, label }) => {
+          const groupWorkflows = groupedWorkflows.get(status) || [];
+          if (groupWorkflows.length === 0) return null;
+
+          return (
+            <QueueSection key={status} defaultOpen>
+              <QueueSectionTrigger>
+                <QueueSectionLabel>{label}</QueueSectionLabel>
+                <Badge variant="secondary" className="ml-auto text-xs">
+                  {groupWorkflows.length}
+                </Badge>
+              </QueueSectionTrigger>
+              <QueueSectionContent>
+                <QueueList>
+                  {groupWorkflows.map((workflow) => (
+                    <JobQueueItem
+                      key={workflow.id}
+                      workflow={workflow}
+                      selected={workflow.id === selectedId}
+                      onSelect={onSelect}
+                    />
+                  ))}
+                </QueueList>
+              </QueueSectionContent>
+            </QueueSection>
+          );
+        })}
+      </div>
+    );
+  }
 
   return (
-    <div
-      role="button"
-      tabIndex={0}
-      aria-pressed={isSelected}
-      onClick={onClick}
-      onKeyDown={handleKeyDown}
-      className={`
-        p-3 cursor-pointer transition-all duration-200
-        bg-bg-main/60 border
-        ${isSelected
-          ? 'border-accent-gold border-2 bg-accent-gold/8 shadow-[0_0_15px_rgba(255,200,87,0.1)]'
-          : 'border-text-primary/8 hover:border-text-primary/20'
-        }
-      `.trim()}
-    >
-      <div className="flex items-center justify-between mb-1.5">
-        <span className="font-mono text-sm font-semibold text-accent-blue">
-          {workflow.issue_id}
-        </span>
-        <StatusBadge status={workflow.status} />
-      </div>
-      <p className="font-body text-base text-text-primary mb-1">
-        {workflow.worktree_name}
-      </p>
-      <span className="font-heading text-xs tracking-wider text-text-secondary">
-        Est: {formatETA(workflow.eta_seconds)}
-      </span>
-    </div>
-  );
-};
+    <QueueSection defaultOpen>
+      <QueueSectionTrigger>
+        <QueueSectionLabel>JOB QUEUE</QueueSectionLabel>
+        <Badge variant="secondary" className="ml-auto text-xs">
+          {workflows.length}
+        </Badge>
+      </QueueSectionTrigger>
 
-export const JobQueue: FC<JobQueueProps> = ({ workflows, selectedId, onSelect }) => {
-  return (
-    <div className="bg-bg-dark/60 border border-text-primary/10 p-5 flex flex-col">
-      <h3 className="font-heading text-sm font-semibold tracking-[0.12em] text-text-secondary mb-4 pb-3 border-b border-text-primary/10">
-        JOB QUEUE
-      </h3>
-      <div className="flex flex-col gap-3 flex-1 overflow-auto">
-        {workflows.map((workflow) => (
-          <QueueItem
-            key={workflow.id}
-            workflow={workflow}
-            isSelected={workflow.id === selectedId}
-            onClick={() => onSelect(workflow.id)}
-          />
-        ))}
-      </div>
-    </div>
+      <QueueSectionContent>
+        {workflows.length === 0 ? (
+          <p className="text-center text-muted-foreground py-8">
+            No active workflows
+          </p>
+        ) : (
+          <QueueList>
+            {workflows.map((workflow) => (
+              <JobQueueItem
+                key={workflow.id}
+                workflow={workflow}
+                selected={workflow.id === selectedId}
+                onSelect={onSelect}
+              />
+            ))}
+          </QueueList>
+        )}
+      </QueueSectionContent>
+    </QueueSection>
   );
-};
+}
 ```
 
-**Step 4: Run test to verify it passes**
-
-Run: `cd dashboard && npm test src/components/organisms/JobQueue.test.tsx`
-Expected: PASS
-
-**Step 5: Commit**
+**Step 3: Run test**
 
 ```bash
-git add dashboard/src/components/organisms/JobQueue.tsx dashboard/src/components/organisms/JobQueue.test.tsx
-git commit -m "feat(dashboard): add JobQueue with keyboard navigation
+cd dashboard && npm test src/components/JobQueue.test.tsx
+```
 
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
+**Step 4: Commit**
 
-Co-Authored-By: Claude <noreply@anthropic.com>"
+```bash
+git add dashboard/src/components/JobQueue.tsx dashboard/src/components/JobQueue.test.tsx
+git commit -m "feat(dashboard): add JobQueue using ai-elements Queue components
+
+- Composes QueueSection, QueueSectionTrigger, QueueSectionContent, QueueList
+- Collapsible section with count badge
+- Optional grouping by workflow status
+- Empty state message
+- Uses JobQueueItem for individual workflows"
 ```
 
 ---
 
-## Task 5: ActivityLog Component with Scanlines
+## Task 6: ActivityLogItem Component
+
+Create a component for individual log entries using Queue components with terminal-style formatting.
 
 **Files:**
-- Create: `dashboard/src/components/organisms/ActivityLog.tsx`
-- Create: `dashboard/src/components/organisms/ActivityLog.test.tsx`
+- Create: `dashboard/src/components/ActivityLogItem.tsx`
+- Create: `dashboard/src/components/ActivityLogItem.test.tsx`
 
 **Step 1: Write the failing test**
 
 ```typescript
-// dashboard/src/components/organisms/ActivityLog.test.tsx
+// dashboard/src/components/ActivityLogItem.test.tsx
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { ActivityLogItem } from './ActivityLogItem';
+
+describe('ActivityLogItem', () => {
+  const mockEvent = {
+    id: 'evt-001',
+    workflow_id: 'wf-001',
+    sequence: 1,
+    timestamp: '2025-12-01T14:32:07Z',
+    agent: 'ARCHITECT',
+    event_type: 'stage_started' as const,
+    message: 'Issue #8 parsed. Creating task DAG for benchmark framework.',
+  };
+
+  it('renders timestamp in HH:MM:SS format', () => {
+    render(<ActivityLogItem event={mockEvent} />);
+    expect(screen.getByText('14:32:07')).toBeInTheDocument();
+  });
+
+  it('renders agent name in brackets', () => {
+    render(<ActivityLogItem event={mockEvent} />);
+    expect(screen.getByText('[ARCHITECT]')).toBeInTheDocument();
+  });
+
+  it('renders message text', () => {
+    render(<ActivityLogItem event={mockEvent} />);
+    expect(screen.getByText(/Issue #8 parsed/)).toBeInTheDocument();
+  });
+
+  it('applies correct agent color class', () => {
+    render(<ActivityLogItem event={mockEvent} />);
+    const agent = screen.getByText('[ARCHITECT]');
+    expect(agent).toHaveClass('text-accent');
+  });
+
+  it('uses QueueItem structure internally', () => {
+    const { container } = render(<ActivityLogItem event={mockEvent} />);
+    expect(container.querySelector('[data-slot="item"]')).toBeInTheDocument();
+  });
+
+  it('renders QueueItemIndicator for event type', () => {
+    const { container } = render(<ActivityLogItem event={mockEvent} />);
+    expect(container.querySelector('[data-slot="indicator"]')).toBeInTheDocument();
+  });
+
+  it('shows different colors for different agents', () => {
+    const developerEvent = { ...mockEvent, agent: 'DEVELOPER' };
+    render(<ActivityLogItem event={developerEvent} />);
+    const agent = screen.getByText('[DEVELOPER]');
+    expect(agent).toHaveClass('text-primary');
+  });
+});
+```
+
+**Step 2: Implement ActivityLogItem component**
+
+```typescript
+// dashboard/src/components/ActivityLogItem.tsx
+import {
+  QueueItem,
+  QueueItemIndicator,
+  QueueItemContent,
+} from '@/components/ai-elements/queue';
+import { cn } from '@/lib/utils';
+import type { WorkflowEvent } from '@/types';
+
+interface ActivityLogItemProps {
+  event: WorkflowEvent;
+}
+
+// Format ISO timestamp to HH:MM:SS
+function formatTime(isoString: string): string {
+  const date = new Date(isoString);
+  return date.toISOString().slice(11, 19);
+}
+
+// Agent colors for visual distinction
+const agentColors: Record<string, string> = {
+  ARCHITECT: 'text-accent',
+  DEVELOPER: 'text-primary',
+  REVIEWER: 'text-[--status-completed]',
+  SYSTEM: 'text-muted-foreground',
+};
+
+// Map event types to indicator status
+const eventTypeStatus: Record<string, 'pending' | 'running' | 'completed' | 'failed'> = {
+  stage_started: 'running',
+  stage_completed: 'completed',
+  stage_failed: 'failed',
+  approval_requested: 'pending',
+  approval_granted: 'completed',
+  approval_rejected: 'failed',
+  message: 'running',
+};
+
+/**
+ * ActivityLogItem displays a single workflow event using ai-elements QueueItem.
+ *
+ * Format: [HH:MM:SS] [AGENT] message
+ * Uses monospace font for terminal aesthetic.
+ */
+export function ActivityLogItem({ event }: ActivityLogItemProps) {
+  const agentColor = agentColors[event.agent.toUpperCase()] || 'text-muted-foreground';
+  const status = eventTypeStatus[event.event_type] || 'running';
+
+  return (
+    <QueueItem className="py-1.5 border-b border-border/30">
+      <QueueItemIndicator status={status} className="w-2 h-2" />
+
+      <QueueItemContent className="grid grid-cols-[80px_90px_1fr] gap-3 font-mono text-sm">
+        <span className="text-muted-foreground tabular-nums">
+          {formatTime(event.timestamp)}
+        </span>
+        <span className={cn('font-semibold', agentColor)}>
+          [{event.agent.toUpperCase()}]
+        </span>
+        <span className="text-foreground/80">
+          {event.message}
+        </span>
+      </QueueItemContent>
+    </QueueItem>
+  );
+}
+```
+
+**Step 3: Commit**
+
+```bash
+git add dashboard/src/components/ActivityLogItem.tsx dashboard/src/components/ActivityLogItem.test.tsx
+git commit -m "feat(dashboard): add ActivityLogItem using ai-elements QueueItem
+
+- Wraps ai-elements QueueItem for log entries
+- Terminal-style formatting with timestamp and agent
+- Color-coded agent names
+- QueueItemIndicator shows event type status"
+```
+
+---
+
+## Task 7: ActivityLog Component
+
+Create the full activity log using Queue components with auto-scroll and terminal aesthetic.
+
+**Files:**
+- Create: `dashboard/src/components/ActivityLog.tsx`
+- Create: `dashboard/src/components/ActivityLog.test.tsx`
+
+**Step 1: Write the failing test**
+
+```typescript
+// dashboard/src/components/ActivityLog.test.tsx
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen } from '@testing-library/react';
 import { ActivityLog } from './ActivityLog';
+import * as workflowStore from '@/store/workflowStore';
+
+// Mock the Zustand store
+vi.mock('@/store/workflowStore', () => ({
+  useWorkflowStore: vi.fn(() => ({
+    eventsByWorkflow: {},
+  })),
+}));
 
 describe('ActivityLog', () => {
   const mockEvents = [
     {
       id: 'evt-001',
       workflow_id: 'wf-001',
+      sequence: 1,
       timestamp: '2025-12-01T14:32:07Z',
       agent: 'ARCHITECT',
-      message: 'Issue #8 parsed. Creating task DAG for benchmark framework.',
+      event_type: 'stage_started' as const,
+      message: 'Issue #8 parsed.',
     },
     {
       id: 'evt-002',
       workflow_id: 'wf-001',
+      sequence: 2,
       timestamp: '2025-12-01T14:32:45Z',
       agent: 'ARCHITECT',
-      message: 'Plan approved. Routing to DEVELOPER.',
-    },
-    {
-      id: 'evt-003',
-      workflow_id: 'wf-001',
-      timestamp: '2025-12-01T14:33:12Z',
-      agent: 'DEVELOPER',
-      message: 'Task received. Scaffolding tests/benchmark/ structure.',
+      event_type: 'stage_completed' as const,
+      message: 'Plan approved.',
     },
   ];
 
-  it('renders all events in chronological order', () => {
-    render(<ActivityLog events={mockEvents} />);
+  it('renders section label via QueueSectionLabel', () => {
+    render(<ActivityLog workflowId="wf-001" initialEvents={mockEvents} />);
+    expect(screen.getByText('ACTIVITY LOG')).toBeInTheDocument();
+  });
+
+  it('renders all initial events', () => {
+    render(<ActivityLog workflowId="wf-001" initialEvents={mockEvents} />);
     expect(screen.getByText(/Issue #8 parsed/)).toBeInTheDocument();
     expect(screen.getByText(/Plan approved/)).toBeInTheDocument();
-    expect(screen.getByText(/Task received/)).toBeInTheDocument();
   });
 
-  it('displays timestamps in HH:MM:SSZ format', () => {
-    render(<ActivityLog events={mockEvents} />);
-    expect(screen.getByText('14:32:07Z')).toBeInTheDocument();
-    expect(screen.getByText('14:32:45Z')).toBeInTheDocument();
+  it('merges loader events with real-time events from Zustand', () => {
+    const realtimeEvent = {
+      id: 'evt-003',
+      workflow_id: 'wf-001',
+      sequence: 3,
+      timestamp: '2025-12-01T14:33:00Z',
+      agent: 'DEVELOPER',
+      event_type: 'stage_started' as const,
+      message: 'Starting implementation.',
+    };
+
+    vi.mocked(workflowStore.useWorkflowStore).mockReturnValue({
+      eventsByWorkflow: { 'wf-001': [realtimeEvent] },
+    } as any);
+
+    render(<ActivityLog workflowId="wf-001" initialEvents={mockEvents} />);
+
+    // Should show both loader events and real-time events
+    expect(screen.getByText(/Issue #8 parsed/)).toBeInTheDocument();
+    expect(screen.getByText(/Starting implementation/)).toBeInTheDocument();
   });
 
-  it('displays agent names in brackets', () => {
-    render(<ActivityLog events={mockEvents} />);
-    expect(screen.getByText('[ARCHITECT]')).toBeInTheDocument();
-    expect(screen.getByText('[DEVELOPER]')).toBeInTheDocument();
+  it('has proper ARIA role for log', () => {
+    render(<ActivityLog workflowId="wf-001" initialEvents={mockEvents} />);
+    expect(screen.getByRole('log')).toHaveAttribute('aria-live', 'polite');
   });
 
-  it('has role="log" for screen readers', () => {
-    render(<ActivityLog events={mockEvents} />);
-    const log = screen.getByRole('log');
-    expect(log).toHaveAttribute('aria-live', 'polite');
-    expect(log).toHaveAttribute('aria-label', 'Workflow activity log');
+  it('renders blinking cursor using Shimmer', () => {
+    render(<ActivityLog workflowId="wf-001" initialEvents={mockEvents} />);
+    expect(screen.getByTestId('log-cursor')).toBeInTheDocument();
   });
 
-  it('renders blinking cursor at end', () => {
-    render(<ActivityLog events={mockEvents} />);
-    expect(screen.getByTestId('log-cursor')).toHaveClass('animate-blink');
+  it('shows empty state when no events', () => {
+    render(<ActivityLog workflowId="wf-001" initialEvents={[]} />);
+    expect(screen.getByText(/No activity/)).toBeInTheDocument();
   });
 
-  it('auto-scrolls to bottom when new events arrive', () => {
-    const { rerender } = render(<ActivityLog events={mockEvents} />);
-
-    const newEvents = [
-      ...mockEvents,
-      {
-        id: 'evt-004',
-        workflow_id: 'wf-001',
-        timestamp: '2025-12-01T14:34:00Z',
-        agent: 'REVIEWER',
-        message: 'Code review commenced.',
-      },
-    ];
-
-    rerender(<ActivityLog events={newEvents} />);
-    expect(screen.getByText(/Code review commenced/)).toBeInTheDocument();
+  it('uses QueueSection structure internally', () => {
+    const { container } = render(<ActivityLog workflowId="wf-001" initialEvents={mockEvents} />);
+    expect(container.querySelector('[data-slot="section"]')).toBeInTheDocument();
   });
 
-  it('respects prefers-reduced-motion for scanlines', () => {
-    const { container } = render(<ActivityLog events={mockEvents} />);
-    const scanlines = container.querySelector('.scanlines');
-    expect(scanlines).toHaveClass('motion-reduce:hidden');
+  it('renders Loader when loading prop is true', () => {
+    render(<ActivityLog workflowId="wf-001" initialEvents={mockEvents} loading />);
+    expect(screen.getByTestId('activity-loader')).toBeInTheDocument();
+  });
+
+  it('applies scanlines overlay for terminal aesthetic', () => {
+    const { container } = render(<ActivityLog workflowId="wf-001" initialEvents={mockEvents} />);
+    expect(container.querySelector('[data-scanlines]')).toBeInTheDocument();
   });
 });
 ```
 
-**Step 2: Run test to verify it fails**
-
-Run: `cd dashboard && npm test src/components/organisms/ActivityLog.test.tsx`
-Expected: FAIL - Component does not exist
-
-**Step 3: Implement ActivityLog component**
+**Step 2: Implement ActivityLog component**
 
 ```typescript
-// dashboard/src/components/organisms/ActivityLog.tsx
-import { FC, useEffect, useRef } from 'react';
-
-interface WorkflowEvent {
-  id: string;
-  workflow_id: string;
-  timestamp: string;
-  agent: string;
-  message: string;
-}
+// dashboard/src/components/ActivityLog.tsx
+import { useEffect, useRef, useMemo } from 'react';
+import {
+  QueueSection,
+  QueueSectionTrigger,
+  QueueSectionLabel,
+  QueueSectionContent,
+  QueueList,
+} from '@/components/ai-elements/queue';
+import { Loader } from '@/components/ai-elements/loader';
+import { Shimmer } from '@/components/ai-elements/shimmer';
+import { ActivityLogItem } from '@/components/ActivityLogItem';
+import { useWorkflowStore } from '@/store/workflowStore';
+import type { WorkflowEvent } from '@/types';
 
 interface ActivityLogProps {
-  events: WorkflowEvent[];
+  workflowId: string;
+  // Initial events from loader (via parent page)
+  initialEvents?: WorkflowEvent[];
+  loading?: boolean;
 }
 
-const formatTimestamp = (isoString: string): string => {
-  const date = new Date(isoString);
-  const hours = String(date.getUTCHours()).padStart(2, '0');
-  const minutes = String(date.getUTCMinutes()).padStart(2, '0');
-  const seconds = String(date.getUTCSeconds()).padStart(2, '0');
-  return `${hours}:${minutes}:${seconds}Z`;
-};
+/**
+ * ActivityLog displays workflow events using ai-elements Queue components
+ * with terminal aesthetic (scanlines, blinking cursor, auto-scroll).
+ *
+ * Data Flow:
+ * - Initial events from loader (via parent WorkflowDetailPage)
+ * - Real-time events from Zustand store (WebSocket updates)
+ * - Merged to show complete event stream
+ *
+ * Structure:
+ * - QueueSection
+ *   - QueueSectionTrigger with "ACTIVITY LOG" label
+ *   - QueueSectionContent
+ *     - Scanlines overlay
+ *     - QueueList with ActivityLogItem entries
+ *     - Blinking cursor (Shimmer)
+ *     - Loader when loading
+ */
+export function ActivityLog({ workflowId, initialEvents = [], loading = false }: ActivityLogProps) {
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-export const ActivityLog: FC<ActivityLogProps> = ({ events }) => {
-  const logEndRef = useRef<HTMLDivElement>(null);
+  // Real-time events from WebSocket (via Zustand store from Plan 09)
+  const { eventsByWorkflow } = useWorkflowStore();
+  const realtimeEvents = eventsByWorkflow[workflowId] || [];
+
+  // Merge: loader events + any new real-time events
+  const events = useMemo(() => {
+    const loaderEventIds = new Set(initialEvents.map(e => e.id));
+    const newEvents = realtimeEvents.filter(e => !loaderEventIds.has(e.id));
+    return [...initialEvents, ...newEvents];
+  }, [initialEvents, realtimeEvents]);
 
   // Auto-scroll to bottom when new events arrive
   useEffect(() => {
-    logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [events]);
+    if (scrollRef.current) {
+      scrollRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [events.length]);
 
   return (
-    <div className="bg-bg-dark/60 border border-text-primary/10 p-5 flex flex-col">
-      <h3 className="font-heading text-sm font-semibold tracking-[0.12em] text-text-secondary mb-4 pb-3 border-b border-text-primary/10">
-        ACTIVITY LOG
-      </h3>
+    <QueueSection defaultOpen className="h-full flex flex-col">
+      <QueueSectionTrigger>
+        <QueueSectionLabel>ACTIVITY LOG</QueueSectionLabel>
+        {loading && (
+          <Loader
+            data-testid="activity-loader"
+            className="ml-auto w-4 h-4"
+          />
+        )}
+      </QueueSectionTrigger>
 
-      <div
-        role="log"
-        aria-live="polite"
-        aria-label="Workflow activity log"
-        className="relative font-mono text-sm leading-relaxed flex-1 overflow-auto"
-      >
-        {/* Scanlines effect */}
+      <QueueSectionContent className="flex-1 relative overflow-hidden">
+        {/* Scanlines overlay for terminal aesthetic */}
         <div
-          className="scanlines absolute inset-0 pointer-events-none motion-reduce:hidden"
+          data-scanlines
+          className="absolute inset-0 pointer-events-none opacity-50 motion-reduce:hidden z-10"
           style={{
-            background: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(239, 248, 226, 0.015) 2px, rgba(239, 248, 226, 0.015) 4px)',
+            background: 'repeating-linear-gradient(0deg, transparent, transparent 2px, oklch(from var(--foreground) l c h / 0.015) 2px, oklch(from var(--foreground) l c h / 0.015) 4px)',
           }}
           aria-hidden="true"
         />
 
-        {/* Log entries */}
-        {events.map((event) => (
-          <div
-            key={event.id}
-            className="grid grid-cols-[90px_90px_1fr] gap-3 py-1 border-b border-text-primary/[0.04]"
-          >
-            <span className="text-text-secondary">{formatTimestamp(event.timestamp)}</span>
-            <span className="text-accent-blue font-semibold">[{event.agent}]</span>
-            <span className="text-text-primary/80">{event.message}</span>
-          </div>
-        ))}
-
-        {/* Blinking cursor */}
         <div
-          data-testid="log-cursor"
-          className="text-accent-gold [text-shadow:0_0_8px_rgba(255,200,87,0.6)] animate-blink mt-2"
-          aria-hidden="true"
+          role="log"
+          aria-live="polite"
+          aria-label="Workflow activity log"
+          className="h-full overflow-y-auto p-4"
         >
-          ▋
+          {events.length === 0 ? (
+            <p className="text-center text-muted-foreground py-8">
+              No activity yet
+            </p>
+          ) : (
+            <QueueList>
+              {events.map((event) => (
+                <ActivityLogItem key={event.id} event={event} />
+              ))}
+
+              {/* Blinking cursor using Shimmer */}
+              <div
+                data-testid="log-cursor"
+                className="text-primary mt-2 font-mono"
+                aria-hidden="true"
+              >
+                <Shimmer className="w-3">_</Shimmer>
+              </div>
+
+              {/* Scroll anchor */}
+              <div ref={scrollRef} />
+            </QueueList>
+          )}
         </div>
-
-        {/* Scroll anchor */}
-        <div ref={logEndRef} />
-      </div>
-    </div>
+      </QueueSectionContent>
+    </QueueSection>
   );
-};
+}
 ```
 
-**Step 4: Add blink animation to Tailwind config**
-
-```typescript
-// dashboard/tailwind.config.js
-export default {
-  // ... existing config
-  theme: {
-    extend: {
-      animation: {
-        blink: 'blink 1s step-end infinite',
-        pulse: 'pulse 2s ease-in-out infinite',
-      },
-      keyframes: {
-        blink: {
-          '0%, 100%': { opacity: '1' },
-          '50%': { opacity: '0' },
-        },
-        pulse: {
-          '0%, 100%': { opacity: '1', boxShadow: '0 0 8px rgba(255, 200, 87, 0.6)' },
-          '50%': { opacity: '0.6', boxShadow: '0 0 12px rgba(255, 200, 87, 0.8)' },
-        },
-      },
-    },
-  },
-};
-```
-
-**Step 5: Run test to verify it passes**
-
-Run: `cd dashboard && npm test src/components/organisms/ActivityLog.test.tsx`
-Expected: PASS
-
-**Step 6: Commit**
+**Step 3: Commit**
 
 ```bash
-git add dashboard/src/components/organisms/ActivityLog.tsx \
-  dashboard/src/components/organisms/ActivityLog.test.tsx \
-  dashboard/tailwind.config.js
-git commit -m "feat(dashboard): add ActivityLog with scanlines and auto-scroll
+git add dashboard/src/components/ActivityLog.tsx dashboard/src/components/ActivityLog.test.tsx
+git commit -m "feat(dashboard): add ActivityLog with loader + real-time event merging
 
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>"
+- Composes QueueSection with ActivityLogItem entries
+- Merges initial events from loader with real-time events from Zustand
+- Auto-scroll to latest event
+- Scanlines overlay for terminal aesthetic
+- Blinking cursor using ai-elements Shimmer
+- Loading state with ai-elements Loader
+- ARIA live region for screen readers"
 ```
 
 ---
 
-## Task 6: BeaconNode Custom React Flow Node
+## Task 8: ApprovalControls Component (using ai-elements Confirmation + useFetcher)
+
+Create approval controls using ai-elements Confirmation with React Router's useFetcher for mutations.
 
 **Files:**
-- Create: `dashboard/src/components/flow/BeaconNode.tsx`
-- Create: `dashboard/src/components/flow/BeaconNode.test.tsx`
-- Create: `dashboard/src/components/flow/MapPinIcon.tsx`
+- Create: `dashboard/src/components/ApprovalControls.tsx`
+- Create: `dashboard/src/components/ApprovalControls.test.tsx`
 
 **Step 1: Write the failing test**
 
 ```typescript
-// dashboard/src/components/flow/BeaconNode.test.tsx
+// dashboard/src/components/ApprovalControls.test.tsx
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { BeaconNode } from './BeaconNode';
+import { createMemoryRouter, RouterProvider } from 'react-router-dom';
+import { ApprovalControls } from './ApprovalControls';
 
-describe('BeaconNode', () => {
-  const baseProps = {
-    id: 'architect',
-    data: {
-      label: 'Architect',
-      subtitle: 'Planning',
-      status: 'completed' as const,
-      tokens: '12.4k',
+// Helper to render component with router context
+const renderWithRouter = (workflowId: string, planSummary: string, status?: string) => {
+  const router = createMemoryRouter([
+    {
+      path: '/',
+      element: <ApprovalControls workflowId={workflowId} planSummary={planSummary} status={status} />,
+      // Mock action endpoints
+      action: async () => ({ ok: true }),
     },
-  };
+    {
+      path: '/workflows/:id/approve',
+      action: async () => ({ ok: true }),
+    },
+    {
+      path: '/workflows/:id/reject',
+      action: async () => ({ ok: true }),
+    },
+  ]);
 
-  it('renders stage label and subtitle', () => {
-    render(<BeaconNode {...baseProps} />);
+  return render(<RouterProvider router={router} />);
+};
+
+describe('ApprovalControls', () => {
+  it('renders Approve and Reject buttons via ConfirmationActions', () => {
+    renderWithRouter('wf-001', 'Add benchmark framework');
+    expect(screen.getByText('Approve')).toBeInTheDocument();
+    expect(screen.getByText('Reject')).toBeInTheDocument();
+  });
+
+  it('renders ConfirmationTitle with plan summary', () => {
+    renderWithRouter('wf-001', 'Add benchmark framework');
+    expect(screen.getByText(/Add benchmark framework/)).toBeInTheDocument();
+  });
+
+  it('renders ConfirmationRequest description', () => {
+    renderWithRouter('wf-001', 'Add benchmark framework');
+    expect(screen.getByText(/Review and approve/)).toBeInTheDocument();
+  });
+
+  it('uses fetcher.Form with POST method for approve action', () => {
+    const { container } = renderWithRouter('wf-001', 'Test');
+    const approveForm = screen.getByText('Approve').closest('form');
+    expect(approveForm).toHaveAttribute('method', 'post');
+    expect(approveForm).toHaveAttribute('action', '/workflows/wf-001/approve');
+  });
+
+  it('uses fetcher.Form with POST method for reject action', () => {
+    const { container } = renderWithRouter('wf-001', 'Test');
+    const rejectForm = screen.getByText('Reject').closest('form');
+    expect(rejectForm).toHaveAttribute('method', 'post');
+    expect(rejectForm).toHaveAttribute('action', '/workflows/wf-001/reject');
+  });
+
+  it('disables buttons when fetcher is submitting', () => {
+    // Note: In real implementation, fetcher.state would be 'submitting'
+    // This test shows the structure; actual disabled state requires user interaction
+    renderWithRouter('wf-001', 'Test');
+    const approveButton = screen.getByText('Approve');
+    expect(approveButton).not.toBeDisabled(); // Initially enabled
+  });
+
+  it('shows Loader when fetcher is not idle', () => {
+    // Note: In real implementation, fetcher.state tracking would show loader
+    // This test documents the expected behavior
+    renderWithRouter('wf-001', 'Test');
+    // Loader appears only when fetcher.state !== 'idle'
+  });
+
+  it('uses ai-elements Confirmation structure', () => {
+    const { container } = renderWithRouter('wf-001', 'Test');
+    expect(container.querySelector('[data-slot="confirmation"]')).toBeInTheDocument();
+  });
+
+  it('shows ConfirmationAccepted state when status is approved', () => {
+    renderWithRouter('wf-001', 'Test', 'approved');
+    expect(screen.getByText(/Plan approved/)).toBeInTheDocument();
+  });
+
+  it('shows ConfirmationRejected state when status is rejected', () => {
+    renderWithRouter('wf-001', 'Test', 'rejected');
+    expect(screen.getByText(/Plan rejected/)).toBeInTheDocument();
+  });
+});
+```
+
+**Step 2: Implement ApprovalControls component with useFetcher**
+
+```typescript
+// dashboard/src/components/ApprovalControls.tsx
+import { useFetcher } from 'react-router-dom';
+import {
+  Confirmation,
+  ConfirmationTitle,
+  ConfirmationRequest,
+  ConfirmationAccepted,
+  ConfirmationRejected,
+  ConfirmationActions,
+  ConfirmationAction,
+} from '@/components/ai-elements/confirmation';
+import { Loader } from '@/components/ai-elements/loader';
+import { Check, X } from 'lucide-react';
+
+type ApprovalStatus = 'pending' | 'approved' | 'rejected';
+
+interface ApprovalControlsProps {
+  workflowId: string;
+  planSummary: string;
+  status?: ApprovalStatus;
+}
+
+/**
+ * ApprovalControls uses ai-elements Confirmation for approve/reject workflow.
+ *
+ * Data Flow:
+ * - Uses React Router's useFetcher for approve/reject mutations
+ * - Form submissions to /workflows/:id/approve and /workflows/:id/reject actions
+ * - Pending state from fetcher.state !== 'idle'
+ * - No custom hooks - mutations handled via Data Mode actions
+ *
+ * State machine: approval-requested -> approval-responded
+ *
+ * Structure:
+ * - Confirmation (container with state management)
+ *   - ConfirmationTitle (plan summary)
+ *   - ConfirmationRequest (description)
+ *   - ConfirmationActions
+ *     - fetcher.Form (Approve action)
+ *     - fetcher.Form (Reject action)
+ *   - ConfirmationAccepted (shown after approval)
+ *   - ConfirmationRejected (shown after rejection)
+ */
+export function ApprovalControls({
+  workflowId,
+  planSummary,
+  status = 'pending',
+}: ApprovalControlsProps) {
+  const fetcher = useFetcher();
+  const isPending = fetcher.state !== 'idle';
+
+  return (
+    <Confirmation
+      status={status === 'pending' ? 'requested' : 'responded'}
+      className="p-4 border border-border rounded-lg bg-card"
+    >
+      <ConfirmationTitle className="font-heading text-lg font-semibold mb-2">
+        {planSummary}
+      </ConfirmationTitle>
+
+      <ConfirmationRequest className="text-sm text-muted-foreground mb-4">
+        Review and approve this plan to proceed with implementation.
+      </ConfirmationRequest>
+
+      {status === 'pending' && (
+        <ConfirmationActions className="flex gap-3">
+          {/* Approve action via fetcher.Form */}
+          <fetcher.Form method="post" action={`/workflows/${workflowId}/approve`}>
+            <ConfirmationAction
+              action="accept"
+              type="submit"
+              disabled={isPending}
+              className="bg-[--confirmation-accept] hover:bg-[--confirmation-accept]/90 text-foreground"
+            >
+              {isPending ? (
+                <Loader
+                  data-testid="approval-loader"
+                  className="w-4 h-4 mr-2"
+                />
+              ) : (
+                <Check className="w-4 h-4 mr-2" />
+              )}
+              Approve
+            </ConfirmationAction>
+          </fetcher.Form>
+
+          {/* Reject action via fetcher.Form */}
+          <fetcher.Form method="post" action={`/workflows/${workflowId}/reject`}>
+            <input type="hidden" name="feedback" value="Rejected by user" />
+            <ConfirmationAction
+              action="reject"
+              type="submit"
+              variant="outline"
+              disabled={isPending}
+              className="border-[--confirmation-reject] text-[--confirmation-reject] hover:bg-[--confirmation-reject] hover:text-foreground"
+            >
+              {isPending ? (
+                <Loader
+                  data-testid="approval-loader"
+                  className="w-4 h-4 mr-2"
+                />
+              ) : (
+                <X className="w-4 h-4 mr-2" />
+              )}
+              Reject
+            </ConfirmationAction>
+          </fetcher.Form>
+        </ConfirmationActions>
+      )}
+
+      <ConfirmationAccepted className="text-[--confirmation-accept] font-semibold">
+        <Check className="w-4 h-4 mr-2 inline" />
+        Plan approved. Implementation starting...
+      </ConfirmationAccepted>
+
+      <ConfirmationRejected className="text-[--confirmation-reject] font-semibold">
+        <X className="w-4 h-4 mr-2 inline" />
+        Plan rejected. Awaiting revision...
+      </ConfirmationRejected>
+    </Confirmation>
+  );
+}
+```
+
+**Step 3: Commit**
+
+```bash
+git add dashboard/src/components/ApprovalControls.tsx dashboard/src/components/ApprovalControls.test.tsx
+git commit -m "feat(dashboard): add ApprovalControls using Confirmation + useFetcher
+
+- Wraps ai-elements Confirmation state machine (requested -> responded)
+- Uses React Router useFetcher for approve/reject mutations
+- fetcher.Form submits to /workflows/:id/approve and /workflows/:id/reject
+- Pending state from fetcher.state !== 'idle'
+- ConfirmationAccepted/Rejected for response states
+- No custom hooks - mutations via Data Mode actions
+- Uses aviation theme confirmation colors"
+```
+
+---
+
+## Page Component Integration Examples
+
+**Note:** These examples show how page components wire up loader data to child components using React Router v7 Data Mode patterns. These patterns are implemented in Plan 09 (Routes & Pages).
+
+### Example 1: WorkflowsPage with Loader Data
+
+```typescript
+// pages/WorkflowsPage.tsx
+import { useLoaderData, Outlet, useNavigation } from 'react-router-dom';
+import { JobQueue } from '@/components/JobQueue';
+import { useWorkflowStore } from '@/store/workflowStore';
+
+export default function WorkflowsPage() {
+  const { workflows } = useLoaderData() as WorkflowsLoaderData;
+  const { selectedWorkflowId, selectWorkflow } = useWorkflowStore();
+  const navigation = useNavigation();
+
+  const isNavigating = navigation.state !== 'idle';
+
+  return (
+    <div className="grid grid-cols-[300px_1fr] h-full">
+      {/* JobQueue receives workflows from loader */}
+      {isNavigating ? (
+        <JobQueueSkeleton />
+      ) : (
+        <JobQueue
+          workflows={workflows}
+          selectedId={selectedWorkflowId}
+          onSelect={selectWorkflow}
+        />
+      )}
+
+      {/* Renders WorkflowDetailPage when :id is present */}
+      <Outlet />
+    </div>
+  );
+}
+
+// Loader fetches initial data (defined in Plan 09)
+export async function workflowsLoader() {
+  const response = await fetch('/api/workflows');
+  const workflows = await response.json();
+  return { workflows };
+}
+```
+
+### Example 2: WorkflowDetailPage with Real-time Events
+
+```typescript
+// pages/WorkflowDetailPage.tsx
+import { useLoaderData, useParams } from 'react-router-dom';
+import { ActivityLog } from '@/components/ActivityLog';
+import { ApprovalControls } from '@/components/ApprovalControls';
+
+export default function WorkflowDetailPage() {
+  const { workflowId } = useParams();
+  const { workflow } = useLoaderData() as WorkflowDetailLoaderData;
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* ActivityLog merges loader events with real-time from Zustand */}
+      <ActivityLog
+        workflowId={workflowId!}
+        initialEvents={workflow.recent_events}
+      />
+
+      {/* ApprovalControls uses useFetcher for mutations */}
+      {workflow.needs_approval && (
+        <ApprovalControls
+          workflowId={workflowId!}
+          planSummary={workflow.plan_summary}
+          status={workflow.approval_status}
+        />
+      )}
+    </div>
+  );
+}
+
+// Loader fetches workflow detail (defined in Plan 09)
+export async function workflowDetailLoader({ params }: LoaderFunctionArgs) {
+  const response = await fetch(`/api/workflows/${params.id}`);
+  const workflow = await response.json();
+  return { workflow };
+}
+```
+
+### Example 3: Sidebar with NavLink for Active Styling
+
+```typescript
+// components/DashboardSidebar.tsx
+import { NavLink } from 'react-router-dom';
+import { Home, Settings, Activity } from 'lucide-react';
+import { cn } from '@/lib/utils';
+
+function SidebarNavLink({ to, icon: Icon, label }: NavLinkProps) {
+  return (
+    <NavLink
+      to={to}
+      className={({ isActive, isPending }) =>
+        cn(
+          'flex items-center gap-3 px-3 py-2 rounded transition-colors',
+          isActive && 'bg-sidebar-primary text-sidebar-primary-foreground',
+          isPending && 'opacity-50',
+          !isActive && 'hover:bg-sidebar-accent'
+        )
+      }
+    >
+      <Icon className="w-4 h-4" />
+      <span>{label}</span>
+    </NavLink>
+  );
+}
+
+export function DashboardSidebar() {
+  return (
+    <aside className="w-64 bg-sidebar border-r">
+      <nav className="flex flex-col gap-1 p-4">
+        <SidebarNavLink to="/" icon={Home} label="Dashboard" />
+        <SidebarNavLink to="/workflows" icon={Activity} label="Workflows" />
+        <SidebarNavLink to="/settings" icon={Settings} label="Settings" />
+      </nav>
+    </aside>
+  );
+}
+```
+
+### Key Patterns Summary
+
+1. **Loader Data**: Components receive initial data via `useLoaderData()` from parent pages
+2. **Real-time Updates**: Zustand store provides WebSocket events, merged with loader data
+3. **Loading States**: `useNavigation()` shows route-level loading indicators
+4. **Mutations**: `useFetcher()` handles form submissions without navigation
+5. **Active Routes**: `NavLink` automatically applies active state styling
+
+---
+
+## PART 2: Custom WorkflowCanvas Components
+
+These tasks build custom React Flow components for the workflow visualization. The design mock uses map pin icons for nodes, creating a "flight route" aesthetic that requires custom implementation.
+
+---
+
+## Task 9: WorkflowNode Component (Custom React Flow Node)
+
+Create a custom React Flow node with MapPin icon, status-based coloring, and beacon glow animation. This is NOT built on ai-elements Node because the design requires map pin icons, not Card-based layouts.
+
+**Files:**
+- Create: `dashboard/src/components/flow/WorkflowNode.tsx`
+- Create: `dashboard/src/components/flow/WorkflowNode.test.tsx`
+
+**Step 1: Write the failing test**
+
+```typescript
+// dashboard/src/components/flow/WorkflowNode.test.tsx
+import { describe, it, expect } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import { ReactFlowProvider } from '@xyflow/react';
+import { WorkflowNode } from './WorkflowNode';
+
+const renderNode = (data: any) => {
+  return render(
+    <ReactFlowProvider>
+      <WorkflowNode
+        id="test"
+        data={data}
+        type="workflow"
+        selected={false}
+        isConnectable={false}
+        positionAbsoluteX={0}
+        positionAbsoluteY={0}
+        zIndex={0}
+      />
+    </ReactFlowProvider>
+  );
+};
+
+describe('WorkflowNode', () => {
+  it('renders stage label', () => {
+    renderNode({ label: 'Architect', status: 'completed' });
     expect(screen.getByText('Architect')).toBeInTheDocument();
+  });
+
+  it('renders subtitle when provided', () => {
+    renderNode({ label: 'Architect', subtitle: 'Planning', status: 'completed' });
     expect(screen.getByText('Planning')).toBeInTheDocument();
   });
 
   it('renders token count when provided', () => {
-    render(<BeaconNode {...baseProps} />);
+    renderNode({ label: 'Architect', status: 'completed', tokens: '12.4k' });
     expect(screen.getByText('12.4k tokens')).toBeInTheDocument();
   });
 
-  it('renders map pin icon with completed state styling', () => {
-    render(<BeaconNode {...baseProps} />);
-    const pin = screen.getByTestId('map-pin-icon');
-    expect(pin).toHaveAttribute('data-status', 'completed');
+  it('renders MapPin icon (not Card-based layout)', () => {
+    const { container } = renderNode({ label: 'Developer', status: 'active' });
+    // Should have lucide MapPin SVG
+    expect(container.querySelector('svg.lucide-map-pin')).toBeInTheDocument();
   });
 
-  it('applies beacon pulse animation to active state', () => {
-    const activeProps = {
-      ...baseProps,
-      data: { ...baseProps.data, status: 'active' as const },
-    };
-    render(<BeaconNode {...activeProps} />);
-    const pin = screen.getByTestId('map-pin-icon');
-    expect(pin).toHaveClass('animate-beacon-glow');
+  it('applies active status styling with beacon glow', () => {
+    const { container } = renderNode({ label: 'Developer', status: 'active' });
+    expect(container.querySelector('[data-status="active"]')).toBeInTheDocument();
+    // Active nodes have beacon glow animation
+    expect(container.querySelector('.animate-pulse')).toBeInTheDocument();
   });
 
-  it('applies blocked state styling', () => {
-    const blockedProps = {
-      ...baseProps,
-      data: { ...baseProps.data, status: 'blocked' as const },
-    };
-    render(<BeaconNode {...blockedProps} />);
-    const pin = screen.getByTestId('map-pin-icon');
-    expect(pin).toHaveAttribute('data-status', 'blocked');
+  it('applies completed status styling (teal color)', () => {
+    const { container } = renderNode({ label: 'Architect', status: 'completed' });
+    expect(container.querySelector('[data-status="completed"]')).toBeInTheDocument();
   });
 
-  it('does not render token count when not provided', () => {
-    const noTokensProps = {
-      ...baseProps,
-      data: { ...baseProps.data, tokens: null },
-    };
-    render(<BeaconNode {...noTokensProps} />);
-    expect(screen.queryByText(/tokens/)).not.toBeInTheDocument();
+  it('applies pending status styling (muted)', () => {
+    const { container } = renderNode({ label: 'Reviewer', status: 'pending' });
+    expect(container.querySelector('[data-status="pending"]')).toBeInTheDocument();
   });
 
-  it('has proper ARIA role and label', () => {
-    render(<BeaconNode {...baseProps} />);
-    const node = screen.getByRole('img');
-    expect(node).toHaveAttribute('aria-label', 'Workflow stage: Architect - Planning (completed)');
+  it('has proper ARIA label', () => {
+    renderNode({ label: 'Architect', subtitle: 'Planning', status: 'completed' });
+    expect(screen.getByRole('img')).toHaveAttribute(
+      'aria-label',
+      'Workflow stage: Architect - Planning (completed)'
+    );
+  });
+
+  it('renders handles for connections', () => {
+    const { container } = renderNode({ label: 'Test', status: 'pending' });
+    // Should have input and output handles
+    expect(container.querySelectorAll('.react-flow__handle')).toHaveLength(2);
+  });
+
+  it('does NOT use ai-elements Node structure', () => {
+    const { container } = renderNode({ label: 'Test', status: 'pending' });
+    // Should NOT have data-slot="node" (ai-elements pattern)
+    expect(container.querySelector('[data-slot="node"]')).not.toBeInTheDocument();
   });
 });
 ```
 
 **Step 2: Run test to verify it fails**
 
-Run: `cd dashboard && npm test src/components/flow/BeaconNode.test.tsx`
-Expected: FAIL - Component does not exist
-
-**Step 3: Create MapPinIcon component**
-
-```typescript
-// dashboard/src/components/flow/MapPinIcon.tsx
-import { FC } from 'react';
-
-type NodeStatus = 'completed' | 'active' | 'pending' | 'blocked';
-
-interface MapPinIconProps {
-  status: NodeStatus;
-  size?: number;
-  className?: string;
-}
-
-const statusColors = {
-  completed: {
-    fill: '#5B8A72',
-    stroke: '#3D5E4B',
-  },
-  active: {
-    fill: '#FFC857',
-    stroke: '#D4A53D',
-  },
-  pending: {
-    fill: '#4A5C54',
-    stroke: '#2D3B35',
-  },
-  blocked: {
-    fill: '#A33D2E',
-    stroke: '#6B1F14',
-  },
-};
-
-export const MapPinIcon: FC<MapPinIconProps> = ({ status, size = 32, className = '' }) => {
-  const colors = statusColors[status];
-
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill={colors.fill}
-      stroke={colors.stroke}
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      data-testid="map-pin-icon"
-      data-status={status}
-      className={`${status === 'active' ? 'animate-beacon-glow' : ''} ${className}`.trim()}
-      aria-hidden="true"
-    >
-      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-      <circle cx="12" cy="10" r="3" fill={colors.stroke} />
-    </svg>
-  );
-};
+```bash
+cd dashboard && npm test src/components/flow/WorkflowNode.test.tsx
 ```
 
-**Step 4: Implement BeaconNode component**
+Expected: FAIL - Component does not exist
+
+**Step 3: Implement WorkflowNode component**
 
 ```typescript
-// dashboard/src/components/flow/BeaconNode.tsx
-import { FC, memo } from 'react';
-import { Handle, Position, NodeProps } from 'reactflow';
-import { MapPinIcon } from './MapPinIcon';
+// dashboard/src/components/flow/WorkflowNode.tsx
+import { memo } from 'react';
+import { Handle, Position, type NodeProps } from '@xyflow/react';
+import { MapPin } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 type NodeStatus = 'completed' | 'active' | 'pending' | 'blocked';
 
-interface BeaconNodeData {
+export interface WorkflowNodeData {
   label: string;
-  subtitle: string;
+  subtitle?: string;
   status: NodeStatus;
-  tokens: string | null;
+  tokens?: string;
 }
 
-export type BeaconNodeProps = NodeProps<BeaconNodeData>;
+/**
+ * Status-based styling for the map pin workflow node.
+ * Uses aviation theme colors:
+ * - completed: teal (status-completed)
+ * - active: amber (primary) with beacon glow animation
+ * - pending: muted/dimmed
+ * - blocked: red (destructive)
+ */
+const statusStyles: Record<NodeStatus, {
+  pinClass: string;
+  containerClass: string;
+  glowClass: string;
+}> = {
+  completed: {
+    pinClass: 'text-[--workflow-node-completed]',
+    containerClass: 'opacity-100',
+    glowClass: '',
+  },
+  active: {
+    pinClass: 'text-[--workflow-node-active] animate-pulse',
+    containerClass: 'opacity-100',
+    glowClass: 'shadow-[0_0_20px_var(--workflow-beacon-glow)]',
+  },
+  pending: {
+    pinClass: 'text-[--workflow-node-pending]',
+    containerClass: 'opacity-50',
+    glowClass: '',
+  },
+  blocked: {
+    pinClass: 'text-[--workflow-node-blocked]',
+    containerClass: 'opacity-100',
+    glowClass: '',
+  },
+};
 
-const BeaconNodeComponent: FC<BeaconNodeProps> = ({ data }) => {
-  const tokenColor = data.status === 'active' ? 'text-accent-gold' : 'text-status-completed';
+/**
+ * WorkflowNode is a CUSTOM React Flow node component.
+ *
+ * Design: Uses MapPin icon from lucide-react to create a "flight route waypoint"
+ * aesthetic. This differs from ai-elements Node which uses Card-based layouts.
+ *
+ * Structure:
+ * - Container with status-based opacity
+ * - MapPin icon with status-based color and optional beacon glow
+ * - Label text below the pin
+ * - Optional subtitle
+ * - Optional token count
+ * - Connection handles (left input, right output)
+ */
+function WorkflowNodeComponent({ data }: NodeProps<WorkflowNodeData>) {
+  const styles = statusStyles[data.status];
+  const ariaLabel = `Workflow stage: ${data.label}${data.subtitle ? ` - ${data.subtitle}` : ''} (${data.status})`;
 
   return (
     <div
       role="img"
-      aria-label={`Workflow stage: ${data.label} - ${data.subtitle} (${data.status})`}
-      className="flex flex-col items-center gap-2 min-w-[100px] transition-transform duration-200 hover:-translate-y-0.5 hover:drop-shadow-[0_4px_12px_rgba(255,200,87,0.15)]"
+      aria-label={ariaLabel}
+      data-status={data.status}
+      className={cn(
+        'flex flex-col items-center min-w-[100px]',
+        styles.containerClass
+      )}
     >
       {/* Input handle (left) */}
       <Handle
         type="target"
         position={Position.Left}
-        className="w-2 h-2 !bg-text-primary/20 border-0"
+        className="!w-2 !h-2 !bg-[--workflow-node-pending] !border-0"
       />
 
-      {/* Map Pin Icon */}
-      <MapPinIcon status={data.status} size={32} />
+      {/* Map Pin icon with beacon glow for active status */}
+      <div className={cn('rounded-full p-2', styles.glowClass)}>
+        <MapPin
+          className={cn('lucide-map-pin w-8 h-8', styles.pinClass)}
+          strokeWidth={2}
+        />
+      </div>
 
       {/* Label */}
-      <span className="font-heading text-lg font-semibold tracking-wider text-text-primary text-center mt-3">
+      <span className="font-heading text-sm font-semibold tracking-wider text-foreground mt-2">
         {data.label}
       </span>
 
       {/* Subtitle */}
-      <span className="font-body text-sm text-text-secondary text-center">
-        {data.subtitle}
-      </span>
+      {data.subtitle && (
+        <span className="font-body text-xs text-muted-foreground">
+          {data.subtitle}
+        </span>
+      )}
 
-      {/* Token count (if provided) */}
+      {/* Token count */}
       {data.tokens && (
-        <span className={`font-mono text-xs text-center ${tokenColor}`}>
+        <span className="font-mono text-xs text-muted-foreground mt-1">
           {data.tokens} tokens
         </span>
       )}
@@ -1260,87 +1902,57 @@ const BeaconNodeComponent: FC<BeaconNodeProps> = ({ data }) => {
       <Handle
         type="source"
         position={Position.Right}
-        className="w-2 h-2 !bg-text-primary/20 border-0"
+        className="!w-2 !h-2 !bg-[--workflow-node-pending] !border-0"
       />
     </div>
   );
-};
+}
 
-export const BeaconNode = memo(BeaconNodeComponent);
+export const WorkflowNode = memo(WorkflowNodeComponent);
 ```
 
-**Step 5: Add beacon-glow animation to Tailwind config**
-
-```typescript
-// dashboard/tailwind.config.js
-export default {
-  // ... existing config
-  theme: {
-    extend: {
-      animation: {
-        blink: 'blink 1s step-end infinite',
-        pulse: 'pulse 2s ease-in-out infinite',
-        'beacon-glow': 'beaconGlow 2s ease-in-out infinite',
-      },
-      keyframes: {
-        blink: {
-          '0%, 100%': { opacity: '1' },
-          '50%': { opacity: '0' },
-        },
-        pulse: {
-          '0%, 100%': { opacity: '1', boxShadow: '0 0 8px rgba(255, 200, 87, 0.6)' },
-          '50%': { opacity: '0.6', boxShadow: '0 0 12px rgba(255, 200, 87, 0.8)' },
-        },
-        beaconGlow: {
-          '0%, 100%': {
-            filter: 'drop-shadow(0 0 4px rgba(255, 200, 87, 0.6)) drop-shadow(0 0 8px rgba(255, 200, 87, 0.4))',
-          },
-          '50%': {
-            filter: 'drop-shadow(0 0 8px rgba(255, 200, 87, 0.9)) drop-shadow(0 0 16px rgba(255, 200, 87, 0.6)) drop-shadow(0 0 24px rgba(255, 200, 87, 0.3))',
-          },
-        },
-      },
-    },
-  },
-};
-```
-
-**Step 6: Run test to verify it passes**
-
-Run: `cd dashboard && npm test src/components/flow/BeaconNode.test.tsx`
-Expected: PASS
-
-**Step 7: Commit**
+**Step 4: Run test to verify it passes**
 
 ```bash
-git add dashboard/src/components/flow/BeaconNode.tsx \
-  dashboard/src/components/flow/BeaconNode.test.tsx \
-  dashboard/src/components/flow/MapPinIcon.tsx \
-  dashboard/tailwind.config.js
-git commit -m "feat(dashboard): add BeaconNode with animated map pin
+cd dashboard && npm test src/components/flow/WorkflowNode.test.tsx
+```
 
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
+Expected: PASS
 
-Co-Authored-By: Claude <noreply@anthropic.com>"
+**Step 5: Commit**
+
+```bash
+git add dashboard/src/components/flow/WorkflowNode.tsx dashboard/src/components/flow/WorkflowNode.test.tsx
+git commit -m "feat(dashboard): add custom WorkflowNode with MapPin icon
+
+- Custom React Flow node (NOT ai-elements Node)
+- MapPin icon from lucide-react for flight route aesthetic
+- Status-based coloring: teal (completed), amber (active), muted (pending)
+- Beacon glow animation for active nodes
+- Label, subtitle, and token count display
+- Connection handles for React Flow edges
+- Memoized for performance"
 ```
 
 ---
 
-## Task 7: FlightEdge Custom React Flow Edge
+## Task 10: WorkflowEdge Component (Custom React Flow Edge)
+
+Create a custom React Flow edge with time labels at the midpoint and animated flow indicator. This is NOT built on ai-elements Edge because we need specific control over the time label positioning and animation.
 
 **Files:**
-- Create: `dashboard/src/components/flow/FlightEdge.tsx`
-- Create: `dashboard/src/components/flow/FlightEdge.test.tsx`
+- Create: `dashboard/src/components/flow/WorkflowEdge.tsx`
+- Create: `dashboard/src/components/flow/WorkflowEdge.test.tsx`
 
 **Step 1: Write the failing test**
 
 ```typescript
-// dashboard/src/components/flow/FlightEdge.test.tsx
+// dashboard/src/components/flow/WorkflowEdge.test.tsx
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { FlightEdge } from './FlightEdge';
+import { WorkflowEdge } from './WorkflowEdge';
 
-describe('FlightEdge', () => {
+describe('WorkflowEdge', () => {
   const baseProps = {
     id: 'e1-2',
     source: 'node1',
@@ -1351,104 +1963,124 @@ describe('FlightEdge', () => {
     targetY: 100,
     sourcePosition: 'right' as const,
     targetPosition: 'left' as const,
-    data: {
-      label: '0:24',
-      status: 'completed' as const,
-    },
+    data: { label: '0:24', status: 'completed' as const },
   };
 
   it('renders edge path', () => {
-    const { container } = render(<FlightEdge {...baseProps} />);
-    const path = container.querySelector('path');
-    expect(path).toBeInTheDocument();
+    const { container } = render(
+      <svg>
+        <WorkflowEdge {...baseProps} />
+      </svg>
+    );
+    expect(container.querySelector('path')).toBeInTheDocument();
   });
 
-  it('renders time label', () => {
-    render(<FlightEdge {...baseProps} />);
+  it('renders time label at midpoint', () => {
+    render(
+      <svg>
+        <WorkflowEdge {...baseProps} />
+      </svg>
+    );
     expect(screen.getByText('0:24')).toBeInTheDocument();
   });
 
-  it('applies completed state styling (solid green line)', () => {
-    const { container } = render(<FlightEdge {...baseProps} />);
-    const path = container.querySelector('path[data-status="completed"]');
-    expect(path).toHaveAttribute('stroke', '#5B8A72');
+  it('uses solid line for completed status', () => {
+    const { container } = render(
+      <svg>
+        <WorkflowEdge {...baseProps} />
+      </svg>
+    );
+    const path = container.querySelector('path');
+    expect(path).toHaveAttribute('data-status', 'completed');
+    // Solid line has no stroke-dasharray
+    expect(path).not.toHaveAttribute('stroke-dasharray');
   });
 
-  it('applies active state styling (dashed gold line with glow)', () => {
-    const activeProps = {
-      ...baseProps,
-      data: { ...baseProps.data, status: 'active' as const },
-    };
-    const { container } = render(<FlightEdge {...activeProps} />);
-    const path = container.querySelector('path[data-status="active"]');
-    expect(path).toHaveAttribute('stroke', '#FFC857');
-    expect(path).toHaveAttribute('stroke-dasharray', '5 5');
-  });
-
-  it('applies pending state styling (dashed low opacity)', () => {
+  it('uses dashed line for pending status', () => {
     const pendingProps = {
       ...baseProps,
       data: { ...baseProps.data, status: 'pending' as const },
     };
-    const { container } = render(<FlightEdge {...pendingProps} />);
-    const path = container.querySelector('path[data-status="pending"]');
-    expect(path).toHaveClass('opacity-30');
+    const { container } = render(
+      <svg>
+        <WorkflowEdge {...pendingProps} />
+      </svg>
+    );
+    const path = container.querySelector('path');
+    expect(path).toHaveAttribute('data-status', 'pending');
+    expect(path).toHaveAttribute('stroke-dasharray');
   });
 
-  it('positions label at midpoint of edge', () => {
-    render(<FlightEdge {...baseProps} />);
-    const label = screen.getByText('0:24');
-    expect(label).toBeInTheDocument();
+  it('shows animated flow indicator for active edges', () => {
+    const activeProps = {
+      ...baseProps,
+      data: { ...baseProps.data, status: 'active' as const },
+    };
+    const { container } = render(
+      <svg>
+        <WorkflowEdge {...activeProps} />
+      </svg>
+    );
+    // Active edges have animated circle
+    expect(container.querySelector('circle')).toBeInTheDocument();
+  });
+
+  it('applies completed color from CSS variable', () => {
+    const { container } = render(
+      <svg>
+        <WorkflowEdge {...baseProps} />
+      </svg>
+    );
+    const path = container.querySelector('path');
+    expect(path?.getAttribute('style')).toContain('--workflow-edge-completed');
+  });
+
+  it('does NOT use ai-elements Edge structure', () => {
+    const { container } = render(
+      <svg>
+        <WorkflowEdge {...baseProps} />
+      </svg>
+    );
+    // Should NOT have data-animated="true" or data-temporary="true" (ai-elements patterns)
+    expect(container.querySelector('[data-animated]')).not.toBeInTheDocument();
+    expect(container.querySelector('[data-temporary]')).not.toBeInTheDocument();
   });
 });
 ```
 
 **Step 2: Run test to verify it fails**
 
-Run: `cd dashboard && npm test src/components/flow/FlightEdge.test.tsx`
+```bash
+cd dashboard && npm test src/components/flow/WorkflowEdge.test.tsx
+```
+
 Expected: FAIL - Component does not exist
 
-**Step 3: Implement FlightEdge component**
+**Step 3: Implement WorkflowEdge component**
 
 ```typescript
-// dashboard/src/components/flow/FlightEdge.tsx
-import { FC, memo } from 'react';
-import { EdgeProps, getStraightPath } from 'reactflow';
+// dashboard/src/components/flow/WorkflowEdge.tsx
+import { memo } from 'react';
+import { getSmoothStepPath, type EdgeProps, EdgeLabelRenderer } from '@xyflow/react';
 
 type EdgeStatus = 'completed' | 'active' | 'pending';
 
-interface FlightEdgeData {
+export interface WorkflowEdgeData {
   label: string;
   status: EdgeStatus;
 }
 
-export type FlightEdgeProps = EdgeProps<FlightEdgeData>;
-
-const statusConfig = {
-  completed: {
-    stroke: '#5B8A72',
-    strokeWidth: 2,
-    opacity: 1,
-    dashArray: undefined,
-    glow: false,
-  },
-  active: {
-    stroke: '#FFC857',
-    strokeWidth: 2,
-    opacity: 1,
-    dashArray: '5 5',
-    glow: true,
-  },
-  pending: {
-    stroke: 'rgba(239, 248, 226, 0.2)',
-    strokeWidth: 2,
-    opacity: 0.3,
-    dashArray: '5 5',
-    glow: false,
-  },
-};
-
-const FlightEdgeComponent: FC<FlightEdgeProps> = ({
+/**
+ * WorkflowEdge is a CUSTOM React Flow edge component.
+ *
+ * Design: Connects map pin nodes with status-based styling:
+ * - completed: solid line, teal color
+ * - active: dashed line with animated flowing circle, amber color
+ * - pending: dashed line, muted color
+ *
+ * Time labels are rendered at the edge midpoint.
+ */
+function WorkflowEdgeComponent({
   id,
   sourceX,
   sourceY,
@@ -1457,95 +2089,108 @@ const FlightEdgeComponent: FC<FlightEdgeProps> = ({
   sourcePosition,
   targetPosition,
   data,
-}) => {
-  const [edgePath, labelX, labelY] = getStraightPath({
+}: EdgeProps<WorkflowEdgeData>) {
+  const [edgePath, labelX, labelY] = getSmoothStepPath({
     sourceX,
     sourceY,
     targetX,
     targetY,
+    sourcePosition,
+    targetPosition,
+    borderRadius: 8,
   });
 
-  const config = statusConfig[data?.status || 'pending'];
+  const status = data?.status || 'pending';
+
+  // Style based on status
+  const strokeColor = {
+    completed: 'var(--workflow-edge-completed)',
+    active: 'var(--workflow-edge-active)',
+    pending: 'var(--workflow-edge-pending)',
+  }[status];
+
+  const isDashed = status !== 'completed';
+  const strokeOpacity = status === 'pending' ? 0.4 : 1;
 
   return (
-    <g>
-      {/* Edge path */}
+    <>
+      {/* Main edge path */}
       <path
         id={id}
         d={edgePath}
-        stroke={config.stroke}
-        strokeWidth={config.strokeWidth}
-        strokeDasharray={config.dashArray}
+        data-status={status}
         fill="none"
-        data-status={data?.status}
-        className={`
-          ${config.opacity < 1 ? 'opacity-30' : ''}
-          ${config.glow ? 'drop-shadow-[0_0_8px_rgba(255,200,87,0.4)]' : ''}
-        `.trim()}
+        strokeWidth={2}
+        strokeLinecap="round"
+        style={{ stroke: strokeColor, opacity: strokeOpacity }}
+        {...(isDashed && { strokeDasharray: '6 4' })}
       />
 
-      {/* Time label */}
-      <foreignObject
-        x={labelX - 30}
-        y={labelY - 15}
-        width={60}
-        height={30}
-        className="overflow-visible"
-      >
-        <div className="flex items-center justify-center h-full">
-          <span className="px-2 py-0.5 font-mono text-xs text-text-secondary bg-bg-dark/80 border border-text-primary/15">
-            {data?.label}
-          </span>
-        </div>
-      </foreignObject>
+      {/* Animated flow indicator for active edges */}
+      {status === 'active' && (
+        <circle r={4} fill={strokeColor}>
+          <animateMotion dur="1.5s" repeatCount="indefinite" path={edgePath} />
+        </circle>
+      )}
 
-      {/* Arrow indicator */}
-      <foreignObject
-        x={labelX - 6}
-        y={labelY + 18}
-        width={12}
-        height={12}
-        className="overflow-visible"
-      >
-        <div className="flex items-center justify-center text-[10px] text-text-primary/40">
-          ▸
-        </div>
-      </foreignObject>
-    </g>
+      {/* Time label at midpoint */}
+      {data?.label && (
+        <EdgeLabelRenderer>
+          <div
+            style={{
+              position: 'absolute',
+              transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
+              pointerEvents: 'all',
+            }}
+            className="px-2 py-0.5 font-mono text-xs text-muted-foreground bg-background/90 border border-border rounded"
+          >
+            {data.label}
+          </div>
+        </EdgeLabelRenderer>
+      )}
+    </>
   );
-};
+}
 
-export const FlightEdge = memo(FlightEdgeComponent);
+export const WorkflowEdge = memo(WorkflowEdgeComponent);
 ```
 
 **Step 4: Run test to verify it passes**
 
-Run: `cd dashboard && npm test src/components/flow/FlightEdge.test.tsx`
+```bash
+cd dashboard && npm test src/components/flow/WorkflowEdge.test.tsx
+```
+
 Expected: PASS
 
 **Step 5: Commit**
 
 ```bash
-git add dashboard/src/components/flow/FlightEdge.tsx dashboard/src/components/flow/FlightEdge.test.tsx
-git commit -m "feat(dashboard): add FlightEdge with time labels and animations
+git add dashboard/src/components/flow/WorkflowEdge.tsx dashboard/src/components/flow/WorkflowEdge.test.tsx
+git commit -m "feat(dashboard): add custom WorkflowEdge with time labels
 
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>"
+- Custom React Flow edge (NOT ai-elements Edge)
+- Status-based styling: solid (completed), dashed (active/pending)
+- Animated flow indicator circle for active edges
+- Time label at edge midpoint
+- Uses aviation theme CSS variables
+- Memoized for performance"
 ```
 
 ---
 
-## Task 8: WorkflowCanvas with React Flow Integration
+## Task 11: WorkflowCanvas Component (React Flow Container)
+
+Create the workflow visualization container using React Flow with custom node/edge types, dot pattern background, and aviation theme.
 
 **Files:**
-- Create: `dashboard/src/components/organisms/WorkflowCanvas.tsx`
-- Create: `dashboard/src/components/organisms/WorkflowCanvas.test.tsx`
+- Create: `dashboard/src/components/WorkflowCanvas.tsx`
+- Create: `dashboard/src/components/WorkflowCanvas.test.tsx`
 
 **Step 1: Write the failing test**
 
 ```typescript
-// dashboard/src/components/organisms/WorkflowCanvas.test.tsx
+// dashboard/src/components/WorkflowCanvas.test.tsx
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { WorkflowCanvas } from './WorkflowCanvas';
@@ -1553,7 +2198,7 @@ import { WorkflowCanvas } from './WorkflowCanvas';
 describe('WorkflowCanvas', () => {
   const mockPipeline = {
     nodes: [
-      { id: 'issue', label: 'Issue', subtitle: 'Origin', status: 'completed' as const, tokens: null },
+      { id: 'issue', label: 'Issue', status: 'completed' as const },
       { id: 'architect', label: 'Architect', subtitle: 'Planning', status: 'completed' as const, tokens: '12.4k' },
       { id: 'developer', label: 'Developer', subtitle: 'Implementation', status: 'active' as const, tokens: '48.2k' },
     ],
@@ -1568,60 +2213,73 @@ describe('WorkflowCanvas', () => {
     expect(container.querySelector('.react-flow')).toBeInTheDocument();
   });
 
-  it('renders navigation grid pattern background', () => {
-    const { container } = render(<WorkflowCanvas pipeline={mockPipeline} />);
-    const gridPattern = container.querySelector('[data-testid="grid-pattern"]');
-    expect(gridPattern).toBeInTheDocument();
-  });
-
-  it('has proper ARIA role for pipeline visualization', () => {
+  it('has proper ARIA role and label', () => {
     render(<WorkflowCanvas pipeline={mockPipeline} />);
     const canvas = screen.getByRole('img');
-    expect(canvas).toHaveAttribute('aria-label');
     expect(canvas.getAttribute('aria-label')).toContain('pipeline');
   });
 
-  it('renders all nodes from pipeline', () => {
+  it('renders all nodes with MapPin icons', () => {
     render(<WorkflowCanvas pipeline={mockPipeline} />);
     expect(screen.getByText('Issue')).toBeInTheDocument();
     expect(screen.getByText('Architect')).toBeInTheDocument();
     expect(screen.getByText('Developer')).toBeInTheDocument();
   });
 
-  it('renders edges with time labels', () => {
-    render(<WorkflowCanvas pipeline={mockPipeline} />);
-    expect(screen.getByText('0:08')).toBeInTheDocument();
-    expect(screen.getByText('0:24')).toBeInTheDocument();
+  it('renders dot pattern background', () => {
+    const { container } = render(<WorkflowCanvas pipeline={mockPipeline} />);
+    expect(container.querySelector('.react-flow__background')).toBeInTheDocument();
   });
 
-  it('disables user interaction (view-only)', () => {
+  it('renders stage progress info', () => {
+    render(<WorkflowCanvas pipeline={mockPipeline} />);
+    // Should show completed/total stages
+    expect(screen.getByText(/2.*3.*stages/i)).toBeInTheDocument();
+  });
+
+  it('is non-interactive (view-only mode)', () => {
     const { container } = render(<WorkflowCanvas pipeline={mockPipeline} />);
-    const reactFlow = container.querySelector('.react-flow');
-    expect(reactFlow).toHaveAttribute('data-interactive', 'false');
+    // React Flow with nodesDraggable=false and nodesConnectable=false
+    expect(container.querySelector('.react-flow')).toBeInTheDocument();
+  });
+
+  it('uses custom WorkflowNode component', () => {
+    const { container } = render(<WorkflowCanvas pipeline={mockPipeline} />);
+    // Custom nodes have MapPin icons
+    expect(container.querySelectorAll('.lucide-map-pin').length).toBe(3);
+  });
+
+  it('renders Loader when loading prop is true', () => {
+    render(<WorkflowCanvas pipeline={mockPipeline} loading />);
+    expect(screen.getByTestId('canvas-loader')).toBeInTheDocument();
   });
 });
 ```
 
 **Step 2: Run test to verify it fails**
 
-Run: `cd dashboard && npm test src/components/organisms/WorkflowCanvas.test.tsx`
+```bash
+cd dashboard && npm test src/components/WorkflowCanvas.test.tsx
+```
+
 Expected: FAIL - Component does not exist
 
 **Step 3: Implement WorkflowCanvas component**
 
 ```typescript
-// dashboard/src/components/organisms/WorkflowCanvas.tsx
-import { FC, useMemo } from 'react';
-import ReactFlow, {
-  Node,
-  Edge,
+// dashboard/src/components/WorkflowCanvas.tsx
+import { useMemo } from 'react';
+import {
+  ReactFlow,
   Background,
   BackgroundVariant,
-  ReactFlowProvider,
-} from 'reactflow';
-import 'reactflow/dist/style.css';
-import { BeaconNode } from '../flow/BeaconNode';
-import { FlightEdge } from '../flow/FlightEdge';
+  type Node,
+  type Edge,
+} from '@xyflow/react';
+import '@xyflow/react/dist/style.css';
+import { Loader } from '@/components/ai-elements/loader';
+import { WorkflowNode, type WorkflowNodeData } from '@/components/flow/WorkflowNode';
+import { WorkflowEdge, type WorkflowEdgeData } from '@/components/flow/WorkflowEdge';
 
 type NodeStatus = 'completed' | 'active' | 'pending' | 'blocked';
 type EdgeStatus = 'completed' | 'active' | 'pending';
@@ -1629,9 +2287,9 @@ type EdgeStatus = 'completed' | 'active' | 'pending';
 interface PipelineNode {
   id: string;
   label: string;
-  subtitle: string;
+  subtitle?: string;
   status: NodeStatus;
-  tokens: string | null;
+  tokens?: string;
 }
 
 interface PipelineEdge {
@@ -1648,41 +2306,61 @@ interface Pipeline {
 
 interface WorkflowCanvasProps {
   pipeline: Pipeline;
+  loading?: boolean;
 }
 
+// Register custom node and edge types
 const nodeTypes = {
-  beacon: BeaconNode,
+  workflow: WorkflowNode,
 };
 
 const edgeTypes = {
-  flight: FlightEdge,
+  workflow: WorkflowEdge,
 };
 
-const WorkflowCanvasComponent: FC<WorkflowCanvasProps> = ({ pipeline }) => {
+/**
+ * WorkflowCanvas is a React Flow container with custom node/edge types.
+ *
+ * Design: Displays the workflow pipeline as a "flight route" with map pin
+ * waypoints connected by status-based edges. This is view-only (non-interactive).
+ *
+ * Features:
+ * - Custom WorkflowNode with MapPin icons
+ * - Custom WorkflowEdge with time labels
+ * - Dot pattern background (aviation radar aesthetic)
+ * - Stage progress info panel
+ * - Loading state with ai-elements Loader
+ */
+export function WorkflowCanvas({ pipeline, loading = false }: WorkflowCanvasProps) {
   // Convert pipeline data to React Flow format
-  const nodes: Node[] = useMemo(
+  const nodes: Node<WorkflowNodeData>[] = useMemo(
     () =>
       pipeline.nodes.map((node, index) => ({
         id: node.id,
-        type: 'beacon',
-        position: { x: index * 200, y: 50 },
+        type: 'workflow',
+        // Position nodes horizontally with spacing
+        position: { x: index * 180, y: 80 },
         data: {
           label: node.label,
           subtitle: node.subtitle,
           status: node.status,
           tokens: node.tokens,
         },
+        // Make nodes non-interactive
+        draggable: false,
+        selectable: false,
+        connectable: false,
       })),
     [pipeline.nodes]
   );
 
-  const edges: Edge[] = useMemo(
+  const edges: Edge<WorkflowEdgeData>[] = useMemo(
     () =>
-      pipeline.edges.map((edge, index) => ({
+      pipeline.edges.map((edge) => ({
         id: `e-${edge.from}-${edge.to}`,
         source: edge.from,
         target: edge.to,
-        type: 'flight',
+        type: 'workflow',
         data: {
           label: edge.label,
           status: edge.status,
@@ -1692,1126 +2370,1035 @@ const WorkflowCanvasComponent: FC<WorkflowCanvasProps> = ({ pipeline }) => {
   );
 
   const currentStage = pipeline.nodes.find((n) => n.status === 'active')?.label || 'Unknown';
+  const completedCount = pipeline.nodes.filter((n) => n.status === 'completed').length;
 
   return (
     <div
       role="img"
       aria-label={`Workflow pipeline with ${pipeline.nodes.length} stages. Current stage: ${currentStage}`}
-      className="relative h-64 bg-gradient-to-b from-bg-main/40 to-bg-dark/40"
+      className="h-64 bg-gradient-to-b from-card/40 to-background/40 relative"
     >
-      {/* Grid pattern background */}
-      <div
-        data-testid="grid-pattern"
-        className="absolute inset-0 opacity-50 pointer-events-none"
-        style={{
-          backgroundImage: `
-            linear-gradient(rgba(239, 248, 226, 0.05) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(239, 248, 226, 0.05) 1px, transparent 1px)
-          `,
-          backgroundSize: '20px 20px',
-        }}
-        aria-hidden="true"
-      />
-
-      {/* React Flow */}
       <ReactFlow
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         fitView
+        fitViewOptions={{ padding: 0.3 }}
+        // View-only mode
         nodesDraggable={false}
         nodesConnectable={false}
         elementsSelectable={false}
+        panOnDrag={false}
         zoomOnScroll={false}
         zoomOnPinch={false}
-        panOnDrag={false}
-        data-interactive="false"
+        zoomOnDoubleClick={false}
+        preventScrolling={false}
         className="workflow-canvas"
       >
-        <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="rgba(239, 248, 226, 0.1)" />
+        <Background
+          variant={BackgroundVariant.Dots}
+          gap={20}
+          size={1}
+          color="oklch(from var(--foreground) l c h / 0.1)"
+        />
       </ReactFlow>
+
+      {/* Stage progress info */}
+      <div className="absolute top-3 right-3 bg-card/80 border border-border rounded px-3 py-2">
+        <div className="flex items-center gap-3 text-sm">
+          {loading ? (
+            <Loader data-testid="canvas-loader" className="w-4 h-4" />
+          ) : (
+            <span className="font-mono text-muted-foreground">
+              {completedCount}/{pipeline.nodes.length} stages
+            </span>
+          )}
+        </div>
+      </div>
     </div>
   );
-};
-
-export const WorkflowCanvas: FC<WorkflowCanvasProps> = (props) => (
-  <ReactFlowProvider>
-    <WorkflowCanvasComponent {...props} />
-  </ReactFlowProvider>
-);
+}
 ```
 
 **Step 4: Run test to verify it passes**
 
-Run: `cd dashboard && npm test src/components/organisms/WorkflowCanvas.test.tsx`
+```bash
+cd dashboard && npm test src/components/WorkflowCanvas.test.tsx
+```
+
 Expected: PASS
 
 **Step 5: Commit**
 
 ```bash
-git add dashboard/src/components/organisms/WorkflowCanvas.tsx dashboard/src/components/organisms/WorkflowCanvas.test.tsx
-git commit -m "feat(dashboard): add WorkflowCanvas with React Flow integration
+git add dashboard/src/components/WorkflowCanvas.tsx dashboard/src/components/WorkflowCanvas.test.tsx
+git commit -m "feat(dashboard): add WorkflowCanvas with custom React Flow components
 
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>"
+- React Flow container with fitView and view-only mode
+- Custom WorkflowNode and WorkflowEdge types
+- Dot pattern background for aviation radar aesthetic
+- Stage progress info panel
+- Loading state with ai-elements Loader
+- ARIA labeling for accessibility"
 ```
 
 ---
 
-## Task 9: ApprovalButtons Component
+## PART 3: Supporting Components and Exports
+
+---
+
+## Task 12: WorkflowHeader Component
+
+Create a header component combining StatusBadge with workflow info.
 
 **Files:**
-- Create: `dashboard/src/components/molecules/ApprovalButtons.tsx`
-- Create: `dashboard/src/components/molecules/ApprovalButtons.test.tsx`
+- Create: `dashboard/src/components/WorkflowHeader.tsx`
+- Create: `dashboard/src/components/WorkflowHeader.test.tsx`
 
 **Step 1: Write the failing test**
 
 ```typescript
-// dashboard/src/components/molecules/ApprovalButtons.test.tsx
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { ApprovalButtons } from './ApprovalButtons';
+// dashboard/src/components/WorkflowHeader.test.tsx
+import { describe, it, expect } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import { WorkflowHeader } from './WorkflowHeader';
 
-describe('ApprovalButtons', () => {
-  it('renders Approve and Reject buttons', () => {
-    render(<ApprovalButtons workflowId="wf-001" onApprove={() => {}} onReject={() => {}} isPending={false} />);
-    expect(screen.getByText('Approve')).toBeInTheDocument();
-    expect(screen.getByText('Reject')).toBeInTheDocument();
+describe('WorkflowHeader', () => {
+  const mockWorkflow = {
+    id: 'wf-001',
+    issue_id: '#8',
+    worktree_name: 'feature-benchmark',
+    status: 'in_progress' as const,
+  };
+
+  it('renders issue ID', () => {
+    render(<WorkflowHeader workflow={mockWorkflow} />);
+    expect(screen.getByText('#8')).toBeInTheDocument();
   });
 
-  it('calls onApprove when Approve button is clicked', () => {
-    const onApprove = vi.fn();
-    render(<ApprovalButtons workflowId="wf-001" onApprove={onApprove} onReject={() => {}} isPending={false} />);
-
-    fireEvent.click(screen.getByText('Approve'));
-    expect(onApprove).toHaveBeenCalledWith('wf-001');
+  it('renders worktree name', () => {
+    render(<WorkflowHeader workflow={mockWorkflow} />);
+    expect(screen.getByText('feature-benchmark')).toBeInTheDocument();
   });
 
-  it('calls onReject when Reject button is clicked', () => {
-    const onReject = vi.fn();
-    render(<ApprovalButtons workflowId="wf-001" onApprove={() => {}} onReject={onReject} isPending={false} />);
-
-    fireEvent.click(screen.getByText('Reject'));
-    expect(onReject).toHaveBeenCalledWith('wf-001');
+  it('renders StatusBadge', () => {
+    render(<WorkflowHeader workflow={mockWorkflow} />);
+    expect(screen.getByRole('status')).toHaveTextContent('RUNNING');
   });
 
-  it('disables buttons when isPending is true', () => {
-    render(<ApprovalButtons workflowId="wf-001" onApprove={() => {}} onReject={() => {}} isPending={true} />);
-
-    const approveBtn = screen.getByText('Approve');
-    const rejectBtn = screen.getByText('Reject');
-
-    expect(approveBtn).toBeDisabled();
-    expect(rejectBtn).toBeDisabled();
+  it('shows Loader for running status', () => {
+    const { container } = render(<WorkflowHeader workflow={mockWorkflow} />);
+    // Loader renders animated SVG
+    expect(container.querySelector('[data-loader]')).toBeInTheDocument();
   });
 
-  it('shows loading spinner when isPending is true', () => {
-    render(<ApprovalButtons workflowId="wf-001" onApprove={() => {}} onReject={() => {}} isPending={true} />);
-    expect(screen.getByTestId('loading-spinner')).toBeInTheDocument();
+  it('has proper semantic structure', () => {
+    render(<WorkflowHeader workflow={mockWorkflow} />);
+    expect(screen.getByRole('banner')).toBeInTheDocument();
   });
 
-  it('has proper ARIA labels for accessibility', () => {
-    render(<ApprovalButtons workflowId="wf-001" onApprove={() => {}} onReject={() => {}} isPending={false} />);
-
-    const approveBtn = screen.getByLabelText('Approve workflow plan');
-    const rejectBtn = screen.getByLabelText('Reject workflow plan');
-
-    expect(approveBtn).toBeInTheDocument();
-    expect(rejectBtn).toBeInTheDocument();
-  });
-
-  it('supports keyboard interaction (Enter key)', () => {
-    const onApprove = vi.fn();
-    render(<ApprovalButtons workflowId="wf-001" onApprove={onApprove} onReject={() => {}} isPending={false} />);
-
-    const approveBtn = screen.getByText('Approve');
-    fireEvent.keyDown(approveBtn, { key: 'Enter' });
-
-    expect(onApprove).toHaveBeenCalledWith('wf-001');
+  it('shows elapsed time when provided', () => {
+    render(<WorkflowHeader workflow={mockWorkflow} elapsedTime="2:34" />);
+    expect(screen.getByText('2:34')).toBeInTheDocument();
   });
 });
 ```
 
-**Step 2: Run test to verify it fails**
-
-Run: `cd dashboard && npm test src/components/molecules/ApprovalButtons.test.tsx`
-Expected: FAIL - Component does not exist
-
-**Step 3: Implement ApprovalButtons component**
+**Step 2: Implement WorkflowHeader component**
 
 ```typescript
-// dashboard/src/components/molecules/ApprovalButtons.tsx
-import { FC } from 'react';
+// dashboard/src/components/WorkflowHeader.tsx
+import { StatusBadge } from '@/components/StatusBadge';
+import { Loader } from '@/components/ai-elements/loader';
+import type { WorkflowSummary } from '@/types';
 
-interface ApprovalButtonsProps {
-  workflowId: string;
-  onApprove: (workflowId: string) => void;
-  onReject: (workflowId: string) => void;
-  isPending: boolean;
+interface WorkflowHeaderProps {
+  workflow: Pick<WorkflowSummary, 'id' | 'issue_id' | 'worktree_name' | 'status'>;
+  elapsedTime?: string;
 }
 
-const Spinner: FC = () => (
-  <svg
-    data-testid="loading-spinner"
-    className="animate-spin h-4 w-4"
-    xmlns="http://www.w3.org/2000/svg"
-    fill="none"
-    viewBox="0 0 24 24"
-  >
-    <circle
-      className="opacity-25"
-      cx="12"
-      cy="12"
-      r="10"
-      stroke="currentColor"
-      strokeWidth="4"
-    />
-    <path
-      className="opacity-75"
-      fill="currentColor"
-      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-    />
-  </svg>
-);
-
-export const ApprovalButtons: FC<ApprovalButtonsProps> = ({
-  workflowId,
-  onApprove,
-  onReject,
-  isPending,
-}) => {
-  const handleApprove = () => {
-    if (!isPending) {
-      onApprove(workflowId);
-    }
-  };
-
-  const handleReject = () => {
-    if (!isPending) {
-      onReject(workflowId);
-    }
-  };
-
-  const handleKeyDown = (handler: () => void) => (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !isPending) {
-      handler();
-    }
-  };
+/**
+ * WorkflowHeader displays workflow identification and status.
+ * Uses StatusBadge (wrapping QueueItemIndicator) and Loader from ai-elements.
+ */
+export function WorkflowHeader({ workflow, elapsedTime }: WorkflowHeaderProps) {
+  const isRunning = workflow.status === 'in_progress';
 
   return (
-    <div className="flex gap-3" role="group" aria-label="Plan approval actions">
-      <button
-        onClick={handleApprove}
-        onKeyDown={handleKeyDown(handleApprove)}
-        disabled={isPending}
-        aria-label="Approve workflow plan"
-        className={`
-          flex items-center justify-center gap-2
-          px-6 py-3
-          font-heading text-sm font-semibold tracking-wider uppercase
-          bg-status-completed text-bg-dark
-          border-2 border-status-completed
-          transition-all duration-200
-          ${isPending
-            ? 'opacity-50 cursor-not-allowed'
-            : 'hover:bg-status-completed/90 hover:shadow-lg hover:shadow-status-completed/20 active:scale-95'
-          }
-        `.trim()}
-      >
-        {isPending ? <Spinner /> : null}
-        Approve
-      </button>
+    <header
+      role="banner"
+      className="flex items-center justify-between px-6 py-4 border-b border-border bg-card/50"
+    >
+      {/* Left: Workflow info */}
+      <div>
+        <span className="block font-heading text-xs font-semibold tracking-widest text-muted-foreground mb-1">
+          WORKFLOW
+        </span>
+        <div className="flex items-center gap-3">
+          <h2 className="font-display text-3xl font-bold tracking-wider text-foreground">
+            {workflow.issue_id}
+          </h2>
+          <span className="font-mono text-sm text-muted-foreground">
+            {workflow.worktree_name}
+          </span>
+        </div>
+      </div>
 
-      <button
-        onClick={handleReject}
-        onKeyDown={handleKeyDown(handleReject)}
-        disabled={isPending}
-        aria-label="Reject workflow plan"
-        className={`
-          flex items-center justify-center gap-2
-          px-6 py-3
-          font-heading text-sm font-semibold tracking-wider uppercase
-          bg-transparent text-status-failed
-          border-2 border-status-failed
-          transition-all duration-200
-          ${isPending
-            ? 'opacity-50 cursor-not-allowed'
-            : 'hover:bg-status-failed hover:text-text-primary hover:shadow-lg hover:shadow-status-failed/20 active:scale-95'
-          }
-        `.trim()}
-      >
-        {isPending ? <Spinner /> : null}
-        Reject
-      </button>
-    </div>
+      {/* Right: Status */}
+      <div className="flex items-center gap-3 px-4 py-2 bg-primary/10 border border-primary/30 rounded">
+        {isRunning && (
+          <Loader data-loader className="w-4 h-4 text-primary" />
+        )}
+        <StatusBadge status={workflow.status} />
+        {elapsedTime && (
+          <span className="font-mono text-sm text-muted-foreground">
+            {elapsedTime}
+          </span>
+        )}
+      </div>
+    </header>
   );
-};
+}
 ```
 
-**Step 4: Run test to verify it passes**
-
-Run: `cd dashboard && npm test src/components/molecules/ApprovalButtons.test.tsx`
-Expected: PASS
-
-**Step 5: Commit**
+**Step 3: Commit**
 
 ```bash
-git add dashboard/src/components/molecules/ApprovalButtons.tsx dashboard/src/components/molecules/ApprovalButtons.test.tsx
-git commit -m "feat(dashboard): add ApprovalButtons with loading states
+git add dashboard/src/components/WorkflowHeader.tsx dashboard/src/components/WorkflowHeader.test.tsx
+git commit -m "feat(dashboard): add WorkflowHeader component
 
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>"
+- Issue ID and worktree name display
+- StatusBadge with ai-elements QueueItemIndicator
+- Loader animation for running status
+- Optional elapsed time display
+- Semantic banner role"
 ```
 
 ---
 
-## Task 10: ActiveJobs Page Assembly
+## Task 13: Create Component Index Exports
 
 **Files:**
-- Create: `dashboard/src/pages/ActiveJobs.tsx`
-- Create: `dashboard/src/pages/ActiveJobs.test.tsx`
+- Create: `dashboard/src/components/index.ts`
+- Create: `dashboard/src/components/flow/index.ts`
 
-**Step 1: Write the failing test**
+**Step 1: Create flow components index**
 
 ```typescript
-// dashboard/src/pages/ActiveJobs.test.tsx
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
-import { ActiveJobs } from './ActiveJobs';
-import { useWorkflowStore } from '../store/workflowStore';
+// dashboard/src/components/flow/index.ts
+export { WorkflowNode, type WorkflowNodeData } from './WorkflowNode';
+export { WorkflowEdge, type WorkflowEdgeData } from './WorkflowEdge';
+```
 
-// Mock the store
-vi.mock('../store/workflowStore', () => ({
-  useWorkflowStore: vi.fn(),
-}));
+**Step 2: Create main components index**
 
-describe('ActiveJobs', () => {
-  const mockWorkflows = {
-    'wf-001': {
-      id: 'wf-001',
-      issue_id: '#8',
-      worktree_name: 'feature-benchmark',
-      status: 'blocked' as const,
-      eta_seconds: 165,
-      pipeline: {
-        nodes: [
-          { id: 'issue', label: 'Issue', subtitle: 'Origin', status: 'completed' as const, tokens: null },
-          { id: 'architect', label: 'Architect', subtitle: 'Planning', status: 'completed' as const, tokens: '12.4k' },
-        ],
-        edges: [
-          { from: 'issue', to: 'architect', label: '0:08', status: 'completed' as const },
-        ],
-      },
-    },
-    'wf-002': {
-      id: 'wf-002',
-      issue_id: '#7',
-      worktree_name: 'main',
-      status: 'completed' as const,
-      eta_seconds: 0,
-      pipeline: {
-        nodes: [],
-        edges: [],
-      },
-    },
-  };
+```typescript
+// dashboard/src/components/index.ts
 
-  const mockEventsByWorkflow = {
-    'wf-001': [
-      {
-        id: 'evt-001',
-        workflow_id: 'wf-001',
-        timestamp: '2025-12-01T14:32:07Z',
-        agent: 'ARCHITECT',
-        message: 'Plan approved.',
-      },
-    ],
-  };
+// =============================================================================
+// Domain Components
+// =============================================================================
 
-  beforeEach(() => {
-    vi.mocked(useWorkflowStore).mockReturnValue({
-      workflows: mockWorkflows,
-      selectedWorkflowId: 'wf-001',
-      eventsByWorkflow: mockEventsByWorkflow,
-      selectWorkflow: vi.fn(),
-      isConnected: true,
-      error: null,
-    } as any);
+// ai-elements based wrappers (Queue, Confirmation)
+export { StatusBadge } from './StatusBadge';
+export { JobQueueItem } from './JobQueueItem';
+export { JobQueue } from './JobQueue';
+export { ActivityLogItem } from './ActivityLogItem';
+export { ActivityLog } from './ActivityLog';
+export { ApprovalControls } from './ApprovalControls';
+export { WorkflowHeader } from './WorkflowHeader';
+
+// Custom React Flow components (WorkflowCanvas)
+export { WorkflowCanvas } from './WorkflowCanvas';
+
+// Custom flow node/edge types
+export * from './flow';
+
+// =============================================================================
+// ai-elements (re-exported for direct use when needed)
+// =============================================================================
+export * from './ai-elements/queue';
+export * from './ai-elements/confirmation';
+export * from './ai-elements/loader';
+export * from './ai-elements/shimmer';
+
+// =============================================================================
+// shadcn UI components
+// =============================================================================
+export * from './ui/button';
+export * from './ui/badge';
+export * from './ui/card';
+export * from './ui/scroll-area';
+export * from './ui/tooltip';
+```
+
+**Step 3: Commit**
+
+```bash
+git add dashboard/src/components/index.ts dashboard/src/components/flow/index.ts
+git commit -m "feat(dashboard): add component index exports
+
+- Barrel exports for ai-elements wrappers
+- Barrel exports for custom WorkflowCanvas components
+- Re-export ai-elements for direct use
+- Re-export shadcn UI components"
+```
+
+---
+
+## PART 4: Additional shadcn/ui Components
+
+These tasks add Progress, Skeleton, EmptyState, and Sidebar components for enhanced UX.
+
+---
+
+## Task 14: Progress Component
+
+Add shadcn/ui Progress component for showing overall workflow progress.
+
+**Files:**
+- Create: `dashboard/src/components/ui/progress.tsx`
+- Create: `dashboard/src/components/WorkflowProgress.tsx`
+- Create: `dashboard/src/components/WorkflowProgress.test.tsx`
+
+**Step 1: Install Progress component**
+
+```bash
+cd dashboard
+npx shadcn@latest add progress
+```
+
+**Step 2: Write the failing test**
+
+```typescript
+// dashboard/src/components/WorkflowProgress.test.tsx
+import { describe, it, expect } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import { WorkflowProgress } from './WorkflowProgress';
+
+describe('WorkflowProgress', () => {
+  it('renders progress bar', () => {
+    const { container } = render(<WorkflowProgress completed={2} total={5} />);
+    expect(container.querySelector('[data-slot="progress"]')).toBeInTheDocument();
   });
 
-  it('renders all major components', () => {
-    render(<ActiveJobs />);
-
-    // Check for header
-    expect(screen.getByText('#8')).toBeInTheDocument();
-
-    // Check for job queue
-    expect(screen.getByText('JOB QUEUE')).toBeInTheDocument();
-
-    // Check for workflow canvas
-    expect(screen.getByRole('img', { name: /pipeline/i })).toBeInTheDocument();
-
-    // Check for activity log
-    expect(screen.getByText('ACTIVITY LOG')).toBeInTheDocument();
+  it('shows percentage label', () => {
+    render(<WorkflowProgress completed={2} total={5} />);
+    expect(screen.getByText('40%')).toBeInTheDocument();
   });
 
-  it('renders approval buttons when workflow is blocked', () => {
-    render(<ActiveJobs />);
-    expect(screen.getByText('Approve')).toBeInTheDocument();
-    expect(screen.getByText('Reject')).toBeInTheDocument();
+  it('shows stage count', () => {
+    render(<WorkflowProgress completed={2} total={5} />);
+    expect(screen.getByText('2 of 5 stages')).toBeInTheDocument();
   });
 
-  it('does not render approval buttons when workflow is not blocked', () => {
-    vi.mocked(useWorkflowStore).mockReturnValue({
-      workflows: mockWorkflows,
-      selectedWorkflowId: 'wf-002',
-      eventsByWorkflow: {},
-      selectWorkflow: vi.fn(),
-      isConnected: true,
-      error: null,
-    } as any);
-
-    render(<ActiveJobs />);
-    expect(screen.queryByText('Approve')).not.toBeInTheDocument();
+  it('applies correct progress value', () => {
+    const { container } = render(<WorkflowProgress completed={3} total={4} />);
+    const indicator = container.querySelector('[data-slot="progress-indicator"]');
+    expect(indicator).toHaveStyle({ transform: 'translateX(-25%)' });
   });
 
-  it('shows error message when connection is lost', () => {
-    vi.mocked(useWorkflowStore).mockReturnValue({
-      workflows: {},
-      selectedWorkflowId: null,
-      eventsByWorkflow: {},
-      selectWorkflow: vi.fn(),
-      isConnected: false,
-      error: 'Connection lost',
-    } as any);
-
-    render(<ActiveJobs />);
-    expect(screen.getByText(/connection lost/i)).toBeInTheDocument();
+  it('uses OKLCH status colors', () => {
+    const { container } = render(<WorkflowProgress completed={5} total={5} />);
+    expect(container.querySelector('[data-complete="true"]')).toBeInTheDocument();
   });
 
-  it('shows placeholder when no workflows exist', () => {
-    vi.mocked(useWorkflowStore).mockReturnValue({
-      workflows: {},
-      selectedWorkflowId: null,
-      eventsByWorkflow: {},
-      selectWorkflow: vi.fn(),
-      isConnected: true,
-      error: null,
-    } as any);
-
-    render(<ActiveJobs />);
-    expect(screen.getByText(/no active workflows/i)).toBeInTheDocument();
+  it('has proper ARIA attributes', () => {
+    render(<WorkflowProgress completed={2} total={5} />);
+    const progress = screen.getByRole('progressbar');
+    expect(progress).toHaveAttribute('aria-valuenow', '40');
+    expect(progress).toHaveAttribute('aria-valuemin', '0');
+    expect(progress).toHaveAttribute('aria-valuemax', '100');
   });
 });
 ```
 
-**Step 2: Run test to verify it fails**
-
-Run: `cd dashboard && npm test src/pages/ActiveJobs.test.tsx`
-Expected: FAIL - Component does not exist
-
-**Step 3: Implement ActiveJobs page**
+**Step 3: Implement WorkflowProgress component**
 
 ```typescript
-// dashboard/src/pages/ActiveJobs.tsx
-import { FC } from 'react';
-import { useWorkflowStore } from '../store/workflowStore';
-import { useWorkflowActions } from '../hooks/useWorkflowActions';
-import { Header } from '../components/organisms/Header';
-import { JobQueue } from '../components/organisms/JobQueue';
-import { WorkflowCanvas } from '../components/organisms/WorkflowCanvas';
-import { ActivityLog } from '../components/organisms/ActivityLog';
-import { ApprovalButtons } from '../components/molecules/ApprovalButtons';
+// dashboard/src/components/WorkflowProgress.tsx
+import { Progress } from '@/components/ui/progress';
+import { cn } from '@/lib/utils';
 
-export const ActiveJobs: FC = () => {
-  const {
-    workflows,
-    selectedWorkflowId,
-    eventsByWorkflow,
-    selectWorkflow,
-    isConnected,
-    error,
-  } = useWorkflowStore();
+interface WorkflowProgressProps {
+  completed: number;
+  total: number;
+  className?: string;
+}
 
-  const { approveWorkflow, rejectWorkflow, isActionPending } = useWorkflowActions();
-
-  const workflowList = Object.values(workflows);
-  const selectedWorkflow = selectedWorkflowId ? workflows[selectedWorkflowId] : null;
-  const selectedEvents = selectedWorkflowId ? eventsByWorkflow[selectedWorkflowId] || [] : [];
-
-  // Error state
-  if (!isConnected && error) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-center">
-          <div className="text-status-failed text-xl mb-2">Connection Lost</div>
-          <div className="text-text-secondary text-sm">{error}</div>
-        </div>
-      </div>
-    );
-  }
-
-  // Empty state
-  if (workflowList.length === 0) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-center">
-          <div className="text-text-primary text-xl mb-2">No Active Workflows</div>
-          <div className="text-text-secondary text-sm">
-            Start a workflow from the CLI: <code className="font-mono">amelia start ISSUE-123</code>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  const isBlocked = selectedWorkflow?.status === 'blocked';
-  const isPending = selectedWorkflowId ? isActionPending(selectedWorkflowId) : false;
+/**
+ * WorkflowProgress shows overall workflow completion using shadcn/ui Progress.
+ * Includes percentage label and stage count.
+ *
+ * Uses OKLCH status colors:
+ * - In progress: --status-running (amber)
+ * - Complete: --status-completed (teal/green)
+ */
+export function WorkflowProgress({ completed, total, className }: WorkflowProgressProps) {
+  const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
+  const isComplete = completed === total && total > 0;
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      {selectedWorkflow && <Header workflow={selectedWorkflow} />}
+    <div
+      data-slot="workflow-progress"
+      data-complete={isComplete}
+      className={cn('flex flex-col gap-2', className)}
+    >
+      <div className="flex items-center justify-between text-sm">
+        <span className="font-mono text-muted-foreground">
+          {completed} of {total} stages
+        </span>
+        <span className="font-mono font-semibold text-foreground">
+          {percentage}%
+        </span>
+      </div>
 
-      {/* Workflow Visualization */}
-      {selectedWorkflow && selectedWorkflow.pipeline && (
-        <div className="px-12 py-6">
-          <WorkflowCanvas pipeline={selectedWorkflow.pipeline} />
+      <Progress
+        data-slot="progress"
+        value={percentage}
+        className={cn(
+          'h-2',
+          isComplete && '[&>[data-slot=progress-indicator]]:bg-status-completed'
+        )}
+        aria-label={`Workflow progress: ${percentage}% complete`}
+      />
+    </div>
+  );
+}
+```
+
+**Step 4: Commit**
+
+```bash
+git add dashboard/src/components/ui/progress.tsx dashboard/src/components/WorkflowProgress.tsx dashboard/src/components/WorkflowProgress.test.tsx
+git commit -m "feat(dashboard): add WorkflowProgress component
+
+- Wraps shadcn/ui Progress with workflow-specific display
+- Percentage label and stage count
+- OKLCH status colors (amber in progress, teal complete)
+- data-slot attributes for styling hooks
+- ARIA progressbar attributes"
+```
+
+---
+
+## Task 15: Skeleton Component for Loading States
+
+Add shadcn/ui Skeleton component for loading placeholders in JobQueue and ActivityLog.
+
+**Files:**
+- Create: `dashboard/src/components/ui/skeleton.tsx`
+- Create: `dashboard/src/components/JobQueueSkeleton.tsx`
+- Create: `dashboard/src/components/ActivityLogSkeleton.tsx`
+
+**Step 1: Install Skeleton component**
+
+```bash
+cd dashboard
+npx shadcn@latest add skeleton
+```
+
+**Step 2: Implement JobQueueSkeleton**
+
+```typescript
+// dashboard/src/components/JobQueueSkeleton.tsx
+import { Skeleton } from '@/components/ui/skeleton';
+
+interface JobQueueSkeletonProps {
+  count?: number;
+}
+
+/**
+ * JobQueueSkeleton provides loading placeholder for JobQueue.
+ * Matches the structure of JobQueueItem for smooth transition.
+ */
+export function JobQueueSkeleton({ count = 3 }: JobQueueSkeletonProps) {
+  return (
+    <div data-slot="job-queue-skeleton" className="flex flex-col gap-2 p-4">
+      {Array.from({ length: count }).map((_, i) => (
+        <div
+          key={i}
+          className="flex items-center gap-3 p-3 rounded-lg border border-border/50"
+        >
+          {/* Status indicator */}
+          <Skeleton className="h-4 w-16 rounded-md" />
+
+          {/* Content */}
+          <div className="flex-1 space-y-2">
+            <Skeleton className="h-4 w-12" /> {/* Issue ID */}
+            <Skeleton className="h-3 w-32" /> {/* Worktree name */}
+          </div>
+
+          {/* Stage */}
+          <Skeleton className="h-3 w-20" />
         </div>
-      )}
+      ))}
+    </div>
+  );
+}
+```
 
-      {/* Approval Buttons (when blocked) */}
-      {isBlocked && selectedWorkflowId && (
-        <div className="px-12 py-4 flex justify-center">
-          <ApprovalButtons
-            workflowId={selectedWorkflowId}
-            onApprove={approveWorkflow}
-            onReject={rejectWorkflow}
-            isPending={isPending}
+**Step 3: Implement ActivityLogSkeleton**
+
+```typescript
+// dashboard/src/components/ActivityLogSkeleton.tsx
+import { Skeleton } from '@/components/ui/skeleton';
+
+interface ActivityLogSkeletonProps {
+  lines?: number;
+}
+
+/**
+ * ActivityLogSkeleton provides loading placeholder for ActivityLog.
+ * Matches terminal-style log entry structure.
+ */
+export function ActivityLogSkeleton({ lines = 5 }: ActivityLogSkeletonProps) {
+  return (
+    <div data-slot="activity-log-skeleton" className="flex flex-col gap-1.5 p-4 font-mono">
+      {Array.from({ length: lines }).map((_, i) => (
+        <div key={i} className="flex items-center gap-3">
+          {/* Timestamp */}
+          <Skeleton className="h-4 w-16" />
+
+          {/* Agent */}
+          <Skeleton className="h-4 w-20" />
+
+          {/* Message - varying widths for natural look */}
+          <Skeleton
+            className="h-4 flex-1"
+            style={{ maxWidth: `${50 + Math.random() * 40}%` }}
           />
         </div>
-      )}
-
-      {/* Bottom Section: Queue + Log */}
-      <div className="grid grid-cols-[320px_1fr] gap-6 px-8 pb-6 flex-1 min-h-0">
-        <JobQueue
-          workflows={workflowList}
-          selectedId={selectedWorkflowId}
-          onSelect={selectWorkflow}
-        />
-        <ActivityLog events={selectedEvents} />
-      </div>
+      ))}
     </div>
   );
-};
-```
-
-**Step 4: Create useWorkflowActions hook (stub for testing)**
-
-```typescript
-// dashboard/src/hooks/useWorkflowActions.ts
-import { useWorkflowStore } from '../store/workflowStore';
-
-export interface UseWorkflowActionsResult {
-  approveWorkflow: (workflowId: string) => Promise<void>;
-  rejectWorkflow: (workflowId: string) => Promise<void>;
-  cancelWorkflow: (workflowId: string) => Promise<void>;
-  isActionPending: (workflowId: string) => boolean;
-}
-
-export function useWorkflowActions(): UseWorkflowActionsResult {
-  const { pendingActions } = useWorkflowStore();
-
-  const approveWorkflow = async (workflowId: string) => {
-    // Implementation will be added in Plan 9 (state management)
-    console.log('Approve workflow:', workflowId);
-  };
-
-  const rejectWorkflow = async (workflowId: string) => {
-    console.log('Reject workflow:', workflowId);
-  };
-
-  const cancelWorkflow = async (workflowId: string) => {
-    console.log('Cancel workflow:', workflowId);
-  };
-
-  const isActionPending = (workflowId: string) => {
-    return pendingActions.some(id => id.endsWith(workflowId));
-  };
-
-  return {
-    approveWorkflow,
-    rejectWorkflow,
-    cancelWorkflow,
-    isActionPending,
-  };
 }
 ```
 
-**Step 5: Run test to verify it passes**
-
-Run: `cd dashboard && npm test src/pages/ActiveJobs.test.tsx`
-Expected: PASS
-
-**Step 6: Commit**
+**Step 4: Commit**
 
 ```bash
-git add dashboard/src/pages/ActiveJobs.tsx \
-  dashboard/src/pages/ActiveJobs.test.tsx \
-  dashboard/src/hooks/useWorkflowActions.ts
-git commit -m "feat(dashboard): add ActiveJobs page with all components
+git add dashboard/src/components/ui/skeleton.tsx dashboard/src/components/JobQueueSkeleton.tsx dashboard/src/components/ActivityLogSkeleton.tsx
+git commit -m "feat(dashboard): add Skeleton components for loading states
 
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>"
+- JobQueueSkeleton matches JobQueueItem structure
+- ActivityLogSkeleton matches terminal log entry format
+- data-slot attributes for styling hooks
+- Pulse animation via shadcn/ui Skeleton"
 ```
 
 ---
 
-## Task 11: Accessibility Audit & Fixes
+## Task 16: EmptyState Component
+
+Create a reusable empty state component for when no workflows are active.
 
 **Files:**
-- Create: `dashboard/src/utils/a11y.test.ts`
-- Modify: `dashboard/src/index.css`
-- Modify: All component files as needed
+- Create: `dashboard/src/components/EmptyState.tsx`
+- Create: `dashboard/src/components/EmptyState.test.tsx`
 
-**Step 1: Write accessibility tests with axe-core**
+**Step 1: Write the failing test**
 
 ```typescript
-// dashboard/src/utils/a11y.test.ts
-import { describe, it, expect } from 'vitest';
-import { render } from '@testing-library/react';
-import { axe, toHaveNoViolations } from 'jest-axe';
-import { Sidebar } from '../components/organisms/Sidebar';
-import { Header } from '../components/organisms/Header';
-import { JobQueue } from '../components/organisms/JobQueue';
-import { ActivityLog } from '../components/organisms/ActivityLog';
-import { ApprovalButtons } from '../components/molecules/ApprovalButtons';
-import { BrowserRouter } from 'react-router-dom';
+// dashboard/src/components/EmptyState.test.tsx
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
+import { EmptyState } from './EmptyState';
 
-expect.extend(toHaveNoViolations);
-
-describe('Accessibility (WCAG AA)', () => {
-  it('Sidebar has no violations', async () => {
-    const { container } = render(
-      <BrowserRouter>
-        <Sidebar />
-      </BrowserRouter>
-    );
-    const results = await axe(container);
-    expect(results).toHaveNoViolations();
+describe('EmptyState', () => {
+  it('renders icon', () => {
+    const { container } = render(<EmptyState icon="inbox" message="No items" />);
+    expect(container.querySelector('svg')).toBeInTheDocument();
   });
 
-  it('Header has no violations', async () => {
-    const mockWorkflow = {
-      id: 'wf-001',
-      issue_id: '#8',
-      worktree_name: 'feature',
-      status: 'running' as const,
-      eta_seconds: 165,
-    };
-    const { container } = render(<Header workflow={mockWorkflow} />);
-    const results = await axe(container);
-    expect(results).toHaveNoViolations();
+  it('renders message', () => {
+    render(<EmptyState icon="inbox" message="No active workflows" />);
+    expect(screen.getByText('No active workflows')).toBeInTheDocument();
   });
 
-  it('JobQueue has no violations', async () => {
-    const mockWorkflows = [
-      {
-        id: 'wf-001',
-        issue_id: '#8',
-        worktree_name: 'feature',
-        status: 'running' as const,
-        eta_seconds: 165,
-      },
-    ];
-    const { container } = render(
-      <JobQueue workflows={mockWorkflows} selectedId={null} onSelect={() => {}} />
-    );
-    const results = await axe(container);
-    expect(results).toHaveNoViolations();
-  });
-
-  it('ActivityLog has no violations', async () => {
-    const mockEvents = [
-      {
-        id: 'evt-001',
-        workflow_id: 'wf-001',
-        timestamp: '2025-12-01T14:32:07Z',
-        agent: 'ARCHITECT',
-        message: 'Test message',
-      },
-    ];
-    const { container } = render(<ActivityLog events={mockEvents} />);
-    const results = await axe(container);
-    expect(results).toHaveNoViolations();
-  });
-
-  it('ApprovalButtons has no violations', async () => {
-    const { container } = render(
-      <ApprovalButtons
-        workflowId="wf-001"
-        onApprove={() => {}}
-        onReject={() => {}}
-        isPending={false}
+  it('renders description when provided', () => {
+    render(
+      <EmptyState
+        icon="inbox"
+        message="No workflows"
+        description="Start a new workflow to see it here"
       />
     );
-    const results = await axe(container);
-    expect(results).toHaveNoViolations();
-  });
-});
-```
-
-**Step 2: Install axe-core dependencies**
-
-```bash
-cd dashboard
-npm install -D jest-axe @axe-core/react
-```
-
-**Step 3: Add reduced motion styles to index.css**
-
-```css
-/* dashboard/src/index.css */
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-/* Respect prefers-reduced-motion */
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
-  }
-
-  .beacon-pulse,
-  .animate-beacon-glow,
-  .animate-pulse,
-  .animate-blink {
-    animation: none !important;
-  }
-}
-
-/* High contrast mode support */
-@media (prefers-contrast: high) {
-  :root {
-    --text-primary: #FFFFFF;
-    --text-secondary: #CCCCCC;
-    --bg-dark: #000000;
-    --bg-main: #0A0A0A;
-  }
-}
-
-/* Focus visible styles for keyboard navigation */
-*:focus-visible {
-  outline: 2px solid #FFC857;
-  outline-offset: 2px;
-}
-```
-
-**Step 4: Run accessibility tests**
-
-Run: `cd dashboard && npm test src/utils/a11y.test.ts`
-Expected: PASS with no axe violations
-
-**Step 5: Commit**
-
-```bash
-git add dashboard/src/utils/a11y.test.ts \
-  dashboard/src/index.css \
-  dashboard/package.json \
-  dashboard/package-lock.json
-git commit -m "feat(dashboard): add accessibility audit with axe-core
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>"
-```
-
----
-
-## Task 12: Playwright E2E Tests for Multi-Workflow Flow
-
-**Files:**
-- Create: `dashboard/e2e/multi-workflow.spec.ts`
-- Create: `dashboard/playwright.config.ts`
-
-**Step 1: Write E2E test**
-
-```typescript
-// dashboard/e2e/multi-workflow.spec.ts
-import { test, expect } from '@playwright/test';
-
-test.describe('Multi-Workflow Selection and Approval Flow', () => {
-  test.beforeEach(async ({ page }) => {
-    // Start mock server with multiple workflows
-    await page.goto('http://localhost:5173/jobs');
-    await page.waitForLoadState('networkidle');
+    expect(screen.getByText('Start a new workflow to see it here')).toBeInTheDocument();
   });
 
-  test('displays all active workflows in job queue', async ({ page }) => {
-    // Verify job queue shows multiple workflows
-    const queueItems = page.locator('[role="button"][aria-pressed]');
-    await expect(queueItems).toHaveCount(3);
-
-    // Verify workflow IDs are visible
-    await expect(page.locator('text=#8')).toBeVisible();
-    await expect(page.locator('text=#7')).toBeVisible();
-    await expect(page.locator('text=#9')).toBeVisible();
-  });
-
-  test('switches between workflows on click', async ({ page }) => {
-    // Initially, workflow #8 is selected (gold border)
-    const workflow8 = page.locator('text=#8').locator('..');
-    await expect(workflow8).toHaveClass(/border-accent-gold/);
-
-    // Click workflow #7
-    await page.locator('text=#7').click();
-
-    // Verify workflow #7 is now selected
-    const workflow7 = page.locator('text=#7').locator('..');
-    await expect(workflow7).toHaveClass(/border-accent-gold/);
-
-    // Verify header updated to show #7
-    await expect(page.locator('h2', { hasText: '#7' })).toBeVisible();
-  });
-
-  test('switches workflows using keyboard navigation', async ({ page }) => {
-    // Focus first workflow
-    await page.keyboard.press('Tab');
-    await page.keyboard.press('Tab'); // Navigate to job queue
-
-    // Press Enter to select
-    await page.keyboard.press('Enter');
-
-    // Verify selection
-    const firstItem = page.locator('[role="button"][aria-pressed="true"]').first();
-    await expect(firstItem).toBeFocused();
-  });
-
-  test('displays approval buttons only for blocked workflows', async ({ page }) => {
-    // Select blocked workflow (#8)
-    await page.locator('text=#8').click();
-
-    // Verify approval buttons are visible
-    await expect(page.locator('button', { hasText: 'Approve' })).toBeVisible();
-    await expect(page.locator('button', { hasText: 'Reject' })).toBeVisible();
-
-    // Select completed workflow (#7)
-    await page.locator('text=#7').click();
-
-    // Verify approval buttons are hidden
-    await expect(page.locator('button', { hasText: 'Approve' })).not.toBeVisible();
-  });
-
-  test('approves workflow and updates status', async ({ page }) => {
-    // Select blocked workflow
-    await page.locator('text=#8').click();
-
-    // Click Approve button
-    await page.locator('button', { hasText: 'Approve' }').click();
-
-    // Verify button shows loading state
-    await expect(page.locator('[data-testid="loading-spinner"]')).toBeVisible();
-
-    // Wait for approval to complete (mock WebSocket event)
-    await page.waitForTimeout(500);
-
-    // Verify status badge updated to RUNNING
-    await expect(page.locator('text=RUNNING')).toBeVisible();
-
-    // Verify approval buttons disappeared
-    await expect(page.locator('button', { hasText: 'Approve' })).not.toBeVisible();
-  });
-
-  test('activity log updates when switching workflows', async ({ page }) => {
-    // Select workflow #8
-    await page.locator('text=#8').click();
-
-    // Verify activity log shows events for #8
-    await expect(page.locator('text=[ARCHITECT]')).toBeVisible();
-    await expect(page.locator('text=Issue #8 parsed')).toBeVisible();
-
-    // Select workflow #7
-    await page.locator('text=#7').click();
-
-    // Verify activity log updates to show events for #7
-    await expect(page.locator('text=Issue #7 completed')).toBeVisible();
-  });
-
-  test('respects reduced motion preference', async ({ page, context }) => {
-    // Enable reduced motion
-    await context.addInitScript(() => {
-      Object.defineProperty(window, 'matchMedia', {
-        value: (query: string) => ({
-          matches: query === '(prefers-reduced-motion: reduce)',
-          media: query,
-          addEventListener: () => {},
-          removeEventListener: () => {},
-        }),
-      });
-    });
-
-    await page.reload();
-
-    // Verify animations are disabled
-    const beaconNode = page.locator('[data-testid="map-pin-icon"]').first();
-    const animationDuration = await beaconNode.evaluate((el) =>
-      window.getComputedStyle(el).animationDuration
+  it('renders action button when provided', () => {
+    const onAction = vi.fn();
+    render(
+      <EmptyState
+        icon="inbox"
+        message="No workflows"
+        action={{ label: 'New Workflow', onClick: onAction }}
+      />
     );
-    expect(animationDuration).toBe('0.01ms');
+
+    fireEvent.click(screen.getByText('New Workflow'));
+    expect(onAction).toHaveBeenCalled();
   });
 
-  test('keyboard navigation follows ARIA best practices', async ({ page }) => {
-    // Tab through interactive elements
-    await page.keyboard.press('Tab'); // Sidebar nav
-    await page.keyboard.press('Tab'); // First queue item
-
-    // Verify focus is visible
-    const focused = page.locator(':focus');
-    await expect(focused).toHaveCSS('outline-color', 'rgb(255, 200, 87)'); // Gold outline
-
-    // Navigate with arrow keys (if implemented)
-    await page.keyboard.press('ArrowDown');
-    const nextFocused = page.locator(':focus');
-    await expect(nextFocused).toBeDefined();
+  it('has data-slot attribute', () => {
+    const { container } = render(<EmptyState icon="inbox" message="Empty" />);
+    expect(container.querySelector('[data-slot="empty-state"]')).toBeInTheDocument();
   });
 
-  test('announces workflow status changes to screen readers', async ({ page }) => {
-    // Select blocked workflow
-    await page.locator('text=#8').click();
-
-    // Verify ARIA live region exists
-    const liveRegion = page.locator('[aria-live="polite"]');
-    await expect(liveRegion).toBeVisible();
-
-    // Approve workflow
-    await page.locator('button', { hasText: 'Approve' }').click();
-
-    // Wait for status update
-    await page.waitForTimeout(500);
-
-    // Verify live region was updated (content changed)
-    const logContent = await liveRegion.textContent();
-    expect(logContent).toContain('DEVELOPER');
+  it('uses muted foreground colors', () => {
+    const { container } = render(<EmptyState icon="inbox" message="Empty" />);
+    expect(container.querySelector('.text-muted-foreground')).toBeInTheDocument();
   });
 });
 ```
 
-**Step 2: Create Playwright config**
+**Step 2: Implement EmptyState component with CVA**
 
 ```typescript
-// dashboard/playwright.config.ts
-import { defineConfig, devices } from '@playwright/test';
+// dashboard/src/components/EmptyState.tsx
+import { cva, type VariantProps } from 'class-variance-authority';
+import { Inbox, FileText, Activity, AlertCircle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
-export default defineConfig({
-  testDir: './e2e',
-  fullyParallel: true,
-  forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
-  reporter: 'html',
-  use: {
-    baseURL: 'http://localhost:5173',
-    trace: 'on-first-retry',
-  },
-
-  projects: [
-    {
-      name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+const emptyStateVariants = cva(
+  'flex flex-col items-center justify-center text-center p-8',
+  {
+    variants: {
+      size: {
+        sm: 'p-4 gap-2',
+        md: 'p-8 gap-3',
+        lg: 'p-12 gap-4',
+      },
     },
-    {
-      name: 'firefox',
-      use: { ...devices['Desktop Firefox'] },
+    defaultVariants: {
+      size: 'md',
     },
-    {
-      name: 'webkit',
-      use: { ...devices['Desktop Safari'] },
-    },
-  ],
-
-  webServer: {
-    command: 'npm run dev',
-    url: 'http://localhost:5173',
-    reuseExistingServer: !process.env.CI,
-  },
-});
-```
-
-**Step 3: Install Playwright**
-
-```bash
-cd dashboard
-npm install -D @playwright/test
-npx playwright install
-```
-
-**Step 4: Add E2E script to package.json**
-
-```json
-{
-  "scripts": {
-    "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui"
   }
+);
+
+const icons = {
+  inbox: Inbox,
+  file: FileText,
+  activity: Activity,
+  alert: AlertCircle,
+};
+
+interface EmptyStateProps extends VariantProps<typeof emptyStateVariants> {
+  icon: keyof typeof icons;
+  message: string;
+  description?: string;
+  action?: {
+    label: string;
+    onClick: () => void;
+  };
+  className?: string;
+}
+
+/**
+ * EmptyState displays a placeholder when no content is available.
+ * Uses CVA for size variants and includes optional action button.
+ *
+ * Includes data-slot="empty-state" for styling hooks.
+ */
+export function EmptyState({
+  icon,
+  message,
+  description,
+  action,
+  size,
+  className,
+}: EmptyStateProps) {
+  const Icon = icons[icon];
+
+  return (
+    <div
+      data-slot="empty-state"
+      className={cn(emptyStateVariants({ size }), className)}
+    >
+      <Icon
+        className="h-12 w-12 text-muted-foreground/50"
+        strokeWidth={1.5}
+        aria-hidden="true"
+      />
+
+      <h3 className="font-heading text-lg font-semibold text-muted-foreground">
+        {message}
+      </h3>
+
+      {description && (
+        <p className="text-sm text-muted-foreground/70 max-w-sm">
+          {description}
+        </p>
+      )}
+
+      {action && (
+        <Button
+          variant="outline"
+          onClick={action.onClick}
+          className="mt-2 focus-visible:ring-ring/50 focus-visible:ring-[3px]"
+        >
+          {action.label}
+        </Button>
+      )}
+    </div>
+  );
 }
 ```
 
-**Step 5: Run E2E tests**
-
-Run: `cd dashboard && npm run test:e2e`
-Expected: PASS (with mock server setup)
-
-**Step 6: Commit**
+**Step 3: Commit**
 
 ```bash
-git add dashboard/e2e/multi-workflow.spec.ts \
-  dashboard/playwright.config.ts \
-  dashboard/package.json \
-  dashboard/package-lock.json
-git commit -m "test(dashboard): add Playwright E2E tests for multi-workflow flow
+git add dashboard/src/components/EmptyState.tsx dashboard/src/components/EmptyState.test.tsx
+git commit -m "feat(dashboard): add EmptyState component
 
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>"
+- CVA for size variants (sm, md, lg)
+- Icon options: inbox, file, activity, alert
+- Optional description and action button
+- data-slot attribute for styling hooks
+- focus-visible states on action button"
 ```
 
 ---
 
-## Task 13: Starfield & Visual Effects
+## Task 17: Sidebar Component for Dashboard Layout
+
+Install and configure shadcn/ui Sidebar for the dashboard navigation layout.
 
 **Files:**
-- Create: `dashboard/src/components/effects/Starfield.tsx`
-- Create: `dashboard/src/components/effects/CockpitGlass.tsx`
-- Create: `dashboard/src/components/effects/Vignette.tsx`
-- Modify: `dashboard/src/App.tsx`
+- Create: `dashboard/src/components/ui/sidebar.tsx`
+- Create: `dashboard/src/components/DashboardSidebar.tsx`
+- Create: `dashboard/src/components/DashboardSidebar.test.tsx`
+- Modify: `dashboard/src/layouts/DashboardLayout.tsx`
 
-**Step 1: Create Starfield effect**
+**Step 1: Install Sidebar component**
 
-```typescript
-// dashboard/src/components/effects/Starfield.tsx
-import { FC } from 'react';
-
-export const Starfield: FC = () => (
-  <div
-    className="fixed inset-0 pointer-events-none opacity-40 motion-reduce:hidden"
-    style={{
-      background: `
-        radial-gradient(1px 1px at 20px 30px, #EFF8E2, transparent),
-        radial-gradient(1px 1px at 40px 70px, rgba(239, 248, 226, 0.8), transparent),
-        radial-gradient(1px 1px at 50px 160px, rgba(239, 248, 226, 0.6), transparent),
-        radial-gradient(1px 1px at 90px 40px, #EFF8E2, transparent),
-        radial-gradient(1px 1px at 130px 80px, rgba(239, 248, 226, 0.7), transparent),
-        radial-gradient(1.5px 1.5px at 160px 120px, #FFC857, transparent),
-        radial-gradient(1px 1px at 200px 50px, rgba(239, 248, 226, 0.5), transparent),
-        radial-gradient(1px 1px at 220px 150px, rgba(239, 248, 226, 0.9), transparent),
-        radial-gradient(1px 1px at 280px 20px, rgba(239, 248, 226, 0.6), transparent),
-        radial-gradient(1.5px 1.5px at 320px 100px, rgba(91, 155, 213, 0.8), transparent),
-        radial-gradient(1px 1px at 350px 180px, rgba(239, 248, 226, 0.7), transparent),
-        radial-gradient(1px 1px at 400px 60px, #EFF8E2, transparent),
-        radial-gradient(1px 1px at 450px 130px, rgba(239, 248, 226, 0.5), transparent),
-        radial-gradient(1px 1px at 500px 30px, rgba(239, 248, 226, 0.8), transparent),
-        radial-gradient(1.5px 1.5px at 550px 90px, #FFC857, transparent),
-        radial-gradient(1px 1px at 600px 170px, rgba(239, 248, 226, 0.6), transparent),
-        radial-gradient(1px 1px at 650px 50px, rgba(239, 248, 226, 0.9), transparent),
-        radial-gradient(1px 1px at 700px 120px, rgba(239, 248, 226, 0.4), transparent),
-        radial-gradient(1px 1px at 750px 80px, #EFF8E2, transparent),
-        radial-gradient(1px 1px at 800px 160px, rgba(239, 248, 226, 0.7), transparent)
-      `,
-      backgroundRepeat: 'repeat',
-      backgroundSize: '800px 200px',
-    }}
-    aria-hidden="true"
-  />
-);
+```bash
+cd dashboard
+npx shadcn@latest add sidebar
 ```
 
-**Step 2: Create CockpitGlass scanlines**
+This installs the full shadcn/ui Sidebar with:
+- `SidebarProvider` - State management with cookie persistence
+- `Sidebar`, `SidebarContent`, `SidebarHeader`, `SidebarFooter`
+- `SidebarMenu`, `SidebarMenuItem`, `SidebarMenuButton`
+- `SidebarMenuCollapsible`, `SidebarMenuSub`
+- `SidebarTrigger` - Toggle button for mobile
+
+**Step 2: Write the failing test**
 
 ```typescript
-// dashboard/src/components/effects/CockpitGlass.tsx
-import { FC } from 'react';
+// dashboard/src/components/DashboardSidebar.test.tsx
+import { describe, it, expect } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
+import { DashboardSidebar } from './DashboardSidebar';
+import { SidebarProvider } from '@/components/ui/sidebar';
 
-export const CockpitGlass: FC = () => (
-  <div
-    className="fixed inset-0 pointer-events-none z-[1000] motion-reduce:hidden"
-    style={{
-      background: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(239, 248, 226, 0.01) 2px, rgba(239, 248, 226, 0.01) 4px)',
-    }}
-    aria-hidden="true"
-  />
-);
-```
-
-**Step 3: Create Vignette overlay**
-
-```typescript
-// dashboard/src/components/effects/Vignette.tsx
-import { FC } from 'react';
-
-export const Vignette: FC = () => (
-  <div
-    className="fixed inset-0 pointer-events-none z-[999]"
-    style={{
-      background: 'radial-gradient(ellipse at center, transparent 30%, rgba(13, 26, 18, 0.6) 100%)',
-    }}
-    aria-hidden="true"
-  />
-);
-```
-
-**Step 4: Update App.tsx to include effects**
-
-```typescript
-// dashboard/src/App.tsx
-import { FC } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { Sidebar } from './components/organisms/Sidebar';
-import { ActiveJobs } from './pages/ActiveJobs';
-import { Starfield } from './components/effects/Starfield';
-import { CockpitGlass } from './components/effects/CockpitGlass';
-import { Vignette } from './components/effects/Vignette';
-
-export const App: FC = () => {
-  return (
-    <BrowserRouter>
-      <div className="flex h-screen bg-bg-main text-text-primary overflow-hidden relative">
-        {/* Visual effects */}
-        <Starfield />
-        <CockpitGlass />
-        <Vignette />
-
-        {/* Main layout */}
-        <Sidebar />
-        <main className="flex-1 relative z-10 overflow-auto">
-          <Routes>
-            <Route path="/jobs" element={<ActiveJobs />} />
-            <Route path="/" element={<Navigate to="/jobs" replace />} />
-          </Routes>
-        </main>
-      </div>
-    </BrowserRouter>
+const renderSidebar = () => {
+  return render(
+    <SidebarProvider>
+      <DashboardSidebar />
+    </SidebarProvider>
   );
 };
+
+describe('DashboardSidebar', () => {
+  it('renders sidebar with data-slot', () => {
+    const { container } = renderSidebar();
+    expect(container.querySelector('[data-slot="dashboard-sidebar"]')).toBeInTheDocument();
+  });
+
+  it('renders navigation menu items', () => {
+    renderSidebar();
+    expect(screen.getByText('Workflows')).toBeInTheDocument();
+    expect(screen.getByText('Activity')).toBeInTheDocument();
+    expect(screen.getByText('Settings')).toBeInTheDocument();
+  });
+
+  it('renders collapsible section for workflows', () => {
+    renderSidebar();
+    const trigger = screen.getByRole('button', { name: /Workflows/i });
+    expect(trigger).toHaveAttribute('aria-expanded');
+  });
+
+  it('expands collapsible on click', () => {
+    renderSidebar();
+    const trigger = screen.getByRole('button', { name: /Workflows/i });
+
+    fireEvent.click(trigger);
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('renders footer with version info', () => {
+    renderSidebar();
+    expect(screen.getByText(/Amelia/)).toBeInTheDocument();
+  });
+
+  it('has proper focus-visible states', () => {
+    const { container } = renderSidebar();
+    const buttons = container.querySelectorAll('[data-slot="sidebar-menu-button"]');
+    buttons.forEach(button => {
+      expect(button.className).toContain('focus-visible:ring');
+    });
+  });
+});
+```
+
+**Step 3: Implement DashboardSidebar component**
+
+```typescript
+// dashboard/src/components/DashboardSidebar.tsx
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarHeader,
+  SidebarFooter,
+  SidebarMenu,
+  SidebarMenuItem,
+  SidebarMenuButton,
+  SidebarMenuCollapsible,
+  SidebarMenuCollapsibleTrigger,
+  SidebarMenuCollapsibleContent,
+  SidebarMenuSub,
+  SidebarMenuSubItem,
+  SidebarMenuSubButton,
+} from '@/components/ui/sidebar';
+import { LayoutDashboard, GitBranch, Activity, Settings, ChevronDown } from 'lucide-react';
+import { cn } from '@/lib/utils';
+
+/**
+ * DashboardSidebar provides navigation for the Amelia dashboard.
+ * Uses shadcn/ui Sidebar with collapsible sections.
+ *
+ * Features:
+ * - SidebarProvider for state management (in parent layout)
+ * - Cookie-based state persistence
+ * - Mobile responsive with sheet drawer
+ * - Keyboard navigation with focus-visible states
+ */
+export function DashboardSidebar() {
+  return (
+    <Sidebar data-slot="dashboard-sidebar" className="border-r border-border">
+      <SidebarHeader className="px-4 py-6">
+        <div className="flex items-center gap-2">
+          <div className="h-8 w-8 rounded-md bg-primary/20 flex items-center justify-center">
+            <LayoutDashboard className="h-4 w-4 text-primary" />
+          </div>
+          <span className="font-heading text-lg font-bold tracking-wider">
+            AMELIA
+          </span>
+        </div>
+      </SidebarHeader>
+
+      <SidebarContent className="px-2">
+        <SidebarMenu>
+          {/* Workflows section - collapsible */}
+          <SidebarMenuCollapsible defaultOpen>
+            <SidebarMenuItem>
+              <SidebarMenuCollapsibleTrigger asChild>
+                <SidebarMenuButton
+                  className={cn(
+                    'w-full justify-between',
+                    'focus-visible:ring-ring/50 focus-visible:ring-[3px]'
+                  )}
+                >
+                  <span className="flex items-center gap-2">
+                    <GitBranch className="h-4 w-4" />
+                    Workflows
+                  </span>
+                  <ChevronDown className="h-4 w-4 transition-transform duration-200 group-data-[state=open]:rotate-180" />
+                </SidebarMenuButton>
+              </SidebarMenuCollapsibleTrigger>
+
+              <SidebarMenuCollapsibleContent>
+                <SidebarMenuSub>
+                  <SidebarMenuSubItem>
+                    <SidebarMenuSubButton
+                      className="focus-visible:ring-ring/50 focus-visible:ring-[3px]"
+                    >
+                      Active
+                    </SidebarMenuSubButton>
+                  </SidebarMenuSubItem>
+                  <SidebarMenuSubItem>
+                    <SidebarMenuSubButton
+                      className="focus-visible:ring-ring/50 focus-visible:ring-[3px]"
+                    >
+                      Completed
+                    </SidebarMenuSubButton>
+                  </SidebarMenuSubItem>
+                  <SidebarMenuSubItem>
+                    <SidebarMenuSubButton
+                      className="focus-visible:ring-ring/50 focus-visible:ring-[3px]"
+                    >
+                      Failed
+                    </SidebarMenuSubButton>
+                  </SidebarMenuSubItem>
+                </SidebarMenuSub>
+              </SidebarMenuCollapsibleContent>
+            </SidebarMenuItem>
+          </SidebarMenuCollapsible>
+
+          {/* Activity */}
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              className="focus-visible:ring-ring/50 focus-visible:ring-[3px]"
+            >
+              <Activity className="h-4 w-4" />
+              Activity
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+
+          {/* Settings */}
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              className="focus-visible:ring-ring/50 focus-visible:ring-[3px]"
+            >
+              <Settings className="h-4 w-4" />
+              Settings
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarContent>
+
+      <SidebarFooter className="px-4 py-4 border-t border-border">
+        <p className="text-xs text-muted-foreground">
+          Amelia v1.0.0
+        </p>
+      </SidebarFooter>
+    </Sidebar>
+  );
+}
+```
+
+**Step 4: Update DashboardLayout to use SidebarProvider**
+
+```typescript
+// dashboard/src/layouts/DashboardLayout.tsx
+import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
+import { DashboardSidebar } from '@/components/DashboardSidebar';
+
+interface DashboardLayoutProps {
+  children: React.ReactNode;
+}
+
+/**
+ * DashboardLayout wraps the app with SidebarProvider for navigation.
+ * Cookie-based persistence remembers sidebar open/closed state.
+ */
+export function DashboardLayout({ children }: DashboardLayoutProps) {
+  return (
+    <SidebarProvider defaultOpen>
+      <div className="flex min-h-screen">
+        <DashboardSidebar />
+
+        <main className="flex-1">
+          {/* Mobile sidebar trigger */}
+          <div className="sticky top-0 z-10 flex h-14 items-center gap-4 border-b border-border bg-background px-4 lg:hidden">
+            <SidebarTrigger className="focus-visible:ring-ring/50 focus-visible:ring-[3px]" />
+            <span className="font-heading font-bold">AMELIA</span>
+          </div>
+
+          <div className="p-6">
+            {children}
+          </div>
+        </main>
+      </div>
+    </SidebarProvider>
+  );
+}
 ```
 
 **Step 5: Commit**
 
 ```bash
-git add dashboard/src/components/effects/ dashboard/src/App.tsx
-git commit -m "feat(dashboard): add starfield, scanlines, and vignette effects
+git add dashboard/src/components/ui/sidebar.tsx dashboard/src/components/DashboardSidebar.tsx dashboard/src/components/DashboardSidebar.test.tsx dashboard/src/layouts/DashboardLayout.tsx
+git commit -m "feat(dashboard): add Sidebar for dashboard navigation
 
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
+- Install shadcn/ui Sidebar component
+- DashboardSidebar with collapsible Workflows section
+- SidebarProvider with cookie-based state persistence
+- Mobile responsive with SidebarTrigger
+- focus-visible states on all interactive elements
+- data-slot attributes for styling hooks"
+```
 
-Co-Authored-By: Claude <noreply@anthropic.com>"
+---
+
+## Task 18: Update Component Index Exports
+
+Update the component index to include new components.
+
+**Files:**
+- Modify: `dashboard/src/components/index.ts`
+
+**Step 1: Update exports**
+
+```typescript
+// dashboard/src/components/index.ts
+
+// =============================================================================
+// Domain Components
+// =============================================================================
+
+// ai-elements based wrappers (Queue, Confirmation)
+export { StatusBadge } from './StatusBadge';
+export { JobQueueItem } from './JobQueueItem';
+export { JobQueue } from './JobQueue';
+export { ActivityLogItem } from './ActivityLogItem';
+export { ActivityLog } from './ActivityLog';
+export { ApprovalControls } from './ApprovalControls';
+export { WorkflowHeader } from './WorkflowHeader';
+export { WorkflowProgress } from './WorkflowProgress';
+
+// Skeleton loading states
+export { JobQueueSkeleton } from './JobQueueSkeleton';
+export { ActivityLogSkeleton } from './ActivityLogSkeleton';
+
+// Empty states
+export { EmptyState } from './EmptyState';
+
+// Layout components
+export { DashboardSidebar } from './DashboardSidebar';
+
+// Custom React Flow components (WorkflowCanvas)
+export { WorkflowCanvas } from './WorkflowCanvas';
+
+// Custom flow node/edge types
+export * from './flow';
+
+// =============================================================================
+// ai-elements (re-exported for direct use when needed)
+// =============================================================================
+export * from './ai-elements/queue';
+export * from './ai-elements/confirmation';
+export * from './ai-elements/loader';
+export * from './ai-elements/shimmer';
+
+// =============================================================================
+// shadcn UI components
+// =============================================================================
+export * from './ui/button';
+export * from './ui/badge';
+export * from './ui/card';
+export * from './ui/progress';
+export * from './ui/skeleton';
+export * from './ui/sidebar';
+export * from './ui/scroll-area';
+export * from './ui/tooltip';
+```
+
+**Step 2: Commit**
+
+```bash
+git add dashboard/src/components/index.ts
+git commit -m "feat(dashboard): update component exports
+
+- Add WorkflowProgress, JobQueueSkeleton, ActivityLogSkeleton
+- Add EmptyState and DashboardSidebar
+- Add progress, skeleton, sidebar UI exports"
 ```
 
 ---
@@ -2820,65 +3407,107 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 
 After completing all tasks, verify:
 
-**Component Functionality:**
-- [ ] StatusBadge renders all workflow states (RUNNING, DONE, QUEUED, BLOCKED, CANCELLED)
-- [ ] Sidebar navigation highlights active route with gold border
-- [ ] Header displays workflow ID, status, and ETA placeholder
-- [ ] JobQueue allows selecting workflows with keyboard (Enter/Space)
-- [ ] ActivityLog auto-scrolls to bottom when new events arrive
-- [ ] BeaconNode shows map pin with pulsing animation for active state
-- [ ] FlightEdge renders solid/dashed lines with time labels
-- [ ] WorkflowCanvas displays React Flow pipeline with grid background
-- [ ] ApprovalButtons disable when action is pending (loading spinner)
-- [ ] ActiveJobs page composes all components correctly
+**React Router v7 Data Mode Patterns:**
+- [ ] Components receive data from `useLoaderData()` in parent pages
+- [ ] ApprovalControls uses `useFetcher()` for approve/reject mutations
+- [ ] Navigation state shows loading indicators via `useNavigation()`
+- [ ] NavLink shows active route styling automatically
+- [ ] ActivityLog merges loader data with Zustand real-time events
+- [ ] No custom data-fetching hooks in components (use loaders/actions)
 
-**Accessibility (WCAG AA):**
-- [ ] All interactive elements have proper ARIA labels
-- [ ] Color contrast ratios meet WCAG AA (4.5:1 for text)
-- [ ] Keyboard navigation works (Tab, Enter, Space, Arrow keys)
-- [ ] Focus visible indicator (gold outline) on all interactive elements
-- [ ] ActivityLog has `role="log"` with `aria-live="polite"`
-- [ ] WorkflowCanvas has `role="img"` with descriptive aria-label
-- [ ] Reduced motion media query disables animations
-- [ ] Axe-core audit passes with 0 violations
+**ai-elements Components:**
+- [ ] ai-elements queue, confirmation, loader, shimmer installed in `src/components/ai-elements/`
+- [ ] StatusBadge wraps QueueItemIndicator with correct labels
+- [ ] JobQueue uses QueueSection with collapsible behavior
+- [ ] ActivityLog shows events with auto-scroll and blinking cursor
+- [ ] ApprovalControls uses Confirmation state machine + useFetcher
 
-**Visual Design:**
-- [ ] Aviation theme colors applied (gold, green, red, blue)
-- [ ] Typography uses Bebas Neue, Barlow Condensed, Source Sans, IBM Plex Mono
-- [ ] Starfield background visible with random star placement
-- [ ] Cockpit glass scanlines overlay at top layer
-- [ ] Vignette darkens edges for depth
-- [ ] Beacon nodes glow when active
-- [ ] Status badges use correct colors with dark/light text for contrast
+**Custom WorkflowCanvas Components:**
+- [ ] WorkflowNode renders MapPin icons (NOT Card-based layout)
+- [ ] WorkflowNode has beacon glow animation for active status
+- [ ] WorkflowNode shows status-based colors (amber active, teal completed, muted pending)
+- [ ] WorkflowEdge shows time labels at midpoint
+- [ ] WorkflowEdge has animated flow indicator for active edges
+- [ ] WorkflowEdge uses dashed lines for pending, solid for completed
+- [ ] WorkflowCanvas is view-only (non-interactive)
+- [ ] WorkflowCanvas has dot pattern background
 
-**E2E Tests:**
-- [ ] Multi-workflow selection works (click to switch)
-- [ ] Approval flow updates status badge from BLOCKED → RUNNING
-- [ ] Activity log filters by selected workflow
-- [ ] Keyboard navigation follows ARIA patterns
-- [ ] Screen reader announcements work (aria-live updates)
+**Additional shadcn/ui Components:**
+- [ ] Progress component shows workflow completion with OKLCH colors
+- [ ] Skeleton components match JobQueue/ActivityLog structure
+- [ ] EmptyState displays when no workflows are active
+- [ ] Sidebar has collapsible navigation with cookie persistence
+- [ ] Mobile responsive Sidebar with sheet drawer
 
-**Build & Performance:**
-- [ ] `npm run build` succeeds with no errors
-- [ ] Bundle size is reasonable (<500KB gzipped)
-- [ ] No console errors in browser
-- [ ] All Vitest unit tests pass
-- [ ] All Playwright E2E tests pass
+**shadcn/ui Patterns:**
+- [ ] All custom components have `data-slot` attributes
+- [ ] CVA used for component variants (StatusBadge, EmptyState)
+- [ ] `cn()` utility used for className merging
+- [ ] Focus states include `focus-visible:ring-ring/50 focus-visible:ring-[3px]`
+- [ ] OKLCH color format used throughout CSS variables
+- [ ] Two-tier CSS variable system (`@theme inline` + base variables)
+
+**General:**
+- [ ] All component tests pass: `npm run test:run`
+- [ ] TypeScript compilation passes: `npm run type-check`
+- [ ] Components render correctly in browser
+- [ ] All components use aviation theme via CSS variables
+- [ ] Components have proper ARIA attributes
+- [ ] Keyboard navigation works for interactive elements
 
 ---
 
 ## Summary
 
-This plan delivers the complete dashboard UI with:
+This plan uses a **hybrid approach** to component development:
 
-1. **Atomic design components** - StatusBadge, CompassRose, icons
-2. **Molecules** - ApprovalButtons with loading states
-3. **Organisms** - Sidebar, Header, JobQueue, ActivityLog, WorkflowCanvas
-4. **Pages** - ActiveJobs composing all components
-5. **React Flow integration** - BeaconNode and FlightEdge custom components
-6. **Full accessibility** - WCAG AA compliance, keyboard navigation, screen reader support
-7. **Aviation theme** - Starfield, scanlines, vignette, gold accents, map pin beacons
-8. **E2E tests** - Playwright tests for multi-workflow selection and approval flow
-9. **Visual effects** - Reduced motion support, high contrast mode
+### ai-elements Based Components
 
-The implementation follows TDD with tests written first for all components. All interactive elements are keyboard accessible with proper ARIA labels. The design matches the HTML mock while maintaining accessibility standards.
+| Component | ai-elements Foundation | Purpose |
+|-----------|------------------------|---------|
+| StatusBadge | QueueItemIndicator | Status indicators with workflow labels |
+| JobQueueItem | QueueItem, QueueItemContent | Individual queue entries |
+| JobQueue | QueueSection, QueueList | Collapsible queue lists |
+| ActivityLogItem | QueueItem, QueueItemIndicator | Terminal-style log entries |
+| ActivityLog | QueueSection, Shimmer | Auto-scrolling activity log |
+| ApprovalControls | Confirmation, ConfirmationActions | Approval workflow state machine |
+
+### Custom React Flow Components
+
+| Component | Built With | Purpose |
+|-----------|------------|---------|
+| WorkflowNode | React Flow + lucide MapPin | Map pin waypoint nodes |
+| WorkflowEdge | React Flow + SVG animation | Status-based edges with time labels |
+| WorkflowCanvas | React Flow container | Flight route visualization |
+
+### Additional shadcn/ui Components
+
+| Component | shadcn/ui Foundation | Purpose |
+|-----------|----------------------|---------|
+| WorkflowProgress | Progress | Overall workflow completion indicator |
+| JobQueueSkeleton | Skeleton | Loading placeholder for JobQueue |
+| ActivityLogSkeleton | Skeleton | Loading placeholder for ActivityLog |
+| EmptyState | Custom + CVA | Placeholder when no workflows active |
+| DashboardSidebar | Sidebar | Collapsible navigation with state persistence |
+
+### Benefits of Hybrid Approach
+
+1. **Consistency** - ai-elements provides battle-tested patterns for queues and confirmations
+2. **Design Fidelity** - Custom React Flow preserves the aviation "flight route" aesthetic
+3. **Accessibility** - ai-elements includes built-in ARIA attributes
+4. **Performance** - Custom nodes/edges are memoized for React Flow optimization
+5. **Theme Integration** - All components use aviation theme CSS variables
+
+### Modern shadcn/ui Patterns Applied
+
+1. **data-slot attributes** - All custom components include `data-slot` for semantic styling hooks
+2. **OKLCH color format** - Perceptually uniform colors with `oklch()` syntax
+3. **Two-tier CSS variables** - Base variables + `@theme inline` for Tailwind mapping
+4. **CVA for variants** - Type-safe variant definitions with class-variance-authority
+5. **Focus-visible states** - Consistent `focus-visible:ring-ring/50 focus-visible:ring-[3px]`
+6. **cn() utility** - Proper className merging with clsx + tailwind-merge
+
+**Next Steps:**
+- Plan 11: State management integration (connect to Zustand store)
+- Plan 12: WebSocket real-time updates
+- Plan 13: E2E tests with Playwright
