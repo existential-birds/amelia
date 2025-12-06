@@ -12,7 +12,7 @@ React Flow (@xyflow/react) is a library for building node-based graphs, workflow
 ### Installation
 
 ```bash
-npm install @xyflow/react
+pnpm add @xyflow/react
 ```
 
 ### Basic Setup

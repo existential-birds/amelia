@@ -38,7 +38,7 @@ Use `websocat` for WebSocket testing:
 brew install websocat
 
 # Alternative: use wscat
-npm install -g wscat
+pnpm add -g wscat
 ```
 
 ---

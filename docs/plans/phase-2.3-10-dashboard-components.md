@@ -112,7 +112,7 @@ ai-elements uses a registry-based installation similar to shadcn/ui. Install the
 cd dashboard
 
 # Install base dependencies
-npm install @xyflow/react framer-motion
+pnpm add @xyflow/react framer-motion
 
 # Install ai-elements components via registry
 npx shadcn@latest add https://ai-elements.vercel.app/registry/queue.json
@@ -132,7 +132,7 @@ This installs components to `dashboard/src/components/ai-elements/`:
 **Step 2: Verify installation**
 
 ```bash
-npm run type-check
+pnpm run type-check
 ```
 
 Expected: No TypeScript errors. Files exist in `src/components/ai-elements/`.
@@ -254,7 +254,7 @@ Add to `dashboard/src/index.css`:
 **Step 2: Verify theme integration**
 
 ```bash
-npm run dev
+pnpm run dev
 # Check browser console for CSS errors
 ```
 
@@ -336,7 +336,7 @@ describe('StatusBadge', () => {
 **Step 2: Run test to verify it fails**
 
 ```bash
-cd dashboard && npm test src/components/StatusBadge.test.tsx
+cd dashboard && pnpm test src/components/StatusBadge.test.tsx
 ```
 
 Expected: FAIL - Component does not exist
@@ -439,7 +439,7 @@ export function StatusBadge({ status, size, className }: StatusBadgeProps) {
 **Step 4: Run test to verify it passes**
 
 ```bash
-cd dashboard && npm test src/components/StatusBadge.test.tsx
+cd dashboard && pnpm test src/components/StatusBadge.test.tsx
 ```
 
 Expected: PASS
@@ -628,7 +628,7 @@ export function JobQueueItem({ workflow, selected, onSelect, actions }: JobQueue
 **Step 3: Run test**
 
 ```bash
-cd dashboard && npm test src/components/JobQueueItem.test.tsx
+cd dashboard && pnpm test src/components/JobQueueItem.test.tsx
 ```
 
 **Step 4: Commit**
@@ -871,7 +871,7 @@ export function JobQueue({ workflows = [], selectedId = null, onSelect = () => {
 **Step 3: Run test**
 
 ```bash
-cd dashboard && npm test src/components/JobQueue.test.tsx
+cd dashboard && pnpm test src/components/JobQueue.test.tsx
 ```
 
 **Step 4: Commit**
@@ -1778,7 +1778,7 @@ describe('WorkflowNode', () => {
 **Step 2: Run test to verify it fails**
 
 ```bash
-cd dashboard && npm test src/components/flow/WorkflowNode.test.tsx
+cd dashboard && pnpm test src/components/flow/WorkflowNode.test.tsx
 ```
 
 Expected: FAIL - Component does not exist
@@ -1914,7 +1914,7 @@ export const WorkflowNode = memo(WorkflowNodeComponent);
 **Step 4: Run test to verify it passes**
 
 ```bash
-cd dashboard && npm test src/components/flow/WorkflowNode.test.tsx
+cd dashboard && pnpm test src/components/flow/WorkflowNode.test.tsx
 ```
 
 Expected: PASS
@@ -2051,7 +2051,7 @@ describe('WorkflowEdge', () => {
 **Step 2: Run test to verify it fails**
 
 ```bash
-cd dashboard && npm test src/components/flow/WorkflowEdge.test.tsx
+cd dashboard && pnpm test src/components/flow/WorkflowEdge.test.tsx
 ```
 
 Expected: FAIL - Component does not exist
@@ -2158,7 +2158,7 @@ export const WorkflowEdge = memo(WorkflowEdgeComponent);
 **Step 4: Run test to verify it passes**
 
 ```bash
-cd dashboard && npm test src/components/flow/WorkflowEdge.test.tsx
+cd dashboard && pnpm test src/components/flow/WorkflowEdge.test.tsx
 ```
 
 Expected: PASS
@@ -2259,7 +2259,7 @@ describe('WorkflowCanvas', () => {
 **Step 2: Run test to verify it fails**
 
 ```bash
-cd dashboard && npm test src/components/WorkflowCanvas.test.tsx
+cd dashboard && pnpm test src/components/WorkflowCanvas.test.tsx
 ```
 
 Expected: FAIL - Component does not exist
@@ -2424,7 +2424,7 @@ export function WorkflowCanvas({ pipeline, loading = false }: WorkflowCanvasProp
 **Step 4: Run test to verify it passes**
 
 ```bash
-cd dashboard && npm test src/components/WorkflowCanvas.test.tsx
+cd dashboard && pnpm test src/components/WorkflowCanvas.test.tsx
 ```
 
 Expected: PASS
@@ -3448,8 +3448,8 @@ After completing all tasks, verify:
 - [ ] Two-tier CSS variable system (`@theme inline` + base variables)
 
 **General:**
-- [ ] All component tests pass: `npm run test:run`
-- [ ] TypeScript compilation passes: `npm run type-check`
+- [ ] All component tests pass: `pnpm run test:run`
+- [ ] TypeScript compilation passes: `pnpm run type-check`
 - [ ] Components render correctly in browser
 - [ ] All components use aviation theme via CSS variables
 - [ ] Components have proper ARIA attributes

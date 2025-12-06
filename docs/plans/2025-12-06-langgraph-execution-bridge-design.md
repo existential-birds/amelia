@@ -56,18 +56,71 @@ This design connects the server layer (FastAPI, SQLite, REST endpoints) to the e
 | Retry config | Simplified (max_retries + base_delay) | Error classification is implementation concern, not config |
 | CLI vs Server | Execution mode in graph config | Same graph code, different approval behavior |
 
+## Serialization Convention
+
+**Enum Value Serialization:**
+
+Python code uses UPPERCASE enum members internally, but JSON serialization uses snake_case lowercase to match frontend expectations:
+
+| Python Code | JSON Serialization |
+|-------------|-------------------|
+| `EventType.STAGE_STARTED` | `"stage_started"` |
+| `EventType.STAGE_COMPLETED` | `"stage_completed"` |
+| `EventType.APPROVAL_REQUIRED` | `"approval_required"` |
+| `EventType.SYSTEM_ERROR` | `"system_error"` |
+| `EventType.SYSTEM_INFO` | `"system_info"` |
+
+**Implementation:**
+
+Use Pydantic's `use_enum_values=True` or custom serializer:
+
+```python
+from enum import Enum
+from pydantic import BaseModel, ConfigDict
+
+class EventType(str, Enum):
+    """Event types - serialize to lowercase snake_case."""
+    STAGE_STARTED = "stage_started"
+    STAGE_COMPLETED = "stage_completed"
+    APPROVAL_REQUIRED = "approval_required"
+    SYSTEM_ERROR = "system_error"
+    SYSTEM_INFO = "system_info"
+
+class WorkflowEvent(BaseModel):
+    """Pydantic will serialize EventType.STAGE_STARTED as 'stage_started'."""
+    model_config = ConfigDict(use_enum_values=True)
+
+    event_type: EventType
+    message: str
+    data: dict | None = None
+```
+
 ## State Model
 
 `ServerExecutionState` wraps `ExecutionState` via composition:
 
 ```python
+from pydantic import Field
+
+class WorkflowStatus(str, Enum):
+    """Workflow status - serialize to lowercase."""
+    PENDING = "pending"
+    RUNNING = "in_progress"
+    BLOCKED = "blocked"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
 class ServerExecutionState(BaseModel):
     # Server metadata
     id: str
     issue_id: str
     worktree_path: str
     worktree_name: str  # Derived from path
-    workflow_status: WorkflowStatus = WorkflowStatus.PENDING
+    workflow_status: WorkflowStatus = Field(
+        default=WorkflowStatus.PENDING,
+        alias="status",  # Serialize as "status" in JSON
+    )
     started_at: datetime
     completed_at: datetime | None = None
     current_stage: str = "initializing"
@@ -75,7 +128,28 @@ class ServerExecutionState(BaseModel):
 
     # Core orchestration state - always present
     execution_state: ExecutionState
+
+    model_config = ConfigDict(
+        use_enum_values=True,
+        populate_by_name=True,  # Allow both "workflow_status" and "status"
+    )
 ```
+
+**Field Mapping:**
+- Python internal field: `workflow_status` (type: `WorkflowStatus`)
+- REST API JSON field: `status` (type: `string`)
+- This ensures frontend receives `{"status": "in_progress"}` not `{"workflow_status": "RUNNING"}`
+
+**WorkflowStatus Value Mapping:**
+
+| Python Enum | JSON Value | Description |
+|-------------|------------|-------------|
+| `PENDING` | `"pending"` | Not yet started |
+| `RUNNING` | `"in_progress"` | Currently executing |
+| `BLOCKED` | `"blocked"` | Awaiting human approval |
+| `COMPLETED` | `"completed"` | Finished successfully |
+| `FAILED` | `"failed"` | Finished with error |
+| `CANCELLED` | `"cancelled"` | Cancelled by user |
 
 **Initialization:** All fields populated at workflow creation. Issue fetched immediately, `worktree_name` derived from path. No nullable fields except `completed_at` and `failure_reason`.
 
@@ -199,7 +273,15 @@ async def _run_workflow(
             }
         }
 
-        # 3. Stream execution with event emission
+        # 3. Emit workflow lifecycle event
+        await self._emit(
+            workflow_id,
+            EventType.WORKFLOW_STARTED,
+            "Workflow execution started",
+            data={"issue_id": state.issue_id},
+        )
+
+        # 4. Stream execution with event emission
         try:
             async for event in graph.astream_events(
                 state.execution_state,
@@ -208,12 +290,27 @@ async def _run_workflow(
             ):
                 await self._handle_graph_event(workflow_id, event)
 
+            # 5. Emit workflow completion event
+            await self._emit(
+                workflow_id,
+                EventType.WORKFLOW_COMPLETED,
+                "Workflow completed successfully",
+                data={"final_state": state.current_stage},
+            )
+
         except GraphInterrupt:
             # Human approval required - checkpoint saved automatically
             await self._emit_approval_required(workflow_id, state)
             return  # Execution pauses here
 
         except Exception as e:
+            # 6. Emit workflow failure event
+            await self._emit(
+                workflow_id,
+                EventType.WORKFLOW_FAILED,
+                f"Workflow failed: {str(e)}",
+                data={"error": str(e), "stage": state.current_stage},
+            )
             await self._handle_execution_error(workflow_id, e)
             raise
 ```
@@ -327,11 +424,28 @@ async def _handle_graph_event(
 
 | LangGraph Event | WorkflowEvent | When |
 |-----------------|---------------|------|
-| `on_chain_start` | `STAGE_STARTED` | Node begins |
-| `on_chain_end` | `STAGE_COMPLETED` | Node finishes |
+| Workflow start | `WORKFLOW_STARTED` | Beginning of `_run_workflow()` |
+| `on_chain_start` | `STAGE_STARTED` | Node begins (if in STAGE_NODES) |
+| `on_chain_end` | `STAGE_COMPLETED` | Node finishes (if in STAGE_NODES) |
 | `on_chain_error` | `SYSTEM_ERROR` | Node fails |
 | `on_llm_stream` | `SYSTEM_INFO` | Verbose mode only |
 | `GraphInterrupt` | `APPROVAL_REQUIRED` | Before approval node |
+| Workflow success | `WORKFLOW_COMPLETED` | End of successful execution |
+| Workflow error | `WORKFLOW_FAILED` | Exception in execution |
+
+**Required EventType additions:**
+```python
+class EventType(str, Enum):
+    """Event types - serialize to lowercase snake_case."""
+    WORKFLOW_STARTED = "workflow_started"     # NEW
+    WORKFLOW_COMPLETED = "workflow_completed"  # NEW
+    WORKFLOW_FAILED = "workflow_failed"        # NEW
+    STAGE_STARTED = "stage_started"
+    STAGE_COMPLETED = "stage_completed"
+    APPROVAL_REQUIRED = "approval_required"
+    SYSTEM_ERROR = "system_error"
+    SYSTEM_INFO = "system_info"
+```
 
 ## Error Handling & Retry
 

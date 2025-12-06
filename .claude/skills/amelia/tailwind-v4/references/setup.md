@@ -15,7 +15,7 @@
 Install Tailwind CSS v4 with the Vite plugin:
 
 ```bash
-npm install -D tailwindcss@next @tailwindcss/vite@next
+pnpm add -D tailwindcss@next @tailwindcss/vite@next
 ```
 
 **Complete package.json example**:

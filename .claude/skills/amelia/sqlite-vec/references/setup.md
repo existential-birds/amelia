@@ -17,7 +17,7 @@ pip install sqlite-vec
 ```
 
 ### Other Languages
-- Node.js: `npm install sqlite-vec`
+- Node.js: `pnpm add sqlite-vec`
 - Ruby: `gem install sqlite-vec`
 - Go: `go get -u github.com/asg017/sqlite-vec/bindings/go`
 - Rust: `cargo add sqlite-vec`
