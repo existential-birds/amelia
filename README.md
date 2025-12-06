@@ -12,6 +12,8 @@ Amelia automates development workflows (issue analysis, planning, coding, review
 Issue → Architect (plan) → Human Approval → Developer (execute) ↔ Reviewer (review) → Done
 ```
 
+![Amelia Terminal](docs/design/terminal_screen.jpg)
+
 ![Amelia Dashboard Design Mock](docs/design/design_mock.jpg)
 
 ## Prerequisites
