@@ -18,6 +18,14 @@ from amelia.server.exceptions import (
 from amelia.server.models import ServerExecutionState
 from amelia.server.models.events import EventType, WorkflowEvent
 
+# Nodes that emit stage events
+STAGE_NODES: frozenset[str] = frozenset({
+    "architect_node",
+    "human_approval_node",
+    "developer_node",
+    "reviewer_node",
+})
+
 
 class OrchestratorService:
     """Manages concurrent workflow executions across worktrees.
@@ -421,6 +429,53 @@ class OrchestratorService:
         finally:
             # Cleanup - event should already be removed by approve/reject
             self._approval_events.pop(workflow_id, None)
+
+    async def _handle_graph_event(
+        self,
+        workflow_id: str,
+        event: dict[str, object],
+    ) -> None:
+        """Translate LangGraph events to WorkflowEvents and emit.
+
+        Args:
+            workflow_id: The workflow this event belongs to.
+            event: LangGraph event dictionary.
+        """
+        event_type = event.get("event")
+        node_name = event.get("name")
+
+        if not isinstance(node_name, str):
+            return
+
+        if event_type == "on_chain_start":
+            if node_name in STAGE_NODES:
+                await self._emit(
+                    workflow_id,
+                    EventType.STAGE_STARTED,
+                    f"Starting {node_name}",
+                    data={"stage": node_name},
+                )
+
+        elif event_type == "on_chain_end":
+            if node_name in STAGE_NODES:
+                await self._emit(
+                    workflow_id,
+                    EventType.STAGE_COMPLETED,
+                    f"Completed {node_name}",
+                    data={"stage": node_name, "output": event.get("data")},
+                )
+
+        elif event_type == "on_chain_error":
+            error_data = event.get("data", {})
+            error_msg = "Unknown error"
+            if isinstance(error_data, dict):
+                error_msg = str(error_data.get("error", "Unknown error"))
+            await self._emit(
+                workflow_id,
+                EventType.SYSTEM_ERROR,
+                f"Error in {node_name}: {error_msg}",
+                data={"stage": node_name, "error": error_msg},
+            )
 
     async def recover_interrupted_workflows(self) -> None:
         """Recover workflows that were running when server crashed.
