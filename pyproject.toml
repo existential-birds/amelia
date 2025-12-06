@@ -55,6 +55,7 @@ ignore = ["E501"]
 
 [tool.ruff.lint.per-file-ignores]
 "amelia/server/routes/*.py" = ["B008"]  # FastAPI Depends() in defaults is intentional
+"tests/**/*.py" = ["PLC0415"]  # Imports inside test functions are intentional
 
 [tool.ruff.lint.isort]
 known-first-party = ["amelia"]
