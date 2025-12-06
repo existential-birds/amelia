@@ -19,6 +19,7 @@ dependencies = [
     "pydantic-settings>=2.6.0",
     "psutil>=6.1.0",
     "aiosqlite>=0.20.0",
+    "langgraph-checkpoint-sqlite>=3.0.0",
 ]
 
 [project.scripts]
