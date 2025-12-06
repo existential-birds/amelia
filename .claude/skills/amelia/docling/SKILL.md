@@ -86,8 +86,8 @@ if result.status == ConversionStatus.SUCCESS:
 
 - **Markdown**: `export_to_markdown()` or `save_as_markdown()`
 - **HTML**: `export_to_html()` or `save_as_html()`
-- **JSON**: `export_to_dict()` / `export_to_json()` or `save_as_json()`
-- **Text**: `export_to_markdown(strict_text=True)` or `save_as_markdown(strict_text=True)`
+- **JSON**: `export_to_dict()` or `save_as_json()` (note: no `export_to_json()` method)
+- **Text**: `export_to_text()` or `export_to_markdown(strict_text=True)` or `save_as_markdown(strict_text=True)`
 - **DocTags**: `export_to_doctags()` or `save_as_doctags()`
 
 ## Common Patterns
@@ -205,7 +205,10 @@ for item, level in doc.iterate_items():
 from docling.datamodel.pipeline_options import (
     PdfPipelineOptions,
     EasyOcrOptions,
-    TesseractOcrOptions
+    TesseractOcrOptions,
+    TesseractCliOcrOptions,
+    OcrMacOptions,
+    RapidOcrOptions
 )
 
 # EasyOCR (default)
@@ -216,7 +219,12 @@ pipeline_options.ocr_options = EasyOcrOptions(lang=["en", "de"])
 # Tesseract
 pipeline_options = PdfPipelineOptions()
 pipeline_options.do_ocr = True
-pipeline_options.ocr_options = TesseractOcrOptions()
+pipeline_options.ocr_options = TesseractOcrOptions(lang=["eng", "deu"])
+
+# RapidOCR
+pipeline_options = PdfPipelineOptions()
+pipeline_options.do_ocr = True
+pipeline_options.ocr_options = RapidOcrOptions()
 ```
 
 ### Table Extraction Options

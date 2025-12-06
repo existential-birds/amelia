@@ -191,6 +191,10 @@ const useStore = createWithEqualityFn<State>()(
   }),
   shallow  // Use shallow comparison by default
 )
+
+// Note: For most cases, use useShallow instead
+// useShallow is imported from 'zustand/react/shallow' or 'zustand/shallow'
+// The former is React-specific, the latter includes both shallow and useShallow
 ```
 
 ## Vanilla Store with Types

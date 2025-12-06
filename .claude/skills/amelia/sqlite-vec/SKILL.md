@@ -210,7 +210,7 @@ For manual distance calculations (non-vec0 tables):
 
 ```sql
 -- L2 distance
-SELECT vec_distance_L2('[1, 2]', '[3, 4]');
+SELECT vec_distance_l2('[1, 2]', '[3, 4]');
 -- 2.8284...
 
 -- Cosine distance

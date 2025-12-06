@@ -12,6 +12,8 @@ Amelia automates development workflows (issue analysis, planning, coding, review
 Issue → Architect (plan) → Human Approval → Developer (execute) ↔ Reviewer (review) → Done
 ```
 
+![Amelia Terminal](docs/design/terminal_screen.jpg)
+
 ![Amelia Dashboard Design Mock](docs/design/design_mock.jpg)
 
 ## Prerequisites
@@ -160,6 +162,9 @@ The following skills are available in `.claude/skills/amelia/` to help Claude Co
 |-------|----------|-------------|
 | **vercel-ai-sdk** | `useChat`, `streamText`, `UIMessage` | Vercel AI SDK for streaming chat, tool calls, message handling |
 | **docling** | `DocumentConverter`, `HierarchicalChunker` | Document parsing (PDF, DOCX), chunking for RAG pipelines |
+| **langgraph-graphs** | `StateGraph`, `add_node`, `add_edge` | LangGraph state machine patterns, nodes, edges, conditional routing |
+| **langgraph-persistence** | `AsyncSqliteSaver`, `interrupt_before`, `GraphInterrupt` | LangGraph checkpointing, human-in-loop, interrupts, streaming |
+| **pydantic-ai-agents** | `pydantic_ai`, `Agent`, `RunContext`, `@agent.tool` | Pydantic AI agent patterns, tools, dependencies, structured outputs |
 | **sqlite-vec** | `vec0`, `MATCH`, `vec_distance` | Vector similarity search in SQLite, KNN queries, embeddings |
 
 ### Testing Skills

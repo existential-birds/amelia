@@ -52,11 +52,16 @@ const bears = useBearStore((state) => state.bears)
 // Bad - rerenders on any change
 const state = useBearStore()
 
-// Multiple values with useShallow
+// Multiple values with useShallow (prevents rerenders with shallow comparison)
 import { useShallow } from 'zustand/react/shallow'
 
 const { bears, fish } = useBearStore(
   useShallow((state) => ({ bears: state.bears, fish: state.fish }))
+)
+
+// Array destructuring also works
+const [bears, fish] = useBearStore(
+  useShallow((state) => [state.bears, state.fish])
 )
 ```
 

@@ -391,6 +391,90 @@ See [Debate Mode Design](brainstorming/2025-12-05-debate-mode-design.md) for ful
 
 ---
 
+## Phase 13: AWS AgentCore Cloud Deployment 🆕
+
+*Parallel workflow execution in the cloud via AWS Bedrock AgentCore*
+
+Deploy Amelia to AWS AgentCore to enable parallel workflow execution without local resource limitations. A thin CLI client communicates with the cloud backend while preserving local-only mode as the default.
+
+### Goals
+- Run multiple workflows in parallel (not limited by local resources)
+- Thin CLI client for submitting and monitoring workflows
+- Web UI connectivity to cloud backend
+- Preserve existing local-only mode (no breaking changes)
+
+### Architecture Decisions
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| Communication | REST + WebSocket | Real-time updates, matches existing server patterns |
+| Execution model | Agent-per-workflow | Natural isolation via AgentCore microVM, scales per-workflow |
+| Human approval | Callback + re-invoke pattern | Runtime cannot pause; checkpoint state, return, re-invoke on approval |
+| State management | LangGraph checkpoint to AgentCore Memory | Native `langgraph-checkpoint-aws` integration |
+| Control Plane compute | ECS Fargate | WebSocket support, long-running processes |
+| Infrastructure as Code | CDK (TypeScript) | Better AWS integration, type safety |
+
+### Phase 1: Foundation (Driver + Memory)
+- [ ] Add `api:bedrock` driver (Bedrock SDK, Claude/Nova models)
+- [ ] Add `api:anthropic` driver (direct Anthropic API)
+- [ ] Register in `DriverFactory`
+- [ ] Add `langgraph-checkpoint-aws` dependency
+- [ ] Test LangGraph + AgentCore Memory with `agentcore dev`
+- [ ] Verify package size < 250 MB for direct code deployment
+
+### Phase 2: Async Approval (Critical Path)
+- [ ] Refactor `human_approval_node` to return `needs_approval` instead of blocking
+- [ ] Implement approval resume via graph re-invocation
+- [ ] Add callback functions for Control Plane notification
+- [ ] Test approval flow with simulated Control Plane
+- [ ] Handle 15-min idle timeout (checkpoint before return)
+
+### Phase 3: Control Plane
+- [ ] FastAPI service with workflow CRUD
+- [ ] Aurora Serverless v2 schema (workflows, approvals, audit log)
+- [ ] Runtime invocation via Bedrock AgentCore SDK
+- [ ] Callback endpoints for Runtime notifications
+- [ ] ECS Fargate task definition + ALB
+
+### Phase 4: WebSocket Hub
+- [ ] API Gateway WebSocket API
+- [ ] Lambda connection manager (connect/disconnect/default)
+- [ ] DynamoDB connection state table
+- [ ] Event broadcasting from Control Plane
+- [ ] Client reconnection with event replay
+
+### Phase 5: Identity + Git
+- [ ] Create GitHub OAuth App (not GitHub App)
+- [ ] Configure AgentCore Identity provider
+- [ ] Implement `@requires_access_token` git operations
+- [ ] Cognito User Pool with GitHub federation
+- [ ] CLI authentication flow (browser-based OAuth)
+
+### Phase 6: Thin CLI
+- [ ] `RemoteClient` class for Control Plane communication
+- [ ] `--remote` flag on existing commands
+- [ ] `amelia workflows` subcommand group
+- [ ] WebSocket event streaming with reconnection
+- [ ] OAuth consent handling (open browser for auth URL)
+
+### Phase 7: Infrastructure
+- [ ] CDK stack for all AWS resources
+- [ ] CI/CD pipeline (GitHub Actions → ECR → ECS)
+- [ ] Integration tests in dedicated AWS account
+- [ ] Documentation and runbooks
+
+### Key Research Findings
+| Area | Finding |
+|------|---------|
+| Runtime Communication | No built-in callback—Runtime must HTTP POST to Control Plane |
+| State Persistence | Native `langgraph-checkpoint-aws` (AgentCoreMemorySaver, AgentCoreMemoryStore) |
+| Session Limits | 15-min idle timeout, 8-hour max; approval = checkpoint + return + re-invoke |
+| Git Authentication | GitHub OAuth via `GithubOauth2` provider; token in HTTPS URL |
+| Deployment Size | Direct code: 250 MB zipped / 750 MB unzipped (15x faster session creation) |
+
+See [AWS AgentCore Deployment Design](brainstorming/2025-12-06-aws-agentcore-deployment-design.md) and [AWS AgentCore Research](brainstorming/2025-12-06-aws-agentcore-research.md) for full specifications.
+
+---
+
 ## Implementation Notes
 
 ### Feature List Format

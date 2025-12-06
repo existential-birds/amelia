@@ -20,9 +20,19 @@ vi.mock('./module', () => ({
   default: vi.fn()
 }))
 
-// Partial mock with importActual
+// Partial mock with importActual (two ways)
+// Option 1: Use vi.importActual directly
 vi.mock('./utils', async () => {
-  const actual = await vi.importActual('./utils')
+  const actual = await vi.importActual<typeof import('./utils')>('./utils')
+  return {
+    ...actual,
+    specificFunction: vi.fn()
+  }
+})
+
+// Option 2: Use the importOriginal helper parameter
+vi.mock('./utils', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./utils')>()
   return {
     ...actual,
     specificFunction: vi.fn()

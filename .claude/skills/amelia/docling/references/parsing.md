@@ -382,18 +382,6 @@ pipeline_options.do_ocr = True
 pipeline_options.ocr_options = RapidOcrOptions()
 ```
 
-### Surya OCR
-
-```python
-from docling.datamodel.pipeline_options import (
-    PdfPipelineOptions,
-    SuryaOcrOptions
-)
-
-pipeline_options = PdfPipelineOptions()
-pipeline_options.do_ocr = True
-pipeline_options.ocr_options = SuryaOcrOptions()
-```
 
 ### GPU Acceleration
 

@@ -128,7 +128,7 @@ function DynamicHandleNode({ id }: NodeProps) {
       <button
         onClick={() => {
           setHandleCount((c) => c + 1);
-          updateNodeInternals([id]); // Critical: notify React Flow
+          updateNodeInternals(id); // Critical: notify React Flow
         }}
       >
         add handle

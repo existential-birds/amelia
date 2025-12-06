@@ -44,7 +44,7 @@ export default defineConfig({
 
 ## @theme Directive Modes
 
-### default
+### default (standard mode)
 Generates CSS variables that can be referenced elsewhere:
 ```css
 @theme {
@@ -54,6 +54,8 @@ Generates CSS variables that can be referenced elsewhere:
 /* Generates: :root { --color-brand: oklch(...); } */
 /* Usage: text-brand → color: var(--color-brand) */
 ```
+
+**Note**: You can also use `@theme default` explicitly to mark theme values that can be overridden by non-default @theme declarations.
 
 ### inline
 Inlines values directly without CSS variables (better performance):
@@ -66,13 +68,14 @@ Inlines values directly without CSS variables (better performance):
 ```
 
 ### reference
-Defines theme values without emitting CSS (for type generation only):
+Inlines values as fallbacks without emitting CSS variables:
 ```css
 @theme reference {
   --color-internal: oklch(50% 0.1 180);
 }
 
-/* No CSS output, but utilities still work */
+/* No :root variable, but utilities use fallback */
+/* Usage: bg-internal → background-color: var(--color-internal, oklch(50% 0.1 180)) */
 ```
 
 ## OKLCH Color Format
@@ -161,10 +164,10 @@ Tailwind v4 eliminates configuration files:
 ### When to use @theme reference
 
 **Use `@theme reference`**:
-- Internal design tokens for calculations
-- Type-only theme values
-- Avoiding CSS output bloat
-- Prefix-scoped themes that shouldn't emit
+- Provide fallback values without CSS variable overhead
+- Values that should work even if variable isn't defined
+- Reducing :root bloat while maintaining utility support
+- Combining with inline for direct value substitution
 
 ## Common Patterns
 

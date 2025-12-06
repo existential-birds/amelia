@@ -748,11 +748,15 @@ import {
   QueueItemIndicator,
   QueueItemContent,
   QueueItemDescription,
+} from "@/components/ai-elements/queue";
+import {
   Tool,
   ToolHeader,
   ToolContent,
   ToolInput,
   ToolOutput,
+} from "@/components/ai-elements/tool";
+import {
   Confirmation,
   ConfirmationTitle,
   ConfirmationRequest,
@@ -760,10 +764,12 @@ import {
   ConfirmationAction,
   ConfirmationAccepted,
   ConfirmationRejected,
+} from "@/components/ai-elements/confirmation";
+import {
   Reasoning,
   ReasoningTrigger,
   ReasoningContent,
-} from "@/components/ai-elements";
+} from "@/components/ai-elements/reasoning";
 
 function WorkflowDisplay({ todos, tools, reasoning }) {
   return (

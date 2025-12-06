@@ -1,8 +1,9 @@
 # LangGraph Execution Bridge Design
 
-> **Status:** Approved
+> **Status:** Approved (Revised)
 > **Date:** 2025-12-06
 > **Author:** Claude + Human collaboration
+> **Revision:** Simplified checkpointing, retry config, added execution mode handling
 
 ## Overview
 
@@ -19,11 +20,13 @@ This design connects the server layer (FastAPI, SQLite, REST endpoints) to the e
 │  └──────────────┘    └──────┬───────┘    └──────────────┘       │
 │                             │                                    │
 │                    ┌────────▼────────┐                          │
-│                    │ ExecutionBridge │  ◀── NEW                 │
+│                    │ ExecutionBridge │  ◀── NEW (method)        │
 │                    └────────┬────────┘                          │
 │                             │                                    │
 │                    ┌────────▼────────┐                          │
-│                    │ SQLiteCheckpoint│  ◀── NEW                 │
+│                    │ langgraph-      │  ◀── PACKAGE             │
+│                    │ checkpoint-     │                          │
+│                    │ sqlite          │                          │
 │                    └────────┬────────┘                          │
 └─────────────────────────────┼───────────────────────────────────┘
                               │
@@ -36,9 +39,9 @@ This design connects the server layer (FastAPI, SQLite, REST endpoints) to the e
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-**New Components:**
-- `ExecutionBridge` - Invokes LangGraph, handles interrupts, streams events
-- `SQLiteCheckpointer` - Persists graph state for interrupt/resume
+**Components:**
+- `ExecutionBridge` - Method in OrchestratorService that invokes LangGraph, handles interrupts, streams events
+- `langgraph-checkpoint-sqlite` - Official LangGraph package for checkpoint persistence
 - State composition - `ServerExecutionState.execution_state: ExecutionState`
 
 ## Key Decisions
@@ -46,11 +49,12 @@ This design connects the server layer (FastAPI, SQLite, REST endpoints) to the e
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
 | Human approval | Interrupt-based (`interrupt_before`) | LangGraph native, keeps core clean |
-| Checkpoint persistence | SQLite now, PostgreSQL later | Leverage existing infrastructure |
+| Checkpoint persistence | `langgraph-checkpoint-sqlite` package | Battle-tested, handles serialization/migrations |
 | State model | Composition (wrap `ExecutionState`) | Preserves architectural boundary |
 | Event streaming | Map LangGraph → WorkflowEvent | Stable dashboard interface |
-| Error handling | Auto-retry with backoff | Resilience for transient failures |
-| Retry config | Per-profile in YAML | Different drivers have different failure modes |
+| Error handling | Auto-retry with exponential backoff | Resilience for transient failures |
+| Retry config | Simplified (max_retries + base_delay) | Error classification is implementation concern, not config |
+| CLI vs Server | Execution mode in graph config | Same graph code, different approval behavior |
 
 ## State Model
 
@@ -75,44 +79,105 @@ class ServerExecutionState(BaseModel):
 
 **Initialization:** All fields populated at workflow creation. Issue fetched immediately, `worktree_name` derived from path. No nullable fields except `completed_at` and `failure_reason`.
 
-## SQLite Checkpointer
+## Checkpoint Persistence
 
-Implements LangGraph's `BaseCheckpointSaver` interface:
+Use the official `langgraph-checkpoint-sqlite` package instead of custom implementation.
 
+**Installation:**
+```bash
+uv add langgraph-checkpoint-sqlite
+```
+
+**Usage:**
 ```python
-class SQLiteCheckpointer(BaseCheckpointSaver):
-    def __init__(self, db: Database) -> None:
-        self._db = db
+from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
-    async def aget(self, config: RunnableConfig) -> Checkpoint | None:
-        """Retrieve checkpoint for thread_id."""
+# Create checkpointer with dedicated file (separate from main DB)
+checkpointer = AsyncSqliteSaver.from_conn_string("~/.amelia/checkpoints.db")
 
-    async def aput(self, config: RunnableConfig, checkpoint: Checkpoint) -> None:
-        """Store checkpoint for thread_id."""
-
-    async def alist(self, config: RunnableConfig) -> list[CheckpointTuple]:
-        """List checkpoint history for thread_id."""
+# Or share connection with existing database
+async with aiosqlite.connect("~/.amelia/amelia.db") as conn:
+    checkpointer = AsyncSqliteSaver(conn)
+    graph = create_orchestrator_graph(checkpoint_saver=checkpointer)
 ```
 
-**Schema:**
-
-```sql
-CREATE TABLE workflow_checkpoints (
-    thread_id TEXT PRIMARY KEY,  -- workflow_id
-    checkpoint BLOB NOT NULL,    -- serialized checkpoint
-    metadata JSON,               -- optional metadata
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-```
+**Why package over custom:**
+- Handles checkpoint serialization (pickle with fallbacks)
+- Manages schema migrations automatically
+- Provides TTL-based cleanup via `AsyncSqliteSaver.setup(ttl=timedelta(days=7))`
+- ~150 lines of code we don't need to write/test/maintain
 
 **Thread ID:** Maps to `workflow_id` for checkpoint isolation.
+
+## CLI vs Server Execution Mode
+
+The same graph must work for both CLI (blocking `typer.confirm`) and server (interrupt-based) contexts.
+
+**Solution:** Pass execution mode via graph config, check in `human_approval_node`:
+
+```python
+# In amelia/core/orchestrator.py
+
+def human_approval_node(state: ExecutionState, config: RunnableConfig) -> ExecutionState:
+    """Handle human approval - behavior depends on execution mode."""
+
+    execution_mode = config.get("configurable", {}).get("execution_mode", "cli")
+
+    if execution_mode == "cli":
+        # CLI mode: blocking prompt
+        if state.plan:
+            display_plan(state.plan)
+        approved = typer.confirm("Do you approve this plan?", default=False)
+        return state.model_copy(update={"human_approved": approved})
+
+    else:
+        # Server mode: approval comes from resumed state after interrupt
+        # If human_approved is already set (from resume), use it
+        # Otherwise, just return - the interrupt mechanism will pause here
+        return state
+```
+
+**Graph creation with mode:**
+```python
+# CLI usage (existing)
+config = {
+    "configurable": {
+        "thread_id": "cli-session",
+        "execution_mode": "cli",
+    }
+}
+result = await graph.ainvoke(initial_state, config=config)
+
+# Server usage (new)
+config = {
+    "configurable": {
+        "thread_id": workflow_id,
+        "execution_mode": "server",
+    }
+}
+async for event in graph.astream_events(
+    state.execution_state,
+    config=config,
+    interrupt_before=["human_approval_node"],
+):
+    await self._handle_graph_event(workflow_id, event)
+```
 
 ## Execution Bridge
 
 The `_run_workflow()` implementation:
 
 ```python
+from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+
+# Nodes that emit stage events
+STAGE_NODES = frozenset({
+    "architect_node",
+    "human_approval_node",
+    "developer_node",
+    "reviewer_node",
+})
+
 async def _run_workflow(
     self,
     workflow_id: str,
@@ -121,37 +186,44 @@ async def _run_workflow(
     """Execute workflow via LangGraph with interrupt support."""
 
     # 1. Create graph with checkpointer
-    checkpointer = SQLiteCheckpointer(self._db)
-    graph = create_orchestrator_graph(checkpoint_saver=checkpointer)
+    async with AsyncSqliteSaver.from_conn_string(
+        str(self._checkpoint_path)
+    ) as checkpointer:
+        graph = create_orchestrator_graph(checkpoint_saver=checkpointer)
 
-    # 2. Configure for this workflow
-    config = {"configurable": {"thread_id": workflow_id}}
+        # 2. Configure for server execution
+        config = {
+            "configurable": {
+                "thread_id": workflow_id,
+                "execution_mode": "server",
+            }
+        }
 
-    # 3. Stream execution with event emission
-    try:
-        async for event in graph.astream_events(
-            state.execution_state,
-            config=config,
-            interrupt_before=["human_approval_node"],
-        ):
-            await self._handle_graph_event(workflow_id, event)
+        # 3. Stream execution with event emission
+        try:
+            async for event in graph.astream_events(
+                state.execution_state,
+                config=config,
+                interrupt_before=["human_approval_node"],
+            ):
+                await self._handle_graph_event(workflow_id, event)
 
-    except GraphInterrupt:
-        # Human approval required - checkpoint saved automatically
-        await self._emit_approval_required(workflow_id, state)
-        return  # Execution pauses here
+        except GraphInterrupt:
+            # Human approval required - checkpoint saved automatically
+            await self._emit_approval_required(workflow_id, state)
+            return  # Execution pauses here
 
-    except Exception as e:
-        await self._handle_execution_error(workflow_id, e)
-        raise
+        except Exception as e:
+            await self._handle_execution_error(workflow_id, e)
+            raise
 ```
 
 ## Human Approval Flow
 
 ```
 1. Graph reaches human_approval_node
-   └─▶ GraphInterrupt raised (checkpoint saved)
-   └─▶ _run_workflow() catches, emits approval_required event
+   └─▶ GraphInterrupt raised (checkpoint saved automatically)
+   └─▶ _run_workflow() catches, emits APPROVAL_REQUIRED event
    └─▶ Workflow status → BLOCKED
 
 2. Dashboard shows approval UI
@@ -162,16 +234,45 @@ async def _run_workflow(
    └─▶ OrchestratorService.approve_workflow()
 
 4. Resume from checkpoint
-   └─▶ Update execution_state.human_approved = True/False
+   └─▶ Load checkpoint, update state.human_approved = True/False
    └─▶ graph.ainvoke(None, config)  # Resume with updated state
    └─▶ Graph continues to developer_node (or END if rejected)
 ```
 
+**Resume implementation:**
+```python
+async def approve_workflow(self, workflow_id: str) -> None:
+    """Resume workflow after approval."""
+    async with AsyncSqliteSaver.from_conn_string(
+        str(self._checkpoint_path)
+    ) as checkpointer:
+        graph = create_orchestrator_graph(checkpoint_saver=checkpointer)
+
+        config = {
+            "configurable": {
+                "thread_id": workflow_id,
+                "execution_mode": "server",
+            }
+        }
+
+        # Update state with approval decision
+        await graph.aupdate_state(
+            config,
+            {"human_approved": True},
+        )
+
+        # Resume execution
+        async for event in graph.astream_events(None, config=config):
+            await self._handle_graph_event(workflow_id, event)
+```
+
 ## Event Streaming
 
-Map LangGraph events to WorkflowEvents:
+Map LangGraph events to existing WorkflowEvents:
 
 ```python
+from amelia.server.models.events import EventType
+
 async def _handle_graph_event(
     self,
     workflow_id: str,
@@ -180,33 +281,74 @@ async def _handle_graph_event(
     """Translate LangGraph events to WorkflowEvents and emit."""
 
     event_type = event.get("event")
+    node_name = event.get("name")
 
     if event_type == "on_chain_start":
-        node_name = event.get("name")
         if node_name in STAGE_NODES:
-            await self._emit(workflow_id, "stage_changed", {"stage": node_name})
+            await self._emit(
+                workflow_id,
+                EventType.STAGE_STARTED,
+                f"Starting {node_name}",
+                data={"stage": node_name},
+            )
 
     elif event_type == "on_chain_end":
-        node_name = event.get("name")
         if node_name in STAGE_NODES:
-            await self._emit(workflow_id, "stage_completed", {"stage": node_name, "output": event.get("data")})
+            await self._emit(
+                workflow_id,
+                EventType.STAGE_COMPLETED,
+                f"Completed {node_name}",
+                data={"stage": node_name, "output": event.get("data")},
+            )
 
-    elif event_type == "on_llm_stream" and self._verbose_mode(workflow_id):
-        await self._emit(workflow_id, "llm_token", {"token": event.get("data", {}).get("chunk")})
+    elif event_type == "on_chain_error":
+        error = event.get("data", {}).get("error", "Unknown error")
+        await self._emit(
+            workflow_id,
+            EventType.SYSTEM_ERROR,
+            f"Error in {node_name}: {error}",
+            data={"stage": node_name, "error": str(error)},
+        )
+
+    elif event_type == "on_llm_stream":
+        # Only emit in verbose mode to avoid flooding
+        if self._verbose_mode.get(workflow_id, False):
+            chunk = event.get("data", {}).get("chunk", "")
+            if chunk:
+                await self._emit(
+                    workflow_id,
+                    EventType.SYSTEM_INFO,  # Or add LLM_TOKEN to EventType
+                    chunk,
+                    data={"type": "llm_token"},
+                )
 ```
 
 **Event mapping:**
 
 | LangGraph Event | WorkflowEvent | When |
 |-----------------|---------------|------|
-| `on_chain_start` | `stage_changed` | Node begins |
-| `on_chain_end` | `stage_completed` | Node finishes |
-| `on_llm_stream` | `llm_token` | Verbose mode only |
-| `GraphInterrupt` | `approval_required` | Before approval node |
+| `on_chain_start` | `STAGE_STARTED` | Node begins |
+| `on_chain_end` | `STAGE_COMPLETED` | Node finishes |
+| `on_chain_error` | `SYSTEM_ERROR` | Node fails |
+| `on_llm_stream` | `SYSTEM_INFO` | Verbose mode only |
+| `GraphInterrupt` | `APPROVAL_REQUIRED` | Before approval node |
 
 ## Error Handling & Retry
 
+Simplified retry with typed exception handling:
+
 ```python
+import asyncio
+from httpx import TimeoutException
+
+# Exceptions that warrant retry
+TRANSIENT_EXCEPTIONS = (
+    asyncio.TimeoutError,
+    TimeoutException,
+    ConnectionError,
+    # Add SDK-specific rate limit errors as needed
+)
+
 async def _run_workflow_with_retry(
     self,
     workflow_id: str,
@@ -214,25 +356,35 @@ async def _run_workflow_with_retry(
 ) -> None:
     """Execute workflow with automatic retry for transient failures."""
 
-    retry_config = state.execution_state.profile.retry_config
+    retry_config = state.execution_state.profile.retry
     attempt = 0
 
     while attempt <= retry_config.max_retries:
         try:
             await self._run_workflow(workflow_id, state)
-            return
+            return  # Success
 
-        except TransientError as e:
+        except TRANSIENT_EXCEPTIONS as e:
             attempt += 1
             if attempt > retry_config.max_retries:
-                await self._mark_failed(workflow_id, e)
+                await self._mark_failed(workflow_id, f"Failed after {attempt} attempts: {e}")
                 raise
 
-            delay = retry_config.base_delay * (2 ** (attempt - 1))
+            delay = min(
+                retry_config.base_delay * (2 ** (attempt - 1)),
+                60.0,  # Hard cap at 60s
+            )
+            logger.warning(
+                f"Transient error (attempt {attempt}/{retry_config.max_retries}), "
+                f"retrying in {delay}s",
+                workflow_id=workflow_id,
+                error=str(e),
+            )
             await asyncio.sleep(delay)
 
-        except PermanentError as e:
-            await self._mark_failed(workflow_id, e)
+        except Exception as e:
+            # Non-transient error - fail immediately
+            await self._mark_failed(workflow_id, str(e))
             raise
 ```
 
@@ -240,10 +392,12 @@ async def _run_workflow_with_retry(
 
 | Error Type | Examples | Behavior |
 |------------|----------|----------|
-| Transient | Network timeout, rate limit, LLM overload | Retry with backoff |
-| Permanent | Invalid issue ID, auth failure, validation | Fail immediately |
+| Transient | `TimeoutError`, `ConnectionError`, rate limits | Retry with exponential backoff |
+| Permanent | `ValueError`, `KeyError`, auth failures | Fail immediately |
 
 ## Configuration Schema
+
+Simplified retry configuration:
 
 ```yaml
 profiles:
@@ -253,11 +407,6 @@ profiles:
     retry:
       max_retries: 3
       base_delay: 1.0
-      max_delay: 30.0
-      retryable_errors:
-        - network_timeout
-        - rate_limit
-        - llm_overload
 
   enterprise:
     driver: cli:claude
@@ -265,28 +414,25 @@ profiles:
     retry:
       max_retries: 5
       base_delay: 2.0
-      max_delay: 60.0
-      retryable_errors:
-        - network_timeout
-        - rate_limit
-        - llm_overload
-        - cli_timeout
 ```
 
 **Model addition:**
 
 ```python
 class RetryConfig(BaseModel):
-    max_retries: int = 3
-    base_delay: float = 1.0
-    max_delay: float = 30.0
-    retryable_errors: list[str] = ["network_timeout", "rate_limit", "llm_overload"]
+    """Retry configuration for transient failures."""
+    max_retries: int = Field(default=3, ge=0, le=10)
+    base_delay: float = Field(default=1.0, ge=0.1, le=30.0)
 
 class Profile(BaseModel):
     name: str
-    driver: str
-    tracker: str
-    retry: RetryConfig = RetryConfig()
+    driver: DriverType
+    tracker: TrackerType = "none"
+    strategy: StrategyType = "single"
+    execution_mode: ExecutionMode = "structured"
+    plan_output_dir: str = "docs/plans"
+    working_dir: str | None = None
+    retry: RetryConfig = Field(default_factory=RetryConfig)
 ```
 
 ## Testing Strategy
@@ -297,46 +443,69 @@ class Profile(BaseModel):
 tests/
 ├── unit/
 │   ├── server/
-│   │   ├── database/
-│   │   │   └── test_checkpointer.py     # SQLiteCheckpointer isolation
 │   │   └── orchestrator/
-│   │       ├── test_execution_bridge.py # _run_workflow with mocked graph
-│   │       ├── test_event_mapping.py    # LangGraph → WorkflowEvent
-│   │       └── test_retry_logic.py      # Backoff, error classification
+│   │       ├── test_execution_bridge.py  # _run_workflow with mocked graph
+│   │       ├── test_event_mapping.py     # LangGraph → WorkflowEvent
+│   │       └── test_retry_logic.py       # Backoff, error classification
 │   └── core/
-│       └── test_retry_config.py         # RetryConfig validation
+│       ├── test_retry_config.py          # RetryConfig validation
+│       └── test_human_approval_node.py   # CLI vs server mode
 ├── integration/
-│   ├── test_approval_flow.py            # Interrupt → approve → resume
-│   ├── test_checkpoint_recovery.py      # Restart mid-workflow
-│   └── test_concurrent_workflows.py     # Multiple workflows isolated
+│   ├── test_approval_flow.py             # Interrupt → approve → resume
+│   ├── test_checkpoint_recovery.py       # Restart mid-workflow
+│   └── test_concurrent_workflows.py      # Multiple workflows isolated
 ```
 
 **TDD approach:**
 
 | Component | Test First | Then Implement |
 |-----------|------------|----------------|
-| `SQLiteCheckpointer` | `aget`/`aput` round-trip | Schema + methods |
-| `RetryConfig` | Validation, defaults | Pydantic model |
-| `_run_workflow` | Mock graph, verify events | Execution bridge |
-| Approval flow | Mock interrupt, verify resume | Full cycle |
-| Error handling | Error classification | Retry wrapper |
+| `RetryConfig` | Validation, defaults, bounds | Pydantic model |
+| `human_approval_node` | CLI mode prompts, server mode passes through | Mode detection |
+| `_run_workflow` | Mock graph, verify events emitted | Execution bridge |
+| Event mapping | Each LangGraph event → correct WorkflowEvent | `_handle_graph_event` |
+| Approval flow | Mock interrupt, verify resume with state | Full cycle |
+| Error handling | Transient vs permanent classification | Retry wrapper |
 
 ## Implementation Order
 
-1. **RetryConfig model** - Add to `amelia/core/types.py`
-2. **SQLiteCheckpointer** - New file `amelia/server/database/checkpointer.py`
-3. **State model update** - Add `execution_state` to `ServerExecutionState`
-4. **Event mapping** - Add `_handle_graph_event()` to service
-5. **Execution bridge** - Implement `_run_workflow()`
-6. **Retry wrapper** - Add `_run_workflow_with_retry()`
-7. **Approval flow** - Update `approve_workflow()` / `reject_workflow()`
-8. **Integration tests** - Full workflow cycles
+1. **Add dependency** - `uv add langgraph-checkpoint-sqlite`
+2. **RetryConfig model** - Add to `amelia/core/types.py`
+3. **Update human_approval_node** - Add execution mode detection in `amelia/core/orchestrator.py`
+4. **State model update** - Add `execution_state` to `ServerExecutionState`
+5. **Event mapping** - Add `STAGE_NODES` constant and `_handle_graph_event()` to service
+6. **Execution bridge** - Implement `_run_workflow()` with checkpointer
+7. **Retry wrapper** - Add `_run_workflow_with_retry()`
+8. **Approval flow** - Update `approve_workflow()` / `reject_workflow()` to resume graph
+9. **Integration tests** - Full workflow cycles
+
+## Checkpoint Cleanup
+
+The `langgraph-checkpoint-sqlite` package supports TTL-based cleanup:
+
+```python
+# During server startup (lifespan)
+async with AsyncSqliteSaver.from_conn_string(checkpoint_path) as saver:
+    await saver.setup(ttl=timedelta(days=7))  # Auto-cleanup old checkpoints
+```
+
+For manual cleanup of completed workflows:
+```python
+# After workflow completes successfully
+await checkpointer.adelete(config)
+```
 
 ## Future: PostgreSQL Migration
 
-The `SQLiteCheckpointer` interface matches `langgraph-checkpoint-postgres`. Migration path:
+Migration path when scaling:
 
-1. Add `langgraph-checkpoint-postgres` dependency
-2. Add `checkpoint_backend` config option
-3. Factory function selects implementation based on config
+1. `uv add langgraph-checkpoint-postgres`
+2. Add `checkpoint_backend: sqlite | postgres` to server config
+3. Factory function selects implementation:
+   ```python
+   def get_checkpointer(config: ServerConfig):
+       if config.checkpoint_backend == "postgres":
+           return AsyncPostgresSaver.from_conn_string(config.postgres_url)
+       return AsyncSqliteSaver.from_conn_string(config.checkpoint_path)
+   ```
 4. No changes to `OrchestratorService` - same interface

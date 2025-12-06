@@ -133,30 +133,38 @@ function LoginPage() {
 }
 ```
 
-### Middleware (Framework Mode)
+### Middleware (Framework Mode Only)
+
+Middleware requires Framework Mode and the `future.v8_middleware` flag. Export middleware from route modules:
 
 ```tsx
-import { redirect } from "react-router";
+// app/routes/dashboard.tsx (Framework Mode)
+import { redirect, createContext } from "react-router";
 
-async function authMiddleware({ context, request }) {
-  const userId = getUserId(request);
+export const userContext = createContext<User | null>(null);
 
-  if (!userId) {
-    throw redirect("/login");
-  }
+export const middleware = [
+  async function authMiddleware({ request, context }, next) {
+    const userId = getUserId(request);
 
-  const user = await getUserById(userId);
-  context.set(userContext, user);
-}
+    if (!userId) {
+      throw redirect("/login");
+    }
 
-createBrowserRouter([
-  {
-    path: "/dashboard",
-    middleware: [authMiddleware],
-    Component: Dashboard,
+    const user = await getUserById(userId);
+    context.set(userContext, user);
+
+    return next();
   },
-]);
+];
+
+export async function loader({ context }: Route.LoaderArgs) {
+  const user = context.get(userContext);
+  return { user };
+}
 ```
+
+Note: Middleware is NOT available in Data Mode (createBrowserRouter). Use loaders for auth checks in Data Mode.
 
 ## Lazy Loading / Code Splitting
 

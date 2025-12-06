@@ -103,7 +103,7 @@ For regular tables (not vec0):
 SELECT
   id,
   contents,
-  vec_distance_L2(contents_embedding, ?) as distance
+  vec_distance_l2(contents_embedding, ?) as distance
 FROM documents
 ORDER BY distance
 LIMIT 10;
