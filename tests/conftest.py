@@ -9,7 +9,7 @@ from typer.testing import CliRunner
 
 from amelia.agents.reviewer import ReviewResponse
 from amelia.core.state import ExecutionState, ReviewResult, Task, TaskDAG
-from amelia.core.types import Design, Issue, Profile
+from amelia.core.types import Design, Issue, Profile, Settings
 from amelia.drivers.base import DriverInterface
 from amelia.trackers.noop import NoopTracker
 
@@ -97,6 +97,17 @@ def mock_profile_work(mock_profile_factory):
 @pytest.fixture
 def mock_profile_home(mock_profile_factory):
     return mock_profile_factory(name="home", driver="api:openai", tracker="github", strategy="competitive")
+
+
+@pytest.fixture
+def mock_settings(mock_profile_factory):
+    """Create mock Settings instance with test profiles."""
+    test_profile = mock_profile_factory(name="test", driver="cli:claude", tracker="noop", strategy="single")
+    work_profile = mock_profile_factory(name="work", driver="cli:claude", tracker="jira", strategy="single")
+    return Settings(
+        active_profile="test",
+        profiles={"test": test_profile, "work": work_profile}
+    )
 
 
 @pytest.fixture

@@ -16,7 +16,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from amelia.core.state import ExecutionState
-from amelia.core.types import Profile
+from amelia.core.types import Profile, Settings
 from amelia.server.database.repository import WorkflowRepository
 from amelia.server.models.events import EventType, WorkflowEvent
 from amelia.server.models.state import ServerExecutionState
@@ -47,6 +47,16 @@ def event_tracker():
             return [e for e in self.events if e.event_type == event_type]
 
     return EventTracker()
+
+
+@pytest.fixture
+def test_settings():
+    """Create test Settings instance."""
+    test_profile = Profile(name="test", driver="cli:claude", tracker="noop", strategy="single")
+    return Settings(
+        active_profile="test",
+        profiles={"test": test_profile}
+    )
 
 
 @pytest.fixture
@@ -91,12 +101,13 @@ class TestMissingExecutionState:
 
     @pytest.mark.asyncio
     async def test_missing_execution_state_sets_status_to_failed(
-        self, event_tracker, mock_repository, temp_checkpoint_db
+        self, event_tracker, mock_repository, temp_checkpoint_db, test_settings
     ):
         """When execution_state is None, status is set to failed."""
         service = OrchestratorService(
             event_tracker,
             mock_repository,
+            settings=test_settings,
             checkpoint_path=temp_checkpoint_db,
         )
 
@@ -134,6 +145,7 @@ class TestLifecycleEvents:
         event_tracker,
         mock_repository,
         temp_checkpoint_db,
+        test_settings,
     ):
         """WORKFLOW_STARTED event is emitted at the start."""
         # Setup mock graph that completes immediately
@@ -151,6 +163,7 @@ class TestLifecycleEvents:
         service = OrchestratorService(
             event_tracker,
             mock_repository,
+            settings=test_settings,
             checkpoint_path=temp_checkpoint_db,
         )
 
@@ -187,6 +200,7 @@ class TestGraphInterruptHandling:
         event_tracker,
         mock_repository,
         temp_checkpoint_db,
+        test_settings,
     ):
         """GraphInterrupt sets status to blocked and emits APPROVAL_REQUIRED."""
         from langgraph.errors import GraphInterrupt
@@ -213,6 +227,7 @@ class TestGraphInterruptHandling:
         service = OrchestratorService(
             event_tracker,
             mock_repository,
+            settings=test_settings,
             checkpoint_path=temp_checkpoint_db,
         )
 

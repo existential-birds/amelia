@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from amelia.core.state import ExecutionState
-from amelia.core.types import Profile
+from amelia.core.types import Profile, Settings
 from amelia.server.models.events import EventType
 from amelia.server.models.state import ServerExecutionState
 from amelia.server.orchestrator.service import OrchestratorService
@@ -30,9 +30,9 @@ def mock_repository():
 
 
 @pytest.fixture
-def service(mock_event_bus, mock_repository):
+def service(mock_event_bus, mock_repository, mock_settings: Settings):
     """Create OrchestratorService with mocked dependencies."""
-    svc = OrchestratorService(mock_event_bus, mock_repository)
+    svc = OrchestratorService(mock_event_bus, mock_repository, mock_settings)
     svc._checkpoint_path = "/tmp/test_checkpoints.db"
     return svc
 

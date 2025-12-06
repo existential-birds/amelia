@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from amelia.core.types import Settings
 from amelia.server.database.repository import WorkflowRepository
 from amelia.server.events.bus import EventBus
 from amelia.server.exceptions import (
@@ -44,11 +45,13 @@ def mock_repository() -> AsyncMock:
 def orchestrator(
     mock_event_bus: EventBus,
     mock_repository: AsyncMock,
+    mock_settings: Settings,
 ) -> OrchestratorService:
     """Create orchestrator service."""
     return OrchestratorService(
         event_bus=mock_event_bus,
         repository=mock_repository,
+        settings=mock_settings,
         max_concurrent=5,
     )
 
@@ -78,6 +81,9 @@ async def test_start_workflow_success(
         assert state.worktree_path == "/path/to/worktree"
         assert state.worktree_name == "feat-123"
         assert state.workflow_status == "pending"
+        # Verify execution_state is initialized with profile
+        assert state.execution_state is not None
+        assert state.execution_state.profile.name == "test"
 
 
 @pytest.mark.asyncio

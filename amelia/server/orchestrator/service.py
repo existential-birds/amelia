@@ -8,11 +8,15 @@ from typing import Any, cast
 from uuid import uuid4
 
 from langchain_core.runnables.config import RunnableConfig
+from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langgraph.errors import GraphInterrupt
+from langgraph.graph.state import CompiledStateGraph
 from loguru import logger
 
 from amelia.core.orchestrator import create_orchestrator_graph
+from amelia.core.state import ExecutionState
+from amelia.core.types import Settings
 from amelia.server.database.repository import WorkflowRepository
 from amelia.server.events.bus import EventBus
 from amelia.server.exceptions import (
@@ -46,6 +50,7 @@ class OrchestratorService:
         self,
         event_bus: EventBus,
         repository: WorkflowRepository,
+        settings: Settings,
         max_concurrent: int = 5,
         checkpoint_path: str = "~/.amelia/checkpoints.db",
     ) -> None:
@@ -54,11 +59,13 @@ class OrchestratorService:
         Args:
             event_bus: Event bus for broadcasting workflow events.
             repository: Repository for workflow persistence.
+            settings: Application settings for profile management.
             max_concurrent: Maximum number of concurrent workflows (default: 5).
             checkpoint_path: Path to checkpoint database file.
         """
         self._event_bus = event_bus
         self._repository = repository
+        self._settings = settings
         self._max_concurrent = max_concurrent
         # Expand ~ and resolve path, ensure parent directory exists
         expanded_path = Path(checkpoint_path).expanduser().resolve()
@@ -70,6 +77,23 @@ class OrchestratorService:
         self._start_lock = asyncio.Lock()  # Prevents race conditions on workflow start
         self._sequence_counters: dict[str, int] = {}  # workflow_id -> next sequence
         self._sequence_locks: dict[str, asyncio.Lock] = {}  # workflow_id -> lock
+
+    def _create_server_graph(
+        self,
+        checkpointer: BaseCheckpointSaver[Any],
+    ) -> CompiledStateGraph[Any]:
+        """Create graph with server-mode interrupt configuration.
+
+        Args:
+            checkpointer: Checkpoint saver for persistence.
+
+        Returns:
+            Compiled LangGraph with interrupt_before=["human_approval_node"].
+        """
+        return create_orchestrator_graph(
+            checkpoint_saver=checkpointer,
+            interrupt_before=["human_approval_node"],
+        )
 
     async def start_workflow(
         self,
@@ -108,11 +132,22 @@ class OrchestratorService:
 
             # Create workflow record
             workflow_id = str(uuid4())
+
+            # Load the profile (use provided profile name or active profile as fallback)
+            profile_name = profile or self._settings.active_profile
+            if profile_name not in self._settings.profiles:
+                raise ValueError(f"Profile '{profile_name}' not found in settings")
+            loaded_profile = self._settings.profiles[profile_name]
+
+            # Initialize ExecutionState with the loaded profile
+            execution_state = ExecutionState(profile=loaded_profile)
+
             state = ServerExecutionState(
                 id=workflow_id,
                 issue_id=issue_id,
                 worktree_path=worktree_path,
                 worktree_name=worktree_name or worktree_path.split("/")[-1],
+                execution_state=execution_state,
                 workflow_status="pending",
                 started_at=datetime.now(UTC),
             )
@@ -262,10 +297,7 @@ class OrchestratorService:
             str(self._checkpoint_path)
         ) as checkpointer:
             # CRITICAL: Pass interrupt_before to enable server-mode approval
-            graph = create_orchestrator_graph(
-                checkpoint_saver=checkpointer,
-                interrupt_before=["human_approval_node"],
-            )
+            graph = self._create_server_graph(checkpointer)
 
             config: RunnableConfig = {
                 "configurable": {
@@ -428,7 +460,7 @@ class OrchestratorService:
         async with AsyncSqliteSaver.from_conn_string(
             str(self._checkpoint_path)
         ) as checkpointer:
-            graph = create_orchestrator_graph(checkpoint_saver=checkpointer)
+            graph = self._create_server_graph(checkpointer)
 
             config: RunnableConfig = {
                 "configurable": {
@@ -525,7 +557,7 @@ class OrchestratorService:
         async with AsyncSqliteSaver.from_conn_string(
             str(self._checkpoint_path)
         ) as checkpointer:
-            graph = create_orchestrator_graph(checkpoint_saver=checkpointer)
+            graph = self._create_server_graph(checkpointer)
 
             config: RunnableConfig = {
                 "configurable": {

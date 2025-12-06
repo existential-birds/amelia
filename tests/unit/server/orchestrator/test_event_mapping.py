@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from amelia.core.types import Settings
 from amelia.server.models.events import EventType
 from amelia.server.orchestrator.service import STAGE_NODES, OrchestratorService
 
@@ -25,12 +26,12 @@ class TestHandleGraphEvent:
     """Test _handle_graph_event method."""
 
     @pytest.fixture
-    def service(self):
+    def service(self, mock_settings: Settings):
         """Create OrchestratorService with mocked dependencies."""
         event_bus = MagicMock()
         repository = AsyncMock()
         repository.get_max_event_sequence.return_value = 0
-        return OrchestratorService(event_bus, repository)
+        return OrchestratorService(event_bus, repository, mock_settings)
 
     async def test_on_chain_start_emits_stage_started(self, service):
         """on_chain_start for stage node emits STAGE_STARTED event."""
