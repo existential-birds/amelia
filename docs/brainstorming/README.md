@@ -14,6 +14,7 @@ These documents represent exploratory design work—ideas that have been refined
 
 | Document | Description | Status |
 |----------|-------------|--------|
+| [Knowledge Library Design](2025-12-06-knowledge-library-design.md) | Co-learning system where developers and agents share framework documentation and best practices | Draft |
 | [AWS AgentCore Deployment](2025-12-06-aws-agentcore-deployment-design.md) | Deploy Amelia to AWS AgentCore for parallel cloud workflow execution | Draft |
 | [Debate Mode Design](2025-12-05-debate-mode-design.md) | Multi-agent deliberation for design decisions and exploratory research | Draft |
 | [Spec Builder Design](2025-12-05-spec-builder-design.md) | Document-assisted technical design tool integrated into the dashboard | Draft |

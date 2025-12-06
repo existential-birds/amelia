@@ -391,7 +391,54 @@ See [Debate Mode Design](brainstorming/2025-12-05-debate-mode-design.md) for ful
 
 ---
 
-## Phase 13: AWS AgentCore Cloud Deployment 🆕
+## Phase 13: Knowledge Library 🆕
+
+*Co-learning system where developers and agents share framework knowledge*
+
+A shared knowledge base that helps developers learn frameworks while providing agents with documentation context for better code generation.
+
+### Core Concept
+
+When Amelia writes code using a framework the developer doesn't know well, two problems arise:
+1. The developer can't effectively review or maintain the code
+2. The developer misses an opportunity to learn from Amelia's work
+
+Knowledge Library solves both by creating a shared knowledge foundation.
+
+### Framework Ingestion
+- [ ] **Manual URL addition** - Paste docs URL, Docling parses and indexes
+- [ ] **Chunking pipeline** - Semantic text splitting for retrieval
+- [ ] **sqlite-vec embeddings** - Vector storage in existing SQLite database
+- [ ] **Global + project layers** - Frameworks available globally, with project-specific conventions
+
+### Developer Learning UI
+- [ ] **Knowledge Library tab** - New dashboard section for framework exploration
+- [ ] **Chat-based Q&A** - Ask questions, get answers grounded in official docs
+- [ ] **Source citations** - Responses include `[Source: filename.md]` references
+- [ ] **Framework sidebar** - List frameworks with ingestion status indicators
+
+### Contextual Code Explanation
+- [ ] **"Explain" button** - Click any code block Amelia wrote to understand it
+- [ ] **Grounded explanations** - Explanations reference the same docs agents used
+- [ ] **Slide-over panel** - Non-intrusive UI for on-demand learning
+
+### Agent RAG Integration
+- [ ] **KnowledgeRetriever** - Query interface for Developer/Architect agents
+- [ ] **Pertinent retrieval** - Only relevant chunks included (avoids context bloat)
+- [ ] **Task-aware signals** - Retrieves based on imports, task description, file patterns
+- [ ] **Token capping** - Max ~2000 tokens of framework context per task
+
+### Future Extensions
+- [ ] Auto-detection from package.json/requirements.txt
+- [ ] Project-specific conventions UI
+- [ ] Post-workflow learning summaries
+- [ ] Multi-page crawling (follow links from docs URL)
+
+See [Knowledge Library Design](brainstorming/2025-12-06-knowledge-library-design.md) for full specification.
+
+---
+
+## Phase 14: AWS AgentCore Cloud Deployment 🆕
 
 *Parallel workflow execution in the cloud via AWS Bedrock AgentCore*
 
