@@ -1,11 +1,14 @@
 """Shared fixtures for database tests."""
 
 from collections.abc import AsyncGenerator
+from datetime import datetime
 from pathlib import Path
 
 import pytest
 
 from amelia.server.database.connection import Database
+from amelia.server.database.repository import WorkflowRepository
+from amelia.server.models.state import ServerExecutionState
 
 
 @pytest.fixture
@@ -53,3 +56,38 @@ async def db_with_schema(temp_db_path: Path) -> AsyncGenerator[Database, None]:
     async with Database(temp_db_path) as db:
         await db.ensure_schema()
         yield db
+
+
+@pytest.fixture
+async def repository(db_with_schema: Database) -> WorkflowRepository:
+    """Create WorkflowRepository with initialized schema.
+
+    Args:
+        db_with_schema: Database with schema initialized.
+
+    Returns:
+        WorkflowRepository: Repository instance.
+    """
+    return WorkflowRepository(db_with_schema)
+
+
+@pytest.fixture
+async def workflow(repository: WorkflowRepository) -> ServerExecutionState:
+    """Create and save a test workflow.
+
+    Args:
+        repository: WorkflowRepository instance.
+
+    Returns:
+        ServerExecutionState: Created workflow.
+    """
+    wf = ServerExecutionState(
+        id="wf-test",
+        issue_id="ISSUE-1",
+        worktree_path="/tmp/test",
+        worktree_name="test",
+        workflow_status="pending",
+        started_at=datetime.utcnow(),
+    )
+    await repository.create(wf)
+    return wf

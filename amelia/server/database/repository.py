@@ -354,3 +354,65 @@ class WorkflowRepository:
             (workflow_id,),
         )
         return result if isinstance(result, int) else 0
+
+    async def event_exists(self, event_id: str) -> bool:
+        """Check if an event exists by ID.
+
+        Args:
+            event_id: The event ID to check.
+
+        Returns:
+            True if event exists, False otherwise.
+        """
+        result = await self._db.fetch_scalar(
+            "SELECT 1 FROM events WHERE id = ? LIMIT 1",
+            (event_id,),
+        )
+        return result is not None
+
+    async def get_events_after(self, since_event_id: str) -> list[WorkflowEvent]:
+        """Get all events after a specific event (for backfill on reconnect).
+
+        Args:
+            since_event_id: The event ID to start after.
+
+        Returns:
+            List of events after the given event, ordered by sequence.
+
+        Raises:
+            ValueError: If the since_event_id doesn't exist.
+        """
+        # First, get the workflow_id and sequence of the since event
+        row = await self._db.fetch_one(
+            "SELECT workflow_id, sequence FROM events WHERE id = ?",
+            (since_event_id,),
+        )
+
+        if row is None:
+            raise ValueError(f"Event {since_event_id} not found")
+
+        workflow_id, since_sequence = row["workflow_id"], row["sequence"]
+
+        # Get all events from same workflow with higher sequence
+        rows = await self._db.fetch_all(
+            """
+            SELECT id, workflow_id, sequence, timestamp, agent, event_type,
+                   message, data_json, correlation_id
+            FROM events
+            WHERE workflow_id = ? AND sequence > ?
+            ORDER BY sequence ASC
+            """,
+            (workflow_id, since_sequence),
+        )
+
+        events = []
+        for row in rows:
+            event_data = dict(row)
+            # Parse JSON data field if present (column is data_json, model field is data)
+            if event_data.get("data_json"):
+                event_data["data"] = json.loads(event_data.pop("data_json"))
+            else:
+                event_data.pop("data_json", None)  # Remove None value
+            events.append(WorkflowEvent(**event_data))
+
+        return events
