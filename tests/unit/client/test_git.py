@@ -1,38 +1,17 @@
 # tests/unit/client/test_git.py
 """Tests for git worktree context detection."""
-import pytest
 import subprocess
-from pathlib import Path
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 
 class TestGetWorktreeContext:
     """Tests for get_worktree_context function."""
 
-    def test_returns_tuple(self, tmp_path):
+    def test_returns_tuple(self):
         """Returns (worktree_path, worktree_name) tuple."""
         from amelia.client.git import get_worktree_context
-
-        # Create a git repo
-        subprocess.run(["git", "init"], cwd=tmp_path, check=True, capture_output=True)
-        subprocess.run(
-            ["git", "config", "user.email", "test@example.com"],
-            cwd=tmp_path,
-            check=True,
-            capture_output=True,
-        )
-        subprocess.run(
-            ["git", "config", "user.name", "Test User"],
-            cwd=tmp_path,
-            check=True,
-            capture_output=True,
-        )
-        subprocess.run(
-            ["git", "commit", "--allow-empty", "-m", "initial"],
-            cwd=tmp_path,
-            check=True,
-            capture_output=True,
-        )
 
         with patch("subprocess.run") as mock_run:
             # Mock git rev-parse --is-inside-work-tree

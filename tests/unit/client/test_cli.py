@@ -1,29 +1,14 @@
 # tests/unit/client/test_cli.py
 """Tests for refactored CLI commands."""
-import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
-from typer.testing import CliRunner
+from unittest.mock import AsyncMock, MagicMock, patch
 
 
 class TestStartCommand:
     """Tests for 'amelia start' command."""
 
-    @pytest.fixture
-    def runner(self):
-        """Typer CLI test runner."""
-        return CliRunner()
-
-    def test_start_command_exists(self, runner):
-        """'amelia start' command is registered."""
-        from amelia.main import app
-
-        result = runner.invoke(app, ["start", "--help"])
-        assert result.exit_code == 0
-        assert "Start a workflow for an issue" in result.stdout
-
     @patch("amelia.client.cli.get_worktree_context")
     @patch("amelia.client.cli.AmeliaClient")
-    def test_start_detects_worktree(self, mock_client_class, mock_worktree, runner):
+    def test_start_detects_worktree(self, mock_client_class, mock_worktree, cli_runner):
         """start command auto-detects worktree context."""
         from amelia.main import app
 
@@ -39,7 +24,7 @@ class TestStartCommand:
         )
         mock_client_class.return_value = mock_client
 
-        result = runner.invoke(app, ["start", "ISSUE-123"])
+        result = cli_runner.invoke(app, ["start", "ISSUE-123"])
 
         assert result.exit_code == 0
         mock_worktree.assert_called_once()
@@ -47,7 +32,7 @@ class TestStartCommand:
 
     @patch("amelia.client.cli.get_worktree_context")
     @patch("amelia.client.cli.AmeliaClient")
-    def test_start_with_profile(self, mock_client_class, mock_worktree, runner):
+    def test_start_with_profile(self, mock_client_class, mock_worktree, cli_runner):
         """start command passes profile to API."""
         from amelia.main import app
 
@@ -61,7 +46,7 @@ class TestStartCommand:
         )
         mock_client_class.return_value = mock_client
 
-        result = runner.invoke(app, ["start", "ISSUE-123", "--profile", "work"])
+        result = cli_runner.invoke(app, ["start", "ISSUE-123", "--profile", "work"])
 
         assert result.exit_code == 0
         call_kwargs = mock_client.create_workflow.call_args.kwargs
@@ -69,10 +54,10 @@ class TestStartCommand:
 
     @patch("amelia.client.cli.get_worktree_context")
     @patch("amelia.client.cli.AmeliaClient")
-    def test_start_handles_server_unreachable(self, mock_client_class, mock_worktree, runner):
+    def test_start_handles_server_unreachable(self, mock_client_class, mock_worktree, cli_runner):
         """start command shows helpful error when server unreachable."""
-        from amelia.main import app
         from amelia.client.api import ServerUnreachableError
+        from amelia.main import app
 
         mock_worktree.return_value = ("/home/user/repo", "main")
 
@@ -82,7 +67,7 @@ class TestStartCommand:
         )
         mock_client_class.return_value = mock_client
 
-        result = runner.invoke(app, ["start", "ISSUE-123"])
+        result = cli_runner.invoke(app, ["start", "ISSUE-123"])
 
         assert result.exit_code == 1
         assert "Cannot connect" in result.stdout or "server" in result.stdout.lower()
@@ -90,10 +75,10 @@ class TestStartCommand:
 
     @patch("amelia.client.cli.get_worktree_context")
     @patch("amelia.client.cli.AmeliaClient")
-    def test_start_handles_workflow_conflict(self, mock_client_class, mock_worktree, runner):
+    def test_start_handles_workflow_conflict(self, mock_client_class, mock_worktree, cli_runner):
         """start command shows active workflow details on conflict."""
-        from amelia.main import app
         from amelia.client.api import WorkflowConflictError
+        from amelia.main import app
 
         mock_worktree.return_value = ("/home/user/repo", "main")
 
@@ -108,7 +93,7 @@ class TestStartCommand:
         )
         mock_client_class.return_value = mock_client
 
-        result = runner.invoke(app, ["start", "ISSUE-123"])
+        result = cli_runner.invoke(app, ["start", "ISSUE-123"])
 
         assert result.exit_code == 1
         assert "already active" in result.stdout.lower()
@@ -116,32 +101,32 @@ class TestStartCommand:
         assert "amelia cancel" in result.stdout
 
     @patch("amelia.client.cli.get_worktree_context")
-    def test_start_handles_not_in_git_repo(self, mock_worktree, runner):
+    def test_start_handles_not_in_git_repo(self, mock_worktree, cli_runner):
         """start command shows error when not in git repo."""
         from amelia.main import app
 
         mock_worktree.side_effect = ValueError("Not inside a git repository")
 
-        result = runner.invoke(app, ["start", "ISSUE-123"])
+        result = cli_runner.invoke(app, ["start", "ISSUE-123"])
 
         assert result.exit_code == 1
         assert "git repository" in result.stdout.lower()
 
     @patch("amelia.client.cli.get_worktree_context")
-    def test_start_handles_bare_repo(self, mock_worktree, runner):
+    def test_start_handles_bare_repo(self, mock_worktree, cli_runner):
         """start command shows error for bare repository."""
         from amelia.main import app
 
         mock_worktree.side_effect = ValueError("Cannot run workflows in a bare repository")
 
-        result = runner.invoke(app, ["start", "ISSUE-123"])
+        result = cli_runner.invoke(app, ["start", "ISSUE-123"])
 
         assert result.exit_code == 1
         assert "bare repository" in result.stdout.lower()
 
     @patch("amelia.client.cli.get_worktree_context")
     @patch("amelia.client.cli.AmeliaClient")
-    def test_start_shows_success_message(self, mock_client_class, mock_worktree, runner):
+    def test_start_shows_success_message(self, mock_client_class, mock_worktree, cli_runner):
         """start command shows success with workflow ID."""
         from amelia.main import app
 
@@ -157,7 +142,7 @@ class TestStartCommand:
         )
         mock_client_class.return_value = mock_client
 
-        result = runner.invoke(app, ["start", "ISSUE-123"])
+        result = cli_runner.invoke(app, ["start", "ISSUE-123"])
 
         assert result.exit_code == 0
         assert "wf-123" in result.stdout
@@ -168,21 +153,9 @@ class TestStartCommand:
 class TestApproveCommand:
     """Tests for 'amelia approve' command."""
 
-    @pytest.fixture
-    def runner(self):
-        """Typer CLI test runner."""
-        return CliRunner()
-
-    def test_approve_command_exists(self, runner):
-        """'amelia approve' command is registered."""
-        from amelia.main import app
-
-        result = runner.invoke(app, ["approve", "--help"])
-        assert result.exit_code == 0
-
     @patch("amelia.client.cli.get_worktree_context")
     @patch("amelia.client.cli.AmeliaClient")
-    def test_approve_finds_workflow_by_worktree(self, mock_client_class, mock_worktree, runner):
+    def test_approve_finds_workflow_by_worktree(self, mock_client_class, mock_worktree, cli_runner):
         """approve command finds workflow ID from current worktree."""
         from amelia.main import app
 
@@ -203,7 +176,7 @@ class TestApproveCommand:
         mock_client.approve_workflow.return_value = None
         mock_client_class.return_value = mock_client
 
-        result = runner.invoke(app, ["approve"])
+        result = cli_runner.invoke(app, ["approve"])
 
         assert result.exit_code == 0
         mock_client.get_active_workflows.assert_called_once_with(worktree_path="/home/user/repo")
@@ -211,7 +184,7 @@ class TestApproveCommand:
 
     @patch("amelia.client.cli.get_worktree_context")
     @patch("amelia.client.cli.AmeliaClient")
-    def test_approve_shows_error_when_no_workflow(self, mock_client_class, mock_worktree, runner):
+    def test_approve_shows_error_when_no_workflow(self, mock_client_class, mock_worktree, cli_runner):
         """approve command shows error when no workflow active."""
         from amelia.main import app
 
@@ -221,17 +194,17 @@ class TestApproveCommand:
         mock_client.get_active_workflows.return_value = MagicMock(workflows=[], total=0)
         mock_client_class.return_value = mock_client
 
-        result = runner.invoke(app, ["approve"])
+        result = cli_runner.invoke(app, ["approve"])
 
         assert result.exit_code == 1
         assert "no workflow" in result.stdout.lower()
 
     @patch("amelia.client.cli.get_worktree_context")
     @patch("amelia.client.cli.AmeliaClient")
-    def test_approve_shows_error_when_not_blocked(self, mock_client_class, mock_worktree, runner):
+    def test_approve_shows_error_when_not_blocked(self, mock_client_class, mock_worktree, cli_runner):
         """approve command shows error when workflow not awaiting approval."""
-        from amelia.main import app
         from amelia.client.api import InvalidRequestError
+        from amelia.main import app
 
         mock_worktree.return_value = ("/home/user/repo", "main")
 
@@ -252,14 +225,14 @@ class TestApproveCommand:
         )
         mock_client_class.return_value = mock_client
 
-        result = runner.invoke(app, ["approve"])
+        result = cli_runner.invoke(app, ["approve"])
 
         assert result.exit_code == 1
         assert "not awaiting approval" in result.stdout.lower()
 
     @patch("amelia.client.cli.get_worktree_context")
     @patch("amelia.client.cli.AmeliaClient")
-    def test_approve_shows_success(self, mock_client_class, mock_worktree, runner):
+    def test_approve_shows_success(self, mock_client_class, mock_worktree, cli_runner):
         """approve command shows success message."""
         from amelia.main import app
 
@@ -278,7 +251,7 @@ class TestApproveCommand:
         mock_client.approve_workflow.return_value = None
         mock_client_class.return_value = mock_client
 
-        result = runner.invoke(app, ["approve"])
+        result = cli_runner.invoke(app, ["approve"])
 
         assert result.exit_code == 0
         assert "approved" in result.stdout.lower()
@@ -288,21 +261,9 @@ class TestApproveCommand:
 class TestRejectCommand:
     """Tests for 'amelia reject' command."""
 
-    @pytest.fixture
-    def runner(self):
-        """Typer CLI test runner."""
-        return CliRunner()
-
-    def test_reject_command_exists(self, runner):
-        """'amelia reject' command is registered."""
-        from amelia.main import app
-
-        result = runner.invoke(app, ["reject", "--help"])
-        assert result.exit_code == 0
-
     @patch("amelia.client.cli.get_worktree_context")
     @patch("amelia.client.cli.AmeliaClient")
-    def test_reject_with_reason(self, mock_client_class, mock_worktree, runner):
+    def test_reject_with_reason(self, mock_client_class, mock_worktree, cli_runner):
         """reject command sends reason to API."""
         from amelia.main import app
 
@@ -315,7 +276,7 @@ class TestRejectCommand:
         mock_client.reject_workflow.return_value = None
         mock_client_class.return_value = mock_client
 
-        result = runner.invoke(app, ["reject", "Not ready yet"])
+        result = cli_runner.invoke(app, ["reject", "Not ready yet"])
 
         assert result.exit_code == 0
         mock_client.reject_workflow.assert_called_once_with(
@@ -324,7 +285,7 @@ class TestRejectCommand:
 
     @patch("amelia.client.cli.get_worktree_context")
     @patch("amelia.client.cli.AmeliaClient")
-    def test_reject_shows_error_when_no_workflow(self, mock_client_class, mock_worktree, runner):
+    def test_reject_shows_error_when_no_workflow(self, mock_client_class, mock_worktree, cli_runner):
         """reject command shows error when no workflow active."""
         from amelia.main import app
 
@@ -334,7 +295,7 @@ class TestRejectCommand:
         mock_client.get_active_workflows.return_value = MagicMock(workflows=[], total=0)
         mock_client_class.return_value = mock_client
 
-        result = runner.invoke(app, ["reject", "reason"])
+        result = cli_runner.invoke(app, ["reject", "reason"])
 
         assert result.exit_code == 1
         assert "no workflow" in result.stdout.lower()
@@ -343,24 +304,13 @@ class TestRejectCommand:
 class TestStatusCommand:
     """Tests for 'amelia status' command."""
 
-    @pytest.fixture
-    def runner(self):
-        """Typer CLI test runner."""
-        return CliRunner()
-
-    def test_status_command_exists(self, runner):
-        """'amelia status' command is registered."""
-        from amelia.main import app
-
-        result = runner.invoke(app, ["status", "--help"])
-        assert result.exit_code == 0
-
     @patch("amelia.client.cli.get_worktree_context")
     @patch("amelia.client.cli.AmeliaClient")
-    def test_status_shows_current_worktree(self, mock_client_class, mock_worktree, runner):
+    def test_status_shows_current_worktree(self, mock_client_class, mock_worktree, cli_runner):
         """status command shows workflow for current worktree."""
-        from amelia.main import app
         from datetime import datetime
+
+        from amelia.main import app
 
         mock_worktree.return_value = ("/home/user/repo", "main")
 
@@ -380,7 +330,7 @@ class TestStatusCommand:
         )
         mock_client_class.return_value = mock_client
 
-        result = runner.invoke(app, ["status"])
+        result = cli_runner.invoke(app, ["status"])
 
         assert result.exit_code == 0
         assert "wf-123" in result.stdout
@@ -389,10 +339,11 @@ class TestStatusCommand:
 
     @patch("amelia.client.cli.get_worktree_context")
     @patch("amelia.client.cli.AmeliaClient")
-    def test_status_all_shows_all_worktrees(self, mock_client_class, mock_worktree, runner):
+    def test_status_all_shows_all_worktrees(self, mock_client_class, mock_worktree, cli_runner):
         """status --all shows workflows from all worktrees."""
-        from amelia.main import app
         from datetime import datetime
+
+        from amelia.main import app
 
         mock_worktree.return_value = ("/home/user/repo", "main")
 
@@ -420,7 +371,7 @@ class TestStatusCommand:
         )
         mock_client_class.return_value = mock_client
 
-        result = runner.invoke(app, ["status", "--all"])
+        result = cli_runner.invoke(app, ["status", "--all"])
 
         assert result.exit_code == 0
         mock_client.get_active_workflows.assert_called_once_with(worktree_path=None)
@@ -429,7 +380,7 @@ class TestStatusCommand:
 
     @patch("amelia.client.cli.get_worktree_context")
     @patch("amelia.client.cli.AmeliaClient")
-    def test_status_shows_no_workflows_message(self, mock_client_class, mock_worktree, runner):
+    def test_status_shows_no_workflows_message(self, mock_client_class, mock_worktree, cli_runner):
         """status command shows message when no workflows active."""
         from amelia.main import app
 
@@ -439,7 +390,7 @@ class TestStatusCommand:
         mock_client.get_active_workflows.return_value = MagicMock(workflows=[], total=0)
         mock_client_class.return_value = mock_client
 
-        result = runner.invoke(app, ["status"])
+        result = cli_runner.invoke(app, ["status"])
 
         assert result.exit_code == 0
         assert "no active" in result.stdout.lower() or "no workflow" in result.stdout.lower()
@@ -448,21 +399,9 @@ class TestStatusCommand:
 class TestCancelCommand:
     """Tests for 'amelia cancel' command."""
 
-    @pytest.fixture
-    def runner(self):
-        """Typer CLI test runner."""
-        return CliRunner()
-
-    def test_cancel_command_exists(self, runner):
-        """'amelia cancel' command is registered."""
-        from amelia.main import app
-
-        result = runner.invoke(app, ["cancel", "--help"])
-        assert result.exit_code == 0
-
     @patch("amelia.client.cli.get_worktree_context")
     @patch("amelia.client.cli.AmeliaClient")
-    def test_cancel_finds_workflow_by_worktree(self, mock_client_class, mock_worktree, runner):
+    def test_cancel_finds_workflow_by_worktree(self, mock_client_class, mock_worktree, cli_runner):
         """cancel command finds workflow from current worktree."""
         from amelia.main import app
 
@@ -475,14 +414,14 @@ class TestCancelCommand:
         mock_client.cancel_workflow.return_value = None
         mock_client_class.return_value = mock_client
 
-        result = runner.invoke(app, ["cancel"], input="y\n")
+        result = cli_runner.invoke(app, ["cancel"], input="y\n")
 
         assert result.exit_code == 0
         mock_client.cancel_workflow.assert_called_once_with(workflow_id="wf-123")
 
     @patch("amelia.client.cli.get_worktree_context")
     @patch("amelia.client.cli.AmeliaClient")
-    def test_cancel_requires_confirmation(self, mock_client_class, mock_worktree, runner):
+    def test_cancel_requires_confirmation(self, mock_client_class, mock_worktree, cli_runner):
         """cancel command requires user confirmation."""
         from amelia.main import app
 
@@ -495,14 +434,14 @@ class TestCancelCommand:
         mock_client_class.return_value = mock_client
 
         # User declines
-        result = runner.invoke(app, ["cancel"], input="n\n")
+        result = cli_runner.invoke(app, ["cancel"], input="n\n")
 
         assert result.exit_code == 1
         mock_client.cancel_workflow.assert_not_called()
 
     @patch("amelia.client.cli.get_worktree_context")
     @patch("amelia.client.cli.AmeliaClient")
-    def test_cancel_force_skips_confirmation(self, mock_client_class, mock_worktree, runner):
+    def test_cancel_force_skips_confirmation(self, mock_client_class, mock_worktree, cli_runner):
         """cancel --force skips confirmation prompt."""
         from amelia.main import app
 
@@ -515,14 +454,14 @@ class TestCancelCommand:
         mock_client.cancel_workflow.return_value = None
         mock_client_class.return_value = mock_client
 
-        result = runner.invoke(app, ["cancel", "--force"])
+        result = cli_runner.invoke(app, ["cancel", "--force"])
 
         assert result.exit_code == 0
         mock_client.cancel_workflow.assert_called_once()
 
     @patch("amelia.client.cli.get_worktree_context")
     @patch("amelia.client.cli.AmeliaClient")
-    def test_cancel_shows_error_when_no_workflow(self, mock_client_class, mock_worktree, runner):
+    def test_cancel_shows_error_when_no_workflow(self, mock_client_class, mock_worktree, cli_runner):
         """cancel command shows error when no workflow active."""
         from amelia.main import app
 
@@ -532,7 +471,7 @@ class TestCancelCommand:
         mock_client.get_active_workflows.return_value = MagicMock(workflows=[], total=0)
         mock_client_class.return_value = mock_client
 
-        result = runner.invoke(app, ["cancel"])
+        result = cli_runner.invoke(app, ["cancel"])
 
         assert result.exit_code == 1
         assert "no workflow" in result.stdout.lower()

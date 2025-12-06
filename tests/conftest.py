@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 import yaml
+from typer.testing import CliRunner
 
 from amelia.agents.reviewer import ReviewResponse
 from amelia.core.state import ExecutionState, ReviewResult, Task, TaskDAG
@@ -286,3 +287,9 @@ def git_repo_with_changes(tmp_path):
     (tmp_path / "file.txt").write_text("modified")
 
     return tmp_path
+
+
+@pytest.fixture
+def cli_runner():
+    """Typer CLI test runner for command testing."""
+    return CliRunner()
