@@ -281,8 +281,8 @@ def cancel_command(
             console.print(f"Cancel workflow [bold]{workflow.id}[/bold] ({workflow.issue_id})?")
             confirm = typer.confirm("Are you sure?")
             if not confirm:
-                console.print("[yellow]Cancelled.[/yellow]")
-                raise typer.Exit(1)
+                console.print("[dim]Aborted.[/dim]")
+                raise typer.Exit(0)
 
         # Cancel it
         await client.cancel_workflow(workflow_id=workflow.id)

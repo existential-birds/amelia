@@ -433,10 +433,11 @@ class TestCancelCommand:
         )
         mock_client_class.return_value = mock_client
 
-        # User declines
+        # User declines - not an error, just aborted
         result = cli_runner.invoke(app, ["cancel"], input="n\n")
 
-        assert result.exit_code == 1
+        assert result.exit_code == 0
+        assert "Aborted" in result.output
         mock_client.cancel_workflow.assert_not_called()
 
     @patch("amelia.client.cli.get_worktree_context")
