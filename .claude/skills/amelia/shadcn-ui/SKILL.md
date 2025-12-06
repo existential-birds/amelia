@@ -5,13 +5,19 @@ description: shadcn/ui component patterns with Radix primitives and Tailwind sty
 
 # shadcn/ui Component Development
 
-This skill covers component patterns, styling techniques, and architectural decisions used in shadcn/ui, a collection of re-usable components built with Radix UI primitives and styled with Tailwind CSS.
+## Contents
+
+- [Quick Reference](#quick-reference) - cn(), basic CVA pattern
+- [Component Anatomy](#component-anatomy) - Props typing, asChild, data-slot
+- [Component Patterns](#component-patterns) - Compound components, Radix wrapping
+- [Styling Techniques](#styling-techniques) - CVA variants, modern CSS selectors, accessibility states
+- [Decision Tables](#decision-tables) - When to use CVA, compound components, asChild, Context
+- [Common Patterns](#common-patterns) - Form elements, dialogs, sidebars
+- [Reference Files](#reference-files) - Full implementations and advanced patterns
 
 ## Quick Reference
 
-### The cn() Utility
-
-Every shadcn/ui component uses the `cn()` utility for merging Tailwind classes:
+### cn() Utility
 
 ```tsx
 import { clsx, type ClassValue } from "clsx"
@@ -22,16 +28,12 @@ export function cn(...inputs: ClassValue[]) {
 }
 ```
 
-This utility combines `clsx` for conditional class application with `tailwind-merge` for intelligent Tailwind class conflict resolution.
-
 ### Basic CVA Pattern
-
-Components use Class Variance Authority (CVA) for variant-based styling:
 
 ```tsx
 import { cva, type VariantProps } from "class-variance-authority"
 
-const componentVariants = cva(
+const buttonVariants = cva(
   "base-classes-applied-to-all-variants",
   {
     variants: {
@@ -51,78 +53,49 @@ const componentVariants = cva(
   }
 )
 
-function Component({
+function Button({
   variant,
   size,
   className,
   ...props
-}: React.ComponentProps<"button"> & VariantProps<typeof componentVariants>) {
+}: React.ComponentProps<"button"> & VariantProps<typeof buttonVariants>) {
   return (
     <button
-      className={cn(componentVariants({ variant, size }), className)}
+      className={cn(buttonVariants({ variant, size }), className)}
       {...props}
     />
   )
 }
+
+export { Button, buttonVariants }
 ```
 
 ## Component Anatomy
 
-### Props Typing Pattern
-
-Every component follows this TypeScript pattern:
+### Props Typing Patterns
 
 ```tsx
-// For HTML elements
-function Component({
-  className,
-  ...props
-}: React.ComponentProps<"element">) {
-  return <element className={cn("base-classes", className)} {...props} />
+// HTML elements
+function Component({ className, ...props }: React.ComponentProps<"div">) {
+  return <div className={cn("base-classes", className)} {...props} />
 }
 
-// For Radix primitives
-function Component({
-  className,
-  ...props
-}: React.ComponentProps<typeof RadixPrimitive.Root>) {
-  return (
-    <RadixPrimitive.Root
-      className={cn("base-classes", className)}
-      {...props}
-    />
-  )
+// Radix primitives
+function Component({ className, ...props }: React.ComponentProps<typeof RadixPrimitive.Root>) {
+  return <RadixPrimitive.Root className={cn("base-classes", className)} {...props} />
 }
 
 // With CVA variants
 function Component({
-  variant,
-  size,
-  className,
-  ...props
-}: React.ComponentProps<"element"> & VariantProps<typeof variants>) {
-  return (
-    <element
-      className={cn(variants({ variant, size }), className)}
-      {...props}
-    />
-  )
-}
-
-// With asChild prop
-function Component({
-  asChild = false,
-  className,
-  ...props
-}: React.ComponentProps<"element"> & { asChild?: boolean }) {
-  const Comp = asChild ? Slot : "element"
-  return <Comp className={cn("base-classes", className)} {...props} />
+  variant, size, className, ...props
+}: React.ComponentProps<"button"> & VariantProps<typeof variants>) {
+  return <button className={cn(variants({ variant, size }), className)} {...props} />
 }
 ```
 
-### The asChild Pattern
+### asChild Pattern
 
-The `asChild` prop enables polymorphic rendering using `@radix-ui/react-slot`:
+Enables polymorphic rendering via `@radix-ui/react-slot`:
 
 ```tsx
 import { Slot } from "@radix-ui/react-slot"
@@ -133,12 +106,8 @@ function Button({
   variant,
   size,
   ...props
-}: React.ComponentProps<"button"> &
-  VariantProps<typeof buttonVariants> & {
-    asChild?: boolean
-  }) {
+}: React.ComponentProps<"button"> & VariantProps<typeof buttonVariants> & { asChild?: boolean }) {
   const Comp = asChild ? Slot : "button"
-
   return (
     <Comp
       data-slot="button"
@@ -151,264 +120,94 @@ function Button({
 
 **Usage:**
 ```tsx
-// Renders as <button>
-<Button>Click me</Button>
-
-// Renders as <a> with button styling
-<Button asChild>
-  <a href="/home">Home</a>
-</Button>
-
-// Renders as Next.js Link
-<Button asChild>
-  <Link href="/dashboard">Dashboard</Link>
-</Button>
+<Button>Click me</Button>                           // Renders <button>
+<Button asChild><a href="/home">Home</a></Button>   // Renders <a> with button styling
+<Button asChild><Link href="/dash">Dash</Link></Button>  // Works with Next.js Link
 ```
-
-The `Slot` component merges props and classes onto the child element.
 
 ### data-slot Attributes
 
-Every component includes a `data-slot` attribute for CSS targeting:
+Every component includes `data-slot` for CSS targeting:
 
 ```tsx
-function Button({ ...props }) {
-  return <button data-slot="button" {...props} />
-}
-
-function Card({ ...props }) {
-  return <div data-slot="card" {...props} />
-}
-
-function CardHeader({ ...props }) {
-  return <div data-slot="card-header" {...props} />
-}
+function Card({ ...props }) { return <div data-slot="card" {...props} /> }
+function CardHeader({ ...props }) { return <div data-slot="card-header" {...props} /> }
 ```
 
-**CSS Targeting:**
+**CSS/Tailwind targeting:**
 ```css
-/* Target specific components */
 [data-slot="button"] { /* styles */ }
-
-/* Target within parent */
-[data-slot="card"] [data-slot="button"] { /* styles */ }
+[data-slot="card"] [data-slot="button"] { /* nested targeting */ }
 ```
 
-**Tailwind Usage:**
 ```tsx
-// Style all buttons within this div
 <div className="[&_[data-slot=button]]:shadow-lg">
   <Button>Automatically styled</Button>
 </div>
 ```
 
-**Conditional Layouts:**
+**Conditional layouts with has():**
 ```tsx
-function CardHeader({ className, ...props }) {
-  return (
-    <div
-      data-slot="card-header"
-      className={cn(
-        "grid gap-2",
-        // Two columns when CardAction is present
-        "has-data-[slot=card-action]:grid-cols-[1fr_auto]",
-        className
-      )}
-      {...props}
-    />
-  )
-}
+<div
+  data-slot="card-header"
+  className={cn(
+    "grid gap-2",
+    "has-data-[slot=card-action]:grid-cols-[1fr_auto]"
+  )}
+/>
 ```
 
 ## Component Patterns
 
 ### Compound Components
 
-Complex UI is split into multiple related components that compose together:
-
 ```tsx
-// Export all parts
 export { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 
-// Each part is independently typed
 function Card({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="card"
-      className={cn(
-        "bg-card text-card-foreground flex flex-col gap-6 rounded-xl border py-6 shadow-sm",
-        className
-      )}
+      className={cn("bg-card text-card-foreground flex flex-col gap-6 rounded-xl border py-6 shadow-sm", className)}
       {...props}
     />
   )
 }
 
 function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="card-header"
-      className={cn("grid gap-2 px-6", className)}
-      {...props}
-    />
-  )
+  return <div data-slot="card-header" className={cn("grid gap-2 px-6", className)} {...props} />
 }
 
 function CardTitle({ className, ...props }: React.ComponentProps<"div">) {
-  return (
-    <div
-      data-slot="card-title"
-      className={cn("leading-none font-semibold", className)}
-      {...props}
-    />
-  )
+  return <div data-slot="card-title" className={cn("leading-none font-semibold", className)} {...props} />
 }
-```
-
-**Usage:**
-```tsx
-<Card>
-  <CardHeader>
-    <CardTitle>Title</CardTitle>
-    <CardDescription>Description</CardDescription>
-  </CardHeader>
-  <CardContent>Content</CardContent>
-  <CardFooter>Footer</CardFooter>
-</Card>
-```
-
-### Context for Complex Components
-
-Components with shared state across multiple children use React Context:
-
-```tsx
-type ComponentContextValue = {
-  state: string
-  setState: (state: string) => void
-}
-
-const ComponentContext = React.createContext<ComponentContextValue | null>(null)
-
-function useComponent() {
-  const context = React.useContext(ComponentContext)
-  if (!context) {
-    throw new Error("useComponent must be used within ComponentProvider")
-  }
-  return context
-}
-
-function ComponentProvider({ children, defaultState }: Props) {
-  const [state, setState] = React.useState(defaultState)
-
-  const contextValue = React.useMemo(
-    () => ({ state, setState }),
-    [state, setState]
-  )
-
-  return (
-    <ComponentContext.Provider value={contextValue}>
-      {children}
-    </ComponentContext.Provider>
-  )
-}
-
-function ComponentChild() {
-  const { state, setState } = useComponent()
-  return <div>{state}</div>
-}
-```
-
-**Best Practices:**
-- Memoize context value to prevent unnecessary re-renders
-- Provide custom hook with error checking
-- Type context as `Type | null` to enforce provider usage
-- Use `React.useCallback` for stable function references
-
-### Controlled and Uncontrolled State
-
-Support both patterns for flexibility:
-
-```tsx
-function Component({
-  defaultValue,
-  value: valueProp,
-  onValueChange: setValueProp,
-  ...props
-}) {
-  // Internal state
-  const [_value, _setValue] = React.useState(defaultValue)
-
-  // Use prop if provided, otherwise internal state
-  const value = valueProp ?? _value
-
-  const setValue = React.useCallback(
-    (newValue) => {
-      if (setValueProp) {
-        setValueProp(newValue)
-      } else {
-        _setValue(newValue)
-      }
-    },
-    [setValueProp]
-  )
-
-  return <input value={value} onChange={(e) => setValue(e.target.value)} />
-}
-```
-
-**Uncontrolled usage:**
-```tsx
-<Component defaultValue="initial" />
-```
-
-**Controlled usage:**
-```tsx
-const [value, setValue] = useState("initial")
-<Component value={value} onValueChange={setValue} />
 ```
 
 ### Wrapping Radix Primitives
 
-Many components wrap Radix UI primitives:
-
 ```tsx
 "use client"
 
-import * as React from "react"
 import * as LabelPrimitive from "@radix-ui/react-label"
-import { cn } from "@/lib/utils"
 
-function Label({
-  className,
-  ...props
-}: React.ComponentProps<typeof LabelPrimitive.Root>) {
+function Label({ className, ...props }: React.ComponentProps<typeof LabelPrimitive.Root>) {
   return (
     <LabelPrimitive.Root
       data-slot="label"
-      className={cn(
-        "flex items-center gap-2 text-sm font-medium",
-        className
-      )}
+      className={cn("flex items-center gap-2 text-sm font-medium", className)}
       {...props}
     />
   )
 }
-
-export { Label }
 ```
 
-**Key Points:**
-- Add `"use client"` directive for client components
-- Type props as `React.ComponentProps<typeof Primitive.Root>`
-- Add `data-slot` attribute for CSS targeting
-- Merge primitive props with spread operator
+Key points: Add `"use client"`, use `React.ComponentProps<typeof Primitive.Root>`, add `data-slot`.
 
 ## Styling Techniques
 
-### CVA Variant Patterns
+### CVA Variants
 
-#### Multiple Variant Dimensions
-
+**Multiple dimensions:**
 ```tsx
 const buttonVariants = cva("base-classes", {
   variants: {
@@ -426,216 +225,71 @@ const buttonVariants = cva("base-classes", {
       icon: "size-9",
     },
   },
-  defaultVariants: {
-    variant: "default",
-    size: "default",
-  },
+  defaultVariants: { variant: "default", size: "default" },
 })
 ```
 
-#### Compound Variants
-
-Apply classes when multiple conditions are met:
-
+**Compound variants:**
 ```tsx
-const variants = cva("base", {
-  variants: {
-    variant: { default: "bg-primary", outline: "border" },
-    size: { sm: "h-8", lg: "h-12" },
-  },
-  compoundVariants: [
-    {
-      variant: "outline",
-      size: "lg",
-      class: "border-2", // Thicker border for large outlined buttons
-    },
-  ],
-})
+compoundVariants: [
+  { variant: "outline", size: "lg", class: "border-2" },
+]
 ```
 
-#### Type Extraction
-
+**Type extraction:**
 ```tsx
-import { type VariantProps } from "class-variance-authority"
-
-const componentVariants = cva(/* ... */)
-
-// Extract variant prop types
-type ComponentVariants = VariantProps<typeof componentVariants>
-// Result: { variant?: "default" | "outline", size?: "sm" | "lg" }
-
-// Use in component props
-interface ComponentProps
-  extends React.ComponentProps<"button">,
-    VariantProps<typeof componentVariants> {
-  asChild?: boolean
-}
+type ButtonVariants = VariantProps<typeof buttonVariants>
+// Result: { variant?: "default" | "outline" | ..., size?: "sm" | "lg" | ... }
 ```
 
-#### Export Pattern
+### Modern CSS Selectors in Tailwind
 
-Always export both component and variants for reusability:
-
+**has() selector:**
 ```tsx
-const buttonVariants = cva(/* ... */)
-
-function Button({ ... }) {
-  return <button className={cn(buttonVariants({ variant, size }))} />
-}
-
-export { Button, buttonVariants }
+<button className="px-4 has-[>svg]:px-3">  // Adjusts padding when contains icon
+<div className="has-data-[slot=action]:grid-cols-[1fr_auto]">  // Conditional layout
 ```
 
-This allows external composition:
-
+**Group/peer selectors:**
 ```tsx
-import { buttonVariants } from "@/components/ui/button"
-
-function CustomLink() {
-  return (
-    <a className={cn(buttonVariants({ variant: "outline" }), "custom-class")}>
-      Link styled as button
-    </a>
-  )
-}
-```
-
-### Modern CSS Selectors
-
-#### has() Selector
-
-Adjust parent styling based on children:
-
-```tsx
-// Button adjusts padding when it contains an icon
-<button className="px-4 has-[>svg]:px-3">
-  <Icon />
-  Text
-</button>
-
-// CVA integration
-const buttonVariants = cva("...", {
-  variants: {
-    size: {
-      default: "h-9 px-4 has-[>svg]:px-3",
-      sm: "h-8 px-3 has-[>svg]:px-2.5",
-    },
-  },
-})
-
-// Conditional grid layout
-<div className="grid grid-rows-[auto_auto] has-data-[slot=action]:grid-cols-[1fr_auto]">
-  <div>Title</div>
-  <div>Description</div>
-  <div data-slot="action">Action</div> {/* Triggers two-column layout */}
-</div>
-```
-
-#### Group and Peer Selectors
-
-Named groups and peers for complex interactions:
-
-```tsx
-// Parent controls child visibility
 <div className="group" data-state="collapsed">
-  <div className="group-data-[state=collapsed]:hidden">
-    Hidden when collapsed
-  </div>
+  <div className="group-data-[state=collapsed]:hidden">Hidden when collapsed</div>
 </div>
 
-// Sibling interactions
-<button className="peer/menu-button" data-active="true">
-  Menu
-</button>
-<div className="peer-data-[active=true]/menu-button:text-accent">
-  Highlighted when sibling is active
-</div>
+<button className="peer/menu" data-active="true">Menu</button>
+<div className="peer-data-[active=true]/menu:text-accent">Styled when sibling active</div>
 ```
 
-#### Parent Class Selectors
-
-Style based on parent classes:
-
-```tsx
-<div className="border-t">
-  <div className="[.border-t]:pt-6">
-    Adds top padding when parent has border-t
-  </div>
-</div>
-```
-
-#### Container Queries
-
-Responsive styling based on container size:
-
+**Container queries:**
 ```tsx
 <div className="@container/card">
-  <div className="gap-2 @container/card:gap-4 @md:flex-row">
-    Adjusts based on container width
-  </div>
+  <div className="@md:flex-row">Responds to container width</div>
 </div>
 ```
 
-### Focus and Accessibility States
-
-#### Focus Visible
+### Accessibility States
 
 ```tsx
 className={cn(
-  "outline-none",
-  "focus-visible:border-ring",
-  "focus-visible:ring-ring/50",
-  "focus-visible:ring-[3px]",
+  // Focus
+  "outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]",
+  // Invalid
+  "aria-invalid:border-destructive aria-invalid:ring-destructive/20",
+  // Disabled
+  "disabled:pointer-events-none disabled:opacity-50",
 )}
-```
 
-#### ARIA Invalid
-
-```tsx
-className={cn(
-  "aria-invalid:border-destructive",
-  "aria-invalid:ring-destructive/20",
-  "dark:aria-invalid:ring-destructive/40",
-)}
-```
-
-#### Disabled States
-
-```tsx
-className={cn(
-  "disabled:pointer-events-none",
-  "disabled:cursor-not-allowed",
-  "disabled:opacity-50",
-  "peer-disabled:cursor-not-allowed",
-  "peer-disabled:opacity-50",
-)}
-```
-
-#### Screen Reader Only
-
-```tsx
-<span className="sr-only">Close</span>
+<span className="sr-only">Close</span>  // Screen reader only
 ```
 
 ### Dark Mode
 
-Use Tailwind's dark mode with class strategy:
-
+Semantic tokens adapt automatically:
 ```tsx
-className={cn(
-  "bg-background text-foreground",
-  "dark:bg-input/30",
-  "dark:border-input",
-  "dark:hover:bg-input/50",
-)}
+className="bg-background text-foreground dark:bg-input/30 dark:hover:bg-input/50"
 ```
 
-Semantic color tokens adapt automatically:
-- `bg-background` / `text-foreground`
-- `bg-primary` / `text-primary-foreground`
-- `bg-card` / `text-card-foreground`
-- `border-input`
-- `text-muted-foreground`
+Tokens: `bg-background`, `text-foreground`, `bg-primary`, `text-primary-foreground`, `bg-card`, `text-card-foreground`, `border-input`, `text-muted-foreground`
 
 ## Decision Tables
 
@@ -676,11 +330,10 @@ Semantic color tokens adapt automatically:
 | State shared by many siblings | Yes | Lift state up |
 | Plugin/extension architecture | Yes | Props |
 | Simple parent-child communication | No | Props |
-| Independent components | No | Props |
 
 ## Common Patterns
 
-### Form Element Pattern
+### Form Input
 
 ```tsx
 function Input({ className, type, ...props }: React.ComponentProps<"input">) {
@@ -689,23 +342,11 @@ function Input({ className, type, ...props }: React.ComponentProps<"input">) {
       type={type}
       data-slot="input"
       className={cn(
-        // Base styles
         "h-9 w-full rounded-md border px-3 py-1",
-        // Focus state
-        "outline-none",
-        "focus-visible:border-ring",
-        "focus-visible:ring-ring/50",
-        "focus-visible:ring-[3px]",
-        // Invalid state
-        "aria-invalid:border-destructive",
-        "aria-invalid:ring-destructive/20",
-        // Disabled state
-        "disabled:cursor-not-allowed",
-        "disabled:opacity-50",
-        // Pseudo-elements
-        "placeholder:text-muted-foreground",
-        // Dark mode
-        "dark:bg-input/30",
+        "outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]",
+        "aria-invalid:border-destructive aria-invalid:ring-destructive/20",
+        "disabled:cursor-not-allowed disabled:opacity-50",
+        "placeholder:text-muted-foreground dark:bg-input/30",
         className
       )}
       {...props}
@@ -714,7 +355,7 @@ function Input({ className, type, ...props }: React.ComponentProps<"input">) {
 }
 ```
 
-### Modal Pattern (Dialog)
+### Dialog Content
 
 ```tsx
 function DialogContent({ children, showCloseButton = true, ...props }) {
@@ -724,27 +365,17 @@ function DialogContent({ children, showCloseButton = true, ...props }) {
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          // Layout
-          "fixed top-[50%] left-[50%]",
-          "translate-x-[-50%] translate-y-[-50%]",
-          "w-full max-w-lg",
-          // Styling
+          "fixed top-[50%] left-[50%] translate-x-[-50%] translate-y-[-50%] w-full max-w-lg",
           "bg-background border rounded-lg p-6 shadow-lg",
-          // Animations
-          "data-[state=open]:animate-in",
-          "data-[state=open]:fade-in-0",
-          "data-[state=open]:zoom-in-95",
-          "data-[state=closed]:animate-out",
-          "data-[state=closed]:fade-out-0",
-          "data-[state=closed]:zoom-out-95",
+          "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95",
+          "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95",
         )}
         {...props}
       >
         {children}
         {showCloseButton && (
           <DialogPrimitive.Close className="absolute top-4 right-4">
-            <XIcon />
-            <span className="sr-only">Close</span>
+            <XIcon /><span className="sr-only">Close</span>
           </DialogPrimitive.Close>
         )}
       </DialogPrimitive.Content>
@@ -753,19 +384,18 @@ function DialogContent({ children, showCloseButton = true, ...props }) {
 }
 ```
 
-### Complex State Management (Sidebar)
+### Sidebar with Context
 
 ```tsx
 function SidebarProvider({ defaultOpen = true, children }) {
   const isMobile = useIsMobile()
   const [open, setOpen] = React.useState(defaultOpen)
 
-  // Keyboard shortcut
   React.useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "b" && (event.metaKey || event.ctrlKey)) {
-        event.preventDefault()
-        setOpen((open) => !open)
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "b" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault()
+        setOpen(o => !o)
       }
     }
     window.addEventListener("keydown", handleKeyDown)
@@ -773,12 +403,7 @@ function SidebarProvider({ defaultOpen = true, children }) {
   }, [])
 
   const contextValue = React.useMemo(
-    () => ({
-      state: open ? "expanded" : "collapsed",
-      open,
-      setOpen,
-      isMobile,
-    }),
+    () => ({ state: open ? "expanded" : "collapsed", open, setOpen, isMobile }),
     [open, setOpen, isMobile]
   )
 
@@ -786,10 +411,7 @@ function SidebarProvider({ defaultOpen = true, children }) {
     <SidebarContext.Provider value={contextValue}>
       <div
         data-slot="sidebar-wrapper"
-        style={{
-          "--sidebar-width": "16rem",
-          "--sidebar-width-icon": "3rem",
-        } as React.CSSProperties}
+        style={{ "--sidebar-width": "16rem", "--sidebar-width-icon": "3rem" } as React.CSSProperties}
       >
         {children}
       </div>
@@ -800,8 +422,8 @@ function SidebarProvider({ defaultOpen = true, children }) {
 
 ## Reference Files
 
-For comprehensive examples and advanced patterns, see:
+For comprehensive examples and advanced patterns:
 
-- **[components.md](./references/components.md)** - Full component implementations (Button, Card, Badge, Input, Label, Textarea, Dialog)
-- **[cva.md](./references/cva.md)** - CVA patterns including compound variants, responsive variants, type extraction
-- **[patterns.md](./references/patterns.md)** - Architectural patterns including compound components, asChild polymorphism, controlled state, Context usage, data-slot targeting, has() selectors
+- **[components.md](./references/components.md)** - Full implementations: Button, Card, Badge, Input, Label, Textarea, Dialog
+- **[cva.md](./references/cva.md)** - CVA patterns: compound variants, responsive variants, type extraction
+- **[patterns.md](./references/patterns.md)** - Architectural patterns: compound components, asChild, controlled state, Context, data-slot, has() selectors
