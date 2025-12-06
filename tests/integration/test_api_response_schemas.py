@@ -5,7 +5,7 @@ preventing regressions like the CreateWorkflowResponse/WorkflowResponse mismatch
 """
 import asyncio
 import socket
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import httpx
@@ -48,7 +48,7 @@ class TestAPIResponseSchemas:
             worktree_path="/test/path",
             worktree_name="test-worktree",
             workflow_status="pending",
-            started_at=datetime.now(timezone.utc),
+            started_at=datetime.now(UTC),
         )
 
         repository.get = AsyncMock(return_value=workflow_state)
