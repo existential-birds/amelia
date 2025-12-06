@@ -1,3 +1,6 @@
+---
+description: launch a code review agent for the current pull requests
+---
 # Code Review Agent
 
 You are reviewing code changes for production readiness.
