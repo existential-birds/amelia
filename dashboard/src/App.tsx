@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { RouterProvider } from 'react-router-dom';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { BrowserCheck } from '@/components/BrowserCheck';
@@ -15,10 +16,9 @@ export function App() {
   return (
     <BrowserCheck>
       <TooltipProvider>
-        <RouterProvider
-          router={router}
-          fallbackElement={<GlobalLoadingSpinner />}
-        />
+        <Suspense fallback={<GlobalLoadingSpinner />}>
+          <RouterProvider router={router} />
+        </Suspense>
       </TooltipProvider>
     </BrowserCheck>
   );

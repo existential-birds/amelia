@@ -14,19 +14,31 @@ export const router = createBrowserRouter([
       },
       {
         path: 'workflows',
-        lazy: () => import('@/pages/WorkflowsPage'),
+        lazy: async () => {
+          const { default: Component } = await import('@/pages/WorkflowsPage');
+          return { Component };
+        },
       },
       {
         path: 'workflows/:id',
-        lazy: () => import('@/pages/WorkflowDetailPage'),
+        lazy: async () => {
+          const { default: Component } = await import('@/pages/WorkflowDetailPage');
+          return { Component };
+        },
       },
       {
         path: 'history',
-        lazy: () => import('@/pages/HistoryPage'),
+        lazy: async () => {
+          const { default: Component } = await import('@/pages/HistoryPage');
+          return { Component };
+        },
       },
       {
         path: 'logs',
-        lazy: () => import('@/pages/LogsPage'),
+        lazy: async () => {
+          const { default: Component } = await import('@/pages/LogsPage');
+          return { Component };
+        },
       },
       {
         path: '*',
