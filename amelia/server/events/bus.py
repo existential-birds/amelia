@@ -91,4 +91,5 @@ class EventBus:
 
         # Broadcast to WebSocket clients
         if self._connection_manager:
-            asyncio.create_task(self._connection_manager.broadcast(event))
+            task = asyncio.create_task(self._connection_manager.broadcast(event))
+            # Don't await - this is fire-and-forget, but exceptions are handled in broadcast()
