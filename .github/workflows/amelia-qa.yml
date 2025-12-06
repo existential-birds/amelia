@@ -42,31 +42,12 @@ jobs:
             echo "No test plan file found"
           fi
 
-      - name: Read test plan content
-        if: steps.find-plan.outputs.found == 'true'
-        id: read-plan
-        run: |
-          # Read the file and escape for GitHub Actions
-          CONTENT=$(cat "${{ steps.find-plan.outputs.file }}")
-
-          # Use a delimiter for multiline content
-          echo "content<<EOF" >> $GITHUB_OUTPUT
-          echo "$CONTENT" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-
       - name: Post test plan as comment
         if: steps.find-plan.outputs.found == 'true'
         uses: peter-evans/create-or-update-comment@v4
         with:
           issue-number: ${{ github.event.pull_request.number }}
-          body: |
-            ## 🧪 Manual Test Plan
-
-            > Auto-posted by `amelia-qa` workflow from `${{ steps.find-plan.outputs.file }}`
-
-            ---
-
-            ${{ steps.read-plan.outputs.content }}
+          body-path: ${{ steps.find-plan.outputs.file }}
           reactions: eyes
 
       - name: No test plan found
