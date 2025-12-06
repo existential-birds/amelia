@@ -17,7 +17,7 @@ type CanvasProps = ReactFlowProps & {
 **Usage:**
 
 ```tsx
-import { Canvas } from "@/components/ai-elements";
+import { Canvas } from "@/components/ai-elements/canvas";
 import { Background, Controls, Panel } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
@@ -353,7 +353,7 @@ import { Background } from "@xyflow/react";
 Example of creating custom node types with aviation-specific styling.
 
 ```tsx
-import { Node, NodeHeader, NodeTitle, NodeContent, NodeFooter } from "@/components/ai-elements";
+import { Node, NodeHeader, NodeTitle, NodeContent, NodeFooter } from "@/components/ai-elements/node";
 import type { NodeProps } from "@xyflow/react";
 
 type ProcessNodeData = {
@@ -414,16 +414,16 @@ const nodeTypes = {
 
 ```tsx
 import { useState } from "react";
+import { Canvas } from "@/components/ai-elements/canvas";
 import {
-  Canvas,
   Node,
   NodeHeader,
   NodeTitle,
   NodeDescription,
   NodeContent,
   NodeFooter,
-  Edge,
-} from "@/components/ai-elements";
+} from "@/components/ai-elements/node";
+import { Edge } from "@/components/ai-elements/edge";
 import {
   Background,
   Controls,

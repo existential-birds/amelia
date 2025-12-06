@@ -255,12 +255,13 @@ Requirements:
 - Vector length must be divisible by 8
 - Only float32 or int8 vectors
 
-### vec_quantize_i8() - Int8 Quantization
-Quantize float32 to int8 (implementation varies by version):
+### vec_quantize_int8() - Int8 Quantization
+Quantize float32 to int8 using the specified method:
 
 ```sql
-SELECT vec_quantize_i8('[1.5, 2.7, -3.2, 4.9]');
+SELECT vec_quantize_int8('[1.5, 2.7, -3.2, 4.9]', 'unit');
 -- Quantizes to int8 range [-128, 127]
+-- Second parameter specifies quantization method (e.g., 'unit')
 ```
 
 ## Iteration

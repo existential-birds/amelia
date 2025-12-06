@@ -443,6 +443,8 @@ import {
   ConversationContent,
   ConversationEmptyState,
   ConversationScrollButton,
+} from "@/components/ai-elements/conversation";
+import {
   Message,
   MessageContent,
   MessageResponse,
@@ -456,7 +458,7 @@ import {
   MessageBranchPrevious,
   MessageBranchNext,
   MessageBranchPage,
-} from "@/components/ai-elements";
+} from "@/components/ai-elements/message";
 
 function ChatInterface({ messages }: { messages: UIMessage[] }) {
   return (

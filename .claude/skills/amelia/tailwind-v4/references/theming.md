@@ -14,9 +14,9 @@
 
 ## @theme Directive Modes
 
-Tailwind v4 provides three modes for defining theme values.
+Tailwind v4 provides multiple modes for defining theme values. Modes can be combined (e.g., `@theme default inline`, `@theme inline reference`).
 
-### @theme (default)
+### @theme (default mode)
 
 Generates CSS variables that can be referenced in custom CSS:
 
@@ -73,7 +73,7 @@ Inlines values directly without CSS variable indirection:
 
 ### @theme reference
 
-Defines theme values without emitting CSS:
+Inlines values as fallbacks without emitting CSS variables to :root:
 
 ```css
 @theme reference {
@@ -81,13 +81,53 @@ Defines theme values without emitting CSS:
 }
 ```
 
-**Generated CSS**: None (values tracked internally only)
+**Generated CSS** (when `bg-internal` is used):
+```css
+.bg-internal {
+  background-color: var(--color-internal, oklch(50% 0.1 180));
+}
+```
+
+**Key behavior**: No `:root` variable is created, but the utility still works by using the value as a fallback in `var()`.
 
 **When to use**:
-- Internal design tokens
-- Type-only theme values
-- Avoiding CSS bloat
-- Prefixed themes that shouldn't emit variables
+- Provide fallback values without CSS variable overhead
+- Reduce :root bloat while maintaining utility functionality
+- Values that should work even if the variable isn't defined elsewhere
+- Combine with `inline` for direct value substitution (e.g., `@theme reference inline`)
+
+### @theme default
+
+Explicitly marks theme values as defaults that can be overridden:
+
+```css
+@theme default {
+  --color-primary: oklch(60% 0.24 262);
+}
+
+/* Later in the file or another file */
+@theme {
+  --color-primary: oklch(70% 0.20 180);  /* This overrides the default */
+}
+```
+
+**Generated CSS**:
+```css
+:root, :host {
+  --color-primary: oklch(70% 0.20 180);
+}
+```
+
+**When to use**:
+- Providing base theme values that can be customized
+- Library or framework default themes
+- Creating overridable design systems
+- Used extensively in Tailwind's built-in `theme.css`
+
+**Mode combinations**:
+- `@theme default inline` - Default values, inlined directly
+- `@theme default reference` - Default fallbacks without :root emission
+- `@theme default inline reference` - All three combined
 
 ## CSS Variable Naming Conventions
 

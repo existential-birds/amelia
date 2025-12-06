@@ -137,20 +137,21 @@ const [edgePath, labelX, labelY] = getSmoothStepPath({
 });
 ```
 
-### getStepPath
+### getSmoothStepPath with borderRadius: 0 (Step Edge)
 
-Creates orthogonal paths with sharp corners:
+For orthogonal paths with sharp corners, use `getSmoothStepPath` with `borderRadius: 0`:
 
 ```typescript
-import { getStepPath } from '@xyflow/react';
+import { getSmoothStepPath } from '@xyflow/react';
 
-const [edgePath, labelX, labelY] = getStepPath({
+const [edgePath, labelX, labelY] = getSmoothStepPath({
   sourceX,
   sourceY,
   sourcePosition,
   targetX,
   targetY,
   targetPosition,
+  borderRadius: 0, // Sharp corners (step edge)
   offset: 20, // Optional: offset from node
 });
 ```

@@ -615,7 +615,7 @@ import {
   PromptInputActionMenuContent,
   PromptInputActionAddAttachments,
   usePromptInputAttachments,
-} from "@/components/ai-elements";
+} from "@/components/ai-elements/prompt-input";
 import { PaperclipIcon, PlusIcon } from "lucide-react";
 
 function ChatInput() {

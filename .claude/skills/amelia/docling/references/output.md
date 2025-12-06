@@ -197,16 +197,12 @@ print(len(doc_dict["tables"]))
 ```python
 import json
 
-# Export to JSON string
-json_str = result.document.export_to_json()
-
-# Parse back
-doc_dict = json.loads(json_str)
-
-# Or use dict export with json.dumps
-import json
+# Export to dict, then convert to JSON string
 doc_dict = result.document.export_to_dict()
 json_str = json.dumps(doc_dict, indent=2)
+
+# Note: There is no export_to_json() method
+# Use export_to_dict() and then json.dumps() for JSON strings
 ```
 
 ### Pretty Print
@@ -229,12 +225,13 @@ JSON export is lossless - you can reconstruct the DoclingDocument:
 from docling_core.types.doc import DoclingDocument
 import json
 
-# Export
-json_str = result.document.export_to_json()
+# Export to dict, then to JSON string
+doc_dict = result.document.export_to_dict()
+json_str = json.dumps(doc_dict)
 
 # Reconstruct
-doc_dict = json.loads(json_str)
-reconstructed = DoclingDocument(**doc_dict)
+doc_dict_loaded = json.loads(json_str)
+reconstructed = DoclingDocument(**doc_dict_loaded)
 
 # Identical to original
 assert reconstructed.export_to_markdown() == result.document.export_to_markdown()

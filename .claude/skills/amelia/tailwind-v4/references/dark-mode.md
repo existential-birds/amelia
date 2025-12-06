@@ -67,26 +67,21 @@ export function Card({ children }: { children: React.ReactNode }) {
 
 Toggle dark mode with a `.dark` class on the root element.
 
-### Configuration (v3 compatibility)
+### Configuration
 
-If using v3 config compatibility layer:
+**Pure v4 approach**: Use a v3 config file with darkMode setting:
 
 ```js
-// tailwind.config.js (v3 compat mode)
+// tailwind.config.js (for v3 compatibility)
 module.exports = {
-  darkMode: 'class',
+  darkMode: 'class',  // or 'selector' (same as 'class')
 };
 ```
 
-In pure v4 CSS (using `@theme` and `@import` with compat plugin):
-
-```css
-@import 'tailwindcss/compat';
-
-@config {
-  dark-mode: class;
-}
-```
+**Note**: In pure v4, the default `dark:` variant uses media queries (`prefers-color-scheme: dark`). To use class-based dark mode, you need to either:
+1. Use a v3 config file with `darkMode: 'class'` (shown above)
+2. Use `@import "tailwindcss/compat"` and provide a config
+3. Define a custom variant with `@custom-variant`
 
 ### Generated CSS
 

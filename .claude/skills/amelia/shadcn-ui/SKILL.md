@@ -7,6 +7,7 @@ description: shadcn/ui component patterns with Radix primitives and Tailwind sty
 
 ## Contents
 
+- [CLI Commands](#cli-commands) - Installing and adding components
 - [Quick Reference](#quick-reference) - cn(), basic CVA pattern
 - [Component Anatomy](#component-anatomy) - Props typing, asChild, data-slot
 - [Component Patterns](#component-patterns) - Compound components, Radix wrapping
@@ -14,6 +15,44 @@ description: shadcn/ui component patterns with Radix primitives and Tailwind sty
 - [Decision Tables](#decision-tables) - When to use CVA, compound components, asChild, Context
 - [Common Patterns](#common-patterns) - Form elements, dialogs, sidebars
 - [Reference Files](#reference-files) - Full implementations and advanced patterns
+
+## CLI Commands
+
+### Initialize shadcn/ui
+
+```bash
+npx shadcn@latest init
+```
+
+This creates a `components.json` configuration file and sets up:
+- Tailwind CSS configuration
+- CSS variables for theming
+- cn() utility function
+- Required dependencies
+
+### Add Components
+
+```bash
+# Add a single component
+npx shadcn@latest add button
+
+# Add multiple components
+npx shadcn@latest add button card dialog
+
+# Add all available components
+npx shadcn@latest add --all
+```
+
+**Important:** The package name changed in 2024:
+- Old (deprecated): `npx shadcn-ui@latest add`
+- Current: `npx shadcn@latest add`
+
+### Common Options
+
+- `-y, --yes` - Skip confirmation prompt
+- `-o, --overwrite` - Overwrite existing files
+- `-c, --cwd <cwd>` - Set working directory
+- `--src-dir` - Use src directory structure
 
 ## Quick Reference
 

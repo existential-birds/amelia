@@ -254,9 +254,9 @@ function CustomEdgeComponent(props: EdgeProps<CustomEdge>) {
 - `getBezierPath()` - Smooth curves
 - `getStraightPath()` - Straight lines
 - `getSmoothStepPath()` - Orthogonal with rounded corners
-- `getStepPath()` - Orthogonal with sharp corners
+- `getSmoothStepPath({ borderRadius: 0 })` - Orthogonal with sharp corners (step edge)
 
-All return `[path, labelX, labelY]`.
+All return `[path, labelX, labelY, offsetX, offsetY]`.
 
 ### Interactive Labels
 

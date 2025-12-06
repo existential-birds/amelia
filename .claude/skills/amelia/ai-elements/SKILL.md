@@ -15,6 +15,18 @@ Install via shadcn registry:
 npx shadcn@latest add https://ai-elements.vercel.app/r/[component-name]
 ```
 
+**Import Pattern**: Components are imported from individual files, not a barrel export:
+
+```tsx
+// Correct - import from specific files
+import { Conversation } from "@/components/ai-elements/conversation";
+import { Message } from "@/components/ai-elements/message";
+import { PromptInput } from "@/components/ai-elements/prompt-input";
+
+// Incorrect - no barrel export
+import { Conversation, Message } from "@/components/ai-elements";
+```
+
 ## Component Categories
 
 ### Conversation Components
@@ -200,6 +212,17 @@ type MessageAttachmentProps = HTMLAttributes<HTMLDivElement> & {
 Combine Conversation, Message, and PromptInput for a complete chat UI:
 
 ```tsx
+import { Conversation, ConversationContent, ConversationScrollButton } from "@/components/ai-elements/conversation";
+import { Message, MessageContent, MessageResponse } from "@/components/ai-elements/message";
+import {
+  PromptInput,
+  PromptInputTextarea,
+  PromptInputFooter,
+  PromptInputTools,
+  PromptInputButton,
+  PromptInputSubmit
+} from "@/components/ai-elements/prompt-input";
+
 <div className="flex flex-col h-screen">
   <Conversation>
     <ConversationContent>
@@ -232,6 +255,8 @@ Combine Conversation, Message, and PromptInput for a complete chat UI:
 Show tool execution with expandable details:
 
 ```tsx
+import { Tool, ToolHeader, ToolContent, ToolInput, ToolOutput } from "@/components/ai-elements/tool";
+
 {toolInvocations.map(tool => (
   <Tool key={tool.id}>
     <ToolHeader
@@ -253,6 +278,16 @@ Show tool execution with expandable details:
 Request user confirmation before executing actions:
 
 ```tsx
+import {
+  Confirmation,
+  ConfirmationTitle,
+  ConfirmationRequest,
+  ConfirmationActions,
+  ConfirmationAction,
+  ConfirmationAccepted,
+  ConfirmationRejected
+} from "@/components/ai-elements/confirmation";
+
 <Confirmation approval={tool.approval} state={tool.state}>
   <ConfirmationTitle>
     Approve deletion of {resource}?
@@ -283,6 +318,19 @@ Request user confirmation before executing actions:
 Display task lists with completion status:
 
 ```tsx
+import {
+  Queue,
+  QueueSection,
+  QueueSectionTrigger,
+  QueueSectionLabel,
+  QueueSectionContent,
+  QueueList,
+  QueueItem,
+  QueueItemIndicator,
+  QueueItemContent,
+  QueueItemDescription
+} from "@/components/ai-elements/queue";
+
 <Queue>
   <QueueSection>
     <QueueSectionTrigger>
