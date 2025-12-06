@@ -10,31 +10,55 @@
 
 ---
 
+## Implementation Note: Stream API Change
+
+**IMPORTANT:** The final implementation uses `astream(stream_mode='updates')` instead of the originally planned `astream_events()` approach. This change was necessary for proper interrupt detection in LangGraph.
+
+**Key Differences:**
+- **Original Plan:** Use `astream_events()` and catch `GraphInterrupt` exception
+- **Final Implementation:** Use `astream(stream_mode='updates')` and detect `__interrupt__` in stream chunks
+- **Method Name:** `_handle_stream_chunk()` instead of `_handle_graph_event()`
+- **Interrupt Detection:** Check for `chunk.get("__interrupt__")` instead of catching exception
+
+**Rationale:** The `astream_events()` API did not reliably expose interrupt signals in all scenarios. Switching to `astream(stream_mode='updates')` provides direct access to the `__interrupt__` marker in the stream, enabling more robust interrupt detection.
+
+**Additional Enhancements (commit a65b5c3):**
+- Worktree validation with `InvalidWorktreeError` before workflow start
+- JSON serialization of Pydantic models via `model_dump(mode='json')` for SQLite persistence
+- Custom `_pydantic_encoder` for nested Pydantic objects in event data
+
+---
+
 ## PR Strategy
 
 This implementation is split into **two PRs** for easier review and faster iteration:
 
-### PR 1: Core Execution Bridge (Tasks 1, 1.5, 4, 5, 6, 7, 10, 11, 12, 13, 14)
+### PR 1: Core Execution Bridge (Tasks 1, 1.5, 4, 5, 6, 7, 10, 11, 12, 13, 14) ✅ COMPLETED
 
 **Branch:** `feat/langgraph-execution-bridge`
 
 The core interrupt/resume mechanism. Self-contained and functional without retry logic.
 
-| Task | Description | Priority |
-|------|-------------|----------|
-| 1 | Add langgraph-checkpoint-sqlite dependency | Required |
-| 1.5 | Update create_orchestrator_graph with interrupt_before | **CRITICAL** |
-| 4 | Update human_approval_node for execution mode | Required |
-| 5 | Add execution_state to ServerExecutionState | Required |
-| 6 | Add STAGE_NODES and event mapping | Required |
-| 7 | Implement _run_workflow with GraphInterrupt handling | **CRITICAL** |
-| 10 | Update approve_workflow for graph resume | Required |
-| 11 | Update reject_workflow for graph state | Required |
-| 12 | Run full test suite and linting | Required |
-| 13 | Create integration test for approval flow | Required |
-| 14 | Final verification | Required |
+| Task | Description | Priority | Status |
+|------|-------------|----------|--------|
+| 1 | Add langgraph-checkpoint-sqlite dependency | Required | ✅ Done |
+| 1.5 | Update create_orchestrator_graph with interrupt_before | **CRITICAL** | ✅ Done |
+| 4 | Update human_approval_node for execution mode | Required | ✅ Done |
+| 5 | Add execution_state to ServerExecutionState | Required | ✅ Done |
+| 6 | Add STAGE_NODES and event mapping | Required | ✅ Done |
+| 7 | Implement _run_workflow with interrupt detection | **CRITICAL** | ✅ Done |
+| 10 | Update approve_workflow for graph resume | Required | ✅ Done |
+| 11 | Update reject_workflow for graph state | Required | ✅ Done |
+| 12 | Run full test suite and linting | Required | ✅ Done |
+| 13 | Create integration test for approval flow | Required | ✅ Done |
+| 14 | Final verification | Required | ✅ Done |
 
-**Estimated scope:** ~600-800 lines + tests
+**Actual scope:** ~616 lines changed across 11 files (commit a65b5c3)
+
+**Key Implementation Details:**
+- Uses `astream(stream_mode='updates')` instead of `astream_events()` for better interrupt detection
+- Includes worktree validation and JSON serialization for Pydantic models
+- All 465 tests passing
 
 ---
 
@@ -642,6 +666,8 @@ git commit -m "feat(server): add execution_state composition to ServerExecutionS
 - Create: `tests/unit/server/orchestrator/test_event_mapping.py`
 - Modify: `amelia/server/orchestrator/service.py`
 
+> **Note:** In final implementation, this became `_handle_stream_chunk()` instead of `_handle_graph_event()` due to the switch to `astream(stream_mode='updates')`.
+
 **Step 1: Write the failing test**
 
 Create `tests/unit/server/orchestrator/test_event_mapping.py`:
@@ -670,7 +696,7 @@ class TestStageNodesConstant:
 
 
 class TestHandleGraphEvent:
-    """Test _handle_graph_event method."""
+    """Test _handle_graph_event method (later renamed to _handle_stream_chunk)."""
 
     @pytest.fixture
     def service(self):
@@ -813,7 +839,7 @@ git commit -m "feat(server): add STAGE_NODES constant and event mapping helper"
 
 ---
 
-## Task 7: Implement _run_workflow with Checkpointing and GraphInterrupt Handling
+## Task 7: Implement _run_workflow with Checkpointing and Interrupt Detection
 
 **Files:**
 - Create: `tests/unit/server/orchestrator/test_execution_bridge.py`
@@ -821,8 +847,10 @@ git commit -m "feat(server): add STAGE_NODES constant and event mapping helper"
 
 > **CRITICAL:** This implementation must:
 > 1. Pass `interrupt_before=["human_approval_node"]` when creating the graph
-> 2. Catch `GraphInterrupt` exception and set workflow status to "blocked"
+> 2. Detect `__interrupt__` in stream chunks and set workflow status to "blocked"
 > 3. Emit `APPROVAL_REQUIRED` event when interrupted (not treat it as an error)
+>
+> **Implementation Update:** Final version uses `astream(stream_mode='updates')` to detect `__interrupt__` signals directly from stream chunks, instead of catching `GraphInterrupt` exceptions from `astream_events()`.
 
 **Step 1: Write the failing test**
 
@@ -2125,10 +2153,15 @@ Check that all PR 1 components are implemented:
 - [x] `human_approval_node` execution mode detection (Task 4)
 - [x] `ServerExecutionState.execution_state` composition (Task 5)
 - [x] `STAGE_NODES` constant (Task 6)
-- [x] `_handle_graph_event` method (Task 6)
-- [x] `_run_workflow` with checkpointing and `GraphInterrupt` handling **(CRITICAL)** (Task 7)
+- [x] `_handle_stream_chunk` method (Task 6) - Updated from `_handle_graph_event` for astream API
+- [x] `_run_workflow` with checkpointing and interrupt detection **(CRITICAL)** (Task 7)
 - [x] `approve_workflow` graph resume (Task 10)
 - [x] `reject_workflow` graph state update (Task 11)
+- [x] Full test suite verification (Task 12)
+- [x] Integration tests for approval flow (Task 13)
+- [x] Worktree validation with `InvalidWorktreeError` (commit a65b5c3)
+- [x] JSON serialization for Pydantic models in checkpoints (commit a65b5c3)
+- [x] Switch to `astream(stream_mode='updates')` for interrupt detection (commit a65b5c3)
 
 **Step 5: Final commit and create PR 1**
 
