@@ -66,16 +66,16 @@ uv run python -c "from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver; 
 uv run amelia server --reload
 
 # Start workflow (terminal 2)
-curl -X POST http://localhost:8420/api/v1/workflows \
+curl -X POST http://localhost:8420/api/workflows \
   -H "Content-Type: application/json" \
-  -d '{"issue_id": "TEST-001", "worktree_path": "/tmp/test-wt"}'
+  -d '{"issue_id": "30", "worktree_path": "/tmp/test-wt"}'
 
 # Check workflow status
-curl http://localhost:8420/api/v1/workflows/{workflow_id}
+curl http://localhost:8420/api/workflows/{workflow_id}
 # Expected: {"workflow_status": "blocked", ...}
 
 # Check events
-curl http://localhost:8420/api/v1/workflows/{workflow_id}/events
+curl http://localhost:8420/api/workflows/{workflow_id}/events
 # Expected: WORKFLOW_STARTED, STAGE_STARTED, APPROVAL_REQUIRED events
 ```
 
@@ -100,14 +100,14 @@ curl http://localhost:8420/api/v1/workflows/{workflow_id}/events
 **Verification Commands:**
 ```bash
 # Approve the blocked workflow
-curl -X POST http://localhost:8420/api/v1/workflows/{workflow_id}/approve
+curl -X POST http://localhost:8420/api/workflows/{workflow_id}/approve
 
 # Monitor status
-curl http://localhost:8420/api/v1/workflows/{workflow_id}
+curl http://localhost:8420/api/workflows/{workflow_id}
 # Expected: {"workflow_status": "completed", ...} (after execution)
 
 # Check events include all stages
-curl http://localhost:8420/api/v1/workflows/{workflow_id}/events
+curl http://localhost:8420/api/workflows/{workflow_id}/events
 # Expected: APPROVAL_GRANTED, STAGE_STARTED (developer), STAGE_COMPLETED, etc.
 ```
 
@@ -131,12 +131,12 @@ curl http://localhost:8420/api/v1/workflows/{workflow_id}/events
 **Verification Commands:**
 ```bash
 # Reject the blocked workflow
-curl -X POST http://localhost:8420/api/v1/workflows/{workflow_id}/reject \
+curl -X POST http://localhost:8420/api/workflows/{workflow_id}/reject \
   -H "Content-Type: application/json" \
   -d '{"feedback": "Plan needs more detail"}'
 
 # Verify status
-curl http://localhost:8420/api/v1/workflows/{workflow_id}
+curl http://localhost:8420/api/workflows/{workflow_id}
 # Expected: {"workflow_status": "failed", "failure_reason": "Plan needs more detail"}
 ```
 
@@ -170,7 +170,7 @@ sqlite3 ~/.amelia/checkpoints.db "SELECT thread_id FROM checkpoints;"
 
 # Restart server and check workflow state
 uv run amelia server --reload
-curl http://localhost:8420/api/v1/workflows/{workflow_id}
+curl http://localhost:8420/api/workflows/{workflow_id}
 ```
 
 ---
@@ -190,11 +190,11 @@ curl http://localhost:8420/api/v1/workflows/{workflow_id}
 **Verification Commands:**
 ```bash
 # Try to approve a completed or non-existent workflow
-curl -X POST http://localhost:8420/api/v1/workflows/non-existent/approve
+curl -X POST http://localhost:8420/api/workflows/non-existent/approve
 # Expected: 404 WorkflowNotFoundError
 
 # Try to approve already-completed workflow
-curl -X POST http://localhost:8420/api/v1/workflows/{completed_id}/approve
+curl -X POST http://localhost:8420/api/workflows/{completed_id}/approve
 # Expected: 400/409 InvalidStateError
 ```
 
@@ -216,7 +216,7 @@ curl -X POST http://localhost:8420/api/v1/workflows/{completed_id}/approve
 **Verification Commands:**
 ```bash
 # After workflow completes
-curl http://localhost:8420/api/v1/workflows/{workflow_id}/events | jq '.[] | select(.event_type | contains("STAGE"))'
+curl http://localhost:8420/api/workflows/{workflow_id}/events | jq '.[] | select(.event_type | contains("STAGE"))'
 # Expected: Paired STAGE_STARTED/STAGE_COMPLETED for each node
 ```
 
@@ -241,19 +241,19 @@ curl http://localhost:8420/api/v1/workflows/{workflow_id}/events | jq '.[] | sel
 **Verification Commands:**
 ```bash
 # Start two workflows
-curl -X POST http://localhost:8420/api/v1/workflows \
+curl -X POST http://localhost:8420/api/workflows \
   -d '{"issue_id": "TEST-A", "worktree_path": "/tmp/wt-a"}'
 # Note workflow_id_a
 
-curl -X POST http://localhost:8420/api/v1/workflows \
+curl -X POST http://localhost:8420/api/workflows \
   -d '{"issue_id": "TEST-B", "worktree_path": "/tmp/wt-b"}'
 # Note workflow_id_b
 
 # Approve A
-curl -X POST http://localhost:8420/api/v1/workflows/{workflow_id_a}/approve
+curl -X POST http://localhost:8420/api/workflows/{workflow_id_a}/approve
 
 # Check B is still blocked
-curl http://localhost:8420/api/v1/workflows/{workflow_id_b}
+curl http://localhost:8420/api/workflows/{workflow_id_b}
 # Expected: {"workflow_status": "blocked"}
 ```
 
@@ -308,25 +308,25 @@ import asyncio
 async def test_approval_flow():
     async with httpx.AsyncClient(base_url="http://localhost:8420") as client:
         # Start workflow
-        resp = await client.post("/api/v1/workflows", json={
-            "issue_id": "TEST-001",
+        resp = await client.post("/api/workflows", json={
+            "issue_id": "30",
             "worktree_path": "/tmp/test-wt"
         })
         workflow_id = resp.json()["id"]
 
         # Poll until blocked
         for _ in range(30):
-            status = await client.get(f"/api/v1/workflows/{workflow_id}")
+            status = await client.get(f"/api/workflows/{workflow_id}")
             if status.json()["workflow_status"] == "blocked":
                 break
             await asyncio.sleep(1)
 
         # Approve
-        await client.post(f"/api/v1/workflows/{workflow_id}/approve")
+        await client.post(f"/api/workflows/{workflow_id}/approve")
 
         # Poll until completed
         for _ in range(60):
-            status = await client.get(f"/api/v1/workflows/{workflow_id}")
+            status = await client.get(f"/api/workflows/{workflow_id}")
             if status.json()["workflow_status"] in ("completed", "failed"):
                 print(f"Final status: {status.json()['workflow_status']}")
                 break
@@ -345,6 +345,7 @@ The following changes should be verified through testing:
 
 2. **Server execution bridge** (`amelia/server/orchestrator/service.py`):
    - `_run_workflow()` creates graph with `interrupt_before=["human_approval_node"]`
+   - `_run_workflow()` converts `ExecutionState` to JSON-serializable dict using `model_dump(mode="json")` before passing to LangGraph (required for SQLite checkpoint persistence)
    - `approve_workflow()` uses `graph.aupdate_state()` and resumes execution
    - `reject_workflow()` updates state with `human_approved=False`
    - Event mapping via `_handle_graph_event()` and `STAGE_NODES`

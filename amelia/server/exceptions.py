@@ -79,3 +79,21 @@ class WorkflowNotFoundError(Exception):
         """
         self.workflow_id = workflow_id
         super().__init__(f"Workflow not found: {workflow_id}")
+
+
+class InvalidWorktreeError(Exception):
+    """Raised when worktree path is invalid or not a git repository.
+
+    HTTP Status: 400 Bad Request
+    """
+
+    def __init__(self, worktree_path: str, reason: str):
+        """Initialize InvalidWorktreeError.
+
+        Args:
+            worktree_path: Path to the invalid worktree.
+            reason: Explanation of why the worktree is invalid.
+        """
+        self.worktree_path = worktree_path
+        self.reason = reason
+        super().__init__(f"Invalid worktree '{worktree_path}': {reason}")

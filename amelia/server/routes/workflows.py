@@ -14,6 +14,7 @@ from amelia.server.dependencies import get_orchestrator, get_repository
 from amelia.server.exceptions import (
     ConcurrencyLimitError,
     InvalidStateError,
+    InvalidWorktreeError,
     WorkflowConflictError,
     WorkflowNotFoundError,
 )
@@ -421,6 +422,33 @@ def configure_exception_handlers(app: FastAPI) -> None:
         )
         return JSONResponse(
             status_code=404,
+            content=error.model_dump(),
+        )
+
+    @app.exception_handler(InvalidWorktreeError)
+    async def invalid_worktree_handler(
+        request: Request, exc: InvalidWorktreeError
+    ) -> JSONResponse:
+        """Handle InvalidWorktreeError with 400 Bad Request.
+
+        Args:
+            request: The incoming request.
+            exc: The exception instance.
+
+        Returns:
+            JSONResponse with 400 status code.
+        """
+        logger.warning(f"Invalid worktree: {exc.worktree_path} - {exc.reason}")
+        error = ErrorResponse(
+            code="INVALID_WORKTREE",
+            error=str(exc),
+            details={
+                "worktree_path": exc.worktree_path,
+                "reason": exc.reason,
+            },
+        )
+        return JSONResponse(
+            status_code=400,
             content=error.model_dump(),
         )
 

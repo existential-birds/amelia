@@ -141,7 +141,7 @@ class TestLifecycleEvents:
         # Setup mock graph that completes immediately
         mock_graph = AsyncMock()
         # Use lambda to return iterator directly without AsyncMock wrapper
-        mock_graph.astream_events = lambda *args, **kwargs: AsyncIteratorMock([])
+        mock_graph.astream = lambda *args, **kwargs: AsyncIteratorMock([])
         mock_create_graph.return_value = mock_graph
 
         mock_saver = AsyncMock()
@@ -192,20 +192,29 @@ class TestGraphInterruptHandling:
         temp_checkpoint_db,
         mock_settings,
     ):
-        """GraphInterrupt sets status to blocked and emits APPROVAL_REQUIRED."""
-        from langgraph.errors import GraphInterrupt
-
-        # Create async iterator that raises GraphInterrupt
+        """__interrupt__ chunk sets status to blocked and emits APPROVAL_REQUIRED."""
+        # Create async iterator that yields __interrupt__ chunk (new astream API)
         class InterruptIterator:
+            def __init__(self):
+                self._items = [
+                    {"architect_node": {}},  # First node completes
+                    {"__interrupt__": ("Paused for approval",)},  # Interrupt signal
+                ]
+                self._index = 0
+
             def __aiter__(self):
                 return self
 
             async def __anext__(self):
-                raise GraphInterrupt("Paused for approval")
+                if self._index >= len(self._items):
+                    raise StopAsyncIteration
+                item = self._items[self._index]
+                self._index += 1
+                return item
 
         mock_graph = AsyncMock()
-        # Don't wrap in AsyncMock - directly return the iterator
-        mock_graph.astream_events = lambda *args, **kwargs: InterruptIterator()
+        # Use astream (not astream_events) to match the updated implementation
+        mock_graph.astream = lambda *args, **kwargs: InterruptIterator()
         mock_create_graph.return_value = mock_graph
 
         mock_saver = AsyncMock()

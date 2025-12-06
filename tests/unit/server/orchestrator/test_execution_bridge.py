@@ -62,9 +62,9 @@ class TestRunWorkflowEmitsLifecycleEvents:
         self, mock_create_graph, mock_saver_class, service, server_state
     ):
         """_run_workflow emits WORKFLOW_STARTED at beginning."""
-        # Setup mock graph that completes immediately
+        # Setup mock graph that completes immediately (empty stream)
         mock_graph = AsyncMock()
-        mock_graph.astream_events = MagicMock(return_value=AsyncIteratorMock([]))
+        mock_graph.astream = MagicMock(return_value=AsyncIteratorMock([]))
         mock_create_graph.return_value = mock_graph
 
         mock_saver = AsyncMock()
@@ -95,7 +95,10 @@ class TestRunWorkflowEmitsLifecycleEvents:
     ):
         """_run_workflow emits WORKFLOW_COMPLETED on successful completion."""
         mock_graph = AsyncMock()
-        mock_graph.astream_events = MagicMock(return_value=AsyncIteratorMock([]))
+        # Simulate a graph that completes without interruption
+        mock_graph.astream = MagicMock(return_value=AsyncIteratorMock([
+            {"architect_node": {}},  # Node completes
+        ]))
         mock_create_graph.return_value = mock_graph
 
         mock_saver = AsyncMock()
@@ -117,27 +120,76 @@ class TestRunWorkflowEmitsLifecycleEvents:
         assert len(completed_events) == 1
 
 
+class TestRunWorkflowStateSerialization:
+    """Test _run_workflow passes JSON-serializable state to LangGraph."""
+
+    @patch("amelia.server.orchestrator.service.AsyncSqliteSaver")
+    @patch("amelia.server.orchestrator.service.create_orchestrator_graph")
+    async def test_passes_json_serializable_state_to_astream(
+        self, mock_create_graph, mock_saver_class, service, server_state
+    ):
+        """_run_workflow passes JSON-serializable dict to graph.astream().
+
+        This is critical for SQLite checkpointing - LangGraph's AsyncSqliteSaver
+        uses json.dumps() internally, which fails on Pydantic BaseModel objects.
+        """
+        import json
+
+        mock_graph = AsyncMock()
+        captured_input = []
+
+        def capture_astream(input_state, **kwargs):
+            captured_input.append(input_state)
+            return AsyncIteratorMock([])
+
+        mock_graph.astream = MagicMock(side_effect=capture_astream)
+        mock_create_graph.return_value = mock_graph
+
+        mock_saver = AsyncMock()
+        mock_saver_class.from_conn_string.return_value.__aenter__ = AsyncMock(
+            return_value=mock_saver
+        )
+        mock_saver_class.from_conn_string.return_value.__aexit__ = AsyncMock()
+
+        service._emit = AsyncMock()
+
+        await service._run_workflow("wf-123", server_state)
+
+        # Verify astream was called
+        assert len(captured_input) == 1
+        state_input = captured_input[0]
+
+        # State should be a dict, not a Pydantic model
+        assert isinstance(state_input, dict), (
+            f"Expected dict, got {type(state_input).__name__}. "
+            "Pydantic models are not JSON-serializable for LangGraph checkpointing."
+        )
+
+        # State should be JSON-serializable (no Pydantic objects nested inside)
+        try:
+            json.dumps(state_input)
+        except TypeError as e:
+            pytest.fail(
+                f"State passed to graph.astream() is not JSON-serializable: {e}. "
+                "Use model_dump(mode='json') to ensure all nested objects are serializable."
+            )
+
+
 class TestRunWorkflowInterruptHandling:
-    """Test _run_workflow handles GraphInterrupt correctly."""
+    """Test _run_workflow handles __interrupt__ chunk correctly."""
 
     @patch("amelia.server.orchestrator.service.AsyncSqliteSaver")
     @patch("amelia.server.orchestrator.service.create_orchestrator_graph")
     async def test_graph_interrupt_sets_status_to_blocked(
         self, mock_create_graph, mock_saver_class, service, server_state
     ):
-        """GraphInterrupt sets workflow status to blocked, not failed."""
-        from langgraph.errors import GraphInterrupt
-
-        # Create async iterator that raises GraphInterrupt
-        class InterruptIterator:
-            def __aiter__(self):
-                return self
-
-            async def __anext__(self):
-                raise GraphInterrupt("Interrupted at human_approval_node")
-
+        """__interrupt__ chunk sets workflow status to blocked, not failed."""
+        # Simulate interrupt via __interrupt__ chunk (new astream API)
         mock_graph = AsyncMock()
-        mock_graph.astream_events = MagicMock(return_value=InterruptIterator())
+        mock_graph.astream = MagicMock(return_value=AsyncIteratorMock([
+            {"architect_node": {}},  # First node completes
+            {"__interrupt__": ("Interrupted at human_approval_node",)},  # Interrupt signal
+        ]))
         mock_create_graph.return_value = mock_graph
 
         mock_saver = AsyncMock()
@@ -172,7 +224,7 @@ class TestRunWorkflowInterruptHandling:
     ):
         """_run_workflow passes interrupt_before to create_orchestrator_graph."""
         mock_graph = AsyncMock()
-        mock_graph.astream_events = MagicMock(return_value=AsyncIteratorMock([]))
+        mock_graph.astream = MagicMock(return_value=AsyncIteratorMock([]))
         mock_create_graph.return_value = mock_graph
 
         mock_saver = AsyncMock()

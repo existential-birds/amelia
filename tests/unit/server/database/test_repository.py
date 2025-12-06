@@ -221,3 +221,48 @@ class TestWorkflowRepository:
 
         max_seq = await repository.get_max_event_sequence("wf-1")
         assert max_seq == 3
+
+    @pytest.mark.asyncio
+    async def test_save_event_with_pydantic_model_in_data(self, repository):
+        """Should serialize Pydantic models in event data.
+
+        Regression test for: TypeError: Object of type Profile is not JSON serializable
+        """
+        from amelia.core.types import Profile
+
+        # First create a workflow
+        state = ServerExecutionState(
+            id="wf-pydantic",
+            issue_id="ISSUE-456",
+            worktree_path="/path/to/worktree",
+            worktree_name="feat-456",
+            workflow_status="in_progress",
+            started_at=datetime.now(UTC),
+        )
+        await repository.create(state)
+
+        # Create event with Pydantic model in data
+        profile = Profile(name="test", driver="cli:claude")
+        event = WorkflowEvent(
+            id="evt-pydantic",
+            workflow_id="wf-pydantic",
+            sequence=1,
+            timestamp=datetime.now(UTC),
+            agent="architect",
+            event_type=EventType.STAGE_COMPLETED,
+            message="Stage completed",
+            data={
+                "stage": "architect_node",
+                "output": {
+                    "profile": profile,  # Pydantic model, should be serialized
+                    "nested": {"another_profile": profile},
+                },
+            },
+        )
+
+        # Should not raise TypeError
+        await repository.save_event(event)
+
+        # Verify event was saved
+        max_seq = await repository.get_max_event_sequence("wf-pydantic")
+        assert max_seq == 1

@@ -4,13 +4,12 @@ import asyncio
 import contextlib
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 from uuid import uuid4
 
 from langchain_core.runnables.config import RunnableConfig
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
-from langgraph.errors import GraphInterrupt
 from langgraph.graph.state import CompiledStateGraph
 from loguru import logger
 
@@ -22,11 +21,13 @@ from amelia.server.events.bus import EventBus
 from amelia.server.exceptions import (
     ConcurrencyLimitError,
     InvalidStateError,
+    InvalidWorktreeError,
     WorkflowConflictError,
     WorkflowNotFoundError,
 )
 from amelia.server.models import ServerExecutionState
 from amelia.server.models.events import EventType, WorkflowEvent
+from amelia.trackers.factory import create_tracker
 
 
 # Nodes that emit stage events
@@ -116,9 +117,20 @@ class OrchestratorService:
             The workflow ID (UUID).
 
         Raises:
+            InvalidWorktreeError: If worktree path doesn't exist or is not a git repo.
             WorkflowConflictError: If worktree already has active workflow.
             ConcurrencyLimitError: If at max concurrent workflows.
         """
+        # Validate worktree before acquiring lock (fast-fail)
+        worktree = Path(worktree_path)
+        if not worktree.exists():
+            raise InvalidWorktreeError(worktree_path, "directory does not exist")
+        if not worktree.is_dir():
+            raise InvalidWorktreeError(worktree_path, "path is not a directory")
+        git_path = worktree / ".git"
+        if not git_path.exists():
+            raise InvalidWorktreeError(worktree_path, "not a git repository (.git missing)")
+
         async with self._start_lock:
             # Check worktree conflict - workflow_id is cached in tuple
             if worktree_path in self._active_tasks:
@@ -139,8 +151,12 @@ class OrchestratorService:
                 raise ValueError(f"Profile '{profile_name}' not found in settings")
             loaded_profile = self._settings.profiles[profile_name]
 
-            # Initialize ExecutionState with the loaded profile
-            execution_state = ExecutionState(profile=loaded_profile)
+            # Fetch issue from tracker
+            tracker = create_tracker(loaded_profile)
+            issue = tracker.get_issue(issue_id)
+
+            # Initialize ExecutionState with the loaded profile and issue
+            execution_state = ExecutionState(profile=loaded_profile, issue=issue)
 
             state = ServerExecutionState(
                 id=workflow_id,
@@ -316,33 +332,46 @@ class OrchestratorService:
             try:
                 await self._repository.set_status(workflow_id, "in_progress")
 
-                async for event in graph.astream_events(
-                    state.execution_state,
+                was_interrupted = False
+                # Use astream with stream_mode="updates" to detect interrupts
+                # astream_events does NOT surface __interrupt__ events
+                # Convert Pydantic model to JSON-serializable dict for checkpointing.
+                # LangGraph's AsyncSqliteSaver uses json.dumps() internally,
+                # which fails on Pydantic BaseModel objects.
+                initial_state = state.execution_state.model_dump(mode="json")
+
+                async for chunk in graph.astream(
+                    initial_state,
                     config=config,
+                    stream_mode="updates",
                 ):
-                    await self._handle_graph_event(workflow_id, cast(dict[str, Any], event))
+                    # Check for interrupt signal from LangGraph
+                    if "__interrupt__" in chunk:
+                        was_interrupted = True
+                        logger.info(
+                            "Workflow paused for human approval",
+                            workflow_id=workflow_id,
+                            interrupt_data=chunk["__interrupt__"],
+                        )
+                        await self._emit(
+                            workflow_id,
+                            EventType.APPROVAL_REQUIRED,
+                            "Plan ready for review - awaiting human approval",
+                            data={"paused_at": "human_approval_node"},
+                        )
+                        await self._repository.set_status(workflow_id, "blocked")
+                        break
+                    # Emit stage events for each node that completes
+                    await self._handle_stream_chunk(workflow_id, chunk)
 
-                await self._emit(
-                    workflow_id,
-                    EventType.WORKFLOW_COMPLETED,
-                    "Workflow completed successfully",
-                    data={"final_stage": state.current_stage},
-                )
-                await self._repository.set_status(workflow_id, "completed")
-
-            except GraphInterrupt:
-                # Normal pause at human_approval_node - NOT an error
-                logger.info(
-                    "Workflow paused for human approval",
-                    workflow_id=workflow_id,
-                )
-                await self._emit(
-                    workflow_id,
-                    EventType.APPROVAL_REQUIRED,
-                    "Plan ready for review - awaiting human approval",
-                    data={"paused_at": "human_approval_node"},
-                )
-                await self._repository.set_status(workflow_id, "blocked")
+                if not was_interrupted:
+                    await self._emit(
+                        workflow_id,
+                        EventType.WORKFLOW_COMPLETED,
+                        "Workflow completed successfully",
+                        data={"final_stage": state.current_stage},
+                    )
+                    await self._repository.set_status(workflow_id, "completed")
 
             except Exception as e:
                 logger.exception("Workflow execution failed", workflow_id=workflow_id)
@@ -475,10 +504,21 @@ class OrchestratorService:
             # Update status to in_progress before resuming
             await self._repository.set_status(workflow_id, "in_progress")
 
-            # Resume execution
+            # Resume execution from checkpoint
             try:
-                async for event in graph.astream_events(None, config=config):  # type: ignore[assignment]
-                    await self._handle_graph_event(workflow_id, cast(dict[str, Any], event))
+                async for chunk in graph.astream(
+                    None,  # Resume from checkpoint, no new input needed
+                    config=config,
+                    stream_mode="updates",
+                ):
+                    # Check for unexpected interrupt (shouldn't happen after approval)
+                    if "__interrupt__" in chunk:
+                        logger.warning(
+                            "Unexpected interrupt after approval",
+                            workflow_id=workflow_id,
+                        )
+                        continue
+                    await self._handle_stream_chunk(workflow_id, chunk)
 
                 await self._emit(
                     workflow_id,
@@ -641,6 +681,38 @@ class OrchestratorService:
                 f"Error in {node_name}: {error_msg}",
                 data={"stage": node_name, "error": error_msg},
             )
+
+    async def _handle_stream_chunk(
+        self,
+        workflow_id: str,
+        chunk: dict[str, Any],
+    ) -> None:
+        """Handle a chunk from astream(stream_mode='updates').
+
+        With stream_mode='updates', each chunk maps node names to their
+        state updates. We emit STAGE_STARTED before and STAGE_COMPLETED
+        after each node that's in STAGE_NODES.
+
+        Args:
+            workflow_id: The workflow this chunk belongs to.
+            chunk: Dict mapping node names to state updates.
+        """
+        for node_name, output in chunk.items():
+            if node_name in STAGE_NODES:
+                # Emit both started and completed for each node update
+                # (astream "updates" mode gives us the result after completion)
+                await self._emit(
+                    workflow_id,
+                    EventType.STAGE_STARTED,
+                    f"Starting {node_name}",
+                    data={"stage": node_name},
+                )
+                await self._emit(
+                    workflow_id,
+                    EventType.STAGE_COMPLETED,
+                    f"Completed {node_name}",
+                    data={"stage": node_name, "output": output},
+                )
 
     async def recover_interrupted_workflows(self) -> None:
         """Recover workflows that were running when server crashed.

@@ -2,8 +2,10 @@
 
 import json
 from datetime import UTC, datetime
+from typing import Any
 
 import aiosqlite
+from pydantic import BaseModel
 
 from amelia.server.database.connection import Database, SqliteValue
 from amelia.server.exceptions import WorkflowNotFoundError
@@ -13,6 +15,23 @@ from amelia.server.models.state import (
     WorkflowStatus,
     validate_transition,
 )
+
+
+def _pydantic_encoder(obj: Any) -> Any:
+    """JSON encoder that handles Pydantic models.
+
+    Args:
+        obj: Object to encode.
+
+    Returns:
+        JSON-serializable representation.
+
+    Raises:
+        TypeError: If object is not JSON serializable.
+    """
+    if isinstance(obj, BaseModel):
+        return obj.model_dump(mode="json")
+    raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
 
 
 class WorkflowRepository:
@@ -353,7 +372,9 @@ class WorkflowRepository:
                 event.agent,
                 event.event_type.value,
                 event.message,
-                json.dumps(event.data) if event.data else None,
+                json.dumps(event.data, default=_pydantic_encoder)
+                if event.data
+                else None,
                 event.correlation_id,
             ),
         )
