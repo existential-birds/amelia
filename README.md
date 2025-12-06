@@ -119,6 +119,22 @@ amelia plan-only GH-789 --profile home
 amelia plan-only GH-789 --design docs/designs/feature.md
 ```
 
+## Claude Code Commands
+
+When working on this project with [Claude Code](https://claude.ai/code), the following slash commands are available:
+
+| Command | Description |
+|---------|-------------|
+| `/amelia:commit-push` | Commit and push all local changes to remote |
+| `/amelia:review` | Launch a code review agent for the current PR |
+| `/amelia:review-tests` | Review test code for quality and conciseness |
+| `/amelia:ensure-doc` | Ensure all code is properly documented |
+| `/amelia:gen-test-plan` | Generate manual test plan for PR |
+| `/amelia:run-test-plan <path>` | Execute a manual test plan in an isolated worktree |
+| `/amelia:greptile-review` | Fetch and evaluate greptile-apps review comments |
+| `/amelia:eval-feedback <feedback>` | Evaluate code review feedback from another session |
+| `/amelia:respond-review` | Respond to greptile review comments after evaluation |
+
 ## Configuration
 
 Basic `settings.amelia.yaml`:
