@@ -7,13 +7,23 @@ from amelia.core.types import Profile, Settings
 
 
 def load_settings(config_path: Path | None = None) -> Settings:
-    """
-    Load settings from a YAML file.
+    """Load settings from a YAML file.
 
     Resolution order:
     1. Explicit config_path parameter (if provided)
     2. AMELIA_SETTINGS environment variable (if set)
     3. Default: 'settings.amelia.yaml' in the current directory
+
+    Args:
+        config_path: Optional explicit path to the configuration file.
+
+    Returns:
+        Settings object populated from the YAML configuration.
+
+    Raises:
+        FileNotFoundError: If the configuration file does not exist.
+        yaml.YAMLError: If the YAML file is malformed.
+        pydantic.ValidationError: If the configuration fails validation.
     """
     if config_path is None:
         env_path = os.environ.get("AMELIA_SETTINGS")
@@ -29,11 +39,16 @@ def load_settings(config_path: Path | None = None) -> Settings:
     return Settings(**data)
 
 def validate_profile(profile: "Profile") -> None:
-    """
-    Enforce constraints on profiles.
+    """Enforce constraints on profiles.
 
     Currently a no-op. Profile constraints are now fully configurable
     by the user via settings.amelia.yaml.
+
+    Args:
+        profile: The Profile object to validate.
+
+    Raises:
+        ValueError: If the profile fails validation (not currently raised).
     """
     pass
 

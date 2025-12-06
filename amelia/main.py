@@ -88,10 +88,17 @@ def start_local(
         help="Specify the profile to use from settings.amelia.yaml."
     ),
 ) -> None:
-    """
-    Starts the Amelia orchestrator locally (without server) with the specified or default profile.
+    """Starts the Amelia orchestrator locally (without server).
 
     DEPRECATED: Use 'amelia server' and 'amelia start' instead.
+
+    Args:
+        ctx: Typer context (unused).
+        issue_id: The ID of the issue to work on (e.g., PROJ-123).
+        profile_name: Optional profile name to use from settings.amelia.yaml.
+
+    Raises:
+        typer.Exit: On validation failure or orchestration error.
     """
     settings = _safe_load_settings()
     active_profile = _get_active_profile(settings, profile_name)
@@ -153,10 +160,22 @@ def plan_only_command(
         None, "--design", "-d", help="Path to design markdown file from brainstorming."
     ),
 ) -> None:
-    """
-    Generates a plan for the specified issue using the Architect agent without execution.
+    """Generate a plan for an issue without executing it.
+
+    Uses the Architect agent to analyze the issue and create a task DAG,
+    saving the plan to a markdown file without proceeding to execution.
+
+    Args:
+        ctx: Typer context (unused).
+        issue_id: The ID of the issue to generate a plan for.
+        profile_name: Optional profile name to use from settings.amelia.yaml.
+        design_path: Optional path to design markdown file from brainstorming.
+
+    Raises:
+        typer.Exit: On validation failure, issue fetch error, or planning error.
     """
     async def _run() -> None:
+        """Async implementation of plan generation."""
         settings = _safe_load_settings()
         active_profile = _get_active_profile(settings, profile_name)
         
@@ -217,10 +236,21 @@ def review(
         help="Specify the profile to use from settings.amelia.yaml."
     ),
 ) -> None:
-    """
-    Triggers a review process for the current project.
+    """Trigger a code review process for the current project.
+
+    Runs the Reviewer agent to analyze code changes and provide feedback
+    on code quality, potential issues, and improvements.
+
+    Args:
+        ctx: Typer context (unused).
+        local: If True, review local uncommitted changes from git diff.
+        profile_name: Optional profile name to use from settings.amelia.yaml.
+
+    Raises:
+        typer.Exit: On validation failure or review error.
     """
     async def _run() -> None:
+        """Async implementation of the review process."""
         typer.echo("Starting Amelia Review process...")
         
         settings = _safe_load_settings()

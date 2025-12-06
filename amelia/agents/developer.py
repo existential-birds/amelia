@@ -16,7 +16,14 @@ ExecutionMode = Literal["structured", "agentic"]
 
 
 class DeveloperResponse(BaseModel):
-    """Schema for Developer agent's task execution output."""
+    """Schema for Developer agent's task execution output.
+
+    Attributes:
+        status: Execution status (completed, failed, or in_progress).
+        output: Human-readable description of what was accomplished.
+        error: Error message if status is failed, None otherwise.
+    """
+
     status: DeveloperStatus
     output: str
     error: str | None = None

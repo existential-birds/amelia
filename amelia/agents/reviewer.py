@@ -7,7 +7,14 @@ from amelia.drivers.base import DriverInterface
 
 
 class ReviewResponse(BaseModel):
-    """Schema for LLM-generated review response."""
+    """Schema for LLM-generated review response.
+
+    Attributes:
+        approved: Whether the code changes are acceptable and meet requirements.
+        comments: List of specific feedback items and suggestions.
+        severity: Overall severity of review findings (low, medium, high).
+    """
+
     approved: bool = Field(description="Whether the changes are acceptable.")
     comments: list[str] = Field(description="Specific feedback items.")
     severity: Severity = Field(description="Overall severity of the review findings.")

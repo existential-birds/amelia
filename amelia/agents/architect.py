@@ -9,12 +9,23 @@ from amelia.drivers.base import DriverInterface
 
 
 class TaskListResponse(BaseModel):
-    """Schema for LLM-generated list of tasks."""
+    """Schema for LLM-generated list of tasks.
+
+    Attributes:
+        tasks: List of actionable development tasks parsed from LLM output.
+    """
+
     tasks: list[Task] = Field(description="A list of actionable development tasks.")
 
 
 class PlanOutput(BaseModel):
-    """Output from architect planning."""
+    """Output from architect planning.
+
+    Attributes:
+        task_dag: The generated task dependency graph.
+        markdown_path: Path to the saved markdown plan file.
+    """
+
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     task_dag: TaskDAG

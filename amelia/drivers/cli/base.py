@@ -60,6 +60,23 @@ class CliDriver(DriverInterface):
                     raise
 
     async def generate(self, messages: list[AgentMessage], schema: type[BaseModel] | None = None, **kwargs: Any) -> Any:
+        """Generate a response from the LLM with serialized execution.
+
+        Acquires a semaphore to ensure only one generation runs at a time,
+        then delegates to _generate_impl with retry logic.
+
+        Args:
+            messages: List of conversation messages to send to the LLM.
+            schema: Optional Pydantic model for structured output validation.
+            **kwargs: Additional driver-specific parameters.
+
+        Returns:
+            The LLM response, optionally validated against the schema.
+
+        Raises:
+            TimeoutError: If the operation times out after all retries.
+            RuntimeError: If a non-timeout runtime error occurs.
+        """
         async with self._semaphore:
             return await self._execute_with_retry(self._generate_impl, messages, schema, **kwargs)
 
@@ -82,6 +99,22 @@ class CliDriver(DriverInterface):
         raise NotImplementedError("Subclasses must implement _generate_impl")
     
     async def execute_tool(self, tool_name: str, **kwargs: Any) -> Any:
+        """Execute a tool by name with serialized execution.
+
+        Acquires a semaphore to ensure only one tool execution runs at a time,
+        then delegates to _execute_tool_impl with retry logic.
+
+        Args:
+            tool_name: Name of the tool to execute.
+            **kwargs: Tool-specific arguments.
+
+        Returns:
+            The result of the tool execution.
+
+        Raises:
+            TimeoutError: If the operation times out after all retries.
+            RuntimeError: If a non-timeout runtime error occurs.
+        """
         async with self._semaphore:
             return await self._execute_with_retry(self._execute_tool_impl, tool_name, **kwargs)
 
