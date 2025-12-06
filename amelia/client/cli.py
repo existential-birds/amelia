@@ -14,7 +14,7 @@ from amelia.client.api import (
     WorkflowConflictError,
 )
 from amelia.client.git import get_worktree_context
-from amelia.client.models import WorkflowResponse
+from amelia.client.models import CreateWorkflowResponse
 
 
 console = Console()
@@ -45,7 +45,7 @@ def start_command(
     # Create workflow via API
     client = AmeliaClient()
 
-    async def _create() -> WorkflowResponse:
+    async def _create() -> CreateWorkflowResponse:
         return await client.create_workflow(
             issue_id=issue_id,
             worktree_path=worktree_path,
@@ -57,8 +57,8 @@ def start_command(
         workflow = asyncio.run(_create())
 
         console.print(f"[green]✓[/green] Workflow started: [bold]{workflow.id}[/bold]")
-        console.print(f"  Issue: {workflow.issue_id}")
-        console.print(f"  Worktree: {workflow.worktree_path}")
+        console.print(f"  Issue: {issue_id}")
+        console.print(f"  Worktree: {worktree_path}")
         console.print(f"  Status: {workflow.status}")
         console.print("\n[dim]View in dashboard: http://127.0.0.1:8420[/dim]")
 

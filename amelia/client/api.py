@@ -6,6 +6,7 @@ import httpx
 
 from amelia.client.models import (
     CreateWorkflowRequest,
+    CreateWorkflowResponse,
     RejectWorkflowRequest,
     WorkflowListResponse,
     WorkflowResponse,
@@ -85,7 +86,7 @@ class AmeliaClient:
         worktree_path: str,
         worktree_name: str | None = None,
         profile: str | None = None,
-    ) -> WorkflowResponse:
+    ) -> CreateWorkflowResponse:
         """Create a new workflow.
 
         Args:
@@ -95,7 +96,7 @@ class AmeliaClient:
             profile: Optional profile name for configuration
 
         Returns:
-            WorkflowResponse with created workflow details
+            CreateWorkflowResponse with workflow id and initial status
 
         Raises:
             WorkflowConflictError: If workflow already active in this worktree
@@ -118,7 +119,7 @@ class AmeliaClient:
                 )
 
                 if response.status_code in (200, 201):
-                    return WorkflowResponse.model_validate(response.json())
+                    return CreateWorkflowResponse.model_validate(response.json())
                 elif response.status_code == 409:
                     data = response.json()
                     detail = data.get("detail", {})
