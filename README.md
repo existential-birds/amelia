@@ -2,6 +2,10 @@
 
 [Amelia](https://en.wikipedia.org/wiki/Amelia_Earhart) is a local agentic coding system that orchestrates software development tasks through multiple AI agents with specialized roles.
 
+```
+Issue → Architect (plan) → Human Approval → Developer (execute) ↔ Reviewer (review) → Done
+```
+
 **Core Philosophy:** Amelia is built with the assumption that LLMs will continually improve. We prefer prompts over code, delegation over hardcoding, and flexible architectures—so as models get smarter, Amelia automatically improves without requiring changes.
 
 ## What is Amelia?
@@ -21,7 +25,7 @@ The Facts, Such As They Are:
 The architect plans. The developer executes. The reviewer reviews. The loop continues until approval is granted or the heat death of the universe,
 whichever comes first. No one recalls who wrote the original requirements.
 
-Official Disclaimer:
+**Official Disclaimer:**
 
 You may use Amelia. You may not use Amelia. Both choices lead to the same corridor, which leads to another corridor. The exit sign is always visible but
 somehow never closer.
@@ -30,11 +34,7 @@ If Amelia works for you, this is not a guarantee.
 If Amelia fails for you, this is also not a guarantee.
 The only guarantee is that there are no guarantees, and even this is subject to revision pending review.
 
-The trial begins tomorrow. It has always been beginning tomorrow.
-
-```
-Issue → Architect (plan) → Human Approval → Developer (execute) ↔ Reviewer (review) → Done
-```
+_The trial begins tomorrow. It has always been beginning tomorrow._
 
 ![Amelia Terminal](docs/design/terminal_screen.jpg)
 
