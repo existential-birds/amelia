@@ -27,45 +27,24 @@ Issue → Architect (plan) → Human Approval → Developer (execute) ↔ Review
 
 ## Quick Start
 
+Use Amelia in any existing Git repository to automate development tasks.
+
+### 1. Install Prerequisites
+
 ```bash
 # Install uv (Linux/macOS)
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Clone and install
-git clone https://github.com/anderskev/amelia.git
-cd amelia
-uv sync
-
-# Set your API key (for api:openai driver)
-export OPENAI_API_KEY="sk-..."
-
-# Create minimal config
-cat > settings.amelia.yaml << 'EOF'
-active_profile: dev
-profiles:
-  dev:
-    name: dev
-    driver: api:openai
-    tracker: noop
-    strategy: single
-EOF
-
-# Test with a dry run
-uv run amelia plan-only TEST-001
-```
-
-> **Note:** The `tracker: noop` configuration above uses a mock issue tracker for testing. If you configure `tracker: github` or `tracker: jira`, you must have an issue matching the ID (e.g., `TEST-001`) in your configured tracker.
-
-## Using Amelia in Your Project
-
-Amelia works on any Git repository. Here's how to use it with your existing projects:
-
-### Option 1: Install as a Global Tool (Recommended)
-
-```bash
-# Install amelia globally with uv
+# Install amelia as a global tool
 uv tool install git+https://github.com/anderskev/amelia.git
 
+# Set your API key
+export OPENAI_API_KEY="sk-..."
+```
+
+### 2. Configure Your Project
+
+```bash
 # Navigate to your project
 cd /path/to/your/project
 
@@ -79,32 +58,57 @@ profiles:
     tracker: github
     strategy: single
 EOF
+```
 
-# Run amelia commands from your project directory
-amelia plan-only GH-123
-amelia start GH-123
+### 3. Create or Select an Issue
+
+Amelia works on issues from your configured tracker. Create one if needed:
+
+```bash
+# Create a new GitHub issue
+gh issue create --title "Add user authentication" --body "Implement login/logout functionality"
+
+# Or use an existing issue number
+gh issue list
+```
+
+### 4. Run Amelia
+
+```bash
+# Generate a plan (dry run - no code changes)
+amelia plan-only 123
+
+# Execute the full workflow (plan → approve → develop → review)
+amelia start 123
+
+# Review uncommitted changes
 amelia review --local
 ```
 
-### Option 2: Run from Amelia Source
+> **Tip:** Use `tracker: noop` in your config to test without a real issue tracker. This creates a mock issue from the ID you provide.
 
-If you prefer not to install globally, navigate to your project and run via the amelia source:
+## Alternative Installation
+
+### Run from Source
+
+If you prefer not to install globally:
 
 ```bash
-# Navigate to your project (important: amelia reads config from cwd)
+# Clone the repo
+git clone https://github.com/anderskev/amelia.git
+cd amelia
+uv sync
+
+# Run from your project directory
 cd /path/to/your/project
-
-# Create settings.amelia.yaml in your project root (see above)
-
-# Run amelia via its source path
-/path/to/amelia/uv run amelia plan-only GH-123
+/path/to/amelia/uv run amelia plan-only 123
 ```
 
-Or use the `AMELIA_SETTINGS` environment variable to point to your config:
+Or use the `AMELIA_SETTINGS` environment variable:
 
 ```bash
 cd /path/to/amelia
-AMELIA_SETTINGS=/path/to/your/project/settings.amelia.yaml uv run amelia plan-only GH-123
+AMELIA_SETTINGS=/path/to/your/project/settings.amelia.yaml uv run amelia plan-only 123
 ```
 
 > **Note:** Amelia reads `settings.amelia.yaml` from the current working directory (or via `AMELIA_SETTINGS`). Run commands from your project root so agents have access to your codebase context.
@@ -209,6 +213,38 @@ Run checks manually to see detailed errors:
 uv run ruff check amelia tests
 uv run mypy amelia
 uv run pytest
+```
+
+### "Missing required dependencies: langgraph-checkpoint-sqlite" when running `amelia server`
+
+This error indicates a dependency conflict from multiple installations:
+
+**Causes:**
+1. Multiple amelia installations (e.g., old `pip install` in pyenv AND new `uv tool install`)
+2. Outdated `uv tool` installation that didn't pick up new dependencies
+
+**Solutions:**
+
+Check for multiple installations:
+```bash
+which amelia
+type amelia
+```
+
+If pyenv shim is being used (`/Users/.../.pyenv/shims/amelia`), uninstall the old version:
+```bash
+pip uninstall amelia
+pyenv rehash
+```
+
+Reinstall with uv:
+```bash
+uv tool install --reinstall git+https://github.com/anderskev/amelia.git
+```
+
+Verify correct version is used:
+```bash
+which amelia  # Should show ~/.local/bin/amelia
 ```
 
 ## Learn More
