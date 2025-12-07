@@ -213,7 +213,6 @@ uv run pytest
 
 ## Learn More
 
-- [Contributing](CONTRIBUTING.md) - Development setup, code conventions, and Claude Code commands/skills
 - [Roadmap](docs/roadmap.md) - Detailed development phases and vision
 - [Concepts: Understanding Agentic AI](docs/concepts.md) - How agents, drivers, and orchestration work
 - [Architecture & Data Flow](docs/architecture.md) - Technical deep dive with diagrams
