@@ -1,5 +1,7 @@
 """Workflow management routes and exception handlers."""
 
+from __future__ import annotations
+
 import base64
 from datetime import datetime
 from pathlib import Path
