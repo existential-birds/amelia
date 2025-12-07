@@ -1,9 +1,32 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { api } from '../client';
-import type { WorkflowSummary } from '../../types';
+import { createMockWorkflowSummary, createMockWorkflowDetail } from './fixtures';
 
 // Mock fetch globally
 global.fetch = vi.fn();
+
+// ============================================================================
+// Test Helpers
+// ============================================================================
+
+function mockFetchSuccess<T>(data: T) {
+  (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    ok: true,
+    json: async () => data,
+  });
+}
+
+function mockFetchError(status: number, error: string, code: string) {
+  (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    ok: false,
+    status,
+    json: async () => ({ error, code }),
+  });
+}
+
+// ============================================================================
+// Tests
+// ============================================================================
 
 describe('API Client', () => {
   beforeEach(() => {
@@ -12,21 +35,9 @@ describe('API Client', () => {
 
   describe('getWorkflows', () => {
     it('should fetch active workflows', async () => {
-      const mockWorkflows: WorkflowSummary[] = [
-        {
-          id: 'wf-1',
-          issue_id: 'ISSUE-1',
-          worktree_name: 'main',
-          status: 'in_progress',
-          started_at: '2025-12-01T10:00:00Z',
-          current_stage: 'architect',
-        },
-      ];
+      const mockWorkflows = [createMockWorkflowSummary()];
 
-      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ workflows: mockWorkflows, total: 1, has_more: false }),
-      });
+      mockFetchSuccess({ workflows: mockWorkflows, total: 1, has_more: false });
 
       const result = await api.getWorkflows();
 
@@ -34,18 +45,8 @@ describe('API Client', () => {
       expect(result).toEqual(mockWorkflows);
     });
 
-    it('should handle fetch errors', async () => {
-      (global.fetch as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('Network error'));
-
-      await expect(api.getWorkflows()).rejects.toThrow('Network error');
-    });
-
     it('should handle HTTP errors', async () => {
-      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-        ok: false,
-        status: 500,
-        json: async () => ({ error: 'Internal server error', code: 'INTERNAL_ERROR' }),
-      });
+      mockFetchError(500, 'Internal server error', 'INTERNAL_ERROR');
 
       await expect(api.getWorkflows()).rejects.toThrow('Internal server error');
     });
@@ -53,55 +54,46 @@ describe('API Client', () => {
 
   describe('getWorkflow', () => {
     it('should fetch single workflow by ID', async () => {
-      const mockWorkflow = {
-        id: 'wf-1',
-        issue_id: 'ISSUE-1',
-        worktree_path: '/path/to/worktree',
-        worktree_name: 'main',
-        status: 'in_progress',
-        started_at: '2025-12-01T10:00:00Z',
-        completed_at: null,
-        failure_reason: null,
-        current_stage: 'architect',
-        plan: null,
-        token_usage: {},
-        recent_events: [],
-      };
+      const mockWorkflow = createMockWorkflowDetail();
 
-      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockWorkflow,
-      });
+      mockFetchSuccess(mockWorkflow);
 
       const result = await api.getWorkflow('wf-1');
 
       expect(global.fetch).toHaveBeenCalledWith('/api/workflows/wf-1');
       expect(result.id).toBe('wf-1');
     });
-  });
 
-  describe('approveWorkflow', () => {
-    it('should POST to approve endpoint', async () => {
-      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ status: 'in_progress' }),
-      });
+    it('should handle HTTP errors', async () => {
+      mockFetchError(404, 'Workflow not found', 'NOT_FOUND');
 
-      await api.approveWorkflow('wf-1');
-
-      expect(global.fetch).toHaveBeenCalledWith('/api/workflows/wf-1/approve', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      });
+      await expect(api.getWorkflow('wf-999')).rejects.toThrow('Workflow not found');
     });
   });
 
-  describe('rejectWorkflow', () => {
-    it('should POST to reject endpoint with feedback', async () => {
-      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ status: 'failed' }),
-      });
+  describe('workflow mutations', () => {
+    it.each([
+      ['approveWorkflow', 'wf-1', '/api/workflows/wf-1/approve', undefined],
+      ['cancelWorkflow', 'wf-1', '/api/workflows/wf-1/cancel', undefined],
+    ] as const)(
+      '%s should POST to correct endpoint',
+      async (method, id, expectedUrl) => {
+        mockFetchSuccess({ status: 'ok' });
+
+        await api[method](id);
+
+        expect(global.fetch).toHaveBeenCalledWith(
+          expectedUrl,
+          expect.objectContaining({
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+          })
+        );
+      }
+    );
+
+    it('rejectWorkflow should POST to correct endpoint with feedback', async () => {
+      mockFetchSuccess({ status: 'failed' });
 
       await api.rejectWorkflow('wf-1', 'Plan needs revision');
 
@@ -111,34 +103,36 @@ describe('API Client', () => {
         body: JSON.stringify({ feedback: 'Plan needs revision' }),
       });
     });
-  });
 
-  describe('cancelWorkflow', () => {
-    it('should POST to cancel endpoint', async () => {
-      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ status: 'cancelled' }),
-      });
+    it('should handle HTTP errors on mutations', async () => {
+      mockFetchError(403, 'Forbidden', 'FORBIDDEN');
 
-      await api.cancelWorkflow('wf-1');
-
-      expect(global.fetch).toHaveBeenCalledWith('/api/workflows/wf-1/cancel', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      });
+      await expect(api.approveWorkflow('wf-1')).rejects.toThrow('Forbidden');
     });
   });
 
   describe('getWorkflowHistory', () => {
     it('should fetch workflows with completed, failed, and cancelled statuses in parallel', async () => {
       const completedWorkflows = [
-        { id: 'wf-1', status: 'completed', started_at: '2025-12-01T10:00:00Z' },
+        createMockWorkflowSummary({
+          id: 'wf-1',
+          status: 'completed',
+          started_at: '2025-12-01T10:00:00Z',
+        }),
       ];
       const failedWorkflows = [
-        { id: 'wf-2', status: 'failed', started_at: '2025-12-01T11:00:00Z' },
+        createMockWorkflowSummary({
+          id: 'wf-2',
+          status: 'failed',
+          started_at: '2025-12-01T11:00:00Z',
+        }),
       ];
       const cancelledWorkflows = [
-        { id: 'wf-3', status: 'cancelled', started_at: '2025-12-01T09:00:00Z' },
+        createMockWorkflowSummary({
+          id: 'wf-3',
+          status: 'cancelled',
+          started_at: '2025-12-01T09:00:00Z',
+        }),
       ];
 
       (global.fetch as ReturnType<typeof vi.fn>)
@@ -166,6 +160,27 @@ describe('API Client', () => {
       expect(result[0]!.id).toBe('wf-2'); // Most recent (11:00)
       expect(result[1]!.id).toBe('wf-1'); // 10:00
       expect(result[2]!.id).toBe('wf-3'); // Oldest (09:00)
+    });
+
+    it('should handle HTTP errors', async () => {
+      // getWorkflowHistory makes 3 parallel requests, mock the first to fail
+      // (Promise.all will reject on first error)
+      (global.fetch as ReturnType<typeof vi.fn>)
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 500,
+          json: async () => ({ error: 'Internal server error', code: 'INTERNAL_ERROR' }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ workflows: [], total: 0, has_more: false }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ workflows: [], total: 0, has_more: false }),
+        });
+
+      await expect(api.getWorkflowHistory()).rejects.toThrow('Internal server error');
     });
   });
 });

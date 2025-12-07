@@ -25,112 +25,77 @@ describe('useWorkflowActions', () => {
     });
   });
 
-  describe('approveWorkflow', () => {
+  describe.each([
+    {
+      action: 'approveWorkflow' as const,
+      actionId: 'approve',
+      apiMethod: 'approveWorkflow' as const,
+      args: ['wf-1', 'blocked' as const] as const,
+      successMessage: 'Plan approved',
+      errorPrefix: 'Approval failed',
+    },
+    {
+      action: 'rejectWorkflow' as const,
+      actionId: 'reject',
+      apiMethod: 'rejectWorkflow' as const,
+      args: ['wf-1', 'Needs revision', 'blocked' as const] as const,
+      successMessage: 'Plan rejected',
+      errorPrefix: 'Rejection failed',
+    },
+    {
+      action: 'cancelWorkflow' as const,
+      actionId: 'cancel',
+      apiMethod: 'cancelWorkflow' as const,
+      args: ['wf-1', 'in_progress' as const] as const,
+      successMessage: 'Workflow cancelled',
+      errorPrefix: 'Cancellation failed',
+    },
+  ])('$action', ({ action, actionId, apiMethod, args, successMessage, errorPrefix }) => {
     it('should add pending action during request', async () => {
-      vi.mocked(api.approveWorkflow).mockImplementationOnce(
+      vi.mocked(api[apiMethod]).mockImplementationOnce(
         () => new Promise((resolve) => { setTimeout(resolve, 100); })
       );
 
       const { result } = renderHook(() => useWorkflowActions());
 
       act(() => {
-        result.current.approveWorkflow('wf-1', 'blocked');
+        (result.current[action] as any)(...args);
       });
 
       await waitFor(() => {
-        expect(useWorkflowStore.getState().pendingActions.includes('approve-wf-1')).toBe(true);
+        expect(useWorkflowStore.getState().pendingActions.includes(`${actionId}-wf-1`)).toBe(true);
       });
 
       await waitFor(() => {
-        expect(useWorkflowStore.getState().pendingActions.includes('approve-wf-1')).toBe(false);
+        expect(useWorkflowStore.getState().pendingActions.includes(`${actionId}-wf-1`)).toBe(false);
       });
     });
 
     it('should show success toast on success', async () => {
-      vi.mocked(api.approveWorkflow).mockResolvedValueOnce(undefined);
+      vi.mocked(api[apiMethod]).mockResolvedValueOnce(undefined);
 
       const { result } = renderHook(() => useWorkflowActions());
 
       await act(async () => {
-        await result.current.approveWorkflow('wf-1', 'blocked');
+        await (result.current[action] as any)(...args);
       });
 
       await waitFor(() => {
-        expect(toast.success).toHaveBeenCalledWith('Plan approved');
+        expect(toast.success).toHaveBeenCalledWith(successMessage);
       });
     });
 
     it('should show error toast on failure', async () => {
-      vi.mocked(api.approveWorkflow).mockRejectedValueOnce(new Error('Server error'));
+      vi.mocked(api[apiMethod]).mockRejectedValueOnce(new Error('Server error'));
 
       const { result } = renderHook(() => useWorkflowActions());
 
       await act(async () => {
-        await result.current.approveWorkflow('wf-1', 'blocked');
+        await (result.current[action] as any)(...args);
       });
 
       await waitFor(() => {
-        expect(toast.error).toHaveBeenCalledWith('Approval failed: Server error');
-      });
-    });
-  });
-
-  describe('rejectWorkflow', () => {
-    it('should show success toast on success', async () => {
-      vi.mocked(api.rejectWorkflow).mockResolvedValueOnce(undefined);
-
-      const { result } = renderHook(() => useWorkflowActions());
-
-      await act(async () => {
-        await result.current.rejectWorkflow('wf-1', 'Needs revision', 'blocked');
-      });
-
-      await waitFor(() => {
-        expect(toast.success).toHaveBeenCalledWith('Plan rejected');
-      });
-    });
-
-    it('should show error toast on failure', async () => {
-      vi.mocked(api.rejectWorkflow).mockRejectedValueOnce(new Error('Server error'));
-
-      const { result } = renderHook(() => useWorkflowActions());
-
-      await act(async () => {
-        await result.current.rejectWorkflow('wf-1', 'Needs revision', 'blocked');
-      });
-
-      await waitFor(() => {
-        expect(toast.error).toHaveBeenCalledWith('Rejection failed: Server error');
-      });
-    });
-  });
-
-  describe('cancelWorkflow', () => {
-    it('should show success toast on success', async () => {
-      vi.mocked(api.cancelWorkflow).mockResolvedValueOnce(undefined);
-
-      const { result } = renderHook(() => useWorkflowActions());
-
-      await act(async () => {
-        await result.current.cancelWorkflow('wf-1', 'in_progress');
-      });
-
-      await waitFor(() => {
-        expect(toast.success).toHaveBeenCalledWith('Workflow cancelled');
-      });
-    });
-
-    it('should show error toast on failure', async () => {
-      vi.mocked(api.cancelWorkflow).mockRejectedValueOnce(new Error('Server error'));
-
-      const { result } = renderHook(() => useWorkflowActions());
-
-      await act(async () => {
-        await result.current.cancelWorkflow('wf-1', 'in_progress');
-      });
-
-      await waitFor(() => {
-        expect(toast.error).toHaveBeenCalledWith('Cancellation failed: Server error');
+        expect(toast.error).toHaveBeenCalledWith(`${errorPrefix}: Server error`);
       });
     });
   });

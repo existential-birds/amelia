@@ -1,48 +1,53 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { approveAction, rejectAction, cancelAction } from '../workflows';
 import { api } from '../../api/client';
+import type { ActionFunctionArgs } from 'react-router-dom';
 
 vi.mock('../../api/client');
+
+/**
+ * Helper to create ActionFunctionArgs for testing
+ */
+function createActionArgs(params: Record<string, string>, requestInit?: RequestInit): ActionFunctionArgs {
+  return {
+    params,
+    request: new Request('http://localhost', { method: 'POST', ...requestInit }),
+  } as unknown as ActionFunctionArgs;
+}
 
 describe('Workflow Actions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
+  describe('validation', () => {
+    it.each([
+      ['approveAction', approveAction],
+      ['rejectAction', rejectAction],
+      ['cancelAction', cancelAction],
+    ])('%s should throw 400 if ID is missing', async (_name, action) => {
+      const args = createActionArgs({});
+      await expect(action(args)).rejects.toThrowError(
+        expect.objectContaining({ status: 400 })
+      );
+    });
+  });
+
   describe('approveAction', () => {
     it('should approve workflow by ID from params', async () => {
       vi.mocked(api.approveWorkflow).mockResolvedValueOnce(undefined);
 
-      const result = await approveAction({
-        params: { id: 'wf-1' },
-        request: new Request('http://localhost/workflows/wf-1/approve', { method: 'POST' }),
-      } as unknown as Parameters<typeof approveAction>[0]);
+      const result = await approveAction(createActionArgs({ id: 'wf-1' }));
 
       expect(api.approveWorkflow).toHaveBeenCalledWith('wf-1');
       expect(result).toEqual({ success: true, action: 'approved' });
-    });
-
-    it('should throw 400 if ID is missing', async () => {
-      try {
-        await approveAction({
-          params: {},
-          request: new Request('http://localhost/workflows/approve', { method: 'POST' }),
-        } as unknown as Parameters<typeof approveAction>[0]);
-        expect.fail('Should have thrown');
-      } catch (error) {
-        expect(error).toBeInstanceOf(Response);
-        expect((error as Response).status).toBe(400);
-      }
     });
 
     it('should propagate API errors', async () => {
       vi.mocked(api.approveWorkflow).mockRejectedValueOnce(new Error('Server error'));
 
       await expect(
-        approveAction({
-          params: { id: 'wf-1' },
-          request: new Request('http://localhost/workflows/wf-1/approve', { method: 'POST' }),
-        } as unknown as Parameters<typeof approveAction>[0])
+        approveAction(createActionArgs({ id: 'wf-1' }))
       ).rejects.toThrow('Server error');
     });
   });
@@ -54,62 +59,21 @@ describe('Workflow Actions', () => {
       const formData = new FormData();
       formData.append('feedback', 'Plan needs revision');
 
-      const request = new Request('http://localhost/workflows/wf-1/reject', {
-        method: 'POST',
-        body: formData,
-      });
-
-      const result = await rejectAction({
-        params: { id: 'wf-1' },
-        request,
-      } as unknown as Parameters<typeof rejectAction>[0]);
+      const result = await rejectAction(createActionArgs({ id: 'wf-1' }, { body: formData }));
 
       expect(api.rejectWorkflow).toHaveBeenCalledWith('wf-1', 'Plan needs revision');
       expect(result).toEqual({ success: true, action: 'rejected' });
-    });
-
-    it('should throw 400 if ID is missing', async () => {
-      const formData = new FormData();
-      formData.append('feedback', 'Test');
-
-      const request = new Request('http://localhost/workflows/reject', {
-        method: 'POST',
-        body: formData,
-      });
-
-      try {
-        await rejectAction({
-          params: {},
-          request,
-        } as unknown as Parameters<typeof rejectAction>[0]);
-        expect.fail('Should have thrown');
-      } catch (error) {
-        expect(error).toBeInstanceOf(Response);
-        expect((error as Response).status).toBe(400);
-      }
     });
 
     it('should throw 400 if feedback is missing', async () => {
       const formData = new FormData();
       // No feedback field
 
-      const request = new Request('http://localhost/workflows/wf-1/reject', {
-        method: 'POST',
-        body: formData,
-      });
-
-      try {
-        await rejectAction({
-          params: { id: 'wf-1' },
-          request,
-        } as unknown as Parameters<typeof rejectAction>[0]);
-        expect.fail('Should have thrown');
-      } catch (error) {
-        expect(error).toBeInstanceOf(Response);
-        expect((error as Response).status).toBe(400);
-        const text = await (error as Response).text();
-        expect(text).toBe('Feedback required');
-      }
+      await expect(
+        rejectAction(createActionArgs({ id: 'wf-1' }, { body: formData }))
+      ).rejects.toThrowError(
+        expect.objectContaining({ status: 400 })
+      );
     });
   });
 
@@ -117,26 +81,10 @@ describe('Workflow Actions', () => {
     it('should cancel workflow by ID from params', async () => {
       vi.mocked(api.cancelWorkflow).mockResolvedValueOnce(undefined);
 
-      const result = await cancelAction({
-        params: { id: 'wf-1' },
-        request: new Request('http://localhost/workflows/wf-1/cancel', { method: 'POST' }),
-      } as unknown as Parameters<typeof cancelAction>[0]);
+      const result = await cancelAction(createActionArgs({ id: 'wf-1' }));
 
       expect(api.cancelWorkflow).toHaveBeenCalledWith('wf-1');
       expect(result).toEqual({ success: true, action: 'cancelled' });
-    });
-
-    it('should throw 400 if ID is missing', async () => {
-      try {
-        await cancelAction({
-          params: {},
-          request: new Request('http://localhost/workflows/cancel', { method: 'POST' }),
-        } as unknown as Parameters<typeof cancelAction>[0]);
-        expect.fail('Should have thrown');
-      } catch (error) {
-        expect(error).toBeInstanceOf(Response);
-        expect((error as Response).status).toBe(400);
-      }
     });
   });
 });

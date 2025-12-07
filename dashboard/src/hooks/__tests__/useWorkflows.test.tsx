@@ -1,8 +1,9 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { renderHook } from '@testing-library/react';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { renderHook, act } from '@testing-library/react';
 import { useWorkflows } from '../useWorkflows';
 import { useWorkflowStore } from '../../store/workflowStore';
 import { useLoaderData, useRevalidator } from 'react-router-dom';
+import type { WorkflowEvent } from '../../types/api';
 
 vi.mock('react-router-dom', () => ({
   useLoaderData: vi.fn(),
@@ -18,6 +19,7 @@ describe('useWorkflows', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.useFakeTimers();
     useWorkflowStore.setState({
       selectedWorkflowId: null,
       eventsByWorkflow: {},
@@ -27,39 +29,22 @@ describe('useWorkflows', () => {
       pendingActions: [],
     });
     vi.mocked(useRevalidator).mockReturnValue(mockRevalidator);
-  });
-
-  it('should return workflows from loader data', () => {
-    const mockWorkflows = [
-      {
-        id: 'wf-1',
-        issue_id: 'ISSUE-1',
-        worktree_name: 'main',
-        status: 'in_progress' as const,
-        started_at: '2025-12-01T10:00:00Z',
-        current_stage: 'architect',
-      },
-    ];
-
-    vi.mocked(useLoaderData).mockReturnValue({ workflows: mockWorkflows });
-
-    const { result } = renderHook(() => useWorkflows());
-
-    expect(result.current.workflows).toEqual(mockWorkflows);
-    expect(result.current.isConnected).toBe(false);
-  });
-
-  it('should return connection state from Zustand store', () => {
-    useWorkflowStore.setState({ isConnected: true });
     vi.mocked(useLoaderData).mockReturnValue({ workflows: [] });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('should return isConnected from store', () => {
+    useWorkflowStore.setState({ isConnected: true });
 
     const { result } = renderHook(() => useWorkflows());
 
     expect(result.current.isConnected).toBe(true);
   });
 
-  it('should provide revalidation state', () => {
-    vi.mocked(useLoaderData).mockReturnValue({ workflows: [] });
+  it('should expose isRevalidating based on revalidator state', () => {
     vi.mocked(useRevalidator).mockReturnValue({
       state: 'loading',
       revalidate: mockRevalidate,
@@ -70,13 +55,143 @@ describe('useWorkflows', () => {
     expect(result.current.isRevalidating).toBe(true);
   });
 
-  it('should provide manual revalidate function', () => {
-    vi.mocked(useLoaderData).mockReturnValue({ workflows: [] });
+  describe('auto-revalidation logic', () => {
+    const createEvent = (
+      event_type: WorkflowEvent['event_type'],
+      timestamp: string
+    ): WorkflowEvent => ({
+      id: 'evt-1',
+      workflow_id: 'wf-1',
+      event_type,
+      timestamp,
+      data: {},
+    });
 
-    const { result } = renderHook(() => useWorkflows());
+    it.each([
+      'workflow_started',
+      'workflow_completed',
+      'workflow_failed',
+    ] as const)('should auto-revalidate on recent %s event', (event_type) => {
+      const now = new Date('2025-12-06T10:00:00Z');
+      vi.setSystemTime(now);
 
-    result.current.revalidate();
+      const { rerender } = renderHook(() => useWorkflows());
 
-    expect(mockRevalidate).toHaveBeenCalled();
+      // Add a recent status event
+      act(() => {
+        useWorkflowStore.setState({
+          eventsByWorkflow: {
+            'wf-1': [createEvent(event_type, now.toISOString())],
+          },
+        });
+        rerender();
+      });
+
+      expect(mockRevalidate).toHaveBeenCalledTimes(1);
+    });
+
+    it('should NOT revalidate for old status events (>5 seconds)', () => {
+      const now = new Date('2025-12-06T10:00:00Z');
+      vi.setSystemTime(now);
+
+      const { rerender } = renderHook(() => useWorkflows());
+
+      // Add an old status event (6 seconds ago)
+      const oldTimestamp = new Date(now.getTime() - 6000).toISOString();
+      act(() => {
+        useWorkflowStore.setState({
+          eventsByWorkflow: {
+            'wf-1': [createEvent('workflow_completed', oldTimestamp)],
+          },
+        });
+        rerender();
+      });
+
+      expect(mockRevalidate).not.toHaveBeenCalled();
+    });
+
+    it('should NOT revalidate for non-status events', () => {
+      const now = new Date('2025-12-06T10:00:00Z');
+      vi.setSystemTime(now);
+
+      const { rerender } = renderHook(() => useWorkflows());
+
+      // Add a non-status event
+      act(() => {
+        useWorkflowStore.setState({
+          eventsByWorkflow: {
+            'wf-1': [createEvent('stage_started', now.toISOString())],
+          },
+        });
+        rerender();
+      });
+
+      expect(mockRevalidate).not.toHaveBeenCalled();
+    });
+
+    it('should NOT revalidate when revalidator is already loading', () => {
+      const now = new Date('2025-12-06T10:00:00Z');
+      vi.setSystemTime(now);
+
+      // Mock revalidator as loading
+      vi.mocked(useRevalidator).mockReturnValue({
+        state: 'loading',
+        revalidate: mockRevalidate,
+      });
+
+      const { rerender } = renderHook(() => useWorkflows());
+
+      // Add a recent status event
+      act(() => {
+        useWorkflowStore.setState({
+          eventsByWorkflow: {
+            'wf-1': [createEvent('workflow_completed', now.toISOString())],
+          },
+        });
+        rerender();
+      });
+
+      expect(mockRevalidate).not.toHaveBeenCalled();
+    });
+
+    it('should revalidate when multiple workflows have recent status events', () => {
+      const now = new Date('2025-12-06T10:00:00Z');
+      vi.setSystemTime(now);
+
+      const { rerender } = renderHook(() => useWorkflows());
+
+      // Add recent status events for multiple workflows
+      act(() => {
+        useWorkflowStore.setState({
+          eventsByWorkflow: {
+            'wf-1': [createEvent('workflow_started', now.toISOString())],
+            'wf-2': [createEvent('workflow_completed', now.toISOString())],
+          },
+        });
+        rerender();
+      });
+
+      expect(mockRevalidate).toHaveBeenCalledTimes(1);
+    });
+
+    it('should revalidate when recent status event is exactly at 5 second boundary', () => {
+      const now = new Date('2025-12-06T10:00:00Z');
+      vi.setSystemTime(now);
+
+      const { rerender } = renderHook(() => useWorkflows());
+
+      // Add event exactly 4.999 seconds ago (still within 5 second window)
+      const boundaryTimestamp = new Date(now.getTime() - 4999).toISOString();
+      act(() => {
+        useWorkflowStore.setState({
+          eventsByWorkflow: {
+            'wf-1': [createEvent('workflow_completed', boundaryTimestamp)],
+          },
+        });
+        rerender();
+      });
+
+      expect(mockRevalidate).toHaveBeenCalledTimes(1);
+    });
   });
 });

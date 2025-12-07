@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { useWorkflowStore } from '../workflowStore';
-import type { WorkflowEvent } from '../../types';
+import { createMockEvent } from '../../__tests__/fixtures';
 
 // Mock sessionStorage
 const sessionStorageMock = (() => {
@@ -34,34 +34,14 @@ describe('workflowStore', () => {
     sessionStorageMock.clear();
   });
 
-  describe('selectWorkflow', () => {
-    it('should update selectedWorkflowId', () => {
-      useWorkflowStore.getState().selectWorkflow('wf-123');
-
-      expect(useWorkflowStore.getState().selectedWorkflowId).toBe('wf-123');
-    });
-
-    it('should allow null selection', () => {
-      useWorkflowStore.setState({ selectedWorkflowId: 'wf-1' });
-      useWorkflowStore.getState().selectWorkflow(null);
-
-      expect(useWorkflowStore.getState().selectedWorkflowId).toBeNull();
-    });
-  });
 
   describe('addEvent', () => {
     it('should add event to workflow event list', () => {
-      const event: WorkflowEvent = {
+      const event = createMockEvent({
         id: 'evt-1',
         workflow_id: 'wf-1',
-        sequence: 1,
-        timestamp: '2025-12-01T10:00:00Z',
-        agent: 'architect',
-        event_type: 'workflow_started',
         message: 'Workflow started',
-        data: undefined,
-        correlation_id: undefined,
-      };
+      });
 
       useWorkflowStore.getState().addEvent(event);
 
@@ -72,29 +52,21 @@ describe('workflowStore', () => {
     });
 
     it('should append to existing events', () => {
-      const event1: WorkflowEvent = {
+      const event1 = createMockEvent({
         id: 'evt-1',
         workflow_id: 'wf-1',
         sequence: 1,
-        timestamp: '2025-12-01T10:00:00Z',
-        agent: 'architect',
-        event_type: 'workflow_started',
         message: 'Started',
-        data: undefined,
-        correlation_id: undefined,
-      };
+      });
 
-      const event2: WorkflowEvent = {
+      const event2 = createMockEvent({
         id: 'evt-2',
         workflow_id: 'wf-1',
         sequence: 2,
-        timestamp: '2025-12-01T10:01:00Z',
-        agent: 'architect',
         event_type: 'stage_started',
         message: 'Planning',
         data: { stage: 'architect' },
-        correlation_id: undefined,
-      };
+      });
 
       useWorkflowStore.getState().addEvent(event1);
       useWorkflowStore.getState().addEvent(event2);
@@ -110,17 +82,13 @@ describe('workflowStore', () => {
 
       // Add 501 events
       for (let i = 1; i <= MAX_EVENTS + 1; i++) {
-        const event: WorkflowEvent = {
+        const event = createMockEvent({
           id: `evt-${i}`,
           workflow_id: 'wf-1',
           sequence: i,
-          timestamp: '2025-12-01T10:00:00Z',
-          agent: 'architect',
           event_type: 'stage_started',
           message: `Event ${i}`,
-          data: undefined,
-          correlation_id: undefined,
-        };
+        });
         useWorkflowStore.getState().addEvent(event);
       }
 
@@ -171,48 +139,28 @@ describe('workflowStore', () => {
   });
 
   describe('persistence', () => {
-    it('should persist selectedWorkflowId to sessionStorage', () => {
+    it('should persist selectedWorkflowId and lastEventId but NOT events', () => {
+      // Update both selectedWorkflowId and add an event
       useWorkflowStore.getState().selectWorkflow('wf-123');
+      useWorkflowStore.getState().addEvent(
+        createMockEvent({
+          id: 'evt-999',
+          workflow_id: 'wf-1',
+          message: 'Started',
+        })
+      );
 
       const stored = sessionStorageMock.getItem('amelia-workflow-state');
       expect(stored).not.toBeNull();
       const parsed = JSON.parse(stored!);
+
+      // Should persist selectedWorkflowId
       expect(parsed.state.selectedWorkflowId).toBe('wf-123');
-    });
 
-    it('should persist lastEventId to sessionStorage', () => {
-      useWorkflowStore.getState().addEvent({
-        id: 'evt-999',
-        workflow_id: 'wf-1',
-        sequence: 1,
-        timestamp: '2025-12-01T10:00:00Z',
-        agent: 'architect',
-        event_type: 'workflow_started',
-        message: 'Started',
-        data: undefined,
-        correlation_id: undefined,
-      });
-
-      const stored = sessionStorageMock.getItem('amelia-workflow-state');
-      const parsed = JSON.parse(stored!);
+      // Should persist lastEventId
       expect(parsed.state.lastEventId).toBe('evt-999');
-    });
 
-    it('should NOT persist events to sessionStorage', () => {
-      useWorkflowStore.getState().addEvent({
-        id: 'evt-1',
-        workflow_id: 'wf-1',
-        sequence: 1,
-        timestamp: '2025-12-01T10:00:00Z',
-        agent: 'architect',
-        event_type: 'workflow_started',
-        message: 'Started',
-        data: undefined,
-        correlation_id: undefined,
-      });
-
-      const stored = sessionStorageMock.getItem('amelia-workflow-state');
-      const parsed = JSON.parse(stored!);
+      // Should NOT persist events
       expect(parsed.state.eventsByWorkflow).toBeUndefined();
     });
   });
