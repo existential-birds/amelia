@@ -133,6 +133,7 @@ class ClaudeCliDriver(CliDriver):
         skip_permissions: Whether to use --dangerously-skip-permissions flag.
         allowed_tools: List of allowed tool names (passed via --allowedTools).
         disallowed_tools: List of disallowed tool names (passed via --disallowedTools).
+        tool_call_history: List of tool calls made during agentic execution.
     """
 
     def __init__(

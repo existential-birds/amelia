@@ -19,14 +19,13 @@ from amelia.core.exceptions import (
 
 
 class SafeShellExecutor:
-    """
-    Executes shell commands with hybrid security model.
+    """Executes shell commands with hybrid security model.
 
     Security layers (in order):
-    1. Metacharacter blocking - prevents shell injection (always active)
-    2. Blocked commands - prevents privilege escalation (always active)
-    3. Dangerous patterns - prevents destructive commands (always active)
-    4. Strict mode allowlist - optional, for high-security environments
+        1. Metacharacter blocking - prevents shell injection (always active)
+        2. Blocked commands - prevents privilege escalation (always active)
+        3. Dangerous patterns - prevents destructive commands (always active)
+        4. Strict mode allowlist - optional, for high-security environments
 
     Default behavior: Allow any command except dangerous ones.
     No configuration needed for normal development workflows.

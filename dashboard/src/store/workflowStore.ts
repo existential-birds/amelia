@@ -2,10 +2,17 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { WorkflowEvent } from '../types';
 
+/**
+ * Maximum number of events to retain per workflow in the store.
+ *
+ * When this limit is exceeded, the oldest events are trimmed to maintain
+ * performance and prevent excessive memory usage. The most recent events
+ * are always kept.
+ */
 const MAX_EVENTS_PER_WORKFLOW = 500;
 
 /**
- * Zustand store for real-time WebSocket events and UI state.
+ * Zustand store state for real-time WebSocket events and UI state.
  *
  * Note: Workflow data comes from React Router loaders, not this store.
  * This store only manages:
@@ -15,31 +22,128 @@ const MAX_EVENTS_PER_WORKFLOW = 500;
  * - Pending actions for optimistic UI
  */
 interface WorkflowState {
-  // UI State
+  /**
+   * The currently selected workflow ID in the UI, or null if none selected.
+   */
   selectedWorkflowId: string | null;
 
-  // Real-time events from WebSocket (grouped by workflow)
+  /**
+   * Real-time events from WebSocket, grouped by workflow ID.
+   * Each workflow maintains a separate array of events, automatically
+   * trimmed to MAX_EVENTS_PER_WORKFLOW entries.
+   */
   eventsByWorkflow: Record<string, WorkflowEvent[]>;
 
-  // Last seen event ID for reconnection backfill
+  /**
+   * ID of the last received event, used for reconnection backfill.
+   * When reconnecting, this ID is sent to the server to retrieve
+   * any missed events.
+   */
   lastEventId: string | null;
 
-  // Connection state
+  /**
+   * Whether the WebSocket connection is currently active.
+   */
   isConnected: boolean;
+
+  /**
+   * Error message from the last connection failure, or null if connected.
+   */
   connectionError: string | null;
 
-  // Pending actions for optimistic UI tracking
-  pendingActions: string[]; // Action IDs currently in flight
+  /**
+   * Action IDs currently being executed (in-flight requests).
+   * Used for optimistic UI updates and loading states.
+   */
+  pendingActions: string[];
 
-  // Actions
+  /**
+   * Selects a workflow for display in the UI.
+   *
+   * @param id - The workflow ID to select, or null to deselect.
+   */
   selectWorkflow: (id: string | null) => void;
+
+  /**
+   * Adds a new event to the store for the specified workflow.
+   *
+   * Automatically trims the event list if it exceeds MAX_EVENTS_PER_WORKFLOW,
+   * keeping only the most recent events. Updates lastEventId.
+   *
+   * @param event - The workflow event to add.
+   */
   addEvent: (event: WorkflowEvent) => void;
+
+  /**
+   * Updates the last seen event ID for reconnection tracking.
+   *
+   * @param id - The event ID, or null to clear.
+   */
   setLastEventId: (id: string | null) => void;
+
+  /**
+   * Updates the WebSocket connection state.
+   *
+   * @param connected - Whether the connection is active.
+   * @param error - Optional error message if connection failed.
+   */
   setConnected: (connected: boolean, error?: string) => void;
+
+  /**
+   * Marks an action as pending (in-flight).
+   *
+   * Prevents duplicate entries - if the action ID already exists,
+   * the state remains unchanged.
+   *
+   * @param actionId - The unique ID of the action being executed.
+   */
   addPendingAction: (actionId: string) => void;
+
+  /**
+   * Removes an action from the pending list.
+   *
+   * Call this when an action completes (success or failure).
+   *
+   * @param actionId - The unique ID of the completed action.
+   */
   removePendingAction: (actionId: string) => void;
 }
 
+/**
+ * Zustand store hook for managing workflow real-time events and UI state.
+ *
+ * This store handles:
+ * - Real-time WebSocket events (grouped by workflow, auto-trimmed)
+ * - UI state (currently selected workflow)
+ * - WebSocket connection status and errors
+ * - Pending action tracking for optimistic UI updates
+ *
+ * State is persisted to sessionStorage, but only UI state is saved
+ * (selectedWorkflowId and lastEventId). Real-time events are ephemeral
+ * and not persisted.
+ *
+ * @example
+ * ```typescript
+ * const { selectedWorkflowId, addEvent, isConnected } = useWorkflowStore();
+ *
+ * // Select a workflow
+ * useWorkflowStore.getState().selectWorkflow('workflow-123');
+ *
+ * // Add a real-time event
+ * addEvent({
+ *   id: 'evt-1',
+ *   workflow_id: 'workflow-123',
+ *   type: 'task.started',
+ *   timestamp: '2025-12-06T10:00:00Z',
+ *   data: { task_id: 'task-1' }
+ * });
+ *
+ * // Check connection status
+ * if (isConnected) {
+ *   console.log('WebSocket connected');
+ * }
+ * ```
+ */
 export const useWorkflowStore = create<WorkflowState>()(
   persist(
     (set) => ({

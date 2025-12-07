@@ -10,10 +10,14 @@ from amelia.drivers.base import DriverInterface
 
 
 class CliDriver(DriverInterface):
-    """
-    Base class for CLI-based drivers.
+    """Base class for CLI-based drivers.
+
     Forces sequential execution for operations by using a semaphore.
     Also handles timeout and retries.
+
+    Attributes:
+        timeout: Maximum execution time in seconds for operations.
+        max_retries: Number of retry attempts for timed-out operations.
     """
     def __init__(self, timeout: int = 30, max_retries: int = 0):
         """Initialize the CLI driver with timeout and retry settings.

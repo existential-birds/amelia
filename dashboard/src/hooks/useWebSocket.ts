@@ -2,19 +2,47 @@ import { useEffect, useRef } from 'react';
 import { useWorkflowStore } from '../store/workflowStore';
 import type { WebSocketMessage, WorkflowEvent } from '../types';
 
+/**
+ * Base URL for the WebSocket connection.
+ * Defaults to ws://localhost:8420/ws/events if VITE_WS_BASE_URL is not set.
+ */
 const WS_BASE_URL = import.meta.env.VITE_WS_BASE_URL || 'ws://localhost:8420/ws/events';
+
+/**
+ * Maximum delay between reconnection attempts in milliseconds (30 seconds).
+ */
 const MAX_RECONNECT_DELAY = 30000; // 30 seconds
+
+/**
+ * Initial delay for the first reconnection attempt in milliseconds (1 second).
+ */
 const INITIAL_RECONNECT_DELAY = 1000; // 1 second
 
 /**
  * WebSocket hook for real-time workflow events.
  *
- * Manages WebSocket connection lifecycle:
- * - Auto-connects on mount
- * - Subscribes to all workflows on connect
- * - Handles reconnection with exponential backoff (max 30s)
- * - Detects sequence gaps and logs warnings
- * - Dispatches custom 'workflow-event' events for revalidation hints
+ * Manages WebSocket connection lifecycle with automatic reconnection and event handling:
+ * - Auto-connects on mount and subscribes to all workflows
+ * - Handles reconnection with exponential backoff (1s, 2s, 4s, ..., max 30s)
+ * - Detects sequence gaps in events and logs warnings
+ * - Updates Zustand store with incoming workflow events
+ * - Dispatches custom 'workflow-event' DOM events for revalidation hints
+ * - Supports event backfill using the ?since= query parameter
+ *
+ * @returns An object containing a manual reconnect function.
+ *
+ * @example
+ * ```tsx
+ * function App() {
+ *   const { reconnect } = useWebSocket();
+ *
+ *   return (
+ *     <div>
+ *       <button onClick={reconnect}>Reconnect</button>
+ *     </div>
+ *   );
+ * }
+ * ```
  */
 export function useWebSocket() {
   const wsRef = useRef<WebSocket | null>(null);
