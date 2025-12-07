@@ -42,14 +42,14 @@ export function ActivityLog({ workflowId, initialEvents = [], className }: Activ
 
   // Real-time events from WebSocket (via Zustand store)
   const { eventsByWorkflow } = useWorkflowStore();
-  const realtimeEvents = eventsByWorkflow[workflowId] || [];
 
   // Merge: loader events + any new real-time events (deduplicated by id)
   const events = useMemo(() => {
+    const realtimeEvents = eventsByWorkflow[workflowId] || [];
     const loaderEventIds = new Set(initialEvents.map(e => e.id));
     const newEvents = realtimeEvents.filter(e => !loaderEventIds.has(e.id));
     return [...initialEvents, ...newEvents];
-  }, [initialEvents, realtimeEvents]);
+  }, [initialEvents, eventsByWorkflow, workflowId]);
 
   // Auto-scroll to bottom when new events arrive
   useEffect(() => {

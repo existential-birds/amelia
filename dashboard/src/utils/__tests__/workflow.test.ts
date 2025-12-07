@@ -54,4 +54,39 @@ describe('getActiveWorkflow', () => {
     ];
     expect(getActiveWorkflow(workflows)?.id).toBe('newest');
   });
+
+  it('should return blocked workflow when no running exists', () => {
+    const workflows = [
+      createWorkflow({ id: '1', status: 'completed' }),
+      createWorkflow({ id: '2', status: 'blocked' }),
+    ];
+    expect(getActiveWorkflow(workflows)?.id).toBe('2');
+  });
+
+  it('should prioritize running over blocked', () => {
+    const workflows = [
+      createWorkflow({ id: '1', status: 'blocked' }),
+      createWorkflow({ id: '2', status: 'in_progress' }),
+    ];
+    expect(getActiveWorkflow(workflows)?.id).toBe('2');
+  });
+
+  it('should prioritize blocked over completed', () => {
+    const workflows = [
+      createWorkflow({ id: '1', status: 'completed', started_at: '2025-12-01T00:00:00Z' }),
+      createWorkflow({ id: '2', status: 'blocked', started_at: '2025-01-01T00:00:00Z' }),
+    ];
+    expect(getActiveWorkflow(workflows)?.id).toBe('2');
+  });
+
+  it('should handle null started_at in completed workflows', () => {
+    const workflows = [
+      createWorkflow({ id: '1', status: 'completed', started_at: null }),
+      createWorkflow({ id: '2', status: 'completed', started_at: '2025-01-01T00:00:00Z' }),
+      createWorkflow({ id: '3', status: 'completed', started_at: null }),
+    ];
+    // Should not throw, should return one of them
+    const result = getActiveWorkflow(workflows);
+    expect(result).not.toBeNull();
+  });
 });
