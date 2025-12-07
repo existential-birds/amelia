@@ -11,6 +11,7 @@ from amelia.server.dev import (
     check_node_installed,
     check_node_modules_exist,
     check_pnpm_installed,
+    check_port_available,
     is_amelia_dev_repo,
 )
 
@@ -93,6 +94,29 @@ class TestDependencyChecks:
             assert check_node_modules_exist() is False
 
 
+class TestPortCheck:
+    """Tests for port availability checking."""
+
+    def test_check_port_available_free_port(self):
+        """Returns True for available ports."""
+        # Use a high port unlikely to be in use
+        assert check_port_available("127.0.0.1", 59123) is True
+
+    def test_check_port_available_bound_port(self):
+        """Returns False when port is already bound."""
+        import socket
+
+        # Bind a socket to a port, then check availability
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.bind(("127.0.0.1", 0))  # Bind to random available port
+        _, port = sock.getsockname()
+
+        try:
+            assert check_port_available("127.0.0.1", port) is False
+        finally:
+            sock.close()
+
+
 class TestColors:
     """Tests for color palette."""
 
@@ -164,29 +188,85 @@ class TestDevCLI:
 
     def test_dev_user_mode_skips_node_check(self, runner: CliRunner):
         """In user mode, node/pnpm checks are skipped."""
+
+        def close_coroutine(coro):
+            """Close coroutine to prevent RuntimeWarning."""
+            coro.close()
+            return 0
+
         with (
             patch("amelia.server.dev.is_amelia_dev_repo", return_value=False),
             patch("amelia.server.dev.check_node_installed", return_value=False),
             patch("amelia.server.dev.check_pnpm_installed", return_value=False),
-            patch("amelia.server.dev.asyncio.run") as mock_run,
+            patch("amelia.server.dev.check_port_available", return_value=True),
+            patch("amelia.server.dev.asyncio.run", side_effect=close_coroutine) as mock_run,
         ):
-            mock_run.return_value = 0
             runner.invoke(app, ["dev"])
             # Should not fail due to missing node/pnpm
             mock_run.assert_called_once()
 
     def test_dev_no_dashboard_skips_node_check(self, runner: CliRunner):
         """--no-dashboard skips node/pnpm checks even in dev mode."""
+
+        def close_coroutine(coro):
+            """Close coroutine to prevent RuntimeWarning."""
+            coro.close()
+            return 0
+
         with (
             patch("amelia.server.dev.is_amelia_dev_repo", return_value=True),
             patch("amelia.server.dev.check_node_installed", return_value=False),
             patch("amelia.server.dev.check_pnpm_installed", return_value=False),
-            patch("amelia.server.dev.asyncio.run") as mock_run,
+            patch("amelia.server.dev.check_port_available", return_value=True),
+            patch("amelia.server.dev.asyncio.run", side_effect=close_coroutine) as mock_run,
         ):
-            mock_run.return_value = 0
             runner.invoke(app, ["dev", "--no-dashboard"])
             # Should not fail due to missing node/pnpm
             mock_run.assert_called_once()
+
+    def test_dev_fails_when_port_in_use(self, runner: CliRunner):
+        """Dev command fails with clear error when port is in use."""
+        with (
+            patch("amelia.server.dev.is_amelia_dev_repo", return_value=False),
+            patch("amelia.server.dev.check_port_available", return_value=False),
+        ):
+            result = runner.invoke(app, ["dev", "--port", "8420"])
+            assert result.exit_code == 1
+            assert "8420" in result.stdout
+            assert "already in use" in result.stdout
+            assert "--port" in result.stdout
+
+
+class TestAutoInstall:
+    """Tests for auto-install behavior."""
+
+    async def test_run_pnpm_install_failure_returns_false(self):
+        """run_pnpm_install returns False on non-zero exit code."""
+        from amelia.server.dev import run_pnpm_install
+
+        mock_process = AsyncMock()
+        mock_process.returncode = 1
+        mock_process.stdout = AsyncMock()
+        mock_process.stdout.readline = AsyncMock(side_effect=[b"", None])
+        mock_process.wait = AsyncMock(return_value=1)
+
+        with patch("amelia.server.dev.asyncio.create_subprocess_exec", return_value=mock_process):
+            result = await run_pnpm_install()
+            assert result is False
+
+    async def test_run_pnpm_install_success_returns_true(self):
+        """run_pnpm_install returns True on zero exit code."""
+        from amelia.server.dev import run_pnpm_install
+
+        mock_process = AsyncMock()
+        mock_process.returncode = 0
+        mock_process.stdout = AsyncMock()
+        mock_process.stdout.readline = AsyncMock(side_effect=[b"", None])
+        mock_process.wait = AsyncMock(return_value=0)
+
+        with patch("amelia.server.dev.asyncio.create_subprocess_exec", return_value=mock_process):
+            result = await run_pnpm_install()
+            assert result is True
 
 
 class TestProcessManager:

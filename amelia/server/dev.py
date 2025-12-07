@@ -7,9 +7,11 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import errno
 import os
 import shutil
 import signal
+import socket
 import sys
 from enum import Enum
 from pathlib import Path
@@ -73,6 +75,26 @@ def check_node_installed() -> bool:
 def check_node_modules_exist() -> bool:
     """Check if dashboard/node_modules exists."""
     return (Path.cwd() / "dashboard" / "node_modules").is_dir()
+
+
+def check_port_available(host: str, port: int) -> bool:
+    """Check if a port is available for binding.
+
+    Args:
+        host: Host address to check.
+        port: Port number to check.
+
+    Returns:
+        True if port is available, False if already in use.
+    """
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        try:
+            sock.bind((host, port))
+            return True
+        except OSError as e:
+            if e.errno in (errno.EADDRINUSE, errno.EADDRNOTAVAIL):
+                return False
+            raise
 
 
 async def run_pnpm_install() -> bool:
@@ -359,7 +381,7 @@ def dev(
     ctx: typer.Context,
     port: Annotated[
         int | None,
-        typer.Option("--port", "-p", help="Server port (default: 8000)"),
+        typer.Option("--port", "-p", help="Server port (default: 8420)"),
     ] = None,
     no_dashboard: Annotated[
         bool,
@@ -418,6 +440,17 @@ def dev(
     config = ServerConfig()
     effective_port = port if port is not None else config.port
     effective_host = "0.0.0.0" if bind_all else config.host
+
+    # Check port availability
+    if not check_port_available(effective_host, effective_port):
+        console.print(
+            Text(
+                f"Error: Port {effective_port} is already in use. "
+                f"Try a different port with --port <PORT>",
+                style=Colors.RUST,
+            )
+        )
+        raise typer.Exit(code=1)
 
     # Show mode
     mode = "dev" if is_dev_repo else "user"
