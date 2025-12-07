@@ -120,6 +120,7 @@ When working on this project with [Claude Code](https://claude.ai/code), the fol
 | `/amelia:run-test-plan <path>` | Execute a manual test plan in an isolated worktree |
 | `/amelia:greptile-review` | Fetch and evaluate greptile-apps review comments |
 | `/amelia:eval-feedback <feedback>` | Evaluate code review feedback from another session |
+| `/amelia:prompt-improver <prompt>` | Optimize a prompt following Claude 4 best practices |
 | `/amelia:respond-review` | Respond to greptile review comments after evaluation |
 | `/amelia:skill-builder` | Create Claude Code skills with comprehensive best practices |
 
