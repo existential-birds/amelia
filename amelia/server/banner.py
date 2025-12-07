@@ -1,4 +1,6 @@
 """ASCII banner with gradient colors for server startup including an airplane."""
+import random
+
 from rich.console import Console
 from rich.style import Style
 from rich.text import Text
@@ -90,6 +92,42 @@ def get_gradient_banner(start_color: str, end_color: str) -> Text:
     return text
 
 
+def get_agi_banner() -> Text:
+    """Generate the AGI countdown banner with gradient.
+
+    Returns:
+        Rich Text object with the styled AGI countdown banner.
+    """
+    days_until_agi = random.randint(14, 1000)
+    inner_width = 39
+    centered_days = str(days_until_agi).center(inner_width)
+
+    lines = [
+        "    ╔═══════════════════════════════════════╗",
+        "    ║                                       ║",
+        "    ║   DAYS REMAINING UNTIL AGI ACHIEVED:  ║",
+        f"    ║{centered_days}║",
+        "    ║                                       ║",
+        "    ╚═══════════════════════════════════════╝",
+    ]
+
+    text = Text()
+    max_len = max(len(line) for line in lines)
+
+    for i, line in enumerate(lines):
+        for j, char in enumerate(line):
+            if char.strip():
+                factor = j / max_len if max_len > 0 else 0
+                color = _interpolate_color(GOLD, MOSS, factor)
+                text.append(char, style=Style(color=color))
+            else:
+                text.append(char)
+        if i < len(lines) - 1:
+            text.append("\n")
+
+    return text
+
+
 def print_banner(console: Console) -> None:
     """Print the gradient ASCII banner.
 
@@ -98,7 +136,9 @@ def print_banner(console: Console) -> None:
     """
     # Using NAVY (#0a2463) to GOLD (#ffc857) for a "Sky/Sunrise" effect
     banner = get_gradient_banner(start_color=NAVY, end_color=GOLD)
-    
-    console.print() 
+
+    console.print()
     console.print(banner)
+    console.print()
+    console.print(get_agi_banner())
     console.print()
