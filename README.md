@@ -276,15 +276,6 @@ Verify correct version is used:
 which amelia  # Should show ~/.local/bin/amelia
 ```
 
-## Contributing
-
-We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, code conventions, and workflow guidelines.
-
-**Quick links for contributors:**
-- Check the [Roadmap project board](https://github.com/anderskev/amelia/projects) to see what's planned
-- Filter issues by `good first issue` or `help wanted` to find work
-- Depend on **tagged releases** for production use, not main
-
 ## Learn More
 
 - [Roadmap](docs/roadmap.md) - Detailed development phases and vision
