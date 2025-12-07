@@ -1,21 +1,24 @@
-# LangGraph Execution Bridge Manual Testing Plan
+# Dashboard Setup Manual Testing Plan
 
-**Branch:** `feat/langgraph-execution-bridge`
-**Feature:** Server-side LangGraph execution with interrupt/resume for human approval
+**Branch:** `feat/dashboard-setup`
+**Feature:** Initialize Amelia Dashboard with Vite + React + TypeScript, shadcn/ui components, and FastAPI static file serving
 
 ## Overview
 
-This PR implements the LangGraph execution bridge that enables:
-- **Interrupt-based approval flow**: Workflow pauses at `human_approval_node` via LangGraph's `interrupt_before` mechanism
-- **Checkpoint persistence**: Workflow state saved to SQLite via `langgraph-checkpoint-sqlite`
-- **Server-mode execution**: Distinct from CLI mode - approval happens via API, not blocking prompt
-- **State resumption**: After approval, graph resumes with `human_approved=True` in state
-- **Event emission**: `APPROVAL_REQUIRED`, `APPROVAL_GRANTED`, `STAGE_STARTED`, `STAGE_COMPLETED` events
+This PR adds a complete dashboard frontend to Amelia, including:
+- Vite + React + TypeScript project setup in `/dashboard`
+- shadcn/ui component library with Radix UI primitives
+- React Router v7 with lazy-loaded pages and error boundaries
+- Custom AI-themed UI components (confirmation dialogs, queues, loaders)
+- FastAPI integration for serving the built dashboard as static files
+- SPA routing fallback for client-side navigation
+- Dark theme with custom design tokens
 
-Manual testing is needed because:
-1. LangGraph checkpoint/resume behavior requires real SQLite integration
-2. Async task lifecycle and cleanup need verification
-3. Event bus integration and timing need end-to-end verification
+Manual testing is needed to verify:
+1. Dashboard builds correctly and displays properly
+2. Client-side routing works when served by FastAPI
+3. API routes remain accessible alongside the dashboard
+4. Navigation and UI components render correctly
 
 ---
 
@@ -24,237 +27,292 @@ Manual testing is needed because:
 ### Environment Setup
 
 ```bash
-# 1. Navigate to project
+# 1. Navigate to project root
 cd /Users/ka/github/amelia-langgraph-bridge
 
-# 2. Install dependencies (includes langgraph-checkpoint-sqlite)
+# 2. Install Python dependencies
 uv sync
 
-# 3. Verify dependencies
-uv run python -c "from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver; print('OK')"
+# 3. Install dashboard dependencies
+cd dashboard && pnpm install
+
+# 4. Build the dashboard
+pnpm run build
+
+# 5. Return to project root
+cd ..
+
+# 6. Verify build output exists
+ls -la dashboard/dist/
 ```
 
 ### Testing Tools
 
-- `curl` or `httpie` for API requests
-- `sqlite3` for checkpoint database inspection
-- Second terminal for monitoring logs
+- Browser with DevTools (Chrome/Firefox recommended)
+- Terminal for running server commands
+- curl or httpie for API testing
 
 ---
 
 ## Test Scenarios
 
-### TC-01: Workflow Starts and Pauses at Approval
+### TC-01: Dashboard Build Process
 
-**Objective:** Verify workflow execution pauses at `human_approval_node` and emits `APPROVAL_REQUIRED` event.
+**Objective:** Verify the dashboard builds without errors and produces correct output
 
 **Steps:**
-1. Start the server with logging enabled
-2. Start a workflow via API
-3. Monitor events for `APPROVAL_REQUIRED`
-4. Verify workflow status is `blocked`
+1. Navigate to dashboard directory
+2. Run TypeScript type checking
+3. Run the build command
+4. Verify output structure
 
 **Expected Result:**
-- Workflow status transitions: `pending` -> `in_progress` -> `blocked`
-- `WORKFLOW_STARTED` event emitted
-- `STAGE_STARTED` event for `architect_node`
-- `APPROVAL_REQUIRED` event emitted with `paused_at: human_approval_node`
+- No TypeScript errors
+- Build completes successfully
+- `dist/` contains `index.html` and `assets/` directory
+- Assets include JS, CSS, and sourcemap files
 
 **Verification Commands:**
 ```bash
-# Start server (terminal 1)
-uv run amelia server --reload
-
-# Start workflow (terminal 2)
-curl -X POST http://localhost:8420/api/workflows \
-  -H "Content-Type: application/json" \
-  -d '{"issue_id": "30", "worktree_path": "/tmp/test-wt"}'
-
-# Check workflow status
-curl http://localhost:8420/api/workflows/{workflow_id}
-# Expected: {"workflow_status": "blocked", ...}
-
-# Check events
-curl http://localhost:8420/api/workflows/{workflow_id}/events
-# Expected: WORKFLOW_STARTED, STAGE_STARTED, APPROVAL_REQUIRED events
+cd dashboard
+pnpm run type-check
+pnpm run build
+ls -la dist/
+ls -la dist/assets/
 ```
 
 ---
 
-### TC-02: Approve Workflow Resumes Execution
+### TC-02: FastAPI Serves Dashboard at Root
 
-**Objective:** Verify `approve_workflow` updates state and resumes LangGraph execution.
+**Objective:** Verify the built dashboard is served correctly at `/`
 
 **Steps:**
-1. Start a workflow and wait for `blocked` status
-2. Call approve endpoint
-3. Monitor events for `APPROVAL_GRANTED` and subsequent stages
-4. Verify final status is `completed`
+1. Ensure dashboard is built (`dashboard/dist/` exists)
+2. Start the Amelia server
+3. Open browser to `http://localhost:8420/`
+4. Verify the dashboard loads
 
 **Expected Result:**
-- `APPROVAL_GRANTED` event emitted
-- Status transitions: `blocked` -> `in_progress` -> `completed`
-- Graph state updated with `human_approved=True`
-- Developer and reviewer nodes execute
+- Browser displays the Amelia Dashboard
+- Page title is "Amelia Dashboard"
+- Sidebar with "AMELIA" branding visible
+- Navigation links present (Active Jobs, Past Runs, Logs)
 
 **Verification Commands:**
 ```bash
-# Approve the blocked workflow
-curl -X POST http://localhost:8420/api/workflows/{workflow_id}/approve
+# Start the server
+uv run uvicorn amelia.server.main:app --host 0.0.0.0 --port 8420
 
-# Monitor status
-curl http://localhost:8420/api/workflows/{workflow_id}
-# Expected: {"workflow_status": "completed", ...} (after execution)
+# In another terminal:
+curl -s http://localhost:8420/ | head -20
+# Should contain "Amelia Dashboard" in HTML
 
-# Check events include all stages
-curl http://localhost:8420/api/workflows/{workflow_id}/events
-# Expected: APPROVAL_GRANTED, STAGE_STARTED (developer), STAGE_COMPLETED, etc.
+# Or check content-type:
+curl -I http://localhost:8420/
+# Should show: content-type: text/html; charset=utf-8
 ```
 
 ---
 
-### TC-03: Reject Workflow Sets Failed State
+### TC-03: SPA Client-Side Routing
 
-**Objective:** Verify `reject_workflow` cancels execution and updates LangGraph state.
+**Objective:** Verify client-side routes work when served by FastAPI
 
 **Steps:**
-1. Start a workflow and wait for `blocked` status
-2. Call reject endpoint with feedback
-3. Verify status is `failed` with rejection reason
+1. With server running, navigate to `http://localhost:8420/workflows`
+2. Verify page loads (not 404)
+3. Navigate to `http://localhost:8420/history`
+4. Navigate to `http://localhost:8420/logs`
+5. Navigate to `http://localhost:8420/workflows/test-123`
+6. Try refreshing the browser on each route
 
 **Expected Result:**
-- `APPROVAL_REJECTED` event emitted
-- Status set to `failed`
-- `failure_reason` contains rejection feedback
-- Graph state updated with `human_approved=False`
+- All routes return 200 and render the dashboard
+- Each page shows appropriate content/placeholder
+- Browser refresh maintains the current route
+- Active navigation link is highlighted in sidebar
 
 **Verification Commands:**
 ```bash
-# Reject the blocked workflow
-curl -X POST http://localhost:8420/api/workflows/{workflow_id}/reject \
-  -H "Content-Type: application/json" \
-  -d '{"feedback": "Plan needs more detail"}'
-
-# Verify status
-curl http://localhost:8420/api/workflows/{workflow_id}
-# Expected: {"workflow_status": "failed", "failure_reason": "Plan needs more detail"}
+# Each should return 200 with HTML content
+curl -I http://localhost:8420/workflows
+curl -I http://localhost:8420/history
+curl -I http://localhost:8420/logs
+curl -I http://localhost:8420/workflows/some-id
 ```
 
 ---
 
-### TC-04: Checkpoint Persistence Survives Server Restart
+### TC-04: API Routes Remain Accessible
 
-**Objective:** Verify checkpoint state is persisted to SQLite and survives restarts.
+**Objective:** Verify API endpoints work alongside the dashboard
 
 **Steps:**
-1. Start workflow and pause at approval
-2. Stop the server
-3. Inspect checkpoint database
-4. Restart server
-5. Verify workflow can be recovered or shows correct state
+1. Test health check endpoint
+2. Test API documentation
+3. Test a workflow API endpoint
 
 **Expected Result:**
-- Checkpoint database (`~/.amelia/checkpoints.db`) contains workflow state
-- State includes graph position at `human_approval_node`
+- `/api/health/live` returns JSON `{"status": "alive"}`
+- `/api/docs` serves Swagger UI
+- API routes return JSON, not HTML
 
 **Verification Commands:**
 ```bash
-# After workflow is blocked, stop server (Ctrl+C)
+# Health check
+curl http://localhost:8420/api/health/live
+# Expected: {"status":"alive"}
 
-# Inspect checkpoint database
-sqlite3 ~/.amelia/checkpoints.db ".tables"
-# Expected: checkpoints table exists
+# Check API docs accessible
+curl -I http://localhost:8420/api/docs
+# Expected: 200 OK
 
-sqlite3 ~/.amelia/checkpoints.db "SELECT thread_id FROM checkpoints;"
-# Expected: workflow_id from blocked workflow
-
-# Restart server and check workflow state
-uv run amelia server --reload
-curl http://localhost:8420/api/workflows/{workflow_id}
+# Unknown API route returns 404 JSON, not dashboard HTML
+curl http://localhost:8420/api/nonexistent
+# Expected: 404 JSON error, NOT HTML
 ```
 
 ---
 
-### TC-05: Approve Non-Blocked Workflow Returns Error
+### TC-05: Unknown API Routes Return 404
 
-**Objective:** Verify approve/reject only work on blocked workflows.
+**Objective:** Verify unknown `/api/` routes don't fall through to SPA
 
 **Steps:**
-1. Try to approve a workflow that is not blocked
-2. Verify appropriate error response
+1. Request a non-existent API endpoint
+2. Check response is JSON 404, not HTML
 
 **Expected Result:**
-- HTTP 400 or 409 error
-- Error message indicates invalid state
+- Response status is 404
+- Response body is JSON error, not index.html
 
 **Verification Commands:**
 ```bash
-# Try to approve a completed or non-existent workflow
-curl -X POST http://localhost:8420/api/workflows/non-existent/approve
-# Expected: 404 WorkflowNotFoundError
-
-# Try to approve already-completed workflow
-curl -X POST http://localhost:8420/api/workflows/{completed_id}/approve
-# Expected: 400/409 InvalidStateError
+curl -w "\n%{http_code}\n" http://localhost:8420/api/does-not-exist
+# Should return 404 JSON, not 200 HTML
 ```
 
 ---
 
-### TC-06: Event Mapping Emits Stage Events
+### TC-06: Static Assets Served Correctly
 
-**Objective:** Verify LangGraph events are correctly mapped to workflow events.
+**Objective:** Verify JS/CSS assets load properly
 
 **Steps:**
-1. Start and approve a workflow
-2. Check all stage events are emitted correctly
+1. Open dashboard in browser
+2. Open DevTools Network tab
+3. Refresh the page
+4. Check all assets load with 200 status
 
 **Expected Result:**
-- `STAGE_STARTED` events for: `architect_node`, `human_approval_node`, `developer_node`, `reviewer_node`
-- `STAGE_COMPLETED` events for each stage
-- Events have correct `stage` field in data
+- All `.js` files load successfully
+- All `.css` files load successfully
+- No 404 errors in Network tab
+- Assets served from `/assets/` path
 
 **Verification Commands:**
 ```bash
-# After workflow completes
-curl http://localhost:8420/api/workflows/{workflow_id}/events | jq '.[] | select(.event_type | contains("STAGE"))'
-# Expected: Paired STAGE_STARTED/STAGE_COMPLETED for each node
+# List built assets
+ls dashboard/dist/assets/
+
+# Check one asset is accessible (filename will vary)
+curl -I http://localhost:8420/assets/index-*.js
 ```
 
 ---
 
-### TC-07: Concurrent Workflow Isolation
+### TC-07: Dashboard Not Built Fallback
 
-**Objective:** Verify multiple workflows don't interfere with each other.
+**Objective:** Verify helpful message when dashboard is not built
 
 **Steps:**
-1. Start workflow A on worktree `/tmp/wt-a`
-2. Start workflow B on worktree `/tmp/wt-b`
-3. Approve workflow A
-4. Verify workflow B still blocked
-5. Approve workflow B
+1. Stop the server
+2. Remove or rename `dashboard/dist/`
+3. Start the server
+4. Request root URL
 
 **Expected Result:**
-- Each workflow has independent checkpoint
-- Approving one doesn't affect the other
-- Both complete successfully
+- Response is JSON with helpful message
+- Message includes build instructions
+- API routes still work normally
 
 **Verification Commands:**
 ```bash
-# Start two workflows
-curl -X POST http://localhost:8420/api/workflows \
-  -d '{"issue_id": "TEST-A", "worktree_path": "/tmp/wt-a"}'
-# Note workflow_id_a
+# Remove built dashboard
+mv dashboard/dist dashboard/dist.bak
 
-curl -X POST http://localhost:8420/api/workflows \
-  -d '{"issue_id": "TEST-B", "worktree_path": "/tmp/wt-b"}'
-# Note workflow_id_b
+# Restart server and test
+curl http://localhost:8420/
+# Expected: {"message":"Dashboard not built","instructions":"Run 'cd dashboard && pnpm run build' to build the dashboard"}
 
-# Approve A
-curl -X POST http://localhost:8420/api/workflows/{workflow_id_a}/approve
+# Restore
+mv dashboard/dist.bak dashboard/dist
+```
 
-# Check B is still blocked
-curl http://localhost:8420/api/workflows/{workflow_id_b}
-# Expected: {"workflow_status": "blocked"}
+---
+
+### TC-08: Navigation UI Components
+
+**Objective:** Verify sidebar navigation works correctly
+
+**Steps:**
+1. Open dashboard in browser
+2. Click "Active Jobs" link
+3. Verify URL changes to `/workflows`
+4. Click "Past Runs" link
+5. Click "Logs" link
+6. Verify active state highlighting changes
+
+**Expected Result:**
+- Clicking navigation links updates URL
+- Active link is visually highlighted
+- Page content changes appropriately
+- Browser back/forward buttons work
+
+---
+
+### TC-09: Error Boundary Display
+
+**Objective:** Verify error boundary handles routing errors
+
+**Steps:**
+1. Manually trigger an error (modify a page component temporarily)
+2. Navigate to that page
+3. Verify error boundary catches and displays error
+
+**Expected Result:**
+- Error boundary displays friendly error message
+- "Go Home" and "Go Back" buttons present
+- In development mode, error stack trace shown
+
+---
+
+### TC-10: Development Server Proxy
+
+**Objective:** Verify Vite dev server proxies API requests correctly
+
+**Steps:**
+1. Start the FastAPI server on port 8420
+2. In another terminal, start dashboard dev server
+3. Open `http://localhost:3000`
+4. Verify API calls work through proxy
+
+**Expected Result:**
+- Dashboard loads at `http://localhost:3000`
+- API requests to `/api/*` proxied to FastAPI
+- Hot reloading works for frontend changes
+
+**Verification Commands:**
+```bash
+# Terminal 1: Start FastAPI
+uv run uvicorn amelia.server.main:app --port 8420
+
+# Terminal 2: Start dashboard dev server
+cd dashboard && pnpm run dev
+
+# Test proxy works (from dev server port)
+curl http://localhost:3000/api/health/live
 ```
 
 ---
@@ -263,14 +321,13 @@ curl http://localhost:8420/api/workflows/{workflow_id_b}
 
 After testing:
 ```bash
-# Stop the server
-# Ctrl+C in server terminal
+# Stop the servers (Ctrl+C in each terminal)
 
-# Clean up test worktrees
-rm -rf /tmp/wt-a /tmp/wt-b /tmp/test-wt
+# Optional: Remove build artifacts
+rm -rf dashboard/dist
 
-# Optionally remove checkpoint database
-rm -f ~/.amelia/checkpoints.db
+# Rebuild if needed for future tests
+cd dashboard && pnpm run build
 ```
 
 ---
@@ -279,13 +336,16 @@ rm -f ~/.amelia/checkpoints.db
 
 | Test ID | Description | Status | Notes |
 |---------|-------------|--------|-------|
-| TC-01 | Workflow pauses at approval | [ ] Pass / [ ] Fail | |
-| TC-02 | Approve resumes execution | [ ] Pass / [ ] Fail | |
-| TC-03 | Reject sets failed state | [ ] Pass / [ ] Fail | |
-| TC-04 | Checkpoint survives restart | [ ] Pass / [ ] Fail | |
-| TC-05 | Error on approve non-blocked | [ ] Pass / [ ] Fail | |
-| TC-06 | Stage events emitted correctly | [ ] Pass / [ ] Fail | |
-| TC-07 | Concurrent workflow isolation | [ ] Pass / [ ] Fail | |
+| TC-01 | Dashboard Build Process | [ ] Pass / [ ] Fail | |
+| TC-02 | FastAPI Serves Dashboard at Root | [ ] Pass / [ ] Fail | |
+| TC-03 | SPA Client-Side Routing | [ ] Pass / [ ] Fail | |
+| TC-04 | API Routes Remain Accessible | [ ] Pass / [ ] Fail | |
+| TC-05 | Unknown API Routes Return 404 | [ ] Pass / [ ] Fail | |
+| TC-06 | Static Assets Served Correctly | [ ] Pass / [ ] Fail | |
+| TC-07 | Dashboard Not Built Fallback | [ ] Pass / [ ] Fail | |
+| TC-08 | Navigation UI Components | [ ] Pass / [ ] Fail | |
+| TC-09 | Error Boundary Display | [ ] Pass / [ ] Fail | |
+| TC-10 | Development Server Proxy | [ ] Pass / [ ] Fail | |
 
 ---
 
@@ -293,44 +353,34 @@ rm -f ~/.amelia/checkpoints.db
 
 ### For LLM Agent Executing This Plan:
 
-1. **Start server first** - All tests require a running server
-2. **Execute tests sequentially** - TC-01 through TC-03 follow a workflow lifecycle
-3. **Capture workflow IDs** - Store IDs from POST responses for subsequent requests
-4. **Monitor logs** - Server logs will show LangGraph execution details
-5. **Check checkpoint DB** - Use sqlite3 to verify persistence
+1. **Start with TC-01** - Build must succeed before other tests
+2. **Keep server running** - TC-02 through TC-06 require FastAPI running
+3. **Document asset filenames** - JS/CSS files have hashed names, note actual names
+4. **Capture screenshots** - If using playwright/browser automation
+5. **Test TC-07 last** - Requires removing build artifacts
 
-### Programmatic Test Execution
+### Programmatic Testing Example:
 
 ```python
 import httpx
-import asyncio
 
-async def test_approval_flow():
+async def test_dashboard_routes():
     async with httpx.AsyncClient(base_url="http://localhost:8420") as client:
-        # Start workflow
-        resp = await client.post("/api/workflows", json={
-            "issue_id": "30",
-            "worktree_path": "/tmp/test-wt"
-        })
-        workflow_id = resp.json()["id"]
+        # TC-02: Root serves HTML
+        r = await client.get("/")
+        assert r.status_code == 200
+        assert "text/html" in r.headers.get("content-type", "")
 
-        # Poll until blocked
-        for _ in range(30):
-            status = await client.get(f"/api/workflows/{workflow_id}")
-            if status.json()["workflow_status"] == "blocked":
-                break
-            await asyncio.sleep(1)
+        # TC-03: SPA routes
+        for path in ["/workflows", "/history", "/logs"]:
+            r = await client.get(path)
+            assert r.status_code == 200
+            assert "text/html" in r.headers.get("content-type", "")
 
-        # Approve
-        await client.post(f"/api/workflows/{workflow_id}/approve")
-
-        # Poll until completed
-        for _ in range(60):
-            status = await client.get(f"/api/workflows/{workflow_id}")
-            if status.json()["workflow_status"] in ("completed", "failed"):
-                print(f"Final status: {status.json()['workflow_status']}")
-                break
-            await asyncio.sleep(1)
+        # TC-04: API routes
+        r = await client.get("/api/health/live")
+        assert r.status_code == 200
+        assert r.json() == {"status": "alive"}
 ```
 
 ---
@@ -339,16 +389,23 @@ async def test_approval_flow():
 
 The following changes should be verified through testing:
 
-1. **Orchestrator interrupt support** (`amelia/core/orchestrator.py`):
-   - `create_orchestrator_graph()` accepts `interrupt_before` parameter
-   - `human_approval_node` returns state unchanged in server mode
+1. **Dashboard Infrastructure** (`dashboard/`):
+   - Vite + React + TypeScript project setup
+   - pnpm package management with lockfile
+   - Build output to `dashboard/dist/`
 
-2. **Server execution bridge** (`amelia/server/orchestrator/service.py`):
-   - `_run_workflow()` creates graph with `interrupt_before=["human_approval_node"]`
-   - `_run_workflow()` converts `ExecutionState` to JSON-serializable dict using `model_dump(mode="json")` before passing to LangGraph (required for SQLite checkpoint persistence)
-   - `approve_workflow()` uses `graph.aupdate_state()` and resumes execution
-   - `reject_workflow()` updates state with `human_approved=False`
-   - Event mapping via `_handle_graph_event()` and `STAGE_NODES`
+2. **FastAPI Static Serving** (`amelia/server/main.py`):
+   - Static file mounting for `/assets`
+   - SPA fallback route for client-side routing
+   - Conditional behavior when dashboard not built
 
-3. **State composition** (`amelia/server/models/state.py`):
-   - `ServerExecutionState.execution_state` holds core state for LangGraph
+3. **UI Components** (`dashboard/src/components/`):
+   - Layout with sidebar navigation
+   - Error boundaries for route errors
+   - shadcn/ui base components (Button, Card, etc.)
+   - AI-themed components (confirmation, queue, loader)
+
+4. **Routing** (`dashboard/src/router.tsx`):
+   - React Router v7 configuration
+   - Lazy-loaded pages
+   - Redirect handling for root and unknown paths

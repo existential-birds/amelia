@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -165,15 +165,11 @@ def create_app() -> FastAPI:
             # Skip API and WebSocket routes
             if full_path.startswith("api/") or full_path.startswith("ws/"):
                 # Let the 404 handler deal with unknown API routes
-                from fastapi import HTTPException
-
                 raise HTTPException(status_code=404, detail="Not found")
 
             index_file = dashboard_dir / "index.html"
             if index_file.exists():
                 return FileResponse(index_file)
-
-            from fastapi import HTTPException
 
             raise HTTPException(status_code=404, detail="Dashboard not built")
 

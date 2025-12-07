@@ -1,7 +1,6 @@
 import { Suspense } from 'react';
 import { RouterProvider } from 'react-router-dom';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { BrowserCheck } from '@/components/BrowserCheck';
 import { router } from '@/router';
 
 function GlobalLoadingSpinner() {
@@ -14,12 +13,10 @@ function GlobalLoadingSpinner() {
 
 export function App() {
   return (
-    <BrowserCheck>
-      <TooltipProvider>
-        <Suspense fallback={<GlobalLoadingSpinner />}>
-          <RouterProvider router={router} />
-        </Suspense>
-      </TooltipProvider>
-    </BrowserCheck>
+    <TooltipProvider>
+      <Suspense fallback={<GlobalLoadingSpinner />}>
+        <RouterProvider router={router} />
+      </Suspense>
+    </TooltipProvider>
   );
 }
