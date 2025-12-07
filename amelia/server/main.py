@@ -1,4 +1,40 @@
-"""FastAPI application setup and configuration."""
+"""FastAPI application setup and configuration.
+
+Note: Imports are intentionally placed after _check_dependencies() to provide
+a user-friendly error message when langgraph-checkpoint-sqlite is missing.
+This typically happens when running `amelia server` without `uv run`.
+"""
+# ruff: noqa: E402, PLC0415
+import sys
+
+
+def _check_dependencies() -> None:
+    """Check that required dependencies are available.
+
+    Raises:
+        SystemExit: If required dependencies are missing.
+    """
+    missing = []
+    try:
+        import langgraph.checkpoint.sqlite.aio  # noqa: F401
+    except ModuleNotFoundError:
+        missing.append("langgraph-checkpoint-sqlite")
+
+    if missing:
+        print(
+            f"\n[ERROR] Missing required dependencies: {', '.join(missing)}\n\n"
+            "The Amelia server requires dependencies installed in the virtual environment.\n"
+            "Please run the server using:\n\n"
+            "    uv run amelia server\n\n"
+            "Or install dependencies globally:\n\n"
+            f"    pip install {' '.join(missing)}\n",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+
+_check_dependencies()
+
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
