@@ -211,6 +211,38 @@ uv run mypy amelia
 uv run pytest
 ```
 
+### "Missing required dependencies: langgraph-checkpoint-sqlite" when running `amelia server`
+
+This error indicates a dependency conflict from multiple installations:
+
+**Causes:**
+1. Multiple amelia installations (e.g., old `pip install` in pyenv AND new `uv tool install`)
+2. Outdated `uv tool` installation that didn't pick up new dependencies
+
+**Solutions:**
+
+Check for multiple installations:
+```bash
+which amelia
+type amelia
+```
+
+If pyenv shim is being used (`/Users/.../.pyenv/shims/amelia`), uninstall the old version:
+```bash
+pip uninstall amelia
+pyenv rehash
+```
+
+Reinstall with uv:
+```bash
+uv tool install --reinstall git+https://github.com/anderskev/amelia.git
+```
+
+Verify correct version is used:
+```bash
+which amelia  # Should show ~/.local/bin/amelia
+```
+
 ## Learn More
 
 - [Roadmap](docs/roadmap.md) - Detailed development phases and vision
