@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { Layout } from './Layout';
 
 // Mock the hooks
@@ -16,17 +17,23 @@ vi.mock('@/store/workflowStore', () => ({
   }),
 }));
 
-// Mock react-router-dom hooks
-vi.mock('react-router-dom', async () => {
-  const actual = await vi.importActual('react-router-dom');
-  return {
-    ...actual,
-    useLocation: () => ({ pathname: '/workflows' }),
-    useNavigation: () => ({ state: 'idle' }),
-    Outlet: () => null,
-    Link: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  };
-});
+const renderLayout = (initialRoute = '/') => {
+  const router = createMemoryRouter(
+    [
+      {
+        path: '/',
+        element: <Layout />,
+        children: [
+          { path: 'workflows', element: <div>Workflows</div> },
+          { path: 'history', element: <div>History</div> },
+          { path: 'logs', element: <div>Logs</div> },
+        ],
+      },
+    ],
+    { initialEntries: [initialRoute] }
+  );
+  return render(<RouterProvider router={router} />);
+};
 
 describe('Layout WebSocket Initialization', () => {
   beforeEach(() => {
@@ -35,19 +42,19 @@ describe('Layout WebSocket Initialization', () => {
   });
 
   it('should initialize WebSocket on mount', () => {
-    render(<Layout />);
+    renderLayout();
     expect(mockUseWebSocket).toHaveBeenCalledTimes(1);
   });
 
   it('should display "Connected" when WebSocket is connected', () => {
     mockIsConnected = true;
-    render(<Layout />);
+    renderLayout();
     expect(screen.getByText('Connected')).toBeInTheDocument();
   });
 
   it('should display "Disconnected" when WebSocket is disconnected', () => {
     mockIsConnected = false;
-    render(<Layout />);
+    renderLayout();
     expect(screen.getByText('Disconnected')).toBeInTheDocument();
   });
 });

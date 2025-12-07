@@ -74,11 +74,16 @@ describe('useWebSocket', () => {
       isConnected: false,
       connectionError: null,
     });
+    // Suppress console output in tests
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.spyOn(console, 'error').mockImplementation(() => {});
   });
 
   afterEach(() => {
     vi.runOnlyPendingTimers();
     vi.useRealTimers();
+    vi.restoreAllMocks();
   });
 
   it('should connect to WebSocket on mount', () => {

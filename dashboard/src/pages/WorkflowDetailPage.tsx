@@ -49,8 +49,9 @@ export default function WorkflowDetailPage() {
 
   // Convert plan to pipeline format for WorkflowCanvas (if plan exists)
   const pipeline = workflow.plan
-    ? {
-        nodes: workflow.plan.tasks.map((task) => ({
+    ? (() => {
+        const taskIds = new Set(workflow.plan!.tasks.map((t) => t.id));
+        const nodes = workflow.plan!.tasks.map((task) => ({
           id: task.id,
           label: task.agent,
           subtitle: task.description,
@@ -61,17 +62,21 @@ export default function WorkflowDetailPage() {
             : task.status === 'failed'
             ? 'blocked' as const
             : 'pending' as const,
-        })),
-        edges: workflow.plan.tasks
+        }));
+        // Filter edges to only include those where both source and target exist
+        const edges = workflow.plan!.tasks
           .flatMap((task) =>
-            task.dependencies.map((depId) => ({
-              from: depId,
-              to: task.id,
-              label: '',
-              status: 'completed' as const,
-            }))
-          ),
-      }
+            task.dependencies
+              .filter((depId) => taskIds.has(depId))
+              .map((depId) => ({
+                from: depId,
+                to: task.id,
+                label: '',
+                status: 'completed' as const,
+              }))
+          );
+        return { nodes, edges };
+      })()
     : null;
 
   return (

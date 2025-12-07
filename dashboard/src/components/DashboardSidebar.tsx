@@ -1,3 +1,4 @@
+import { NavLink } from 'react-router-dom';
 import {
   Sidebar,
   SidebarContent,
@@ -5,123 +6,141 @@ import {
   SidebarFooter,
   SidebarMenu,
   SidebarMenuItem,
-  SidebarMenuButton,
-  SidebarMenuSub,
-  SidebarMenuSubItem,
-  SidebarMenuSubButton,
   SidebarGroup,
+  SidebarGroupLabel,
   SidebarGroupContent,
 } from '@/components/ui/sidebar';
-import {
-  Collapsible,
-  CollapsibleTrigger,
-  CollapsibleContent,
-} from '@/components/ui/collapsible';
-import { LayoutDashboard, GitBranch, Activity, Settings, ChevronDown } from 'lucide-react';
+import { GitBranch, History, Radio, Compass } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useWorkflowStore } from '@/store/workflowStore';
+
+/**
+ * Navigation link component using React Router's NavLink for active state.
+ * Applies shadcn/ui SidebarMenuButton styling with active highlighting.
+ */
+interface SidebarNavLinkProps {
+  to: string;
+  icon: React.ElementType;
+  label: string;
+}
+
+function SidebarNavLink({ to, icon: Icon, label }: SidebarNavLinkProps) {
+  return (
+    <SidebarMenuItem>
+      <NavLink
+        to={to}
+        className={({ isActive, isPending }) =>
+          cn(
+            'flex items-center gap-3 w-full px-3 py-2 rounded-md text-sm',
+            'focus-visible:ring-ring/50 focus-visible:ring-[3px] transition-colors',
+            isActive && 'bg-sidebar-primary text-sidebar-primary-foreground',
+            isPending && 'opacity-50',
+            !isActive && 'hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
+          )
+        }
+      >
+        <Icon className="h-4 w-4" />
+        <span className="font-heading font-semibold tracking-wide">{label}</span>
+      </NavLink>
+    </SidebarMenuItem>
+  );
+}
 
 /**
  * DashboardSidebar provides navigation for the Amelia dashboard.
- * Uses shadcn/ui Sidebar with collapsible sections.
+ * Uses shadcn/ui Sidebar with React Router NavLink for active state styling.
  *
  * Features:
  * - SidebarProvider for state management (in parent layout)
  * - Cookie-based state persistence
  * - Mobile responsive with sheet drawer
  * - Keyboard navigation with focus-visible states
+ * - Server connection status indicator
  */
 export function DashboardSidebar() {
+  // Get connection status from store
+  const isConnected = useWorkflowStore((state) => state.isConnected);
+
   return (
-    <Sidebar className="border-r border-border">
-      <SidebarHeader className="px-4 py-6">
-        <div className="flex items-center gap-2">
-          <div className="h-8 w-8 rounded-md bg-primary/20 flex items-center justify-center">
-            <LayoutDashboard className="h-4 w-4 text-primary" />
-          </div>
-          <span className="font-heading text-lg font-bold tracking-wider">
-            AMELIA
-          </span>
-        </div>
+    <Sidebar className="border-r border-sidebar-border">
+      {/* Logo */}
+      <SidebarHeader className="px-6 py-6 border-b border-sidebar-border">
+        <h1 className="text-4xl font-display text-sidebar-primary tracking-wider">
+          AMELIA
+        </h1>
+        <p className="text-xs font-mono text-muted-foreground mt-1">
+          Agentic Orchestrator
+        </p>
       </SidebarHeader>
 
       <SidebarContent className="px-2">
+        {/* Workflows Section */}
         <SidebarGroup>
+          <SidebarGroupLabel className="text-xs font-heading text-muted-foreground/60 font-semibold tracking-wider">
+            WORKFLOWS
+          </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {/* Workflows section - collapsible */}
-              <Collapsible defaultOpen className="group/collapsible">
-                <SidebarMenuItem>
-                  <CollapsibleTrigger asChild>
-                    <SidebarMenuButton
-                      className={cn(
-                        'w-full justify-between',
-                        'focus-visible:ring-ring/50 focus-visible:ring-[3px]'
-                      )}
-                    >
-                      <span className="flex items-center gap-2">
-                        <GitBranch className="h-4 w-4" />
-                        Workflows
-                      </span>
-                      <ChevronDown className="h-4 w-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-180" />
-                    </SidebarMenuButton>
-                  </CollapsibleTrigger>
+              <SidebarNavLink
+                to="/workflows"
+                icon={GitBranch}
+                label="Active Jobs"
+              />
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
 
-                  <CollapsibleContent>
-                    <SidebarMenuSub>
-                      <SidebarMenuSubItem>
-                        <SidebarMenuSubButton
-                          className="focus-visible:ring-ring/50 focus-visible:ring-[3px]"
-                        >
-                          Active
-                        </SidebarMenuSubButton>
-                      </SidebarMenuSubItem>
-                      <SidebarMenuSubItem>
-                        <SidebarMenuSubButton
-                          className="focus-visible:ring-ring/50 focus-visible:ring-[3px]"
-                        >
-                          Completed
-                        </SidebarMenuSubButton>
-                      </SidebarMenuSubItem>
-                      <SidebarMenuSubItem>
-                        <SidebarMenuSubButton
-                          className="focus-visible:ring-ring/50 focus-visible:ring-[3px]"
-                        >
-                          Failed
-                        </SidebarMenuSubButton>
-                      </SidebarMenuSubItem>
-                    </SidebarMenuSub>
-                  </CollapsibleContent>
-                </SidebarMenuItem>
-              </Collapsible>
+        {/* History Section */}
+        <SidebarGroup>
+          <SidebarGroupLabel className="text-xs font-heading text-muted-foreground/60 font-semibold tracking-wider">
+            HISTORY
+          </SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarNavLink
+                to="/history"
+                icon={History}
+                label="Past Runs"
+              />
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
 
-              {/* Activity */}
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  className="focus-visible:ring-ring/50 focus-visible:ring-[3px]"
-                >
-                  <Activity className="h-4 w-4" />
-                  Activity
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-
-              {/* Settings */}
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  className="focus-visible:ring-ring/50 focus-visible:ring-[3px]"
-                >
-                  <Settings className="h-4 w-4" />
-                  Settings
-                </SidebarMenuButton>
-              </SidebarMenuItem>
+        {/* Monitoring Section */}
+        <SidebarGroup>
+          <SidebarGroupLabel className="text-xs font-heading text-muted-foreground/60 font-semibold tracking-wider">
+            MONITORING
+          </SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarNavLink
+                to="/logs"
+                icon={Radio}
+                label="Logs"
+              />
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="px-4 py-4 border-t border-border">
-        <p className="text-xs text-muted-foreground">
-          Amelia v1.0.0
-        </p>
+      {/* Footer with server status */}
+      <SidebarFooter className="px-4 py-4 border-t border-sidebar-border">
+        <div className="flex items-center gap-3">
+          <Compass className="w-8 h-8 text-muted-foreground/50" />
+          <div className="text-xs font-mono text-muted-foreground">
+            <div className="flex items-center gap-2">
+              <span
+                className={cn(
+                  'inline-block w-2 h-2 rounded-full',
+                  isConnected
+                    ? 'bg-[--status-running] animate-pulse-glow'
+                    : 'bg-[--status-failed]'
+                )}
+              />
+              {isConnected ? 'Connected' : 'Disconnected'}
+            </div>
+          </div>
+        </div>
       </SidebarFooter>
     </Sidebar>
   );
