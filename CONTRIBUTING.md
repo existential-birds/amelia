@@ -121,6 +121,7 @@ When working on this project with [Claude Code](https://claude.ai/code), the fol
 | `/amelia:greptile-review` | Fetch and evaluate greptile-apps review comments |
 | `/amelia:eval-feedback <feedback>` | Evaluate code review feedback from another session |
 | `/amelia:respond-review` | Respond to greptile review comments after evaluation |
+| `/amelia:skill-builder` | Create Claude Code skills with comprehensive best practices |
 
 ## Claude Code Skills
 
@@ -153,3 +154,9 @@ The following skills are available in `.claude/skills/amelia/` to help Claude Co
 | Skill | Triggers | Description |
 |-------|----------|-------------|
 | **vitest-testing** | `vitest`, `vi.mock`, `describe` | Vitest patterns, mocking, configuration, test utilities |
+
+### Tooling Skills
+
+| Skill | Triggers | Description |
+|-------|----------|-------------|
+| **github-projects** | `gh project`, `project board`, `kanban` | GitHub Projects (v2) via gh CLI, project items, fields, workflows |
