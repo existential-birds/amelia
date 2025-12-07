@@ -183,6 +183,20 @@ def create_app() -> FastAPI:
                 "instructions": "Run 'cd dashboard && pnpm run build' to build the dashboard",
             }
 
+        # SPA fallback: return instructions for all non-API routes
+        @application.get("/{full_path:path}")
+        async def spa_fallback_not_built(full_path: str) -> dict[str, str]:
+            """Inform user about missing dashboard for SPA routes."""
+            # Skip API and WebSocket routes
+            if full_path.startswith("api/") or full_path.startswith("ws/"):
+                # Let the 404 handler deal with unknown API routes
+                raise HTTPException(status_code=404, detail="Not found")
+
+            return {
+                "message": "Dashboard not built",
+                "instructions": "Run 'cd dashboard && pnpm run build' to build the dashboard",
+            }
+
     return application
 
 
