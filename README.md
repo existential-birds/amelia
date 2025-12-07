@@ -56,6 +56,59 @@ uv run amelia plan-only TEST-001
 
 > **Note:** The `tracker: noop` configuration above uses a mock issue tracker for testing. If you configure `tracker: github` or `tracker: jira`, you must have an issue matching the ID (e.g., `TEST-001`) in your configured tracker.
 
+## Using Amelia in Your Project
+
+Amelia works on any Git repository. Here's how to use it with your existing projects:
+
+### Option 1: Install as a Global Tool (Recommended)
+
+```bash
+# Install amelia globally with uv
+uv tool install git+https://github.com/anderskev/amelia.git
+
+# Navigate to your project
+cd /path/to/your/project
+
+# Create config in your project root
+cat > settings.amelia.yaml << 'EOF'
+active_profile: dev
+profiles:
+  dev:
+    name: dev
+    driver: api:openai
+    tracker: github
+    strategy: single
+EOF
+
+# Run amelia commands from your project directory
+amelia plan-only GH-123
+amelia start GH-123
+amelia review --local
+```
+
+### Option 2: Run from Amelia Source
+
+If you prefer not to install globally, navigate to your project and run via the amelia source:
+
+```bash
+# Navigate to your project (important: amelia reads config from cwd)
+cd /path/to/your/project
+
+# Create settings.amelia.yaml in your project root (see above)
+
+# Run amelia via its source path
+/path/to/amelia/uv run amelia plan-only GH-123
+```
+
+Or use the `AMELIA_SETTINGS` environment variable to point to your config:
+
+```bash
+cd /path/to/amelia
+AMELIA_SETTINGS=/path/to/your/project/settings.amelia.yaml uv run amelia plan-only GH-123
+```
+
+> **Note:** Amelia reads `settings.amelia.yaml` from the current working directory (or via `AMELIA_SETTINGS`). Run commands from your project root so agents have access to your codebase context.
+
 ## How It Works
 
 ### Agent Roles
