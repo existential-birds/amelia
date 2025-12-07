@@ -7,6 +7,7 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { Layout } from '@/components/Layout';
 import { RootErrorBoundary } from '@/components/ErrorBoundary';
+import { workflowsLoader, workflowDetailLoader, historyLoader } from '@/loaders/workflows';
 
 export const router = createBrowserRouter([
   {
@@ -20,6 +21,7 @@ export const router = createBrowserRouter([
       },
       {
         path: 'workflows',
+        loader: workflowsLoader,
         lazy: async () => {
           const { default: Component } = await import('@/pages/WorkflowsPage');
           return { Component };
@@ -27,6 +29,7 @@ export const router = createBrowserRouter([
       },
       {
         path: 'workflows/:id',
+        loader: workflowDetailLoader,
         lazy: async () => {
           const { default: Component } = await import('@/pages/WorkflowDetailPage');
           return { Component };
@@ -34,6 +37,7 @@ export const router = createBrowserRouter([
       },
       {
         path: 'history',
+        loader: historyLoader,
         lazy: async () => {
           const { default: Component } = await import('@/pages/HistoryPage');
           return { Component };
