@@ -447,7 +447,78 @@ See [Knowledge Library Design](brainstorming/2025-12-06-knowledge-library-design
 
 ---
 
-## Phase 14: AWS AgentCore Cloud Deployment 🆕
+## Phase 14: Capitalization Tracking 🆕
+
+*Attribute engineering work to initiatives for financial reporting*
+
+A system that maps PRs and issues to capitalizable initiatives (JIRA Epics or GitHub Projects), estimates engineering hours from PR lifecycle, and produces auditable reports for finance.
+
+### Goals
+- Real-time attribution when Amelia orchestrates work
+- Retrospective analysis of historical PRs/issues
+- Finance-ready reports with full audit trails
+- OPEX vs CAPEX classification per initiative
+
+### Design Decisions
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| Initiative source | JIRA Epics / GitHub Projects | Tracker-native, follows CONTRIBUTING.md discipline |
+| Mapping strategy | Hierarchical only | Issue's parent epic/project = initiative |
+| Hours estimation | PR lifecycle (open → merge) | Only reliable signal; no JIRA time tracking |
+| Engineer weighting | Flat rate | Finance applies their own labor rates |
+| Output formats | CLI + JSON/CSV, dashboard later | CLI for automation, dashboard for exploration |
+| Retrospective trigger | On-demand CLI | Avoids background job complexity |
+| Audit trail | Full reasoning per attribution | SOX compliance requires traceability |
+
+### Phase 14a: Data Models & Persistence
+- [ ] `Initiative`, `Attribution`, `CapexReport` Pydantic models
+- [ ] SQLite CRUD operations in `amelia/capex/store.py`
+- [ ] Alembic migration for `initiatives` and `attributions` tables
+
+### Phase 14b: Initiative Tracker Protocol
+- [ ] `InitiativeTracker` protocol in tracker abstraction
+- [ ] JIRA implementation — fetch epics, resolve parent for issue
+- [ ] GitHub implementation — fetch projects, resolve membership
+
+### Phase 14c: Hours Estimation
+- [ ] `business_hours_between()` utility (weekdays, 8-hour days)
+- [ ] `estimate_hours()` from PR lifecycle with audit trail
+- [ ] Edge cases: unmerged PRs, weekend spans
+
+### Phase 14d: Attribution Engine
+- [ ] PR → issue → initiative hierarchy resolution
+- [ ] Audit trail reasoning generation
+- [ ] Persistence via store
+
+### Phase 14e: CLI Scan Command
+- [ ] `amelia capex scan --since --until` command
+- [ ] Fetch PRs from GitHub, resolve attributions
+- [ ] `amelia capex unattributed` — list orphan artifacts
+
+### Phase 14f: CLI Report Commands
+- [ ] `amelia capex initiatives` — list from tracker
+- [ ] `amelia capex report` — JSON/CSV/table output
+- [ ] `amelia capex show` — attribution details for artifact
+
+### Phase 14g: Real-time Orchestrator Hook
+- [ ] Capture initiative context at workflow start
+- [ ] Emit attribution when PR merges
+- [ ] Link workflow ID to attributions
+
+### Phase 14h: Dashboard API
+- [ ] `/api/capex/*` REST endpoints
+- [ ] Initiative list, detail, report endpoints
+
+### Phase 14i: Dashboard UI
+- [ ] Initiative list and detail pages
+- [ ] Unattributed artifacts view
+- [ ] Report generation with export
+
+See [Capitalization Tracking Design](brainstorming/2025-12-07-capex-tracking-design.md) for full specification.
+
+---
+
+## Phase 15: AWS AgentCore Cloud Deployment 🆕
 
 *Parallel workflow execution in the cloud via AWS Bedrock AgentCore*
 
