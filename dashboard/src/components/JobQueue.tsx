@@ -22,7 +22,7 @@ import type { WorkflowSummary } from '@/types';
 interface JobQueueProps {
   workflows?: Pick<WorkflowSummary, 'id' | 'issue_id' | 'worktree_name' | 'status' | 'current_stage'>[];
   selectedId?: string | null;
-  onSelect?: (id: string) => void;
+  onSelect?: (id: string | null) => void;
   className?: string;
 }
 

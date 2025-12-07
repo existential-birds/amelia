@@ -34,6 +34,8 @@ import type { WorkflowSummary, WorkflowDetail } from './index';
 export interface WorkflowsLoaderData {
   /** Array of workflow summaries to display in the list. */
   workflows: WorkflowSummary[];
+  /** Pre-loaded detail for the active workflow, or null if none/failed to load. */
+  activeDetail: WorkflowDetail | null;
 }
 
 /**

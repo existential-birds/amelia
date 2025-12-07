@@ -4,7 +4,7 @@
 import { StatusBadge } from '@/components/StatusBadge';
 import { Loader } from '@/components/ai-elements/loader';
 import { cn } from '@/lib/utils';
-import type { WorkflowSummary } from '@/types';
+import type { WorkflowDetail, WorkflowSummary } from '@/types';
 
 /**
  * Props for the WorkflowHeader component.
@@ -13,7 +13,7 @@ import type { WorkflowSummary } from '@/types';
  * @property className - Optional additional CSS classes
  */
 interface WorkflowHeaderProps {
-  workflow: Pick<WorkflowSummary, 'id' | 'issue_id' | 'worktree_name' | 'status'>;
+  workflow: WorkflowDetail | Pick<WorkflowSummary, 'id' | 'issue_id' | 'worktree_name' | 'status'>;
   elapsedTime?: string;
   className?: string;
 }
