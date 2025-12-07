@@ -739,6 +739,29 @@ async def test_emit_concurrent_lock_creation_race(
     assert set(sequences) == set(range(1, 11))
 
 
+class TestStartWorkflowWithRetry:
+    """Test start_workflow uses retry wrapper."""
+
+    @pytest.mark.asyncio
+    async def test_start_workflow_calls_retry_wrapper(
+        self, orchestrator: OrchestratorService, mock_repository: AsyncMock, valid_worktree: str
+    ):
+        """start_workflow creates task with _run_workflow_with_retry."""
+        orchestrator._run_workflow_with_retry = AsyncMock()
+
+        workflow_id = await orchestrator.start_workflow(
+            issue_id="TEST-1",
+            worktree_path=valid_worktree,
+        )
+
+        # Wait briefly for task to start
+        await asyncio.sleep(0.01)
+
+        # The task should call _run_workflow_with_retry
+        assert workflow_id is not None
+        orchestrator._run_workflow_with_retry.assert_called_once()
+
+
 @pytest.mark.asyncio
 async def test_get_workflow_by_worktree_uses_cache(
     orchestrator: OrchestratorService,

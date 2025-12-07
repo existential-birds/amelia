@@ -94,12 +94,19 @@ def _amelia_banner() -> str:
 def _log_format(record: "Record") -> str:
     """Custom log format with dashboard colors.
 
-    Colors by level:
-        - DEBUG: sage muted (#88A896)
-        - INFO: blue (#5B9BD5)
-        - SUCCESS: sage green (#5B8A72)
-        - WARNING: gold (#FFC857)
-        - ERROR/CRITICAL: rust red (#A33D2E)
+    Args:
+        record: Loguru record containing log metadata and message.
+
+    Returns:
+        Format string with ANSI color codes for the log message.
+
+    Note:
+        Colors by level:
+            - DEBUG: sage muted (#88A896)
+            - INFO: blue (#5B9BD5)
+            - SUCCESS: sage green (#5B8A72)
+            - WARNING: gold (#FFC857)
+            - ERROR/CRITICAL: rust red (#A33D2E)
     """
     level = record["level"].name
 

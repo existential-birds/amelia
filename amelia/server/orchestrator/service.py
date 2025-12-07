@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+from httpx import TimeoutException
 from langchain_core.runnables.config import RunnableConfig
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
@@ -37,6 +38,13 @@ STAGE_NODES: frozenset[str] = frozenset({
     "developer_node",
     "reviewer_node",
 })
+
+# Exceptions that warrant retry
+TRANSIENT_EXCEPTIONS: tuple[type[Exception], ...] = (
+    asyncio.TimeoutError,
+    TimeoutException,
+    ConnectionError,
+)
 
 
 class OrchestratorService:
@@ -182,8 +190,8 @@ class OrchestratorService:
                 worktree_path=worktree_path,
             )
 
-            # Start async task
-            task = asyncio.create_task(self._run_workflow(workflow_id, state))
+            # Start async task with retry wrapper for transient failures
+            task = asyncio.create_task(self._run_workflow_with_retry(workflow_id, state))
             self._active_tasks[worktree_path] = (workflow_id, task)
 
         # Remove from active tasks on completion
@@ -373,13 +381,73 @@ class OrchestratorService:
                     )
                     await self._repository.set_status(workflow_id, "completed")
 
+            except Exception:
+                # Let exceptions propagate to _run_workflow_with_retry for retry logic
+                # and proper failure event emission
+                raise
+
+    async def _run_workflow_with_retry(
+        self,
+        workflow_id: str,
+        state: ServerExecutionState,
+    ) -> None:
+        """Execute workflow with automatic retry for transient failures.
+
+        Args:
+            workflow_id: The workflow ID.
+            state: Server execution state.
+        """
+        if state.execution_state is None:
+            await self._repository.set_status(
+                workflow_id, "failed", failure_reason="Missing execution state"
+            )
+            return
+
+        retry_config = state.execution_state.profile.retry
+        attempt = 0
+
+        while attempt <= retry_config.max_retries:
+            try:
+                await self._run_workflow(workflow_id, state)
+                return  # Success
+
+            except TRANSIENT_EXCEPTIONS as e:
+                attempt += 1
+                if attempt > retry_config.max_retries:
+                    logger.exception("Workflow failed after retries exhausted", workflow_id=workflow_id)
+                    await self._emit(
+                        workflow_id,
+                        EventType.WORKFLOW_FAILED,
+                        f"Workflow failed after {attempt} attempts: {e!s}",
+                        data={"error": str(e), "attempts": attempt},
+                    )
+                    await self._repository.set_status(
+                        workflow_id,
+                        "failed",
+                        failure_reason=f"Failed after {attempt} attempts: {e}",
+                    )
+                    raise
+
+                delay = min(
+                    retry_config.base_delay * (2 ** (attempt - 1)),
+                    retry_config.max_delay,
+                )
+                logger.warning(
+                    f"Transient error (attempt {attempt}/{retry_config.max_retries}), "
+                    f"retrying in {delay}s",
+                    workflow_id=workflow_id,
+                    error=str(e),
+                )
+                await asyncio.sleep(delay)
+
             except Exception as e:
-                logger.exception("Workflow execution failed", workflow_id=workflow_id)
+                # Non-transient error - fail immediately
+                logger.exception("Workflow failed with non-transient error", workflow_id=workflow_id)
                 await self._emit(
                     workflow_id,
                     EventType.WORKFLOW_FAILED,
                     f"Workflow failed: {e!s}",
-                    data={"error": str(e), "stage": state.current_stage},
+                    data={"error": str(e), "error_type": "non-transient"},
                 )
                 await self._repository.set_status(
                     workflow_id, "failed", failure_reason=str(e)

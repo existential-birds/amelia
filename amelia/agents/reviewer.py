@@ -35,16 +35,16 @@ class Reviewer:
         self.driver = driver
 
     async def review(self, state: ExecutionState, code_changes: str) -> ReviewResult:
-        """Review code changes in the context of the current execution state and issue.
+        """Review code changes in context of execution state and issue.
 
-        Implements single or competitive review strategy based on the profile.
+        Selects single or competitive review strategy based on profile settings.
 
         Args:
-            state: Current execution state containing issue context and profile.
+            state: Current execution state containing issue and profile context.
             code_changes: Diff or description of code changes to review.
 
         Returns:
-            ReviewResult with approval status, comments, and severity.
+            ReviewResult with approval status, comments, and severity level.
         """
         if state.profile.strategy == "competitive":
             return await self._competitive_review(state, code_changes)

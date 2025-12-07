@@ -8,6 +8,21 @@ TrackerType = Literal["jira", "github", "none", "noop"]
 StrategyType = Literal["single", "competitive"]
 ExecutionMode = Literal["structured", "agentic"]
 
+
+class RetryConfig(BaseModel):
+    """Retry configuration for transient failures.
+
+    Attributes:
+        max_retries: Maximum number of retry attempts (0-10).
+        base_delay: Base delay in seconds for exponential backoff (0.1-30.0).
+        max_delay: Maximum delay cap in seconds (1.0-300.0).
+    """
+
+    max_retries: int = Field(default=3, ge=0, le=10)
+    base_delay: float = Field(default=1.0, ge=0.1, le=30.0)
+    max_delay: float = Field(default=60.0, ge=1.0, le=300.0)
+
+
 class Profile(BaseModel):
     """Configuration profile for Amelia execution.
 
@@ -19,7 +34,9 @@ class Profile(BaseModel):
         execution_mode: Execution mode (structured or agentic).
         plan_output_dir: Directory for storing generated plans.
         working_dir: Working directory for agentic execution.
+        retry: Retry configuration for transient failures.
     """
+
     name: str
     driver: DriverType
     tracker: TrackerType = "none"
@@ -27,6 +44,7 @@ class Profile(BaseModel):
     execution_mode: ExecutionMode = "structured"
     plan_output_dir: str = "docs/plans"
     working_dir: str | None = None
+    retry: RetryConfig = Field(default_factory=RetryConfig)
 
 class Settings(BaseModel):
     """Global settings for Amelia.
