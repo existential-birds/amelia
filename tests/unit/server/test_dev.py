@@ -6,8 +6,8 @@ import pytest
 from typer.testing import CliRunner
 
 from amelia.main import app
+from amelia.server.banner import CREAM, GOLD, MOSS, RUST
 from amelia.server.dev import (
-    Colors,
     _get_log_level_style,
     check_node_installed,
     check_node_modules_exist,
@@ -222,22 +222,22 @@ class TestGetLogLevelStyle:
     @pytest.mark.parametrize(
         "text,expected",
         [
-            ("INFO:     Starting server", Colors.MOSS),
-            ("INFO: message", Colors.MOSS),
-            ("info:     lowercase", Colors.MOSS),
-            ("DEBUG:    Some debug info", Colors.CREAM),
-            ("debug: lowercase", Colors.CREAM),
-            ("WARNING:  Something concerning", Colors.GOLD),
-            ("warning: lowercase", Colors.GOLD),
-            ("WARN:     Short form", Colors.GOLD),
-            ("warn: lowercase short", Colors.GOLD),
-            ("ERROR:    Something failed", Colors.RUST),
-            ("error: lowercase", Colors.RUST),
-            ("CRITICAL: System down", Colors.RUST),
-            ("critical: lowercase", Colors.RUST),
-            ("Random text without level", Colors.CREAM),
-            ("", Colors.CREAM),
-            ("   Leading whitespace", Colors.CREAM),
+            ("INFO:     Starting server", MOSS),
+            ("INFO: message", MOSS),
+            ("info:     lowercase", MOSS),
+            ("DEBUG:    Some debug info", CREAM),
+            ("debug: lowercase", CREAM),
+            ("WARNING:  Something concerning", GOLD),
+            ("warning: lowercase", GOLD),
+            ("WARN:     Short form", GOLD),
+            ("warn: lowercase short", GOLD),
+            ("ERROR:    Something failed", RUST),
+            ("error: lowercase", RUST),
+            ("CRITICAL: System down", RUST),
+            ("critical: lowercase", RUST),
+            ("Random text without level", CREAM),
+            ("", CREAM),
+            ("   Leading whitespace", CREAM),
         ],
         ids=[
             "INFO-uppercase",
@@ -258,6 +258,6 @@ class TestGetLogLevelStyle:
             "leading-whitespace",
         ],
     )
-    def test_log_level_detection(self, text: str, expected: Colors) -> None:
+    def test_log_level_detection(self, text: str, expected: str) -> None:
         """Correctly identifies log level and returns appropriate color."""
         assert _get_log_level_style(text) == expected

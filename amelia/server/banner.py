@@ -8,6 +8,7 @@ from rich.text import Text
 
 # --- Color Palette ---
 NAVY = "#0a2463"
+TWILIGHT = "#1245ba"
 RUST = "#a0311c"
 GOLD = "#ffc857"
 CREAM = "#eff8e2"
@@ -124,6 +125,46 @@ def get_agi_banner() -> Text:
                 text.append(char)
         if i < len(lines) - 1:
             text.append("\n")
+
+    return text
+
+
+def get_service_urls_display(
+    api_host: str,
+    api_port: int,
+    is_dev_mode: bool,
+) -> Text:
+    """Generate styled display of service URLs.
+
+    Args:
+        api_host: Host the API is bound to.
+        api_port: Port the API is bound to.
+        is_dev_mode: Whether running in dev mode (separate Vite server).
+
+    Returns:
+        Rich Text object with styled service URLs.
+    """
+    # Use localhost for display if bound to 0.0.0.0
+    display_host = "localhost" if api_host == "0.0.0.0" else api_host
+    api_url = f"http://{display_host}:{api_port}"
+
+    # In dev mode, dashboard runs on Vite (port 5173)
+    # In user mode, dashboard is served from API server
+    dashboard_url = "http://localhost:5173" if is_dev_mode else api_url
+
+    text = Text()
+
+    # Dashboard line with arrow
+    text.append("    ➜ ", style=MOSS)
+    text.append("Dashboard: ", style=CREAM)
+    text.append(dashboard_url, style=f"bold {GOLD}")
+    text.append("\n")
+
+    # API line (only show separately in dev mode where they differ)
+    if is_dev_mode:
+        text.append("    ➜ ", style=MOSS)
+        text.append("API:       ", style=CREAM)
+        text.append(api_url, style=f"bold {CREAM}")
 
     return text
 

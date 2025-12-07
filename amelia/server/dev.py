@@ -13,7 +13,6 @@ import shutil
 import signal
 import socket
 import sys
-from enum import Enum
 from pathlib import Path
 from typing import Annotated
 
@@ -21,26 +20,22 @@ import typer
 from rich.console import Console
 from rich.text import Text
 
-from amelia.server.banner import print_banner
+from amelia.server.banner import (
+    CREAM,
+    GOLD,
+    GRAY,
+    MOSS,
+    RUST,
+    TWILIGHT,
+    get_service_urls_display,
+    print_banner,
+)
 from amelia.server.config import ServerConfig
 
 
-# Amelia brand color palette
-class Colors(str, Enum):
-    """Amelia brand color palette for log output."""
-
-    NAVY = "#0a2463"  # [server] prefix (muted)
-    TWILIGHT = "#1245ba"  # [server] prefix
-    GOLD = "#ffc857"  # [dashboard] prefix
-    CREAM = "#eff8e2"  # Primary log text
-    MOSS = "#88976b"  # Timestamps, secondary info
-    RUST = "#a0311c"  # Errors, warnings
-    GRAY = "#6d726a"  # Muted/debug output
-
-
 # Process prefixes
-SERVER_PREFIX = Text("[server]    ", style=Colors.TWILIGHT)
-DASHBOARD_PREFIX = Text("[dashboard] ", style=Colors.GOLD)
+SERVER_PREFIX = Text("[server]    ", style=TWILIGHT)
+DASHBOARD_PREFIX = Text("[dashboard] ", style=GOLD)
 
 dev_app = typer.Typer(help="Start development server with dashboard")
 console = Console()
@@ -104,7 +99,7 @@ async def run_pnpm_install() -> bool:
     Returns:
         True if installation succeeded, False otherwise.
     """
-    console.print(DASHBOARD_PREFIX + Text("Installing dependencies...", style=Colors.CREAM))
+    console.print(DASHBOARD_PREFIX + Text("Installing dependencies...", style=CREAM))
 
     process = await asyncio.create_subprocess_exec(
         "pnpm",
@@ -120,7 +115,7 @@ async def run_pnpm_install() -> bool:
         if not line:
             break
         text = line.decode().rstrip()
-        console.print(DASHBOARD_PREFIX + Text(text, style=Colors.GRAY))
+        console.print(DASHBOARD_PREFIX + Text(text, style=GRAY))
 
     await process.wait()
     return process.returncode == 0
@@ -140,15 +135,15 @@ def _get_log_level_style(text: str) -> str:
     """
     text_upper = text.upper()
     if text_upper.startswith("ERROR") or text_upper.startswith("CRITICAL"):
-        return Colors.RUST
+        return RUST
     if text_upper.startswith("WARNING") or text_upper.startswith("WARN"):
-        return Colors.GOLD
+        return GOLD
     if text_upper.startswith("DEBUG"):
-        return Colors.CREAM
+        return CREAM
     if text_upper.startswith("INFO"):
-        return Colors.MOSS
+        return MOSS
     # Default for unparseable lines
-    return Colors.CREAM
+    return CREAM
 
 
 async def stream_output(
@@ -200,7 +195,7 @@ class ProcessManager:
             The subprocess handle.
         """
         console.print(
-            SERVER_PREFIX + Text(f"Starting uvicorn on http://{host}:{port}", style=Colors.CREAM)
+            SERVER_PREFIX + Text(f"Starting uvicorn on http://{host}:{port}", style=CREAM)
         )
 
         process = await asyncio.create_subprocess_exec(
@@ -229,7 +224,7 @@ class ProcessManager:
         """
         console.print(
             DASHBOARD_PREFIX
-            + Text("Starting vite on http://localhost:5173", style=Colors.CREAM)
+            + Text("Starting vite on http://localhost:5173", style=CREAM)
         )
 
         process = await asyncio.create_subprocess_exec(
@@ -277,7 +272,7 @@ class ProcessManager:
 
         if exit_code != 0:
             console.print(
-                prefix + Text(f"Process exited with code {exit_code}", style=Colors.RUST)
+                prefix + Text(f"Process exited with code {exit_code}", style=RUST)
             )
             self._exit_code = exit_code
             self._shutdown_event.set()
@@ -290,14 +285,14 @@ class ProcessManager:
 
         if self.dashboard_process and self.dashboard_process.returncode is None:
             console.print(
-                DASHBOARD_PREFIX + Text("Stopping...", style=Colors.MOSS)
+                DASHBOARD_PREFIX + Text("Stopping...", style=MOSS)
             )
             self.dashboard_process.terminate()
             tasks.append(asyncio.create_task(self._wait_for_termination(self.dashboard_process)))
 
         if self.server_process and self.server_process.returncode is None:
             console.print(
-                SERVER_PREFIX + Text("Stopping...", style=Colors.MOSS)
+                SERVER_PREFIX + Text("Stopping...", style=MOSS)
             )
             self.server_process.terminate()
             tasks.append(asyncio.create_task(self._wait_for_termination(self.server_process)))
@@ -380,7 +375,7 @@ async def run_dev_mode(
                 if not success:
                     console.print(
                         DASHBOARD_PREFIX
-                        + Text("Failed to install dependencies", style=Colors.RUST)
+                        + Text("Failed to install dependencies", style=RUST)
                     )
                     await manager.shutdown()
                     return 1
@@ -456,7 +451,7 @@ def dev(
             console.print(
                 Text(
                     "Error: Node.js is required for dev mode. Install from https://nodejs.org",
-                    style=Colors.RUST,
+                    style=RUST,
                 )
             )
             raise typer.Exit(code=1)
@@ -465,7 +460,7 @@ def dev(
             console.print(
                 Text(
                     "Error: pnpm is required for dev mode. Install: npm i -g pnpm",
-                    style=Colors.RUST,
+                    style=RUST,
                 )
             )
             raise typer.Exit(code=1)
@@ -484,20 +479,24 @@ def dev(
             Text(
                 f"Error: Port {effective_port} is already in use. "
                 f"Try a different port with --port <PORT>",
-                style=Colors.RUST,
+                style=RUST,
             )
         )
         raise typer.Exit(code=1)
 
-    # Show mode
+    # Show mode and service URLs
     mode = "dev" if is_dev_repo else "user"
-    console.print(Text(f"Mode: {mode}", style=Colors.MOSS))
+    is_dev_mode = is_dev_repo and not no_dashboard
+    console.print(Text(f"Mode: {mode}", style=MOSS))
+    console.print()
+    console.print(get_service_urls_display(effective_host, effective_port, is_dev_mode))
+    console.print()
 
     if bind_all:
         console.print(
             Text(
                 "Warning: Server accessible to all network clients. No authentication enabled.",
-                style=Colors.RUST,
+                style=RUST,
             )
         )
 
@@ -508,4 +507,4 @@ def dev(
         )
         raise typer.Exit(code=exit_code)
     except KeyboardInterrupt:
-        console.print(Text("\nShutdown complete.", style=Colors.MOSS))
+        console.print(Text("\nShutdown complete.", style=MOSS))
