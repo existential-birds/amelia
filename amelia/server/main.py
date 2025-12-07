@@ -185,10 +185,20 @@ def create_app() -> FastAPI:
     application.include_router(workflows_router, prefix="/api")
     application.include_router(websocket_router)  # No prefix - route is /ws/events
 
-    # Serve dashboard static files (after build)
-    dashboard_dir = Path(__file__).parent.parent.parent / "dashboard" / "dist"
+    # Serve dashboard static files
+    # Priority: bundled static files (installed package) > dev build (dashboard/dist)
+    bundled_static_dir = Path(__file__).parent / "static"
+    dev_dashboard_dir = Path(__file__).parent.parent.parent / "dashboard" / "dist"
 
-    if dashboard_dir.exists():
+    # Use bundled static if it has an index.html, otherwise use dev dashboard
+    if (bundled_static_dir / "index.html").exists():
+        dashboard_dir = bundled_static_dir
+    elif dev_dashboard_dir.exists():
+        dashboard_dir = dev_dashboard_dir
+    else:
+        dashboard_dir = None
+
+    if dashboard_dir is not None:
         # Serve static assets (JS, CSS, images)
         assets_dir = dashboard_dir / "assets"
         if assets_dir.exists():

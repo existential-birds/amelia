@@ -180,6 +180,35 @@ amelia plan-only GH-789 --profile home
 amelia plan-only GH-789 --design docs/designs/feature.md
 ```
 
+### `amelia dev [--port <PORT>] [--no-dashboard] [--bind-all]`
+
+Starts the development environment with API server and dashboard:
+
+**In the Amelia repository (dev mode):**
+- Runs uvicorn for the API server
+- Runs Vite dev server for the dashboard with hot reload
+- Auto-installs npm dependencies if needed
+
+**In other repositories (user mode):**
+- Runs uvicorn only
+- Serves bundled dashboard static files
+
+```bash
+amelia dev                    # Start server + dashboard
+amelia dev --port 9000        # Custom port
+amelia dev --no-dashboard     # Server only
+amelia dev --bind-all         # Network access (0.0.0.0)
+```
+
+### `amelia server [--port <PORT>] [--host <HOST>]`
+
+Starts only the API server (no dashboard dev server):
+
+```bash
+amelia server                 # Default: localhost:8420
+amelia server --port 9000     # Custom port
+```
+
 ## Configuration
 
 Basic `settings.amelia.yaml`:
@@ -271,6 +300,7 @@ which amelia  # Should show ~/.local/bin/amelia
 - FastAPI server with SQLite persistence
 - Workflow state machine with event tracking
 - React dashboard foundation (Vite, shadcn/ui, React Router v7, aviation theme)
+- Unified `amelia dev` command with color-coded output for server + dashboard
 
 **Limitations/Coming Soon:**
 - TaskDAG doesn't validate cyclic dependencies

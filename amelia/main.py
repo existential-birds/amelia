@@ -18,6 +18,7 @@ from amelia.core.types import Issue, Profile, Settings
 from amelia.drivers.factory import DriverFactory
 from amelia.logging import configure_logging
 from amelia.server.cli import server_app
+from amelia.server.dev import dev_app
 from amelia.tools.shell_executor import run_shell_command
 from amelia.trackers.factory import create_tracker
 from amelia.utils.design_parser import parse_design
@@ -25,6 +26,7 @@ from amelia.utils.design_parser import parse_design
 
 app = typer.Typer(help="Amelia Agentic Orchestrator CLI")
 app.add_typer(server_app, name="server")
+app.add_typer(dev_app, name="dev")
 app.command(name="start", help="Start a workflow for an issue.")(start_command)
 app.command(name="approve", help="Approve the workflow plan in the current worktree.")(approve_command)
 app.command(name="reject", help="Reject the workflow plan in the current worktree.")(reject_command)
