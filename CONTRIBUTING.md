@@ -328,14 +328,14 @@ If you're using Claude Code, leverage these commands to streamline the PR proces
 # 3. Run a self-review before creating PR
 /amelia:review
 
-# 4. Create the PR with standardized description
+# 4. Evaluate and address review feedback
+/amelia:eval-feedback <paste feedback here>
+
+# 5. Create the PR with standardized description
 /amelia:create-pr
 
-# 5. Generate manual test plan (for significant changes)
+# 6. Generate manual test plan (for significant changes)
 /amelia:gen-test-plan
-
-# 6. After receiving review feedback from another LLM session
-/amelia:eval-feedback <paste feedback here>
 ```
 
 ## Claude Code Commands
