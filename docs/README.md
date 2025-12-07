@@ -12,6 +12,7 @@
 | [Roadmap](roadmap.md) | Project vision, phases, and planned features |
 | [Benchmarking](benchmarking.md) | How to evaluate and iterate on LLM agents |
 | [Data Model](data-model.md) | Database schema and state machine definitions |
+| [Troubleshooting](troubleshooting.md) | Common issues and solutions |
 
 ## Sections
 
