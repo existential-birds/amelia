@@ -10,7 +10,7 @@ import {
   SidebarGroup,
   SidebarGroupLabel,
   SidebarGroupContent,
-  SidebarRail,
+  SidebarTrigger,
   useSidebar,
 } from '@/components/ui/sidebar';
 import { GitBranch, History, Radio, Compass } from 'lucide-react';
@@ -150,52 +150,60 @@ export function DashboardSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      {/* Footer with server status */}
+      {/* Footer with server status and collapse toggle */}
       <SidebarFooter
         className={cn(
           'border-t border-sidebar-border',
-          isCollapsed ? 'px-2 py-4' : 'px-4 py-4'
+          isCollapsed ? 'px-2 py-3' : 'px-4 py-3'
         )}
       >
         <div
           className={cn(
             'flex items-center',
-            isCollapsed ? 'justify-center' : 'gap-3'
+            isCollapsed ? 'flex-col' : 'justify-between'
           )}
         >
-          {isCollapsed ? (
-            <span
-              className={cn(
-                'inline-block w-3 h-3 rounded-full',
-                isConnected
-                  ? 'bg-[--status-running] animate-pulse-glow'
-                  : 'bg-[--status-failed]'
-              )}
-              title={isConnected ? 'Connected' : 'Disconnected'}
-            />
-          ) : (
-            <>
-              <Compass className="w-8 h-8 text-muted-foreground/50" />
-              <div className="text-xs font-mono text-muted-foreground">
-                <div className="flex items-center gap-2">
-                  <span
-                    className={cn(
-                      'inline-block w-2 h-2 rounded-full',
-                      isConnected
-                        ? 'bg-[--status-running] animate-pulse-glow'
-                        : 'bg-[--status-failed]'
-                    )}
-                  />
-                  {isConnected ? 'Connected' : 'Disconnected'}
+          {/* Connection status */}
+          <div
+            className={cn(
+              'flex items-center',
+              isCollapsed ? 'justify-center' : 'gap-3'
+            )}
+          >
+            {isCollapsed ? (
+              <span
+                className={cn(
+                  'inline-block w-3 h-3 rounded-full',
+                  isConnected
+                    ? 'bg-[--status-running] animate-pulse-glow'
+                    : 'bg-[--status-failed]'
+                )}
+                title={isConnected ? 'Connected' : 'Disconnected'}
+              />
+            ) : (
+              <>
+                <Compass className="w-6 h-6 text-muted-foreground/50" />
+                <div className="text-xs font-mono text-muted-foreground">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={cn(
+                        'inline-block w-2 h-2 rounded-full',
+                        isConnected
+                          ? 'bg-[--status-running] animate-pulse-glow'
+                          : 'bg-[--status-failed]'
+                      )}
+                    />
+                    {isConnected ? 'Connected' : 'Disconnected'}
+                  </div>
                 </div>
-              </div>
-            </>
-          )}
+              </>
+            )}
+          </div>
+
+          {/* Collapse toggle button */}
+          <SidebarTrigger className="text-muted-foreground hover:text-foreground" />
         </div>
       </SidebarFooter>
-
-      {/* Invisible edge rail for collapse/expand on hover */}
-      <SidebarRail />
     </Sidebar>
   );
 }
