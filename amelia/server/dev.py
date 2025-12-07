@@ -29,7 +29,8 @@ from amelia.server.config import ServerConfig
 class Colors(str, Enum):
     """Amelia brand color palette for log output."""
 
-    NAVY = "#0a2463"  # [server] prefix
+    NAVY = "#0a2463"  # [server] prefix (muted)
+    TWILIGHT = "#1245ba"  # [server] prefix
     GOLD = "#ffc857"  # [dashboard] prefix
     CREAM = "#eff8e2"  # Primary log text
     MOSS = "#88976b"  # Timestamps, secondary info
@@ -38,7 +39,7 @@ class Colors(str, Enum):
 
 
 # Process prefixes
-SERVER_PREFIX = Text("[server]    ", style=Colors.NAVY)
+SERVER_PREFIX = Text("[server]    ", style=Colors.TWILIGHT)
 DASHBOARD_PREFIX = Text("[dashboard] ", style=Colors.GOLD)
 
 dev_app = typer.Typer(help="Start development server with dashboard")
