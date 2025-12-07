@@ -314,6 +314,7 @@ If you're using Claude Code, leverage these commands to streamline the PR proces
 | `/amelia:review-tests` | Review test code for quality and conciseness |
 | `/amelia:ensure-doc` | Verify all code is properly documented |
 | `/amelia:gen-test-plan` | Generate a manual test plan for significant changes |
+| `/amelia:eval-feedback <feedback>` | Evaluate code review feedback from another LLM session |
 
 **Recommended workflow:**
 
@@ -332,6 +333,9 @@ If you're using Claude Code, leverage these commands to streamline the PR proces
 
 # 5. Generate manual test plan (for significant changes)
 /amelia:gen-test-plan
+
+# 6. After receiving review feedback from another LLM session
+/amelia:eval-feedback <paste feedback here>
 ```
 
 ## Claude Code Commands
