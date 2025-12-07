@@ -125,6 +125,31 @@ async def run_pnpm_install() -> bool:
     return process.returncode == 0
 
 
+def _get_log_level_style(text: str) -> str:
+    """Determine the style based on log level prefix in text.
+
+    Parses uvicorn-style log output (e.g., "INFO:     message") and returns
+    the appropriate color from the Amelia palette.
+
+    Args:
+        text: Log line text to parse.
+
+    Returns:
+        Color style string for the detected log level.
+    """
+    text_upper = text.upper()
+    if text_upper.startswith("ERROR") or text_upper.startswith("CRITICAL"):
+        return Colors.RUST
+    if text_upper.startswith("WARNING") or text_upper.startswith("WARN"):
+        return Colors.GOLD
+    if text_upper.startswith("DEBUG"):
+        return Colors.CREAM
+    if text_upper.startswith("INFO"):
+        return Colors.MOSS
+    # Default for unparseable lines
+    return Colors.CREAM
+
+
 async def stream_output(
     stream: asyncio.StreamReader,
     prefix: Text,
@@ -135,15 +160,18 @@ async def stream_output(
     Args:
         stream: The asyncio stream to read from.
         prefix: The colored prefix to prepend to each line.
-        is_stderr: Whether this is stderr (use error color).
+        is_stderr: Whether this is stderr (ignored, we parse log levels instead).
     """
+    # Note: is_stderr is kept for API compatibility but we parse log levels instead
+    # because uvicorn writes all logs (including INFO) to stderr
+    _ = is_stderr
     while True:
         line = await stream.readline()
         if not line:
             break
         text = line.decode().rstrip()
         if text:
-            style = Colors.RUST if is_stderr else Colors.CREAM
+            style = _get_log_level_style(text)
             console.print(prefix + Text(text, style=style))
 
 
