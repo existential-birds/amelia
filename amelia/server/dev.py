@@ -298,6 +298,14 @@ class ProcessManager:
         """Get the exit code for the dev command."""
         return self._exit_code
 
+    def request_shutdown(self) -> None:
+        """Request graceful shutdown of all processes."""
+        self._shutdown_event.set()
+
+    async def wait_for_shutdown(self) -> None:
+        """Wait for shutdown to be requested."""
+        await self._shutdown_event.wait()
+
 
 async def run_dev_mode(
     host: str,
@@ -317,11 +325,11 @@ async def run_dev_mode(
         Exit code (0 for success).
     """
     manager = ProcessManager()
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
 
     # Handle signals
     def signal_handler() -> None:
-        manager._shutdown_event.set()
+        manager.request_shutdown()
 
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, signal_handler)
@@ -357,7 +365,7 @@ async def run_dev_mode(
 
         # Wait for shutdown signal or process failure
         done, pending = await asyncio.wait(
-            [*tasks, asyncio.create_task(manager._shutdown_event.wait())],
+            [*tasks, asyncio.create_task(manager.wait_for_shutdown())],
             return_when=asyncio.FIRST_COMPLETED,
         )
 
