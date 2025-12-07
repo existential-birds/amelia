@@ -234,6 +234,7 @@ uv run pytest
 - Real tool execution in Developer agent
 - FastAPI server with SQLite persistence
 - Workflow state machine with event tracking
+- React dashboard foundation (Vite, shadcn/ui, React Router v7, aviation theme)
 
 **Limitations/Coming Soon:**
 - TaskDAG doesn't validate cyclic dependencies

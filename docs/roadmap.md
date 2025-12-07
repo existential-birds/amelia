@@ -52,12 +52,21 @@ Observable orchestration through a local web interface.
   - Task status changes broadcast immediately
   - Log streaming from agent execution
   - Approval request notifications
-- [ ] **React dashboard** - Observability UI
+- [x] **React dashboard foundation** - Project setup and infrastructure
+  - Vite 6 + React 18 + TypeScript 5 with path aliases
+  - Tailwind CSS v4 with `@tailwindcss/vite` plugin
+  - shadcn/ui components (Button, Card, Badge, ScrollArea, Tooltip, Progress, Skeleton)
+  - ai-elements components (queue, confirmation, loader, shimmer)
+  - React Flow (@xyflow/react) for custom workflow visualization
+  - React Router v7 Data Mode with lazy loading and route-level error boundaries
+  - Aviation theme with CSS variable design tokens (OKLCH color space)
+  - FastAPI static file serving for production
+- [ ] **React dashboard features** - Observability UI components
   - Workflow list with status indicators
-  - Task DAG visualization (dependency graph)
+  - Task DAG visualization (custom React Flow nodes)
   - Live log viewer with agent attribution
   - Approval action buttons
-  - Zustand for client state management
+  - API client integration with React Router loaders
 
 ---
 

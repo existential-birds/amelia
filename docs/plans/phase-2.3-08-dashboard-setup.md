@@ -2,7 +2,7 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Status:** Not Started
+**Status:** ✅ Complete
 
 **Goal:** Create the React dashboard frontend with Vite, TypeScript, shadcn/ui, ai-elements, and React Router v7. This establishes the foundation for the web UI with proper aviation/cockpit aesthetic using design tokens, routing infrastructure, error boundaries, and FastAPI static file serving.
 
@@ -1251,7 +1251,6 @@ Create `dashboard/src/App.tsx`:
 ```typescript
 import { RouterProvider } from 'react-router-dom';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { BrowserCheck } from '@/components/BrowserCheck';
 import { router } from '@/router';
 
 function GlobalLoadingSpinner() {
@@ -1264,14 +1263,12 @@ function GlobalLoadingSpinner() {
 
 export function App() {
   return (
-    <BrowserCheck>
-      <TooltipProvider>
-        <RouterProvider
-          router={router}
-          fallbackElement={<GlobalLoadingSpinner />}
-        />
-      </TooltipProvider>
-    </BrowserCheck>
+    <TooltipProvider>
+      <RouterProvider
+        router={router}
+        fallbackElement={<GlobalLoadingSpinner />}
+      />
+    </TooltipProvider>
   );
 }
 ```
@@ -1483,12 +1480,11 @@ git commit -m "feat(dashboard): create page components for lazy loading
 
 ---
 
-## Task 6: Add Route-Based Error Boundaries and Browser Check
+## Task 6: Add Route-Based Error Boundaries
 
 **Files:**
 - Create: `dashboard/src/components/ErrorBoundary.tsx`
 - Create: `dashboard/src/components/ConnectionLost.tsx`
-- Create: `dashboard/src/components/BrowserCheck.tsx`
 
 > **Note:** With React Router v7 Data Mode, error boundaries are configured at the route level using the `errorElement` property. This provides better error isolation per route and integrates with React Router's error handling system.
 
@@ -1607,52 +1603,7 @@ export function ConnectionLost({ onRetry, error }: ConnectionLostProps) {
 }
 ```
 
-**Step 3: Create BrowserCheck component**
-
-Create `dashboard/src/components/BrowserCheck.tsx`:
-
-```typescript
-import { ReactNode } from 'react';
-import { Chrome } from 'lucide-react';
-
-interface BrowserCheckProps {
-  children: ReactNode;
-}
-
-export function BrowserCheck({ children }: BrowserCheckProps) {
-  // Check for Chrome (but not Edge or Opera)
-  const isChrome =
-    /Chrome/.test(navigator.userAgent) && !/Edg|OPR/.test(navigator.userAgent);
-
-  if (!isChrome) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-background text-foreground p-8">
-        <Chrome className="w-16 h-16 text-primary mb-4" />
-        <h1 className="text-4xl font-display text-primary mb-4">
-          Unsupported Browser
-        </h1>
-        <p className="text-muted-foreground mb-4 max-w-md text-center">
-          Amelia Dashboard is optimized for Google Chrome.
-        </p>
-        <p className="text-muted-foreground mb-8 max-w-md text-center text-sm">
-          Chrome-specific features: container queries, structuredClone(),
-          native WebSocket ping/pong, CSS color-mix()
-        </p>
-        <a
-          href="https://www.google.com/chrome/"
-          className="text-accent hover:underline font-heading text-lg tracking-wide"
-        >
-          Download Chrome ->
-        </a>
-      </div>
-    );
-  }
-
-  return <>{children}</>;
-}
-```
-
-**Step 4: Verify error boundary works**
+**Step 3: Verify error boundary works**
 
 The error boundary is already configured in `router.tsx` (Task 5):
 
@@ -1672,20 +1623,18 @@ To test the error boundary:
 3. Check that error details show in dev mode
 4. Verify "Go Home" and "Reload" buttons work
 
-**Step 5: Commit**
+**Step 4: Commit**
 
 ```bash
 git add dashboard/src/components/ErrorBoundary.tsx \
-        dashboard/src/components/ConnectionLost.tsx \
-        dashboard/src/components/BrowserCheck.tsx
-git commit -m "feat(dashboard): add route-based error boundaries and browser check
+        dashboard/src/components/ConnectionLost.tsx
+git commit -m "feat(dashboard): add route-based error boundaries
 
 - RootErrorBoundary using useRouteError hook (React Router v7)
 - Handles both HTTP errors (404, 500) and JavaScript errors
 - Shows error stack in dev mode only
 - Navigation buttons: Go Home, Go Back, Reload
 - ConnectionLost component for WebSocket failures
-- BrowserCheck enforces Chrome-only support
 - Integrates with router errorElement (configured in Task 5)"
 ```
 
@@ -2245,7 +2194,6 @@ After completing all tasks, verify:
 - [ ] Route error boundaries catch errors (test with broken route)
 - [ ] Dark aviation theme applied via CSS variables (`@theme inline` directive)
 - [ ] Custom fonts loaded (Bebas Neue, Barlow Condensed, etc.)
-- [ ] Browser check works (test in Firefox/Safari shows warning)
 - [ ] `pnpm run build` creates `dashboard/dist/` successfully
 - [ ] FastAPI serves dashboard at localhost:8420 after build
 - [ ] API proxy works in dev mode
@@ -2274,7 +2222,6 @@ This plan establishes the complete foundation for the Amelia Dashboard using mod
 - Route-based lazy loading with code splitting
 - Route-level error boundaries using `errorElement`
 - Layout component with `<Outlet />` and navigation state tracking
-- Chrome-only browser compatibility check
 - TypeScript type definitions for API models
 - FastAPI static file serving integration
 - Development proxy for API and WebSocket

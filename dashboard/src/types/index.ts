@@ -18,11 +18,9 @@ export type WorkflowStatus =
 export interface WorkflowSummary {
   id: string;
   issue_id: string;
-  worktree_path: string;
   worktree_name: string;
   status: WorkflowStatus;
   started_at: string | null;
-  completed_at: string | null;
   current_stage: string | null;
 }
 
@@ -98,10 +96,8 @@ export interface TaskDAG {
 // ============================================================================
 
 export interface TokenSummary {
-  input_tokens: number;
-  output_tokens: number;
   total_tokens: number;
-  estimated_cost_usd: number | null;
+  total_cost_usd: number;
 }
 
 export interface TokenUsage {
