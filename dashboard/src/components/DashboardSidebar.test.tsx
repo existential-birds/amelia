@@ -7,7 +7,7 @@ import { SidebarProvider } from '@/components/ui/sidebar';
 // Mock the workflow store
 vi.mock('@/store/workflowStore', () => ({
   useWorkflowStore: vi.fn((selector) => {
-    const state = { isConnected: true };
+    const state = { isConnected: true, selectWorkflow: vi.fn() };
     return selector(state);
   }),
 }));
@@ -59,6 +59,7 @@ describe('DashboardSidebar', () => {
   it('applies active styling to current route', () => {
     renderSidebar('/workflows');
     const link = screen.getByRole('link', { name: /Active Jobs/ });
-    expect(link).toHaveClass('bg-sidebar-primary');
+    // NavLink sets aria-current="page" when active
+    expect(link).toHaveAttribute('aria-current', 'page');
   });
 });

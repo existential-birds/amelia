@@ -10,7 +10,7 @@
  * Displays the active workflow's pipeline canvas at the top with
  * job queue and activity log in a split view below.
  */
-import { useState } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useLoaderData, useFetcher } from 'react-router-dom';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
@@ -21,6 +21,7 @@ import { WorkflowCanvas } from '@/components/WorkflowCanvas';
 import { ActivityLog } from '@/components/ActivityLog';
 import { ActivityLogSkeleton } from '@/components/ActivityLogSkeleton';
 import { JobQueue } from '@/components/JobQueue';
+import { useWorkflowStore } from '@/store/workflowStore';
 import { getActiveWorkflow } from '@/utils/workflow';
 import { buildPipeline } from '@/utils/pipeline';
 import type { workflowsLoader, workflowDetailLoader } from '@/loaders/workflows';
@@ -40,8 +41,10 @@ import type { workflowsLoader, workflowDetailLoader } from '@/loaders/workflows'
  */
 export default function WorkflowsPage() {
   const { workflows, activeDetail } = useLoaderData<typeof workflowsLoader>();
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selectedId = useWorkflowStore((state) => state.selectedWorkflowId);
+  const selectWorkflow = useWorkflowStore((state) => state.selectWorkflow);
   const fetcher = useFetcher<typeof workflowDetailLoader>();
+  const jobQueueRef = useRef<HTMLDivElement>(null);
 
   // Auto-select active workflow
   const activeWorkflow = getActiveWorkflow(workflows);
@@ -61,12 +64,29 @@ export default function WorkflowsPage() {
 
   // Fetch detail when user selects a different workflow
   // NOTE: Uses existing /workflows/:id route and workflowDetailLoader
-  const handleSelect = (id: string | null) => {
-    setSelectedId(id);
+  const handleSelect = useCallback((id: string | null) => {
+    selectWorkflow(id);
     if (id && id !== activeWorkflow?.id) {
       fetcher.load(`/workflows/${id}`);
     }
-  };
+  }, [selectWorkflow, activeWorkflow?.id, fetcher]);
+
+  // Clear selection when clicking outside the job queue
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element;
+      // Check if click is outside job queue and not on sidebar
+      const isInsideJobQueue = jobQueueRef.current?.contains(target);
+      const isInsideSidebar = target.closest('[data-slot="sidebar"]');
+
+      if (!isInsideJobQueue && !isInsideSidebar && selectedId) {
+        selectWorkflow(null);
+      }
+    };
+
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [selectedId, selectWorkflow]);
 
   if (workflows.length === 0) {
     return <WorkflowEmptyState variant="no-workflows" />;
@@ -107,11 +127,13 @@ export default function WorkflowsPage() {
       {/* Bottom: Queue + Activity (split) - ScrollArea provides overflow handling */}
       <div className="flex-1 grid grid-cols-[320px_1fr] gap-4 p-4 overflow-hidden relative z-10">
         <ScrollArea className="h-full">
-          <JobQueue
-            workflows={workflows}
-            selectedId={displayedId}
-            onSelect={handleSelect}
-          />
+          <div ref={jobQueueRef}>
+            <JobQueue
+              workflows={workflows}
+              selectedId={displayedId}
+              onSelect={handleSelect}
+            />
+          </div>
         </ScrollArea>
         <ScrollArea className="h-full">
           {detail ? (
