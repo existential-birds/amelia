@@ -12,52 +12,7 @@ import { GitBranch, Loader2 } from 'lucide-react';
 import { WorkflowNode, type WorkflowNodeType } from '@/components/flow/WorkflowNode';
 import { WorkflowEdge, type WorkflowEdgeType } from '@/components/flow/WorkflowEdge';
 import { cn } from '@/lib/utils';
-
-/** Possible status values for pipeline nodes. */
-type NodeStatus = 'completed' | 'active' | 'pending' | 'blocked';
-
-/** Possible status values for pipeline edges. */
-type EdgeStatus = 'completed' | 'active' | 'pending';
-
-/**
- * Represents a node in the workflow pipeline.
- * @property id - Unique node identifier
- * @property label - Display label for the node
- * @property subtitle - Optional secondary text
- * @property status - Current node status
- * @property tokens - Optional token count display
- */
-interface PipelineNode {
-  id: string;
-  label: string;
-  subtitle?: string;
-  status: NodeStatus;
-  tokens?: string;
-}
-
-/**
- * Represents an edge connecting two pipeline nodes.
- * @property from - Source node ID
- * @property to - Target node ID
- * @property label - Edge label text
- * @property status - Current edge status
- */
-interface PipelineEdge {
-  from: string;
-  to: string;
-  label: string;
-  status: EdgeStatus;
-}
-
-/**
- * Complete pipeline data structure for the canvas.
- * @property nodes - Array of pipeline nodes
- * @property edges - Array of pipeline edges
- */
-interface Pipeline {
-  nodes: PipelineNode[];
-  edges: PipelineEdge[];
-}
+import type { Pipeline } from '@/utils/pipeline';
 
 /**
  * Props for the WorkflowCanvas component.

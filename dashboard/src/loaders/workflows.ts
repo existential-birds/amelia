@@ -10,6 +10,7 @@ import type { LoaderFunctionArgs } from 'react-router-dom';
 import type { WorkflowsLoaderData } from '@/types/api';
 import { getDemoMode } from '@/hooks/useDemoMode';
 import { getMockActiveWorkflows, getMockHistoryWorkflows, getMockWorkflowDetail } from '@/mocks/infinite-mode';
+import { logger } from '@/lib/logger';
 
 /**
  * Loader for the active workflows page.
@@ -44,7 +45,7 @@ export async function workflowsLoader({ request }: LoaderFunctionArgs): Promise<
     try {
       activeDetail = await api.getWorkflow(active.id);
     } catch (error) {
-      console.error('Failed to fetch active workflow detail:', error);
+      logger.warn('Failed to fetch active workflow detail', { workflowId: active.id, error });
       // Continue with null - page will show list without canvas
     }
   }
