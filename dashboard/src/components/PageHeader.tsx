@@ -116,12 +116,7 @@ Center.displayName = 'PageHeader.Center';
  */
 function Right({ children, className }: SlotProps) {
   return (
-    <div
-      className={cn(
-        'flex items-center gap-2 px-4 py-2 bg-primary/10 border border-primary/30 justify-self-end',
-        className
-      )}
-    >
+    <div className={cn('flex items-center gap-2 justify-self-end', className)}>
       {children}
     </div>
   );
