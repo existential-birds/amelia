@@ -32,8 +32,6 @@ The only guarantee is that there are no guarantees, and even this is subject to 
 
 _The trial begins tomorrow. It has always been beginning tomorrow._
 
-![Amelia Dashboard Design Mock](docs/design/desktop_screen.jpg)
-
 ## Prerequisites
 
 - **Python 3.12+** - Required for type hints and async features
@@ -49,7 +47,7 @@ Use Amelia in any existing Git repository to automate development tasks.
 
 ![Amelia Terminal](docs/design/terminal_screen.jpg)
 
-![Amelia Dashboard Design Mock](docs/design/design_mock.jpg)
+![Amelia Dashboard Design Mock](docs/design/desktop_screen.jpg)
 
 ### 1. Install Prerequisites
 
