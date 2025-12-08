@@ -305,8 +305,6 @@ export { Input }
 The Label component wraps Radix UI primitives with proper styling.
 
 ```tsx
-"use client"
-
 import * as React from "react"
 import * as LabelPrimitive from "@radix-ui/react-label"
 import { cn } from "@/lib/utils"
@@ -332,7 +330,6 @@ export { Label }
 
 **Key Features:**
 - Wraps `@radix-ui/react-label` primitive
-- `"use client"` directive for client-side rendering
 - `React.ComponentProps<typeof LabelPrimitive.Root>` - type from primitive
 - `group-data-[disabled=true]:*` - group state styling
 - `peer-disabled:*` - sibling state styling
@@ -372,8 +369,6 @@ export { Textarea }
 The Dialog component demonstrates Radix UI integration with compound components.
 
 ```tsx
-"use client"
-
 import * as React from "react"
 import * as DialogPrimitive from "@radix-ui/react-dialog"
 import { XIcon } from "lucide-react"

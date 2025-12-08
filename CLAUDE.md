@@ -34,6 +34,28 @@ uv run amelia review --local                     # Review uncommitted changes
 
 **Pre-push hook**: A git pre-push hook runs `ruff check`, `mypy`, and `pytest` before every push. All checks must pass to push to remote.
 
+## Dashboard Frontend
+
+The dashboard is a React + TypeScript frontend in `dashboard/`.
+
+**Ports:**
+- Frontend dev server: `8421`
+- Backend API: `8420` (proxied via Vite)
+
+```bash
+cd dashboard
+
+pnpm dev          # Start dev server on localhost:8421
+pnpm build        # Build for production
+pnpm test         # Run Vitest tests
+pnpm test:run     # Run tests once (CI mode)
+pnpm lint         # ESLint check
+pnpm lint:fix     # ESLint auto-fix
+pnpm type-check   # TypeScript checking
+```
+
+**Tech Stack:** React Router v7, Tailwind CSS v4, shadcn/ui, Zustand, Vitest, XyFlow
+
 ## Architecture Overview
 
 Amelia is a local agentic coding orchestrator that coordinates specialized AI agents through a LangGraph state machine.
@@ -103,3 +125,40 @@ For PRs with significant changes, create a manual test plan that the `amelia-qa`
 - Place test plan at `docs/testing/pr-test-plan.md` (preferred) or `docs/testing/manual-test-plan-*.md`
 - The file is auto-detected when the PR is opened and posted as a comment
 - After the PR is merged, delete the test plan file (it's preserved in the PR comment)
+
+## Slash Commands
+
+Custom slash commands are in `.claude/commands/amelia/`. Key commands:
+
+| Command | Purpose |
+|---------|---------|
+| `/amelia:create-pr` | Create PR with standardized description template |
+| `/amelia:update-pr-desc` | Update existing PR description after changes |
+| `/amelia:commit-push` | Commit and push with Conventional Commits format |
+| `/amelia:review` | Launch code review agent for production readiness |
+| `/amelia:review-frontend` | Comprehensive React Router v7 frontend review |
+| `/amelia:review-tests` | Review test code for usefulness and conciseness |
+| `/amelia:gen-test-plan` | Generate manual test plan for PR |
+| `/amelia:run-test-plan` | Execute test plan in isolated worktree |
+| `/amelia:gen-release-notes` | Generate release notes since a tag |
+| `/amelia:greptile-review` | Fetch and evaluate greptile-apps bot comments |
+| `/amelia:respond-review` | Reply to review comments after fixes |
+| `/amelia:eval-feedback` | Evaluate code review feedback |
+| `/amelia:ensure-doc` | Verify code documentation (OpenAPI, docstrings) |
+| `/amelia:review-plan` | Review implementation plans with parallel agents |
+| `/amelia:skill-builder` | Create Claude Code skills with best practices |
+
+## Skills
+
+Custom skills are in `.claude/skills/amelia/`. These provide domain-specific knowledge:
+
+| Skill | Purpose |
+|-------|---------|
+| `shadcn-ui` | shadcn/ui components, CVA patterns, Radix primitives |
+| `tailwind-v4` | Tailwind CSS v4 with CSS-first config, @theme directive |
+| `vitest-testing` | Vitest patterns, mocking, async testing |
+| `vercel-ai-sdk` | Chat interfaces with streaming, useChat hook |
+| `langgraph-graphs` | StateGraph, nodes, edges, conditional routing |
+| `langgraph-persistence` | Checkpointing, human-in-loop, event streaming |
+| `github-projects` | GitHub Projects v2 via gh CLI |
+| `react-router-v7` | React Router v7 patterns and navigation |

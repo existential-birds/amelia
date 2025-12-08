@@ -32,6 +32,8 @@ The only guarantee is that there are no guarantees, and even this is subject to 
 
 _The trial begins tomorrow. It has always been beginning tomorrow._
 
+![Amelia Dashboard Design Mock](docs/design/desktop_screen.jpg)
+
 ## Prerequisites
 
 - **Python 3.12+** - Required for type hints and async features
