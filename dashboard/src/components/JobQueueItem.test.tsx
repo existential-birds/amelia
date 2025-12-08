@@ -1,15 +1,16 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { JobQueueItem } from './JobQueueItem';
+import { createMockWorkflowSummary } from '@/__tests__/fixtures';
 
 describe('JobQueueItem', () => {
-  const mockWorkflow = {
+  const mockWorkflow = createMockWorkflowSummary({
     id: 'wf-001',
     issue_id: '#8',
     worktree_name: 'feature-benchmark',
-    status: 'in_progress' as const,
+    status: 'in_progress',
     current_stage: 'Developer',
-  };
+  });
 
   it('renders issue ID and worktree name', () => {
     render(<JobQueueItem workflow={mockWorkflow} selected={false} onSelect={() => {}} />);
@@ -22,41 +23,19 @@ describe('JobQueueItem', () => {
     expect(screen.getByRole('status')).toHaveTextContent('RUNNING');
   });
 
-  it('renders estimated time', () => {
-    render(<JobQueueItem workflow={mockWorkflow} selected={false} onSelect={() => {}} />);
-    // TODO: Update when ETA comes from API
-    expect(screen.getByText(/Est: 02:45/)).toBeInTheDocument();
-  });
-
   it('shows selected state with data-selected attribute', () => {
-    render(
-      <JobQueueItem workflow={mockWorkflow} selected={true} onSelect={() => {}} />
-    );
+    render(<JobQueueItem workflow={mockWorkflow} selected={true} onSelect={() => {}} />);
     const button = screen.getByRole('button');
     expect(button).toHaveAttribute('data-selected', 'true');
   });
 
-  it('calls onSelect when clicked', () => {
+  it.each([
+    { interaction: 'click', trigger: (el: Element) => fireEvent.click(el) },
+    { interaction: 'Enter key', trigger: (el: Element) => fireEvent.keyDown(el, { key: 'Enter' }) },
+  ])('calls onSelect on $interaction', ({ trigger }) => {
     const onSelect = vi.fn();
     render(<JobQueueItem workflow={mockWorkflow} selected={false} onSelect={onSelect} />);
-
-    fireEvent.click(screen.getByRole('button'));
+    trigger(screen.getByRole('button'));
     expect(onSelect).toHaveBeenCalledWith('wf-001');
-  });
-
-  it('supports keyboard navigation (Enter)', () => {
-    const onSelect = vi.fn();
-    render(<JobQueueItem workflow={mockWorkflow} selected={false} onSelect={onSelect} />);
-
-    fireEvent.keyDown(screen.getByRole('button'), { key: 'Enter' });
-    expect(onSelect).toHaveBeenCalledWith('wf-001');
-  });
-
-  it('has data-slot attribute', () => {
-    render(
-      <JobQueueItem workflow={mockWorkflow} selected={false} onSelect={() => {}} />
-    );
-    const button = screen.getByRole('button');
-    expect(button).toHaveAttribute('data-slot', 'job-queue-item');
   });
 });

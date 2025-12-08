@@ -6,7 +6,7 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { api } from '../client';
-import { createMockWorkflowSummary, createMockWorkflowDetail } from './fixtures';
+import { createMockWorkflowSummary, createMockWorkflowDetail } from '@/__tests__/fixtures';
 
 // Mock fetch globally
 global.fetch = vi.fn();
@@ -60,7 +60,7 @@ describe('API Client', () => {
 
   describe('getWorkflow', () => {
     it('should fetch single workflow by ID', async () => {
-      const mockWorkflow = createMockWorkflowDetail();
+      const mockWorkflow = createMockWorkflowDetail({ id: 'wf-1' });
 
       mockFetchSuccess(mockWorkflow);
 

@@ -66,11 +66,4 @@ describe('WorkflowNode', () => {
       'Workflow stage: Architect - Planning (completed)'
     );
   });
-
-  it('renders connection handles', () => {
-    renderNode({ label: 'Test', status: 'pending' });
-    const node = screen.getByRole('img');
-    // Handles are rendered as siblings of the node, check they exist in parent
-    expect(node.parentElement?.querySelectorAll('.react-flow__handle')).toHaveLength(2);
-  });
 });

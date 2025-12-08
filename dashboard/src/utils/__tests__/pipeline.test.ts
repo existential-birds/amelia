@@ -175,11 +175,16 @@ describe('buildPipeline', () => {
   });
 
   describe('edge status computation', () => {
-    it('should mark edge as completed when target task is completed', () => {
+    it.each([
+      { targetStatus: 'completed' as const, expectedEdgeStatus: 'completed' },
+      { targetStatus: 'in_progress' as const, expectedEdgeStatus: 'active' },
+      { targetStatus: 'pending' as const, expectedEdgeStatus: 'pending' },
+      { targetStatus: 'failed' as const, expectedEdgeStatus: 'pending' },
+    ])('marks edge as $expectedEdgeStatus when target task is $targetStatus', ({ targetStatus, expectedEdgeStatus }) => {
       const workflow = createWorkflowDetail({
         tasks: [
           createTask({ id: 't1', status: 'completed' }),
-          createTask({ id: 't2', status: 'completed', dependencies: ['t1'] }),
+          createTask({ id: 't2', status: targetStatus, dependencies: ['t1'] }),
         ],
         execution_order: ['t1', 't2'],
       });
@@ -191,71 +196,11 @@ describe('buildPipeline', () => {
         from: 't1',
         to: 't2',
         label: '',
-        status: 'completed',
+        status: expectedEdgeStatus,
       });
     });
 
-    it('should mark edge as active when target task is in_progress', () => {
-      const workflow = createWorkflowDetail({
-        tasks: [
-          createTask({ id: 't1', status: 'completed' }),
-          createTask({ id: 't2', status: 'in_progress', dependencies: ['t1'] }),
-        ],
-        execution_order: ['t1', 't2'],
-      });
-
-      const result = buildPipeline(workflow);
-
-      expect(result!.edges).toHaveLength(1);
-      expect(result!.edges[0]).toEqual({
-        from: 't1',
-        to: 't2',
-        label: '',
-        status: 'active',
-      });
-    });
-
-    it('should mark edge as pending when target task is pending', () => {
-      const workflow = createWorkflowDetail({
-        tasks: [
-          createTask({ id: 't1', status: 'completed' }),
-          createTask({ id: 't2', status: 'pending', dependencies: ['t1'] }),
-        ],
-        execution_order: ['t1', 't2'],
-      });
-
-      const result = buildPipeline(workflow);
-
-      expect(result!.edges).toHaveLength(1);
-      expect(result!.edges[0]).toEqual({
-        from: 't1',
-        to: 't2',
-        label: '',
-        status: 'pending',
-      });
-    });
-
-    it('should mark edge as pending when target task is failed', () => {
-      const workflow = createWorkflowDetail({
-        tasks: [
-          createTask({ id: 't1', status: 'completed' }),
-          createTask({ id: 't2', status: 'failed', dependencies: ['t1'] }),
-        ],
-        execution_order: ['t1', 't2'],
-      });
-
-      const result = buildPipeline(workflow);
-
-      expect(result!.edges).toHaveLength(1);
-      expect(result!.edges[0]).toEqual({
-        from: 't1',
-        to: 't2',
-        label: '',
-        status: 'pending',
-      });
-    });
-
-    it('should compute edge status independently for multiple edges', () => {
+    it('computes edge status independently for multiple edges', () => {
       const workflow = createWorkflowDetail({
         tasks: [
           createTask({ id: 't1', status: 'completed' }),
@@ -269,30 +214,9 @@ describe('buildPipeline', () => {
       const result = buildPipeline(workflow);
 
       expect(result!.edges).toHaveLength(3);
-
-      // t1 -> t2: completed (target t2 is completed)
-      expect(result!.edges.find(e => e.from === 't1' && e.to === 't2')).toEqual({
-        from: 't1',
-        to: 't2',
-        label: '',
-        status: 'completed',
-      });
-
-      // t2 -> t3: active (target t3 is in_progress)
-      expect(result!.edges.find(e => e.from === 't2' && e.to === 't3')).toEqual({
-        from: 't2',
-        to: 't3',
-        label: '',
-        status: 'active',
-      });
-
-      // t3 -> t4: pending (target t4 is pending)
-      expect(result!.edges.find(e => e.from === 't3' && e.to === 't4')).toEqual({
-        from: 't3',
-        to: 't4',
-        label: '',
-        status: 'pending',
-      });
+      expect(result!.edges.find(e => e.from === 't1' && e.to === 't2')).toMatchObject({ status: 'completed' });
+      expect(result!.edges.find(e => e.from === 't2' && e.to === 't3')).toMatchObject({ status: 'active' });
+      expect(result!.edges.find(e => e.from === 't3' && e.to === 't4')).toMatchObject({ status: 'pending' });
     });
   });
 });

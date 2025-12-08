@@ -69,24 +69,17 @@ describe('DashboardSidebar', () => {
     expect(link).toHaveAttribute('aria-current', 'page');
   });
 
-  it('shows infinity symbol when in demo mode', () => {
-    // Mock demo mode as active
-    vi.mocked(useDemoMode).mockReturnValue({ isDemo: true, demoType: 'infinite' });
+  it.each([
+    { isDemo: true, demoType: 'infinite' as const, expectedSymbol: '∞' },
+    { isDemo: false, demoType: null, expectedSymbol: null },
+  ])('shows $expectedSymbol when isDemo=$isDemo', ({ isDemo, demoType, expectedSymbol }) => {
+    vi.mocked(useDemoMode).mockReturnValue({ isDemo, demoType });
 
     renderSidebar();
 
-    // Should show both AMELIA and infinity symbol
     expect(screen.getByText('AMELIA')).toBeInTheDocument();
-    expect(screen.getByText('∞')).toBeInTheDocument();
-  });
-
-  it('shows AMELIA logo when not in demo mode', () => {
-    // Mock demo mode as inactive (default)
-    vi.mocked(useDemoMode).mockReturnValue({ isDemo: false, demoType: null });
-
-    renderSidebar();
-
-    // Should show AMELIA instead of infinity symbol
-    expect(screen.getByText('AMELIA')).toBeInTheDocument();
+    if (expectedSymbol) {
+      expect(screen.getByText(expectedSymbol)).toBeInTheDocument();
+    }
   });
 });

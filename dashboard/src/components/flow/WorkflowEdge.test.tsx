@@ -37,10 +37,10 @@ describe('WorkflowEdge', () => {
   it.each([
     { status: 'completed' as const, hasDash: false },
     { status: 'pending' as const, hasDash: true },
+    { status: 'active' as const, hasDash: true },
   ])('applies $status line style (dashed: $hasDash)', ({ status, hasDash }) => {
     const props = { ...baseProps, data: { ...baseProps.data, status } };
     const { container } = renderEdge(props);
-    // SVG paths don't have semantic roles, querySelector is appropriate here
     const path = container.querySelector('path');
     expect(path).toHaveAttribute('data-status', status);
     if (hasDash) {
@@ -48,18 +48,6 @@ describe('WorkflowEdge', () => {
     } else {
       expect(path).not.toHaveAttribute('stroke-dasharray');
     }
-  });
-
-  it('applies dashed style for active edges', () => {
-    const activeProps = {
-      ...baseProps,
-      data: { ...baseProps.data, status: 'active' as const },
-    };
-    const { container } = renderEdge(activeProps);
-    // SVG paths don't have semantic roles, querySelector is appropriate here
-    const path = container.querySelector('path');
-    expect(path).toHaveAttribute('data-status', 'active');
-    expect(path).toHaveAttribute('stroke-dasharray');
   });
 
 });
