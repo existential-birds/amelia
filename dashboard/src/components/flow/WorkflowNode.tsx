@@ -77,6 +77,7 @@ function WorkflowNodeComponent({ data }: NodeProps<WorkflowNodeType>) {
       role="img"
       aria-label={ariaLabel}
       data-status={data.status}
+      data-slot="workflow-node"
       className={cn(
         'flex flex-col items-center min-w-[100px] h-28 relative',
         styles.containerClass

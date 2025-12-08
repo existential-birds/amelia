@@ -71,9 +71,9 @@ describe('buildPipeline', () => {
   it('should create edges between sequential stages', () => {
     const workflow = createWorkflowDetail({
       tasks: [
-        createTask({ id: 't1', dependencies: [] }),
-        createTask({ id: 't2', dependencies: ['t1'] }),
-        createTask({ id: 't3', dependencies: ['t2'] }),
+        createTask({ id: 't1', status: 'pending', dependencies: [] }),
+        createTask({ id: 't2', status: 'pending', dependencies: ['t1'] }),
+        createTask({ id: 't3', status: 'pending', dependencies: ['t2'] }),
       ],
       execution_order: ['t1', 't2', 't3'],
     });
@@ -85,13 +85,13 @@ describe('buildPipeline', () => {
       from: 't1',
       to: 't2',
       label: '',
-      status: 'completed',
+      status: 'pending',
     });
     expect(result!.edges).toContainEqual({
       from: 't2',
       to: 't3',
       label: '',
-      status: 'completed',
+      status: 'pending',
     });
   });
 
@@ -143,8 +143,8 @@ describe('buildPipeline', () => {
   it('should filter out edges referencing non-existent tasks', () => {
     const workflow = createWorkflowDetail({
       tasks: [
-        createTask({ id: 't1', dependencies: ['non-existent'] }),
-        createTask({ id: 't2', dependencies: ['t1'] }),
+        createTask({ id: 't1', status: 'pending', dependencies: ['non-existent'] }),
+        createTask({ id: 't2', status: 'pending', dependencies: ['t1'] }),
       ],
       execution_order: ['t1', 't2'],
     });
@@ -157,7 +157,7 @@ describe('buildPipeline', () => {
       from: 't1',
       to: 't2',
       label: '',
-      status: 'completed',
+      status: 'pending',
     });
   });
 
@@ -172,5 +172,127 @@ describe('buildPipeline', () => {
     const result = buildPipeline(workflow);
 
     expect(result!.nodes[0].status).toBe('blocked');
+  });
+
+  describe('edge status computation', () => {
+    it('should mark edge as completed when target task is completed', () => {
+      const workflow = createWorkflowDetail({
+        tasks: [
+          createTask({ id: 't1', status: 'completed' }),
+          createTask({ id: 't2', status: 'completed', dependencies: ['t1'] }),
+        ],
+        execution_order: ['t1', 't2'],
+      });
+
+      const result = buildPipeline(workflow);
+
+      expect(result!.edges).toHaveLength(1);
+      expect(result!.edges[0]).toEqual({
+        from: 't1',
+        to: 't2',
+        label: '',
+        status: 'completed',
+      });
+    });
+
+    it('should mark edge as active when target task is in_progress', () => {
+      const workflow = createWorkflowDetail({
+        tasks: [
+          createTask({ id: 't1', status: 'completed' }),
+          createTask({ id: 't2', status: 'in_progress', dependencies: ['t1'] }),
+        ],
+        execution_order: ['t1', 't2'],
+      });
+
+      const result = buildPipeline(workflow);
+
+      expect(result!.edges).toHaveLength(1);
+      expect(result!.edges[0]).toEqual({
+        from: 't1',
+        to: 't2',
+        label: '',
+        status: 'active',
+      });
+    });
+
+    it('should mark edge as pending when target task is pending', () => {
+      const workflow = createWorkflowDetail({
+        tasks: [
+          createTask({ id: 't1', status: 'completed' }),
+          createTask({ id: 't2', status: 'pending', dependencies: ['t1'] }),
+        ],
+        execution_order: ['t1', 't2'],
+      });
+
+      const result = buildPipeline(workflow);
+
+      expect(result!.edges).toHaveLength(1);
+      expect(result!.edges[0]).toEqual({
+        from: 't1',
+        to: 't2',
+        label: '',
+        status: 'pending',
+      });
+    });
+
+    it('should mark edge as pending when target task is failed', () => {
+      const workflow = createWorkflowDetail({
+        tasks: [
+          createTask({ id: 't1', status: 'completed' }),
+          createTask({ id: 't2', status: 'failed', dependencies: ['t1'] }),
+        ],
+        execution_order: ['t1', 't2'],
+      });
+
+      const result = buildPipeline(workflow);
+
+      expect(result!.edges).toHaveLength(1);
+      expect(result!.edges[0]).toEqual({
+        from: 't1',
+        to: 't2',
+        label: '',
+        status: 'pending',
+      });
+    });
+
+    it('should compute edge status independently for multiple edges', () => {
+      const workflow = createWorkflowDetail({
+        tasks: [
+          createTask({ id: 't1', status: 'completed' }),
+          createTask({ id: 't2', status: 'completed', dependencies: ['t1'] }),
+          createTask({ id: 't3', status: 'in_progress', dependencies: ['t2'] }),
+          createTask({ id: 't4', status: 'pending', dependencies: ['t3'] }),
+        ],
+        execution_order: ['t1', 't2', 't3', 't4'],
+      });
+
+      const result = buildPipeline(workflow);
+
+      expect(result!.edges).toHaveLength(3);
+
+      // t1 -> t2: completed (target t2 is completed)
+      expect(result!.edges.find(e => e.from === 't1' && e.to === 't2')).toEqual({
+        from: 't1',
+        to: 't2',
+        label: '',
+        status: 'completed',
+      });
+
+      // t2 -> t3: active (target t3 is in_progress)
+      expect(result!.edges.find(e => e.from === 't2' && e.to === 't3')).toEqual({
+        from: 't2',
+        to: 't3',
+        label: '',
+        status: 'active',
+      });
+
+      // t3 -> t4: pending (target t4 is pending)
+      expect(result!.edges.find(e => e.from === 't3' && e.to === 't4')).toEqual({
+        from: 't3',
+        to: 't4',
+        label: '',
+        status: 'pending',
+      });
+    });
   });
 });

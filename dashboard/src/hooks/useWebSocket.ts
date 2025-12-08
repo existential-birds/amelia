@@ -9,10 +9,31 @@ import { useWorkflowStore } from '../store/workflowStore';
 import type { WebSocketMessage, WorkflowEvent } from '../types';
 
 /**
- * Base URL for the WebSocket connection.
- * Defaults to ws://localhost:8420/ws/events if VITE_WS_BASE_URL is not set.
+ * Derive WebSocket URL from window.location.
+ * - http: → ws:
+ * - https: → wss:
+ * - Use the same host as the current page
+ * - Path is always /ws/events
  */
-const WS_BASE_URL = import.meta.env.VITE_WS_BASE_URL || 'ws://localhost:8420/ws/events';
+function deriveWebSocketUrl(): string {
+  // Handle SSR/tests where window might not exist
+  if (typeof window === 'undefined') {
+    return 'ws://localhost:8420/ws/events';
+  }
+
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const host = window.location.host;
+  return `${protocol}//${host}/ws/events`;
+}
+
+/**
+ * Base URL for the WebSocket connection.
+ * Priority:
+ * 1. VITE_WS_BASE_URL env variable (if set)
+ * 2. Derived from window.location (production)
+ * 3. Fallback to ws://localhost:8420/ws/events (SSR/tests)
+ */
+const WS_BASE_URL = import.meta.env.VITE_WS_BASE_URL || deriveWebSocketUrl();
 
 /**
  * Maximum delay between reconnection attempts in milliseconds (30 seconds).

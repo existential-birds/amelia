@@ -65,6 +65,7 @@ function WorkflowEdgeComponent({
       id={id}
       d={edgePath}
       data-status={status}
+      data-slot="workflow-edge"
       fill="none"
       strokeWidth={2}
       strokeLinecap="round"

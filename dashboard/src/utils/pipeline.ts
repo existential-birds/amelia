@@ -122,6 +122,10 @@ export function buildPipeline(workflow: WorkflowDetail): Pipeline | null {
   }));
 
   // Filter edges to only include those where both source and target exist
+  // Compute edge status based on target task state:
+  // - If target is completed → edge is completed
+  // - If target is in_progress → edge is active
+  // - Otherwise → edge is pending
   const edges: PipelineEdge[] = workflow.plan.tasks.flatMap((task) =>
     task.dependencies
       .filter((depId) => taskIds.has(depId))
@@ -129,7 +133,11 @@ export function buildPipeline(workflow: WorkflowDetail): Pipeline | null {
         from: depId,
         to: task.id,
         label: '',
-        status: 'completed' as const,
+        status: task.status === 'completed'
+          ? 'completed'
+          : task.status === 'in_progress'
+          ? 'active'
+          : 'pending',
       }))
   );
 

@@ -62,11 +62,13 @@ function renderWithRouter(loaderData: { workflows: WorkflowSummary[]; activeDeta
         path: '/',
         element: <WorkflowsPage />,
         loader: () => loaderData,
+        HydrateFallback: () => null,
       },
       {
         path: '/workflows/:id',
         element: <div>Detail Page</div>,
         loader: () => ({ workflow: mockWorkflowDetail }),
+        HydrateFallback: () => null,
       },
     ],
     { initialEntries: ['/'] }
