@@ -19,7 +19,7 @@ class JiraTracker(BaseTracker):
     def __init__(self) -> None:
         """Initialize JiraTracker with configuration validation."""
         self._validate_config()
-        self.jira_url = os.environ["JIRA_URL"]
+        self.jira_url = os.environ["JIRA_BASE_URL"]
         self.email = os.environ["JIRA_EMAIL"]
         self.token = os.environ["JIRA_API_TOKEN"]
 
@@ -31,8 +31,8 @@ class JiraTracker(BaseTracker):
             ConfigurationError: If any required variable is missing
         """
         missing = []
-        if not os.environ.get("JIRA_URL"):
-            missing.append("JIRA_URL")
+        if not os.environ.get("JIRA_BASE_URL"):
+            missing.append("JIRA_BASE_URL")
         if not os.environ.get("JIRA_EMAIL"):
             missing.append("JIRA_EMAIL")
         if not os.environ.get("JIRA_API_TOKEN"):

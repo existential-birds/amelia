@@ -21,16 +21,16 @@ class TestJiraTrackerConfigValidation:
         "missing_var,present_vars",
         [
             (
-                "JIRA_URL",
+                "JIRA_BASE_URL",
                 {"JIRA_EMAIL": "test@example.com", "JIRA_API_TOKEN": "token123"},
             ),
             (
                 "JIRA_EMAIL",
-                {"JIRA_URL": "https://example.atlassian.net", "JIRA_API_TOKEN": "token123"},
+                {"JIRA_BASE_URL": "https://example.atlassian.net", "JIRA_API_TOKEN": "token123"},
             ),
             (
                 "JIRA_API_TOKEN",
-                {"JIRA_URL": "https://example.atlassian.net", "JIRA_EMAIL": "test@example.com"},
+                {"JIRA_BASE_URL": "https://example.atlassian.net", "JIRA_EMAIL": "test@example.com"},
             ),
         ],
         ids=["missing_url", "missing_email", "missing_token"]
@@ -48,7 +48,7 @@ class TestJiraTrackerConfigValidation:
 
     def test_all_jira_vars_present_succeeds(self, monkeypatch):
         """With all env vars set, JiraTracker should initialize."""
-        monkeypatch.setenv("JIRA_URL", "https://example.atlassian.net")
+        monkeypatch.setenv("JIRA_BASE_URL", "https://example.atlassian.net")
         monkeypatch.setenv("JIRA_EMAIL", "test@example.com")
         monkeypatch.setenv("JIRA_API_TOKEN", "token123")
 

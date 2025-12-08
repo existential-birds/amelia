@@ -216,16 +216,37 @@ See [Configuration Reference](docs/configuration.md) for full details.
 ## Current Status
 
 **What works:**
-- Full orchestrator loop with human approval gates
-- API driver (OpenAI via pydantic-ai) with structured outputs
-- CLI driver (Claude CLI wrapper) with structured outputs
+- Full orchestrator loop with human approval gates (CLI mode)
+- CLI driver (Claude CLI wrapper) with structured outputs, streaming, and agentic execution
 - Local code review with competitive strategy
-- Jira and GitHub tracker integrations
-- Real tool execution in Developer agent
-- FastAPI server with SQLite persistence
+- GitHub tracker integration (via `gh` CLI)
+- Real tool execution in Developer agent (shell commands, file writes)
+- FastAPI server with SQLite persistence and WebSocket event streaming
 - Workflow state machine with event tracking
-- React dashboard foundation (Vite, shadcn/ui, React Router v7, aviation theme)
-- Unified `amelia dev` command with color-coded output for server + dashboard
 
-**Limitations/Coming Soon:**
-- TaskDAG doesn't validate cyclic dependencies
+**Limitations:**
+
+_This is an experimental project. Set expectations accordingly._
+
+**Web Dashboard (not ready for use):**
+- All pages display "Coming soon" placeholders - no actual workflow data rendered
+- API client, WebSocket hooks, and data loaders are implemented but not connected to UI
+- Toast notifications only log to console
+- Connection status indicator is hardcoded
+
+**API Driver (OpenAI):**
+- No agentic execution support (structured mode only)
+- API key validation is incomplete
+- Less tested than CLI driver
+
+**Orchestrator:**
+- Failed tasks permanently block all dependent tasks (no retry or skip mechanism)
+- `RetryConfig` is defined but not actually used anywhere
+- Server crash recovery is a placeholder (interrupted workflows not recovered)
+- Workflow detail API missing token usage and event history
+
+**Not Implemented:**
+- Checkpoint resumption after interruption
+- Session continuity across runs
+- Task prioritization (all ready tasks treated equally)
+- Structured error categories or retry strategies
