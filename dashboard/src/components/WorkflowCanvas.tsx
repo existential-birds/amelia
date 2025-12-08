@@ -112,7 +112,7 @@ export function WorkflowCanvas({ pipeline, isLoading = false, className }: Workf
       pipeline?.nodes.map((node, index) => ({
         id: node.id,
         type: 'workflow' as const,
-        position: { x: index * 180, y: 80 },
+        position: { x: index * 150, y: 80 },
         data: {
           label: node.label,
           subtitle: node.subtitle,
@@ -142,7 +142,6 @@ export function WorkflowCanvas({ pipeline, isLoading = false, className }: Workf
   );
 
   const currentStage = pipeline?.nodes.find((n) => n.status === 'active')?.label || 'Unknown';
-  const completedCount = pipeline?.nodes.filter((n) => n.status === 'completed').length ?? 0;
 
   // Empty state - no pipeline selected
   if (!pipeline && !isLoading) {
@@ -197,7 +196,7 @@ export function WorkflowCanvas({ pipeline, isLoading = false, className }: Workf
       role="img"
       aria-label={`Workflow pipeline with ${nodeCount} stages. Current stage: ${currentStage}`}
       data-slot="workflow-canvas"
-      className={cn('h-64 bg-linear-to-b from-card/40 to-background/40 relative', className)}
+      className={cn('h-40 bg-linear-to-b from-card/40 to-background/40 relative', className)}
     >
       <ReactFlow
         nodes={nodes}
@@ -205,7 +204,7 @@ export function WorkflowCanvas({ pipeline, isLoading = false, className }: Workf
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         fitView
-        fitViewOptions={{ padding: 0.3 }}
+        fitViewOptions={{ padding: 0.02 }}
         nodesDraggable={false}
         nodesConnectable={false}
         elementsSelectable={false}
@@ -225,12 +224,6 @@ export function WorkflowCanvas({ pipeline, isLoading = false, className }: Workf
         />
       </ReactFlow>
 
-      {/* Stage progress info */}
-      <div className="absolute top-3 right-3 bg-card/80 border border-border rounded px-3 py-2">
-        <span className="font-mono text-sm text-muted-foreground">
-          {completedCount}/{nodeCount} stages
-        </span>
-      </div>
     </div>
   );
 }

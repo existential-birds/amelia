@@ -2,7 +2,7 @@
  * @fileoverview Custom React Flow edge for workflow pipeline connections.
  */
 import { memo } from 'react';
-import { getSmoothStepPath, type EdgeProps, type Edge, EdgeLabelRenderer } from '@xyflow/react';
+import { getSmoothStepPath, type EdgeProps, type Edge } from '@xyflow/react';
 
 /** Possible status values for workflow edges. */
 type EdgeStatus = 'completed' | 'active' | 'pending';
@@ -39,7 +39,7 @@ function WorkflowEdgeComponent({
   targetPosition,
   data,
 }: EdgeProps<WorkflowEdgeType>) {
-  const [edgePath, labelX, labelY] = getSmoothStepPath({
+  const [edgePath] = getSmoothStepPath({
     sourceX,
     sourceY,
     targetX,
@@ -61,39 +61,16 @@ function WorkflowEdgeComponent({
   const strokeOpacity = status === 'pending' ? 0.4 : 1;
 
   return (
-    <>
-      <path
-        id={id}
-        d={edgePath}
-        data-status={status}
-        fill="none"
-        strokeWidth={2}
-        strokeLinecap="round"
-        style={{ stroke: strokeColor, opacity: strokeOpacity }}
-        {...(isDashed && { strokeDasharray: '6 4' })}
-      />
-
-      {status === 'active' && (
-        <circle r={4} fill={strokeColor}>
-          <animateMotion dur="1.5s" repeatCount="indefinite" path={edgePath} />
-        </circle>
-      )}
-
-      {data?.label && (
-        <EdgeLabelRenderer>
-          <div
-            style={{
-              position: 'absolute',
-              transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
-              pointerEvents: 'all',
-            }}
-            className="nodrag nopan px-2 py-0.5 font-mono text-xs text-muted-foreground bg-background/90 border border-border rounded"
-          >
-            {data.label}
-          </div>
-        </EdgeLabelRenderer>
-      )}
-    </>
+    <path
+      id={id}
+      d={edgePath}
+      data-status={status}
+      fill="none"
+      strokeWidth={2}
+      strokeLinecap="round"
+      style={{ stroke: strokeColor, opacity: strokeOpacity }}
+      {...(isDashed && { strokeDasharray: '8 4' })}
+    />
   );
 }
 

@@ -80,12 +80,12 @@ function WorkflowNodeComponent({ data }: NodeProps<WorkflowNodeType>) {
       <Handle
         type="target"
         position={Position.Left}
-        className="!w-2 !h-2 !bg-muted-foreground !border-0"
+        className="!w-0 !h-0 !bg-transparent !border-0 !min-w-0 !min-h-0"
       />
 
       <div className={cn('rounded-full p-2', styles.glowClass)}>
         <MapPin
-          className={cn('lucide-map-pin w-8 h-8', styles.pinClass)}
+          className={cn('lucide-map-pin size-8', styles.pinClass)}
           strokeWidth={2}
         />
       </div>
@@ -109,7 +109,7 @@ function WorkflowNodeComponent({ data }: NodeProps<WorkflowNodeType>) {
       <Handle
         type="source"
         position={Position.Right}
-        className="!w-2 !h-2 !bg-muted-foreground !border-0"
+        className="!w-0 !h-0 !bg-transparent !border-0 !min-w-0 !min-h-0"
       />
     </div>
   );

@@ -47,12 +47,20 @@ describe('WorkflowEdge', () => {
     }
   });
 
-  it('shows animated circle for active edges', () => {
+  it('applies dashed style for active edges', () => {
     const activeProps = {
       ...baseProps,
       data: { ...baseProps.data, status: 'active' as const },
     };
     const { container } = renderEdge(activeProps);
-    expect(container.querySelector('circle')).toBeInTheDocument();
+    const path = container.querySelector('path');
+    expect(path).toHaveAttribute('data-status', 'active');
+    expect(path).toHaveAttribute('stroke-dasharray');
+  });
+
+  it('includes arrow marker on edge end', () => {
+    const { container } = renderEdge(baseProps);
+    const path = container.querySelector('path');
+    expect(path).toHaveAttribute('marker-end');
   });
 });
