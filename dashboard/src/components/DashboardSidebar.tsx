@@ -1,3 +1,10 @@
+/**
+ * @fileoverview Dashboard navigation sidebar component.
+ *
+ * Provides the main navigation for the Amelia dashboard using shadcn/ui
+ * Sidebar primitives with React Router for active state management.
+ */
+
 import { NavLink } from 'react-router-dom';
 import {
   Sidebar,

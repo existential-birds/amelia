@@ -4,12 +4,27 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 
+/**
+ * @fileoverview Main layout component for the Amelia dashboard.
+ * Provides the sidebar, content area, and global visual effects.
+ */
 import { Outlet, useNavigation } from 'react-router-dom';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { DashboardSidebar } from '@/components/DashboardSidebar';
 import { NavigationProgress } from '@/components/NavigationProgress';
 import { useWebSocket } from '@/hooks/useWebSocket';
 
+/**
+ * Root layout component that provides the dashboard structure.
+ *
+ * Features:
+ * - Responsive sidebar with navigation
+ * - WebSocket connection for real-time updates
+ * - Navigation progress indicator during route transitions
+ * - Decorative visual effects (starfield, scanlines, vignette)
+ *
+ * @returns The layout wrapper with sidebar and content outlet.
+ */
 export function Layout() {
   const navigation = useNavigation();
 

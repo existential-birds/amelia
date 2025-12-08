@@ -1,6 +1,15 @@
+/**
+ * @fileoverview Workflow progress indicator component.
+ */
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
 
+/**
+ * Props for the WorkflowProgress component.
+ * @property completed - Number of completed workflow stages
+ * @property total - Total number of workflow stages
+ * @property className - Optional additional CSS classes
+ */
 interface WorkflowProgressProps {
   completed: number;
   total: number;

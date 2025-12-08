@@ -4,9 +4,23 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 
+/**
+ * @fileoverview Logs monitoring page - coming soon placeholder.
+ *
+ * Will display system logs and monitoring information once implemented.
+ */
+
 import { Loader2 } from 'lucide-react';
 import { PageHeader } from '@/components/PageHeader';
 
+/**
+ * Displays a placeholder for the logs monitoring page.
+ *
+ * Currently under development. Will eventually show system logs,
+ * agent output, and monitoring information for workflow debugging.
+ *
+ * @returns The logs page UI with coming soon message
+ */
 export default function LogsPage() {
   return (
     <div className="flex flex-col h-full w-full">
