@@ -337,6 +337,7 @@ When working on this project with [Claude Code](https://claude.ai/code), the fol
 | `/amelia:create-pr` | Create a PR with standardized description template |
 | `/amelia:update-pr-desc` | Update existing PR description after additional changes |
 | `/amelia:review` | Launch a code review agent for the current PR |
+| `/amelia:review-plan <path>` | Review implementation plan for parallelization, TDD, types, library practices |
 | `/amelia:review-tests` | Review test code for quality and conciseness |
 | `/amelia:ensure-doc` | Ensure all code is properly documented |
 | `/amelia:gen-test-plan` | Generate manual test plan for PR |

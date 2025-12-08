@@ -60,7 +60,7 @@ This hybrid approach preserves the aviation/flight control aesthetic where it ma
 | **WorkflowEdge** | **Custom React Flow edge** | Time labels, animated flow indicator |
 | **Progress** | shadcn/ui Progress | Overall workflow progress indicator |
 | **Skeleton** | shadcn/ui Skeleton | Loading states for JobQueue/ActivityLog |
-| **EmptyState** | Custom component | Display when no workflows are active |
+| **WorkflowEmptyState** | shadcn/ui Empty | Display when no workflows are active |
 | **Sidebar** | shadcn/ui Sidebar | Dashboard layout with collapsible navigation |
 
 **Additional Components (shadcn/ui):**
@@ -71,7 +71,7 @@ These components enhance UX with loading states, progress indicators, and respon
 |-----------|---------|--------------|
 | **Progress** | Show workflow overall progress | Animated fill, percentage label, OKLCH colors |
 | **Skeleton** | Loading placeholders | Pulse animation, matches content dimensions |
-| **EmptyState** | No active workflows | Icon, message, optional action button |
+| **WorkflowEmptyState** | No active workflows | Wraps shadcn/ui Empty with workflow variants |
 | **Sidebar** | Dashboard navigation | SidebarProvider, SidebarMenu, cookie-based state, mobile responsive |
 
 The **Sidebar** component from shadcn/ui is recommended for the dashboard layout because it provides:
@@ -2650,7 +2650,7 @@ git commit -m "feat(dashboard): add component index exports
 
 ## PART 4: Additional shadcn/ui Components
 
-These tasks add Progress, Skeleton, EmptyState, and Sidebar components for enhanced UX.
+These tasks add Progress, Skeleton, WorkflowEmptyState, and Sidebar components for enhanced UX.
 
 ---
 
@@ -2891,50 +2891,59 @@ git commit -m "feat(dashboard): add Skeleton components for loading states
 
 ---
 
-## Task 16: EmptyState Component
+## Task 16: EmptyState Component (using shadcn/ui Empty)
 
-Create a reusable empty state component for when no workflows are active.
+Create a workflow-specific empty state wrapper using shadcn/ui Empty component.
 
 **Files:**
-- Create: `dashboard/src/components/EmptyState.tsx`
-- Create: `dashboard/src/components/EmptyState.test.tsx`
+- Create: `dashboard/src/components/ui/empty.tsx` (via shadcn CLI)
+- Create: `dashboard/src/components/WorkflowEmptyState.tsx`
+- Create: `dashboard/src/components/WorkflowEmptyState.test.tsx`
 
-**Step 1: Write the failing test**
+**Step 1: Install shadcn/ui Empty component**
+
+```bash
+cd dashboard
+npx shadcn@latest add empty
+```
+
+This installs the shadcn/ui Empty component with:
+- `Empty` - Container with proper a11y patterns
+- `EmptyImage` - For illustrations/images
+- `EmptyIcon` - For icon display
+- `EmptyTitle` - Main heading
+- `EmptyDescription` - Explanatory text
+- `EmptyActions` - Action buttons slot
+
+**Step 2: Write the failing test**
 
 ```typescript
-// dashboard/src/components/EmptyState.test.tsx
+// dashboard/src/components/WorkflowEmptyState.test.tsx
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { EmptyState } from './EmptyState';
+import { WorkflowEmptyState } from './WorkflowEmptyState';
 
-describe('EmptyState', () => {
-  it('renders icon', () => {
-    const { container } = render(<EmptyState icon="inbox" message="No items" />);
+describe('WorkflowEmptyState', () => {
+  it('renders icon via EmptyIcon', () => {
+    const { container } = render(<WorkflowEmptyState variant="no-workflows" />);
     expect(container.querySelector('svg')).toBeInTheDocument();
   });
 
-  it('renders message', () => {
-    render(<EmptyState icon="inbox" message="No active workflows" />);
-    expect(screen.getByText('No active workflows')).toBeInTheDocument();
+  it('renders title via EmptyTitle', () => {
+    render(<WorkflowEmptyState variant="no-workflows" />);
+    expect(screen.getByText('No Active Workflows')).toBeInTheDocument();
   });
 
-  it('renders description when provided', () => {
-    render(
-      <EmptyState
-        icon="inbox"
-        message="No workflows"
-        description="Start a new workflow to see it here"
-      />
-    );
-    expect(screen.getByText('Start a new workflow to see it here')).toBeInTheDocument();
+  it('renders description via EmptyDescription', () => {
+    render(<WorkflowEmptyState variant="no-workflows" />);
+    expect(screen.getByText(/Start a new workflow/)).toBeInTheDocument();
   });
 
-  it('renders action button when provided', () => {
+  it('renders action button via EmptyActions when provided', () => {
     const onAction = vi.fn();
     render(
-      <EmptyState
-        icon="inbox"
-        message="No workflows"
+      <WorkflowEmptyState
+        variant="no-workflows"
         action={{ label: 'New Workflow', onClick: onAction }}
       />
     );
@@ -2943,53 +2952,64 @@ describe('EmptyState', () => {
     expect(onAction).toHaveBeenCalled();
   });
 
-  it('has data-slot attribute', () => {
-    const { container } = render(<EmptyState icon="inbox" message="Empty" />);
-    expect(container.querySelector('[data-slot="empty-state"]')).toBeInTheDocument();
+  it('uses shadcn/ui Empty structure internally', () => {
+    const { container } = render(<WorkflowEmptyState variant="no-workflows" />);
+    // shadcn/ui Empty renders with data-slot="empty"
+    expect(container.querySelector('[data-slot="empty"]')).toBeInTheDocument();
   });
 
-  it('uses muted foreground colors', () => {
-    const { container } = render(<EmptyState icon="inbox" message="Empty" />);
-    expect(container.querySelector('.text-muted-foreground')).toBeInTheDocument();
+  it('renders no-activity variant correctly', () => {
+    render(<WorkflowEmptyState variant="no-activity" />);
+    expect(screen.getByText('No Activity Yet')).toBeInTheDocument();
+  });
+
+  it('renders error variant correctly', () => {
+    render(<WorkflowEmptyState variant="error" />);
+    expect(screen.getByText('Something Went Wrong')).toBeInTheDocument();
+  });
+
+  it('supports custom title and description override', () => {
+    render(
+      <WorkflowEmptyState
+        variant="no-workflows"
+        title="Custom Title"
+        description="Custom description text"
+      />
+    );
+    expect(screen.getByText('Custom Title')).toBeInTheDocument();
+    expect(screen.getByText('Custom description text')).toBeInTheDocument();
   });
 });
 ```
 
-**Step 2: Implement EmptyState component with CVA**
+**Step 3: Run test to verify it fails**
+
+```bash
+cd dashboard && pnpm test src/components/WorkflowEmptyState.test.tsx
+```
+
+Expected: FAIL - Component does not exist
+
+**Step 4: Implement WorkflowEmptyState wrapper**
 
 ```typescript
-// dashboard/src/components/EmptyState.tsx
-import { cva, type VariantProps } from 'class-variance-authority';
-import { Inbox, FileText, Activity, AlertCircle } from 'lucide-react';
+// dashboard/src/components/WorkflowEmptyState.tsx
+import {
+  Empty,
+  EmptyIcon,
+  EmptyTitle,
+  EmptyDescription,
+  EmptyActions,
+} from '@/components/ui/empty';
 import { Button } from '@/components/ui/button';
+import { Inbox, Activity, AlertCircle, FileX } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-const emptyStateVariants = cva(
-  'flex flex-col items-center justify-center text-center p-8',
-  {
-    variants: {
-      size: {
-        sm: 'p-4 gap-2',
-        md: 'p-8 gap-3',
-        lg: 'p-12 gap-4',
-      },
-    },
-    defaultVariants: {
-      size: 'md',
-    },
-  }
-);
+type EmptyStateVariant = 'no-workflows' | 'no-activity' | 'no-results' | 'error';
 
-const icons = {
-  inbox: Inbox,
-  file: FileText,
-  activity: Activity,
-  alert: AlertCircle,
-};
-
-interface EmptyStateProps extends VariantProps<typeof emptyStateVariants> {
-  icon: keyof typeof icons;
-  message: string;
+interface WorkflowEmptyStateProps {
+  variant: EmptyStateVariant;
+  title?: string;
   description?: string;
   action?: {
     label: string;
@@ -2999,67 +3019,116 @@ interface EmptyStateProps extends VariantProps<typeof emptyStateVariants> {
 }
 
 /**
- * EmptyState displays a placeholder when no content is available.
- * Uses CVA for size variants and includes optional action button.
- *
- * Includes data-slot="empty-state" for styling hooks.
+ * Variant configurations for workflow-specific empty states.
+ * Each variant maps to icon, default title, and default description.
  */
-export function EmptyState({
-  icon,
-  message,
+const variantConfig: Record<EmptyStateVariant, {
+  icon: typeof Inbox;
+  title: string;
+  description: string;
+}> = {
+  'no-workflows': {
+    icon: Inbox,
+    title: 'No Active Workflows',
+    description: 'Start a new workflow to see it here. Workflows track issue progress through the development pipeline.',
+  },
+  'no-activity': {
+    icon: Activity,
+    title: 'No Activity Yet',
+    description: 'Activity will appear here once the workflow starts processing.',
+  },
+  'no-results': {
+    icon: FileX,
+    title: 'No Results Found',
+    description: 'Try adjusting your search or filter criteria.',
+  },
+  'error': {
+    icon: AlertCircle,
+    title: 'Something Went Wrong',
+    description: 'An error occurred while loading. Please try again.',
+  },
+};
+
+/**
+ * WorkflowEmptyState wraps shadcn/ui Empty with workflow-specific variants.
+ *
+ * Leverages battle-tested shadcn/ui Empty for:
+ * - Proper a11y patterns
+ * - Composable sub-components
+ * - Consistent design system integration
+ *
+ * Provides workflow-specific variants:
+ * - no-workflows: For empty workflow list
+ * - no-activity: For empty activity log
+ * - no-results: For empty search results
+ * - error: For error states
+ */
+export function WorkflowEmptyState({
+  variant,
+  title,
   description,
   action,
-  size,
   className,
-}: EmptyStateProps) {
-  const Icon = icons[icon];
+}: WorkflowEmptyStateProps) {
+  const config = variantConfig[variant];
+  const Icon = config.icon;
 
   return (
-    <div
-      data-slot="empty-state"
-      className={cn(emptyStateVariants({ size }), className)}
-    >
-      <Icon
-        className="h-12 w-12 text-muted-foreground/50"
-        strokeWidth={1.5}
-        aria-hidden="true"
-      />
+    <Empty className={cn('py-12', className)}>
+      <EmptyIcon>
+        <Icon
+          className="h-12 w-12 text-muted-foreground/50"
+          strokeWidth={1.5}
+        />
+      </EmptyIcon>
 
-      <h3 className="font-heading text-lg font-semibold text-muted-foreground">
-        {message}
-      </h3>
+      <EmptyTitle className="font-heading">
+        {title ?? config.title}
+      </EmptyTitle>
 
-      {description && (
-        <p className="text-sm text-muted-foreground/70 max-w-sm">
-          {description}
-        </p>
-      )}
+      <EmptyDescription>
+        {description ?? config.description}
+      </EmptyDescription>
 
       {action && (
-        <Button
-          variant="outline"
-          onClick={action.onClick}
-          className="mt-2 focus-visible:ring-ring/50 focus-visible:ring-[3px]"
-        >
-          {action.label}
-        </Button>
+        <EmptyActions>
+          <Button
+            variant="outline"
+            onClick={action.onClick}
+            className="focus-visible:ring-ring/50 focus-visible:ring-[3px]"
+          >
+            {action.label}
+          </Button>
+        </EmptyActions>
       )}
-    </div>
+    </Empty>
   );
 }
 ```
 
-**Step 3: Commit**
+**Step 5: Run test to verify it passes**
 
 ```bash
-git add dashboard/src/components/EmptyState.tsx dashboard/src/components/EmptyState.test.tsx
-git commit -m "feat(dashboard): add EmptyState component
+cd dashboard && pnpm test src/components/WorkflowEmptyState.test.tsx
+```
 
-- CVA for size variants (sm, md, lg)
-- Icon options: inbox, file, activity, alert
-- Optional description and action button
-- data-slot attribute for styling hooks
-- focus-visible states on action button"
+Expected: PASS
+
+**Step 6: Commit**
+
+```bash
+git add dashboard/src/components/ui/empty.tsx dashboard/src/components/WorkflowEmptyState.tsx dashboard/src/components/WorkflowEmptyState.test.tsx
+git commit -m "feat(dashboard): add WorkflowEmptyState using shadcn/ui Empty
+
+- Install shadcn/ui Empty component (battle-tested a11y patterns)
+- Thin wrapper with workflow-specific variants:
+  - no-workflows: Empty workflow list
+  - no-activity: Empty activity log
+  - no-results: Empty search results
+  - error: Error states
+- Optional title/description override
+- Optional action button with focus-visible states
+- Leverages shadcn/ui composable structure"
 ```
 
 ---
@@ -3357,8 +3426,8 @@ export { WorkflowProgress } from './WorkflowProgress';
 export { JobQueueSkeleton } from './JobQueueSkeleton';
 export { ActivityLogSkeleton } from './ActivityLogSkeleton';
 
-// Empty states
-export { EmptyState } from './EmptyState';
+// Empty states (using shadcn/ui Empty)
+export { WorkflowEmptyState } from './WorkflowEmptyState';
 
 // Layout components
 export { DashboardSidebar } from './DashboardSidebar';
@@ -3383,6 +3452,7 @@ export * from './ai-elements/shimmer';
 export * from './ui/button';
 export * from './ui/badge';
 export * from './ui/card';
+export * from './ui/empty';
 export * from './ui/progress';
 export * from './ui/skeleton';
 export * from './ui/sidebar';
@@ -3397,8 +3467,8 @@ git add dashboard/src/components/index.ts
 git commit -m "feat(dashboard): update component exports
 
 - Add WorkflowProgress, JobQueueSkeleton, ActivityLogSkeleton
-- Add EmptyState and DashboardSidebar
-- Add progress, skeleton, sidebar UI exports"
+- Add WorkflowEmptyState and DashboardSidebar
+- Add empty, progress, skeleton, sidebar UI exports"
 ```
 
 ---
@@ -3435,13 +3505,13 @@ After completing all tasks, verify:
 **Additional shadcn/ui Components:**
 - [ ] Progress component shows workflow completion with OKLCH colors
 - [ ] Skeleton components match JobQueue/ActivityLog structure
-- [ ] EmptyState displays when no workflows are active
+- [ ] WorkflowEmptyState displays when no workflows are active (uses shadcn/ui Empty)
 - [ ] Sidebar has collapsible navigation with cookie persistence
 - [ ] Mobile responsive Sidebar with sheet drawer
 
 **shadcn/ui Patterns:**
 - [ ] All custom components have `data-slot` attributes
-- [ ] CVA used for component variants (StatusBadge, EmptyState)
+- [ ] CVA used for component variants (StatusBadge)
 - [ ] `cn()` utility used for className merging
 - [ ] Focus states include `focus-visible:ring-ring/50 focus-visible:ring-[3px]`
 - [ ] OKLCH color format used throughout CSS variables
@@ -3487,7 +3557,7 @@ This plan uses a **hybrid approach** to component development:
 | WorkflowProgress | Progress | Overall workflow completion indicator |
 | JobQueueSkeleton | Skeleton | Loading placeholder for JobQueue |
 | ActivityLogSkeleton | Skeleton | Loading placeholder for ActivityLog |
-| EmptyState | Custom + CVA | Placeholder when no workflows active |
+| WorkflowEmptyState | shadcn/ui Empty | Placeholder when no workflows active |
 | DashboardSidebar | Sidebar | Collapsible navigation with state persistence |
 
 ### Benefits of Hybrid Approach

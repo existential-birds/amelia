@@ -1,92 +1,91 @@
 # Amelia Context for Gemini
 
 This document provides context and instructions for working on the Amelia project.
+**Strictly adhere to these guidelines.**
 
-## Project Overview
+## 1. Project Overview
 
-**Amelia** is a local agentic coding system that orchestrates software development tasks through multiple AI agents (Architect, Developer, Reviewer, Project Manager). It uses a LangGraph-based state machine to coordinate these agents to analyze issues, plan tasks, execute code changes, and review them.
+**Amelia** is a local agentic coding system that orchestrates software development tasks through multiple AI agents. It uses a LangGraph-based state machine to coordinate planning, coding, and reviewing.
 
-Key features:
-- **Agentic Orchestration:** Specialized agents for planning, coding, and reviewing.
-- **Dual Driver Mode:** Supports direct API calls (`api:openai`) via `pydantic-ai` and CLI wrapping (`cli:claude`) for enterprise compliance.
-- **Pluggable Trackers:** Integrates with Jira and GitHub for issue management.
-- **Local & Secure:** Designed to run locally, respecting data privacy.
+*   **Orchestrator:** LangGraph state machine (`amelia/core/orchestrator.py`).
+*   **Dual Driver:** Supports `api:openai` (pydantic-ai) and `cli:claude` (for compliance).
+*   **Privacy:** Designed to run locally.
 
-## Environment & Build
+## 2. Environment & Commands
 
-This project uses **[uv](https://docs.astral.sh/uv/)** for dependency management and build workflows.
-
-### Setup
+### Backend (Python + uv)
+Dependency management via **uv**.
 
 ```bash
-# Install dependencies
-uv sync
+uv sync                                # Install dependencies
+uv run amelia start <ISSUE> --profile <PROFILE> # Run Orchestrator
+uv run pytest                          # Run all tests
+uv run ruff check amelia tests         # Lint
+uv run mypy amelia                     # Type check
 ```
 
-### Running the Application
+**Pre-push Hook:** Enforces `ruff`, `mypy`, and `pytest` passing before push.
 
-The entry point is `amelia/main.py`, exposed as the `amelia` CLI command.
+### Frontend (React + Vite)
+Located in `dashboard/`.
 
 ```bash
-# Run the full orchestrator
-uv run amelia start <ISSUE_ID> --profile <PROFILE_NAME>
-
-# Generate a plan only
-uv run amelia plan-only <ISSUE_ID>
-
-# Run a local review on uncommitted changes
-uv run amelia review --local
+pnpm install
+pnpm dev          # Dev server (port 8421)
+pnpm build        # Production build
+pnpm test         # Vitest
+pnpm lint         # ESLint
+pnpm type-check   # TypeScript check
 ```
 
-### Testing & Quality
+**Stack:** React Router v7, Tailwind CSS v4, shadcn/ui, Zustand, React Flow.
 
-Strict adherence to testing and code quality is required.
+## 3. Critical Code Conventions
 
-```bash
-# Run all tests
-uv run pytest
+### Python
+*   **Type Hints:** Mandatory (Python 3.12+).
+*   **Async:** Core logic is async. Use `async/await` consistently.
+*   **Pydantic:** Use Models for data structures. No raw dicts.
+*   **Logging:** Use `loguru` (`logger.info`), NEVER `print`.
+*   **Docstrings:** Google-style mandatory for all exported symbols.
 
-# Run specific tests
-uv run pytest tests/unit/test_agents.py
+### Testing (TDD)
+*   **Principle:** Write tests FIRST (Red-Green-Refactor).
+*   **Tooling:** `pytest-asyncio` (auto mode).
+*   **Structure:**
+    *   `tests/unit/`: Isolated logic verification.
+    *   `tests/integration/`: Component interaction.
+    *   `tests/e2e/`: Full flow.
+*   **Mocking:** Mock external LLM/API calls in unit tests.
 
-# Linting (Ruff)
-uv run ruff check .
+### Commit Messages
+Follow **Conventional Commits**: `type(scope): description`.
 
-# Type Checking (MyPy) - Strict mode enabled
-uv run mypy .
-```
+| Type | Scope | Example |
+| :--- | :--- | :--- |
+| `feat` | `server`, `cli`, `dashboard` | `feat(server): add retry logic` |
+| `fix` | `agent`, `core` | `fix(core): handle missing key` |
+| `docs` | `readme` | `docs: update setup guide` |
+| `refactor`| `utils` | `refactor(utils): simplify regex` |
+| `test` | `unit` | `test(unit): add coverage for X` |
 
-**Pre-push Hook:** The project enforces a pre-push hook that runs `ruff`, `mypy`, and `pytest`. Ensure these pass before attempting to commit/push.
+## 4. Workflows & Protocols
 
-## Architecture Highlights
+You should encourage and adhere to the project's agentic workflows (defined in `.agent/workflows/`):
 
-*   **Core (`amelia/core/`):** Contains the `Orchestrator` (LangGraph state machine), `ExecutionState`, and shared types (`TaskDAG`, `Issue`).
-*   **Agents (`amelia/agents/`):** specialized classes (`Architect`, `Developer`, `Reviewer`) that implement the logic for each step.
-*   **Drivers (`amelia/drivers/`):** Abstraction layer for LLM interaction.
-    *   `api`: Direct usage of LLM APIs (currently OpenAI).
-    *   `cli`: Wrappers for CLI tools (currently a stub for Claude).
-*   **Trackers (`amelia/trackers/`):** Adapters for issue tracking systems (Jira, GitHub).
+*   **PR Creation:** `/amelia:create-pr` (Standardized, self-verifying descriptions).
+*   **Code Review:** `/amelia:review` (Rigorous, tool-backed verification).
+*   **Documentation:** `/amelia:ensure-doc` (Coverage enforcement).
+*   **Testing:** `/amelia:gen-test-plan` (Manual test plans for complex features).
+
+## 5. Architecture Reference
+
+| Layer | Path | Purpose |
+| :--- | :--- | :--- |
+| **Core** | `amelia/core/` | State definitions, Orchestrator execution loop. |
+| **Agents** | `amelia/agents/` | `Architect` (Plan), `Developer` (Edit), `Reviewer` (Critique). |
+| **Drivers** | `amelia/drivers/` | LLM Adapters (`api` vs `cli`). |
+| **Trackers** | `amelia/trackers/`| Issue source adapters (GitHub/Jira). |
 
 ### Data Flow
-`Issue` -> **Architect** (creates `TaskDAG`) -> **Human Approval** -> **Developer** (executes `Task`s) <-> **Reviewer** (evaluates changes) -> **Complete**
-
-## Development Conventions
-
-*   **Type Hinting:** Python 3.12+ type hints are **mandatory** for all functions and methods.
-*   **Pydantic:** Use Pydantic models for all data structures and schemas. Avoid raw dictionaries.
-*   **Async/Await:** The core logic is asynchronous. Use `async`/`await` consistently.
-*   **Logging:** Use `loguru` for logging. Do not use `print` statements in library code.
-*   **Testing:**
-    *   Write tests for all new functionality.
-    *   Use `pytest-asyncio` for async tests.
-    *   Mock external interactions (LLM calls, API calls) in unit tests.
-*   **Docstrings:** Google-style docstrings for all public modules, classes, and functions.
-
-## Key Files
-
-*   `amelia/main.py`: CLI entry point.
-*   `amelia/core/orchestrator.py`: Main state machine logic.
-*   `amelia/core/state.py`: State definition (`ExecutionState`).
-*   `amelia/agents/*.py`: Agent implementations.
-*   `settings.amelia.yaml`: User configuration (profiles).
-*   `pyproject.toml`: Project dependencies and tool configuration.
+`Issue` -> **Architect** (TaskDAG) -> **Human** -> **Developer** (Code) <-> **Reviewer** (Critique) -> **Merge**

@@ -52,14 +52,21 @@ Generate a manual test plan for the current PR that will be auto-posted as a PR 
 ### Environment Setup
 
 ```bash
-# 1. Install dependencies
-cd /Users/ka/github/amelia
+# 1. Install Python dependencies
+cd /Users/ka/github/amelia-langgraph-bridge
 uv sync
 
-# 2. Start the server (if needed)
-uv run amelia-server start --reload
+# 2. Start the backend server (if needed)
+uv run amelia server --reload
+# Server runs on http://localhost:8420 by default
 
-# 3. Verify setup
+# 3. For dashboard testing, install and start frontend
+cd dashboard
+pnpm install
+pnpm run dev
+# Check dashboard/vite.config.ts for actual port (default: 3000)
+
+# 4. Verify setup
 {verification command}
 ```
 

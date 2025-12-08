@@ -10,7 +10,7 @@ description: shadcn/ui component patterns with Radix primitives and Tailwind sty
 - [CLI Commands](#cli-commands) - Installing and adding components
 - [Quick Reference](#quick-reference) - cn(), basic CVA pattern
 - [Component Anatomy](#component-anatomy) - Props typing, asChild, data-slot
-- [Component Patterns](#component-patterns) - Compound components, Radix wrapping
+- [Component Patterns](#component-patterns) - Compound components
 - [Styling Techniques](#styling-techniques) - CVA variants, modern CSS selectors, accessibility states
 - [Decision Tables](#decision-tables) - When to use CVA, compound components, asChild, Context
 - [Common Patterns](#common-patterns) - Form elements, dialogs, sidebars
@@ -221,26 +221,6 @@ function CardTitle({ className, ...props }: React.ComponentProps<"div">) {
   return <div data-slot="card-title" className={cn("leading-none font-semibold", className)} {...props} />
 }
 ```
-
-### Wrapping Radix Primitives
-
-```tsx
-"use client"
-
-import * as LabelPrimitive from "@radix-ui/react-label"
-
-function Label({ className, ...props }: React.ComponentProps<typeof LabelPrimitive.Root>) {
-  return (
-    <LabelPrimitive.Root
-      data-slot="label"
-      className={cn("flex items-center gap-2 text-sm font-medium", className)}
-      {...props}
-    />
-  )
-}
-```
-
-Key points: Add `"use client"`, use `React.ComponentProps<typeof Primitive.Root>`, add `data-slot`.
 
 ## Styling Techniques
 
