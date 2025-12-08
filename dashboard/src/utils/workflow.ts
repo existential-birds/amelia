@@ -4,6 +4,14 @@
 import type { WorkflowSummary, WorkflowDetail } from '@/types';
 
 /**
+ * Sorts workflows by start time in descending order (most recent first).
+ */
+function sortByStartTimeDesc(a: WorkflowSummary, b: WorkflowSummary): number {
+  if (!a.started_at || !b.started_at) return 0;
+  return new Date(b.started_at).getTime() - new Date(a.started_at).getTime();
+}
+
+/**
  * Determines which workflow to display as the "active" workflow.
  *
  * Priority:
@@ -18,28 +26,19 @@ export function getActiveWorkflow(workflows: WorkflowSummary[]): WorkflowSummary
   // Priority 1: Most recently started running workflow
   const running = workflows
     .filter(w => w.status === 'in_progress')
-    .sort((a, b) => {
-      if (!a.started_at || !b.started_at) return 0;
-      return new Date(b.started_at).getTime() - new Date(a.started_at).getTime();
-    });
+    .sort(sortByStartTimeDesc);
   if (running[0]) return running[0];
 
   // Priority 2: Most recently started blocked workflow
   const blocked = workflows
     .filter(w => w.status === 'blocked')
-    .sort((a, b) => {
-      if (!a.started_at || !b.started_at) return 0;
-      return new Date(b.started_at).getTime() - new Date(a.started_at).getTime();
-    });
+    .sort(sortByStartTimeDesc);
   if (blocked[0]) return blocked[0];
 
   // Priority 3: Most recently started completed workflow
   const completed = workflows
     .filter(w => w.status === 'completed')
-    .sort((a, b) => {
-      if (!a.started_at || !b.started_at) return 0;
-      return new Date(b.started_at).getTime() - new Date(a.started_at).getTime();
-    });
+    .sort(sortByStartTimeDesc);
 
   return completed[0] ?? null;
 }

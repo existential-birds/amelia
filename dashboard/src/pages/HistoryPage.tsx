@@ -12,15 +12,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { StatusBadge } from '@/components/StatusBadge';
 import { WorkflowEmptyState } from '@/components/WorkflowEmptyState';
 import { cn } from '@/lib/utils';
-import type { WorkflowSummary } from '@/types';
-
-/**
- * Data shape returned by the route loader.
- * @property workflows - List of workflow summaries
- */
-interface HistoryLoaderData {
-  workflows: WorkflowSummary[];
-}
+import { historyLoader } from '@/loaders/workflows';
 
 /**
  * Displays a list of past workflows with status and timestamps.
@@ -31,7 +23,7 @@ interface HistoryLoaderData {
  * @returns The history page UI
  */
 export default function HistoryPage() {
-  const { workflows } = useLoaderData() as HistoryLoaderData;
+  const { workflows } = useLoaderData<typeof historyLoader>();
 
   if (workflows.length === 0) {
     return <WorkflowEmptyState variant="no-activity" />;
