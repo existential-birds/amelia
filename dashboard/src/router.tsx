@@ -6,7 +6,7 @@
 
 /**
  * @fileoverview Client-side router configuration for the Amelia dashboard.
- * Uses React Router v6 with data loaders and lazy-loaded route components.
+ * Uses React Router v7 with data loaders and lazy-loaded route components.
  */
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { Layout } from '@/components/Layout';

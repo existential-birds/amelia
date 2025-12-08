@@ -83,45 +83,40 @@ describe('API Client', () => {
         method: 'approveWorkflow' as const,
         id: 'wf-1',
         expectedUrl: '/api/workflows/wf-1/approve',
-        feedback: undefined,
       },
       {
         method: 'cancelWorkflow' as const,
         id: 'wf-1',
         expectedUrl: '/api/workflows/wf-1/cancel',
-        feedback: undefined,
-      },
-      {
-        method: 'rejectWorkflow' as const,
-        id: 'wf-1',
-        expectedUrl: '/api/workflows/wf-1/reject',
-        feedback: 'Plan needs revision',
       },
     ])(
-      '$method should POST to correct endpoint',
-      async ({ method, id, expectedUrl, feedback }) => {
-        mockFetchSuccess({ status: method === 'rejectWorkflow' ? 'failed' : 'ok' });
+      '$method should POST to correct endpoint without body',
+      async ({ method, id, expectedUrl }) => {
+        mockFetchSuccess({ status: 'ok' });
 
-        if (feedback) {
-          await api[method](id, feedback);
-        } else {
-          await api[method](id, 'feedback');
-        }
+        await api[method](id);
 
-        const expectedCall = feedback
-          ? {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ feedback }),
-          }
-          : expect.objectContaining({
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-          });
-
-        expect(global.fetch).toHaveBeenCalledWith(expectedUrl, expectedCall);
+        expect(global.fetch).toHaveBeenCalledWith(expectedUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        });
       }
     );
+
+    it('should POST rejectWorkflow with feedback in body', async () => {
+      const id = 'wf-1';
+      const feedback = 'Plan needs revision';
+
+      mockFetchSuccess({ status: 'failed' });
+
+      await api.rejectWorkflow(id, feedback);
+
+      expect(global.fetch).toHaveBeenCalledWith('/api/workflows/wf-1/reject', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ feedback }),
+      });
+    });
 
     it('should handle HTTP errors on mutations', async () => {
       mockFetchError(403, 'Forbidden', 'FORBIDDEN');

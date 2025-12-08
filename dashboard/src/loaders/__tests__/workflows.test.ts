@@ -8,6 +8,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { workflowsLoader, workflowDetailLoader, historyLoader } from '../workflows';
 import { api } from '../../api/client';
 import { getActiveWorkflow } from '../../utils/workflow';
+import { createMockWorkflowSummary, createMockWorkflowDetail } from '@/__tests__/fixtures';
 import type { LoaderFunctionArgs } from 'react-router-dom';
 
 vi.mock('../../utils/workflow');
@@ -24,36 +25,6 @@ function createLoaderArgs(params: Record<string, string>): LoaderFunctionArgs {
   } as unknown as LoaderFunctionArgs;
 }
 
-/**
- * Mock workflow data fixtures
- */
-const mockWorkflowSummary = {
-  id: 'wf-1',
-  issue_id: 'ISSUE-1',
-  worktree_name: 'main',
-  status: 'in_progress' as const,
-  started_at: '2025-12-01T10:00:00Z',
-  current_stage: 'architect',
-};
-
-const mockWorkflowDetail = {
-  ...mockWorkflowSummary,
-  worktree_path: '/path',
-  completed_at: null,
-  failure_reason: null,
-  plan: null,
-  token_usage: {},
-  recent_events: [],
-};
-
-const mockWorkflowHistory = {
-  id: 'wf-old',
-  issue_id: 'ISSUE-OLD',
-  worktree_name: 'old-branch',
-  status: 'completed' as const,
-  started_at: '2025-11-01T10:00:00Z',
-  current_stage: null,
-};
 
 describe('Workflow Loaders', () => {
   beforeEach(() => {
@@ -62,6 +33,24 @@ describe('Workflow Loaders', () => {
 
   describe('workflowsLoader', () => {
     it('should return workflows list and activeDetail in response', async () => {
+      const mockWorkflowSummary = createMockWorkflowSummary({
+        id: 'wf-1',
+        issue_id: 'ISSUE-1',
+        worktree_name: 'main',
+        status: 'in_progress',
+        started_at: '2025-12-01T10:00:00Z',
+        current_stage: 'architect',
+      });
+      const mockWorkflowDetail = createMockWorkflowDetail({
+        id: 'wf-1',
+        issue_id: 'ISSUE-1',
+        worktree_name: 'main',
+        status: 'in_progress',
+        started_at: '2025-12-01T10:00:00Z',
+        current_stage: 'architect',
+        worktree_path: '/path',
+      });
+
       vi.mocked(api.getWorkflows).mockResolvedValueOnce([mockWorkflowSummary]);
       vi.mocked(getActiveWorkflow).mockReturnValueOnce(mockWorkflowSummary);
       vi.mocked(api.getWorkflow).mockResolvedValueOnce(mockWorkflowDetail);
@@ -87,6 +76,15 @@ describe('Workflow Loaders', () => {
     });
 
     it('should return null activeDetail when detail API call fails', async () => {
+      const mockWorkflowSummary = createMockWorkflowSummary({
+        id: 'wf-1',
+        issue_id: 'ISSUE-1',
+        worktree_name: 'main',
+        status: 'in_progress',
+        started_at: '2025-12-01T10:00:00Z',
+        current_stage: 'architect',
+      });
+
       vi.mocked(api.getWorkflows).mockResolvedValueOnce([mockWorkflowSummary]);
       vi.mocked(getActiveWorkflow).mockReturnValueOnce(mockWorkflowSummary);
       vi.mocked(api.getWorkflow).mockRejectedValueOnce(new Error('Detail fetch failed'));
@@ -98,8 +96,15 @@ describe('Workflow Loaders', () => {
     });
 
     it('should include active workflow detail when running workflow exists', async () => {
-      const runningWorkflow = { ...mockWorkflowSummary, status: 'in_progress' as const };
-      const runningDetail = { ...mockWorkflowDetail, status: 'in_progress' as const };
+      const runningWorkflow = createMockWorkflowSummary({
+        id: 'wf-1',
+        status: 'in_progress',
+      });
+      const runningDetail = createMockWorkflowDetail({
+        id: 'wf-1',
+        status: 'in_progress',
+      });
+
       vi.mocked(api.getWorkflows).mockResolvedValueOnce([runningWorkflow]);
       vi.mocked(getActiveWorkflow).mockReturnValueOnce(runningWorkflow);
       vi.mocked(api.getWorkflow).mockResolvedValueOnce(runningDetail);
@@ -120,6 +125,8 @@ describe('Workflow Loaders', () => {
 
   describe('workflowDetailLoader', () => {
     it('should fetch workflow by ID from params', async () => {
+      const mockWorkflowDetail = createMockWorkflowDetail({ id: 'wf-1' });
+
       vi.mocked(api.getWorkflow).mockResolvedValueOnce(mockWorkflowDetail);
 
       const result = await workflowDetailLoader(createLoaderArgs({ id: 'wf-1' }));
@@ -139,6 +146,15 @@ describe('Workflow Loaders', () => {
 
   describe('historyLoader', () => {
     it('should fetch workflow history', async () => {
+      const mockWorkflowHistory = createMockWorkflowSummary({
+        id: 'wf-old',
+        issue_id: 'ISSUE-OLD',
+        worktree_name: 'old-branch',
+        status: 'completed',
+        started_at: '2025-11-01T10:00:00Z',
+        current_stage: null,
+      });
+
       vi.mocked(api.getWorkflowHistory).mockResolvedValueOnce([mockWorkflowHistory]);
 
       const result = await historyLoader(createLoaderArgs({}));

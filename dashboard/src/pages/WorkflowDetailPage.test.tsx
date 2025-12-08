@@ -1,20 +1,32 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { render, screen, waitFor } from '@testing-library/react';
+import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import WorkflowDetailPage from './WorkflowDetailPage';
-import type { WorkflowDetail } from '@/types';
+import { createMockWorkflowDetail } from '@/__tests__/fixtures';
 
-// Mock data matching actual WorkflowDetail type
-const mockWorkflow: WorkflowDetail = {
+// Mock modules
+vi.mock('@/utils/workflow', () => ({
+  formatElapsedTime: vi.fn(() => '1h 30m'),
+}));
+
+vi.mock('@/utils/pipeline', () => ({
+  buildPipeline: vi.fn(() => ({
+    nodes: [
+      { id: 't1', label: 'developer', subtitle: 'Setup', status: 'completed' as const },
+      { id: 't2', label: 'developer', subtitle: 'Implement', status: 'active' as const },
+    ],
+    edges: [{ from: 't1', to: 't2', label: '', status: 'completed' as const }],
+  })),
+}));
+
+const mockWorkflow = createMockWorkflowDetail({
   id: 'wf-001',
   issue_id: 'PROJ-123',
   worktree_name: 'proj-123-feature',
   worktree_path: '/tmp/worktrees/proj-123',
   status: 'in_progress',
   started_at: '2025-12-07T09:00:00Z',
-  completed_at: null,
   current_stage: 'developer',
-  failure_reason: null,
   plan: {
     tasks: [
       { id: 't1', description: 'Setup', agent: 'developer', dependencies: [], status: 'completed' },
@@ -22,60 +34,56 @@ const mockWorkflow: WorkflowDetail = {
     ],
     execution_order: ['t1', 't2'],
   },
-  token_usage: {},
-  recent_events: [],
-};
-
-// Mock loader data
-vi.mock('react-router-dom', async (importOriginal) => {
-  const mod = await importOriginal<typeof import('react-router-dom')>();
-  return {
-    ...mod,
-    useLoaderData: vi.fn(),
-  };
 });
 
-import { useLoaderData } from 'react-router-dom';
+/**
+ * Helper to render WorkflowDetailPage with data router context
+ */
+function renderWithRouter(loaderData: { workflow: typeof mockWorkflow | null }) {
+  const router = createMemoryRouter(
+    [
+      {
+        path: '/workflows/:id',
+        element: <WorkflowDetailPage />,
+        loader: () => loaderData,
+        HydrateFallback: () => null,
+      },
+    ],
+    { initialEntries: ['/workflows/wf-001'] }
+  );
+
+  return render(<RouterProvider router={router} />);
+}
 
 describe('WorkflowDetailPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('should render workflow header with issue_id', () => {
-    vi.mocked(useLoaderData).mockReturnValue({ workflow: mockWorkflow });
+  it('should render workflow header with issue_id', async () => {
+    renderWithRouter({ workflow: mockWorkflow });
 
-    render(
-      <MemoryRouter>
-        <WorkflowDetailPage />
-      </MemoryRouter>
-    );
-
-    expect(screen.getByText('PROJ-123')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText('PROJ-123')).toBeInTheDocument();
+    });
   });
 
-  it('should render workflow progress', () => {
-    vi.mocked(useLoaderData).mockReturnValue({ workflow: mockWorkflow });
+  it('should render workflow progress', async () => {
+    renderWithRouter({ workflow: mockWorkflow });
 
-    render(
-      <MemoryRouter>
-        <WorkflowDetailPage />
-      </MemoryRouter>
-    );
-
-    // WorkflowProgress component shows task completion
-    expect(screen.getByText(/of 2 stages/)).toBeInTheDocument();
+    await waitFor(() => {
+      // WorkflowProgress component shows task completion
+      expect(screen.getByText(/of 2 stages/)).toBeInTheDocument();
+    });
   });
 
-  it('should render activity log', () => {
-    vi.mocked(useLoaderData).mockReturnValue({ workflow: mockWorkflow });
+  it('should render activity log', async () => {
+    renderWithRouter({ workflow: mockWorkflow });
 
-    render(
-      <MemoryRouter>
-        <WorkflowDetailPage />
-      </MemoryRouter>
-    );
-
-    expect(screen.getByText('ACTIVITY LOG')).toBeInTheDocument();
+    await waitFor(() => {
+      // There are two ACTIVITY LOG elements - use getAllByText and verify at least one exists
+      const activityLogHeaders = screen.getAllByText('ACTIVITY LOG');
+      expect(activityLogHeaders.length).toBeGreaterThanOrEqual(1);
+    });
   });
 });

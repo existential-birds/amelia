@@ -2,7 +2,7 @@
  * @fileoverview Custom React Flow edge for workflow pipeline connections.
  */
 import { memo } from 'react';
-import { getSmoothStepPath, type EdgeProps, type Edge } from '@xyflow/react';
+import { getSmoothStepPath, EdgeLabelRenderer, type EdgeProps, type Edge } from '@xyflow/react';
 
 /** Possible status values for workflow edges. */
 type EdgeStatus = 'completed' | 'active' | 'pending';
@@ -39,7 +39,7 @@ function WorkflowEdgeComponent({
   targetPosition,
   data,
 }: EdgeProps<WorkflowEdgeType>) {
-  const [edgePath] = getSmoothStepPath({
+  const [edgePath, labelX, labelY] = getSmoothStepPath({
     sourceX,
     sourceY,
     targetX,
@@ -61,17 +61,36 @@ function WorkflowEdgeComponent({
   const strokeOpacity = status === 'pending' ? 0.4 : 1;
 
   return (
-    <path
-      id={id}
-      d={edgePath}
-      data-status={status}
-      data-slot="workflow-edge"
-      fill="none"
-      strokeWidth={2}
-      strokeLinecap="round"
-      style={{ stroke: strokeColor, opacity: strokeOpacity }}
-      {...(isDashed && { strokeDasharray: '8 4' })}
-    />
+    <>
+      <path
+        id={id}
+        d={edgePath}
+        data-status={status}
+        data-slot="workflow-edge"
+        fill="none"
+        strokeWidth={2}
+        strokeLinecap="round"
+        style={{ stroke: strokeColor, opacity: strokeOpacity }}
+        {...(isDashed && { strokeDasharray: '8 4' })}
+      />
+      {data?.label && (
+        <EdgeLabelRenderer>
+          <div
+            style={{
+              position: 'absolute',
+              transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
+              pointerEvents: 'all',
+            }}
+            className="text-xs font-mono bg-background px-1 rounded border border-border"
+            data-status={status}
+          >
+            <span style={{ color: strokeColor, opacity: strokeOpacity }}>
+              {data.label}
+            </span>
+          </div>
+        </EdgeLabelRenderer>
+      )}
+    </>
   );
 }
 

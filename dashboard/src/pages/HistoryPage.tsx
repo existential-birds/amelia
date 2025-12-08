@@ -90,6 +90,3 @@ export default function HistoryPage() {
     </div>
   );
 }
-
-// Loader function will be added in Plan 09
-// export async function loader() { ... }

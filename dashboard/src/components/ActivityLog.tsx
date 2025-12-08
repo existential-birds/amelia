@@ -52,8 +52,9 @@ export function ActivityLog({ workflowId, initialEvents = [], className }: Activ
   }, [initialEvents, eventsByWorkflow, workflowId]);
 
   // Auto-scroll to bottom when new events arrive
+  // Note: scrollIntoView check needed because jsdom doesn't implement it
   useEffect(() => {
-    if (scrollRef.current && scrollRef.current.scrollIntoView) {
+    if (scrollRef.current?.scrollIntoView) {
       scrollRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [events.length]);

@@ -69,38 +69,48 @@ export function ApprovalControls({
       </p>
 
       {status === 'pending' && (
-        <div className="flex gap-3">
-          <approveFetcher.Form method="post" action={`/workflows/${workflowId}/approve`}>
-            <Button
-              type="submit"
-              disabled={isPending}
-              className="bg-status-completed hover:bg-status-completed/90 focus-visible:ring-status-completed/50"
-            >
-              {isPending ? (
-                <Loader className="w-4 h-4 mr-2" />
-              ) : (
-                <Check className="w-4 h-4 mr-2" />
-              )}
-              Approve
-            </Button>
-          </approveFetcher.Form>
+        <div className="flex flex-col gap-3">
+          <div className="flex gap-3">
+            <approveFetcher.Form method="post" action={`/workflows/${workflowId}/approve`}>
+              <Button
+                type="submit"
+                disabled={isPending}
+                className="bg-status-completed hover:bg-status-completed/90 focus-visible:ring-status-completed/50"
+              >
+                {isPending ? (
+                  <Loader className="w-4 h-4 mr-2" />
+                ) : (
+                  <Check className="w-4 h-4 mr-2" />
+                )}
+                Approve
+              </Button>
+            </approveFetcher.Form>
 
-          <rejectFetcher.Form method="post" action={`/workflows/${workflowId}/reject`}>
-            <input type="hidden" name="feedback" value="Rejected by user" />
-            <Button
-              type="submit"
-              variant="outline"
-              disabled={isPending}
-              className="border-destructive text-destructive hover:bg-destructive hover:text-foreground focus-visible:ring-destructive/50"
-            >
-              {isPending ? (
-                <Loader className="w-4 h-4 mr-2" />
-              ) : (
-                <X className="w-4 h-4 mr-2" />
-              )}
-              Reject
-            </Button>
-          </rejectFetcher.Form>
+            <rejectFetcher.Form method="post" action={`/workflows/${workflowId}/reject`}>
+              <input type="hidden" name="feedback" value="Rejected by user" />
+              <Button
+                type="submit"
+                variant="outline"
+                disabled={isPending}
+                className="border-destructive text-destructive hover:bg-destructive hover:text-foreground focus-visible:ring-destructive/50"
+              >
+                {isPending ? (
+                  <Loader className="w-4 h-4 mr-2" />
+                ) : (
+                  <X className="w-4 h-4 mr-2" />
+                )}
+                Reject
+              </Button>
+            </rejectFetcher.Form>
+          </div>
+
+          {approveFetcher.data?.error && (
+            <p className="text-sm text-destructive mt-2">{approveFetcher.data.error}</p>
+          )}
+
+          {rejectFetcher.data?.error && (
+            <p className="text-sm text-destructive mt-2">{rejectFetcher.data.error}</p>
+          )}
         </div>
       )}
 
