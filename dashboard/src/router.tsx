@@ -12,7 +12,7 @@ import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { Layout } from '@/components/Layout';
 import { RootErrorBoundary } from '@/components/ErrorBoundary';
 import { workflowsLoader, workflowDetailLoader, historyLoader } from '@/loaders/workflows';
-import { approveAction, rejectAction } from '@/actions/workflows';
+import { approveAction, rejectAction, cancelAction } from '@/actions/workflows';
 
 /**
  * Application router with route definitions, loaders, and actions.
@@ -23,6 +23,7 @@ import { approveAction, rejectAction } from '@/actions/workflows';
  * - `/workflows/:id` → Workflow detail view (lazy-loaded)
  * - `/workflows/:id/approve` → Approve workflow action
  * - `/workflows/:id/reject` → Reject workflow action
+ * - `/workflows/:id/cancel` → Cancel workflow action
  * - `/history` → Completed workflows history (lazy-loaded)
  * - `/logs` → System logs view (lazy-loaded)
  * - `*` → Fallback redirect to `/workflows`
@@ -62,6 +63,10 @@ export const router = createBrowserRouter([
       {
         path: 'workflows/:id/reject',
         action: rejectAction,
+      },
+      {
+        path: 'workflows/:id/cancel',
+        action: cancelAction,
       },
       {
         path: 'history',

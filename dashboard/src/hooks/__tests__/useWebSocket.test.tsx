@@ -9,6 +9,7 @@ import { renderHook } from '@testing-library/react';
 import { useWebSocket } from '../useWebSocket';
 import { useWorkflowStore } from '../../store/workflowStore';
 import { createMockEvent } from '../../__tests__/fixtures';
+import { suppressConsoleLogs } from '@/test/helpers';
 import type { WebSocketMessage } from '../../types';
 
 // Mock WebSocket
@@ -74,10 +75,7 @@ describe('useWebSocket', () => {
       isConnected: false,
       connectionError: null,
     });
-    // Suppress console output in tests
-    vi.spyOn(console, 'log').mockImplementation(() => {});
-    vi.spyOn(console, 'warn').mockImplementation(() => {});
-    vi.spyOn(console, 'error').mockImplementation(() => {});
+    suppressConsoleLogs();
   });
 
   afterEach(() => {
