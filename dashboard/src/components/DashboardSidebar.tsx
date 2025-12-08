@@ -13,7 +13,8 @@ import {
   SidebarTrigger,
   useSidebar,
 } from '@/components/ui/sidebar';
-import { GitBranch, History, Radio, Compass } from 'lucide-react';
+import { GitBranch, History, Radio } from 'lucide-react';
+import { version } from '../../package.json';
 import { cn } from '@/lib/utils';
 import { useWorkflowStore } from '@/store/workflowStore';
 
@@ -182,7 +183,9 @@ export function DashboardSidebar() {
               />
             ) : (
               <>
-                <Compass className="w-6 h-6 text-muted-foreground/50" />
+                <span className="text-xs font-mono text-muted-foreground/50">
+                  v{version}
+                </span>
                 <div className="text-xs font-mono text-muted-foreground">
                   <div className="flex items-center gap-2">
                     <span
