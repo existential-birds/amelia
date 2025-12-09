@@ -120,7 +120,8 @@ amelia/server/static/*
 !amelia/server/static/.gitkeep
 
 # Tool-specific directories
-.gemini/
+.gemini/*
+!.gemini/commands/
 .serena/
 
 # Documentation builds
