@@ -31,7 +31,7 @@ description: Agentic protocol for frontend code review (React Router v7 + shadcn
     *   **Check:** Is this a "Framework Mode" or "Data Router" project? (Look for `@react-router/dev` vs `createBrowserRouter`).
 
 2.  **Scope Definition:**
-    *   **Action:** `run_command('git diff --name-only main..HEAD | grep -E "\.(tsx|ts|css)$"')`
+    *   **Action:** `run_command('git diff --name-only main..HEAD | grep -E "\\.(tsx|ts|css)$"')`
     *   **Filter:** Focus on `dashboard/src/`. Ignore generated files.
 
 ## 🧪 Phase 2: Pattern Verification Loop
