@@ -152,12 +152,16 @@ Custom slash commands are in `.claude/commands/amelia/`. Key commands:
 
 Custom skills are in `.claude/skills/`. These provide domain-specific knowledge:
 
-**Backend/AI (top-level):**
+**LangGraph:**
 | Skill | Purpose |
 |-------|---------|
 | `langgraph-architecture` | Architectural decisions for LangGraph applications |
 | `langgraph-implementation` | Implementing stateful agent graphs, nodes/edges, state schemas |
 | `langgraph-code-review` | Review LangGraph code for bugs and anti-patterns |
+
+**PydanticAI:**
+| Skill | Purpose |
+|-------|---------|
 | `pydantic-ai-agent-creation` | Create PydanticAI agents with type-safe dependencies |
 | `pydantic-ai-tool-system` | Register and implement PydanticAI tools |
 | `pydantic-ai-dependency-injection` | Dependency injection using RunContext |
@@ -165,25 +169,41 @@ Custom skills are in `.claude/skills/`. These provide domain-specific knowledge:
 | `pydantic-ai-testing` | Test PydanticAI agents using TestModel, FunctionModel |
 | `pydantic-ai-common-pitfalls` | Avoid common mistakes in PydanticAI agents |
 
-**Frontend (top-level):**
+**React Flow:**
 | Skill | Purpose |
 |-------|---------|
 | `react-flow-architecture` | Architectural guidance for node-based UIs with React Flow |
 | `react-flow-implementation` | Implementing React Flow nodes, edges, handles, state |
 | `react-flow-advanced` | Advanced patterns: sub-flows, layouts, drag-and-drop |
 | `react-flow-code-review` | Review React Flow code for anti-patterns |
+| `react-flow` | React Flow workflow visualization, custom nodes/edges |
 
-**Frontend (in `.claude/skills/amelia/`):**
+**Frontend:**
 | Skill | Purpose |
 |-------|---------|
 | `shadcn-ui` | shadcn/ui components, CVA patterns, Radix primitives |
 | `tailwind-v4` | Tailwind CSS v4 with CSS-first config, @theme directive |
-| `vitest-testing` | Vitest patterns, mocking, async testing |
-| `vercel-ai-sdk` | Chat interfaces with streaming, useChat hook |
 | `react-router-v7` | React Router v7 patterns and navigation |
 | `zustand-state` | Zustand state management patterns |
-| `react-flow` | React Flow for node-based UIs (project-specific) |
-| `github-projects` | GitHub Projects v2 via gh CLI |
+
+**AI Integration:**
+| Skill | Purpose |
+|-------|---------|
+| `vercel-ai-sdk` | Chat interfaces with streaming, useChat hook |
 | `ai-elements` | Vercel AI Elements for chat interfaces, tool execution, reasoning displays |
+
+**Data Processing:**
+| Skill | Purpose |
+|-------|---------|
 | `docling` | Document parsing for PDF, DOCX, PPTX, HTML, images (15+ formats) |
 | `sqlite-vec` | Vector similarity search in SQLite for embeddings and semantic search |
+
+**Testing:**
+| Skill | Purpose |
+|-------|---------|
+| `vitest-testing` | Vitest patterns, mocking, async testing |
+
+**Tooling:**
+| Skill | Purpose |
+|-------|---------|
+| `github-projects` | GitHub Projects v2 via gh CLI

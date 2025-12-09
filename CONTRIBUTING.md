@@ -350,7 +350,36 @@ When working on this project with [Claude Code](https://claude.ai/code), the fol
 
 ## Claude Code Skills
 
-The following skills are available in `.claude/skills/amelia/` to help Claude Code understand project-specific patterns and libraries:
+The following skills are available in `.claude/skills/` to help Claude Code understand project-specific patterns and libraries:
+
+### LangGraph Skills
+
+| Skill | Triggers | Description |
+|-------|----------|-------------|
+| **langgraph-architecture** | `StateGraph`, `multi-agent`, `persistence` | Architectural decisions for LangGraph applications |
+| **langgraph-implementation** | `add_node`, `add_edge`, `state schema` | Implementing stateful agent graphs, nodes/edges, state schemas |
+| **langgraph-code-review** | `StateGraph`, `checkpointing` | Review LangGraph code for bugs and anti-patterns |
+
+### PydanticAI Skills
+
+| Skill | Triggers | Description |
+|-------|----------|-------------|
+| **pydantic-ai-agent-creation** | `pydantic_ai`, `Agent`, `result_type` | Create PydanticAI agents with type-safe dependencies |
+| **pydantic-ai-tool-system** | `@agent.tool`, `RunContext` | Register and implement PydanticAI tools |
+| **pydantic-ai-dependency-injection** | `deps_type`, `RunContext` | Dependency injection using RunContext |
+| **pydantic-ai-model-integration** | `model`, `fallback`, `streaming` | Configure LLM providers, fallback models |
+| **pydantic-ai-testing** | `TestModel`, `FunctionModel` | Test PydanticAI agents using TestModel, FunctionModel |
+| **pydantic-ai-common-pitfalls** | debugging, errors | Avoid common mistakes in PydanticAI agents |
+
+### React Flow Skills
+
+| Skill | Triggers | Description |
+|-------|----------|-------------|
+| **react-flow-architecture** | `@xyflow/react`, architecture | Architectural guidance for node-based UIs with React Flow |
+| **react-flow-implementation** | `ReactFlow`, `Handle`, `NodeProps` | Implementing React Flow nodes, edges, handles, state |
+| **react-flow-advanced** | sub-flows, layouts, drag-and-drop | Advanced patterns: sub-flows, layouts, undo/redo |
+| **react-flow-code-review** | `@xyflow/react`, review | Review React Flow code for anti-patterns |
+| **react-flow** | `ReactFlow`, `useReactFlow`, `fitView` | React Flow workflow visualization, custom nodes/edges |
 
 ### Frontend Skills
 
@@ -360,18 +389,19 @@ The following skills are available in `.claude/skills/amelia/` to help Claude Co
 | **shadcn-ui** | `shadcn`, `cva`, `cn()`, `data-slot` | shadcn/ui component patterns, CVA variants, Radix primitives |
 | **react-router-v7** | `loader`, `action`, `NavLink` | React Router v7 data loading, actions, navigation patterns |
 | **zustand-state** | `zustand`, `create`, `persist` | Zustand state management, middleware, TypeScript patterns |
-| **react-flow** | `ReactFlow`, `Handle`, `NodeProps` | React Flow workflow visualization, custom nodes/edges |
-| **ai-elements** | `Queue`, `Tool`, `Confirmation` | Vercel AI Elements for chat UI, tool execution, workflows |
 
-### Backend Skills
+### AI Integration Skills
 
 | Skill | Triggers | Description |
 |-------|----------|-------------|
 | **vercel-ai-sdk** | `useChat`, `streamText`, `UIMessage` | Vercel AI SDK for streaming chat, tool calls, message handling |
+| **ai-elements** | `Queue`, `Tool`, `Confirmation` | Vercel AI Elements for chat UI, tool execution, workflows |
+
+### Data Processing Skills
+
+| Skill | Triggers | Description |
+|-------|----------|-------------|
 | **docling** | `DocumentConverter`, `HierarchicalChunker` | Document parsing (PDF, DOCX), chunking for RAG pipelines |
-| **langgraph-graphs** | `StateGraph`, `add_node`, `add_edge` | LangGraph state machine patterns, nodes, edges, conditional routing |
-| **langgraph-persistence** | `AsyncSqliteSaver`, `interrupt_before`, `GraphInterrupt` | LangGraph checkpointing, human-in-loop, interrupts, streaming |
-| **pydantic-ai-agents** | `pydantic_ai`, `Agent`, `RunContext`, `@agent.tool` | Pydantic AI agent patterns, tools, dependencies, structured outputs |
 | **sqlite-vec** | `vec0`, `MATCH`, `vec_distance` | Vector similarity search in SQLite, KNN queries, embeddings |
 
 ### Testing Skills

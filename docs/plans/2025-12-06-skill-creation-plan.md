@@ -2,11 +2,11 @@
 
 > **For Claude:** This is a standalone plan for creating skills in a new session. All source repositories have been cloned to `~/github/`. Use the exploration summaries below as primary source material, reading repo files only when additional detail is needed.
 
-**Status:** Not Started
+**Status:** Completed (2025-12-08)
 
 **Goal:** Create 7 comprehensive skills to support Phase 2.3 dashboard development, Spec Builder, and Debate Mode features. Each skill follows the established pattern with SKILL.md (main entry + frontmatter) and companion topic files.
 
-**Skill Directory:** `.claude/skills/amelia/`
+**Skill Directory:** `.claude/skills/` (migrated from `.claude/skills/` to top-level)
 
 ---
 
@@ -28,11 +28,11 @@ The following repositories are available at `~/github/`:
 Each skill follows this structure:
 
 ```
-.claude/skills/amelia/{skill-name}/
+.claude/skills/{skill-name}/
 ├── SKILL.md          # Main entry with YAML frontmatter
 ├── {TOPIC1}.md       # Detailed topic file
 ├── {TOPIC2}.md       # Detailed topic file
-└── ...
+└── references/       # Optional subdirectory for detailed references
 ```
 
 **SKILL.md frontmatter format:**
@@ -53,7 +53,7 @@ description: {Brief description}. Use when {trigger conditions}. Triggers on {ke
 
 ## Skill 1: shadcn-ui
 
-**Directory:** `.claude/skills/amelia/shadcn-ui/`
+**Directory:** `.claude/skills/shadcn-ui/`
 
 **Files to create:**
 
@@ -110,7 +110,7 @@ description: shadcn/ui component patterns with Radix primitives and Tailwind sty
 
 ## Skill 2: tailwind-v4
 
-**Directory:** `.claude/skills/amelia/tailwind-v4/`
+**Directory:** `.claude/skills/tailwind-v4/`
 
 **Files to create:**
 
@@ -163,7 +163,7 @@ description: Tailwind CSS v4 with CSS-first configuration and design tokens. Use
 
 ## Skill 3: react-flow
 
-**Directory:** `.claude/skills/amelia/react-flow/`
+**Directory:** `.claude/skills/react-flow/`
 
 **Files to create:**
 
@@ -226,7 +226,7 @@ description: React Flow (@xyflow/react) for workflow visualization with custom n
 
 ## Skill 4: ai-elements
 
-**Directory:** `.claude/skills/amelia/ai-elements/`
+**Directory:** `.claude/skills/ai-elements/`
 
 **Files to create:**
 
@@ -290,7 +290,7 @@ description: Vercel AI Elements for workflow UI components. Use when building ch
 
 ## Skill 5: vercel-ai-sdk
 
-**Directory:** `.claude/skills/amelia/vercel-ai-sdk/`
+**Directory:** `.claude/skills/vercel-ai-sdk/`
 
 **Files to create:**
 
@@ -353,7 +353,7 @@ description: Vercel AI SDK for building chat interfaces with streaming. Use when
 
 ## Skill 6: docling
 
-**Directory:** `.claude/skills/amelia/docling/`
+**Directory:** `.claude/skills/docling/`
 
 **Files to create:**
 
@@ -415,7 +415,7 @@ description: Docling document parser for PDF, DOCX, and other formats. Use when 
 
 ## Skill 7: sqlite-vec
 
-**Directory:** `.claude/skills/amelia/sqlite-vec/`
+**Directory:** `.claude/skills/sqlite-vec/`
 
 **Files to create:**
 
@@ -530,7 +530,7 @@ The source repositories are cloned at ~/github/:
 - sqlite-vec
 
 Create skills in the order specified in the plan. For each skill:
-1. Create the directory at .claude/skills/amelia/{skill-name}/
+1. Create the directory at .claude/skills/{skill-name}/
 2. Write SKILL.md with proper frontmatter
 3. Write each companion file with detailed code examples
 4. Reference source files from ~/github/ for accurate patterns
