@@ -31,7 +31,7 @@ You have just evaluated the Gemini Code Assist feedback using `/amelia:gemini-re
    Use this API call to reply:
    ```bash
    gh api repos/{owner}/{repo}/pulls/{number}/comments/{comment_id}/replies \
-     -X POST -f body="@gemini-code-assist Your response here"
+     -X POST --raw-field body="@gemini-code-assist Your response here"
    ```
 
 4. **Summary**: List which comments were addressed and how.

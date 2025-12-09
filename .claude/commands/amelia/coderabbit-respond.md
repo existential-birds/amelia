@@ -31,7 +31,7 @@ You have just evaluated the CodeRabbit feedback using `/amelia:coderabbit-review
    Use this API call to reply:
    ```bash
    gh api repos/{owner}/{repo}/pulls/{number}/comments/{comment_id}/replies \
-     -X POST -f body="@coderabbitai Your response here"
+     -X POST --raw-field body="@coderabbitai Your response here"
    ```
 
 4. **Summary**: List which comments were addressed and how.
