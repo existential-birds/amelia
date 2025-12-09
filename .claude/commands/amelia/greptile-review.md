@@ -1,5 +1,5 @@
 ---
-description: fetch greptile-apps comments from current PR and evaluate with ka-eval-feedback
+description: fetch greptile-apps comments from current PR and evaluate with amelia:eval-feedback
 ---
 Fetch all comments from the `greptile-apps[bot]` user on the current PR and evaluate them.
 
@@ -36,4 +36,4 @@ Fetch all comments from the `greptile-apps[bot]` user on the current PR and eval
    [all review comments here, each prefixed with "File: path:line"]
    ```
 
-4. **Run ka-eval-feedback ultrathink** by invoking `/ka-eval-feedback ultrathink` with the formatted content as the argument. The superpowers:receiving-code-review skill will guide evaluation of each piece of feedback.
+4. **Run amelia:eval-feedback ultrathink** by invoking `/amelia:eval-feedback ultrathink` with the formatted content as the argument. The superpowers:receiving-code-review skill will guide evaluation of each piece of feedback.
