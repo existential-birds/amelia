@@ -75,7 +75,7 @@ describe('WorkflowNode', () => {
 
     const card = screen.getByTestId('workflow-node-card');
     expect(card).toBeInTheDocument();
-    expect(card).toHaveClass('rounded-md', 'border');
+    expect(card).toHaveClass('rounded-md', 'border', 'min-w-[180px]');
   });
 
   describe('status-based card borders', () => {
@@ -166,5 +166,13 @@ describe('WorkflowNode', () => {
       const card = screen.getByTestId('workflow-node-card');
       expect(card).toHaveClass('shadow-md');
     });
+  });
+
+  it('positions handles correctly within card structure', () => {
+    renderNode({ label: 'Test', status: 'pending' });
+
+    // Handles should be present and styled to be invisible but functional
+    const handles = document.querySelectorAll('.react-flow__handle');
+    expect(handles.length).toBe(2); // source and target
   });
 });
