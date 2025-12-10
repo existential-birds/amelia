@@ -24,10 +24,12 @@ describe('getLayoutedElements', () => {
     const result = getLayoutedElements(nodes, edges);
 
     expect(result).toHaveLength(1);
-    expect(result[0].id).toBe('task-1');
+    const node = result[0];
+    expect(node).toBeDefined();
+    expect(node.id).toBe('task-1');
     // Position should be set by dagre (not exactly 0,0)
-    expect(typeof result[0].position.x).toBe('number');
-    expect(typeof result[0].position.y).toBe('number');
+    expect(typeof node.position.x).toBe('number');
+    expect(typeof node.position.y).toBe('number');
   });
 
   it('positions dependent nodes in sequence (LR direction)', () => {
@@ -129,8 +131,10 @@ describe('getLayoutedElements', () => {
 
     const result = getLayoutedElements(nodes, []);
 
-    expect(result[0].type).toBe('workflow');
-    expect(result[0].data).toEqual({
+    expect(result).toHaveLength(1);
+    const node = result[0];
+    expect(node.type).toBe('workflow');
+    expect(node.data).toEqual({
       label: 'Test',
       subtitle: 'Running...',
       status: 'active',
