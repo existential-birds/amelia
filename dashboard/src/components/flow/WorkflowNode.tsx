@@ -5,6 +5,7 @@ import { memo } from 'react';
 import { Handle, Position, type NodeProps, type Node } from '@xyflow/react';
 import { MapPin } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Card, CardContent } from '@/components/ui/card';
 
 /** Possible status values for workflow nodes. */
 type NodeStatus = 'completed' | 'active' | 'pending' | 'blocked';
@@ -54,11 +55,6 @@ const statusStyles: Record<NodeStatus, {
   },
 };
 
-/** Icon layout constants for handle positioning */
-const ICON_WRAPPER_PADDING = 8;  // p-2 = 0.5rem = 8px
-const ICON_SIZE = 32;            // size-8 = 2rem = 32px
-const HANDLE_TOP_PX = ICON_WRAPPER_PADDING + ICON_SIZE;  // Bottom of MapPin icon
-
 /**
  * Renders a workflow stage node with status-based styling.
  *
@@ -73,59 +69,59 @@ function WorkflowNodeComponent({ data }: NodeProps<WorkflowNodeType>) {
   const ariaLabel = `Workflow stage: ${data.label}${data.subtitle ? ` - ${data.subtitle}` : ''} (${data.status})`;
 
   return (
-    <div
+    <Card
+      data-testid="workflow-node-card"
+      data-slot="workflow-node"
+      data-status={data.status}
       role="img"
       aria-label={ariaLabel}
-      data-status={data.status}
-      data-slot="workflow-node"
       className={cn(
-        'flex flex-col items-center min-w-[160px] h-28 relative',
+        'min-w-[160px] rounded-md transition-all duration-200',
         styles.containerClass
       )}
     >
+      <CardContent className="flex flex-col items-center p-4">
+        <div className={cn('rounded-full p-2', styles.glowClass)}>
+          <MapPin
+            className={cn('lucide-map-pin size-8', styles.pinClass)}
+            strokeWidth={2}
+          />
+        </div>
+
+        <span className={cn(
+          "font-heading text-sm font-semibold tracking-wider mt-2 text-center",
+          data.status === 'active' ? 'text-primary' : 'text-foreground'
+        )}>
+          {data.label}
+        </span>
+
+        {data.subtitle && (
+          <span className="font-body text-xs text-muted-foreground mt-0.5 text-center">
+            {data.subtitle}
+          </span>
+        )}
+
+        {data.tokens && (
+          <span className={cn(
+            "font-mono text-xs mt-1",
+            data.status === 'active' ? 'text-primary' : 'text-muted-foreground'
+          )}>
+            {data.tokens} tokens
+          </span>
+        )}
+      </CardContent>
+
       <Handle
         type="target"
         position={Position.Left}
-        style={{ top: `${HANDLE_TOP_PX}px` }}
         className="w-0! h-0! bg-transparent! border-0! min-w-0! min-h-0!"
       />
-
-      <div className={cn('rounded-full p-2', styles.glowClass)}>
-        <MapPin
-          className={cn('lucide-map-pin size-8', styles.pinClass)}
-          strokeWidth={2}
-        />
-      </div>
-
-      <span className={cn(
-        "font-heading text-sm font-semibold tracking-wider mt-2",
-        data.status === 'active' ? 'text-primary' : 'text-foreground'
-      )}>
-        {data.label}
-      </span>
-
-      {data.subtitle && (
-        <span className="font-body text-xs text-muted-foreground mt-0.5">
-          {data.subtitle}
-        </span>
-      )}
-
-      {data.tokens && (
-        <span className={cn(
-          "font-mono text-xs mt-1",
-          data.status === 'active' ? 'text-primary' : 'text-muted-foreground'
-        )}>
-          {data.tokens} tokens
-        </span>
-      )}
-
       <Handle
         type="source"
         position={Position.Right}
-        style={{ top: `${HANDLE_TOP_PX}px` }}
         className="w-0! h-0! bg-transparent! border-0! min-w-0! min-h-0!"
       />
-    </div>
+    </Card>
   );
 }
 

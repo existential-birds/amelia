@@ -69,4 +69,12 @@ describe('WorkflowNode', () => {
       'Workflow stage: Architect - Planning (completed)'
     );
   });
+
+  it('renders node content within a card container', () => {
+    renderNode({ label: 'Test', status: 'pending' });
+
+    const card = screen.getByTestId('workflow-node-card');
+    expect(card).toBeInTheDocument();
+    expect(card).toHaveClass('rounded-md', 'border');
+  });
 });
