@@ -107,4 +107,34 @@ describe('WorkflowNode', () => {
       expect(card).toHaveClass('border-destructive/40');
     });
   });
+
+  describe('status-based card backgrounds', () => {
+    it('applies primary tint background for active status', () => {
+      renderNode({ label: 'Test', status: 'active' });
+
+      const card = screen.getByTestId('workflow-node-card');
+      expect(card).toHaveClass('bg-primary/10');
+    });
+
+    it('applies completed tint background for completed status', () => {
+      renderNode({ label: 'Test', status: 'completed' });
+
+      const card = screen.getByTestId('workflow-node-card');
+      expect(card).toHaveClass('bg-status-completed/5');
+    });
+
+    it('applies reduced opacity background for pending status', () => {
+      renderNode({ label: 'Test', status: 'pending' });
+
+      const card = screen.getByTestId('workflow-node-card');
+      expect(card).toHaveClass('bg-card/60');
+    });
+
+    it('applies destructive tint background for blocked status', () => {
+      renderNode({ label: 'Test', status: 'blocked' });
+
+      const card = screen.getByTestId('workflow-node-card');
+      expect(card).toHaveClass('bg-destructive/5');
+    });
+  });
 });
