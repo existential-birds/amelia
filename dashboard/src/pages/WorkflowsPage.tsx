@@ -51,12 +51,12 @@ export default function WorkflowsPage() {
   const displayedId = selectedId ?? activeWorkflow?.id ?? null;
 
   // Determine which detail to show:
-  // 1. If user selected a different workflow and fetcher has data, use fetcher data
+  // 1. If user selected a workflow and fetcher has data for THAT workflow, use fetcher data
   // 2. If displaying the active workflow, use pre-loaded activeDetail
   // 3. Otherwise show loading state
   const isLoadingDetail = fetcher.state !== 'idle';
   let detail = null;
-  if (selectedId && fetcher.data?.workflow) {
+  if (selectedId && fetcher.data?.workflow?.id === selectedId) {
     detail = fetcher.data.workflow;
   } else if (displayedId === activeWorkflow?.id) {
     detail = activeDetail;

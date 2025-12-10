@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import WorkflowsPage from './WorkflowsPage';
 import type { WorkflowSummary, WorkflowDetail } from '@/types';
@@ -53,6 +54,33 @@ const mockPipeline = {
   edges: [{ from: 't1', to: 't2', label: '', status: 'completed' as const }],
 };
 
+// Second workflow for testing selection behavior
+const mockSecondWorkflowSummary: WorkflowSummary = {
+  id: 'wf-002',
+  issue_id: 'PROJ-456',
+  worktree_name: 'proj-456-bugfix',
+  status: 'blocked',
+  started_at: '2025-12-07T08:00:00Z',
+  current_stage: 'reviewer',
+};
+
+const mockSecondWorkflowDetail: WorkflowDetail = {
+  ...mockSecondWorkflowSummary,
+  worktree_path: '/path/to/second/worktree',
+  completed_at: null,
+  failure_reason: null,
+  plan: {
+    execution_order: ['t1'],
+    tasks: [
+      { id: 't1', agent: 'reviewer', description: 'Review', status: 'in_progress', dependencies: [] },
+    ],
+  },
+  token_usage: {},
+  recent_events: [
+    { id: 'e2', workflow_id: 'wf-002', sequence: 1, timestamp: '2025-12-07T08:01:00Z', event_type: 'stage_started', agent: 'reviewer', message: 'Started review' },
+  ],
+};
+
 /**
  * Helper to render WorkflowsPage with router context and loader data
  */
@@ -68,7 +96,13 @@ function renderWithRouter(loaderData: { workflows: WorkflowSummary[]; activeDeta
       {
         path: '/workflows/:id',
         element: <div>Detail Page</div>,
-        loader: () => ({ workflow: mockWorkflowDetail }),
+        loader: ({ params }) => {
+          // Return the appropriate detail based on the workflow ID
+          if (params.id === 'wf-002') {
+            return { workflow: mockSecondWorkflowDetail };
+          }
+          return { workflow: mockWorkflowDetail };
+        },
         HydrateFallback: () => null,
       },
     ],
@@ -159,5 +193,44 @@ describe('WorkflowsPage', () => {
     await waitFor(() => {
       expect(buildPipeline).toHaveBeenCalledWith(mockWorkflowDetail);
     });
+  });
+
+  it('should show active workflow detail when clicking back after selecting another workflow', async () => {
+    const user = userEvent.setup();
+
+    // Render with two workflows, active workflow is wf-001
+    renderWithRouter({
+      workflows: [mockWorkflowSummary, mockSecondWorkflowSummary],
+      activeDetail: mockWorkflowDetail,
+    });
+
+    // Wait for initial render showing active workflow (PROJ-123)
+    await waitFor(() => {
+      const pageHeader = screen.getByRole('banner');
+      expect(within(pageHeader).getByText('PROJ-123')).toBeInTheDocument();
+    });
+
+    // Click the second workflow (PROJ-456) - should trigger fetch
+    const secondWorkflowButton = screen.getByRole('button', { name: /PROJ-456/ });
+    await user.click(secondWorkflowButton);
+
+    // Wait for the fetched workflow detail to display
+    await waitFor(() => {
+      const pageHeader = screen.getByRole('banner');
+      expect(within(pageHeader).getByText('PROJ-456')).toBeInTheDocument();
+    });
+
+    // Click back to the active workflow (PROJ-123) - should show pre-loaded activeDetail
+    const firstWorkflowButton = screen.getByRole('button', { name: /PROJ-123/ });
+    await user.click(firstWorkflowButton);
+
+    // BUG: Currently shows PROJ-456 (stale fetcher data) instead of PROJ-123 (activeDetail)
+    await waitFor(() => {
+      const pageHeader = screen.getByRole('banner');
+      expect(within(pageHeader).getByText('PROJ-123')).toBeInTheDocument();
+    });
+
+    // Verify buildPipeline was called with the active workflow detail, not the fetched one
+    expect(buildPipeline).toHaveBeenLastCalledWith(mockWorkflowDetail);
   });
 });
