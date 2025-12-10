@@ -13,14 +13,8 @@ from amelia.server.models.events import EventType, WorkflowEvent
 from amelia.server.routes.websocket import websocket_endpoint
 
 
-@pytest.mark.asyncio
 class TestWebSocketEndpoint:
     """Tests for /ws/events endpoint."""
-
-    @pytest.fixture
-    def mock_connection_manager(self):
-        """Mock ConnectionManager."""
-        return AsyncMock(spec=ConnectionManager)
 
     @pytest.fixture
     def mock_repository(self):
@@ -28,6 +22,13 @@ class TestWebSocketEndpoint:
         repo = AsyncMock()
         repo.get_events_after.return_value = []
         return repo
+
+    @pytest.fixture
+    def mock_connection_manager(self, mock_repository):
+        """Mock ConnectionManager with repository."""
+        manager = AsyncMock(spec=ConnectionManager)
+        manager.get_repository.return_value = mock_repository
+        return manager
 
     @pytest.fixture
     def mock_websocket(self):
@@ -49,10 +50,7 @@ class TestWebSocketEndpoint:
         """WebSocket routes client messages to connection manager."""
         mock_websocket.receive_json.side_effect = [message, WebSocketDisconnect()]
 
-        with (
-            patch("amelia.server.routes.websocket.connection_manager", mock_connection_manager),
-            patch("amelia.server.routes.websocket.get_repository", return_value=mock_repository),
-        ):
+        with patch("amelia.server.routes.websocket.connection_manager", mock_connection_manager):
             await websocket_endpoint(mock_websocket, None)
 
         method = getattr(mock_connection_manager, expected_method)
@@ -89,10 +87,7 @@ class TestWebSocketEndpoint:
 
         mock_websocket.receive_json.side_effect = Exception("disconnect")
 
-        with (
-            patch("amelia.server.routes.websocket.connection_manager", mock_connection_manager),
-            patch("amelia.server.routes.websocket.get_repository", return_value=mock_repository),
-        ):
+        with patch("amelia.server.routes.websocket.connection_manager", mock_connection_manager):
             await websocket_endpoint(mock_websocket, since="evt-1")
 
         # Should get events after evt-1
@@ -114,10 +109,7 @@ class TestWebSocketEndpoint:
         mock_repository.get_events_after.side_effect = ValueError("Event evt-nonexistent not found")
         mock_websocket.receive_json.side_effect = Exception("disconnect")
 
-        with (
-            patch("amelia.server.routes.websocket.connection_manager", mock_connection_manager),
-            patch("amelia.server.routes.websocket.get_repository", return_value=mock_repository),
-        ):
+        with patch("amelia.server.routes.websocket.connection_manager", mock_connection_manager):
             await websocket_endpoint(mock_websocket, since="evt-nonexistent")
 
         # Should send backfill_expired message

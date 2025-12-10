@@ -5,15 +5,12 @@
 
 from unittest.mock import AsyncMock
 
-import pytest
-
 from amelia.agents.reviewer import Reviewer, ReviewResponse
 
 
 class TestCompetitiveReviewPersonaAttribution:
     """Tests for preserving persona context in competitive review comments."""
 
-    @pytest.mark.asyncio
     async def test_competitive_review_prefixes_comments_with_persona(
         self,
         mock_execution_state_factory,
@@ -55,7 +52,6 @@ class TestCompetitiveReviewPersonaAttribution:
         assert any("Usability" in c for c in result.comments), \
             "Usability persona comments should be attributed"
 
-    @pytest.mark.asyncio
     async def test_competitive_review_handles_empty_comments(
         self,
         mock_execution_state_factory,

@@ -82,7 +82,6 @@ def valid_worktree(tmp_path: Path) -> str:
 # =============================================================================
 
 
-@pytest.mark.asyncio
 async def test_start_workflow_rejects_nonexistent_path(
     orchestrator: OrchestratorService,
 ) -> None:
@@ -98,7 +97,6 @@ async def test_start_workflow_rejects_nonexistent_path(
     assert "does not exist" in exc_info.value.reason
 
 
-@pytest.mark.asyncio
 async def test_start_workflow_rejects_file_path(
     orchestrator: OrchestratorService,
     tmp_path: Path,
@@ -117,7 +115,6 @@ async def test_start_workflow_rejects_file_path(
     assert "not a directory" in exc_info.value.reason
 
 
-@pytest.mark.asyncio
 async def test_start_workflow_rejects_non_git_directory(
     orchestrator: OrchestratorService,
     tmp_path: Path,
@@ -136,7 +133,6 @@ async def test_start_workflow_rejects_non_git_directory(
     assert ".git missing" in exc_info.value.reason
 
 
-@pytest.mark.asyncio
 async def test_start_workflow_success(
     orchestrator: OrchestratorService,
     mock_repository: AsyncMock,
@@ -167,7 +163,6 @@ async def test_start_workflow_success(
         assert state.execution_state.profile.name == "test"
 
 
-@pytest.mark.asyncio
 async def test_start_workflow_conflict(
     orchestrator: OrchestratorService,
     valid_worktree: str,
@@ -195,7 +190,6 @@ async def test_start_workflow_conflict(
         await task
 
 
-@pytest.mark.asyncio
 async def test_start_workflow_concurrency_limit(
     orchestrator: OrchestratorService,
     valid_worktree: str,
@@ -226,7 +220,6 @@ async def test_start_workflow_concurrency_limit(
             await task
 
 
-@pytest.mark.asyncio
 async def test_cancel_workflow(
     orchestrator: OrchestratorService,
     mock_repository: AsyncMock,
@@ -260,36 +253,113 @@ async def test_cancel_workflow(
     mock_repository.set_status.assert_called_once_with("wf-1", "cancelled")
 
 
-@pytest.mark.asyncio
-async def test_cancel_workflow_not_found(
+@pytest.mark.parametrize(
+    "operation,method_name,args,expected_exception,mock_state",
+    [
+        # Cancel workflow - not found
+        (
+            "cancel",
+            "cancel_workflow",
+            ("nonexistent",),
+            WorkflowNotFoundError,
+            None,
+        ),
+        # Cancel workflow - invalid state
+        (
+            "cancel",
+            "cancel_workflow",
+            ("wf-1",),
+            InvalidStateError,
+            ServerExecutionState(
+                id="wf-1",
+                issue_id="ISSUE-123",
+                worktree_path="/path/to/worktree",
+                worktree_name="feat-123",
+                workflow_status="completed",
+                started_at=datetime.now(UTC),
+            ),
+        ),
+        # Approve workflow - not found
+        (
+            "approve",
+            "approve_workflow",
+            ("wf-1",),
+            WorkflowNotFoundError,
+            None,
+        ),
+        # Approve workflow - invalid state
+        (
+            "approve",
+            "approve_workflow",
+            ("wf-1",),
+            InvalidStateError,
+            ServerExecutionState(
+                id="wf-1",
+                issue_id="ISSUE-123",
+                worktree_path="/path/to/worktree",
+                worktree_name="feat-123",
+                workflow_status="in_progress",
+                started_at=datetime.now(UTC),
+            ),
+        ),
+        # Reject workflow - not found
+        (
+            "reject",
+            "reject_workflow",
+            ("wf-1", "Nope"),
+            WorkflowNotFoundError,
+            None,
+        ),
+        # Reject workflow - invalid state
+        (
+            "reject",
+            "reject_workflow",
+            ("wf-1", "Nope"),
+            InvalidStateError,
+            ServerExecutionState(
+                id="wf-1",
+                issue_id="ISSUE-123",
+                worktree_path="/path/to/worktree",
+                worktree_name="feat-123",
+                workflow_status="in_progress",
+                started_at=datetime.now(UTC),
+            ),
+        ),
+    ],
+    ids=[
+        "cancel-not_found",
+        "cancel-invalid_state",
+        "approve-not_found",
+        "approve-invalid_state",
+        "reject-not_found",
+        "reject-invalid_state",
+    ],
+)
+async def test_workflow_operation_exceptions(
     orchestrator: OrchestratorService,
     mock_repository: AsyncMock,
+    operation: str,
+    method_name: str,
+    args: tuple[str, ...],
+    expected_exception: type[Exception],
+    mock_state: ServerExecutionState | None,
 ) -> None:
-    """Cancel nonexistent workflow should raise WorkflowNotFoundError."""
-    mock_repository.get.return_value = None
+    """Test exception handling for workflow operations (cancel/approve/reject).
 
-    with pytest.raises(WorkflowNotFoundError):
-        await orchestrator.cancel_workflow("nonexistent")
-
-
-@pytest.mark.asyncio
-async def test_cancel_workflow_invalid_state(
-    orchestrator: OrchestratorService,
-    mock_repository: AsyncMock,
-) -> None:
-    """Cancel completed workflow should raise InvalidStateError."""
-    mock_state = ServerExecutionState(
-        id="wf-1",
-        issue_id="ISSUE-123",
-        worktree_path="/path/to/worktree",
-        worktree_name="feat-123",
-        workflow_status="completed",
-        started_at=datetime.now(UTC),
-    )
+    Args:
+        orchestrator: Service under test.
+        mock_repository: Mock repository.
+        operation: Operation name for test identification.
+        method_name: Name of the method to call on orchestrator.
+        args: Arguments to pass to the method.
+        expected_exception: Expected exception type.
+        mock_state: Mock workflow state to return from repository.
+    """
     mock_repository.get.return_value = mock_state
 
-    with pytest.raises(InvalidStateError):
-        await orchestrator.cancel_workflow("wf-1")
+    with pytest.raises(expected_exception):
+        method = getattr(orchestrator, method_name)
+        await method(*args)
 
 
 def test_get_active_workflows(orchestrator: OrchestratorService) -> None:
@@ -306,7 +376,6 @@ def test_get_active_workflows(orchestrator: OrchestratorService) -> None:
 # =============================================================================
 
 
-@pytest.mark.asyncio
 async def test_wait_for_approval(
     orchestrator: OrchestratorService,
     mock_repository: AsyncMock,
@@ -342,7 +411,6 @@ async def test_wait_for_approval(
     assert wait_task.done()
 
 
-@pytest.mark.asyncio
 @patch("amelia.server.orchestrator.service.AsyncSqliteSaver")
 @patch("amelia.server.orchestrator.service.create_orchestrator_graph")
 async def test_approve_workflow_success(
@@ -401,39 +469,6 @@ async def test_approve_workflow_success(
     assert len(approval_granted) == 1
 
 
-@pytest.mark.asyncio
-async def test_approve_workflow_not_found(
-    orchestrator: OrchestratorService,
-    mock_repository: AsyncMock,
-):
-    """Approve non-existent workflow should raise WorkflowNotFoundError."""
-    mock_repository.get.return_value = None
-
-    with pytest.raises(WorkflowNotFoundError):
-        await orchestrator.approve_workflow("wf-1")
-
-
-@pytest.mark.asyncio
-async def test_approve_workflow_not_blocked(
-    orchestrator: OrchestratorService,
-    mock_repository: AsyncMock,
-):
-    """Approve non-blocked workflow should raise InvalidStateError."""
-    mock_state = ServerExecutionState(
-        id="wf-1",
-        issue_id="ISSUE-123",
-        worktree_path="/path/to/worktree",
-        worktree_name="feat-123",
-        workflow_status="in_progress",  # Not blocked
-        started_at=datetime.now(UTC),
-    )
-    mock_repository.get.return_value = mock_state
-
-    with pytest.raises(InvalidStateError):
-        await orchestrator.approve_workflow("wf-1")
-
-
-@pytest.mark.asyncio
 @patch("amelia.server.orchestrator.service.AsyncSqliteSaver")
 @patch("amelia.server.orchestrator.service.create_orchestrator_graph")
 async def test_reject_workflow_success(
@@ -491,38 +526,6 @@ async def test_reject_workflow_success(
     approval_rejected = [e for e in received_events if e.event_type == EventType.APPROVAL_REJECTED]
     assert len(approval_rejected) == 1
     assert "rejected" in approval_rejected[0].message.lower()
-
-
-@pytest.mark.asyncio
-async def test_reject_workflow_not_found(
-    orchestrator: OrchestratorService,
-    mock_repository: AsyncMock,
-):
-    """Reject non-existent workflow should raise WorkflowNotFoundError."""
-    mock_repository.get.return_value = None
-
-    with pytest.raises(WorkflowNotFoundError):
-        await orchestrator.reject_workflow("wf-1", feedback="Nope")
-
-
-@pytest.mark.asyncio
-async def test_reject_workflow_not_blocked(
-    orchestrator: OrchestratorService,
-    mock_repository: AsyncMock,
-):
-    """Reject non-blocked workflow should raise InvalidStateError."""
-    mock_state = ServerExecutionState(
-        id="wf-1",
-        issue_id="ISSUE-123",
-        worktree_path="/path/to/worktree",
-        worktree_name="feat-123",
-        workflow_status="in_progress",  # Not blocked
-        started_at=datetime.now(UTC),
-    )
-    mock_repository.get.return_value = mock_state
-
-    with pytest.raises(InvalidStateError):
-        await orchestrator.reject_workflow("wf-1", feedback="Nope")
 
 
 class TestRejectWorkflowGraphState:
@@ -606,7 +609,6 @@ class TestApproveWorkflowResume:
 # =============================================================================
 
 
-@pytest.mark.asyncio
 async def test_emit_event(
     orchestrator: OrchestratorService,
     mock_repository: AsyncMock,
@@ -636,7 +638,6 @@ async def test_emit_event(
     assert received[0] == saved_event
 
 
-@pytest.mark.asyncio
 async def test_emit_sequence_increment(
     orchestrator: OrchestratorService,
     mock_repository: AsyncMock,
@@ -653,7 +654,6 @@ async def test_emit_sequence_increment(
     assert calls[2][0][0].sequence == 3
 
 
-@pytest.mark.asyncio
 async def test_emit_different_workflows(
     orchestrator: OrchestratorService,
     mock_repository: AsyncMock,
@@ -674,7 +674,6 @@ async def test_emit_different_workflows(
     assert calls[1][0][0].sequence == 1
 
 
-@pytest.mark.asyncio
 async def test_emit_concurrent_same_workflow(
     orchestrator: OrchestratorService,
     mock_repository: AsyncMock,
@@ -695,7 +694,6 @@ async def test_emit_concurrent_same_workflow(
     assert set(sequences) == {1, 2, 3}
 
 
-@pytest.mark.asyncio
 async def test_emit_resumes_from_db_max_sequence(
     orchestrator: OrchestratorService,
     mock_repository: AsyncMock,
@@ -713,7 +711,6 @@ async def test_emit_resumes_from_db_max_sequence(
     assert saved_event.sequence == 43
 
 
-@pytest.mark.asyncio
 async def test_emit_concurrent_lock_creation_race(
     orchestrator: OrchestratorService,
     mock_repository: AsyncMock,
@@ -745,7 +742,6 @@ async def test_emit_concurrent_lock_creation_race(
 class TestStartWorkflowWithRetry:
     """Test start_workflow uses retry wrapper."""
 
-    @pytest.mark.asyncio
     async def test_start_workflow_calls_retry_wrapper(
         self, orchestrator: OrchestratorService, mock_repository: AsyncMock, valid_worktree: str
     ):
@@ -765,7 +761,6 @@ class TestStartWorkflowWithRetry:
         orchestrator._run_workflow_with_retry.assert_called_once()
 
 
-@pytest.mark.asyncio
 async def test_get_workflow_by_worktree_uses_cache(
     orchestrator: OrchestratorService,
     mock_repository: AsyncMock,

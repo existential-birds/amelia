@@ -3,12 +3,19 @@
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 # amelia/server/events/connection_manager.py
 """WebSocket connection manager with subscription filtering."""
+from __future__ import annotations
+
 import asyncio
 from contextlib import suppress
+from typing import TYPE_CHECKING
 
 from fastapi import WebSocket, WebSocketDisconnect
 
 from amelia.server.models.events import WorkflowEvent
+
+
+if TYPE_CHECKING:
+    from amelia.server.database.repository import WorkflowRepository
 
 
 class ConnectionManager:
@@ -19,12 +26,36 @@ class ConnectionManager:
     - Non-empty set = subscribed to specific workflows only
 
     Thread-safe via asyncio.Lock.
+
+    Attributes:
+        _connections: Dict mapping WebSocket to set of subscribed workflow IDs.
+        _lock: Async lock for thread-safe connection management.
+        _repository: Optional workflow repository for event backfill.
     """
 
     def __init__(self) -> None:
         """Initialize connection manager."""
         self._connections: dict[WebSocket, set[str]] = {}
         self._lock = asyncio.Lock()
+        self._repository: WorkflowRepository | None = None
+
+    def set_repository(self, repository: WorkflowRepository) -> None:
+        """Set the workflow repository for event backfill.
+
+        Args:
+            repository: WorkflowRepository instance.
+        """
+        self._repository = repository
+
+    def get_repository(self) -> WorkflowRepository | None:
+        """Get the workflow repository.
+
+        Returns:
+            The WorkflowRepository instance if set via set_repository(),
+            or None if not yet initialized. In normal server operation,
+            this is set during lifespan startup.
+        """
+        return self._repository
 
     async def connect(self, websocket: WebSocket) -> None:
         """Accept and register a new WebSocket connection.
@@ -111,7 +142,7 @@ class ConnectionManager:
             try:
                 await asyncio.wait_for(ws.send_json(payload), timeout=5.0)
                 return (ws, True)
-            except (WebSocketDisconnect, TimeoutError, Exception):
+            except (WebSocketDisconnect, TimeoutError, ConnectionResetError, ConnectionError):
                 return (ws, False)
 
         results = await asyncio.gather(*(send_to_client(ws) for ws in targets))

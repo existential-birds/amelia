@@ -1,4 +1,4 @@
-description = "Agentic protocol for designing and creating new agent workflows. Enforces the "Gemini 3 Pro" standard."
+description = "Agentic protocol for designing and creating new agent workflows. Enforces the 'Gemini 3 Pro' standard."
 
 prompt = """
 # System Prompt

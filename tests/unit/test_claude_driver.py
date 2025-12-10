@@ -47,7 +47,6 @@ class TestClaudeCliDriver:
         expected = "USER: Hello\n\nASSISTANT: Hi there\n\nUSER: How are you?"
         assert prompt == expected
 
-    @pytest.mark.asyncio
     async def test_generate_text_success(self, driver, messages, mock_subprocess_process_factory):
         mock_process = mock_subprocess_process_factory(
             stdout_lines=[b"I am fine, ", b"thank you.", b""],
@@ -66,7 +65,6 @@ class TestClaudeCliDriver:
             mock_process.stdin.drain.assert_called_once()
             mock_process.stdin.close.assert_called_once()
 
-    @pytest.mark.asyncio
     async def test_generate_json_success(self, driver, messages, mock_subprocess_process_factory):
         expected_json = json.dumps({"reasoning": "ok", "answer": "good"})
         mock_process = mock_subprocess_process_factory(
@@ -90,7 +88,6 @@ class TestClaudeCliDriver:
             mock_process.stdin.drain.assert_called_once()
             mock_process.stdin.close.assert_called_once()
 
-    @pytest.mark.asyncio
     async def test_generate_json_list_auto_wrap(self, driver, messages, mock_subprocess_process_factory):
         """Test that a raw list from CLI is auto-wrapped if schema expects 'tasks'."""
         expected_list_json = json.dumps(["task1", "task2"])
@@ -108,7 +105,6 @@ class TestClaudeCliDriver:
             mock_process.stdin.drain.assert_called_once()
             mock_process.stdin.close.assert_called_once()
 
-    @pytest.mark.asyncio
     async def test_generate_json_from_result_envelope_structured_output(self, driver, messages, mock_subprocess_process_factory):
         """Test unwrapping structured_output from Claude CLI result envelope."""
         envelope = json.dumps({
@@ -129,7 +125,6 @@ class TestClaudeCliDriver:
             assert response.reasoning == "from envelope"
             assert response.answer == "structured"
 
-    @pytest.mark.asyncio
     async def test_generate_json_from_result_envelope_result_field(self, driver, messages, mock_subprocess_process_factory):
         """Test parsing JSON from result field when structured_output is missing."""
         inner_json = json.dumps({"reasoning": "from result", "answer": "parsed"})
@@ -151,7 +146,6 @@ class TestClaudeCliDriver:
             assert response.reasoning == "from result"
             assert response.answer == "parsed"
 
-    @pytest.mark.asyncio
     async def test_generate_json_from_result_envelope_text_raises_error(self, driver, messages, mock_subprocess_process_factory):
         """Test that plain text in result field raises clear error."""
         envelope = json.dumps({
@@ -171,7 +165,6 @@ class TestClaudeCliDriver:
         ):
             await driver._generate_impl(messages, schema=_TestModel)
 
-    @pytest.mark.asyncio
     async def test_generate_json_clarification_request_raises_specific_error(self, driver, messages, mock_subprocess_process_factory):
         """Test that clarification requests raise a specific, helpful error."""
         envelope = json.dumps({
@@ -191,7 +184,6 @@ class TestClaudeCliDriver:
         ):
             await driver._generate_impl(messages, schema=_TestModel)
 
-    @pytest.mark.asyncio
     async def test_generate_failure_stderr(self, driver, messages, mock_subprocess_process_factory):
         mock_process = mock_subprocess_process_factory(
             stdout_lines=[b""],
@@ -206,7 +198,6 @@ class TestClaudeCliDriver:
             mock_process.stdin.drain.assert_called_once()
             mock_process.stdin.close.assert_called_once()
 
-    @pytest.mark.asyncio
     async def test_generate_json_parse_error(self, driver, messages, mock_subprocess_process_factory):
         mock_process = mock_subprocess_process_factory(
             stdout_lines=[b"Not JSON", b""],
@@ -220,21 +211,18 @@ class TestClaudeCliDriver:
             mock_process.stdin.drain.assert_called_once()
             mock_process.stdin.close.assert_called_once()
 
-    @pytest.mark.asyncio
     async def test_execute_tool_shell(self, driver):
         with patch.object(SafeShellExecutor, "execute", new_callable=AsyncMock) as mock_run:
             mock_run.return_value = "Output"
             await driver._execute_tool_impl("run_shell_command", command="echo test")
             mock_run.assert_called_once_with("echo test", timeout=driver.timeout)
 
-    @pytest.mark.asyncio
     async def test_execute_tool_write_file(self, driver):
         with patch.object(SafeFileWriter, "write", new_callable=AsyncMock) as mock_write:
             mock_write.return_value = "Success"
             await driver._execute_tool_impl("write_file", file_path="test.txt", content="data")
             mock_write.assert_called_once_with("test.txt", "data")
 
-    @pytest.mark.asyncio
     async def test_execute_tool_unknown(self, driver):
         with pytest.raises(NotImplementedError):
             await driver._execute_tool_impl("unknown_tool")
@@ -243,7 +231,6 @@ class TestClaudeCliDriver:
 class TestClaudeCliDriverResumeAndCwd:
     """Tests for --resume and cwd support in ClaudeCliDriver."""
 
-    @pytest.mark.asyncio
     async def test_generate_with_session_resume(self, driver, messages, mock_subprocess_process_factory):
         """Test that generate passes --resume when session_id provided."""
         mock_process = mock_subprocess_process_factory(
@@ -260,7 +247,6 @@ class TestClaudeCliDriverResumeAndCwd:
             assert "--resume" in args
             assert "sess_resume123" in args
 
-    @pytest.mark.asyncio
     async def test_generate_with_working_directory(self, driver, messages, mock_subprocess_process_factory):
         """Test that generate passes cwd to subprocess."""
         mock_process = mock_subprocess_process_factory(
@@ -291,7 +277,6 @@ class TestClaudeCliDriverPermissions:
         driver = ClaudeCliDriver()
         assert driver.allowed_tools is None
 
-    @pytest.mark.asyncio
     async def test_skip_permissions_flag_added(self, messages, mock_subprocess_process_factory):
         driver = ClaudeCliDriver(skip_permissions=True)
         mock_process = mock_subprocess_process_factory(
@@ -305,7 +290,6 @@ class TestClaudeCliDriverPermissions:
             args = mock_exec.call_args[0]
             assert "--dangerously-skip-permissions" in args
 
-    @pytest.mark.asyncio
     async def test_allowed_tools_flag_added(self, messages, mock_subprocess_process_factory):
         driver = ClaudeCliDriver(allowed_tools=["Read", "Write", "Bash"])
         mock_process = mock_subprocess_process_factory(
@@ -341,7 +325,6 @@ class TestClaudeCliDriverSystemPrompt:
         assert "You are a helpful assistant" not in prompt
         assert "USER: Hello" in prompt
 
-    @pytest.mark.asyncio
     async def test_system_prompt_passed_via_flag(self, messages_with_system, mock_subprocess_process_factory):
         driver = ClaudeCliDriver()
         mock_process = mock_subprocess_process_factory(
@@ -357,7 +340,6 @@ class TestClaudeCliDriverSystemPrompt:
             sys_idx = args.index("--append-system-prompt")
             assert args[sys_idx + 1] == "You are a helpful assistant."
 
-    @pytest.mark.asyncio
     async def test_no_system_prompt_flag_when_no_system_messages(self, messages, mock_subprocess_process_factory):
         driver = ClaudeCliDriver()
         mock_process = mock_subprocess_process_factory(
@@ -383,7 +365,6 @@ class TestClaudeCliDriverModelSelection:
         driver = ClaudeCliDriver(model="opus")
         assert driver.model == "opus"
 
-    @pytest.mark.asyncio
     async def test_model_flag_in_command(self, messages, mock_subprocess_process_factory):
         driver = ClaudeCliDriver(model="opus")
         mock_process = mock_subprocess_process_factory(
@@ -414,7 +395,6 @@ class TestClaudeCliDriverStreaming:
             b''  # EOF
         ]
 
-    @pytest.mark.asyncio
     async def test_generate_stream_yields_events(self, driver, messages, stream_lines):
         """Test that generate_stream yields ClaudeStreamEvent objects."""
         mock_process = AsyncMock()
@@ -440,7 +420,6 @@ class TestClaudeCliDriverStreaming:
             assert events[3].type == "result"
             assert events[3].session_id == "sess_xyz789"
 
-    @pytest.mark.asyncio
     async def test_generate_stream_captures_session_id(self, driver, messages, stream_lines):
         """Test that generate_stream captures session_id from result event."""
         mock_process = AsyncMock()
@@ -530,7 +509,6 @@ class TestClaudeStreamEvent:
 class TestClaudeCliDriverAgentic:
     """Tests for execute_agentic method."""
 
-    @pytest.mark.asyncio
     async def test_execute_agentic_uses_skip_permissions(self, driver, mock_subprocess_process_factory):
         """execute_agentic should use --dangerously-skip-permissions."""
         stream_lines = [
@@ -549,7 +527,6 @@ class TestClaudeCliDriverAgentic:
             args = mock_exec.call_args[0]
             assert "--dangerously-skip-permissions" in args
 
-    @pytest.mark.asyncio
     async def test_execute_agentic_tracks_tool_calls(self, driver, mock_subprocess_process_factory):
         """execute_agentic should track tool calls in tool_call_history."""
         stream_lines = [
@@ -570,50 +547,23 @@ class TestClaudeCliDriverAgentic:
 class TestClarificationDetection:
     """Tests for clarification request detection."""
 
-    def test_detects_could_you_clarify(self):
-        text = "Could you clarify what type of database you're using?"
-        assert _is_clarification_request(text) is True
-
-    def test_detects_can_you_provide(self):
-        text = "Can you provide more details about the requirements?"
-        assert _is_clarification_request(text) is True
-
-    def test_detects_i_need_more(self):
-        text = "I need more information before I can create a plan."
-        assert _is_clarification_request(text) is True
-
-    def test_detects_multiple_questions(self):
-        text = "What framework are you using? What is the target platform?"
-        assert _is_clarification_request(text) is True
-
-    def test_detects_numbered_questions(self):
-        text = """I have a few questions:
+    @pytest.mark.parametrize("text,should_flag", [
+        # Should detect clarification requests
+        ("Could you clarify what type of database you're using?", True),
+        ("Can you provide more details about the requirements?", True),
+        ("I need more information before I can create a plan.", True),
+        ("What framework are you using? What is the target platform?", True),
+        ("""I have a few questions:
         1. What is the tech stack?
         2. Are there any constraints?
-        """
-        assert _is_clarification_request(text) is True
-
-    def test_does_not_flag_normal_response(self):
-        text = "Here is the implementation plan for your feature."
-        assert _is_clarification_request(text) is False
-
-    def test_does_not_flag_single_rhetorical_question(self):
-        text = "The implementation looks good. What else would you like me to do?"
-        # Single question mark, no clarification phrases - should not flag
-        assert _is_clarification_request(text) is False
-
-    def test_does_not_flag_code_with_question_marks(self):
-        text = "def check(x): return True if x else False"
-        assert _is_clarification_request(text) is False
-
-    def test_case_insensitive_detection(self):
-        text = "COULD YOU CLARIFY the requirements?"
-        assert _is_clarification_request(text) is True
-
-    def test_detects_before_i_can(self):
-        text = "Before I can proceed, I need to understand the architecture."
-        assert _is_clarification_request(text) is True
-
-    def test_detects_what_type_of(self):
-        text = "What type of authentication system do you want?"
-        assert _is_clarification_request(text) is True
+        """, True),
+        ("COULD YOU CLARIFY the requirements?", True),
+        ("Before I can proceed, I need to understand the architecture.", True),
+        ("What type of authentication system do you want?", True),
+        # Should not flag normal responses
+        ("Here is the implementation plan for your feature.", False),
+        ("The implementation looks good. What else would you like me to do?", False),
+        ("def check(x): return True if x else False", False),
+    ])
+    def test_clarification_detection(self, text, should_flag):
+        assert _is_clarification_request(text) == should_flag

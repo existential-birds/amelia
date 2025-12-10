@@ -1,0 +1,124 @@
+name: Feature Request
+description: Suggest a new capability or improvement for Amelia
+title: "[Feature]: "
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting an improvement to Amelia. Help us understand the problem you're trying to solve and the context around your request.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the pain point, limitation, or unmet need that motivates this request. Focus on the problem, not the solution.
+      placeholder: |
+        When working on large PRs with multiple files, I have no way to prioritize which files the reviewer should focus on first. This leads to superficial feedback on critical files because the context window gets consumed by less important changes.
+    validations:
+      required: true
+
+  - type: textarea
+    id: who-benefits
+    attributes:
+      label: Who would benefit from this?
+      description: Describe the users or scenarios where this would be valuable. What types of workflows or use cases does this enable?
+      placeholder: |
+        - Teams working on monorepos with many small changes
+        - Developers who need to review security-sensitive code paths
+        - Anyone doing large refactoring PRs
+    validations:
+      required: true
+
+  - type: textarea
+    id: current-state
+    attributes:
+      label: How do you handle this today?
+      description: Describe any current workarounds, manual processes, or alternative tools you use. What are the limitations of these approaches?
+      placeholder: |
+        Currently I split large PRs into smaller ones, but this is time-consuming and sometimes the changes are interdependent. I've also tried manually editing the diff before passing it to the reviewer, but this is error-prone.
+    validations:
+      required: true
+
+  - type: textarea
+    id: success
+    attributes:
+      label: What does success look like?
+      description: Describe the ideal outcome. What would you be able to do that you can't do today? How would you know this feature is working well?
+      placeholder: |
+        I could mark certain files or paths as "critical" and the reviewer would ensure these get thorough analysis before spending context on other files. Success means my security-sensitive code always gets reviewed, even in large PRs.
+    validations:
+      required: true
+
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Constraints and considerations
+      description: Are there any technical limitations, compatibility requirements, or edge cases to consider? What shouldn't change?
+      placeholder: |
+        - Should work with both API and CLI drivers
+        - Must not require changes to existing profile configs
+        - Should handle repos where file importance changes based on the type of PR
+    validations:
+      required: false
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you've considered
+      description: Have you thought about other ways this could be solved? What are the tradeoffs of different approaches?
+      placeholder: |
+        1. A .amelia-priority file in the repo (simple but static)
+        2. Inline comments marking critical sections (granular but noisy)
+        3. Automatic detection based on file history (smart but potentially unreliable)
+    validations:
+      required: false
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      description: Which part of Amelia would this primarily affect?
+      options:
+        - Core orchestrator
+        - Agents (Architect/Developer/Reviewer)
+        - CLI
+        - Drivers (LLM integration)
+        - Trackers (Issue sources)
+        - Dashboard
+        - Configuration/Profiles
+        - New component
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Estimated scope
+      description: How large of a change do you think this would be?
+      options:
+        - Small (single file, minor change)
+        - Medium (few files, new feature)
+        - Large (architectural change, new subsystem)
+        - Unknown
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Any other information, mockups, examples from other tools, or references that might help illustrate this request.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution interest
+      description: Would you be interested in contributing to this feature?
+      options:
+        - label: I'd be interested in implementing this myself with guidance
+        - label: I can help test/review an implementation
+        - label: I can provide more detailed requirements if needed

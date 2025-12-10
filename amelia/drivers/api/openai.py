@@ -5,6 +5,7 @@ import os
 from collections.abc import AsyncIterator
 from typing import Any
 
+from loguru import logger
 from pydantic import BaseModel
 from pydantic_ai import Agent
 from pydantic_ai.messages import (
@@ -57,56 +58,65 @@ class ApiDriver(DriverInterface):
             Model output, either as string or parsed schema instance.
 
         Raises:
+            ValueError: If message list is empty or does not end with a user message.
             RuntimeError: If API call fails.
         """
         if not os.environ.get("OPENAI_API_KEY"):
             raise ValueError("OPENAI_API_KEY environment variable is not set. Please configure it to use the ApiDriver.")
 
-        # pydantic-ai Agent instantiation
-        # We create a new agent for each call or reuse? 
-        # Reusing might be better but for now per-call is safer for state isolation.
-        agent = Agent(self.model_name, output_type=schema if schema else str)
-        
+        # Extract system messages and combine them into a single system prompt
+        system_messages = [msg for msg in messages if msg.role == 'system']
+        system_prompt = "\n\n".join(msg.content for msg in system_messages if msg.content) if system_messages else None
+
+        # Create agent with system prompt if present
+        agent = Agent(
+            self.model_name,
+            output_type=schema if schema else str,
+            system_prompt=system_prompt if system_prompt else ()
+        )
+
         # Constructing conversation history
         # Pydantic-ai Agent.run takes the user prompt and history separately.
         # We need to extract the last user message as the prompt, or use a dummy prompt if none.
         # However, Agent.run() signature is run(prompt: str, *, message_history: list[ModelMessage] | None = None)
 
         # Convert AgentMessages to pydantic-ai ModelMessages
-        # This is a simplification; a full implementation would map roles precisely.
-        # For now, we will just map user/assistant/system.
-        
-        # We'll use the last message as the new prompt if it's from user,
-        # otherwise we might need to send an empty prompt or continue?
-        # Agent.run requires a string prompt.
-        
-        current_prompt = "Please continue."
+        # Filter out system messages as they're handled via Agent constructor
+        non_system_messages = [msg for msg in messages if msg.role != 'system']
+
+        # We'll use the last message as the new prompt if it's from user.
+        # Agent.run requires a string prompt from the user.
         history_messages: list[ModelMessage] = []
-        
+
         # If the last message is from the user, use it as the prompt.
-        if messages and messages[-1].role == 'user':
-            current_prompt = messages[-1].content
+        if non_system_messages and non_system_messages[-1].role == 'user':
+            current_prompt = non_system_messages[-1].content
             # Use all previous messages as history
-            msgs_to_process = messages[:-1]
+            msgs_to_process = non_system_messages[:-1]
+        elif non_system_messages:
+            # No user message at the end - this is an invalid state
+            raise ValueError("Cannot generate response: message list must end with a user message")
         else:
-            msgs_to_process = messages
+            # No messages at all
+            raise ValueError("Cannot generate response: message list is empty after filtering system messages")
 
         for msg in msgs_to_process:
+            if not msg.content:
+                continue  # Skip messages with no content
+
             if msg.role == 'user':
                 history_messages.append(ModelRequest(parts=[UserPromptPart(content=msg.content)]))
             elif msg.role == 'assistant':
-                history_messages.append(ModelResponse(parts=[TextPart(content=msg.content)]))
-            elif msg.role == 'system':
-                # Pydantic-ai handles system prompts via Agent constructor usually,
-                # but we can try to inject it or just ignore if global system prompt is set elsewhere.
-                # ideally we should have a way to set system prompt per run or use SystemPromptPart (if exists).
-                # For now, prepending to next user message or init is common fallback.
-                # Let's assume system format is handled by main agent config for simplicity
-                # or append to history as ModelRequest if supported.
-                pass 
+                history_messages.append(ModelResponse(parts=[TextPart(content=msg.content)])) 
                 
         try:
             result = await agent.run(current_prompt, message_history=history_messages)
+            # Log usage information for monitoring
+            logger.debug(
+                "API call completed",
+                usage=str(result.usage()) if hasattr(result, 'usage') else "N/A",
+                model=self.model_name,
+            )
             return result.output
         except Exception as e:
             raise RuntimeError(f"ApiDriver generation failed: {e}") from e

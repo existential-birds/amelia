@@ -92,7 +92,6 @@ def mock_repository():
 class TestMissingExecutionState:
     """Test error handling for missing execution_state."""
 
-    @pytest.mark.asyncio
     async def test_missing_execution_state_sets_status_to_failed(
         self, event_tracker, mock_repository, temp_checkpoint_db, mock_settings
     ):
@@ -128,7 +127,6 @@ class TestMissingExecutionState:
 class TestLifecycleEvents:
     """Test workflow lifecycle event emission."""
 
-    @pytest.mark.asyncio
     @patch("amelia.server.orchestrator.service.AsyncSqliteSaver")
     @patch("amelia.server.orchestrator.service.create_orchestrator_graph")
     async def test_workflow_started_event_emitted(
@@ -183,7 +181,6 @@ class TestLifecycleEvents:
 class TestGraphInterruptHandling:
     """Test GraphInterrupt is handled correctly."""
 
-    @pytest.mark.asyncio
     @patch("amelia.server.orchestrator.service.AsyncSqliteSaver")
     @patch("amelia.server.orchestrator.service.create_orchestrator_graph")
     async def test_interrupt_sets_status_blocked(

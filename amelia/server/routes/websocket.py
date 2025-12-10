@@ -9,7 +9,6 @@ from typing import Annotated
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 from loguru import logger
 
-from amelia.server.dependencies import get_repository
 from amelia.server.events.connection_manager import ConnectionManager
 
 
@@ -43,35 +42,38 @@ async def websocket_endpoint(
         websocket: The WebSocket connection.
         since: Optional event ID for backfill on reconnect.
     """
-    repository = get_repository()
     await connection_manager.connect(websocket)
     logger.info("websocket_connected", active_connections=connection_manager.active_connections)
 
     try:
         # Handle backfill if reconnecting
         if since:
-            try:
-                # Replay missed events from database
-                events = await repository.get_events_after(since)
+            repository = connection_manager.get_repository()
+            if repository:
+                try:
+                    # Replay missed events from database
+                    events = await repository.get_events_after(since)
 
-                for event in events:
+                    for event in events:
+                        await websocket.send_json({
+                            "type": "event",
+                            "payload": event.model_dump(mode="json"),
+                        })
+
                     await websocket.send_json({
-                        "type": "event",
-                        "payload": event.model_dump(mode="json"),
+                        "type": "backfill_complete",
+                        "count": len(events),
                     })
-
-                await websocket.send_json({
-                    "type": "backfill_complete",
-                    "count": len(events),
-                })
-                logger.info("backfill_complete", count=len(events))
-            except ValueError:
-                # Event was cleaned up by retention - client needs full refresh
-                await websocket.send_json({
-                    "type": "backfill_expired",
-                    "message": "Requested event no longer exists. Full refresh required.",
-                })
-                logger.warning("backfill_expired", since_event_id=since)
+                    logger.info("backfill_complete", count=len(events))
+                except ValueError:
+                    # Event was cleaned up by retention - client needs full refresh
+                    await websocket.send_json({
+                        "type": "backfill_expired",
+                        "message": "Requested event no longer exists. Full refresh required.",
+                    })
+                    logger.warning("backfill_expired", since_event_id=since)
+            else:
+                logger.warning("backfill_unavailable", reason="repository_not_initialized")
 
         # Start heartbeat task
         heartbeat_task = asyncio.create_task(_heartbeat_loop(websocket))

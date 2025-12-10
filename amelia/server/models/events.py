@@ -4,13 +4,13 @@
 """Event models for workflow activity tracking."""
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, Field
 
 
-class EventType(str, Enum):
+class EventType(StrEnum):
     """Exhaustive list of workflow event types.
 
     Events are categorized into:
@@ -19,6 +19,7 @@ class EventType(str, Enum):
     - Approval: Human approval flow events
     - Artifacts: File operations
     - Review: Code review cycle
+    - Agent messages: Task-level messages and status updates
     - System: Errors and warnings
     """
 
@@ -46,6 +47,12 @@ class EventType(str, Enum):
     REVIEW_REQUESTED = "review_requested"
     REVIEW_COMPLETED = "review_completed"
     REVISION_REQUESTED = "revision_requested"
+
+    # Agent messages (replaces in-state message accumulation)
+    AGENT_MESSAGE = "agent_message"
+    TASK_STARTED = "task_started"
+    TASK_COMPLETED = "task_completed"
+    TASK_FAILED = "task_failed"
 
     # System
     SYSTEM_ERROR = "system_error"

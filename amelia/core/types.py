@@ -28,9 +28,15 @@ class RetryConfig(BaseModel):
         max_delay: Maximum delay cap in seconds (1.0-300.0).
     """
 
-    max_retries: int = Field(default=3, ge=0, le=10)
-    base_delay: float = Field(default=1.0, ge=0.1, le=30.0)
-    max_delay: float = Field(default=60.0, ge=1.0, le=300.0)
+    max_retries: int = Field(
+        default=3, ge=0, le=10, description="Maximum number of retry attempts"
+    )
+    base_delay: float = Field(
+        default=1.0, ge=0.1, le=30.0, description="Base delay in seconds for exponential backoff"
+    )
+    max_delay: float = Field(
+        default=60.0, ge=1.0, le=300.0, description="Maximum delay cap in seconds"
+    )
 
 
 class Profile(BaseModel):

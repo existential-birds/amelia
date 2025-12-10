@@ -32,7 +32,6 @@ def health_checker(mock_orchestrator: AsyncMock) -> WorktreeHealthChecker:
     )
 
 
-@pytest.mark.asyncio
 async def test_start_and_stop(health_checker: WorktreeHealthChecker) -> None:
     """Should start and stop check loop."""
     await health_checker.start()
@@ -43,7 +42,6 @@ async def test_start_and_stop(health_checker: WorktreeHealthChecker) -> None:
     assert health_checker._task.cancelled() or health_checker._task.done()
 
 
-@pytest.mark.asyncio
 async def test_check_healthy_worktree(
     health_checker: WorktreeHealthChecker,
     mock_orchestrator: AsyncMock,
@@ -63,7 +61,6 @@ async def test_check_healthy_worktree(
     mock_orchestrator.cancel_workflow.assert_not_called()
 
 
-@pytest.mark.asyncio
 async def test_check_deleted_worktree(
     health_checker: WorktreeHealthChecker,
     mock_orchestrator: AsyncMock,
@@ -89,7 +86,6 @@ async def test_check_deleted_worktree(
     assert call_args[0][0] == "wf-1"
 
 
-@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "setup,expected",
     [

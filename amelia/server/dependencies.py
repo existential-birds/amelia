@@ -57,6 +57,9 @@ def get_repository() -> WorkflowRepository:
 
     Returns:
         WorkflowRepository instance.
+
+    Raises:
+        RuntimeError: If database not initialized.
     """
     db = get_database()
     return WorkflowRepository(db)

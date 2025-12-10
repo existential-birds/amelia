@@ -40,7 +40,7 @@ description: Agentic protocol for verifying documentation completeness and stand
 1.  **Google Style Check:**
     *   Does the docstring follow the format?
     ```python
-    """One line summary.
+    \"\"\"One line summary.
 
     Extended description.
 
@@ -52,7 +52,7 @@ description: Agentic protocol for verifying documentation completeness and stand
 
     Raises:
         ErrorType: When does this occur?
-    """
+    \"\"\"
     ```
 
 2.  **Drift Detection:**

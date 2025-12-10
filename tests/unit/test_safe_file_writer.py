@@ -15,7 +15,6 @@ from amelia.tools.safe_file import SafeFileWriter
 class TestSafeFileWriterSecurity:
     """Test security constraints of SafeFileWriter."""
 
-    @pytest.mark.asyncio
     async def test_write_within_allowed_dir_succeeds(self, tmp_path: Path):
         """Writing within allowed directory should succeed."""
         file_path = tmp_path / "test.txt"
@@ -27,7 +26,6 @@ class TestSafeFileWriterSecurity:
         assert "Successfully" in result
         assert file_path.read_text() == "hello world"
 
-    @pytest.mark.asyncio
     async def test_path_traversal_double_dot_blocked(self, tmp_path: Path):
         """Path traversal with .. should be blocked."""
         malicious_path = str(tmp_path / ".." / ".." / "etc" / "passwd")
@@ -38,7 +36,6 @@ class TestSafeFileWriterSecurity:
                 allowed_dirs=[str(tmp_path)],
             )
 
-    @pytest.mark.asyncio
     async def test_absolute_path_outside_allowed_blocked(self, tmp_path: Path):
         """Absolute paths outside allowed dirs should be blocked."""
         with pytest.raises(PathTraversalError, match="outside allowed"):
@@ -48,7 +45,6 @@ class TestSafeFileWriterSecurity:
                 allowed_dirs=[str(tmp_path)],
             )
 
-    @pytest.mark.asyncio
     async def test_symlink_to_outside_blocked(self, tmp_path: Path):
         """Symlinks pointing outside allowed dirs should be blocked."""
         link_path = tmp_path / "escape_link"
@@ -70,7 +66,6 @@ class TestSafeFileWriterSecurity:
                 allowed_dirs=[str(tmp_path)],
             )
 
-    @pytest.mark.asyncio
     async def test_creates_parent_directories(self, tmp_path: Path):
         """Missing parent directories should be created."""
         file_path = tmp_path / "nested" / "deep" / "file.txt"
@@ -82,7 +77,6 @@ class TestSafeFileWriterSecurity:
         assert "Successfully" in result
         assert file_path.read_text() == "nested content"
 
-    @pytest.mark.asyncio
     async def test_relative_path_resolved_against_cwd(self, tmp_path: Path, monkeypatch):
         """Relative paths should be resolved against cwd."""
         monkeypatch.chdir(tmp_path)
@@ -94,7 +88,6 @@ class TestSafeFileWriterSecurity:
         assert "Successfully" in result
         assert (tmp_path / "relative_file.txt").read_text() == "relative content"
 
-    @pytest.mark.asyncio
     async def test_default_allowed_dir_is_cwd(self, tmp_path: Path, monkeypatch):
         """Default allowed_dirs should be current working directory."""
         monkeypatch.chdir(tmp_path)
@@ -105,13 +98,11 @@ class TestSafeFileWriterSecurity:
         )
         assert "Successfully" in result
 
-    @pytest.mark.asyncio
     async def test_empty_path_rejected(self):
         """Empty file path should be rejected."""
         with pytest.raises(ValueError, match="[Ee]mpty|[Pp]ath"):
             await SafeFileWriter.write("", "content")
 
-    @pytest.mark.asyncio
     async def test_directory_as_target_rejected(self, tmp_path: Path):
         """Directories should not be writable as files."""
         with pytest.raises((IsADirectoryError, ValueError, OSError)):

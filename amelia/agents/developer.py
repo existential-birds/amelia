@@ -1,6 +1,7 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
+import asyncio
 import os
 from typing import Any, Literal
 
@@ -12,7 +13,6 @@ from amelia.core.constants import ToolName
 from amelia.core.exceptions import AgenticExecutionError
 from amelia.core.state import AgentMessage, Task
 from amelia.drivers.base import DriverInterface
-from amelia.drivers.cli.claude import ClaudeStreamEvent
 
 
 DeveloperStatus = Literal["completed", "failed", "in_progress"]
@@ -124,11 +124,11 @@ class Developer:
 
         return "\n".join(sections)
 
-    def _handle_stream_event(self, event: ClaudeStreamEvent) -> None:
+    def _handle_stream_event(self, event: Any) -> None:
         """Display streaming event to terminal.
 
         Args:
-            event: ClaudeStreamEvent to display.
+            event: Stream event to display.
         """
         if event.type == "tool_use":
             typer.secho(f"  -> {event.tool_name}", fg=typer.colors.CYAN)
@@ -190,11 +190,7 @@ class Developer:
             task_desc_lower = task.description.lower().strip()
 
             if task_desc_lower.startswith("run shell command:"):
-                # Extract command with original casing, just skip the prefix length
                 prefix_len = len("run shell command:")
-                # We need to find where the prefix ends in the original string to preserve case of the command
-                # Simple approach: case-insensitive split or just indexing if we assume structure
-                # Let's use the known length of the prefix we matched against
                 command = task.description[prefix_len:].strip()
                 logger.info(f"Developer executing shell command: {command}")
                 result = await self.driver.execute_tool(ToolName.RUN_SHELL_COMMAND, command=command)
@@ -212,8 +208,6 @@ class Developer:
                     path_part = task.description
                     content = ""
                 
-                # Extract path by removing "write file:" prefix (case-insensitive match)
-                # Since we know it starts with "write file:", we can just slice
                 file_path = path_part[len("write file:"):].strip()
 
                 result = await self.driver.execute_tool(ToolName.WRITE_FILE, file_path=file_path, content=content)
@@ -228,6 +222,11 @@ class Developer:
                 llm_response = await self.driver.generate(messages=messages)
                 return {"status": "completed", "output": llm_response}
 
+        except (KeyboardInterrupt, SystemExit, asyncio.CancelledError):
+            raise
         except Exception as e:
-            logger.error(f"Developer task execution failed: {e}")
+            logger.exception(
+                "Developer task execution failed",
+                error_type=type(e).__name__,
+            )
             return {"status": "failed", "output": str(e), "error": str(e)}

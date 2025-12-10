@@ -36,7 +36,6 @@ def retention_service(mock_db: AsyncMock, config: MockConfig) -> LogRetentionSer
     return LogRetentionService(db=mock_db, config=config)
 
 
-@pytest.mark.asyncio
 async def test_cleanup_on_shutdown(
     retention_service: LogRetentionService,
     mock_db: AsyncMock,

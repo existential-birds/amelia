@@ -1,0 +1,119 @@
+name: Bug Report
+description: Report unexpected behavior or errors in Amelia
+title: "[Bug]: "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this bug. Please provide as much context as possible to help us understand and reproduce the issue.
+
+  - type: textarea
+    id: goal
+    attributes:
+      label: What were you trying to accomplish?
+      description: Describe the task or goal you were working on when you encountered this bug. What was the broader context?
+      placeholder: "I was trying to review a PR using the CLI to check for type errors before merging..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+      description: Describe the behavior you expected based on your understanding of how Amelia should work.
+      placeholder: "I expected the reviewer agent to analyze the diff and provide feedback on the changes..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: What actually happened?
+      description: Describe what occurred instead. Include any error messages, unexpected outputs, or behaviors.
+      placeholder: "The command hung for 30 seconds and then returned an empty response with exit code 1..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Provide the exact steps to reproduce this behavior. Be as specific as possible.
+      placeholder: |
+        1. Clone a repo with Python code
+        2. Make changes to a file
+        3. Run `uv run amelia review --local`
+        4. Observe the error
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Environment and configuration
+      description: Include relevant details about your setup. What profile are you using? What driver/tracker configuration?
+      placeholder: |
+        - OS: macOS 14.2
+        - Python: 3.12.1
+        - Profile: work (driver: api:openai, tracker: github)
+        - Relevant config from settings.amelia.yaml
+    validations:
+      required: true
+
+  - type: textarea
+    id: attempts
+    attributes:
+      label: What have you tried?
+      description: List any troubleshooting steps you've already attempted or workarounds you've found.
+      placeholder: |
+        - Tried with a different profile
+        - Checked if the API key was valid
+        - Ran with --verbose flag
+    validations:
+      required: false
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact and frequency
+      description: How does this bug affect your workflow? How often does it occur? Are there any patterns?
+      placeholder: |
+        This blocks my ability to use the review feature entirely.
+        It happens consistently (10/10 times) on repos with more than 50 files.
+    validations:
+      required: false
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      description: Which part of Amelia is affected?
+      options:
+        - Core orchestrator
+        - Agents (Architect/Developer/Reviewer)
+        - CLI
+        - Drivers (LLM integration)
+        - Trackers (Issue sources)
+        - Dashboard
+        - Configuration/Profiles
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs or output
+      description: Include any relevant log output, stack traces, or command output. Use code blocks for formatting.
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: Any other information that might be helpful. Screenshots, related issues, or observations about when this started occurring.
+    validations:
+      required: false

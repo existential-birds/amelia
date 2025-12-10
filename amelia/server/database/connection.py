@@ -104,8 +104,9 @@ class Database:
         if self._connection is None:
             return False
         try:
-            await self._connection.execute("SELECT 1")
-            return True
+            cursor = await self._connection.execute("SELECT 1")
+            result = await cursor.fetchone()
+            return result is not None and result[0] == 1
         except Exception:
             return False
 
