@@ -3,12 +3,14 @@
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 # tests/unit/server/events/test_bus.py
 """Unit tests for EventBus pub/sub."""
+import asyncio
 from datetime import UTC, datetime
+from unittest.mock import AsyncMock
 
 import pytest
 
 from amelia.server.events.bus import EventBus
-from amelia.server.models import EventType, WorkflowEvent
+from amelia.server.models import WorkflowEvent
 
 
 @pytest.fixture
@@ -18,15 +20,12 @@ def event_bus() -> EventBus:
 
 
 @pytest.fixture
-def sample_event() -> WorkflowEvent:
+def sample_event(make_event) -> WorkflowEvent:
     """Create sample event."""
-    return WorkflowEvent(
+    return make_event(
         id="evt-1",
         workflow_id="wf-1",
-        sequence=1,
         timestamp=datetime.now(UTC),
-        agent="system",
-        event_type=EventType.WORKFLOW_STARTED,
         message="Workflow started",
     )
 
@@ -99,3 +98,73 @@ def test_emit_subscriber_exception(event_bus: EventBus, sample_event: WorkflowEv
     # Second subscriber should still receive event
     assert len(received) == 1
     assert received[0] == sample_event
+
+
+async def test_broadcast_task_tracking(event_bus: EventBus, sample_event: WorkflowEvent):
+    """Broadcast tasks should be tracked and cleaned up."""
+    broadcast_called = asyncio.Event()
+
+    # Create mock connection manager
+    mock_manager = AsyncMock()
+
+    async def mock_broadcast(event: WorkflowEvent) -> None:
+        broadcast_called.set()
+
+    mock_manager.broadcast = mock_broadcast
+    event_bus.set_connection_manager(mock_manager)
+
+    # Emit event - should create a background task
+    event_bus.emit(sample_event)
+
+    # Wait for broadcast with timeout instead of arbitrary sleep
+    await asyncio.wait_for(broadcast_called.wait(), timeout=1.0)
+
+    # If we get here, broadcast was called with the event
+
+
+async def test_cleanup_waits_for_broadcast_tasks(event_bus: EventBus, sample_event: WorkflowEvent):
+    """cleanup() should wait for all broadcast tasks to complete."""
+    # Create mock connection manager with slow broadcast
+    mock_manager = AsyncMock()
+    broadcast_completed = False
+
+    async def slow_broadcast(event: WorkflowEvent) -> None:
+        nonlocal broadcast_completed
+        await asyncio.sleep(0.1)
+        broadcast_completed = True
+
+    mock_manager.broadcast = slow_broadcast
+    event_bus.set_connection_manager(mock_manager)
+
+    # Emit event
+    event_bus.emit(sample_event)
+
+    # Cleanup should wait for broadcast to complete
+    await event_bus.cleanup()
+
+    # Broadcast should have completed
+    assert broadcast_completed
+
+    # Task set should be cleared
+    assert len(event_bus._broadcast_tasks) == 0
+
+
+async def test_cleanup_handles_task_exceptions(event_bus: EventBus, sample_event: WorkflowEvent):
+    """cleanup() should handle exceptions in broadcast tasks gracefully."""
+    # Create mock connection manager that raises
+    mock_manager = AsyncMock()
+
+    async def failing_broadcast(event: WorkflowEvent) -> None:
+        raise RuntimeError("Broadcast failed")
+
+    mock_manager.broadcast = failing_broadcast
+    event_bus.set_connection_manager(mock_manager)
+
+    # Emit event
+    event_bus.emit(sample_event)
+
+    # Cleanup should not raise even though broadcast failed
+    await event_bus.cleanup()
+
+    # Task set should be cleared
+    assert len(event_bus._broadcast_tasks) == 0

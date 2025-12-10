@@ -52,7 +52,7 @@ class CreateWorkflowRequest(BaseModel):
         ),
     ] = None
 
-    @field_validator("issue_id")
+    @field_validator("issue_id", mode="after")
     @classmethod
     def validate_issue_id(cls, v: str) -> str:
         """Validate issue_id contains only safe characters.
@@ -102,7 +102,7 @@ class CreateWorkflowRequest(BaseModel):
 
         return v
 
-    @field_validator("worktree_path")
+    @field_validator("worktree_path", mode="after")
     @classmethod
     def validate_worktree_path(cls, v: str) -> str:
         """Validate worktree_path is absolute and safe.
@@ -131,7 +131,7 @@ class CreateWorkflowRequest(BaseModel):
 
         return resolved
 
-    @field_validator("profile")
+    @field_validator("profile", mode="after")
     @classmethod
     def validate_profile(cls, v: str | None) -> str | None:
         """Validate profile name pattern.
@@ -159,7 +159,7 @@ class CreateWorkflowRequest(BaseModel):
 
         return v
 
-    @field_validator("driver")
+    @field_validator("driver", mode="after")
     @classmethod
     def validate_driver(cls, v: str | None) -> str | None:
         """Validate driver format is type:name.

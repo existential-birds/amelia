@@ -89,6 +89,7 @@ class OrchestratorService:
         self._start_lock = asyncio.Lock()  # Prevents race conditions on workflow start
         self._sequence_counters: dict[str, int] = {}  # workflow_id -> next sequence
         self._sequence_locks: dict[str, asyncio.Lock] = {}  # workflow_id -> lock
+        self._last_task_statuses: dict[str, dict[str, str]] = {}  # workflow_id -> {task_id -> status}
 
     def _create_server_graph(
         self,
@@ -199,9 +200,15 @@ class OrchestratorService:
 
         # Remove from active tasks on completion
         def cleanup_task(_: asyncio.Task[None]) -> None:
+            """Clean up resources when workflow task completes.
+
+            Args:
+                _: The completed asyncio Task (unused).
+            """
             self._active_tasks.pop(worktree_path, None)
             self._sequence_counters.pop(workflow_id, None)
             self._sequence_locks.pop(workflow_id, None)
+            self._last_task_statuses.pop(workflow_id, None)
             logger.debug(
                 "Workflow task completed",
                 workflow_id=workflow_id,
@@ -764,6 +771,9 @@ class OrchestratorService:
         state updates. We emit STAGE_STARTED before and STAGE_COMPLETED
         after each node that's in STAGE_NODES.
 
+        Additionally emits AGENT_MESSAGE and task lifecycle events (TASK_STARTED,
+        TASK_COMPLETED, TASK_FAILED) based on node output.
+
         Args:
             workflow_id: The workflow this chunk belongs to.
             chunk: Dict mapping node names to state updates.
@@ -778,6 +788,10 @@ class OrchestratorService:
                     f"Starting {node_name}",
                     data={"stage": node_name},
                 )
+
+                # Emit agent-specific messages based on node
+                await self._emit_agent_messages(workflow_id, node_name, output)
+
                 await self._emit(
                     workflow_id,
                     EventType.STAGE_COMPLETED,
@@ -785,11 +799,163 @@ class OrchestratorService:
                     data={"stage": node_name, "output": output},
                 )
 
+    async def _emit_agent_messages(
+        self,
+        workflow_id: str,
+        node_name: str,
+        output: dict[str, Any],
+    ) -> None:
+        """Emit detailed agent messages based on node output.
+
+        Args:
+            workflow_id: The workflow ID.
+            node_name: Name of the node that produced this output.
+            output: State updates from the node.
+        """
+        if node_name == "architect_node":
+            await self._emit_architect_messages(workflow_id, output)
+        elif node_name == "developer_node":
+            await self._emit_developer_messages(workflow_id, output)
+        elif node_name == "reviewer_node":
+            await self._emit_reviewer_messages(workflow_id, output)
+
+    async def _emit_architect_messages(
+        self,
+        workflow_id: str,
+        output: dict[str, Any],
+    ) -> None:
+        """Emit messages for architect node output.
+
+        Args:
+            workflow_id: The workflow ID.
+            output: State updates from the architect node.
+        """
+        plan = output.get("plan")
+        if plan and isinstance(plan, dict):
+            tasks = plan.get("tasks", [])
+            await self._emit(
+                workflow_id,
+                EventType.AGENT_MESSAGE,
+                f"Generated plan with {len(tasks)} tasks",
+                agent="architect",
+                data={"task_count": len(tasks)},
+            )
+            # Initialize task status tracking for this workflow
+            if workflow_id not in self._last_task_statuses:
+                self._last_task_statuses[workflow_id] = {}
+            for task in tasks:
+                if isinstance(task, dict):
+                    task_id = task.get("id")
+                    task_status = task.get("status")
+                    if task_id and task_status:
+                        self._last_task_statuses[workflow_id][task_id] = task_status
+
+    async def _emit_developer_messages(
+        self,
+        workflow_id: str,
+        output: dict[str, Any],
+    ) -> None:
+        """Emit messages for developer node output.
+
+        Args:
+            workflow_id: The workflow ID.
+            output: State updates from the developer node.
+        """
+        plan = output.get("plan")
+        if plan and isinstance(plan, dict):
+            tasks = plan.get("tasks", [])
+            # Initialize tracking if not present
+            if workflow_id not in self._last_task_statuses:
+                self._last_task_statuses[workflow_id] = {}
+
+            last_statuses = self._last_task_statuses[workflow_id]
+
+            # Emit events only for tasks that changed status
+            for task in tasks:
+                if not isinstance(task, dict):
+                    continue
+
+                task_id = task.get("id")
+                task_status = task.get("status")
+                task_desc = task.get("description", "")
+
+                if not task_id or not task_status:
+                    continue
+
+                # Check if status changed
+                previous_status = last_statuses.get(task_id)
+                if previous_status == task_status:
+                    continue  # No change, skip
+
+                # Update tracking
+                last_statuses[task_id] = task_status
+
+                # Emit task lifecycle events based on new status
+                if task_status == "in_progress":
+                    await self._emit(
+                        workflow_id,
+                        EventType.TASK_STARTED,
+                        f"Starting task: {task_desc}",
+                        agent="developer",
+                        data={"task_id": task_id, "description": task_desc},
+                    )
+                elif task_status == "completed":
+                    await self._emit(
+                        workflow_id,
+                        EventType.TASK_COMPLETED,
+                        f"Completed task: {task_desc}",
+                        agent="developer",
+                        data={"task_id": task_id, "description": task_desc},
+                    )
+                elif task_status == "failed":
+                    await self._emit(
+                        workflow_id,
+                        EventType.TASK_FAILED,
+                        f"Task failed: {task_desc}",
+                        agent="developer",
+                        data={"task_id": task_id, "description": task_desc},
+                    )
+
+    async def _emit_reviewer_messages(
+        self,
+        workflow_id: str,
+        output: dict[str, Any],
+    ) -> None:
+        """Emit messages for reviewer node output.
+
+        Args:
+            workflow_id: The workflow ID.
+            output: State updates from the reviewer node.
+        """
+        last_review = output.get("last_review")
+        if last_review and isinstance(last_review, dict):
+            approved = last_review.get("approved", False)
+            severity = last_review.get("severity", "unknown")
+            comment_count = len(last_review.get("comments", []))
+
+            await self._emit(
+                workflow_id,
+                EventType.AGENT_MESSAGE,
+                f"Review {'approved' if approved else 'requested changes'} "
+                f"({severity} severity, {comment_count} comments)",
+                agent="reviewer",
+                data={
+                    "approved": approved,
+                    "severity": severity,
+                    "comment_count": comment_count,
+                },
+            )
+
     async def recover_interrupted_workflows(self) -> None:
         """Recover workflows that were running when server crashed.
 
-        This is a placeholder - full implementation will be added
-        when LangGraph integration is complete.
+        Scans for workflows in non-terminal states (in_progress, blocked) and marks
+        them as failed with an appropriate reason. This prevents stale workflows from
+        persisting after server restarts.
+
+        Note:
+            This is a placeholder - full implementation will be added when LangGraph
+            integration is complete.
         """
         logger.info("Checking for interrupted workflows...")
         # TODO: Query for workflows with status=in_progress or blocked

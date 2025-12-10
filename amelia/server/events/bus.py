@@ -30,12 +30,14 @@ class EventBus:
 
     Attributes:
         _subscribers: List of callback functions to notify on emit.
+        _broadcast_tasks: Set of active broadcast tasks for cleanup tracking.
     """
 
     def __init__(self) -> None:
         """Initialize event bus with no subscribers."""
         self._subscribers: list[Callable[[WorkflowEvent], None]] = []
         self._connection_manager: ConnectionManager | None = None
+        self._broadcast_tasks: set[asyncio.Task[None]] = set()
 
     def subscribe(self, callback: Callable[[WorkflowEvent], None]) -> None:
         """Subscribe to workflow events.
@@ -61,6 +63,22 @@ class EventBus:
             manager: The ConnectionManager instance.
         """
         self._connection_manager = manager
+
+    def _handle_broadcast_done(self, task: asyncio.Task[None]) -> None:
+        """Handle completion of broadcast task.
+
+        Args:
+            task: The completed broadcast task.
+        """
+        self._broadcast_tasks.discard(task)
+        if not task.cancelled():
+            exc = task.exception()
+            if exc is not None:
+                logger.error(
+                    "WebSocket broadcast failed",
+                    error=str(exc),
+                    error_type=type(exc).__name__,
+                )
 
     def emit(self, event: WorkflowEvent) -> None:
         """Emit event to all subscribers synchronously.
@@ -94,4 +112,16 @@ class EventBus:
 
         # Broadcast to WebSocket clients
         if self._connection_manager:
-            asyncio.create_task(self._connection_manager.broadcast(event))
+            task = asyncio.create_task(self._connection_manager.broadcast(event))
+            self._broadcast_tasks.add(task)
+            task.add_done_callback(self._handle_broadcast_done)
+
+    async def cleanup(self) -> None:
+        """Wait for all pending broadcast tasks to complete.
+
+        Should be called during graceful shutdown to ensure all events
+        are delivered before the server stops.
+        """
+        if self._broadcast_tasks:
+            await asyncio.gather(*self._broadcast_tasks, return_exceptions=True)
+            self._broadcast_tasks.clear()

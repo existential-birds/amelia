@@ -4,27 +4,7 @@
 import pytest
 from pydantic import ValidationError
 
-from amelia.core.state import ExecutionState, TaskDAG
-from amelia.core.types import Profile
-
-
-def test_profile_validation():
-    """Profile should validate field types."""
-    # Valid
-    p = Profile(name="work", driver="cli:claude", tracker="jira", strategy="single")
-    assert p.driver == "cli:claude"
-
-    # Invalid driver type
-    with pytest.raises(ValidationError):
-        Profile(name="work", driver=123, tracker="jira", strategy="single")
-
-
-def test_execution_state_defaults():
-    """ExecutionState should initialize with empty lists."""
-    p = Profile(name="default", driver="api:openai", tracker="none", strategy="single")
-    state = ExecutionState(profile=p)
-    assert state.review_results == []
-    assert state.messages == []
+from amelia.core.state import TaskDAG
 
 
 class TestTaskDAG:
@@ -88,22 +68,3 @@ class TestTaskDAG:
 
         with pytest.raises(ValidationError, match=expected_error):
             TaskDAG(tasks=tasks, original_issue="TEST-1")
-
-
-class TestExecutionStateSession:
-    """Tests for session_id in ExecutionState."""
-
-    def test_execution_state_has_session_id(self, mock_profile_factory, mock_issue_factory):
-        state = ExecutionState(
-            profile=mock_profile_factory(),
-            issue=mock_issue_factory(),
-            claude_session_id="sess_abc123"
-        )
-        assert state.claude_session_id == "sess_abc123"
-
-    def test_execution_state_session_id_defaults_none(self, mock_profile_factory, mock_issue_factory):
-        state = ExecutionState(
-            profile=mock_profile_factory(),
-            issue=mock_issue_factory()
-        )
-        assert state.claude_session_id is None

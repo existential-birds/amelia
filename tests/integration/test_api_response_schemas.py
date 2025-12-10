@@ -7,7 +7,6 @@ These tests verify that the server responses match the client model schemas,
 preventing regressions like the CreateWorkflowResponse/WorkflowResponse mismatch.
 """
 import asyncio
-import socket
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
@@ -20,13 +19,6 @@ from amelia.client.models import CreateWorkflowResponse, WorkflowResponse
 from amelia.server.dependencies import get_orchestrator, get_repository
 from amelia.server.main import app
 from amelia.server.models.state import ServerExecutionState
-
-
-def find_free_port() -> int:
-    """Find an available port for testing."""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
 
 
 class TestAPIResponseSchemas:
@@ -59,7 +51,7 @@ class TestAPIResponseSchemas:
         return repository
 
     @pytest.fixture
-    async def server_with_mocks(self, mock_orchestrator, mock_repository):
+    async def server_with_mocks(self, mock_orchestrator, mock_repository, find_free_port):
         """Start server with mocked dependencies for testing."""
         # Override dependencies
         app.dependency_overrides[get_orchestrator] = lambda: mock_orchestrator
@@ -91,7 +83,6 @@ class TestAPIResponseSchemas:
         await task
         app.dependency_overrides.clear()
 
-    @pytest.mark.asyncio
     async def test_create_workflow_returns_minimal_response(self, server_with_mocks):
         """REGRESSION: POST /api/workflows returns CreateWorkflowResponse schema.
 
@@ -127,7 +118,6 @@ class TestAPIResponseSchemas:
         assert not hasattr(response, "started_at")
         assert not hasattr(response, "current_stage")
 
-    @pytest.mark.asyncio
     async def test_create_workflow_raw_response_schema(self, server_with_mocks):
         """Verify raw HTTP response matches CreateWorkflowResponse schema exactly."""
         async with httpx.AsyncClient() as http_client:
@@ -150,7 +140,6 @@ class TestAPIResponseSchemas:
         assert isinstance(data["status"], str)
         assert isinstance(data["message"], str)
 
-    @pytest.mark.asyncio
     async def test_get_workflow_returns_full_response(self, server_with_mocks):
         """GET /api/workflows/{id} returns WorkflowResponse with full details."""
         client = AmeliaClient(base_url=server_with_mocks)
@@ -166,7 +155,6 @@ class TestAPIResponseSchemas:
         assert response.worktree_name == "test-worktree"
         assert response.status == "pending"
 
-    @pytest.mark.asyncio
     async def test_get_workflow_raw_response_schema(self, server_with_mocks):
         """Verify raw HTTP response from GET includes full workflow details."""
         async with httpx.AsyncClient() as http_client:
@@ -190,7 +178,6 @@ class TestAPIResponseSchemas:
         assert data["issue_id"] == "TEST-456"
         assert data["worktree_path"] == "/test/path"
 
-    @pytest.mark.asyncio
     async def test_create_then_get_workflow_uses_different_schemas(
         self, server_with_mocks
     ):

@@ -62,17 +62,29 @@ def is_amelia_dev_repo() -> bool:
 
 
 def check_pnpm_installed() -> bool:
-    """Check if pnpm is available in PATH."""
+    """Check if pnpm is available in PATH.
+
+    Returns:
+        True if pnpm is available, False otherwise.
+    """
     return shutil.which("pnpm") is not None
 
 
 def check_node_installed() -> bool:
-    """Check if Node.js is available in PATH."""
+    """Check if Node.js is available in PATH.
+
+    Returns:
+        True if Node.js is available, False otherwise.
+    """
     return shutil.which("node") is not None
 
 
 def check_node_modules_exist() -> bool:
-    """Check if dashboard/node_modules exists."""
+    """Check if dashboard/node_modules exists.
+
+    Returns:
+        True if node_modules directory exists, False otherwise.
+    """
     return (Path.cwd() / "dashboard" / "node_modules").is_dir()
 
 
@@ -356,6 +368,7 @@ async def run_dev_mode(
 
     # Handle signals
     def signal_handler() -> None:
+        """Handle termination signals by requesting graceful shutdown."""
         manager.request_shutdown()
 
     for sig in (signal.SIGINT, signal.SIGTERM):

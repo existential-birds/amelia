@@ -4,12 +4,9 @@
 """Tests for WebSocket graceful shutdown in lifespan."""
 from unittest.mock import AsyncMock
 
-import pytest
-
 from amelia.server.events.connection_manager import ConnectionManager
 
 
-@pytest.mark.asyncio
 class TestWebSocketShutdown:
     """Tests for WebSocket shutdown during server lifecycle."""
 

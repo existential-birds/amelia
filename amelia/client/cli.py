@@ -33,6 +33,10 @@ def start_command(
     """Start a workflow for an issue.
 
     Detects the current git worktree and creates a new workflow via the API server.
+
+    Args:
+        issue_id: Issue ID to work on (e.g., ISSUE-123).
+        profile: Profile name for configuration.
     """
     # Detect worktree context
     try:
@@ -197,6 +201,9 @@ def status_command(
 
     By default, shows workflow for the current worktree only.
     Use --all to see workflows from all worktrees.
+
+    Args:
+        all_worktrees: Show workflows from all worktrees.
     """
     # Detect worktree context (if filtering to current)
     worktree_path = None
@@ -258,6 +265,9 @@ def cancel_command(
     """Cancel the active workflow in the current worktree.
 
     Requires confirmation unless --force is used.
+
+    Args:
+        force: Skip confirmation prompt.
     """
     # Detect worktree context
     try:

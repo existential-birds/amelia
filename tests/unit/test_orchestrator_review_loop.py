@@ -33,7 +33,7 @@ class TestReviewLoopLogic:
         plan = mock_task_dag_factory(tasks=[task1, task2])
         review = mock_review_result_factory(approved=False, severity="high")
 
-        state = mock_execution_state_factory(plan=plan, review_results=[review])
+        state = mock_execution_state_factory(plan=plan, last_review=review)
 
         result = should_continue_review_loop(state)
 
@@ -63,7 +63,7 @@ class TestReviewLoopLogic:
         plan = mock_task_dag_factory(tasks=[task1, task2])
         review = mock_review_result_factory(approved=False, severity="medium")
 
-        state = mock_execution_state_factory(plan=plan, review_results=[review])
+        state = mock_execution_state_factory(plan=plan, last_review=review)
 
         result = should_continue_review_loop(state)
 
@@ -93,7 +93,7 @@ class TestReviewLoopLogic:
         plan = mock_task_dag_factory(tasks=[task1, task2])
         review = mock_review_result_factory(approved=True, severity="low")
 
-        state = mock_execution_state_factory(plan=plan, review_results=[review])
+        state = mock_execution_state_factory(plan=plan, last_review=review)
 
         result = should_continue_review_loop(state)
 
@@ -126,7 +126,7 @@ class TestReviewLoopLogic:
         plan = mock_task_dag_factory(tasks=[task1, task2, task3])
         review = mock_review_result_factory(approved=False, severity="critical")
 
-        state = mock_execution_state_factory(plan=plan, review_results=[review])
+        state = mock_execution_state_factory(plan=plan, last_review=review)
 
         result = should_continue_review_loop(state)
 
@@ -135,11 +135,11 @@ class TestReviewLoopLogic:
             "approved but tasks are blocked by failed dependencies"
         )
 
-    def test_should_end_when_no_review_results(
+    def test_should_end_when_no_review(
         self, mock_execution_state_factory, mock_task_factory, mock_task_dag_factory
     ):
         """
-        When no review results exist, should return 'end'.
+        When no review exists, should return 'end'.
 
         Scenario:
         - No reviews have been performed yet
@@ -148,12 +148,12 @@ class TestReviewLoopLogic:
         task1 = mock_task_factory(id="1", status="pending", dependencies=[])
 
         plan = mock_task_dag_factory(tasks=[task1])
-        state = mock_execution_state_factory(plan=plan, review_results=[])
+        state = mock_execution_state_factory(plan=plan, last_review=None)
 
         result = should_continue_review_loop(state)
 
         assert result == "end", (
-            "should_continue_review_loop should return 'end' when no review results exist"
+            "should_continue_review_loop should return 'end' when no review exists"
         )
 
     def test_should_end_when_no_plan(
@@ -168,7 +168,7 @@ class TestReviewLoopLogic:
         - Should return "end" to prevent errors
         """
         review = mock_review_result_factory(approved=False, severity="high")
-        state = mock_execution_state_factory(plan=None, review_results=[review])
+        state = mock_execution_state_factory(plan=None, last_review=review)
 
         result = should_continue_review_loop(state)
 
@@ -200,7 +200,7 @@ class TestReviewLoopLogic:
         plan = mock_task_dag_factory(tasks=[task1, task2, task3])
         review = mock_review_result_factory(approved=False, severity="medium")
 
-        state = mock_execution_state_factory(plan=plan, review_results=[review])
+        state = mock_execution_state_factory(plan=plan, last_review=review)
 
         result = should_continue_review_loop(state)
 
@@ -209,7 +209,7 @@ class TestReviewLoopLogic:
             "tasks exist after some completions"
         )
 
-    def test_should_use_latest_review_result(
+    def test_should_reevaluate_when_review_disapproves_with_ready_tasks(
         self,
         mock_execution_state_factory,
         mock_task_factory,
@@ -217,28 +217,27 @@ class TestReviewLoopLogic:
         mock_review_result_factory,
     ):
         """
-        When multiple reviews exist, should use the latest review result.
+        Should return re_evaluate when review disapproves and ready tasks exist.
 
         Scenario:
-        - First review approved
-        - Second review disapproved
-        - Ready tasks exist
-        - Should return "re_evaluate" based on latest (disapproved) review
+        - Review disapproved with high severity
+        - Ready tasks exist (pending task with no dependencies)
+        - Should return "re_evaluate" to continue development
         """
         task1 = mock_task_factory(id="1", status="pending", dependencies=[])
 
         plan = mock_task_dag_factory(tasks=[task1])
-        review1 = mock_review_result_factory(approved=True, severity="low")
-        review2 = mock_review_result_factory(approved=False, severity="high")
+        review = mock_review_result_factory(approved=False, severity="high")
 
         state = mock_execution_state_factory(
-            plan=plan, review_results=[review1, review2]
+            plan=plan, last_review=review
         )
 
         result = should_continue_review_loop(state)
 
         assert result == "re_evaluate", (
-            "should_continue_review_loop should use latest review result"
+            "should_continue_review_loop should return 're_evaluate' when review "
+            "disapproves and ready tasks exist"
         )
 
 

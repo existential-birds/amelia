@@ -1,6 +1,7 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
+import asyncio
 import os
 from typing import Any, Literal
 
@@ -127,7 +128,7 @@ class Developer:
         """Display streaming event to terminal.
 
         Args:
-            event: ClaudeStreamEvent to display.
+            event: Stream event to display.
         """
         if event.type == "tool_use":
             typer.secho(f"  -> {event.tool_name}", fg=typer.colors.CYAN)
@@ -136,7 +137,7 @@ class Developer:
                 suffix = "..." if len(str(event.tool_input)) > 100 else ""
                 typer.echo(f"    {preview}{suffix}")
 
-        elif event.type == "tool_result":
+        elif event.type == "result":
             typer.secho("  Done", fg=typer.colors.GREEN)
 
         elif event.type == "assistant" and event.content:
@@ -186,15 +187,19 @@ class Developer:
 
                 return {"status": "completed", "output": "\n".join(results)}
 
-            if task.description.lower().startswith("run shell command:"):
-                command = task.description[len("run shell command:"):].strip()
+            task_desc_lower = task.description.lower().strip()
+
+            if task_desc_lower.startswith("run shell command:"):
+                prefix_len = len("run shell command:")
+                command = task.description[prefix_len:].strip()
                 logger.info(f"Developer executing shell command: {command}")
                 result = await self.driver.execute_tool(ToolName.RUN_SHELL_COMMAND, command=command)
                 return {"status": "completed", "output": result}
 
-            elif task.description.lower().startswith("write file:"):
+            elif task_desc_lower.startswith("write file:"):
                 logger.info(f"Developer executing write file task: {task.description}")
 
+                # Using original description for content extraction
                 if " with " in task.description:
                     parts = task.description.split(" with ", 1)
                     path_part = parts[0]
@@ -202,7 +207,7 @@ class Developer:
                 else:
                     path_part = task.description
                     content = ""
-
+                
                 file_path = path_part[len("write file:"):].strip()
 
                 result = await self.driver.execute_tool(ToolName.WRITE_FILE, file_path=file_path, content=content)
@@ -217,6 +222,11 @@ class Developer:
                 llm_response = await self.driver.generate(messages=messages)
                 return {"status": "completed", "output": llm_response}
 
+        except (KeyboardInterrupt, SystemExit, asyncio.CancelledError):
+            raise
         except Exception as e:
-            logger.error(f"Developer task execution failed: {e}")
+            logger.exception(
+                "Developer task execution failed",
+                error_type=type(e).__name__,
+            )
             return {"status": "failed", "output": str(e), "error": str(e)}

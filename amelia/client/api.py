@@ -154,12 +154,15 @@ class AmeliaClient:
         """Approve a workflow plan.
 
         Args:
-            workflow_id: Workflow ID to approve
+            workflow_id: Workflow ID to approve.
+
+        Returns:
+            None on success.
 
         Raises:
-            WorkflowNotFoundError: If workflow doesn't exist
-            InvalidRequestError: If workflow is not in a state that can be approved
-            ServerUnreachableError: If server is not running
+            WorkflowNotFoundError: If workflow doesn't exist.
+            InvalidRequestError: If workflow is not in a state that can be approved.
+            ServerUnreachableError: If server is not running.
         """
         try:
             async with httpx.AsyncClient(timeout=self._timeout) as client:
@@ -185,13 +188,16 @@ class AmeliaClient:
         """Reject a workflow plan.
 
         Args:
-            workflow_id: Workflow ID to reject
-            reason: Reason for rejection
+            workflow_id: Workflow ID to reject.
+            reason: Reason for rejection.
+
+        Returns:
+            None on success.
 
         Raises:
-            WorkflowNotFoundError: If workflow doesn't exist
-            InvalidRequestError: If workflow is not in a state that can be rejected
-            ServerUnreachableError: If server is not running
+            WorkflowNotFoundError: If workflow doesn't exist.
+            InvalidRequestError: If workflow is not in a state that can be rejected.
+            ServerUnreachableError: If server is not running.
         """
         request = RejectWorkflowRequest(feedback=reason)
 
@@ -220,11 +226,14 @@ class AmeliaClient:
         """Cancel an active workflow.
 
         Args:
-            workflow_id: Workflow ID to cancel
+            workflow_id: Workflow ID to cancel.
+
+        Returns:
+            None on success.
 
         Raises:
-            WorkflowNotFoundError: If workflow doesn't exist
-            ServerUnreachableError: If server is not running
+            WorkflowNotFoundError: If workflow doesn't exist.
+            ServerUnreachableError: If server is not running.
         """
         try:
             async with httpx.AsyncClient(timeout=self._timeout) as client:

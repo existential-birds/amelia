@@ -10,7 +10,6 @@ import pytest
 from fastapi import WebSocketDisconnect
 
 from amelia.server.events.connection_manager import ConnectionManager
-from amelia.server.models.events import EventType, WorkflowEvent
 
 
 class TestConnectionManager:
@@ -30,7 +29,6 @@ class TestConnectionManager:
         ws.close = AsyncMock()
         return ws
 
-    @pytest.mark.asyncio
     async def test_disconnect_removes_connection(self, manager, mock_websocket):
         """disconnect() removes connection from tracking."""
         await manager.connect(mock_websocket)
@@ -38,7 +36,6 @@ class TestConnectionManager:
 
         assert manager.active_connections == 0
 
-    @pytest.mark.asyncio
     async def test_subscribe_multiple_workflows(self, manager, mock_websocket):
         """Can subscribe to multiple workflows."""
         await manager.connect(mock_websocket)
@@ -48,7 +45,6 @@ class TestConnectionManager:
         assert "wf-123" in manager._connections[mock_websocket]
         assert "wf-456" in manager._connections[mock_websocket]
 
-    @pytest.mark.asyncio
     async def test_subscribe_all_clears_subscription_set(self, manager, mock_websocket):
         """subscribe_all() clears subscription set (empty = all)."""
         await manager.connect(mock_websocket)
@@ -66,22 +62,18 @@ class TestConnectionManager:
         ],
         ids=["subscribe_all", "specific_match", "no_match"],
     )
-    @pytest.mark.asyncio
     async def test_broadcast_filtering(
-        self, manager, mock_websocket, subscription_workflow, event_workflow, should_send
+        self, manager, mock_websocket, subscription_workflow, event_workflow, should_send, make_event
     ):
         """broadcast() respects subscription filters."""
         await manager.connect(mock_websocket)
         if subscription_workflow:
             await manager.subscribe(mock_websocket, subscription_workflow)
 
-        event = WorkflowEvent(
+        event = make_event(
             id="evt-123",
             workflow_id=event_workflow,
-            sequence=1,
             timestamp=datetime.now(UTC),
-            agent="system",
-            event_type=EventType.WORKFLOW_STARTED,
             message="Started",
         )
 
@@ -92,19 +84,15 @@ class TestConnectionManager:
         else:
             mock_websocket.send_json.assert_not_awaited()
 
-    @pytest.mark.asyncio
-    async def test_broadcast_handles_disconnected_socket(self, manager, mock_websocket):
+    async def test_broadcast_handles_disconnected_socket(self, manager, mock_websocket, make_event):
         """broadcast() removes disconnected sockets gracefully."""
         await manager.connect(mock_websocket)
         mock_websocket.send_json.side_effect = WebSocketDisconnect()
 
-        event = WorkflowEvent(
+        event = make_event(
             id="evt-123",
             workflow_id="wf-456",
-            sequence=1,
             timestamp=datetime.now(UTC),
-            agent="system",
-            event_type=EventType.WORKFLOW_STARTED,
             message="Started",
         )
 
@@ -113,7 +101,6 @@ class TestConnectionManager:
         # Connection should be removed after disconnect
         assert manager.active_connections == 0
 
-    @pytest.mark.asyncio
     async def test_close_all_handles_errors(self, manager, mock_websocket):
         """close_all() handles errors gracefully."""
         mock_websocket.close.side_effect = Exception("Close failed")
@@ -124,7 +111,6 @@ class TestConnectionManager:
         # Should not raise, just clear connections
         assert manager.active_connections == 0
 
-    @pytest.mark.asyncio
     async def test_active_connections_count(self, manager):
         """active_connections property returns correct count."""
         ws1 = AsyncMock()

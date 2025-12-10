@@ -57,7 +57,14 @@ class WorktreeHealthChecker:
         """Periodically check all active worktrees."""
         while True:
             await asyncio.sleep(self._check_interval)
-            await self._check_all_worktrees()
+            try:
+                await self._check_all_worktrees()
+            except Exception as e:
+                logger.error(
+                    "Health check failed - continuing loop",
+                    error=str(e),
+                    error_type=type(e).__name__,
+                )
 
     async def _check_all_worktrees(self) -> None:
         """Check health of all active workflow worktrees."""

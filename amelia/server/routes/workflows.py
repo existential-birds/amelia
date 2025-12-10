@@ -40,7 +40,7 @@ from amelia.server.orchestrator.service import OrchestratorService
 router = APIRouter(prefix="/workflows", tags=["workflows"])
 
 
-@router.post("", status_code=status.HTTP_201_CREATED)
+@router.post("", status_code=status.HTTP_201_CREATED, response_model=CreateWorkflowResponse)
 async def create_workflow(
     request: CreateWorkflowRequest,
     orchestrator: OrchestratorService = Depends(get_orchestrator),
@@ -76,7 +76,7 @@ async def create_workflow(
     )
 
 
-@router.get("")
+@router.get("", response_model=WorkflowListResponse)
 async def list_workflows(
     status: WorkflowStatus | None = None,
     worktree: str | None = None,
@@ -158,7 +158,7 @@ async def list_workflows(
     )
 
 
-@router.get("/active")
+@router.get("/active", response_model=WorkflowListResponse)
 async def list_active_workflows(
     worktree: str | None = None,
     repository: WorkflowRepository = Depends(get_repository),
@@ -196,7 +196,7 @@ async def list_active_workflows(
     )
 
 
-@router.get("/{workflow_id}")
+@router.get("/{workflow_id}", response_model=WorkflowDetailResponse)
 async def get_workflow(
     workflow_id: str,
     repository: WorkflowRepository = Depends(get_repository),
@@ -237,7 +237,7 @@ async def get_workflow(
     )
 
 
-@router.post("/{workflow_id}/cancel")
+@router.post("/{workflow_id}/cancel", response_model=ActionResponse)
 async def cancel_workflow(
     workflow_id: str,
     orchestrator: OrchestratorService = Depends(get_orchestrator),
@@ -260,7 +260,7 @@ async def cancel_workflow(
     return ActionResponse(status="cancelled", workflow_id=workflow_id)
 
 
-@router.post("/{workflow_id}/approve")
+@router.post("/{workflow_id}/approve", response_model=ActionResponse)
 async def approve_workflow(
     workflow_id: str,
     orchestrator: OrchestratorService = Depends(get_orchestrator),
@@ -283,7 +283,7 @@ async def approve_workflow(
     return ActionResponse(status="approved", workflow_id=workflow_id)
 
 
-@router.post("/{workflow_id}/reject")
+@router.post("/{workflow_id}/reject", response_model=ActionResponse)
 async def reject_workflow(
     workflow_id: str,
     request: RejectRequest,

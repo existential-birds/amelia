@@ -38,8 +38,13 @@ app.command(name="cancel", help="Cancel the active workflow in the current workt
 
 @app.callback()
 def main_callback() -> None:
-    """
-    Amelia: A local agentic coding system.
+    """Initialize the Amelia CLI application.
+
+    Configures logging for all CLI commands. Called automatically by Typer
+    before any subcommand execution.
+
+    Returns:
+        None.
     """
     configure_logging()
 
@@ -132,24 +137,7 @@ def start_local(
 
     # Run the orchestrator
     try:
-        # check if there is a running event loop
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = None
-
-        if loop and loop.is_running():
-            # If we are already in an async environment (e.g. tests), use the existing loop
-            # This technically shouldn't happen with standard Typer usage but good for safety
-             typer.echo("Warning: event loop already running, using existing loop", err=True)
-             # We can't await here easily because start() is sync.
-             # But Typer/Click commands are usually sync entry points.
-             # If we really are in a loop, we might need a different approach or just fail.
-             # For now, let's assume standard CLI usage where no loop exists yet.
-             raise RuntimeError("Async event loop already running. Cannot use asyncio.run()")
-
         asyncio.run(app_graph.ainvoke(initial_state))
-
     except Exception as e:
         typer.echo(f"An unexpected error occurred during orchestration: {e}", err=True)
         raise typer.Exit(code=1) from None
@@ -294,10 +282,10 @@ def review(
                 )
                 
                 # Directly call the reviewer node, it will use the driver from profile
-                result_state = await call_reviewer_node(initial_state)
-                
-                if result_state.review_results:
-                    review_result = result_state.review_results[-1]
+                result_dict = await call_reviewer_node(initial_state)
+
+                if result_dict.get("last_review"):
+                    review_result = result_dict["last_review"]
                     typer.echo(f"\n--- REVIEW RESULT ({review_result.reviewer_persona}) ---")
                     typer.echo(f"Approved: {review_result.approved}")
                     typer.echo(f"Severity: {review_result.severity}")

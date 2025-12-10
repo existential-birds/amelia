@@ -1,9 +1,16 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+"""LangGraph state machine orchestrator for coordinating AI agents.
+
+Implements the core workflow: Issue → Architect (plan) → Human Approval →
+Developer (execute) ↔ Reviewer (review) → Done. Provides node functions for
+the state machine and the create_orchestrator_graph() factory.
+"""
 import os
 import subprocess
-from typing import Any
+from typing import Any, Literal
 
 import typer
 from langchain_core.runnables.config import RunnableConfig
@@ -15,60 +22,60 @@ from loguru import logger
 from amelia.agents.architect import Architect
 from amelia.agents.developer import Developer
 from amelia.agents.reviewer import Reviewer
-from amelia.core.state import AgentMessage, ExecutionState, TaskDAG
+from amelia.core.state import ExecutionState, TaskDAG
 from amelia.drivers.factory import DriverFactory
 
 
 # Define nodes for the graph
-async def call_architect_node(state: ExecutionState) -> ExecutionState:
+async def call_architect_node(state: ExecutionState) -> dict[str, Any]:
     """Orchestrator node for the Architect agent to generate a plan.
 
     Args:
         state: Current execution state containing the issue and profile.
 
     Returns:
-        Updated execution state with the generated plan and messages.
+        Partial state dict with the generated plan.
 
     Raises:
         ValueError: If no issue is provided in the state.
     """
     issue_id_for_log = state.issue.id if state.issue else "No Issue Provided"
     logger.info(f"Orchestrator: Calling Architect for issue {issue_id_for_log}")
-    
+
     if state.issue is None:
         raise ValueError("Cannot call Architect: no issue provided in state.")
-        
+
     driver = DriverFactory.get_driver(state.profile.driver)
     architect = Architect(driver)
     plan_output = await architect.plan(state.issue, output_dir=state.profile.plan_output_dir)
 
-    # Add a message to the state history
-    messages = state.messages + [AgentMessage(role="assistant", content=f"Architect generated plan with {len(plan_output.task_dag.tasks)} tasks.")]
-
-    # Return the updated state
-    return ExecutionState(
-        profile=state.profile,
-        issue=state.issue,
-        plan=plan_output.task_dag,
-        messages=messages
+    # Log the agent action
+    logger.info(
+        "Agent action completed",
+        agent="architect",
+        action="generated_plan",
+        details={"task_count": len(plan_output.task_dag.tasks)},
     )
+
+    # Return partial state update
+    return {"plan": plan_output.task_dag}
 
 async def human_approval_node(
     state: ExecutionState,
     config: RunnableConfig | None = None,
-) -> ExecutionState:
+) -> dict[str, Any]:
     """Node to prompt for human approval before proceeding.
 
     Behavior depends on execution mode:
     - CLI mode: Blocking prompt via typer.confirm
-    - Server mode: Returns state unchanged (interrupt mechanism handles pause)
+    - Server mode: Returns empty dict (interrupt mechanism handles pause)
 
     Args:
         state: Current execution state containing the plan to be reviewed.
         config: Optional RunnableConfig with execution_mode in configurable.
 
     Returns:
-        Updated execution state with approval status and messages.
+        Partial state dict with approval status, or empty dict for server mode.
     """
     config = config or {}
     execution_mode = config.get("configurable", {}).get("execution_mode", "cli")
@@ -76,8 +83,8 @@ async def human_approval_node(
     if execution_mode == "server":
         # Server mode: approval comes from resumed state after interrupt
         # If human_approved is already set (from resume), use it
-        # Otherwise, just return - the interrupt mechanism will pause here
-        return state
+        # Otherwise, just return empty dict - the interrupt mechanism will pause here
+        return {}
 
     # CLI mode: blocking prompt
     typer.secho("\n--- HUMAN APPROVAL REQUIRED ---", fg=typer.colors.BRIGHT_YELLOW)
@@ -90,16 +97,14 @@ async def human_approval_node(
     approved = typer.confirm("Do you approve this plan to proceed with development?", default=True)
     comment = typer.prompt("Add an optional comment for the audit log (press Enter to skip)", default="")
 
-    approval_message = f"Human approval: {'Approved' if approved else 'Rejected'}. Comment: {comment}"
-    messages = state.messages + [AgentMessage(role="system", content=approval_message)]
-
-    return ExecutionState(
-        profile=state.profile,
-        issue=state.issue,
-        plan=state.plan,
-        messages=messages,
-        human_approved=approved
+    # Log the approval decision
+    logger.info(
+        "Human approval received",
+        approved=approved,
+        comment=comment,
     )
+
+    return {"human_approved": approved}
 
 async def get_code_changes_for_review(state: ExecutionState) -> str:
     """Retrieves code changes for review.
@@ -129,14 +134,14 @@ async def get_code_changes_for_review(state: ExecutionState) -> str:
     except Exception as e:
         return f"Failed to execute git diff: {str(e)}"
 
-async def call_reviewer_node(state: ExecutionState) -> ExecutionState:
+async def call_reviewer_node(state: ExecutionState) -> dict[str, Any]:
     """Orchestrator node for the Reviewer agent to review code changes.
 
     Args:
         state: Current execution state containing issue and plan information.
 
     Returns:
-        Updated execution state with review results and messages.
+        Partial state dict with review results.
     """
     logger.info(f"Orchestrator: Calling Reviewer for issue {state.issue.id if state.issue else 'N/A'}")
     driver = DriverFactory.get_driver(state.profile.driver)
@@ -145,23 +150,21 @@ async def call_reviewer_node(state: ExecutionState) -> ExecutionState:
     code_changes = await get_code_changes_for_review(state)
     review_result = await reviewer.review(state, code_changes)
 
-    review_msg = f"Reviewer completed review: {review_result.severity}, Approved: {review_result.approved}."
-    logger.info(review_msg)
-    messages = state.messages + [AgentMessage(role="assistant", content=review_msg)]
-    
-    # Update state with review results
-    review_results = state.review_results + [review_result]
-
-    return ExecutionState(
-        profile=state.profile,
-        issue=state.issue,
-        plan=state.plan,
-        messages=messages,
-        human_approved=state.human_approved,
-        review_results=review_results
+    # Log the review completion
+    logger.info(
+        "Agent action completed",
+        agent="reviewer",
+        action="review_completed",
+        details={
+            "severity": review_result.severity,
+            "approved": review_result.approved,
+            "comment_count": len(review_result.comments),
+        },
     )
 
-async def call_developer_node(state: ExecutionState) -> ExecutionState:
+    return {"last_review": review_result}
+
+async def call_developer_node(state: ExecutionState) -> dict[str, Any]:
     """Orchestrator node for the Developer agent to execute tasks.
 
     Executes ready tasks, passing execution_mode and working directory from profile.
@@ -170,13 +173,13 @@ async def call_developer_node(state: ExecutionState) -> ExecutionState:
         state: Current execution state containing the plan and tasks.
 
     Returns:
-        Updated execution state with task results and messages.
+        Partial state dict with task results.
     """
     logger.info("Orchestrator: Calling Developer to execute tasks.")
 
     if not state.plan or not state.plan.tasks:
         logger.info("Orchestrator: No plan or tasks to execute.")
-        return state
+        return {}
 
     driver = DriverFactory.get_driver(state.profile.driver)
     developer = Developer(driver, execution_mode=state.profile.execution_mode)
@@ -188,77 +191,65 @@ async def call_developer_node(state: ExecutionState) -> ExecutionState:
 
     if not ready_tasks:
         logger.info("Orchestrator: No ready tasks found to execute in this iteration.")
-        return state
+        return {}
 
     logger.info(f"Orchestrator: Executing {len(ready_tasks)} ready tasks.")
 
-    updated_messages = list(state.messages)
+    # Create a mutable copy of tasks to update immutably
+    updated_tasks = list(state.plan.tasks)
 
     for task in ready_tasks:
-        task.status = "in_progress"
+        # Find the index of this task in the updated_tasks list
+        task_idx = next(j for j, t in enumerate(updated_tasks) if t.id == task.id)
+
+        # Update status to in_progress (immutably)
+        updated_tasks[task_idx] = task.model_copy(update={"status": "in_progress"})
         logger.info(f"Orchestrator: Developer executing task {task.id}")
 
         try:
             result = await developer.execute_task(task, cwd=cwd)
 
             if result.get("status") == "completed":
-                task.status = "completed"
+                # Update status to completed (immutably)
+                updated_tasks[task_idx] = updated_tasks[task_idx].model_copy(update={"status": "completed"})
                 output_content = result.get("output", "No output")
-                updated_messages.append(
-                    AgentMessage(
-                        role="assistant",
-                        content=f"Task {task.id} completed. Output: {output_content}",
-                    )
+                logger.info(
+                    "Task completed",
+                    task_id=task.id,
+                    output=output_content,
                 )
             else:
-                task.status = "failed"
-                updated_messages.append(
-                    AgentMessage(
-                        role="assistant",
-                        content=f"Task {task.id} failed. Error: {result.get('error', 'Unknown')}",
-                    )
+                # Update status to failed (immutably)
+                updated_tasks[task_idx] = updated_tasks[task_idx].model_copy(update={"status": "failed"})
+                logger.error(
+                    "Task failed",
+                    task_id=task.id,
+                    error=result.get("error", "Unknown"),
                 )
 
         except Exception as e:
-            task.status = "failed"
-            updated_messages.append(
-                AgentMessage(
-                    role="assistant", content=f"Task {task.id} failed. Error: {e}"
-                )
-            )
+            # Update status to failed (immutably)
+            updated_tasks[task_idx] = updated_tasks[task_idx].model_copy(update={"status": "failed"})
             logger.error(f"Task {task.id} failed: {e}")
 
             # For agentic mode, fail fast
             if state.profile.execution_mode == "agentic":
                 updated_plan = TaskDAG(
-                    tasks=state.plan.tasks, original_issue=state.plan.original_issue
+                    tasks=updated_tasks, original_issue=state.plan.original_issue
                 )
-                return ExecutionState(
-                    profile=state.profile,
-                    issue=state.issue,
-                    plan=updated_plan,
-                    messages=updated_messages,
-                    human_approved=state.human_approved,
-                    review_results=state.review_results,
-                    workflow_status="failed",
-                )
+                return {"plan": updated_plan, "workflow_status": "failed"}
 
     updated_plan = TaskDAG(
-        tasks=state.plan.tasks, original_issue=state.plan.original_issue
+        tasks=updated_tasks, original_issue=state.plan.original_issue
     )
 
-    return ExecutionState(
-        profile=state.profile,
-        issue=state.issue,
-        plan=updated_plan,
-        current_task_id=ready_tasks[0].id if ready_tasks else state.current_task_id,
-        messages=updated_messages,
-        human_approved=state.human_approved,
-        review_results=state.review_results,
-    )
+    return {
+        "plan": updated_plan,
+        "current_task_id": ready_tasks[0].id if ready_tasks else state.current_task_id
+    }
 
 # Define a conditional edge to decide if more tasks need to be run
-def should_continue_developer(state: ExecutionState) -> str:
+def should_continue_developer(state: ExecutionState) -> Literal["continue", "end"]:
     """Determine whether to continue the developer loop.
 
     Args:
@@ -270,7 +261,7 @@ def should_continue_developer(state: ExecutionState) -> str:
     """
     if not state.plan:
         return "end"
-    
+
     # Check for ready tasks, not just pending tasks.
     # This prevents infinite loops when tasks are blocked by failed dependencies.
     ready_tasks = state.plan.get_ready_tasks()
@@ -278,17 +269,17 @@ def should_continue_developer(state: ExecutionState) -> str:
         return "continue"
     return "end"
 
-def should_continue_review_loop(state: ExecutionState) -> str:
-    """Determine whether to continue the review loop.
+def should_continue_review_loop(state: ExecutionState) -> Literal["re_evaluate", "end"]:
+    """Determine if review loop should continue based on last review.
 
     Args:
-        state: Current execution state containing review results and plan.
+        state: Current execution state containing last review and plan.
 
     Returns:
         're_evaluate' if review was not approved AND there are tasks to execute.
         'end' if review was approved or no tasks are ready (workflow is stuck).
     """
-    if state.review_results and not state.review_results[-1].approved:
+    if state.last_review and not state.last_review.approved:
         # Only re-evaluate if there are tasks that can be executed
         if state.plan and state.plan.get_ready_tasks():
             return "re_evaluate"
@@ -299,6 +290,17 @@ def should_continue_review_loop(state: ExecutionState) -> str:
         )
         return "end"
     return "end"
+
+def route_approval(state: ExecutionState) -> Literal["approve", "reject"]:
+    """Route based on human approval status.
+
+    Args:
+        state: Current execution state containing human_approved flag.
+
+    Returns:
+        'approve' if human_approved is True, 'reject' otherwise.
+    """
+    return "approve" if state.human_approved else "reject"
 
 def create_orchestrator_graph(
     checkpoint_saver: BaseCheckpointSaver[Any] | None = None,
@@ -331,7 +333,7 @@ def create_orchestrator_graph(
     # Conditional edge from human_approval_node: if approved, go to developer_node, else END
     workflow.add_conditional_edges(
         "human_approval_node",
-        lambda state: "approve" if state.human_approved else "reject",
+        route_approval,
         {
             "approve": "developer_node",
             "reject": END

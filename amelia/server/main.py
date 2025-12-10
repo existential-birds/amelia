@@ -45,8 +45,8 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, HTTPException, Response
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from amelia import __version__
@@ -117,8 +117,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # Create event bus
     event_bus = EventBus()
-    # Wire WebSocket broadcasting
+    # Wire WebSocket broadcasting and repository
     event_bus.set_connection_manager(connection_manager)
+    connection_manager.set_repository(repository)
 
     # Create and register orchestrator
     orchestrator = OrchestratorService(
@@ -153,7 +154,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     yield
 
     # Shutdown - stop components in reverse order
-    # Close WebSocket connections first
+    # Wait for pending broadcast tasks before closing connections
+    await event_bus.cleanup()
+    # Close WebSocket connections
     await connection_manager.close_all(code=1001, reason="Server shutting down")
 
     await health_checker.stop()
@@ -193,7 +196,7 @@ def create_app() -> FastAPI:
     bundled_static_dir = Path(__file__).parent / "static"
     dev_dashboard_dir = Path(__file__).parent.parent.parent / "dashboard" / "dist"
 
-    # Use bundled static if it has an index.html, otherwise use dev dashboard
+    # Determine dashboard directory (None if not built)
     if (bundled_static_dir / "index.html").exists():
         dashboard_dir = bundled_static_dir
     elif dev_dashboard_dir.exists():
@@ -201,52 +204,40 @@ def create_app() -> FastAPI:
     else:
         dashboard_dir = None
 
+    # Mount assets if dashboard exists
     if dashboard_dir is not None:
-        # Serve static assets (JS, CSS, images)
         assets_dir = dashboard_dir / "assets"
         if assets_dir.exists():
             application.mount(
                 "/assets", StaticFiles(directory=assets_dir), name="assets"
             )
 
-        # SPA fallback: serve index.html for all non-API routes
-        @application.api_route("/{full_path:path}", methods=["GET", "HEAD"])
-        async def serve_dashboard(full_path: str) -> FileResponse:
-            """Serve dashboard index.html for client-side routing."""
-            # Skip API and WebSocket routes
-            if full_path.startswith("api/") or full_path.startswith("ws/"):
-                # Let the 404 handler deal with unknown API routes
-                raise HTTPException(status_code=404, detail="Not found")
+    # Single SPA fallback route - handles both "built" and "not built" cases at runtime
+    @application.api_route(
+        "/{full_path:path}", methods=["GET", "HEAD"], include_in_schema=False
+    )
+    async def serve_dashboard(full_path: str) -> Response:
+        """Serve dashboard index.html or return build instructions.
 
+        This route handles all non-API paths:
+        - If dashboard is built: serves index.html for SPA client-side routing
+        - If dashboard is not built: returns JSON with build instructions
+        """
+        # Skip API and WebSocket routes - let 404 handler deal with them
+        if full_path.startswith("api/") or full_path.startswith("ws/"):
+            raise HTTPException(status_code=404, detail="Not found")
+
+        # Serve dashboard if built
+        if dashboard_dir is not None:
             index_file = dashboard_dir / "index.html"
             if index_file.exists():
                 return FileResponse(index_file)
 
-            raise HTTPException(status_code=404, detail="Dashboard not built")
-
-    else:
-
-        @application.api_route("/", methods=["GET", "HEAD"])
-        async def dashboard_not_built() -> dict[str, str]:
-            """Inform user that dashboard needs to be built."""
-            return {
-                "message": "Dashboard not built",
-                "instructions": "Run 'cd dashboard && pnpm run build' to build the dashboard",
-            }
-
-        # SPA fallback: return instructions for all non-API routes
-        @application.api_route("/{full_path:path}", methods=["GET", "HEAD"])
-        async def spa_fallback_not_built(full_path: str) -> dict[str, str]:
-            """Inform user about missing dashboard for SPA routes."""
-            # Skip API and WebSocket routes
-            if full_path.startswith("api/") or full_path.startswith("ws/"):
-                # Let the 404 handler deal with unknown API routes
-                raise HTTPException(status_code=404, detail="Not found")
-
-            return {
-                "message": "Dashboard not built",
-                "instructions": "Run 'cd dashboard && pnpm run build' to build the dashboard",
-            }
+        # Dashboard not built - return instructions
+        return JSONResponse({
+            "message": "Dashboard not built",
+            "instructions": "Run 'cd dashboard && pnpm run build' to build the dashboard",
+        })
 
     return application
 

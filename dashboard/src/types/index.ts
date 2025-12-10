@@ -117,6 +117,12 @@ export interface WorkflowDetail extends WorkflowSummary {
  * - `review_completed`: Reviewer approved the changes
  * - `revision_requested`: Reviewer requested changes
  *
+ * **Agent messages**: Task-level messages and status updates
+ * - `agent_message`: A message from an agent during task execution
+ * - `task_started`: A task has started execution
+ * - `task_completed`: A task has completed successfully
+ * - `task_failed`: A task has failed with an error
+ *
  * **System events**: Errors and warnings
  * - `system_error`: An error occurred during execution
  * - `system_warning`: A warning was issued
@@ -142,6 +148,11 @@ export type EventType =
   | 'review_requested'
   | 'review_completed'
   | 'revision_requested'
+  // Agent messages (replaces in-state message accumulation)
+  | 'agent_message'
+  | 'task_started'
+  | 'task_completed'
+  | 'task_failed'
   // System
   | 'system_error'
   | 'system_warning';

@@ -9,7 +9,7 @@ from uuid import uuid4
 import pytest
 
 from amelia.server.database.repository import WorkflowRepository
-from amelia.server.models import EventType, WorkflowEvent
+from amelia.server.models import EventType
 from amelia.server.models.state import InvalidStateTransitionError, ServerExecutionState
 
 
@@ -21,7 +21,6 @@ class TestWorkflowRepository:
         """WorkflowRepository instance."""
         return WorkflowRepository(db_with_schema)
 
-    @pytest.mark.asyncio
     async def test_create_workflow(self, repository):
         """Can create a workflow."""
         state = ServerExecutionState(
@@ -38,7 +37,6 @@ class TestWorkflowRepository:
         assert retrieved is not None
         assert retrieved.issue_id == "ISSUE-123"
 
-    @pytest.mark.asyncio
     async def test_get_by_worktree(self, repository):
         """Can get active workflow by worktree path."""
         state = ServerExecutionState(
@@ -54,7 +52,6 @@ class TestWorkflowRepository:
         assert retrieved is not None
         assert retrieved.id == state.id
 
-    @pytest.mark.asyncio
     async def test_get_by_worktree_only_active(self, repository):
         """get_by_worktree only returns active workflows."""
         # Create completed workflow
@@ -71,7 +68,6 @@ class TestWorkflowRepository:
         result = await repository.get_by_worktree("/path/to/repo")
         assert result is None
 
-    @pytest.mark.asyncio
     async def test_update_workflow(self, repository):
         """Can update workflow state."""
         state = ServerExecutionState(
@@ -91,7 +87,6 @@ class TestWorkflowRepository:
         assert retrieved.workflow_status == "in_progress"
         assert retrieved.started_at is not None
 
-    @pytest.mark.asyncio
     async def test_set_status_validates_transition(self, repository):
         """set_status validates state machine transitions."""
         state = ServerExecutionState(
@@ -107,7 +102,6 @@ class TestWorkflowRepository:
         with pytest.raises(InvalidStateTransitionError):
             await repository.set_status(state.id, "completed")
 
-    @pytest.mark.asyncio
     async def test_set_status_with_failure_reason(self, repository):
         """set_status can set failure reason."""
         state = ServerExecutionState(
@@ -125,7 +119,6 @@ class TestWorkflowRepository:
         assert retrieved.workflow_status == "failed"
         assert retrieved.failure_reason == "Something went wrong"
 
-    @pytest.mark.asyncio
     async def test_list_active_workflows(self, repository):
         """Can list all active workflows."""
         # Create various workflows
@@ -165,8 +158,7 @@ class TestWorkflowRepository:
     # Event Persistence Tests
     # =========================================================================
 
-    @pytest.mark.asyncio
-    async def test_save_event(self, repository):
+    async def test_save_event(self, repository, make_event):
         """Should persist event to database."""
         # First create a workflow (required for foreign key)
         state = ServerExecutionState(
@@ -179,10 +171,9 @@ class TestWorkflowRepository:
         )
         await repository.create(state)
 
-        event = WorkflowEvent(
+        event = make_event(
             id="evt-1",
             workflow_id="wf-1",
-            sequence=1,
             timestamp=datetime.now(UTC),
             agent="architect",
             event_type=EventType.STAGE_STARTED,
@@ -195,8 +186,7 @@ class TestWorkflowRepository:
         max_seq = await repository.get_max_event_sequence("wf-1")
         assert max_seq == 1
 
-    @pytest.mark.asyncio
-    async def test_get_max_event_sequence_with_events(self, repository):
+    async def test_get_max_event_sequence_with_events(self, repository, make_event):
         """Should return max sequence number."""
         # First create a workflow
         state = ServerExecutionState(
@@ -211,13 +201,11 @@ class TestWorkflowRepository:
 
         # Create events with sequences 1, 2, 3
         for seq in [1, 2, 3]:
-            event = WorkflowEvent(
+            event = make_event(
                 id=f"evt-{seq}",
                 workflow_id="wf-1",
                 sequence=seq,
                 timestamp=datetime.now(UTC),
-                agent="system",
-                event_type=EventType.WORKFLOW_STARTED,
                 message=f"Event {seq}",
             )
             await repository.save_event(event)
@@ -225,8 +213,7 @@ class TestWorkflowRepository:
         max_seq = await repository.get_max_event_sequence("wf-1")
         assert max_seq == 3
 
-    @pytest.mark.asyncio
-    async def test_save_event_with_pydantic_model_in_data(self, repository):
+    async def test_save_event_with_pydantic_model_in_data(self, repository, make_event):
         """Should serialize Pydantic models in event data.
 
         Regression test for: TypeError: Object of type Profile is not JSON serializable
@@ -246,10 +233,9 @@ class TestWorkflowRepository:
 
         # Create event with Pydantic model in data
         profile = Profile(name="test", driver="cli:claude")
-        event = WorkflowEvent(
+        event = make_event(
             id="evt-pydantic",
             workflow_id="wf-pydantic",
-            sequence=1,
             timestamp=datetime.now(UTC),
             agent="architect",
             event_type=EventType.STAGE_COMPLETED,

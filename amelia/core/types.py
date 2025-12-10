@@ -1,6 +1,13 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+"""Configuration and shared type definitions for the Amelia orchestrator.
+
+Contains type aliases (DriverType, TrackerType, StrategyType, ExecutionMode) and
+Pydantic models (RetryConfig, Profile, Settings, Issue, Design) used throughout
+the Amelia agentic coding orchestrator.
+"""
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -21,9 +28,15 @@ class RetryConfig(BaseModel):
         max_delay: Maximum delay cap in seconds (1.0-300.0).
     """
 
-    max_retries: int = Field(default=3, ge=0, le=10)
-    base_delay: float = Field(default=1.0, ge=0.1, le=30.0)
-    max_delay: float = Field(default=60.0, ge=1.0, le=300.0)
+    max_retries: int = Field(
+        default=3, ge=0, le=10, description="Maximum number of retry attempts"
+    )
+    base_delay: float = Field(
+        default=1.0, ge=0.1, le=30.0, description="Base delay in seconds for exponential backoff"
+    )
+    max_delay: float = Field(
+        default=60.0, ge=1.0, le=300.0, description="Maximum delay cap in seconds"
+    )
 
 
 class Profile(BaseModel):

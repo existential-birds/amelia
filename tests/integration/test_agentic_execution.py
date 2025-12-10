@@ -42,7 +42,6 @@ def agentic_state():
 class TestAgenticExecution:
     """Integration tests for agentic execution."""
 
-    @pytest.mark.asyncio
     async def test_agentic_profile_triggers_agentic_execution(self, agentic_state):
         """Agentic profile should use execute_agentic method."""
 
@@ -55,11 +54,11 @@ class TestAgenticExecution:
             mock_driver.execute_agentic = mock_execute_agentic
             mock_factory.get_driver.return_value = mock_driver
 
-            result_state = await call_developer_node(agentic_state)
+            result_dict = await call_developer_node(agentic_state)
 
-            assert result_state.plan.tasks[0].status == "completed"
+            # Nodes now return partial state dicts, not full ExecutionState
+            assert result_dict["plan"].tasks[0].status == "completed"
 
-    @pytest.mark.asyncio
     async def test_agentic_execution_passes_working_dir(self, agentic_state):
         """Agentic execution should pass working_dir from profile to execute_agentic."""
         captured_cwd = None
@@ -78,7 +77,6 @@ class TestAgenticExecution:
 
             assert captured_cwd == "/tmp/test"
 
-    @pytest.mark.asyncio
     async def test_structured_profile_does_not_use_agentic(self):
         """Structured profile should use standard execute_task, not execute_agentic."""
         profile = Profile(

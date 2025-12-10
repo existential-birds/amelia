@@ -110,6 +110,9 @@ async def health(request: Request) -> HealthResponse:
         "healthy" if db_status.status == "healthy" else "degraded"
     )
 
+    # cpu_percent(interval=None) is non-blocking - returns cached value from previous call
+    cpu_percent = process.cpu_percent(interval=None)
+
     return HealthResponse(
         status=overall_status,
         version=__version__,
@@ -117,6 +120,6 @@ async def health(request: Request) -> HealthResponse:
         active_workflows=active_workflows,
         websocket_connections=websocket_connections,
         memory_mb=round(process.memory_info().rss / 1024 / 1024, 2),
-        cpu_percent=process.cpu_percent(),
+        cpu_percent=cpu_percent,
         database=db_status,
     )

@@ -50,6 +50,9 @@ def validate_profile(profile: "Profile") -> None:
     Args:
         profile: The Profile object to validate.
 
+    Returns:
+        None. Validation passes silently.
+
     Raises:
         ValueError: If the profile fails validation (not currently raised).
     """

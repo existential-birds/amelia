@@ -169,10 +169,9 @@ class ExecutionState(BaseModel):
         plan: The task execution plan (DAG).
         current_task_id: ID of the currently executing task.
         human_approved: Whether human approval was granted for the plan.
-        review_results: List of review results from code reviews.
-        messages: Conversation history between agents.
+        last_review: Most recent review result (only latest matters for decisions).
         code_changes_for_review: Staged code changes for review.
-        claude_session_id: Session ID for Claude CLI session continuity.
+        driver_session_id: Session ID for CLI driver session continuity (works with any driver).
         workflow_status: Status of the workflow (running, completed, failed).
     """
     profile: Profile
@@ -180,8 +179,7 @@ class ExecutionState(BaseModel):
     plan: TaskDAG | None = None
     current_task_id: str | None = None
     human_approved: bool | None = None # Field to store human approval status
-    review_results: list[ReviewResult] = Field(default_factory=list)
-    messages: list[AgentMessage] = Field(default_factory=list)
+    last_review: ReviewResult | None = None
     code_changes_for_review: str | None = None # For local review or specific review contexts
-    claude_session_id: str | None = None
+    driver_session_id: str | None = None
     workflow_status: Literal["running", "completed", "failed"] = "running"

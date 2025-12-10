@@ -10,7 +10,6 @@ import pytest
 class TestWorktreeConstraints:
     """Tests for worktree uniqueness constraints."""
 
-    @pytest.mark.asyncio
     async def test_unique_active_worktree_constraint(self, db_with_schema):
         """Only one active workflow per worktree is allowed."""
         # Insert first workflow
@@ -26,7 +25,6 @@ class TestWorktreeConstraints:
                 VALUES ('id2', 'ISSUE-2', '/path/to/worktree', 'main', 'pending', '{}')
             """)
 
-    @pytest.mark.asyncio
     async def test_completed_workflows_dont_conflict(self, db_with_schema):
         """Completed workflows don't block new workflows in same worktree."""
         # Insert completed workflow

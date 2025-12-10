@@ -27,18 +27,19 @@ class TestHumanApprovalNodeServerMode:
     async def test_server_mode_returns_state_unchanged_when_not_approved(
         self, base_state
     ):
-        """In server mode, node returns state unchanged (interrupt handles pause)."""
+        """In server mode, node returns empty dict (interrupt handles pause)."""
         config = {"configurable": {"execution_mode": "server"}}
         result = await human_approval_node(base_state, config)
-        # State should be returned unchanged - interrupt mechanism handles the pause
-        assert result.human_approved is None
+        # Should return empty dict - interrupt mechanism handles the pause
+        assert result == {}
 
     async def test_server_mode_preserves_approval_from_resume(self, base_state):
-        """In server mode, node preserves human_approved set from resume."""
+        """In server mode, node returns empty dict (approval preserved by state)."""
         state = base_state.model_copy(update={"human_approved": True})
         config = {"configurable": {"execution_mode": "server"}}
         result = await human_approval_node(state, config)
-        assert result.human_approved is True
+        # Should return empty dict - human_approved is already in state
+        assert result == {}
 
 
 class TestHumanApprovalNodeCLIMode:
@@ -59,7 +60,7 @@ class TestHumanApprovalNodeCLIMode:
         result = await human_approval_node(base_state, config)
 
         mock_confirm.assert_called_once()
-        assert result.human_approved is True
+        assert result == {"human_approved": True}
 
     @patch("amelia.core.orchestrator.typer.confirm")
     @patch("amelia.core.orchestrator.typer.prompt")
@@ -76,4 +77,4 @@ class TestHumanApprovalNodeCLIMode:
         result = await human_approval_node(base_state, config)
 
         mock_confirm.assert_called_once()
-        assert result.human_approved is False
+        assert result == {"human_approved": False}

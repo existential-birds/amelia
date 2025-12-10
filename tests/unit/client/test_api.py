@@ -29,7 +29,6 @@ class TestAmeliaClient:
         """Client initializes with base URL."""
         assert client.base_url == "http://localhost:8420"
 
-    @pytest.mark.asyncio
     async def test_create_workflow(self, client):
         """create_workflow sends POST request with correct payload."""
         mock_response = {
@@ -61,7 +60,6 @@ class TestAmeliaClient:
             assert call_kwargs["json"]["issue_id"] == "ISSUE-123"
             assert call_kwargs["json"]["worktree_path"] == "/home/user/repo"
 
-    @pytest.mark.asyncio
     async def test_create_workflow_with_profile(self, client):
         """create_workflow includes profile when provided."""
         with patch("httpx.AsyncClient.post") as mock_post:
@@ -84,43 +82,33 @@ class TestAmeliaClient:
             call_kwargs = mock_post.call_args.kwargs
             assert call_kwargs["json"]["profile"] == "work"
 
-    @pytest.mark.asyncio
-    async def test_approve_workflow(self, client):
-        """approve_workflow sends POST to correct endpoint."""
+    @pytest.mark.parametrize(
+        "method_name,endpoint_suffix,method_kwargs,expected_status,should_check_feedback",
+        [
+            ("approve_workflow", "approve", {}, "approved", False),
+            ("reject_workflow", "reject", {"reason": "Not ready"}, "rejected", True),
+            ("cancel_workflow", "cancel", {}, "cancelled", False),
+        ],
+    )
+    async def test_workflow_actions(
+        self, client, method_name, endpoint_suffix, method_kwargs, expected_status, should_check_feedback
+    ):
+        """Workflow action methods send POST requests to correct endpoints."""
         with patch("httpx.AsyncClient.post") as mock_post:
-            mock_post.return_value = httpx.Response(200, json={"status": "approved"})
+            mock_post.return_value = httpx.Response(200, json={"status": expected_status})
 
-            await client.approve_workflow(workflow_id="wf-123")
+            method = getattr(client, method_name)
+            await method(workflow_id="wf-123", **method_kwargs)
 
             mock_post.assert_called_once()
             call_args = mock_post.call_args
-            assert "/api/workflows/wf-123/approve" in str(call_args)
+            assert f"/api/workflows/wf-123/{endpoint_suffix}" in str(call_args)
 
-    @pytest.mark.asyncio
-    async def test_reject_workflow(self, client):
-        """reject_workflow sends POST with feedback."""
-        with patch("httpx.AsyncClient.post") as mock_post:
-            mock_post.return_value = httpx.Response(200, json={"status": "rejected"})
+            # Verify feedback is passed for reject action
+            if should_check_feedback:
+                call_kwargs = mock_post.call_args.kwargs
+                assert call_kwargs["json"]["feedback"] == "Not ready"
 
-            await client.reject_workflow(workflow_id="wf-123", reason="Not ready")
-
-            mock_post.assert_called_once()
-            call_kwargs = mock_post.call_args.kwargs
-            assert call_kwargs["json"]["feedback"] == "Not ready"
-
-    @pytest.mark.asyncio
-    async def test_cancel_workflow(self, client):
-        """cancel_workflow sends POST to cancel endpoint."""
-        with patch("httpx.AsyncClient.post") as mock_post:
-            mock_post.return_value = httpx.Response(200, json={"status": "cancelled"})
-
-            await client.cancel_workflow(workflow_id="wf-123")
-
-            mock_post.assert_called_once()
-            call_args = mock_post.call_args
-            assert "/api/workflows/wf-123/cancel" in str(call_args)
-
-    @pytest.mark.asyncio
     async def test_get_active_workflows(self, client):
         """get_active_workflows fetches active workflows."""
         mock_response = {
@@ -146,7 +134,6 @@ class TestAmeliaClient:
             assert len(result.workflows) == 1
             assert result.total == 1
 
-    @pytest.mark.asyncio
     async def test_get_active_workflows_filter_by_worktree(self, client):
         """get_active_workflows passes worktree filter as query param."""
         mock_response = {
@@ -179,7 +166,6 @@ class TestAmeliaClient:
             assert result.workflows[0].id == "wf-123"
             assert result.total == 1
 
-    @pytest.mark.asyncio
     async def test_get_workflow(self, client):
         """get_workflow fetches single workflow by ID."""
         mock_response = {
@@ -199,65 +185,62 @@ class TestAmeliaClient:
             assert isinstance(result, WorkflowResponse)
             assert result.id == "wf-123"
 
-    @pytest.mark.asyncio
-    async def test_client_handles_409_conflict(self, client):
-        """Client raises descriptive error on 409 Conflict."""
-        with patch("httpx.AsyncClient.post") as mock_post:
-            mock_post.return_value = httpx.Response(
-                409,
-                json={
-                    "detail": {
-                        "error": "workflow_already_active",
-                        "message": "Workflow already active",
-                        "active_workflow": {
-                            "id": "wf-existing",
-                            "issue_id": "ISSUE-99",
-                            "status": "in_progress",
+    @pytest.mark.parametrize(
+        "error_type,mock_behavior,expected_exception,assertion_checks",
+        [
+            (
+                "409_conflict",
+                {
+                    "return_value": httpx.Response(
+                        409,
+                        json={
+                            "detail": {
+                                "error": "workflow_already_active",
+                                "message": "Workflow already active",
+                                "active_workflow": {
+                                    "id": "wf-existing",
+                                    "issue_id": "ISSUE-99",
+                                    "status": "in_progress",
+                                },
+                            }
                         },
-                    }
+                    )
                 },
-            )
-
-            with pytest.raises(WorkflowConflictError) as exc_info:
-                await client.create_workflow(
-                    issue_id="ISSUE-123",
-                    worktree_path="/home/user/repo",
-                    worktree_name="main",
-                )
-
-            assert "already active" in str(exc_info.value).lower()
-
-    @pytest.mark.asyncio
-    async def test_client_handles_429_rate_limit(self, client):
-        """Client raises descriptive error on 429 Too Many Requests."""
+                WorkflowConflictError,
+                lambda exc_value: "already active" in str(exc_value).lower(),
+            ),
+            (
+                "429_rate_limit",
+                {
+                    "return_value": httpx.Response(
+                        429,
+                        headers={"Retry-After": "30"},
+                        json={"detail": "Too many concurrent workflows"},
+                    )
+                },
+                RateLimitError,
+                lambda exc_value: "30" in str(exc_value),
+            ),
+            (
+                "connection_error",
+                {"side_effect": httpx.ConnectError("Connection refused")},
+                ServerUnreachableError,
+                lambda exc_value: "server" in str(exc_value).lower() and "8420" in str(exc_value),
+            ),
+        ],
+    )
+    async def test_client_error_handling(self, client, error_type, mock_behavior, expected_exception, assertion_checks):
+        """Client raises appropriate exceptions for various error conditions."""
         with patch("httpx.AsyncClient.post") as mock_post:
-            mock_post.return_value = httpx.Response(
-                429,
-                headers={"Retry-After": "30"},
-                json={"detail": "Too many concurrent workflows"},
-            )
+            # Apply mock behavior (either return_value or side_effect)
+            for attr, value in mock_behavior.items():
+                setattr(mock_post, attr, value)
 
-            with pytest.raises(RateLimitError) as exc_info:
+            with pytest.raises(expected_exception) as exc_info:
                 await client.create_workflow(
                     issue_id="ISSUE-123",
                     worktree_path="/home/user/repo",
                     worktree_name="main",
                 )
 
-            assert "30" in str(exc_info.value)
-
-    @pytest.mark.asyncio
-    async def test_client_handles_connection_error(self, client):
-        """Client raises descriptive error when server is unreachable."""
-        with patch("httpx.AsyncClient.post") as mock_post:
-            mock_post.side_effect = httpx.ConnectError("Connection refused")
-
-            with pytest.raises(ServerUnreachableError) as exc_info:
-                await client.create_workflow(
-                    issue_id="ISSUE-123",
-                    worktree_path="/home/user/repo",
-                    worktree_name="main",
-                )
-
-            assert "server" in str(exc_info.value).lower()
-            assert "8420" in str(exc_info.value)
+            assert assertion_checks(exc_info.value)
