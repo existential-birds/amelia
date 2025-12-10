@@ -120,8 +120,8 @@ export function WorkflowCanvas({ pipeline, isLoading = false, className }: Workf
 
   // Apply layout to position nodes
   const nodes = useMemo(
-    () => getLayoutedElements(rawNodes, []),
-    [rawNodes]
+    () => getLayoutedElements(rawNodes, edges),
+    [rawNodes, edges]
   );
 
   const currentStage = pipeline?.nodes.find((n) => n.status === 'active')?.label || 'Unknown';

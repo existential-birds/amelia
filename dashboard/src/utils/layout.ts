@@ -1,31 +1,80 @@
 // dashboard/src/utils/layout.ts
 /**
- * @fileoverview Simple layout utility for workflow visualization.
+ * @fileoverview Automatic graph layout using dagre for workflow visualization.
  *
- * Uses React Flow's default behavior - nodes are positioned sequentially.
+ * Uses dagre to compute node positions based on graph structure with
+ * horizontal left-to-right layout optimized for workflow pipelines.
  */
+import Dagre from '@dagrejs/dagre';
 import type { WorkflowNodeType } from '@/components/flow/WorkflowNode';
 import type { Edge } from '@xyflow/react';
 
-/** Spacing between nodes. */
-const NODE_SPACING = 200;
+/** Fixed node width for layout calculation (matches WorkflowNode card width). */
+export const NODE_WIDTH = 180;
+
+/** Fixed node height for layout calculation (matches WorkflowNode card height). */
+export const NODE_HEIGHT = 128;
+
+/** Horizontal spacing between nodes in the same rank. */
+const NODE_SEP = 50;
+
+/** Spacing between ranks (levels) in the graph. */
+const RANK_SEP = 100;
 
 /**
- * Positions nodes sequentially for React Flow.
+ * Positions nodes using dagre automatic graph layout.
  *
- * Places nodes in a horizontal row with consistent spacing.
- * React Flow's fitView will scale and center the result.
+ * Creates a directed graph with horizontal (LR) layout and computes
+ * optimal positions based on edges. React Flow's fitView will scale
+ * and center the result.
  *
  * @param nodes - React Flow nodes to layout
- * @param _edges - Edges (unused, kept for API compatibility)
- * @returns Nodes with updated positions
+ * @param edges - Edges defining the graph structure
+ * @returns Nodes with updated positions computed by dagre
  */
 export function getLayoutedElements(
   nodes: WorkflowNodeType[],
-  _edges: Edge[]
+  edges: Edge[]
 ): WorkflowNodeType[] {
-  return nodes.map((node, index) => ({
-    ...node,
-    position: { x: index * NODE_SPACING, y: 0 },
-  }));
+  // Handle empty input
+  if (nodes.length === 0) {
+    return [];
+  }
+
+  // Create new dagre graph
+  const g = new Dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}));
+
+  // Configure graph for horizontal left-to-right layout
+  g.setGraph({
+    rankdir: 'LR',
+    nodesep: NODE_SEP,
+    ranksep: RANK_SEP,
+  });
+
+  // Add nodes with fixed dimensions
+  nodes.forEach((node) => {
+    g.setNode(node.id, { width: NODE_WIDTH, height: NODE_HEIGHT });
+  });
+
+  // Add edges to define graph structure
+  edges.forEach((edge) => {
+    g.setEdge(edge.source, edge.target);
+  });
+
+  // Compute layout
+  Dagre.layout(g);
+
+  // Apply computed positions to nodes
+  // Note: dagre returns center positions, but React Flow uses top-left positions
+  // We adjust by subtracting half width/height to convert from center to top-left
+  return nodes.map((node) => {
+    const position = g.node(node.id);
+    return {
+      ...node,
+      position: {
+        x: position.x - NODE_WIDTH / 2,
+        y: position.y - NODE_HEIGHT / 2,
+      },
+    };
+  });
 }
