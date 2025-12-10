@@ -19,8 +19,8 @@ const renderNode = (data: WorkflowNodeData) => {
         positionAbsoluteY={0}
         zIndex={0}
         dragging={false}
-        sourcePosition={Position.Right}
-        targetPosition={Position.Left}
+        sourcePosition={Position.Bottom}
+        targetPosition={Position.Top}
       />
     </ReactFlowProvider>
   );
@@ -75,7 +75,7 @@ describe('WorkflowNode', () => {
 
     const card = screen.getByTestId('workflow-node-card');
     expect(card).toBeInTheDocument();
-    expect(card).toHaveClass('rounded-md', 'border', 'w-[180px]', 'h-[128px]');
+    expect(card).toHaveClass('rounded-md', 'border');
   });
 
   describe('status-based card borders', () => {
@@ -174,5 +174,18 @@ describe('WorkflowNode', () => {
     // Handles should be present and styled to be invisible but functional
     const handles = document.querySelectorAll('.react-flow__handle');
     expect(handles.length).toBe(2); // source and target
+  });
+
+  it('positions handles for horizontal flow (left target, right source)', () => {
+    renderNode({ label: 'Test', status: 'pending' });
+
+    const handles = document.querySelectorAll('.react-flow__handle');
+    expect(handles.length).toBe(2);
+
+    // Check for left/right positioning classes
+    const targetHandle = document.querySelector('.react-flow__handle-left');
+    const sourceHandle = document.querySelector('.react-flow__handle-right');
+    expect(targetHandle).toBeInTheDocument();
+    expect(sourceHandle).toBeInTheDocument();
   });
 });

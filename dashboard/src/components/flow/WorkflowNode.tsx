@@ -94,7 +94,7 @@ function WorkflowNodeComponent({ data }: NodeProps<WorkflowNodeType>) {
       role="img"
       aria-label={ariaLabel}
       className={cn(
-        'w-[180px] h-[128px] relative rounded-md transition-all duration-200 overflow-hidden',
+        'relative rounded-md transition-all duration-200 overflow-hidden',
         styles.containerClass,
         styles.borderClass,
         styles.backgroundClass,
@@ -132,16 +132,8 @@ function WorkflowNodeComponent({ data }: NodeProps<WorkflowNodeType>) {
         )}
       </CardContent>
 
-      <Handle
-        type="target"
-        position={Position.Left}
-        className="w-0! h-0! bg-transparent! border-0! min-w-0! min-h-0!"
-      />
-      <Handle
-        type="source"
-        position={Position.Right}
-        className="w-0! h-0! bg-transparent! border-0! min-w-0! min-h-0!"
-      />
+      <Handle type="target" position={Position.Left} />
+      <Handle type="source" position={Position.Right} />
     </Card>
   );
 }
