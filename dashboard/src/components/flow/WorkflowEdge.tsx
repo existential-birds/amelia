@@ -58,7 +58,7 @@ function WorkflowEdgeComponent({
   }[status];
 
   const isDashed = status !== 'completed';
-  const strokeOpacity = status === 'pending' ? 0.4 : 1;
+  const strokeOpacity = status === 'pending' ? 0.6 : 1;
 
   return (
     <>
@@ -68,7 +68,7 @@ function WorkflowEdgeComponent({
         data-status={status}
         data-slot="workflow-edge"
         fill="none"
-        strokeWidth={2}
+        strokeWidth={2.5}
         strokeLinecap="round"
         style={{ stroke: strokeColor, opacity: strokeOpacity }}
         {...(isDashed && { strokeDasharray: '8 4' })}
