@@ -119,9 +119,7 @@ checkpoints/
 amelia/server/static/*
 !amelia/server/static/.gitkeep
 
-# Tool-specific directories
-.gemini/*
-!.gemini/commands/
+
 .serena/
 
 # Documentation builds
