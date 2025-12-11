@@ -29,9 +29,13 @@ uv run mypy amelia                     # Type check
 ### Frontend (React + Vite)
 Located in `dashboard/`.
 
+**Running the dashboard:**
+- For general usage: `uv run amelia dev` serves the built dashboard at `localhost:8420`
+- For frontend development (HMR): Run `pnpm dev` in `dashboard/` for hot reload
+
 ```bash
 pnpm install
-pnpm dev          # Dev server (port 8421)
+pnpm dev          # HMR dev server (port 8421) - frontend development only
 pnpm build        # Production build
 pnpm test         # Vitest
 pnpm lint         # ESLint

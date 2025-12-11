@@ -38,15 +38,22 @@ uv run amelia review --local                     # Review uncommitted changes
 
 The dashboard is a React + TypeScript frontend in `dashboard/`.
 
+**Running the dashboard:**
+- For general usage: `uv run amelia dev` serves the built dashboard at `localhost:8420`
+- For frontend development (HMR): Run `pnpm dev` in `dashboard/` for hot reload
+
 **Ports:**
-- Frontend dev server: `8421`
-- Backend API: `8420` (proxied via Vite)
+- Backend API + bundled dashboard: `8420`
+- Frontend dev server (HMR only): `8421` (proxied to backend)
 
 ```bash
 cd dashboard
 
-pnpm dev          # Start dev server on localhost:8421
-pnpm build        # Build for production
+# Frontend development only (requires backend running separately)
+pnpm dev          # Start Vite dev server with HMR on localhost:8421
+
+# Build & test
+pnpm build        # Build for production (output to dist/)
 pnpm test         # Run Vitest tests
 pnpm test:run     # Run tests once (CI mode)
 pnpm lint         # ESLint check

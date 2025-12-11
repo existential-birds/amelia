@@ -198,8 +198,7 @@ Options:
 - `--no-dashboard` - Skip starting the dashboard
 - `--bind-all` - Bind to 0.0.0.0 (exposes to network)
 
-In the Amelia repository, this runs both uvicorn and Vite dev server with hot reload.
-In other repositories, it runs uvicorn and serves bundled static files.
+The dashboard is served from bundled static files at `localhost:8420`. For frontend development with hot module replacement (HMR), run `pnpm dev` in `dashboard/` separately.
 
 #### `amelia server`
 

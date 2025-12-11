@@ -60,11 +60,14 @@ uv sync
 uv run amelia server --reload
 # Server runs on http://localhost:8420 by default
 
-# 3. For dashboard testing, install and start frontend
+# 3. For dashboard testing (general usage - no frontend changes)
+# Dashboard is served at localhost:8420 by the backend server above
+
+# 3b. For frontend development with HMR (only if modifying dashboard code)
 cd dashboard
 pnpm install
 pnpm run dev
-# Check dashboard/vite.config.ts for actual port (default: 3000)
+# Vite dev server runs on localhost:8421, proxies API to backend
 
 # 4. Verify setup
 {verification command}

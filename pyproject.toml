@@ -24,6 +24,7 @@ dependencies = [
     "psutil>=6.1.0",
     "aiosqlite>=0.20.0",
     "langgraph-checkpoint-sqlite>=3.0.0",
+    "pyjwt[crypto]>=2.9.0",
 ]
 
 [project.scripts]

@@ -2,7 +2,7 @@
 
 > **Vision:** Complete end-to-end workflow control without ever opening GitHub, Jira, or any tracker web UI—with agents that maintain context across sessions and verify their own work. Built on the assumption that LLMs will continually improve, so Amelia automatically gets better as models advance.
 >
-> **Architecture:** Aligned with the [12-Factor Agents](https://github.com/humanlayer/12-factor-agents) methodology for building reliable LLM-powered software.
+> **Architecture:** Aligned with the [12-Factor Agents](https://github.com/humanlayer/12-factor-agents) methodology for building reliable LLM-powered software. See also [Context Engineering Gaps](analysis/context-engineering-gaps.md) for agentic context management requirements.
 
 ## Design Principles
 
@@ -55,6 +55,11 @@ A browser-based dashboard that provides visibility into workflow state, enables 
 - **F6 (Launch/Pause/Resume)**: REST API enables external launch (`POST /workflows`) and query (`GET /workflows/{id}`)
 - **F11 (Trigger from Anywhere)**: WebSocket events enable async notification to any connected client
 
+**Context Engineering:**
+- [Gap 1: Context Compiler](analysis/context-engineering-gaps.md#gap-1-context-compiler) - Add infrastructure for fresh context projection per LLM call
+- [Gap 3: Prompt Prefix Stability](analysis/context-engineering-gaps.md#gap-3-prompt-prefix-stability-for-cache-optimization) - Design prompts for cache reuse
+- [Gap 5: Agent Scope Isolation](analysis/context-engineering-gaps.md#gap-5-agent-scope-isolation) - Minimal default context per agent
+
 ---
 
 ## Phase 3: Session Continuity [Planned]
@@ -73,6 +78,12 @@ Long-running agents fail across context windows because each session starts fres
 - **F5 (Unified State)**: `amelia-progress.json` becomes single source of truth, Git-reconstructible
 - **F6 (Launch/Pause/Resume)**: Explicit pause points and resume protocol for session handoffs
 - **F3 (Own Context Window)**: Progress artifacts provide structured context for new sessions
+
+**Context Engineering:**
+- [Gap 2: Schema-Driven Summarization](analysis/context-engineering-gaps.md#gap-2-schema-driven-summarization) - Compact context preserving semantic structure
+- [Gap 4: Tiered Memory Architecture](analysis/context-engineering-gaps.md#gap-4-tiered-memory-architecture) - Working Context / Sessions / Memory / Artifacts hierarchy
+- [Gap 6: Session Memory Retrieval](analysis/context-engineering-gaps.md#gap-6-session-memory-retrieval) - On-demand access to relevant history
+- [Gap 7: Artifact Handle System](analysis/context-engineering-gaps.md#gap-7-artifact-handle-system) - Reference large objects by pointer
 
 See [Session Continuity Design](brainstorming/) for detailed specification.
 
@@ -462,6 +473,8 @@ def developer_node(state: State) -> State:
 - Include in Architect context for informed planning
 
 See [12-Factor Agents Compliance Analysis](analysis/12-factor-agents-compliance.md) for detailed factor-by-factor assessment.
+
+See [Context Engineering Gaps](analysis/context-engineering-gaps.md) for agentic context management requirements that should be addressed in Phases 2-3.
 
 ---
 

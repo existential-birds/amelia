@@ -337,16 +337,23 @@ When working on this project with [Claude Code](https://claude.ai/code), the fol
 | `/amelia:create-pr` | Create a PR with standardized description template |
 | `/amelia:update-pr-desc` | Update existing PR description after additional changes |
 | `/amelia:review` | Launch a code review agent for the current PR |
+| `/amelia:review-frontend` | Comprehensive React Router v7 frontend code review |
+| `/amelia:review-backend` | Comprehensive Python/FastAPI/LangGraph backend code review |
 | `/amelia:review-plan <path>` | Review implementation plan for parallelization, TDD, types, library practices |
 | `/amelia:review-tests` | Review test code for quality and conciseness |
 | `/amelia:ensure-doc` | Ensure all code is properly documented |
 | `/amelia:gen-test-plan` | Generate manual test plan for PR |
 | `/amelia:run-test-plan <path>` | Execute a manual test plan in an isolated worktree |
 | `/amelia:greptile-review` | Fetch and evaluate greptile-apps review comments |
+| `/amelia:coderabbit-review` | Fetch and evaluate CodeRabbit review comments |
+| `/amelia:gemini-review` | Fetch and evaluate Gemini Code Assist review comments |
 | `/amelia:eval-feedback <feedback>` | Evaluate code review feedback from another session |
 | `/amelia:prompt-improver <prompt>` | Optimize a prompt following Claude 4 best practices |
 | `/amelia:respond-review` | Respond to greptile review comments after evaluation |
+| `/amelia:coderabbit-respond` | Respond to CodeRabbit review comments after evaluation |
+| `/amelia:gemini-respond` | Respond to Gemini Code Assist review comments after evaluation |
 | `/amelia:skill-builder` | Create Claude Code skills with comprehensive best practices |
+| `/amelia:12-factor-analysis <path>` | Analyze codebase against 12-Factor Agents methodology |
 
 ## Claude Code Skills
 
@@ -380,6 +387,7 @@ The following skills are available in `.claude/skills/` to help Claude Code unde
 | **react-flow-advanced** | sub-flows, layouts, drag-and-drop | Advanced patterns: sub-flows, layouts, undo/redo |
 | **react-flow-code-review** | `@xyflow/react`, review | Review React Flow code for anti-patterns |
 | **react-flow** | `ReactFlow`, `useReactFlow`, `fitView` | React Flow workflow visualization, custom nodes/edges |
+| **dagre-react-flow** | `dagre`, `auto-layout`, `getLayoutedElements` | Automatic graph layout using dagre with React Flow |
 
 ### Frontend Skills
 
@@ -415,3 +423,9 @@ The following skills are available in `.claude/skills/` to help Claude Code unde
 | Skill | Triggers | Description |
 |-------|----------|-------------|
 | **github-projects** | `gh project`, `project board`, `kanban` | GitHub Projects (v2) via gh CLI, project items, fields, workflows |
+
+### Architecture Analysis Skills
+
+| Skill | Triggers | Description |
+|-------|----------|-------------|
+| **agent-architecture-analysis** | `12-Factor`, `compliance`, `agent architecture` | Evaluate agentic codebases against 12-Factor Agents methodology |
