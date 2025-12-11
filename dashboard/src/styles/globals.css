@@ -146,7 +146,8 @@
   --chart-2: oklch(50% 0.1 150);              /* Green */
   --chart-3: oklch(65% 0.12 240);             /* Blue */
   --chart-4: oklch(50% 0.2 25);               /* Red */
-  --chart-5: oklch(60% 0.05 150);             /* Gray */             --sidebar-ring: hsl(217.2 91.2% 59.8%);
+  --chart-5: oklch(60% 0.05 150);             /* Gray */
+  --sidebar-ring: hsl(217.2 91.2% 59.8%);
 }
 
 /*
