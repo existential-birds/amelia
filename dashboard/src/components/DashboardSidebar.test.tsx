@@ -80,6 +80,8 @@ describe('DashboardSidebar', () => {
     expect(screen.getByText('AMELIA')).toBeInTheDocument();
     if (expectedSymbol) {
       expect(screen.getByText(expectedSymbol)).toBeInTheDocument();
+    } else {
+      expect(screen.queryByText('∞')).not.toBeInTheDocument();
     }
   });
 });
