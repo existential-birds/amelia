@@ -27,7 +27,6 @@ describe('useWorkflows', () => {
     vi.clearAllMocks();
     vi.useFakeTimers();
     useWorkflowStore.setState({
-      selectedWorkflowId: null,
       eventsByWorkflow: {},
       lastEventId: null,
       isConnected: false,

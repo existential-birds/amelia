@@ -36,8 +36,8 @@ const mockWorkflowDetail: WorkflowDetail = {
   plan: {
     execution_order: ['t1', 't2'],
     tasks: [
-      { id: 't1', agent: 'architect', description: 'Plan', status: 'completed', dependencies: [] },
-      { id: 't2', agent: 'developer', description: 'Code', status: 'in_progress', dependencies: ['t1'] },
+      { id: 't1', description: 'Plan', status: 'completed', dependencies: [] },
+      { id: 't2', description: 'Code', status: 'in_progress', dependencies: ['t1'] },
     ],
   },
   token_usage: {},
@@ -72,7 +72,7 @@ const mockSecondWorkflowDetail: WorkflowDetail = {
   plan: {
     execution_order: ['t1'],
     tasks: [
-      { id: 't1', agent: 'reviewer', description: 'Review', status: 'in_progress', dependencies: [] },
+      { id: 't1', description: 'Review', status: 'in_progress', dependencies: [] },
     ],
   },
   token_usage: {},

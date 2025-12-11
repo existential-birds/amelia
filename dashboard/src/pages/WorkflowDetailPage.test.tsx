@@ -29,8 +29,8 @@ const mockWorkflow = createMockWorkflowDetail({
   current_stage: 'developer',
   plan: {
     tasks: [
-      { id: 't1', description: 'Setup', agent: 'developer', dependencies: [], status: 'completed' },
-      { id: 't2', description: 'Implement', agent: 'developer', dependencies: ['t1'], status: 'in_progress' },
+      { id: 't1', description: 'Setup', dependencies: [], status: 'completed' },
+      { id: 't2', description: 'Implement', dependencies: ['t1'], status: 'in_progress' },
     ],
     execution_order: ['t1', 't2'],
   },

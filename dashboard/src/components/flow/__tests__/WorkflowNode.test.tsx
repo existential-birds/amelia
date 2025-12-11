@@ -3,22 +3,36 @@
  */
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { ReactFlowProvider } from '@xyflow/react';
-import { WorkflowNode } from '../WorkflowNode';
+import { ReactFlowProvider, type NodeProps } from '@xyflow/react';
+import { WorkflowNode, type WorkflowNodeType, type WorkflowNodeData } from '../WorkflowNode';
 
 describe('WorkflowNode', () => {
-  const defaultProps = {
+  const createNodeProps = (
+    data: WorkflowNodeData
+  ): NodeProps<WorkflowNodeType> => ({
     id: 'test-node',
-    data: {
-      label: 'Test Task',
-      status: 'pending' as const,
-    },
+    type: 'workflow',
+    data,
+    draggable: true,
+    selected: false,
+    dragging: false,
+    zIndex: 0,
+    selectable: true,
+    deletable: false,
+    isConnectable: true,
+    positionAbsoluteX: 0,
+    positionAbsoluteY: 0,
+  });
+
+  const defaultData: WorkflowNodeData = {
+    label: 'Test Task',
+    status: 'pending',
   };
 
-  const renderWithProvider = (props = defaultProps) => {
+  const renderWithProvider = (data: WorkflowNodeData = defaultData) => {
     return render(
       <ReactFlowProvider>
-        <WorkflowNode {...props} />
+        <WorkflowNode {...createNodeProps(data)} />
       </ReactFlowProvider>
     );
   };
@@ -31,22 +45,16 @@ describe('WorkflowNode', () => {
 
     it('renders subtitle when provided', () => {
       renderWithProvider({
-        ...defaultProps,
-        data: {
-          ...defaultProps.data,
-          subtitle: 'Task Subtitle',
-        },
+        ...defaultData,
+        subtitle: 'Task Subtitle',
       });
       expect(screen.getByText('Task Subtitle')).toBeInTheDocument();
     });
 
     it('renders tokens when provided', () => {
       renderWithProvider({
-        ...defaultProps,
-        data: {
-          ...defaultProps.data,
-          tokens: '1.2k',
-        },
+        ...defaultData,
+        tokens: '1.2k',
       });
       expect(screen.getByText('1.2k tokens')).toBeInTheDocument();
     });
@@ -64,11 +72,8 @@ describe('WorkflowNode', () => {
 
     it('includes subtitle in aria-label when provided', () => {
       renderWithProvider({
-        ...defaultProps,
-        data: {
-          ...defaultProps.data,
-          subtitle: 'Sub',
-        },
+        ...defaultData,
+        subtitle: 'Sub',
       });
       const card = screen.getByRole('img');
       expect(card).toHaveAttribute(
@@ -84,13 +89,10 @@ describe('WorkflowNode', () => {
       ['active', 'border-primary/60'],
       ['pending', 'border-border'],
       ['blocked', 'border-destructive/40'],
-    ])('applies correct border class for %s status', (status, expectedClass) => {
+    ] as const)('applies correct border class for %s status', (status, expectedClass) => {
       renderWithProvider({
-        ...defaultProps,
-        data: {
-          ...defaultProps.data,
-          status: status as 'completed' | 'active' | 'pending' | 'blocked',
-        },
+        ...defaultData,
+        status,
       });
       const card = screen.getByTestId('workflow-node-card');
       expect(card).toHaveClass(expectedClass);

@@ -8,6 +8,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useElapsedTime } from '../useElapsedTime';
 import { createMockWorkflowDetail } from '../../__tests__/fixtures';
+import type { WorkflowDetail } from '../../types';
 import * as workflowUtils from '../../utils/workflow';
 
 // Mock formatElapsedTime to track calls and provide controlled output
@@ -265,10 +266,12 @@ describe('useElapsedTime', () => {
 
     vi.mocked(workflowUtils.formatElapsedTime).mockReturnValue('1h 00m');
 
-    const { rerender } = renderHook(
-      ({ workflow }) => useElapsedTime(workflow),
-      { initialProps: { workflow } }
-    );
+    const { rerender } = renderHook<
+      string,
+      { workflow: WorkflowDetail | null }
+    >(({ workflow }) => useElapsedTime(workflow), {
+      initialProps: { workflow },
+    });
 
     expect(workflowUtils.formatElapsedTime).toHaveBeenCalledTimes(2);
 
