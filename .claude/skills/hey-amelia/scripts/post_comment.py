@@ -94,19 +94,49 @@ def get_installation_token(jwt_token: str, installation_id: str) -> str:
     return response.json()["token"]
 
 
-def post_review_comment_reply(
-    token: str, repo: str, comment_id: int, body: str
-) -> dict:
-    """Post a reply to a review comment."""
+def get_comment_pr_number(token: str, repo: str, comment_id: int) -> int:
+    """Get the PR number from a review comment."""
     owner, repo_name = repo.split("/")
-    url = f"https://api.github.com/repos/{owner}/{repo_name}/pulls/comments/{comment_id}/replies"
+    url = f"https://api.github.com/repos/{owner}/{repo_name}/pulls/comments/{comment_id}"
     headers = {
         "Authorization": f"Bearer {token}",
         "Accept": "application/vnd.github+json",
         "X-GitHub-Api-Version": "2022-11-28",
     }
 
-    response = httpx.post(url, headers=headers, json={"body": body})
+    response = httpx.get(url, headers=headers)
+    response.raise_for_status()
+
+    # Extract PR number from pull_request_url
+    # Format: https://api.github.com/repos/{owner}/{repo}/pulls/{number}
+    pr_url = response.json()["pull_request_url"]
+    return int(pr_url.split("/")[-1])
+
+
+def post_review_comment_reply(
+    token: str, repo: str, comment_id: int, body: str
+) -> dict:
+    """Post a reply to a review comment.
+
+    Uses the correct GitHub API endpoint:
+    POST /repos/{owner}/{repo}/pulls/{pull_number}/comments
+    with in_reply_to_id in the request body.
+    """
+    owner, repo_name = repo.split("/")
+
+    # First, get the PR number from the comment
+    pr_number = get_comment_pr_number(token, repo, comment_id)
+
+    url = f"https://api.github.com/repos/{owner}/{repo_name}/pulls/{pr_number}/comments"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+
+    response = httpx.post(
+        url, headers=headers, json={"body": body, "in_reply_to": comment_id}
+    )
     response.raise_for_status()
 
     return response.json()

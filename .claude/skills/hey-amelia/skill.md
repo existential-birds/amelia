@@ -98,6 +98,15 @@ The hey-amelia app requires these permissions:
 | Command | Description |
 |---------|-------------|
 | `/amelia:bot-respond` | Respond to all code review bot comments on current PR |
+| `/amelia:bot-comment-pr` | Post a comment to the current PR |
+| `/amelia:bot-comment-issue` | Post a comment to a GitHub issue |
+
+## Skills
+
+| Skill | Description |
+|-------|-------------|
+| [bot-comment-pr](bot-comment-pr.md) | Post general comments to pull requests |
+| [bot-comment-issue](bot-comment-issue.md) | Post comments to GitHub issues |
 
 ## Script Reference
 
