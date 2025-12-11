@@ -11,17 +11,17 @@ Fetch all comments from the `coderabbitai[bot]` user on the current PR and evalu
    ```
    Extract owner, repo, and PR number.
 
-2. **Fetch all CodeRabbit comments** - there are two types, and there may be MULTIPLE of each:
+2. **Fetch all CodeRabbit comments** - there are two types, and there may be MULTIPLE of each. Use `--paginate` to ensure all comments are fetched (GitHub returns max 100 per page):
 
    **Issue comments** (general summary/overview - CodeRabbit posts detailed summaries here):
    ```bash
-   gh api repos/{owner}/{repo}/issues/{number}/comments \
+   gh api --paginate repos/{owner}/{repo}/issues/{number}/comments \
      --jq '.[] | select(.user.login == "coderabbitai[bot]") | .body'
    ```
 
    **Review comments** (line-specific, separated by `---`):
    ```bash
-   gh api repos/{owner}/{repo}/pulls/{number}/comments \
+   gh api --paginate repos/{owner}/{repo}/pulls/{number}/comments \
      --jq '.[] | select(.user.login == "coderabbitai[bot]") | "---\nFile: \(.path):\(.line)\n\(.body)\n"'
    ```
 

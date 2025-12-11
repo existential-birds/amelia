@@ -15,9 +15,9 @@ You have just evaluated the CodeRabbit feedback using `/amelia:coderabbit-review
    gh pr view --json number --jq '.number'
    ```
 
-2. **Get all CodeRabbit review comment IDs and content**:
+2. **Get all CodeRabbit review comment IDs and content** (use `--paginate` to ensure all comments are fetched):
    ```bash
-   gh api repos/{owner}/{repo}/pulls/{number}/comments \
+   gh api --paginate repos/{owner}/{repo}/pulls/{number}/comments \
      --jq '.[] | select(.user.login == "coderabbitai[bot]") | {id: .id, path: .path, line: .line, body: .body}'
    ```
 

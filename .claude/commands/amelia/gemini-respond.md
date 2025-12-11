@@ -15,9 +15,9 @@ You have just evaluated the Gemini Code Assist feedback using `/amelia:gemini-re
    gh pr view --json number --jq '.number'
    ```
 
-2. **Get all gemini review comment IDs and content**:
+2. **Get all gemini review comment IDs and content** (use `--paginate` to ensure all comments are fetched):
    ```bash
-   gh api repos/{owner}/{repo}/pulls/{number}/comments \
+   gh api --paginate repos/{owner}/{repo}/pulls/{number}/comments \
      --jq '.[] | select(.user.login == "gemini-code-assist[bot]") | {id: .id, path: .path, line: .line, body: .body}'
    ```
 

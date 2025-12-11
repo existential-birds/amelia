@@ -11,17 +11,17 @@ Fetch all comments from the `greptile-apps[bot]` user on the current PR and eval
    ```
    Extract owner, repo, and PR number.
 
-2. **Fetch all greptile comments** - there are two types, and there may be MULTIPLE of each:
+2. **Fetch all greptile comments** - there are two types, and there may be MULTIPLE of each. Use `--paginate` to ensure all comments are fetched (GitHub returns max 100 per page):
 
    **Issue comments** (general summary/overview):
    ```bash
-   gh api repos/{owner}/{repo}/issues/{number}/comments \
+   gh api --paginate repos/{owner}/{repo}/issues/{number}/comments \
      --jq '.[] | select(.user.login == "greptile-apps[bot]") | .body'
    ```
 
    **Review comments** (line-specific, separated by `---`):
    ```bash
-   gh api repos/{owner}/{repo}/pulls/{number}/comments \
+   gh api --paginate repos/{owner}/{repo}/pulls/{number}/comments \
      --jq '.[] | select(.user.login == "greptile-apps[bot]") | "---\nFile: \(.path):\(.line)\n\(.body)\n"'
    ```
 
