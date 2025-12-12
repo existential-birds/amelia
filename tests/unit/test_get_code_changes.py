@@ -3,10 +3,7 @@
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """Unit tests for get_code_changes_for_review function."""
 
-import subprocess
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 from amelia.core.orchestrator import get_code_changes_for_review
 
