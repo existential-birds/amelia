@@ -27,7 +27,6 @@ describe('useWorkflows', () => {
     vi.clearAllMocks();
     vi.useFakeTimers();
     useWorkflowStore.setState({
-      selectedWorkflowId: null,
       eventsByWorkflow: {},
       lastEventId: null,
       isConnected: false,
@@ -68,8 +67,11 @@ describe('useWorkflows', () => {
     ): WorkflowEvent => ({
       id: 'evt-1',
       workflow_id: 'wf-1',
+      sequence: 1,
       event_type,
       timestamp,
+      agent: 'developer',
+      message: `Test ${event_type} event`,
       data: {},
     });
 

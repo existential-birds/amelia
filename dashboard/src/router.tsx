@@ -4,10 +4,33 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 
+/**
+ * @fileoverview Client-side router configuration for the Amelia dashboard.
+ * Uses React Router v7 with data loaders and lazy-loaded route components.
+ */
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { Layout } from '@/components/Layout';
 import { RootErrorBoundary } from '@/components/ErrorBoundary';
+import { workflowsLoader, workflowDetailLoader, historyLoader } from '@/loaders/workflows';
+import { approveAction, rejectAction, cancelAction } from '@/actions/workflows';
 
+/**
+ * Application router with route definitions, loaders, and actions.
+ *
+ * Route structure:
+ * - `/` → Redirects to `/workflows`
+ * - `/workflows` → Active workflows list (lazy-loaded)
+ * - `/workflows/:id` → Active workflows list with specific workflow selected (lazy-loaded)
+ * - `/workflows/:id/detail` → Workflow detail view (lazy-loaded)
+ * - `/workflows/:id/approve` → Approve workflow action
+ * - `/workflows/:id/reject` → Reject workflow action
+ * - `/workflows/:id/cancel` → Cancel workflow action
+ * - `/history` → Completed workflows history (lazy-loaded)
+ * - `/logs` → System logs view (lazy-loaded)
+ * - `*` → Fallback redirect to `/workflows`
+ *
+ * All page components are lazy-loaded for optimal initial bundle size.
+ */
 export const router = createBrowserRouter([
   {
     path: '/',
@@ -20,20 +43,48 @@ export const router = createBrowserRouter([
       },
       {
         path: 'workflows',
-        lazy: async () => {
-          const { default: Component } = await import('@/pages/WorkflowsPage');
-          return { Component };
-        },
+        children: [
+          {
+            index: true,
+            loader: workflowsLoader,
+            lazy: async () => {
+              const { default: Component } = await import('@/pages/WorkflowsPage');
+              return { Component };
+            },
+          },
+          {
+            path: ':id',
+            loader: workflowsLoader,
+            lazy: async () => {
+              const { default: Component } = await import('@/pages/WorkflowsPage');
+              return { Component };
+            },
+          },
+          {
+            path: ':id/detail',
+            loader: workflowDetailLoader,
+            lazy: async () => {
+              const { default: Component } = await import('@/pages/WorkflowDetailPage');
+              return { Component };
+            },
+          },
+        ],
       },
       {
-        path: 'workflows/:id',
-        lazy: async () => {
-          const { default: Component } = await import('@/pages/WorkflowDetailPage');
-          return { Component };
-        },
+        path: 'workflows/:id/approve',
+        action: approveAction,
+      },
+      {
+        path: 'workflows/:id/reject',
+        action: rejectAction,
+      },
+      {
+        path: 'workflows/:id/cancel',
+        action: cancelAction,
       },
       {
         path: 'history',
+        loader: historyLoader,
         lazy: async () => {
           const { default: Component } = await import('@/pages/HistoryPage');
           return { Component };

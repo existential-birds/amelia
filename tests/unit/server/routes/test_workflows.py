@@ -12,6 +12,8 @@ import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
+from amelia.core.state import ExecutionState, Task, TaskDAG
+from amelia.core.types import Issue, Profile
 from amelia.server.database import WorkflowRepository
 from amelia.server.exceptions import (
     ConcurrencyLimitError,
@@ -213,6 +215,88 @@ class TestGetWorkflow:
         assert response.status_code == 404
         body = response.json()
         assert body["code"] == "NOT_FOUND"
+
+    async def test_get_workflow_returns_plan_when_present(
+        self,
+        client: AsyncClient,
+        mock_repository: AsyncMock,
+        make_workflow: Callable[..., ServerExecutionState],
+    ):
+        """Get workflow returns plan from execution_state when present."""
+        # Create a test profile
+        profile = Profile(
+            name="test",
+            driver="cli:claude",
+            tracker="noop",
+            strategy="single",
+        )
+
+        # Create a test issue
+        issue = Issue(
+            id="TEST-123",
+            title="Test Issue",
+            description="Test issue description",
+            status="open",
+        )
+
+        # Create a plan with tasks
+        task1 = Task(
+            id="task-1",
+            description="Write failing test",
+            status="completed",
+            dependencies=[],
+        )
+        task2 = Task(
+            id="task-2",
+            description="Implement feature",
+            status="in_progress",
+            dependencies=["task-1"],
+        )
+        plan = TaskDAG(
+            tasks=[task1, task2],
+            original_issue="Test issue description",
+        )
+
+        # Create ExecutionState with the plan
+        execution_state = ExecutionState(
+            profile=profile,
+            issue=issue,
+            plan=plan,
+            current_task_id="task-2",
+        )
+
+        # Create ServerExecutionState with the execution_state
+        workflow = make_workflow(
+            id="wf-123",
+            issue_id="TEST-123",
+            status="in_progress",
+            execution_state=execution_state,
+            current_stage="development",
+        )
+
+        # Mock repository to return the workflow
+        mock_repository.get.return_value = workflow
+
+        # Call GET /workflows/{id}
+        response = await client.get("/workflows/wf-123")
+
+        # Assert response is successful
+        assert response.status_code == 200
+        data = response.json()
+
+        # Assert plan data is returned
+        assert data["plan"] is not None, "Plan should not be None"
+        assert "tasks" in data["plan"], "Plan should contain 'tasks'"
+        assert "original_issue" in data["plan"], "Plan should contain 'original_issue'"
+        assert len(data["plan"]["tasks"]) == 2, "Plan should have 2 tasks"
+        assert data["plan"]["tasks"][0]["id"] == "task-1"
+        assert data["plan"]["tasks"][0]["description"] == "Write failing test"
+        assert data["plan"]["tasks"][0]["status"] == "completed"
+        assert data["plan"]["tasks"][1]["id"] == "task-2"
+        assert data["plan"]["tasks"][1]["description"] == "Implement feature"
+        assert data["plan"]["tasks"][1]["status"] == "in_progress"
+        assert data["plan"]["tasks"][1]["dependencies"] == ["task-1"]
+        assert data["plan"]["original_issue"] == "Test issue description"
 
 
 class TestApproveWorkflow:

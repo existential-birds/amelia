@@ -261,29 +261,6 @@ Options:
 
 Runs the Reviewer agent on your `git diff` output.
 
-### Deprecated Commands
-
-#### `amelia start-local <ISSUE_ID>`
-
-**DEPRECATED:** Use `amelia server` + `amelia start` instead.
-
-Starts the Amelia orchestrator locally without the server.
-
-```bash
-# Start workflow locally (deprecated)
-amelia start-local 123
-
-# With specific profile
-amelia start-local 123 --profile work
-```
-
-Options:
-- `--profile, -p` - Profile name from settings.amelia.yaml
-
-This command runs the orchestrator directly in the current process without the API server. It has been deprecated in favor of the server-based approach which provides better monitoring, concurrency, and the web dashboard.
-
-**Migration:** Use `amelia dev` or `amelia server` to start the server, then `amelia start` to create workflows.
-
 ---
 
 ## REST API Reference
@@ -420,10 +397,6 @@ curl http://localhost:8420/api/workflows/550e8400-e29b-41d4-a716-446655440000
 }
 ```
 
-**Implementation Notes:**
-- `token_usage`: Currently returns `null` (not yet implemented)
-- `recent_events`: Currently returns `[]` (not yet implemented)
-
 #### Approve Workflow
 
 ```bash
@@ -545,9 +518,6 @@ curl http://localhost:8420/api/health
   }
 }
 ```
-
-**Implementation Notes:**
-- `active_workflows`: Currently returns `0` (not yet implemented)
 
 ### WebSocket Events
 

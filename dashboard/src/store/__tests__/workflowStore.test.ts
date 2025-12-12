@@ -30,7 +30,6 @@ Object.defineProperty(window, 'sessionStorage', { value: sessionStorageMock });
 describe('workflowStore', () => {
   beforeEach(() => {
     useWorkflowStore.setState({
-      selectedWorkflowId: null,
       eventsByWorkflow: {},
       lastEventId: null,
       isConnected: false,
@@ -145,9 +144,8 @@ describe('workflowStore', () => {
   });
 
   describe('persistence', () => {
-    it('should persist selectedWorkflowId and lastEventId but NOT events', () => {
-      // Update both selectedWorkflowId and add an event
-      useWorkflowStore.getState().selectWorkflow('wf-123');
+    it('should persist lastEventId but NOT events', () => {
+      // Add an event to update lastEventId
       useWorkflowStore.getState().addEvent(
         createMockEvent({
           id: 'evt-999',
@@ -159,9 +157,6 @@ describe('workflowStore', () => {
       const stored = sessionStorageMock.getItem('amelia-workflow-state');
       expect(stored).not.toBeNull();
       const parsed = JSON.parse(stored!);
-
-      // Should persist selectedWorkflowId
-      expect(parsed.state.selectedWorkflowId).toBe('wf-123');
 
       // Should persist lastEventId
       expect(parsed.state.lastEventId).toBe('evt-999');

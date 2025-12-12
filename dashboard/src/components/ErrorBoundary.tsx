@@ -4,13 +4,27 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 
-import { useRouteError, isRouteErrorResponse, useNavigate } from 'react-router-dom';
+/**
+ * @fileoverview Root error boundary for router-level errors.
+ *
+ * Catches and displays both HTTP errors (404, 500) and JavaScript runtime
+ * errors that occur during rendering or navigation.
+ */
+
+import { useRouteError, isRouteErrorResponse, useNavigate, Link } from 'react-router-dom';
 import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 /**
- * Root error boundary for router-level errors.
- * Uses useRouteError hook from React Router v7.
+ * Root error boundary component for handling router-level errors.
+ *
+ * Displays user-friendly error pages for:
+ * - HTTP error responses (404, 500, etc.) with status and message
+ * - JavaScript runtime errors with stack trace in development mode
+ *
+ * Provides navigation options to recover from errors.
+ *
+ * @returns Error UI with recovery options (reload, go home, go back)
  */
 export function RootErrorBoundary() {
   const error = useRouteError();
@@ -28,9 +42,11 @@ export function RootErrorBoundary() {
           {error.data?.message || 'The page you are looking for does not exist.'}
         </p>
         <div className="flex gap-4">
-          <Button onClick={() => navigate('/')}>
-            <Home className="w-4 h-4" />
-            Go Home
+          <Button asChild>
+            <Link to="/">
+              <Home className="w-4 h-4" />
+              Go Home
+            </Link>
           </Button>
           <Button variant="outline" onClick={() => navigate(-1)}>
             Go Back
@@ -68,9 +84,11 @@ export function RootErrorBoundary() {
           <RefreshCw className="w-4 h-4" />
           Reload Dashboard
         </Button>
-        <Button variant="outline" onClick={() => navigate('/')}>
-          <Home className="w-4 h-4" />
-          Go Home
+        <Button variant="outline" asChild>
+          <Link to="/">
+            <Home className="w-4 h-4" />
+            Go Home
+          </Link>
         </Button>
       </div>
     </div>

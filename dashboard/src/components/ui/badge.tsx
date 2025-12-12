@@ -17,12 +17,6 @@ const badgeVariants = cva(
         secondary: 'bg-secondary text-secondary-foreground',
         destructive: 'bg-destructive text-destructive-foreground',
         outline: 'border border-current text-foreground',
-        // Status variants
-        running: 'bg-[--status-running] text-primary-foreground',
-        completed: 'bg-[--status-completed] text-foreground',
-        pending: 'bg-[--status-pending] text-muted-foreground',
-        blocked: 'bg-[--status-blocked] text-foreground',
-        failed: 'bg-[--status-failed] text-foreground',
       },
     },
     defaultVariants: {
@@ -37,7 +31,11 @@ export interface BadgeProps
 
 function Badge({ className, variant, ...props }: BadgeProps) {
   return (
-    <div className={cn(badgeVariants({ variant }), className)} {...props} />
+    <div
+      data-slot="badge"
+      className={cn(badgeVariants({ variant }), className)}
+      {...props}
+    />
   );
 }
 

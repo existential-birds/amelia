@@ -18,7 +18,7 @@ from langgraph.graph.state import CompiledStateGraph
 from loguru import logger
 
 from amelia.core.orchestrator import create_orchestrator_graph
-from amelia.core.state import ExecutionState
+from amelia.core.state import ExecutionState, TaskDAG
 from amelia.core.types import Settings
 from amelia.server.database.repository import WorkflowRepository
 from amelia.server.events.bus import EventBus
@@ -850,6 +850,9 @@ class OrchestratorService:
                     if task_id and task_status:
                         self._last_task_statuses[workflow_id][task_id] = task_status
 
+            # Sync plan to ServerExecutionState for API access
+            await self._sync_plan_to_state(workflow_id, plan)
+
     async def _emit_developer_messages(
         self,
         workflow_id: str,
@@ -944,6 +947,56 @@ class OrchestratorService:
                     "severity": severity,
                     "comment_count": comment_count,
                 },
+            )
+
+    async def _sync_plan_to_state(
+        self,
+        workflow_id: str,
+        plan_dict: dict[str, Any],
+    ) -> None:
+        """Sync plan from LangGraph state to ServerExecutionState.
+
+        This ensures the plan is available via the REST API when a workflow
+        is blocked for approval. Without this, the API would return plan=None
+        because the plan only exists in the LangGraph checkpointer.
+
+        Args:
+            workflow_id: The workflow ID.
+            plan_dict: The plan dictionary from the graph state output.
+        """
+        try:
+            # Fetch current state
+            state = await self._repository.get(workflow_id)
+            if state is None:
+                logger.warning(
+                    "Cannot sync plan - workflow not found",
+                    workflow_id=workflow_id,
+                )
+                return
+
+            if state.execution_state is None:
+                logger.warning(
+                    "Cannot sync plan - no execution_state",
+                    workflow_id=workflow_id,
+                )
+                return
+
+            # Parse the plan dict into a TaskDAG
+            task_dag = TaskDAG.model_validate(plan_dict)
+
+            # Update the execution_state with the plan
+            state.execution_state.plan = task_dag
+
+            # Save back to repository
+            await self._repository.update(state)
+            logger.debug("Synced plan to ServerExecutionState", workflow_id=workflow_id)
+
+        except Exception as e:
+            # Log but don't fail the workflow - plan sync is best-effort
+            logger.warning(
+                "Failed to sync plan to state",
+                workflow_id=workflow_id,
+                error=str(e),
             )
 
     async def recover_interrupted_workflows(self) -> None:

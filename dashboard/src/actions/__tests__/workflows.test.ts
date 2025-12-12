@@ -28,14 +28,18 @@ describe('Workflow Actions', () => {
 
   describe('validation', () => {
     it.each([
-      ['approveAction', approveAction],
-      ['rejectAction', rejectAction],
-      ['cancelAction', cancelAction],
-    ])('%s should throw 400 if ID is missing', async (_name, action) => {
+      ['approveAction', approveAction, 'approved'],
+      ['rejectAction', rejectAction, 'rejected'],
+      ['cancelAction', cancelAction, 'cancelled'],
+    ])('%s should return error if ID is missing', async (_name, action, actionType) => {
       const args = createActionArgs({});
-      await expect(action(args)).rejects.toThrowError(
-        expect.objectContaining({ status: 400 })
-      );
+      const result = await action(args);
+
+      expect(result).toEqual({
+        success: false,
+        action: actionType,
+        error: 'Workflow ID required',
+      });
     });
   });
 
@@ -49,12 +53,16 @@ describe('Workflow Actions', () => {
       expect(result).toEqual({ success: true, action: 'approved' });
     });
 
-    it('should propagate API errors', async () => {
+    it('should return error on API failure', async () => {
       vi.mocked(api.approveWorkflow).mockRejectedValueOnce(new Error('Server error'));
 
-      await expect(
-        approveAction(createActionArgs({ id: 'wf-1' }))
-      ).rejects.toThrow('Server error');
+      const result = await approveAction(createActionArgs({ id: 'wf-1' }));
+
+      expect(result).toEqual({
+        success: false,
+        action: 'approved',
+        error: 'Server error',
+      });
     });
   });
 
@@ -71,15 +79,32 @@ describe('Workflow Actions', () => {
       expect(result).toEqual({ success: true, action: 'rejected' });
     });
 
-    it('should throw 400 if feedback is missing', async () => {
+    it('should return error if feedback is missing', async () => {
       const formData = new FormData();
       // No feedback field
 
-      await expect(
-        rejectAction(createActionArgs({ id: 'wf-1' }, { body: formData }))
-      ).rejects.toThrowError(
-        expect.objectContaining({ status: 400 })
-      );
+      const result = await rejectAction(createActionArgs({ id: 'wf-1' }, { body: formData }));
+
+      expect(result).toEqual({
+        success: false,
+        action: 'rejected',
+        error: 'Feedback required',
+      });
+    });
+
+    it('should return error on API failure', async () => {
+      vi.mocked(api.rejectWorkflow).mockRejectedValueOnce(new Error('Network error'));
+
+      const formData = new FormData();
+      formData.append('feedback', 'Fix this');
+
+      const result = await rejectAction(createActionArgs({ id: 'wf-1' }, { body: formData }));
+
+      expect(result).toEqual({
+        success: false,
+        action: 'rejected',
+        error: 'Network error',
+      });
     });
   });
 
@@ -91,6 +116,18 @@ describe('Workflow Actions', () => {
 
       expect(api.cancelWorkflow).toHaveBeenCalledWith('wf-1');
       expect(result).toEqual({ success: true, action: 'cancelled' });
+    });
+
+    it('should return error on API failure', async () => {
+      vi.mocked(api.cancelWorkflow).mockRejectedValueOnce(new Error('Cannot cancel'));
+
+      const result = await cancelAction(createActionArgs({ id: 'wf-1' }));
+
+      expect(result).toEqual({
+        success: false,
+        action: 'cancelled',
+        error: 'Cannot cancel',
+      });
     });
   });
 });

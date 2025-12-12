@@ -4,7 +4,9 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 
-"use client";
+/**
+ * @fileoverview Animated text shimmer effect component.
+ */
 
 import { cn } from "@/lib/utils";
 import { motion } from "motion/react";
@@ -16,6 +18,14 @@ import {
   useMemo,
 } from "react";
 
+/**
+ * Props for the Shimmer component.
+ * @property children - Text content to animate
+ * @property as - HTML element type to render (default: 'p')
+ * @property className - Optional additional CSS classes
+ * @property duration - Animation duration in seconds (default: 2)
+ * @property spread - Shimmer spread factor (default: 2)
+ */
 export type TextShimmerProps = {
   children: string;
   as?: ElementType;
@@ -24,6 +34,15 @@ export type TextShimmerProps = {
   spread?: number;
 };
 
+/**
+ * Renders text with an animated shimmer highlight effect.
+ *
+ * Uses Framer Motion to animate a gradient highlight across the text.
+ * Spread is calculated based on text length for consistent appearance.
+ *
+ * @param props - Component props
+ * @returns The shimmer text element
+ */
 const ShimmerComponent = ({
   children,
   as: Component = "p",
@@ -67,4 +86,5 @@ const ShimmerComponent = ({
   );
 };
 
+/** Memoized shimmer text component for performance. */
 export const Shimmer = memo(ShimmerComponent);

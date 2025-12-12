@@ -231,7 +231,7 @@ async def get_workflow(
         completed_at=workflow.completed_at,
         failure_reason=workflow.failure_reason,
         current_stage=workflow.current_stage,
-        plan=None,
+        plan=workflow.execution_state.plan.model_dump() if workflow.execution_state and workflow.execution_state.plan else None,
         token_usage=token_usage,
         recent_events=recent_events,
     )

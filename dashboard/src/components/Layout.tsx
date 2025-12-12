@@ -4,137 +4,93 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 
-import { Outlet, Link, useLocation, useNavigation } from 'react-router-dom';
-import {
-  GitBranch,
-  History,
-  Radio,
-  Compass
-} from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { ScrollArea } from '@/components/ui/scroll-area';
+/**
+ * @fileoverview Main layout component for the Amelia dashboard.
+ * Provides the sidebar, content area, and global visual effects.
+ */
+import { Outlet, useNavigation } from 'react-router-dom';
+import { SidebarProvider } from '@/components/ui/sidebar';
+import { DashboardSidebar } from '@/components/DashboardSidebar';
 import { NavigationProgress } from '@/components/NavigationProgress';
+import { useWebSocket } from '@/hooks/useWebSocket';
 
+/**
+ * Root layout component that provides the dashboard structure.
+ *
+ * Features:
+ * - Responsive sidebar with navigation
+ * - WebSocket connection for real-time updates
+ * - Navigation progress indicator during route transitions
+ * - Decorative visual effects (starfield, scanlines, vignette)
+ *
+ * @returns The layout wrapper with sidebar and content outlet.
+ */
 export function Layout() {
-  const location = useLocation();
   const navigation = useNavigation();
+
+  // Initialize WebSocket connection
+  useWebSocket();
 
   const isNavigating = navigation.state !== 'idle';
 
-  const isActive = (path: string) => {
-    return location.pathname === path || location.pathname.startsWith(path + '/');
-  };
-
   return (
-    <div className="flex h-screen bg-background text-foreground">
-      {/* Sidebar */}
-      <aside className="w-64 bg-sidebar border-r border-sidebar-border flex flex-col">
-        {/* Logo */}
-        <div className="p-6 border-b border-sidebar-border">
-          <h1 className="text-4xl font-display text-sidebar-primary tracking-wider">
-            AMELIA
-          </h1>
-          <p className="text-xs font-mono text-muted-foreground mt-1">
-            Agentic Orchestrator
-          </p>
-        </div>
+    <SidebarProvider>
+      <div className="flex h-screen w-full bg-background text-foreground">
+        {/* Sidebar */}
+        <DashboardSidebar />
 
-        {/* Navigation */}
-        <ScrollArea className="flex-1">
-          <nav className="p-4" aria-label="Main navigation">
-            <div className="space-y-6">
-              <NavSection title="WORKFLOWS">
-                <NavLink
-                  to="/workflows"
-                  icon={<GitBranch className="w-4 h-4" />}
-                  active={isActive('/workflows')}
-                  label="Active Jobs"
-                />
-              </NavSection>
+        {/* Main content area with navigation progress */}
+        <main className="flex-1 overflow-hidden relative">
+          {/* Starfield background - z-0 */}
+          <div
+            className="absolute inset-0 pointer-events-none z-0 opacity-40"
+            style={{
+              background: `
+                radial-gradient(1px 1px at 20px 30px, rgb(239 248 226), transparent),
+                radial-gradient(1px 1px at 40px 70px, rgb(239 248 226 / 0.8), transparent),
+                radial-gradient(1px 1px at 50px 160px, rgb(239 248 226 / 0.6), transparent),
+                radial-gradient(1px 1px at 90px 40px, rgb(239 248 226), transparent),
+                radial-gradient(1px 1px at 130px 80px, rgb(239 248 226 / 0.7), transparent),
+                radial-gradient(1.5px 1.5px at 160px 120px, rgb(255 200 87), transparent),
+                radial-gradient(1px 1px at 200px 50px, rgb(239 248 226 / 0.5), transparent),
+                radial-gradient(1px 1px at 280px 20px, rgb(239 248 226 / 0.6), transparent),
+                radial-gradient(1.5px 1.5px at 320px 100px, rgb(91 155 213 / 0.8), transparent),
+                radial-gradient(1px 1px at 400px 60px, rgb(239 248 226), transparent),
+                radial-gradient(1.5px 1.5px at 550px 90px, rgb(255 200 87), transparent),
+                radial-gradient(1px 1px at 650px 50px, rgb(239 248 226 / 0.9), transparent)
+              `,
+              backgroundRepeat: 'repeat',
+              backgroundSize: '700px 180px',
+            }}
+            aria-hidden="true"
+          />
 
-              <NavSection title="HISTORY">
-                <NavLink
-                  to="/history"
-                  icon={<History className="w-4 h-4" />}
-                  active={isActive('/history')}
-                  label="Past Runs"
-                />
-              </NavSection>
+          {/* Cockpit glass scanlines - z-[100] */}
+          <div
+            className="absolute inset-0 pointer-events-none z-[100]"
+            style={{
+              background: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgb(239 248 226 / 0.01) 2px, rgb(239 248 226 / 0.01) 4px)',
+            }}
+            aria-hidden="true"
+          />
 
-              <NavSection title="MONITORING">
-                <NavLink
-                  to="/logs"
-                  icon={<Radio className="w-4 h-4" />}
-                  active={isActive('/logs')}
-                  label="Logs"
-                />
-              </NavSection>
-            </div>
-          </nav>
-        </ScrollArea>
+          {/* Vignette - z-[99] */}
+          <div
+            className="absolute inset-0 pointer-events-none z-[99]"
+            style={{
+              background: 'radial-gradient(ellipse at center, transparent 30%, rgb(13 26 18 / 0.6) 100%)',
+            }}
+            aria-hidden="true"
+          />
 
-        {/* Footer */}
-        <div className="p-4 border-t border-sidebar-border">
-          <div className="flex items-center gap-3">
-            <Compass className="w-8 h-8 text-muted-foreground/50" />
-            <div className="text-xs font-mono text-muted-foreground">
-              <div>Server: localhost:8420</div>
-              <div className="flex items-center gap-2 mt-1">
-                <span className="inline-block w-2 h-2 bg-[--status-running] rounded-full animate-pulse-glow" />
-                Connected
-              </div>
-            </div>
+          {isNavigating && <NavigationProgress />}
+
+          {/* Content wrapper with z-10 for proper layering */}
+          <div className="relative z-10 h-full">
+            <Outlet />
           </div>
-        </div>
-      </aside>
-
-      {/* Main content area with navigation progress */}
-      <main className="flex-1 overflow-hidden relative">
-        {isNavigating && <NavigationProgress />}
-        <Outlet />
-      </main>
-    </div>
-  );
-}
-
-// Helper components
-interface NavSectionProps {
-  title: string;
-  children: React.ReactNode;
-}
-
-function NavSection({ title, children }: NavSectionProps) {
-  return (
-    <div>
-      <div className="text-xs font-heading text-muted-foreground/60 font-semibold tracking-wider px-3 py-2">
-        {title}
+        </main>
       </div>
-      <div className="space-y-1">{children}</div>
-    </div>
-  );
-}
-
-interface NavLinkProps {
-  to: string;
-  icon: React.ReactNode;
-  active: boolean;
-  label: string;
-}
-
-function NavLink({ to, icon, active, label }: NavLinkProps) {
-  return (
-    <Link
-      to={to}
-      aria-current={active ? 'page' : undefined}
-      className={cn(
-        'flex items-center gap-3 px-3 py-2 font-heading font-semibold text-sm tracking-wide transition-colors focus-ring rounded',
-        active
-          ? 'bg-sidebar-primary text-sidebar-primary-foreground'
-          : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
-      )}
-    >
-      {icon}
-      {label}
-    </Link>
+    </SidebarProvider>
   );
 }

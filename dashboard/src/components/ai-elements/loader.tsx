@@ -4,13 +4,25 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 
+/**
+ * @fileoverview Animated spinner loader component.
+ */
 import { cn } from "@/lib/utils";
 import type { HTMLAttributes } from "react";
 
+/**
+ * Props for the LoaderIcon component.
+ * @property size - Icon size in pixels (default: 16)
+ */
 type LoaderIconProps = {
   size?: number;
 };
 
+/**
+ * SVG spinner icon with radial loading pattern.
+ * @param props - Icon props
+ * @returns The loader SVG
+ */
 const LoaderIcon = ({ size = 16 }: LoaderIconProps) => (
   <svg
     height={size}
@@ -85,10 +97,29 @@ const LoaderIcon = ({ size = 16 }: LoaderIconProps) => (
   </svg>
 );
 
+/**
+ * Props for the Loader component.
+ * @property size - Loader size in pixels (default: 16)
+ * @property className - Optional additional CSS classes
+ */
 export type LoaderProps = HTMLAttributes<HTMLDivElement> & {
   size?: number;
 };
 
+/**
+ * Animated spinning loader indicator.
+ *
+ * Displays a rotating spinner icon for loading states.
+ * Inherits color from parent via currentColor.
+ *
+ * @param props - Component props
+ * @returns The loader component
+ *
+ * @example
+ * ```tsx
+ * <Loader size={24} className="text-primary" />
+ * ```
+ */
 export const Loader = ({ className, size = 16, ...props }: LoaderProps) => (
   <div
     className={cn(

@@ -14,21 +14,26 @@ import type { ActionResult } from '@/types/api';
  * Handles the approve action for a workflow route, sending approval to the API.
  *
  * @param args - React Router action function arguments containing route params.
- * @returns Action result indicating successful approval.
- * @throws {Response} 400 error if workflow ID is missing from route params.
+ * @returns Action result indicating successful approval or error details.
  * @example
  * ```typescript
  * const result = await approveAction({ params: { id: 'workflow-123' } });
- * // Returns: { success: true, action: 'approved' }
+ * // Success: { success: true, action: 'approved' }
+ * // Error: { success: false, action: 'approved', error: 'Workflow ID required' }
  * ```
  */
 export async function approveAction({ params }: ActionFunctionArgs): Promise<ActionResult> {
   if (!params.id) {
-    throw new Response('Workflow ID required', { status: 400 });
+    return { success: false, action: 'approved', error: 'Workflow ID required' };
   }
 
-  await api.approveWorkflow(params.id);
-  return { success: true, action: 'approved' };
+  try {
+    await api.approveWorkflow(params.id);
+    return { success: true, action: 'approved' };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to approve workflow';
+    return { success: false, action: 'approved', error: message };
+  }
 }
 
 /**
@@ -38,8 +43,7 @@ export async function approveAction({ params }: ActionFunctionArgs): Promise<Act
  * and sending it to the API along with the rejection.
  *
  * @param args - React Router action function arguments containing route params and request.
- * @returns Action result indicating successful rejection.
- * @throws {Response} 400 error if workflow ID is missing or feedback is not provided.
+ * @returns Action result indicating successful rejection or error details.
  * @example
  * ```typescript
  * const formData = new FormData();
@@ -48,23 +52,29 @@ export async function approveAction({ params }: ActionFunctionArgs): Promise<Act
  *   params: { id: 'workflow-123' },
  *   request: new Request('/', { method: 'POST', body: formData })
  * });
- * // Returns: { success: true, action: 'rejected' }
+ * // Success: { success: true, action: 'rejected' }
+ * // Error: { success: false, action: 'rejected', error: 'Feedback required' }
  * ```
  */
 export async function rejectAction({ params, request }: ActionFunctionArgs): Promise<ActionResult> {
   if (!params.id) {
-    throw new Response('Workflow ID required', { status: 400 });
+    return { success: false, action: 'rejected', error: 'Workflow ID required' };
   }
 
-  const formData = await request.formData();
-  const feedback = formData.get('feedback');
+  try {
+    const formData = await request.formData();
+    const feedback = formData.get('feedback');
 
-  if (!feedback || typeof feedback !== 'string') {
-    throw new Response('Feedback required', { status: 400 });
+    if (!feedback || typeof feedback !== 'string') {
+      return { success: false, action: 'rejected', error: 'Feedback required' };
+    }
+
+    await api.rejectWorkflow(params.id, feedback);
+    return { success: true, action: 'rejected' };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to reject workflow';
+    return { success: false, action: 'rejected', error: message };
   }
-
-  await api.rejectWorkflow(params.id, feedback);
-  return { success: true, action: 'rejected' };
 }
 
 /**
@@ -73,19 +83,24 @@ export async function rejectAction({ params, request }: ActionFunctionArgs): Pro
  * Handles the cancel action for a workflow route, sending cancellation request to the API.
  *
  * @param args - React Router action function arguments containing route params.
- * @returns Action result indicating successful cancellation.
- * @throws {Response} 400 error if workflow ID is missing from route params.
+ * @returns Action result indicating successful cancellation or error details.
  * @example
  * ```typescript
  * const result = await cancelAction({ params: { id: 'workflow-123' } });
- * // Returns: { success: true, action: 'cancelled' }
+ * // Success: { success: true, action: 'cancelled' }
+ * // Error: { success: false, action: 'cancelled', error: 'Workflow ID required' }
  * ```
  */
 export async function cancelAction({ params }: ActionFunctionArgs): Promise<ActionResult> {
   if (!params.id) {
-    throw new Response('Workflow ID required', { status: 400 });
+    return { success: false, action: 'cancelled', error: 'Workflow ID required' };
   }
 
-  await api.cancelWorkflow(params.id);
-  return { success: true, action: 'cancelled' };
+  try {
+    await api.cancelWorkflow(params.id);
+    return { success: true, action: 'cancelled' };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to cancel workflow';
+    return { success: false, action: 'cancelled', error: message };
+  }
 }

@@ -4,6 +4,12 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 
+/**
+ * @fileoverview Queue UI components for displaying task lists and messages.
+ *
+ * Compound components for building queue interfaces with items,
+ * collapsible sections, attachments, and todo-style task lists.
+ */
 import { Button } from "@/components/ui/button";
 import {
   Collapsible,
@@ -15,6 +21,14 @@ import { cn } from "@/lib/utils";
 import { ChevronDownIcon, PaperclipIcon } from "lucide-react";
 import type { ComponentProps } from "react";
 
+/**
+ * Represents a part of a queue message.
+ * @property type - Content type identifier
+ * @property text - Optional text content
+ * @property url - Optional URL for links/media
+ * @property filename - Optional filename for attachments
+ * @property mediaType - Optional MIME type
+ */
 export type QueueMessagePart = {
   type: string;
   text?: string;
@@ -23,11 +37,23 @@ export type QueueMessagePart = {
   mediaType?: string;
 };
 
+/**
+ * Represents a complete queue message.
+ * @property id - Unique message identifier
+ * @property parts - Array of message parts
+ */
 export type QueueMessage = {
   id: string;
   parts: QueueMessagePart[];
 };
 
+/**
+ * Represents a todo item in the queue.
+ * @property id - Unique todo identifier
+ * @property title - Todo title text
+ * @property description - Optional description
+ * @property status - Todo completion status
+ */
 export type QueueTodo = {
   id: string;
   title: string;
@@ -35,8 +61,10 @@ export type QueueTodo = {
   status?: "pending" | "completed";
 };
 
+/** Props for QueueItem component. */
 export type QueueItemProps = ComponentProps<"li">;
 
+/** List item container for queue entries with hover effects. */
 export const QueueItem = ({ className, ...props }: QueueItemProps) => (
   <li
     className={cn(
@@ -47,10 +75,15 @@ export const QueueItem = ({ className, ...props }: QueueItemProps) => (
   />
 );
 
+/**
+ * Props for QueueItemIndicator component.
+ * @property completed - Whether the item is marked as complete
+ */
 export type QueueItemIndicatorProps = ComponentProps<"span"> & {
   completed?: boolean;
 };
 
+/** Circular indicator showing completion status. */
 export const QueueItemIndicator = ({
   completed = false,
   className,
@@ -68,10 +101,15 @@ export const QueueItemIndicator = ({
   />
 );
 
+/**
+ * Props for QueueItemContent component.
+ * @property completed - Whether to show strikethrough style
+ */
 export type QueueItemContentProps = ComponentProps<"span"> & {
   completed?: boolean;
 };
 
+/** Text content for queue items with completion styling. */
 export const QueueItemContent = ({
   completed = false,
   className,
@@ -89,10 +127,15 @@ export const QueueItemContent = ({
   />
 );
 
+/**
+ * Props for QueueItemDescription component.
+ * @property completed - Whether to show completed styling
+ */
 export type QueueItemDescriptionProps = ComponentProps<"div"> & {
   completed?: boolean;
 };
 
+/** Secondary description text for queue items. */
 export const QueueItemDescription = ({
   completed = false,
   className,
@@ -110,8 +153,10 @@ export const QueueItemDescription = ({
   />
 );
 
+/** Props for QueueItemActions container. */
 export type QueueItemActionsProps = ComponentProps<"div">;
 
+/** Container for queue item action buttons. */
 export const QueueItemActions = ({
   className,
   ...props
@@ -119,11 +164,13 @@ export const QueueItemActions = ({
   <div className={cn("flex gap-1", className)} {...props} />
 );
 
+/** Props for QueueItemAction button. */
 export type QueueItemActionProps = Omit<
   ComponentProps<typeof Button>,
   "variant" | "size"
 >;
 
+/** Ghost button for queue item actions, visible on hover. */
 export const QueueItemAction = ({
   className,
   ...props
@@ -140,8 +187,10 @@ export const QueueItemAction = ({
   />
 );
 
+/** Props for QueueItemAttachment container. */
 export type QueueItemAttachmentProps = ComponentProps<"div">;
 
+/** Container for file/image attachments on queue items. */
 export const QueueItemAttachment = ({
   className,
   ...props
@@ -149,8 +198,10 @@ export const QueueItemAttachment = ({
   <div className={cn("mt-1 flex flex-wrap gap-2", className)} {...props} />
 );
 
+/** Props for QueueItemImage thumbnail. */
 export type QueueItemImageProps = ComponentProps<"img">;
 
+/** Image thumbnail for attachment preview. */
 export const QueueItemImage = ({
   className,
   ...props
@@ -164,8 +215,10 @@ export const QueueItemImage = ({
   />
 );
 
+/** Props for QueueItemFile badge. */
 export type QueueItemFileProps = ComponentProps<"span">;
 
+/** File attachment badge with paperclip icon. */
 export const QueueItemFile = ({
   children,
   className,
@@ -183,8 +236,10 @@ export const QueueItemFile = ({
   </span>
 );
 
+/** Props for QueueList scrollable container. */
 export type QueueListProps = ComponentProps<typeof ScrollArea>;
 
+/** Scrollable list container for queue items. */
 export const QueueList = ({
   children,
   className,
@@ -197,9 +252,10 @@ export const QueueList = ({
   </ScrollArea>
 );
 
-// QueueSection - collapsible section container
+/** Props for QueueSection collapsible container. */
 export type QueueSectionProps = ComponentProps<typeof Collapsible>;
 
+/** Collapsible section container for grouping queue items. */
 export const QueueSection = ({
   className,
   defaultOpen = true,
@@ -208,9 +264,10 @@ export const QueueSection = ({
   <Collapsible className={cn(className)} defaultOpen={defaultOpen} {...props} />
 );
 
-// QueueSectionTrigger - section header/trigger
+/** Props for QueueSectionTrigger button. */
 export type QueueSectionTriggerProps = ComponentProps<"button">;
 
+/** Button trigger for collapsing/expanding queue sections. */
 export const QueueSectionTrigger = ({
   children,
   className,
@@ -230,13 +287,19 @@ export const QueueSectionTrigger = ({
   </CollapsibleTrigger>
 );
 
-// QueueSectionLabel - label content with icon and count
+/**
+ * Props for QueueSectionLabel component.
+ * @property count - Item count to display
+ * @property label - Label text
+ * @property icon - Optional icon element
+ */
 export type QueueSectionLabelProps = ComponentProps<"span"> & {
   count?: number;
   label: string;
   icon?: React.ReactNode;
 };
 
+/** Label with chevron, optional icon, and count for section headers. */
 export const QueueSectionLabel = ({
   count,
   label,
@@ -253,11 +316,12 @@ export const QueueSectionLabel = ({
   </span>
 );
 
-// QueueSectionContent - collapsible content area
+/** Props for QueueSectionContent area. */
 export type QueueSectionContentProps = ComponentProps<
   typeof CollapsibleContent
 >;
 
+/** Collapsible content area for section items. */
 export const QueueSectionContent = ({
   className,
   ...props
@@ -265,8 +329,10 @@ export const QueueSectionContent = ({
   <CollapsibleContent className={cn(className)} {...props} />
 );
 
+/** Props for Queue root container. */
 export type QueueProps = ComponentProps<"div">;
 
+/** Root container for queue UI with border and shadow. */
 export const Queue = ({ className, ...props }: QueueProps) => (
   <div
     className={cn(

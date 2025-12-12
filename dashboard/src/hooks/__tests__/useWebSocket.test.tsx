@@ -9,6 +9,7 @@ import { renderHook } from '@testing-library/react';
 import { useWebSocket } from '../useWebSocket';
 import { useWorkflowStore } from '../../store/workflowStore';
 import { createMockEvent } from '../../__tests__/fixtures';
+import { suppressConsoleLogs } from '@/test/helpers';
 import type { WebSocketMessage } from '../../types';
 
 // Mock WebSocket
@@ -74,11 +75,13 @@ describe('useWebSocket', () => {
       isConnected: false,
       connectionError: null,
     });
+    suppressConsoleLogs();
   });
 
   afterEach(() => {
     vi.runOnlyPendingTimers();
     vi.useRealTimers();
+    vi.restoreAllMocks();
   });
 
   it('should connect to WebSocket on mount', () => {

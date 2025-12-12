@@ -18,21 +18,15 @@ import type { WorkflowEvent } from '../types';
 const MAX_EVENTS_PER_WORKFLOW = 500;
 
 /**
- * Zustand store state for real-time WebSocket events and UI state.
+ * Zustand store state for real-time WebSocket events and connection state.
  *
- * Note: Workflow data comes from React Router loaders, not this store.
+ * Note: Workflow data and UI state (including selection) come from React Router loaders and URL params.
  * This store only manages:
  * - Real-time events from WebSocket
- * - UI state (selected workflow)
  * - Connection state
  * - Pending actions for optimistic UI
  */
 interface WorkflowState {
-  /**
-   * The currently selected workflow ID in the UI, or null if none selected.
-   */
-  selectedWorkflowId: string | null;
-
   /**
    * Real-time events from WebSocket, grouped by workflow ID.
    * Each workflow maintains a separate array of events, automatically
@@ -62,13 +56,6 @@ interface WorkflowState {
    * Used for optimistic UI updates and loading states.
    */
   pendingActions: string[];
-
-  /**
-   * Selects a workflow for display in the UI.
-   *
-   * @param id - The workflow ID to select, or null to deselect.
-   */
-  selectWorkflow: (id: string | null) => void;
 
   /**
    * Adds a new event to the store for the specified workflow.
@@ -116,24 +103,19 @@ interface WorkflowState {
 }
 
 /**
- * Zustand store hook for managing workflow real-time events and UI state.
+ * Zustand store hook for managing workflow real-time events and connection state.
  *
  * This store handles:
  * - Real-time WebSocket events (grouped by workflow, auto-trimmed)
- * - UI state (currently selected workflow)
  * - WebSocket connection status and errors
  * - Pending action tracking for optimistic UI updates
  *
- * State is persisted to sessionStorage, but only UI state is saved
- * (selectedWorkflowId and lastEventId). Real-time events are ephemeral
- * and not persisted.
+ * State is persisted to sessionStorage, but only lastEventId is saved.
+ * Real-time events are ephemeral and not persisted.
  *
  * @example
  * ```typescript
- * const { selectedWorkflowId, addEvent, isConnected } = useWorkflowStore();
- *
- * // Select a workflow
- * useWorkflowStore.getState().selectWorkflow('workflow-123');
+ * const { addEvent, isConnected } = useWorkflowStore();
  *
  * // Add a real-time event
  * addEvent({
@@ -153,14 +135,11 @@ interface WorkflowState {
 export const useWorkflowStore = create<WorkflowState>()(
   persist(
     (set) => ({
-      selectedWorkflowId: null,
       eventsByWorkflow: {},
       lastEventId: null,
       isConnected: false,
       connectionError: null,
       pendingActions: [],
-
-      selectWorkflow: (id) => set({ selectedWorkflowId: id }),
 
       addEvent: (event) =>
         set((state) => {
@@ -220,13 +199,10 @@ export const useWorkflowStore = create<WorkflowState>()(
           sessionStorage.removeItem(name);
         },
       },
-      // Only persist UI state - events are ephemeral
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      partialize: (state) =>
-        ({
-          selectedWorkflowId: state.selectedWorkflowId,
-          lastEventId: state.lastEventId,
-        }) as any,
+      // Only persist lastEventId - events are ephemeral
+      partialize: (state) => ({
+        lastEventId: state.lastEventId,
+      }) as unknown as WorkflowState,
     }
   )
 );

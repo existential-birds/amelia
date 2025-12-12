@@ -4,14 +4,31 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 
+/**
+ * @fileoverview Connection lost error screen component.
+ */
 import { WifiOff, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
+/**
+ * Props for the ConnectionLost component.
+ * @property onRetry - Callback to attempt reconnection
+ * @property error - Optional error message to display
+ */
 interface ConnectionLostProps {
   onRetry: () => void;
   error?: string;
 }
 
+/**
+ * Full-screen error display when WebSocket connection is lost.
+ *
+ * Shows an error icon, message, and reconnect button.
+ * Used when the real-time connection to the server fails.
+ *
+ * @param props - Component props
+ * @returns The connection lost error UI
+ */
 export function ConnectionLost({ onRetry, error }: ConnectionLostProps) {
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-background text-foreground p-8">

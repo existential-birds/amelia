@@ -22,7 +22,6 @@ describe('useWorkflowActions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     useWorkflowStore.setState({
-      selectedWorkflowId: null,
       eventsByWorkflow: {},
       lastEventId: null,
       isConnected: false,
