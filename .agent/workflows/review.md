@@ -18,6 +18,40 @@ description: Launch a rigorous, tool-backed code review agent for current change
     *   For every changed file, ask: "Does this change belong here?"
     *   Check for circular dependencies or layer violations (e.g., UI calls DB directly).
 
+3.  **Agentic Code Detection:**
+    *   Check if changes involve LLM-powered agents, orchestrators, or AI workflows.
+    *   Indicators: `BaseModel` schemas for LLM outputs, `LangGraph`, `pydantic-ai`, prompt templates, tool handlers.
+    *   **If detected:** Proceed to Phase 1.5 for 12-Factor Agent analysis.
+
+## 🤖 Phase 1.5: 12-Factor Agent Analysis (For Agentic Code)
+
+**Use the `agent-architecture-analysis` skill for comprehensive evaluation.**
+
+When changes involve LLM-powered agents, evaluate against these key 12-Factor principles:
+
+| Factor | What to Check | Anti-patterns |
+| :--- | :--- | :--- |
+| **F1: Structured Outputs** | LLM outputs validated via Pydantic/schemas | `json.loads()` without validation, regex parsing |
+| **F4: Tools as Structured Outputs** | Tool handlers type-safe, separated from LLM | `eval()`/`exec()` on LLM output, magic dispatch |
+| **F5: Unified State** | Single state object tracks execution + business | State split across multiple systems |
+| **F8: Own Control Flow** | Custom routing, not framework defaults | Single path, no branching logic |
+| **F9: Error Self-Healing** | Errors in context, retry thresholds | `logger.error()` without context feedback |
+| **F10: Focused Agents** | Single responsibility, 3-10 steps max | God agent with 20+ tools, unbounded steps |
+| **F12: Stateless Reducer** | Immutable state updates, side effects isolated | `state.field = value` mutations |
+
+**Verification Actions:**
+*   **Hypothesis:** "This agent has too many responsibilities."
+    *   **Action:** Count tool registrations and method count per agent class.
+    *   **Result:** >10 tools → **Report MAJOR Issue.**
+
+*   **Hypothesis:** "LLM output isn't validated."
+    *   **Action:** `grep -r "json.loads\|\.split(" --include="*.py"` in agent files.
+    *   **Result:** Unvalidated parsing found → **Report CRITICAL Issue.**
+
+*   **Hypothesis:** "State is mutated in-place."
+    *   **Action:** `grep -r "\.status = \|\.field = " --include="*.py"` in state/agent files.
+    *   **Result:** In-place mutations → **Report MINOR Issue.**
+
 ## 🧪 Phase 2: Verification Loop (The "Trust but Verify" Rule)
 
 **You MUST use tools to verify your hunches.**
@@ -63,6 +97,15 @@ Generate a valid Markdown artifact named `review_report.md`.
 - [ ] Credentials checked?
 - [ ] Input validation checked?
 - [ ] Error handling safe?
+
+## 🤖 12-Factor Agent Compliance (if applicable)
+- [ ] LLM outputs schema-validated? (F1)
+- [ ] Tool handlers type-safe? (F4)
+- [ ] State unified, not split? (F5)
+- [ ] Control flow customized? (F8)
+- [ ] Errors fed back to context? (F9)
+- [ ] Agents focused (3-10 steps)? (F10)
+- [ ] State updates immutable? (F12)
 
 ## 📝 Findings
 

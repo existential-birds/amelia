@@ -45,6 +45,20 @@ git diff {BASE_SHA}..{HEAD_SHA}
 - Performance implications?
 - Security concerns?
 
+**12-Factor Agent Compliance (for agentic code):**
+
+If changes involve LLM-powered agents, orchestrators, or AI workflows, use the `agent-architecture-analysis` skill and evaluate:
+
+| Factor | Check | Red Flag |
+|--------|-------|----------|
+| F1: Structured Outputs | Pydantic schemas for LLM responses | `json.loads()` without validation |
+| F4: Tool Handlers | Type-safe, separated from LLM | `eval()`/`exec()` on LLM output |
+| F5: Unified State | Single state object | State split across systems |
+| F8: Control Flow | Custom routing logic | Framework defaults only |
+| F9: Error Handling | Errors fed to LLM context | `logger.error()` without retry |
+| F10: Agent Focus | 3-10 steps, single responsibility | God agent with 20+ tools |
+| F12: Stateless Reducer | Immutable updates | `state.field = value` |
+
 **Testing:**
 - Tests actually test logic (not mocks)?
 - Edge cases covered?
@@ -75,6 +89,9 @@ git diff {BASE_SHA}..{HEAD_SHA}
 
 #### Important (Should Fix)
 [Architecture problems, missing features, poor error handling, test gaps]
+
+#### 12-Factor Agent Issues (if applicable)
+[Agentic architecture violations - unvalidated LLM outputs, god agents, state mutations, missing error context]
 
 #### Minor (Nice to Have)
 [Code style, optimization opportunities, documentation improvements]
