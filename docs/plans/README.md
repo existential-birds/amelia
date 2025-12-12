@@ -4,12 +4,7 @@ This folder contains active implementation plans for in-progress work. Plans are
 
 ## Active Plans
 
-| Plan | Description | Phase |
-|------|-------------|-------|
-| [Dashboard Setup](phase-2.3-08-dashboard-setup.md) | React dashboard frontend with Vite, TypeScript, shadcn/ui | Phase 2.3 |
-| [Zustand & WebSocket](phase-2.3-09-zustand-websocket.md) | State management and real-time updates | Phase 2.3 |
-| [Dashboard Components](phase-2.3-10-dashboard-components.md) | UI components for workflow visualization | Phase 2.3 |
-| [Web Dashboard Design](2025-12-01-web-dashboard-design.md) | Overall dashboard architecture and design | Phase 2 |
+*No active plans at this time.*
 
 ## Plan Lifecycle
 
