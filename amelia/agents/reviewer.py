@@ -84,11 +84,12 @@ Analyze the provided code changes and provide a comprehensive review."""
                     source="state.current_task.description"
                 )
             )
-        else:
+        elif issue_summary:
+            # issue_summary is guaranteed non-None here due to check on line 67
             sections.append(
                 ContextSection(
                     name="issue",
-                    content=issue_summary,  # type: ignore[arg-type]
+                    content=issue_summary,
                     source="state.issue"
                 )
             )

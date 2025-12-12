@@ -63,7 +63,7 @@ class TestArchitectContextStrategy:
 
         # User message with formatted sections
         assert messages[1].role == "user"
-        assert "## issue" in messages[1].content
+        assert "## Issue" in messages[1].content
         assert "Implement feature X" in messages[1].content
         assert "Feature description" in messages[1].content
 

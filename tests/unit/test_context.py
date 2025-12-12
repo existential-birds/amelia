@@ -27,7 +27,7 @@ class TestCompiledContext:
         assert messages[0].role == "system"
         assert messages[0].content == "You are a developer agent."
         assert messages[1].role == "user"
-        assert messages[1].content == "## issue\n\nFix bug in auth module"
+        assert messages[1].content == "## Issue\n\nFix bug in auth module"
 
     def test_to_messages_with_sections_multiple_sections(self):
         """Test to_messages formats multiple sections with markdown headers."""
@@ -51,9 +51,9 @@ class TestCompiledContext:
 
         # Check sections are formatted with headers and separated by double newlines
         expected_content = (
-            "## issue\n\nImplement feature X\n\n"
-            "## current_task\n\nWrite tests first\n\n"
-            "## plan\n\n3 tasks in sequence"
+            "## Issue\n\nImplement feature X\n\n"
+            "## Current_Task\n\nWrite tests first\n\n"
+            "## Plan\n\n3 tasks in sequence"
         )
         assert messages[1].content == expected_content
 
@@ -68,7 +68,7 @@ class TestCompiledContext:
         # Should only have user message
         assert len(messages) == 1
         assert messages[0].role == "user"
-        assert messages[0].content == "## task\n\nComplete unit tests"
+        assert messages[0].content == "## Task\n\nComplete unit tests"
 
     def test_to_messages_with_messages_override(self):
         """Test that messages override bypasses section-based generation."""

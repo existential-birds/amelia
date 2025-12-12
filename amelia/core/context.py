@@ -116,7 +116,7 @@ class ContextStrategy(ABC):
         # Build user message from sections with markdown headers
         if context.sections:
             section_parts = [
-                f"## {section.name}\n\n{section.content}" for section in context.sections
+                f"## {section.name.title()}\n\n{section.content}" for section in context.sections
             ]
             user_content = "\n\n".join(section_parts)
             messages.append(
