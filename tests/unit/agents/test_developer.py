@@ -100,7 +100,7 @@ class TestDeveloperStreamEmitter:
         )
 
         # Execute task
-        await developer.execute_current_task(state)
+        await developer.execute_current_task(state, workflow_id="TEST-123")
 
         # Verify emitter was called
         assert mock_stream_emitter.called
@@ -111,7 +111,7 @@ class TestDeveloperStreamEmitter:
             event = call.args[0]
             assert isinstance(event, StreamEvent)
             assert event.agent == "developer"
-            assert event.workflow_id == "TEST-123"  # Falls back to issue ID
+            assert event.workflow_id == "TEST-123"  # Uses provided workflow_id
             assert isinstance(event.timestamp, datetime)
             assert event.type in [
                 StreamEventType.CLAUDE_THINKING,
@@ -158,7 +158,7 @@ class TestDeveloperStreamEmitter:
         )
 
         # Should not raise even without emitter
-        result = await developer.execute_current_task(state)
+        result = await developer.execute_current_task(state, workflow_id="TEST-456")
         assert result["status"] == "completed"
 
     async def test_developer_converts_claude_events_to_stream_events(
@@ -206,7 +206,7 @@ class TestDeveloperStreamEmitter:
             stream_emitter=mock_stream_emitter,
         )
 
-        await developer.execute_current_task(state)
+        await developer.execute_current_task(state, workflow_id="TEST-789")
 
         # Verify conversions
         emitted_events = [call.args[0] for call in mock_stream_emitter.call_args_list]
