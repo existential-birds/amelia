@@ -154,7 +154,7 @@ class Architect:
         context_strategy: Strategy for compiling context from ExecutionState.
     """
 
-    context_strategy: type[ContextStrategy] = ArchitectContextStrategy
+    context_strategy: type[ArchitectContextStrategy] = ArchitectContextStrategy
 
     def __init__(self, driver: DriverInterface):
         """Initialize the Architect agent.
@@ -231,10 +231,6 @@ class Architect:
         # Get prompts from strategy (must be ArchitectContextStrategy)
         # We instantiate directly since we know the context_strategy class attribute
         strategy_instance = self.context_strategy()
-        if not isinstance(strategy_instance, ArchitectContextStrategy):
-            raise TypeError(
-                f"Expected ArchitectContextStrategy, got {type(strategy_instance).__name__}"
-            )
 
         task_system_prompt = strategy_instance.get_task_generation_system_prompt()
         task_user_prompt = strategy_instance.get_task_generation_user_prompt()

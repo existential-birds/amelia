@@ -139,12 +139,7 @@ class ContextStrategy(ABC):
         """
         if not state.plan or not state.current_task_id:
             return None
-
-        for task in state.plan.tasks:
-            if task.id == state.current_task_id:
-                return task
-
-        return None
+        return state.plan.get_task(state.current_task_id)
 
     def get_issue_summary(self, state: ExecutionState) -> str | None:
         """Format issue title and description into a summary.

@@ -988,8 +988,8 @@ class OrchestratorService:
             config: The RunnableConfig with thread_id.
         """
         try:
-            # Fetch current checkpoint state from LangGraph (sync method, safe in async)
-            checkpoint_state = graph.get_state(config)
+            # Fetch current checkpoint state from LangGraph
+            checkpoint_state = await graph.aget_state(config)
             if checkpoint_state is None or checkpoint_state.values is None:
                 logger.warning(
                     "Cannot sync plan - no checkpoint state",
