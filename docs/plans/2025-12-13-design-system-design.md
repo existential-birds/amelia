@@ -480,11 +480,11 @@ slidev-theme-amelia/
 
 ---
 
-## Executive Presentation Style
+## Presentation Design Principles
 
-The Slidev theme includes an **executive style** for stakeholder-facing presentations. This style emphasizes clarity, structure, and data-driven storytelling for decision-makers.
+The Slidev theme includes layouts designed for stakeholder-facing presentations. These emphasize clarity, structure, and data-driven storytelling using the Amelia color system.
 
-> **When to use:** Stakeholder presentations, board decks, investment pitches, strategic recommendations. Use the Amelia aviation style for internal/technical presentations.
+> **Light mode recommended for presentations** - Use light mode for projectors, printed handouts, and executive audiences. Dark mode works well for developer conferences and technical demos.
 
 ### Design Philosophy
 
@@ -500,40 +500,35 @@ The Slidev theme includes an **executive style** for stakeholder-facing presenta
 
 ---
 
-### Executive Color Palette
+### Presentation Color Usage
 
-Professional blue-based palette for executive audiences. White backgrounds for projector/print clarity.
+For presentations, use the **Amelia light mode** color tokens. These provide good contrast on projectors and in printed materials.
 
-| Token | Hex | Usage |
-|-------|-----|-------|
-| `exec-bg` | #FFFFFF | Slide background |
-| `exec-surface` | #F8F9FA | Subtle panels, callout boxes |
-| `exec-navy` | #051D49 | Primary blue, titles |
-| `exec-blue` | #2E6B9C | Links, accents |
-| `exec-bright` | #0077C8 | Highlight color (use sparingly) |
-| `exec-text` | #333333 | Body text |
-| `exec-muted` | #666666 | Secondary text |
-| `exec-border` | #E0E0E0 | Dividers, chart axes |
-| `exec-positive` | #2E7D32 | Positive data, growth |
-| `exec-negative` | #C62828 | Negative data, decline |
-| `exec-neutral` | #9E9E9E | Neutral series data |
-
-**Coolors:** https://coolors.co/ffffff-f8f9fa-051d49-2e6b9c-0077c8-333333-666666
+| Token (Light Mode) | Hex | Presentation Usage |
+|-------------------|-----|-------------------|
+| `background` | #FDF8F0 | Slide background |
+| `surface` | #FFFDF9 | Panels, callout boxes |
+| `foreground` | #1A2F23 | Titles, body text |
+| `muted` | #5C7263 | Secondary text |
+| `primary` | #2E6B9C | Links, highlights, key data |
+| `accent` | #E8B84A | Decorative accents (sparingly) |
+| `completed` | #3D7A5A | Positive data, growth |
+| `destructive` | #8B3224 | Negative data, errors |
 
 **Color Principles:**
-- **Restrained base palette** — Most data series use neutral grays
-- **Single highlight color** — Reserve `exec-bright` (#0077C8) for "our recommendation," "target state," or the key data point
+- **Restrained base palette** — Most data series use muted gray (#5C7263)
+- **Single highlight color** — Reserve `primary` (#2E6B9C) for "our recommendation," "target state," or the key data point
 - **Color = meaning** — Never decorative; always functional
 
-#### Color Budget Rule (McKinsey Three-Color Rule)
+#### Color Budget Rule (Three-Color Rule)
 
 Each slide should use a maximum of **three colors** for data visualization:
 
 | Slot | Purpose | Default Color |
 |------|---------|---------------|
-| **Primary** | Key data point, "our company," recommendation | `exec-bright` (#0077C8) |
-| **Neutral** | All other data series, comparison items | `exec-neutral` (#9E9E9E) |
-| **Directional** | Positive/negative change (when showing trends) | `exec-positive` or `exec-negative` |
+| **Primary** | Key data point, "our company," recommendation | `primary` (#2E6B9C) |
+| **Neutral** | All other data series, comparison items | `muted` (#5C7263) |
+| **Directional** | Positive/negative change (when showing trends) | `completed` or `destructive` |
 
 **Enforcement:**
 - If you need more than 3 colors, the chart is too complex — split into multiple charts
@@ -542,11 +537,13 @@ Each slide should use a maximum of **three colors** for data visualization:
 
 ---
 
-### Executive Typography
+### Presentation Typography
+
+Uses the standard Amelia font stack:
 
 | Role | Family | Weight | Usage |
 |------|--------|--------|-------|
-| **Action Title** | Georgia | 700 | Slide headlines (complete sentences) |
+| **Action Title** | Barlow Condensed | 700 | Slide headlines (complete sentences) |
 | **Subheading** | Barlow Condensed | 600 | Section labels, chart titles |
 | **Body** | Source Sans 3 | 400, 600 | Paragraphs, bullets |
 | **Data** | IBM Plex Mono | 400 | Numbers, percentages, KPIs |
@@ -567,7 +564,7 @@ Each slide should use a maximum of **three colors** for data visualization:
 
 ---
 
-### Executive Slide Grid
+### Presentation Slide Grid
 
 Three-zone layout with strict margins and alignment.
 
@@ -601,35 +598,35 @@ Three-zone layout with strict margins and alignment.
 
 ---
 
-### Executive Slide Layouts
+### Presentation Layouts
 
-Extended layouts for the Slidev theme package:
+Extended layouts for stakeholder presentations:
 
 ```
 layouts/
-├── exec-action.vue       # Standard action-title slide
-├── exec-scqa.vue         # SCQA framework (4-panel)
-├── exec-exec.vue         # Executive summary
-├── exec-data.vue         # Full-bleed chart
-├── exec-ghost.vue        # Wireframe planning mode
-├── exec-pyramid.vue      # Pyramid principle diagram
-├── exec-comparison.vue   # Side-by-side analysis
-├── exec-takeaway.vue     # Key insight callout
-├── exec-waterfall.vue    # Bridge/waterfall chart
-├── exec-timeline.vue     # Horizontal timeline
-├── exec-layercake.vue    # Technology architecture stack
-├── exec-chevron.vue      # Sequential process flow
-└── exec-harvey.vue       # Qualitative comparison matrix
+├── action.vue       # Standard action-title slide
+├── scqa.vue         # SCQA framework (4-panel)
+├── summary.vue      # Executive summary with recommendation
+├── data.vue         # Full-bleed chart
+├── ghost.vue        # Wireframe planning mode
+├── pyramid.vue      # Pyramid principle diagram
+├── comparison.vue   # Side-by-side analysis
+├── takeaway.vue     # Key insight callout
+├── waterfall.vue    # Bridge/waterfall chart
+├── timeline.vue     # Horizontal timeline
+├── layercake.vue    # Technology architecture stack
+├── chevron.vue      # Sequential process flow
+└── harvey.vue       # Qualitative comparison matrix
 ```
 
-#### exec-action (Default)
+#### action (Default)
 
-Standard executive slide with action title, body content, and source footer.
+Standard slide with action title, body content, and source footer.
 
 **Usage:**
 ```md
 ---
-layout: exec-action
+layout: action
 title: "Customer churn increased 23% after removing the free tier"
 source: "Internal analytics, Q3 2024"
 ---
@@ -642,14 +639,14 @@ source: "Internal analytics, Q3 2024"
 - `source`: Data source citation for footer
 - `subtitle`: Optional 1-line elaboration below title
 
-#### exec-scqa
+#### scqa
 
 Four-panel SCQA framework for executive narratives.
 
 **Usage:**
 ```md
 ---
-layout: exec-scqa
+layout: scqa
 ---
 
 ::situation::
@@ -676,14 +673,14 @@ Launch a fighter brand targeting the mid-market, preserving the premium tier for
 └─────────────────┴─────────────────┘
 ```
 
-#### exec-exec
+#### summary
 
 Executive summary slide with recommendation box.
 
 **Usage:**
 ```md
 ---
-layout: exec-exec
+layout: summary
 title: "Executive Summary"
 recommendation: "Proceed with Option B: Acquire TechCo for $450M"
 ---
@@ -699,16 +696,16 @@ recommendation: "Proceed with Option B: Acquire TechCo for $450M"
 3. Signing target: Feb 28
 ```
 
-**Visual:** Recommendation displayed in highlighted callout box with `exec-bright` left border.
+**Visual:** Recommendation displayed in highlighted callout box with `primary` left border.
 
-#### exec-data
+#### data
 
 Full-bleed chart slide with minimal chrome. Chart covers 90% of body zone.
 
 **Usage:**
 ```md
 ---
-layout: exec-data
+layout: data
 title: "Revenue concentration decreased as we expanded into three new verticals"
 source: "Company financials, 2020-2024"
 chartTitle: "Revenue by segment ($M)"
@@ -723,14 +720,14 @@ chartTitle: "Revenue by segment ($M)"
 - Full-width chart area
 - Source citation in footer
 
-#### exec-ghost
+#### ghost
 
 Wireframe/planning mode for ghost decks. Shows slide structure without final content.
 
 **Usage:**
 ```md
 ---
-layout: exec-ghost
+layout: ghost
 title: "[ACTION TITLE: State the key insight about market opportunity]"
 placeholder: "Chart showing TAM/SAM/SOM breakdown by region"
 notes: "Need Q4 market sizing data from research team"
@@ -743,14 +740,14 @@ notes: "Need Q4 market sizing data from research team"
 - Yellow sticky-note style comments
 - "DRAFT" watermark
 
-#### exec-pyramid
+#### pyramid
 
 Visualize the Pyramid Principle hierarchy.
 
 **Usage:**
 ```md
 ---
-layout: exec-pyramid
+layout: pyramid
 title: "Three initiatives will reduce costs by $50M annually"
 ---
 
@@ -780,14 +777,14 @@ Reduce operating costs by $50M through supply chain optimization
    └───────┘   └───────┘   └───────┘
 ```
 
-#### exec-comparison
+#### comparison
 
 Side-by-side analysis of options or scenarios.
 
 **Usage:**
 ```md
 ---
-layout: exec-comparison
+layout: comparison
 title: "Option B offers faster time-to-market at comparable cost"
 leftLabel: "Option A: Build"
 rightLabel: "Option B: Buy"
@@ -807,16 +804,16 @@ recommendation: "right"
 - Control: Partial
 ```
 
-**Visual:** Recommended option highlighted with `exec-bright` border.
+**Visual:** Recommended option highlighted with `primary` border.
 
-#### exec-takeaway
+#### takeaway
 
 Key insight callout slide for transitions or emphasis.
 
 **Usage:**
 ```md
 ---
-layout: exec-takeaway
+layout: takeaway
 ---
 
 The market will consolidate to 3 players within 5 years.
@@ -826,14 +823,14 @@ The market will consolidate to 3 players within 5 years.
 
 **Visual:**
 - Large, centered text
-- Emphasis line in `exec-bright`
+- Emphasis line in `primary`
 - Minimal visual elements
 
 ---
 
-### Executive Components
+### Presentation Components
 
-Vue components for executive presentations:
+Vue components for presentations:
 
 ```
 components/
@@ -862,7 +859,7 @@ components/
 
 - Font: Georgia, 700
 - Size: 28px (scales with slide)
-- Color: `exec-navy`
+- Color: `foreground`
 - Max lines: 2
 
 #### InsightBox
@@ -876,7 +873,7 @@ Highlighted callout for key insights or recommendations.
 ```
 
 **Types:**
-- `recommendation` — Blue left border (`exec-bright`)
+- `recommendation` — Blue left border (`primary`)
 - `warning` — Red left border
 - `insight` — Navy left border
 - `action` — Green left border
@@ -915,8 +912,8 @@ Qualitative comparison indicator for matrices (Build vs Buy, vendor comparisons)
 | `full` | ● | Fully meets criteria |
 
 **Styling:**
-- Circle stroke: `exec-border` (#E0E0E0)
-- Fill color: `exec-navy` (#051D49)
+- Circle stroke: `border` (#E0E0E0)
+- Fill color: `foreground` (#051D49)
 - Always include legend explaining what "Full" means
 
 #### LayerCakeDiagram
@@ -933,10 +930,10 @@ Stacked horizontal bands for visualizing technology architecture layers.
 ```
 
 **Styling:**
-- Default band: `exec-surface` background, `exec-border` stroke
-- Highlighted band: `exec-bright` left border (4px), slightly elevated shadow
+- Default band: `surface` background, `border` stroke
+- Highlighted band: `primary` left border (4px), slightly elevated shadow
 - Labels: Barlow Condensed 600, left-aligned
-- Sublabels: Source Sans 3 400, `exec-muted`
+- Sublabels: Source Sans 3 400, `muted`
 - Band height: 60-80px, full width
 - Gap between bands: 2px (to show separation)
 
@@ -957,9 +954,9 @@ Arrow-shaped process steps for visualizing sequential workflows (agentic process
 **Styling:**
 - Shape: Chevron/arrow pointing right, interlocking
 - Status colors:
-  - `completed`: `exec-positive` (#2E7D32)
-  - `active`: `exec-bright` (#0077C8)
-  - `pending`: `exec-neutral` (#9E9E9E)
+  - `completed`: `completed` (#2E7D32)
+  - `active`: `primary` (#0077C8)
+  - `pending`: `muted` (#9E9E9E)
 - Labels: Source Sans 3 600, centered in chevron
 - Height: 48px, width proportional to label
 - Overlap: 12px between chevrons
@@ -979,10 +976,10 @@ Individual segment for bridge/waterfall charts with connectors.
 
 **Styling:**
 - Bar colors:
-  - `start` / `end`: `exec-navy` (#051D49)
-  - `increase`: `exec-negative` (#C62828) for costs, `exec-positive` for revenue
-  - `decrease`: `exec-positive` (#2E7D32) for cost savings
-- Connector: 1px solid `exec-border`, horizontal line from bar top to next bar
+  - `start` / `end`: `foreground` (#051D49)
+  - `increase`: `destructive` (#C62828) for costs, `completed` for revenue
+  - `decrease`: `completed` (#2E7D32) for cost savings
+- Connector: 1px solid `border`, horizontal line from bar top to next bar
 - Value label: IBM Plex Mono, positioned above bar
 - Category label: Source Sans 3, below bar
 - Bar width: 48-64px, gap: 24px
@@ -1025,7 +1022,7 @@ Following Gene Zelazny's principles from "Say It With Charts":
 
 2. **Meaningful ordering** — Sort bars by value (not alphabetically) unless time-based
 
-3. **Single highlight** — Use `exec-bright` for only the key data point; all others in `exec-neutral`
+3. **Single highlight** — Use `primary` for only the key data point; all others in `muted`
 
 4. **Direct labeling** — Label data points directly, not via legend when possible
 
@@ -1039,7 +1036,7 @@ Before finalizing any data visualization, validate against this checklist:
 
 - [ ] **Title is insight** — Action title states the conclusion, not "Revenue by Quarter"
 - [ ] **Sorted meaningfully** — Bars sorted by value (largest first) unless time-based
-- [ ] **Single highlight** — Only ONE data point uses `exec-bright`; all others neutral
+- [ ] **Single highlight** — Only ONE data point uses `primary`; all others neutral
 - [ ] **Direct labels** — Data values labeled on/near data points, not in separate legend
 - [ ] **No chart junk** — No gridlines, no 3D effects, no background fills, no decorative elements
 - [ ] **Axis clarity** — Units obvious, sensible scale, no excessive decimals
@@ -1065,9 +1062,9 @@ Use Marimekko (Mekko) charts for 2D comparisons showing both segment size AND co
 
 | Element | Specification |
 |---------|---------------|
-| "Our company" segment | `exec-bright` (#0077C8) |
-| Competitor segments | `exec-neutral` (#9E9E9E) with varying opacity (90%, 70%, 50%) |
-| Segment borders | 1px `exec-border` |
+| "Our company" segment | `primary` (#0077C8) |
+| Competitor segments | `muted` (#9E9E9E) with varying opacity (90%, 70%, 50%) |
+| Segment borders | 1px `border` |
 | Segment labels | Source Sans 3, inside if >15% width, outside otherwise |
 | Width labels | IBM Plex Mono, below x-axis showing segment size |
 
@@ -1078,11 +1075,11 @@ Use Marimekko (Mekko) charts for 2D comparisons showing both segment size AND co
 ```
 ┌─────────────────────────────────────────────┐
 │                                             │
-│   ████ $120M  ← exec-bright (our co.)   │
-│   ████ $95M   ← exec-neutral            │
-│   ████ $82M   ← exec-neutral            │
-│   ████ $78M   ← exec-neutral            │
-│   ████ $65M   ← exec-neutral            │
+│   ████ $120M  ← primary (our co.)       │
+│   ████ $95M   ← muted                   │
+│   ████ $82M   ← muted                   │
+│   ████ $78M   ← muted                   │
+│   ████ $65M   ← muted                   │
 │                                             │
 │   Revenue by company, 2024                  │
 └─────────────────────────────────────────────┘
@@ -1136,7 +1133,7 @@ For each slide, ask: "So what?" If the answer isn't obvious from the action titl
 
 ```md
 ---
-layout: exec-ghost
+layout: ghost
 title: "[Insight about competitive positioning in enterprise segment]"
 ---
 
@@ -1158,7 +1155,7 @@ Quadrants: Leaders, Challengers, Niche, Declining
 
 | Element | Style |
 |---------|-------|
-| Slide border | Dashed, 2px, `exec-border` |
+| Slide border | Dashed, 2px, `border` |
 | Placeholders | Gray box with dotted border |
 | Notes | Yellow background (#FFF9C4), handwriting font |
 | Watermark | "DRAFT" diagonal, 20% opacity |
@@ -1166,18 +1163,16 @@ Quadrants: Leaders, Challengers, Niche, Declining
 
 ---
 
-### Executive Theme Structure
+### Theme Package Structure
 
-Extended theme package structure:
+Complete Slidev theme package structure:
 
 ```
 slidev-theme-amelia/
 ├── package.json
 ├── styles/
 │   ├── base.css
-│   ├── code.css
-│   ├── amelia.css           # Amelia aviation theme
-│   └── executive.css          # Executive theme
+│   └── code.css
 ├── layouts/
 │   ├── cover.vue
 │   ├── section.vue
@@ -1187,57 +1182,63 @@ slidev-theme-amelia/
 │   ├── quote.vue
 │   ├── diff-view.vue
 │   ├── focus.vue
-│   ├── exec-action.vue       # ← New
-│   ├── exec-scqa.vue         # ← New
-│   ├── exec-exec.vue         # ← New
-│   ├── exec-data.vue         # ← New
-│   ├── exec-ghost.vue        # ← New
-│   ├── exec-pyramid.vue      # ← New
-│   ├── exec-comparison.vue   # ← New
-│   ├── exec-takeaway.vue     # ← New
-│   ├── exec-waterfall.vue    # ← New
-│   └── exec-timeline.vue     # ← New
+│   ├── action.vue        # Action title slide
+│   ├── scqa.vue          # SCQA framework
+│   ├── summary.vue       # Executive summary
+│   ├── data.vue          # Full-bleed chart
+│   ├── ghost.vue         # Wireframe mode
+│   ├── pyramid.vue       # Pyramid principle
+│   ├── comparison.vue    # Side-by-side
+│   ├── takeaway.vue      # Key insight
+│   ├── waterfall.vue     # Bridge chart
+│   ├── timeline.vue      # Horizontal timeline
+│   ├── layercake.vue     # Tech stack
+│   ├── chevron.vue       # Process flow
+│   └── harvey.vue        # Comparison matrix
 └── components/
     ├── AmeliaLogo.vue
     ├── StatusBadge.vue
-    ├── ActionTitle.vue           # ← New
-    ├── SourceNote.vue            # ← New
-    ├── InsightBox.vue            # ← New
-    ├── SCQABlock.vue             # ← New
-    ├── PyramidDiagram.vue        # ← New
-    ├── GhostPlaceholder.vue      # ← New
-    ├── DataHighlight.vue         # ← New
-    └── RecommendationBox.vue     # ← New
+    ├── ActionTitle.vue
+    ├── SourceNote.vue
+    ├── InsightBox.vue
+    ├── SCQABlock.vue
+    ├── PyramidDiagram.vue
+    ├── GhostPlaceholder.vue
+    ├── DataHighlight.vue
+    ├── RecommendationBox.vue
+    ├── HarveyBall.vue
+    ├── LayerCakeDiagram.vue
+    ├── ChevronFlow.vue
+    └── WaterfallBar.vue
 ```
 
-### Switching Between Styles
+### Theme Configuration
 
-Configure style in presentation frontmatter:
+Configure the theme in presentation frontmatter:
 
 ```yaml
 ---
 theme: amelia
-style: executive  # or 'amelia' (default)
 ---
 ```
 
-Or per-slide:
+Use `class: dark` or `class: light` per-slide to control color mode:
 
 ```md
 ---
-layout: exec-action
+layout: action
 title: "Revenue grew 45% through three strategic initiatives"
+class: light
 ---
 ```
 
 ---
 
-### Example Executive Presentation
+### Example Presentation
 
 ```md
 ---
 theme: amelia
-style: executive
 title: Strategic Options for Market Expansion
 author: Strategy Team
 date: 2024-12-15
@@ -1248,9 +1249,10 @@ date: 2024-12-15
 Prepared for: Executive Committee
 
 ---
-layout: exec-exec
+layout: summary
 title: Executive Summary
 recommendation: Pursue Option B (Partnership) to enter APAC within 12 months
+class: light
 ---
 
 **Situation:** Acme leads North America but has no APAC presence, missing $2B TAM.
@@ -1265,7 +1267,8 @@ recommendation: Pursue Option B (Partnership) to enter APAC within 12 months
 3. Term sheet: Feb 28
 
 ---
-layout: exec-scqa
+layout: scqa
+class: light
 ---
 
 ::situation::
@@ -1281,7 +1284,8 @@ How should Acme enter APAC in the next 18 months while managing risk and investm
 Partner with RegionalCo for distribution, combining Acme technology with local relationships and compliance expertise.
 
 ---
-layout: exec-comparison
+layout: comparison
+class: light
 title: Partnership offers the best risk-adjusted path to APAC market entry
 leftLabel: Option A: Build
 rightLabel: Option B: Partner
@@ -1301,7 +1305,8 @@ recommendation: right
 - **Control:** Shared
 
 ---
-layout: exec-data
+layout: data
+class: light
 title: RegionalCo has the strongest distribution network across target markets
 source: Partner analysis, Q4 2024
 chartTitle: Distribution reach by potential partner (stores)
@@ -1310,7 +1315,8 @@ chartTitle: Distribution reach by potential partner (stores)
 <!-- Bar chart showing partner comparison -->
 
 ---
-layout: exec-takeaway
+layout: takeaway
+class: light
 ---
 
 **The APAC window is closing.**
@@ -1318,8 +1324,9 @@ layout: exec-takeaway
 Partnership with RegionalCo is the fastest, lowest-risk path to establish presence before competitors lock in the market.
 
 ---
-layout: exec-action
+layout: action
 title: Three workstreams will execute the partnership within 6 months
+class: light
 source: Project plan, v2.1
 ---
 
@@ -1463,24 +1470,19 @@ pnpm build:slides
 | Design spec document | Markdown | `design-system/README.md` |
 | CSS design tokens | CSS variables | `design-system/tokens/colors.css` |
 | JSON design tokens | JSON | `design-system/tokens/colors.json` |
-| Executive color tokens | CSS variables | `design-system/tokens/exec-colors.css` |
+| Typography tokens | CSS variables | `design-system/tokens/typography.css` |
 | D2 dark theme | .d2 | `design-system/themes/d2/amelia-dark.d2` |
 | D2 light theme | .d2 | `design-system/themes/d2/amelia-light.d2` |
 | Mermaid dark theme | JSON | `design-system/themes/mermaid/amelia-dark.json` |
 | Mermaid light theme | JSON | `design-system/themes/mermaid/amelia-light.json` |
-| Slidev theme (Amelia) | Vue/CSS | `design-system/themes/slidev/styles/amelia.css` |
-| Slidev theme (Executive) | Vue/CSS | `design-system/themes/slidev/styles/executive.css` |
-| Executive layouts (13 total) | Vue | `design-system/themes/slidev/layouts/exec-*.vue` |
-| Executive components (13 total) | Vue | `design-system/themes/slidev/components/` |
-| HarveyBall component | Vue | `design-system/themes/slidev/components/HarveyBall.vue` |
-| LayerCakeDiagram component | Vue | `design-system/themes/slidev/components/LayerCakeDiagram.vue` |
-| ChevronFlow component | Vue | `design-system/themes/slidev/components/ChevronFlow.vue` |
-| MarimekkoChart component | Vue | `design-system/themes/slidev/components/MarimekkoChart.vue` |
+| Slidev theme styles | CSS | `design-system/themes/slidev/styles/` |
+| Slidev layouts (21 total) | Vue | `design-system/themes/slidev/layouts/` |
+| Slidev components (14 total) | Vue | `design-system/themes/slidev/components/` |
 | VitePress theme | Vue/CSS | `design-system/themes/vitepress/` |
 | Logo SVGs | SVG | `design-system/assets/logo/` |
 | Font files | WOFF2 | `design-system/assets/fonts/` |
 | Example diagrams | D2, Mermaid | `design-system/examples/` |
-| Example executive deck | Slidev | `design-system/examples/exec-demo.md` |
+| Example presentation | Slidev | `design-system/examples/slides-demo.md` |
 | VitePress site | Markdown/Vue | `docs/site/` |
 | Presentations | Slidev | `docs/presentations/` |
 

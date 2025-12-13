@@ -22,7 +22,6 @@
 | `design-system/` directory structure | High | Low |
 | Standalone CSS/JSON design tokens | High | Low |
 | Light mode color tokens | High | Medium |
-| Executive presentation color tokens | Medium | Low |
 | D2 themes (dark + light) | Medium | Low |
 | Mermaid themes (dark + light) | Medium | Low |
 | Logo SVG assets | Medium | Low |
@@ -44,9 +43,8 @@ Extract and formalize design tokens from the existing dashboard implementation i
 design-system/
 ├── README.md
 ├── tokens/
-│   ├── colors.css          # CSS custom properties
+│   ├── colors.css          # CSS custom properties (dark + light mode)
 │   ├── colors.json         # JSON for tooling
-│   ├── exec-colors.css     # Executive palette
 │   ├── typography.css      # Font stacks, scale
 │   └── tokens.d.ts         # TypeScript definitions
 ├── themes/
@@ -70,7 +68,7 @@ Extract from `dashboard/src/styles/globals.css` into portable formats.
 
 **File: `design-system/tokens/colors.css`**
 - Dark mode (primary) color tokens
-- Light mode (secondary) color tokens
+- Light mode (secondary) color tokens - used for presentations on projectors
 - Status color tokens
 - Chart color tokens
 
@@ -78,14 +76,9 @@ Extract from `dashboard/src/styles/globals.css` into portable formats.
 - Same tokens in JSON format for JavaScript tooling
 - Structure: `{ dark: {...}, light: {...}, status: {...} }`
 
-**File: `design-system/tokens/exec-colors.css`**
-- Executive presentation palette from spec
-- White background, navy primary, professional blue accents
-
 **Acceptance criteria:**
 - [ ] colors.css contains all dark/light mode tokens
 - [ ] colors.json mirrors CSS tokens in JSON
-- [ ] exec-colors.css contains executive palette
 - [ ] Dashboard still works (tokens remain in globals.css; these are portable copies)
 
 #### Task 1.3: Create typography tokens
@@ -180,7 +173,7 @@ vars: {
 
 ### Phase 3: Slidev Theme Package
 
-Create a complete Slidev theme with both Amelia (aviation) and Executive styles.
+Create a complete Slidev theme with all presentation layouts using the unified Amelia design system.
 
 #### Task 3.1: Initialize Slidev theme package
 
@@ -189,9 +182,7 @@ design-system/themes/slidev/
 ├── package.json
 ├── styles/
 │   ├── base.css
-│   ├── code.css
-│   ├── amelia.css
-│   └── executive.css
+│   └── code.css
 ├── layouts/
 └── components/
 ```
@@ -200,9 +191,9 @@ design-system/themes/slidev/
 - [ ] Valid npm package structure
 - [ ] Can be installed as Slidev theme
 
-#### Task 3.2: Create Amelia (aviation) layouts
+#### Task 3.2: Create presentation layouts
 
-**Layouts:**
+**Core Layouts:**
 - `cover.vue` - Title slide with wordmark
 - `section.vue` - Section divider
 - `default.vue` - Content slide
@@ -212,34 +203,27 @@ design-system/themes/slidev/
 - `diff-view.vue` - Before/after code comparison
 - `focus.vue` - Demo spotlight mode
 
-**Acceptance criteria:**
-- [ ] Each layout matches spec design
-- [ ] Aviation color palette applied
-- [ ] Bebas Neue for display, Barlow for headings
-
-#### Task 3.3: Create Executive layouts
-
-**Layouts:**
-- `exec-action.vue` - Standard action-title slide
-- `exec-scqa.vue` - SCQA 4-panel framework
-- `exec-exec.vue` - Executive summary with recommendation
-- `exec-data.vue` - Full-bleed chart slide
-- `exec-ghost.vue` - Wireframe/planning mode
-- `exec-pyramid.vue` - Pyramid principle diagram
-- `exec-comparison.vue` - Side-by-side analysis
-- `exec-takeaway.vue` - Key insight callout
-- `exec-waterfall.vue` - Bridge/waterfall chart layout
-- `exec-timeline.vue` - Horizontal timeline
-- `exec-layercake.vue` - Technology stack diagram
-- `exec-chevron.vue` - Sequential process flow
-- `exec-harvey.vue` - Qualitative comparison matrix
+**Stakeholder Layouts:**
+- `action.vue` - Standard action-title slide
+- `scqa.vue` - SCQA 4-panel framework
+- `summary.vue` - Executive summary with recommendation
+- `data.vue` - Full-bleed chart slide
+- `ghost.vue` - Wireframe/planning mode
+- `pyramid.vue` - Pyramid principle diagram
+- `comparison.vue` - Side-by-side analysis
+- `takeaway.vue` - Key insight callout
+- `waterfall.vue` - Bridge/waterfall chart layout
+- `timeline.vue` - Horizontal timeline
+- `layercake.vue` - Technology stack diagram
+- `chevron.vue` - Sequential process flow
+- `harvey.vue` - Qualitative comparison matrix
 
 **Acceptance criteria:**
 - [ ] Each layout matches spec design
-- [ ] Executive color palette (white bg, navy primary)
-- [ ] Georgia for action titles, Barlow for subheadings
+- [ ] All layouts support both dark and light mode via `class: dark` or `class: light`
+- [ ] Bebas Neue for display, Barlow Condensed for headings
 
-#### Task 3.4: Create shared components
+#### Task 3.3: Create shared components
 
 **Components:**
 - `AmeliaLogo.vue` - Logo component with color variants
@@ -255,13 +239,14 @@ design-system/themes/slidev/
 - `HarveyBall.vue` - Qualitative comparison indicator
 - `LayerCakeDiagram.vue` - Technology stack visualization
 - `ChevronFlow.vue` - Sequential process arrows
+- `WaterfallBar.vue` - Bridge chart segment
 
 **Acceptance criteria:**
 - [ ] Components reusable across layouts
 - [ ] Props typed with TypeScript
 - [ ] Match spec styling exactly
 
-#### Task 3.5: Create Shiki code theme
+#### Task 3.4: Create Shiki code theme
 
 Configure code highlighting to use aviation colors:
 - Keywords: Gold #FFC857
@@ -272,15 +257,13 @@ Configure code highlighting to use aviation colors:
 
 **Acceptance criteria:**
 - [ ] Code blocks render with correct colors
-- [ ] Works in both Amelia and Executive styles
+- [ ] Works in both dark and light modes
 
-#### Task 3.6: Create example presentations
+#### Task 3.5: Create example presentation
 
-**File: `design-system/examples/slides-amelia.md`**
-- Demo of all Amelia layouts
-
-**File: `design-system/examples/slides-executive.md`**
-- Demo of all Executive layouts with SCQA narrative
+**File: `design-system/examples/slides-demo.md`**
+- Demo of all layouts (both core and stakeholder)
+- Shows both dark and light mode usage
 
 **Acceptance criteria:**
 - [ ] All layouts demonstrated
@@ -416,9 +399,8 @@ These task groups can run in parallel:
 |-------|-------|--------------|
 | **Tokens** | 1.2, 1.3 | After 1.1 |
 | **Diagrams** | 2.1, 2.2 | After Phase 1 |
-| **Slidev Amelia** | 3.2, 3.5 | After 3.1 |
-| **Slidev Executive** | 3.3 | After 3.1 |
-| **Components** | 3.4 | After 3.1 |
+| **Slidev Layouts** | 3.2, 3.4 | After 3.1 |
+| **Slidev Components** | 3.3 | After 3.1 |
 | **VitePress** | 4.1, 4.2 | After Phase 1 |
 
 ---
@@ -442,7 +424,7 @@ The design system is complete when:
 2. **Diagrams are consistent** - D2 and Mermaid diagrams look "Amelia-branded"
 3. **Presentations are fast** - Can create a new deck in minutes using existing layouts
 4. **Documentation is live** - VitePress site deployed and accessible
-5. **Executive decks work** - Can produce stakeholder-ready presentations
+5. **Stakeholder decks work** - Can produce professional presentations with light mode for projectors
 
 ---
 
@@ -450,9 +432,9 @@ The design system is complete when:
 
 | Phase | Tasks | Estimated Files |
 |-------|-------|-----------------|
-| Phase 1 | 4 | ~10 files |
+| Phase 1 | 4 | ~8 files |
 | Phase 2 | 3 | ~6 files |
-| Phase 3 | 6 | ~30 files |
+| Phase 3 | 5 | ~35 files |
 | Phase 4 | 3 | ~15 files |
 | Phase 5 | 3 | ~5 files |
-| **Total** | **19** | **~66 files** |
+| **Total** | **18** | **~69 files** |
