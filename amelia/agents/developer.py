@@ -160,7 +160,10 @@ class Developer:
         if self.execution_mode == "agentic":
             return await self._execute_agentic(task, cwd, state)
         else:
-            return await self._execute_structured(task, state)
+            result = await self._execute_structured(task, state)
+            # Ensure task_id is included for consistency with agentic path
+            result["task_id"] = task.id
+            return result
 
     async def _execute_agentic(self, task: Task, cwd: str, state: ExecutionState) -> dict[str, Any]:
         """Execute task autonomously with full Claude tool access.

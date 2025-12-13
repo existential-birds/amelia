@@ -14,7 +14,7 @@ These documents represent exploratory design work—ideas that have been refined
 
 | Document | Description | Status |
 |----------|-------------|--------|
-| [Planning Workflow Variations](2025-12-13-planning-workflow-variations.md) | Different planning prompt injection strategies for various methodologies (BDD, security-first, bugfix, etc.) | Draft |
+| [Session Continuity Design](2025-12-13-session-continuity-design.md) | Structured handoff protocol for long-running workflows across context windows (Phase 3) | Draft |
 | [Capitalization Tracking Design](2025-12-07-capex-tracking-design.md) | Attribute engineering work to initiatives for financial reporting (CAPEX/OPEX) | Draft |
 | [Knowledge Library Design](2025-12-06-knowledge-library-design.md) | Co-learning system where developers and agents share framework documentation and best practices | Draft |
 | [AWS AgentCore Deployment](2025-12-06-aws-agentcore-deployment-design.md) | Deploy Amelia to AWS AgentCore for parallel cloud workflow execution | Draft |

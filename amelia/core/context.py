@@ -35,7 +35,9 @@ class CompiledContext(BaseModel):
         system_prompt: Optional system message content.
         sections: Named content sections that will be formatted into messages.
         messages: Optional override to bypass section-based message generation.
-            When set, to_messages() will return this directly.
+            When set, to_messages() returns this directly without validation.
+            Any message roles (system, user, assistant) are permitted.
+            Callers are responsible for ensuring message validity.
     """
 
     system_prompt: str | None = None
@@ -97,8 +99,14 @@ class ContextStrategy(ABC):
 
         Returns:
             List of AgentMessages ready for LLM consumption.
+
+        Note:
+            If context.messages is set, it is returned directly without
+            section validation. Any message roles are permitted in this case.
+            This escape hatch is useful for injecting conversation history
+            or system messages that bypass the normal section-based flow.
         """
-        # If messages are explicitly set, use them directly
+        # If messages are explicitly set, use them directly (bypass validation)
         if context.messages is not None:
             return context.messages
 
