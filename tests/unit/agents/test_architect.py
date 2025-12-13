@@ -62,11 +62,6 @@ class TestArchitectContextStrategy:
         """Create an ArchitectContextStrategy instance for testing."""
         return ArchitectContextStrategy()
 
-    def test_has_task_generation_system_prompt_method(self, strategy: ArchitectContextStrategy) -> None:
-        """Test that strategy has get_task_generation_system_prompt method."""
-        assert hasattr(strategy, "get_task_generation_system_prompt")
-        assert callable(strategy.get_task_generation_system_prompt)
-
     def test_task_generation_system_prompt_is_detailed(self, strategy: ArchitectContextStrategy) -> None:
         """Test that task generation system prompt includes TDD instructions."""
         prompt = strategy.get_task_generation_system_prompt()
@@ -101,11 +96,6 @@ class TestArchitectContextStrategy:
         prompt2 = strategy.get_task_generation_system_prompt()
 
         assert prompt1 == prompt2
-
-    def test_get_task_generation_user_prompt_method_exists(self, strategy: ArchitectContextStrategy) -> None:
-        """Test that strategy has get_task_generation_user_prompt method."""
-        assert hasattr(strategy, "get_task_generation_user_prompt")
-        assert callable(strategy.get_task_generation_user_prompt)
 
     def test_task_generation_user_prompt_is_concise(self, strategy: ArchitectContextStrategy) -> None:
         """Test that task generation user prompt is concise and actionable."""

@@ -25,35 +25,6 @@ def mock_stream_emitter() -> AsyncMock:
 class TestDeveloperStreamEmitter:
     """Test Developer agent stream emitter functionality."""
 
-    def test_developer_accepts_stream_emitter(
-        self,
-        mock_driver: MagicMock,
-    ) -> None:
-        """Test that Developer constructor accepts optional stream_emitter parameter."""
-        mock_emitter = AsyncMock()
-
-        # Should not raise
-        developer = Developer(
-            driver=mock_driver,
-            execution_mode="agentic",
-            stream_emitter=mock_emitter,
-        )
-
-        assert developer._stream_emitter is mock_emitter
-
-    def test_developer_works_without_stream_emitter(
-        self,
-        mock_driver: MagicMock,
-    ) -> None:
-        """Test that Developer works without stream_emitter (backward compatible)."""
-        # Should not raise
-        developer = Developer(
-            driver=mock_driver,
-            execution_mode="structured",
-        )
-
-        assert developer._stream_emitter is None
-
     async def test_developer_emits_stream_events_during_agentic_execution(
         self,
         mock_driver: MagicMock,

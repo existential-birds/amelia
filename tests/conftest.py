@@ -408,3 +408,36 @@ def section_helper():
                 assert name not in actual, f"Section '{name}' should not be present. Found: {actual}"
 
     return SectionHelper()
+
+
+@pytest.fixture
+def developer_test_context(mock_task_factory, mock_execution_state_factory):
+    """Factory fixture for creating Developer test contexts with mock driver and state.
+
+    Returns a callable that creates a tuple of (mock_driver, state) with configurable:
+    - task_desc: Task description (default: "Test task")
+    - driver_return: Return value for driver.execute_tool (default: "output")
+    - driver_side_effect: Side effect for driver.execute_tool (overrides driver_return if set)
+
+    Example usage:
+        def test_example(developer_test_context):
+            mock_driver, state = developer_test_context(
+                task_desc="Run shell command: echo hello",
+                driver_return="Command output"
+            )
+            developer = Developer(driver=mock_driver)
+            result = await developer.execute_current_task(state, workflow_id="test-workflow")
+    """
+    def _create(task_desc: str = "Test task", driver_return: Any = "output", driver_side_effect: Any = None):
+        mock_driver = AsyncMock(spec=DriverInterface)
+        if driver_side_effect:
+            mock_driver.execute_tool.side_effect = driver_side_effect
+        else:
+            mock_driver.execute_tool.return_value = driver_return
+        task = mock_task_factory(id="1", description=task_desc)
+        state = mock_execution_state_factory(
+            plan=TaskDAG(tasks=[task], original_issue="Test"),
+            current_task_id=task.id
+        )
+        return mock_driver, state
+    return _create

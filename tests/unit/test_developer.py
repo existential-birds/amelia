@@ -17,18 +17,11 @@ from amelia.drivers.cli.claude import ClaudeStreamEvent
 class TestDeveloperExecution:
     """Tests for Developer.execute_current_task() structured mode behavior."""
 
-    async def test_execute_shell_command_calls_driver(
-        self, mock_task_factory, mock_execution_state_factory
-    ):
+    async def test_execute_shell_command_calls_driver(self, developer_test_context):
         """Developer should call execute_tool for shell commands."""
-        mock_driver = AsyncMock(spec=DriverInterface)
-        mock_driver.execute_tool.return_value = "Command output"
-        task = mock_task_factory(
-            id="1", description="Run shell command: echo hello", status="pending"
-        )
-        state = mock_execution_state_factory(
-            plan=TaskDAG(tasks=[task], original_issue="Test"),
-            current_task_id=task.id,
+        mock_driver, state = developer_test_context(
+            task_desc="Run shell command: echo hello",
+            driver_return="Command output"
         )
         developer = Developer(driver=mock_driver)
 
@@ -37,18 +30,11 @@ class TestDeveloperExecution:
         assert result["status"] == "completed"
         mock_driver.execute_tool.assert_called_once_with("run_shell_command", command="echo hello")
 
-    async def test_execute_write_file_calls_driver(
-        self, mock_task_factory, mock_execution_state_factory
-    ):
+    async def test_execute_write_file_calls_driver(self, developer_test_context):
         """Developer should call execute_tool for write file tasks."""
-        mock_driver = AsyncMock(spec=DriverInterface)
-        mock_driver.execute_tool.return_value = "File created"
-        task = mock_task_factory(
-            id="1", description="write file: test.py with print('hi')", status="pending"
-        )
-        state = mock_execution_state_factory(
-            plan=TaskDAG(tasks=[task], original_issue="Test"),
-            current_task_id=task.id,
+        mock_driver, state = developer_test_context(
+            task_desc="write file: test.py with print('hi')",
+            driver_return="File created"
         )
         developer = Developer(driver=mock_driver)
 
@@ -56,20 +42,13 @@ class TestDeveloperExecution:
 
         mock_driver.execute_tool.assert_called_once()
 
-    async def test_exception_returns_failed_status(
-        self, mock_task_factory, mock_execution_state_factory
-    ):
+    async def test_exception_returns_failed_status(self, developer_test_context):
         """Developer should return failed status on exception."""
-        mock_driver = AsyncMock(spec=DriverInterface)
-        mock_driver.execute_tool.side_effect = RuntimeError(
-            "Mocked command failed: /bin/false returned non-zero exit code."
-        )
-        task = mock_task_factory(
-            id="FAIL_T1", description="Run shell command: /bin/false", status="pending"
-        )
-        state = mock_execution_state_factory(
-            plan=TaskDAG(tasks=[task], original_issue="Test"),
-            current_task_id=task.id,
+        mock_driver, state = developer_test_context(
+            task_desc="Run shell command: /bin/false",
+            driver_side_effect=RuntimeError(
+                "Mocked command failed: /bin/false returned non-zero exit code."
+            )
         )
         developer = Developer(driver=mock_driver)
 
@@ -78,20 +57,11 @@ class TestDeveloperExecution:
         assert result["status"] == "failed"
         assert "Mocked command failed" in result["output"]
 
-    async def test_propagates_error_output(
-        self, mock_task_factory, mock_execution_state_factory
-    ):
+    async def test_propagates_error_output(self, developer_test_context):
         """Developer should propagate error messages in output."""
-        mock_driver = AsyncMock(spec=DriverInterface)
-        mock_driver.execute_tool.return_value = (
-            "Command failed with exit code 1. Stderr: syntax error near line 5"
-        )
-        task = mock_task_factory(
-            id="FIX_T1", description="Run shell command: python broken.py", status="pending"
-        )
-        state = mock_execution_state_factory(
-            plan=TaskDAG(tasks=[task], original_issue="Test"),
-            current_task_id=task.id,
+        mock_driver, state = developer_test_context(
+            task_desc="Run shell command: python broken.py",
+            driver_return="Command failed with exit code 1. Stderr: syntax error near line 5"
         )
         developer = Developer(driver=mock_driver)
 
@@ -99,19 +69,12 @@ class TestDeveloperExecution:
 
         assert "failed" in result["output"].lower() or "error" in result["output"].lower()
 
-    async def test_fallback_uses_generate(
-        self, mock_task_factory, mock_execution_state_factory
-    ):
+    async def test_fallback_uses_generate(self, developer_test_context):
         """Developer should use generate() for unstructured tasks."""
-        mock_driver = AsyncMock(spec=DriverInterface)
+        mock_driver, state = developer_test_context(
+            task_desc="Implement the foo feature"
+        )
         mock_driver.generate.return_value = "Generated response"
-        task = mock_task_factory(
-            id="1", description="Implement the foo feature", status="pending"
-        )
-        state = mock_execution_state_factory(
-            plan=TaskDAG(tasks=[task], original_issue="Test"),
-            current_task_id=task.id,
-        )
         developer = Developer(driver=mock_driver)
 
         result = await developer.execute_current_task(state, workflow_id="test-workflow")
@@ -119,21 +82,14 @@ class TestDeveloperExecution:
         assert result["status"] == "completed"
         mock_driver.generate.assert_called_once()
 
-    async def test_fallback_uses_context_strategy(
-        self, mock_task_factory, mock_execution_state_factory
-    ):
+    async def test_fallback_uses_context_strategy(self, developer_test_context):
         """Developer should use DeveloperContextStrategy for structured fallback."""
         from amelia.agents.developer import DeveloperContextStrategy
 
-        mock_driver = AsyncMock(spec=DriverInterface)
+        mock_driver, state = developer_test_context(
+            task_desc="Implement the foo feature"
+        )
         mock_driver.generate.return_value = "Generated response"
-        task = mock_task_factory(
-            id="1", description="Implement the foo feature", status="pending"
-        )
-        state = mock_execution_state_factory(
-            plan=TaskDAG(tasks=[task], original_issue="Test"),
-            current_task_id=task.id,
-        )
         developer = Developer(driver=mock_driver)
 
         result = await developer.execute_current_task(state, workflow_id="test-workflow")
@@ -150,7 +106,8 @@ class TestDeveloperExecution:
         assert messages[0].content == DeveloperContextStrategy.SYSTEM_PROMPT
 
         # Should have user message with task content
-        assert any(msg.role == "user" and task.description in msg.content for msg in messages)
+        task_desc = "Implement the foo feature"
+        assert any(msg.role == "user" and task_desc in msg.content for msg in messages)
 
 
 class TestDeveloperAgenticExecution:
@@ -252,18 +209,12 @@ class TestDeveloperAgenticExecution:
 
         assert "Something went wrong" in str(exc_info.value)
 
-    async def test_execute_current_task_structured_works(
-        self, mock_task_factory, mock_execution_state_factory
-    ):
+    async def test_execute_current_task_structured_works(self, developer_test_context):
         """Developer in structured mode should work correctly."""
-        mock_driver = AsyncMock(spec=DriverInterface)
-        mock_driver.generate.return_value = "Generated response"
-
-        task = mock_task_factory(id="1", description="Implement feature")
-        state = mock_execution_state_factory(
-            plan=TaskDAG(tasks=[task], original_issue="Test"),
-            current_task_id=task.id,
+        mock_driver, state = developer_test_context(
+            task_desc="Implement feature"
         )
+        mock_driver.generate.return_value = "Generated response"
         developer = Developer(driver=mock_driver, execution_mode="structured")
 
         result = await developer.execute_current_task(state, workflow_id="test-workflow")

@@ -23,62 +23,12 @@ from amelia.agents.architect import PlanOutput
 from amelia.agents.reviewer import ReviewResponse
 from amelia.core.state import ExecutionState, Task, TaskDAG
 from amelia.core.types import Issue, Profile, StreamEvent, StreamEventType
-from amelia.server.database.repository import WorkflowRepository
-from amelia.server.events.bus import EventBus
 from amelia.server.models import ServerExecutionState
 from amelia.server.orchestrator.service import OrchestratorService
 
 
 class TestStreamEmitterIntegration:
     """Test that stream emitters are integrated into the workflow execution."""
-
-    @pytest.fixture
-    def mock_event_bus(self) -> MagicMock:
-        """Create a mock EventBus with emit_stream tracking."""
-        bus = MagicMock(spec=EventBus)
-        bus.emit_stream = MagicMock()
-        bus.emit = MagicMock()
-        bus.set_connection_manager = MagicMock()
-        return bus
-
-    @pytest.fixture
-    def mock_repository(self) -> AsyncMock:
-        """Create a mock WorkflowRepository."""
-        repo = AsyncMock(spec=WorkflowRepository)
-        repo.create = AsyncMock()
-        repo.get = AsyncMock()
-        repo.update = AsyncMock()
-        repo.set_status = AsyncMock()
-        repo.save_event = AsyncMock()
-        repo.get_max_event_sequence = AsyncMock(return_value=0)
-        return repo
-
-    @pytest.fixture
-    def test_profile(self) -> Profile:
-        """Create a test profile."""
-        return Profile(
-            name="test_profile",
-            driver="api:openai",
-            tracker="noop",
-            strategy="single",
-        )
-
-    @pytest.fixture
-    def test_issue(self) -> Issue:
-        """Create a test issue."""
-        return Issue(
-            id="TEST-123",
-            title="Test Stream Integration",
-            description="Verify stream events are emitted during workflow execution",
-        )
-
-    @pytest.fixture
-    def test_settings(self, test_profile: Profile) -> MagicMock:
-        """Create mock settings with test profile."""
-        settings = MagicMock()
-        settings.active_profile = "test_profile"
-        settings.profiles = {"test_profile": test_profile}
-        return settings
 
     async def test_stream_emitter_factory_creates_valid_callback(
         self,
@@ -209,7 +159,9 @@ class TestStreamEmitterIntegration:
                         profile="test_profile",
                     )
 
-                    # Wait for workflow to pause at approval gate
+                    # Wait for async workflow task to reach the approval gate and pause.
+                    # This ensures the workflow has progressed through initialization before
+                    # we assert on event bus state.
                     await asyncio.sleep(0.5)
 
                     # CURRENT STATE: emit_stream is NOT called because stream_emitter
@@ -224,13 +176,15 @@ class TestStreamEmitterIntegration:
                     # Cleanup
                     await service.cancel_workflow(workflow_id, reason="Test cleanup")
 
-    async def test_emitter_propagates_all_stream_event_types(
+    @pytest.mark.parametrize("event_type", list(StreamEventType))
+    async def test_emitter_propagates_stream_event_type(
         self,
+        event_type: StreamEventType,
         mock_event_bus: MagicMock,
         mock_repository: AsyncMock,
         test_settings: MagicMock,
     ) -> None:
-        """Stream emitter correctly propagates all StreamEventType values."""
+        """Stream emitter correctly propagates a specific StreamEventType."""
         service = OrchestratorService(
             event_bus=mock_event_bus,
             repository=mock_repository,
@@ -240,34 +194,24 @@ class TestStreamEmitterIntegration:
         workflow_id = "wf-types-test"
         emitter = service._create_stream_emitter(workflow_id)
 
-        # Test all event types
-        event_types = [
-            StreamEventType.CLAUDE_THINKING,
-            StreamEventType.CLAUDE_TOOL_CALL,
-            StreamEventType.CLAUDE_TOOL_RESULT,
-            StreamEventType.AGENT_OUTPUT,
-        ]
+        # Create event with type-specific fields
+        event = StreamEvent(
+            type=event_type,
+            content=f"Testing {event_type.value}",
+            timestamp=datetime.now(UTC),
+            agent="developer",
+            workflow_id=workflow_id,
+            tool_name="TestTool" if event_type == StreamEventType.CLAUDE_TOOL_CALL else None,
+            tool_input={"test": "input"} if event_type == StreamEventType.CLAUDE_TOOL_CALL else None,
+        )
 
-        for event_type in event_types:
-            mock_event_bus.emit_stream.reset_mock()
+        await emitter(event)
 
-            event = StreamEvent(
-                type=event_type,
-                content=f"Testing {event_type.value}",
-                timestamp=datetime.now(UTC),
-                agent="developer",
-                workflow_id=workflow_id,
-                tool_name="TestTool" if event_type == StreamEventType.CLAUDE_TOOL_CALL else None,
-                tool_input={"test": "input"} if event_type == StreamEventType.CLAUDE_TOOL_CALL else None,
-            )
-
-            await emitter(event)
-
-            # Verify event was emitted
-            mock_event_bus.emit_stream.assert_called_once()
-            emitted_event = mock_event_bus.emit_stream.call_args[0][0]
-            assert emitted_event.type == event_type
-            assert emitted_event.workflow_id == workflow_id
+        # Verify event was emitted
+        mock_event_bus.emit_stream.assert_called_once()
+        emitted_event = mock_event_bus.emit_stream.call_args[0][0]
+        assert emitted_event.type == event_type
+        assert emitted_event.workflow_id == workflow_id
 
     async def test_multiple_workflows_have_isolated_emitters(
         self,
@@ -313,9 +257,10 @@ class TestStreamEmitterIntegration:
         assert mock_event_bus.emit_stream.call_count == 2
 
         # Verify workflow IDs are preserved
-        calls = mock_event_bus.emit_stream.call_args_list
-        assert calls[0][0][0].workflow_id == workflow_1
-        assert calls[1][0][0].workflow_id == workflow_2
+        first_call_event = mock_event_bus.emit_stream.call_args_list[0].args[0]
+        second_call_event = mock_event_bus.emit_stream.call_args_list[1].args[0]
+        assert first_call_event.workflow_id == workflow_1
+        assert second_call_event.workflow_id == workflow_2
 
 
 class TestFutureAgentIntegration:

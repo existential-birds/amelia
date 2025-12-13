@@ -16,31 +16,6 @@ from amelia.core.types import StreamEvent, StreamEventType
 class TestReviewerStreamEmitter:
     """Test Reviewer agent stream emitter functionality."""
 
-    def test_reviewer_accepts_stream_emitter(
-        self,
-        mock_driver: MagicMock,
-    ) -> None:
-        """Test that Reviewer constructor accepts optional stream_emitter parameter."""
-        mock_emitter = AsyncMock()
-
-        # Should not raise
-        reviewer = Reviewer(
-            driver=mock_driver,
-            stream_emitter=mock_emitter,
-        )
-
-        assert reviewer._stream_emitter is mock_emitter
-
-    def test_reviewer_works_without_stream_emitter(
-        self,
-        mock_driver: MagicMock,
-    ) -> None:
-        """Test that Reviewer works without stream_emitter (backward compatible)."""
-        # Should not raise
-        reviewer = Reviewer(driver=mock_driver)
-
-        assert reviewer._stream_emitter is None
-
     async def test_reviewer_emits_agent_output_after_review(
         self,
         mock_driver: MagicMock,

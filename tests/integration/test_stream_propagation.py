@@ -26,18 +26,6 @@ class TestStreamEventPropagation:
     """Test end-to-end stream event propagation."""
 
     @pytest.fixture
-    def connection_manager(self) -> ConnectionManager:
-        """Create a ConnectionManager instance."""
-        return ConnectionManager()
-
-    @pytest.fixture
-    def event_bus(self, connection_manager: ConnectionManager) -> EventBus:
-        """Create an EventBus with ConnectionManager attached."""
-        bus = EventBus()
-        bus.set_connection_manager(connection_manager)
-        return bus
-
-    @pytest.fixture
     def mock_websocket(self) -> AsyncMock:
         """Create a mock WebSocket connection."""
         ws = AsyncMock(spec=WebSocket)
@@ -81,25 +69,6 @@ class TestStreamEventPropagation:
         assert call_args["payload"]["subtype"] == "claude_thinking"
         assert call_args["payload"]["content"] == "Analyzing the codebase..."
         assert call_args["payload"]["agent"] == "developer"
-
-    async def test_stream_events_are_not_persisted(
-        self,
-        event_bus: EventBus,
-        sample_stream_event: StreamEvent,
-    ):
-        """Stream events are ephemeral and not persisted."""
-        # Create mock repository to verify no persistence
-        mock_repo = AsyncMock()
-        mock_repo.save_event = AsyncMock()
-
-        # emit_stream does NOT call repository
-        event_bus.emit_stream(sample_stream_event)
-
-        # Wait for any async tasks
-        await asyncio.sleep(0.1)
-
-        # Repository should NOT be called for stream events
-        mock_repo.save_event.assert_not_called()
 
     async def test_stream_events_broadcast_to_all_clients(
         self,
@@ -159,127 +128,58 @@ class TestStreamEventPropagation:
         assert call_args["payload"]["tool_input"] == {"file_path": "/src/main.py"}
 
 
-class TestAgentEmitterIntegration:
-    """Test agent stream emitter integration."""
+@pytest.mark.parametrize(
+    "agent,event_type,content_substring",
+    [
+        ("developer", StreamEventType.CLAUDE_THINKING, "Planning"),
+        ("architect", StreamEventType.AGENT_OUTPUT, "tasks"),
+        ("reviewer", StreamEventType.AGENT_OUTPUT, "Approved"),
+    ],
+)
+async def test_agent_emitter_broadcasts(
+    agent: str,
+    event_type: StreamEventType,
+    content_substring: str,
+):
+    """Agent stream emitters broadcast events to EventBus."""
+    event_bus = EventBus()
+    captured_events: list[StreamEvent] = []
 
-    @pytest.fixture
-    def event_bus(self) -> EventBus:
-        """Create an EventBus instance."""
-        return EventBus()
+    # Create emitter that captures events and broadcasts
+    def capture_emit_stream(event: StreamEvent) -> None:
+        captured_events.append(event)
 
-    @pytest.fixture
-    def captured_events(self) -> list[StreamEvent]:
-        """Create a list to capture emitted events."""
-        return []
+    event_bus.emit_stream = capture_emit_stream  # type: ignore
 
-    async def test_developer_emitter_broadcasts_events(
-        self,
-        event_bus: EventBus,
-        captured_events: list[StreamEvent],
-    ):
-        """Developer agent's stream emitter broadcasts to EventBus."""
-        # Create emitter that captures events and broadcasts
-        def capture_emit_stream(event: StreamEvent) -> None:
-            captured_events.append(event)
+    # Create emitter callback (simulating what OrchestratorService._create_stream_emitter does)
+    async def emitter(event: StreamEvent) -> None:
+        event_bus.emit_stream(event)
 
-        event_bus.emit_stream = capture_emit_stream  # type: ignore
+    # Simulate agent emitting an event
+    content_map = {
+        "developer": "Planning implementation...",
+        "architect": "Generated plan with 5 tasks",
+        "reviewer": "Review completed: Approved",
+    }
 
-        # Create emitter callback (simulating what OrchestratorService._create_stream_emitter does)
-        async def emitter(event: StreamEvent) -> None:
-            event_bus.emit_stream(event)
+    stream_event = StreamEvent(
+        type=event_type,
+        content=content_map[agent],
+        timestamp=datetime.now(UTC),
+        agent=agent,
+        workflow_id=f"wf-{agent}-123",
+    )
 
-        # Simulate developer agent emitting an event
-        stream_event = StreamEvent(
-            type=StreamEventType.CLAUDE_THINKING,
-            content="Planning implementation...",
-            timestamp=datetime.now(UTC),
-            agent="developer",
-            workflow_id="wf-dev-123",
-        )
+    await emitter(stream_event)
 
-        await emitter(stream_event)
-
-        assert len(captured_events) == 1
-        assert captured_events[0].agent == "developer"
-        assert captured_events[0].type == StreamEventType.CLAUDE_THINKING
-
-    async def test_architect_emitter_broadcasts_agent_output(
-        self,
-        event_bus: EventBus,
-        captured_events: list[StreamEvent],
-    ):
-        """Architect agent emits AGENT_OUTPUT event after planning."""
-
-        def capture_emit_stream(event: StreamEvent) -> None:
-            captured_events.append(event)
-
-        event_bus.emit_stream = capture_emit_stream  # type: ignore
-
-        async def emitter(event: StreamEvent) -> None:
-            event_bus.emit_stream(event)
-
-        # Simulate architect agent emitting completion event
-        stream_event = StreamEvent(
-            type=StreamEventType.AGENT_OUTPUT,
-            content="Generated plan with 5 tasks",
-            timestamp=datetime.now(UTC),
-            agent="architect",
-            workflow_id="wf-arch-123",
-        )
-
-        await emitter(stream_event)
-
-        assert len(captured_events) == 1
-        assert captured_events[0].agent == "architect"
-        assert captured_events[0].type == StreamEventType.AGENT_OUTPUT
-        assert "5 tasks" in captured_events[0].content  # type: ignore
-
-    async def test_reviewer_emitter_broadcasts_review_result(
-        self,
-        event_bus: EventBus,
-        captured_events: list[StreamEvent],
-    ):
-        """Reviewer agent emits AGENT_OUTPUT event after review."""
-
-        def capture_emit_stream(event: StreamEvent) -> None:
-            captured_events.append(event)
-
-        event_bus.emit_stream = capture_emit_stream  # type: ignore
-
-        async def emitter(event: StreamEvent) -> None:
-            event_bus.emit_stream(event)
-
-        # Simulate reviewer agent emitting completion event
-        stream_event = StreamEvent(
-            type=StreamEventType.AGENT_OUTPUT,
-            content="Review completed: Approved",
-            timestamp=datetime.now(UTC),
-            agent="reviewer",
-            workflow_id="wf-rev-123",
-        )
-
-        await emitter(stream_event)
-
-        assert len(captured_events) == 1
-        assert captured_events[0].agent == "reviewer"
-        assert captured_events[0].type == StreamEventType.AGENT_OUTPUT
-        assert "Approved" in captured_events[0].content  # type: ignore
+    assert len(captured_events) == 1
+    assert captured_events[0].agent == agent
+    assert captured_events[0].type == event_type
+    assert content_substring in captured_events[0].content  # type: ignore
 
 
 class TestStreamEventTypes:
     """Test all stream event types are handled correctly."""
-
-    @pytest.fixture
-    def connection_manager(self) -> ConnectionManager:
-        """Create ConnectionManager."""
-        return ConnectionManager()
-
-    @pytest.fixture
-    def event_bus(self, connection_manager: ConnectionManager) -> EventBus:
-        """Create EventBus with ConnectionManager."""
-        bus = EventBus()
-        bus.set_connection_manager(connection_manager)
-        return bus
 
     @pytest.mark.parametrize(
         "event_type,expected_type_str",
