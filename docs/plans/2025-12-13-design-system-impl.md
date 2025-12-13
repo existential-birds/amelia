@@ -9,7 +9,7 @@
 | Component | Status | Location |
 |-----------|--------|----------|
 | Dashboard (React + Tailwind v4) | ✅ Exists | `dashboard/` |
-| Aviation color tokens (OKLCH) | ✅ Exists | `dashboard/src/styles/globals.css` |
+| Color tokens (OKLCH) | ✅ Exists | `dashboard/src/styles/globals.css` |
 | shadcn/ui components | ✅ Exists | `dashboard/src/components/ui/` |
 | Font variables defined | ✅ Exists | CSS vars in globals.css |
 | Animation keyframes | ✅ Exists | pulse-glow, beacon-glow, blink |
@@ -112,7 +112,7 @@ Extract from `dashboard/src/styles/globals.css` into portable formats.
 
 ### Phase 2: Diagram Themes
 
-Create diagram themes for D2 and Mermaid that match the aviation aesthetic.
+Create diagram themes for D2 and Mermaid that match the design system aesthetic.
 
 #### Task 2.1: Create D2 themes
 
@@ -312,7 +312,7 @@ design-system/themes/slidev/
 
 #### Task 3.4: Create Shiki code theme
 
-Configure code highlighting to use aviation colors.
+Configure code highlighting to use design system colors.
 
 **File: `design-system/themes/slidev/setup/shiki.ts`**
 ```typescript
@@ -399,8 +399,8 @@ docs/site/
 - Logo in navigation
 
 **Acceptance criteria:**
-- [ ] Dark mode uses aviation dark palette
-- [ ] Light mode uses aviation light palette
+- [ ] Dark mode uses dark palette
+- [ ] Light mode uses light palette
 - [ ] Typography matches spec
 
 #### Task 4.3: Create documentation content structure

@@ -6,7 +6,7 @@ Welcome to the Amelia Design System documentation. This design system provides a
 
 The Amelia Design System is built around two complementary themes:
 
-- **Dark Mode (Primary)**: Aviation cockpit aesthetic with deep greens (#0D1A12) and gold accents (#FFC857)
+- **Dark Mode (Primary)**: Deep forest greens (#0D1A12) with gold accents (#FFC857)
 - **Light Mode (Secondary)**: Daytime theme with warm cream backgrounds (#FDF8F0) and professional blue accents (#2E6B9C)
 
 The system includes:
@@ -166,7 +166,7 @@ Using Amelia design tokens
 
 ## Features
 
-- Aviation cockpit aesthetics
+- Professional dark theme
 - Professional color palette
 - Consistent typography
 ```
@@ -179,7 +179,7 @@ Using Amelia design tokens
 |-------|-------|-------|
 | `--background` | #0D1A12 | Main background |
 | `--foreground` | #EFF8E2 | Main text |
-| `--primary` | #FFC857 | Aviation gold accent |
+| `--primary` | #FFC857 | Gold accent |
 | `--accent` | #5B9BD5 | Blue interactive elements |
 | `--destructive` | #A33D2E | Error states |
 

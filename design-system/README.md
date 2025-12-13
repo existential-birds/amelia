@@ -1,6 +1,6 @@
 # Amelia Design System
 
-A unified design system for the Amelia AI orchestrator, featuring an aviation-inspired aesthetic with dark-first theming optimized for extended developer sessions.
+A unified design system for the Amelia AI orchestrator with dark-first theming optimized for extended developer sessions.
 
 ## Overview
 
@@ -83,17 +83,16 @@ design-system/
 
 1. **Dark-First** - Optimized for extended developer sessions
 2. **Light Mode for Presentations** - Projector-friendly alternative
-3. **Aviation-Inspired** - Flight deck instrumentation aesthetic
-4. **OKLCH Colors** - Perceptually uniform color space
-5. **Accessible** - WCAG 2.1 AA compliant contrast ratios
+3. **OKLCH Colors** - Perceptually uniform color space
+4. **Accessible** - WCAG 2.1 AA compliant contrast ratios
 
 ## Color Palette
 
 | Role | Dark Mode | Light Mode |
 |------|-----------|------------|
 | Background | Deep Forest #0D1A12 | Warm Cream #FDF8F0 |
-| Surface | Cockpit Green #1F332E | Mist #E8F0E5 |
-| Accent | Aviation Gold #FFC857 | Forest Green #2D5A3D |
+| Surface | Forest Green #1F332E | Mist #E8F0E5 |
+| Accent | Gold #FFC857 | Forest Green #2D5A3D |
 | Foreground | Pale Sage #EFF8E2 | Deep Forest #0D1A12 |
 
 ## Typography

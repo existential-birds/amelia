@@ -1,10 +1,10 @@
 # Amelia VitePress Theme
 
-Aviation-inspired VitePress theme for the Amelia Design System documentation.
+VitePress theme for the Amelia Design System documentation.
 
 ## Features
 
-- **Dark Mode (Primary)**: Aviation cockpit aesthetic with deep greens (#0D1A12) and gold accents (#FFC857)
+- **Dark Mode (Primary)**: Deep forest greens (#0D1A12) with gold accents (#FFC857)
 - **Light Mode (Secondary)**: Daytime theme with warm cream backgrounds (#FDF8F0) and professional blue accents (#2E6B9C)
 - **Custom Typography**: Bebas Neue (display), Barlow Condensed (headings), Source Sans 3 (body), IBM Plex Mono (code)
 - **OKLCH Colors**: Perceptually uniform color space for better color transitions
@@ -136,7 +136,7 @@ This is an info callout with blue accent
 |-------|-----|-------|
 | Background | #0D1A12 | Main page background |
 | Foreground | #EFF8E2 | Main text color |
-| Brand | #FFC857 | Aviation gold - links, buttons |
+| Brand | #FFC857 | Gold - links, buttons |
 | Accent | #5B9BD5 | Blue - interactive elements |
 | Tip | #5B8A72 | Green - success states |
 | Danger | #A33D2E | Red - error states |

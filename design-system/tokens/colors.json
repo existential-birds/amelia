@@ -2,10 +2,10 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://amelia.dev/schemas/design-system/colors.json",
   "title": "Amelia Design System - Color Tokens",
-  "description": "Color token definitions for dark mode (aviation theme) and light mode (daytime theme)",
+  "description": "Color token definitions for dark mode and light mode (daytime theme)",
   "version": "1.0.0",
   "dark": {
-    "description": "Dark mode (primary) - Aviation cockpit theme with deep greens and gold accents",
+    "description": "Dark mode (primary) - Deep forest greens with gold accents",
     "background": "#0D1A12",
     "foreground": "#EFF8E2",
     "card": "#1F332E",

@@ -1,7 +1,7 @@
 {
   "name": "@amelia/vitepress-theme",
   "version": "0.1.0",
-  "description": "Amelia Design System VitePress theme with aviation-inspired aesthetics",
+  "description": "Amelia Design System VitePress theme",
   "type": "module",
   "main": "index.ts",
   "files": [
@@ -14,7 +14,6 @@
     "design-system",
     "vitepress",
     "theme",
-    "aviation",
     "dark-mode"
   ],
   "peerDependencies": {

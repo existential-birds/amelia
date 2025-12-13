@@ -10,14 +10,14 @@ import { defineConfig } from 'vitepress'
  * VitePress Configuration
  *
  * Configures the Amelia Design System documentation site with:
- * - Aviation-inspired theme
+ * - Custom theme
  * - Navigation structure
  * - Search functionality
  * - Dark/light mode support
  */
 export default defineConfig({
   title: 'Amelia Design System',
-  description: 'Aviation-inspired design system for the Amelia AI orchestrator',
+  description: 'Design system for the Amelia AI orchestrator',
 
   // Base path for deployment
   base: '/amelia/',
@@ -27,8 +27,8 @@ export default defineConfig({
     // Logo in navigation
     logo: '/logo/amelia-gold.svg',
 
-    // Site title in nav
-    siteTitle: 'Amelia Design System',
+    // Hide site title text in nav (logo is sufficient)
+    siteTitle: false,
 
     // Navigation menu
     nav: [

@@ -17,7 +17,7 @@ Both tools use Amelia's color tokens to ensure visual consistency across documen
 
 ### Dark Theme Configuration
 
-Use the dark theme for aviation-inspired aesthetics:
+Use the dark theme for professional aesthetics:
 
 ```d2
 # Amelia Dark Theme
@@ -255,7 +255,7 @@ export default defineConfig({
     mermaidPlugin: {
       theme: 'dark',
       themeVariables: {
-        // Dark mode (aviation theme)
+        // Dark mode theme
         primaryColor: '#FFC857',      // Gold
         primaryTextColor: '#0D1A12',   // Dark text on gold
         primaryBorderColor: '#E5B350', // Darker gold

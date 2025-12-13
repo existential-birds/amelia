@@ -9,8 +9,7 @@
  * AMELIA DESIGN SYSTEM - COLOR TOKENS
  * ============================================================================
  *
- * Color tokens for both dark mode (primary, aviation cockpit theme) and
- * light mode (secondary, daytime theme).
+ * Color tokens for both dark mode (primary) and light mode (secondary, daytime theme).
  *
  * Usage:
  * - Import this file into your application's global styles
@@ -22,8 +21,8 @@
  */
 
 /*
- * DARK MODE (Primary) - Aviation Cockpit Theme
- * Default mode - dark green aesthetic inspired by aviation instrumentation
+ * DARK MODE (Primary)
+ * Default mode - deep forest green aesthetic with gold accents
  */
 :root {
   /* Core backgrounds */
@@ -38,7 +37,7 @@
   --popover: oklch(18% 0.025 150);
   --popover-foreground: oklch(95% 0.02 120);
 
-  /* Primary accent - Aviation Gold */
+  /* Primary accent - Gold */
   --primary: oklch(82% 0.16 85);              /* #FFC857 - Gold */
   --primary-foreground: oklch(8% 0.02 150);   /* Dark text on gold */
 

@@ -3,8 +3,8 @@ layout: home
 
 hero:
   name: "Amelia Design System"
-  text: "Aviation-Inspired Design"
-  tagline: A unified design system for the Amelia AI orchestrator, featuring dark-first theming optimized for extended developer sessions.
+  text: "Dark-First Design"
+  tagline: A unified design system for the Amelia AI orchestrator with dark-first theming optimized for extended developer sessions.
   actions:
     - theme: brand
       text: Get Started
@@ -23,7 +23,7 @@ features:
     link: /guide/color-system
   - icon: 📊
     title: Diagram Themes
-    details: Consistent styling for D2 and Mermaid diagrams with aviation-inspired aesthetics.
+    details: Consistent styling for D2 and Mermaid diagrams with cohesive theming.
     link: /guide/diagrams
   - icon: 📽️
     title: Presentation Theme
@@ -31,7 +31,7 @@ features:
     link: /guide/presentations
   - icon: 📚
     title: Documentation
-    details: VitePress theme for beautiful, accessible documentation with aviation cockpit aesthetics.
+    details: VitePress theme for beautiful, accessible documentation with professional aesthetics.
   - icon: 🌙
     title: Dark-First Design
     details: Optimized for extended developer sessions with reduced eye strain and professional aesthetics.
@@ -42,15 +42,14 @@ features:
 
 ## Why Amelia Design System?
 
-The Amelia Design System provides a cohesive visual language across all Amelia project artifacts—from documentation and diagrams to presentations and dashboards. Built on design tokens and aviation-inspired aesthetics, it ensures consistency while maintaining flexibility.
+The Amelia Design System provides a cohesive visual language across all Amelia project artifacts—from documentation and diagrams to presentations and dashboards. Built on design tokens, it ensures consistency while maintaining flexibility.
 
 ### Key Principles
 
 1. **Dark-First** - Optimized for extended developer sessions with reduced eye strain
 2. **Light Mode for Presentations** - Projector-friendly alternative for stakeholder meetings
-3. **Aviation-Inspired** - Flight deck instrumentation aesthetic with cockpit green and gold accents
-4. **OKLCH Colors** - Perceptually uniform color space for better color transitions
-5. **Accessible** - WCAG 2.1 AA compliant contrast ratios
+3. **OKLCH Colors** - Perceptually uniform color space for better color transitions
+4. **Accessible** - WCAG 2.1 AA compliant contrast ratios
 
 ### Quick Start
 
@@ -87,4 +86,4 @@ h1 {
 
 ### Ready to dive in?
 
-[Get Started](/guide/getting-started) with the Amelia Design System and bring aviation-inspired design to your project.
+[Get Started](/guide/getting-started) with the Amelia Design System.

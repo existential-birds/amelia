@@ -1,8 +1,8 @@
 {
   "name": "slidev-theme-amelia",
   "version": "1.0.0",
-  "description": "Aviation-inspired Slidev theme for Amelia presentations",
-  "keywords": ["slidev-theme", "slidev", "amelia", "aviation"],
+  "description": "Slidev theme for Amelia presentations",
+  "keywords": ["slidev-theme", "slidev", "amelia", "dark-theme"],
   "license": "MIT",
   "engines": {
     "node": ">=18.0.0",

@@ -6,7 +6,7 @@ Guidelines for creating professional, consistent presentations using Slidev with
 
 The Amelia Slidev theme provides:
 
-- **Aviation-inspired aesthetics** with dark/light mode support
+- **Professional aesthetics** with dark/light mode support
 - **15+ custom slide layouts** for different presentation needs
 - **7 visualization components** for McKinsey-style consulting decks
 - **Automatic design token integration** for consistent branding
@@ -488,10 +488,10 @@ Highlighted callout for key messages.
 
 ### Dark Mode (Default)
 
-Aviation cockpit aesthetic:
+Dark mode aesthetic:
 - Background: #0D1A12 (deep green)
 - Text: #EFF8E2 (warm off-white)
-- Primary: #FFC857 (aviation gold)
+- Primary: #FFC857 (gold)
 - Accent: #5B9BD5 (blue)
 
 ```markdown

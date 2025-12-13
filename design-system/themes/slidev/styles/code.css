@@ -9,7 +9,7 @@
  * SLIDEV THEME AMELIA - CODE SYNTAX HIGHLIGHTING
  * ============================================================================
  *
- * Aviation-inspired syntax highlighting for code blocks.
+ * Custom syntax highlighting for code blocks.
  *
  * Color scheme:
  * - Gold (--primary): Keywords, operators, important symbols
@@ -68,7 +68,7 @@ pre code {
 }
 
 /* ============================================================================
-   Keywords & Control Flow - Aviation Gold
+   Keywords & Control Flow - Gold
    ============================================================================ */
 
 .token.keyword,

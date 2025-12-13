@@ -8,7 +8,7 @@
 
 /**
  * Colors - Dark Mode (Default)
- * Aviation cockpit theme with deep greens and gold accents
+ * Deep forest greens with gold accents
  * -------------------------------------------------------------------------- */
 
 :root {
@@ -20,7 +20,7 @@
   --vp-c-text-2: #88A896;
   --vp-c-text-3: #5C7263;
 
-  /* Brand colors - Aviation Gold */
+  /* Brand colors - Gold */
   --vp-c-brand-1: #FFC857;
   --vp-c-brand-2: #FFD580;
   --vp-c-brand-3: #E5B350;

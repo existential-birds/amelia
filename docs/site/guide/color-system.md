@@ -4,16 +4,16 @@ The Amelia color system is built on two complementary themes that adapt to user 
 
 ## Design Philosophy
 
-The Amelia Design System features dual themes inspired by aviation and professional environments:
+The Amelia Design System features dual themes designed for professional environments:
 
-- **Dark Mode (Primary)**: Aviation cockpit aesthetic with deep green backgrounds and gold accents
+- **Dark Mode (Primary)**: Deep forest green backgrounds with gold accents
 - **Light Mode (Secondary)**: Daytime professional theme with warm cream backgrounds and blue accents
 
 ## Core Color Tokens
 
 ### Dark Mode (Default)
 
-The default dark mode uses an aviation cockpit aesthetic with deep greens and gold accents:
+The default dark mode uses deep forest greens with gold accents:
 
 <div class="color-swatch-grid">
 
@@ -22,7 +22,7 @@ The default dark mode uses an aviation cockpit aesthetic with deep greens and go
 | `--background` | #0D1A12 | oklch(8% 0.02 150) | Main background |
 | `--foreground` | #EFF8E2 | oklch(95% 0.02 120) | Main text color |
 | `--card` | #1F332E | oklch(18% 0.025 150) | Elevated surfaces |
-| `--primary` | #FFC857 | oklch(82% 0.16 85) | Aviation gold - primary actions |
+| `--primary` | #FFC857 | oklch(82% 0.16 85) | Gold - primary actions |
 | `--secondary` | #4A5C54 | oklch(35% 0.04 150) | Muted panels |
 | `--muted` | #2B3D35 | oklch(25% 0.03 150) | Subtle backgrounds |
 | `--muted-foreground` | #88A896 | oklch(60% 0.05 150) | Secondary text |

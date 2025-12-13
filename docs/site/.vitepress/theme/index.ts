@@ -8,7 +8,7 @@
  * Amelia Design System VitePress Theme
  *
  * Custom theme extending VitePress default theme with:
- * - Aviation-inspired color palette
+ * - Custom color palette
  * - Custom typography (Bebas Neue, Barlow Condensed, Source Sans 3, IBM Plex Mono)
  * - Design system token integration
  */
