@@ -24,11 +24,8 @@ export default defineConfig({
 
   // Theme configuration
   themeConfig: {
-    // Logo in navigation
-    logo: '/logo/amelia-gold.svg',
-
-    // Hide site title text in nav (logo is sufficient)
-    siteTitle: false,
+    // Use text title styled with Bebas Neue (see style.css)
+    siteTitle: 'AMELIA',
 
     // Navigation menu
     nav: [
@@ -85,8 +82,8 @@ export default defineConfig({
 
     // Footer
     footer: {
-      message: 'Released under the MPL-2.0 License.',
-      copyright: 'Copyright © 2024-2025 Amelia Project'
+      message: 'Built by hey-amelia bot. Released under the MPL-2.0 License.',
+      copyright: 'Copyright © 2024-2025 @anderskev'
     },
 
     // Search configuration
@@ -132,8 +129,9 @@ export default defineConfig({
   },
 
   // Head configuration
+  // Note: VitePress does NOT auto-prepend base path to head URLs - must include manually
   head: [
-    ['link', { rel: 'icon', type: 'image/svg+xml', href: '/logo/amelia-gold.svg' }]
-    // Fonts are self-hosted via /fonts/fonts.css (imported in theme/style.css)
+    ['link', { rel: 'icon', type: 'image/svg+xml', href: '/amelia/logo/amelia-gold.svg' }],
+    ['link', { rel: 'stylesheet', href: '/amelia/fonts/fonts.css' }]
   ]
 })

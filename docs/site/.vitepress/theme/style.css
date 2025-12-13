@@ -3,78 +3,7 @@
  * https://github.com/vuejs/vitepress/blob/main/src/client/theme-default/styles/vars.css
  */
 
-/* Self-hosted fonts - @font-face declarations
- * Using relative paths (../fonts/) to work with VitePress base path configuration.
- * Fonts are in public/fonts/, CSS gets bundled to assets/, so relative path is ../fonts/
- */
-
-/* Bebas Neue - Display font for headers */
-@font-face {
-  font-family: 'Bebas Neue';
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url('../fonts/bebas-neue-regular.woff2') format('woff2');
-}
-
-/* Barlow Condensed - Primary UI font */
-@font-face {
-  font-family: 'Barlow Condensed';
-  font-style: normal;
-  font-weight: 500;
-  font-display: swap;
-  src: url('../fonts/barlow-condensed-500.woff2') format('woff2');
-}
-
-@font-face {
-  font-family: 'Barlow Condensed';
-  font-style: normal;
-  font-weight: 600;
-  font-display: swap;
-  src: url('../fonts/barlow-condensed-600.woff2') format('woff2');
-}
-
-@font-face {
-  font-family: 'Barlow Condensed';
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
-  src: url('../fonts/barlow-condensed-700.woff2') format('woff2');
-}
-
-/* Source Sans 3 - Body text font */
-@font-face {
-  font-family: 'Source Sans 3';
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url('../fonts/source-sans-3-400.woff2') format('woff2');
-}
-
-@font-face {
-  font-family: 'Source Sans 3';
-  font-style: normal;
-  font-weight: 600;
-  font-display: swap;
-  src: url('../fonts/source-sans-3-600.woff2') format('woff2');
-}
-
-/* IBM Plex Mono - Monospace font for code */
-@font-face {
-  font-family: 'IBM Plex Mono';
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url('../fonts/ibm-plex-mono-400.woff2') format('woff2');
-}
-
-@font-face {
-  font-family: 'IBM Plex Mono';
-  font-style: normal;
-  font-weight: 500;
-  font-display: swap;
-  src: url('../fonts/ibm-plex-mono-500.woff2') format('woff2');
-}
+/* Fonts are loaded via /fonts/fonts.css in head config (VitePress handles base path) */
 
 /**
  * Colors - Light Mode (Default)
@@ -218,11 +147,23 @@
   letter-spacing: -0.02em;
 }
 
-/* Hero title with display font */
-.VPHero .name {
-  font-family: var(--amelia-font-display) !important;
-  letter-spacing: 0.02em;
+/* Nav title with Bebas Neue display font */
+.VPNavBarTitle .title {
+  font-family: var(--amelia-font-display);
+  font-size: 1.5rem;
+  font-weight: 400;
+  letter-spacing: 0.05em;
 }
+
+/* Color variations for light/dark mode */
+:root .VPNavBarTitle .title {
+  color: var(--vp-c-brand-1);
+}
+
+.dark .VPNavBarTitle .title {
+  color: var(--vp-c-brand-1);
+}
+
 
 /**
  * Component: Button
@@ -251,18 +192,9 @@
  * -------------------------------------------------------------------------- */
 
 :root {
-  --vp-home-hero-name-color: transparent;
-  --vp-home-hero-name-background: linear-gradient(
-    120deg,
-    var(--vp-c-brand-1) 30%,
-    var(--vp-c-info-1)
-  );
-  --vp-home-hero-image-background-image: linear-gradient(
-    -45deg,
-    var(--vp-c-brand-soft) 50%,
-    var(--vp-c-info-soft) 50%
-  );
-  --vp-home-hero-image-filter: blur(40px);
+  --vp-home-hero-name-color: var(--vp-c-brand-1);
+  --vp-home-hero-image-background-image: none;
+  --vp-home-hero-image-filter: none;
 }
 
 /**
