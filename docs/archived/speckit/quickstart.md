@@ -13,7 +13,7 @@
 
 ```bash
 # Clone the repository
-git clone https://github.com/amelia/amelia.git
+git clone https://github.com/anderskev/amelia.git
 cd amelia
 
 # Install dependencies

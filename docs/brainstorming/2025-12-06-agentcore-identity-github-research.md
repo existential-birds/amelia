@@ -682,7 +682,7 @@ def github_api_call(access_token: str, endpoint: str):
 
 ### Architecture Integration
 
-Based on the [AWS AgentCore Deployment Design](/Users/ka/github/amelia-docs/docs/brainstorming/2025-12-06-aws-agentcore-deployment-design.md), here's how to integrate GitHub authentication:
+Based on the AWS AgentCore Deployment Design, here's how to integrate GitHub authentication:
 
 **Phase 1: GitHub OAuth Credential Provider**
 ```python

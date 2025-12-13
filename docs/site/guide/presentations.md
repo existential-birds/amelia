@@ -12,7 +12,7 @@ The Amelia Slidev theme provides:
 - **Automatic design token integration** for consistent branding
 - **Full TypeScript support** with type-safe props
 
-**Theme Location**: `/Users/ka/github/amelia-issue-91/design-system/themes/slidev`
+**Theme Location**: [design-system/themes/slidev](https://github.com/anderskev/amelia/tree/main/design-system/themes/slidev)
 
 ## Quick Start
 
@@ -840,7 +840,7 @@ source: "Strategic Planning 2025"
 - [Slidev Themes](https://sli.dev/themes/gallery.html)
 
 ### Amelia Theme
-- Theme source: `/Users/ka/github/amelia-issue-91/design-system/themes/slidev`
+- Theme source: [design-system/themes/slidev](https://github.com/anderskev/amelia/tree/main/design-system/themes/slidev)
 - Layout docs: `design-system/themes/slidev/layouts/README.md`
 - Component docs: `design-system/themes/slidev/components/README.md`
 

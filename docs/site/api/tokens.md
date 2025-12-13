@@ -376,10 +376,10 @@ Import all design tokens:
 
 ```css
 /* Import color tokens */
-@import '/Users/ka/github/amelia-issue-91/design-system/tokens/colors.css';
+@import 'design-system/tokens/colors.css';
 
 /* Import typography tokens */
-@import '/Users/ka/github/amelia-issue-91/design-system/tokens/typography.css';
+@import 'design-system/tokens/typography.css';
 ```
 
 ### JSON Schema
@@ -403,7 +403,7 @@ Color tokens are also available as JSON:
 }
 ```
 
-**Location**: `/Users/ka/github/amelia-issue-91/design-system/tokens/colors.json`
+**Location**: [design-system/tokens/colors.json](https://github.com/anderskev/amelia/blob/main/design-system/tokens/colors.json)
 
 ## Theme Switching
 

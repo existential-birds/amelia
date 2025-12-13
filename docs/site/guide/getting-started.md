@@ -24,7 +24,7 @@ The design tokens are available as CSS files in the `design-system/tokens/` dire
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/amelia.git
+git clone https://github.com/anderskev/amelia.git
 cd amelia
 
 # Import tokens in your CSS

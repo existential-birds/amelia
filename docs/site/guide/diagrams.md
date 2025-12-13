@@ -32,7 +32,7 @@ vars: {
 }
 ```
 
-**Location**: `/Users/ka/github/amelia-issue-91/design-system/themes/d2/amelia-dark.d2`
+**Location**: [design-system/themes/d2/amelia-dark.d2](https://github.com/anderskev/amelia/blob/main/design-system/themes/d2/amelia-dark.d2)
 
 ### Light Theme Configuration
 
@@ -51,7 +51,7 @@ vars: {
 }
 ```
 
-**Location**: `/Users/ka/github/amelia-issue-91/design-system/themes/d2/amelia-light.d2`
+**Location**: [design-system/themes/d2/amelia-light.d2](https://github.com/anderskev/amelia/blob/main/design-system/themes/d2/amelia-light.d2)
 
 ### Basic Usage
 

@@ -53,7 +53,7 @@ Generate a manual test plan for the current PR that will be auto-posted as a PR 
 
 ```bash
 # 1. Install Python dependencies
-cd /Users/ka/github/amelia-langgraph-bridge
+cd <project-root>
 uv sync
 
 # 2. Start the backend server (if needed)
