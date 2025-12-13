@@ -222,3 +222,42 @@ class TestArchitectContextStrategy:
         assert "Request -> AuthService" in result
         assert "## Testing Strategy" in result
         assert "Unit tests for services" in result
+
+    def test_compile_includes_design_section_when_present(
+        self, strategy, mock_execution_state_factory, mock_issue_factory, mock_design_factory
+    ):
+        """Test compile includes design section when state.design is set."""
+        issue = mock_issue_factory(title="Build auth", description="Auth system")
+        design = mock_design_factory(
+            title="Auth Design",
+            goal="Secure authentication",
+            architecture="JWT-based",
+        )
+        state = mock_execution_state_factory(issue=issue, design=design)
+
+        context = strategy.compile(state)
+
+        # Should have two sections: issue and design
+        assert len(context.sections) == 2
+        section_names = [s.name for s in context.sections]
+        assert "issue" in section_names
+        assert "design" in section_names
+
+        # Find design section
+        design_section = next(s for s in context.sections if s.name == "design")
+        assert "Secure authentication" in design_section.content
+        assert "JWT-based" in design_section.content
+        assert design_section.source == "state.design"
+
+    def test_compile_excludes_design_section_when_none(
+        self, strategy, mock_execution_state_factory, mock_issue_factory
+    ):
+        """Test compile excludes design section when state.design is None."""
+        issue = mock_issue_factory(title="Build feature", description="Feature desc")
+        state = mock_execution_state_factory(issue=issue, design=None)
+
+        context = strategy.compile(state)
+
+        # Should have only issue section
+        assert len(context.sections) == 1
+        assert context.sections[0].name == "issue"

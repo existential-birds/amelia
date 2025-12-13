@@ -174,8 +174,16 @@ Ensure exact file paths, complete code in steps, and commands with expected outp
             )
         )
 
-        # Design section (optional) - for future implementation
-        # Design context will be added when ExecutionState includes design field
+        # Design section (optional)
+        if state.design:
+            design_content = self._format_design_section(state.design)
+            sections.append(
+                ContextSection(
+                    name="design",
+                    content=design_content,
+                    source="state.design",
+                )
+            )
 
         # Validate all sections before returning
         self.validate_sections(sections)
