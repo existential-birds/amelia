@@ -42,7 +42,8 @@ async def test_orchestrator_parallel_review_api() -> None:
             code_changes_for_review="changes"
         )
 
-        await call_reviewer_node(initial_state)
+        config = {"configurable": {"thread_id": "test-parallel-review"}}
+        await call_reviewer_node(initial_state, config)
 
         duration = time.time() - start_time
 
@@ -70,7 +71,7 @@ async def test_orchestrator_parallel_execution(
     profile = Profile(name=profile_name, driver=driver_type, tracker="noop", strategy="single")
     test_issue = Issue(id=issue_id, title=issue_title, description="Execute tasks in parallel.")
 
-    async def delayed_execute_current_task(_self: Any, state: ExecutionState) -> dict[str, str]:
+    async def delayed_execute_current_task(_self: Any, state: ExecutionState, workflow_id: str | None = None) -> dict[str, str]:
         await asyncio.sleep(0.05)
         return {"status": "completed", "output": f"Task {state.current_task_id} finished"}
 
@@ -97,7 +98,8 @@ async def test_orchestrator_parallel_execution(
         app = create_orchestrator_graph()
 
         start_time = time.time()
-        final_state = await app.ainvoke(initial_state)
+        config = {"configurable": {"thread_id": f"test-parallel-exec-{issue_id.lower()}"}}
+        final_state = await app.ainvoke(initial_state, config)
         duration = time.time() - start_time
 
         # Sequential: 100ms, Parallel: ~50ms (200ms threshold for CI variability)
