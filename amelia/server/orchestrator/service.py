@@ -371,6 +371,9 @@ class OrchestratorService:
                             workflow_id=workflow_id,
                             interrupt_data=chunk["__interrupt__"],
                         )
+                        # Sync plan from LangGraph checkpoint to ServerExecutionState
+                        # so it's available via REST API while blocked
+                        await self._sync_plan_from_checkpoint(workflow_id, graph, config)
                         await self._emit(
                             workflow_id,
                             EventType.APPROVAL_REQUIRED,
@@ -419,10 +422,20 @@ class OrchestratorService:
         while attempt <= retry_config.max_retries:
             try:
                 await self._run_workflow(workflow_id, state)
+                # Success - reset error tracking
+                if state.consecutive_errors > 0:
+                    state.consecutive_errors = 0
+                    state.last_error_context = None
+                    await self._repository.update(state)
                 return  # Success
 
             except TRANSIENT_EXCEPTIONS as e:
                 attempt += 1
+                # Update error tracking in ServerExecutionState
+                state.consecutive_errors = attempt
+                state.last_error_context = f"{type(e).__name__}: {str(e)}"
+                await self._repository.update(state)
+
                 if attempt > retry_config.max_retries:
                     logger.exception("Workflow failed after retries exhausted", workflow_id=workflow_id)
                     await self._emit(
@@ -452,6 +465,11 @@ class OrchestratorService:
 
             except Exception as e:
                 # Non-transient error - fail immediately
+                # Still track for observability
+                state.consecutive_errors = attempt + 1
+                state.last_error_context = f"{type(e).__name__}: {str(e)}"
+                await self._repository.update(state)
+
                 logger.exception("Workflow failed with non-transient error", workflow_id=workflow_id)
                 await self._emit(
                     workflow_id,
@@ -850,9 +868,6 @@ class OrchestratorService:
                     if task_id and task_status:
                         self._last_task_statuses[workflow_id][task_id] = task_status
 
-            # Sync plan to ServerExecutionState for API access
-            await self._sync_plan_to_state(workflow_id, plan)
-
     async def _emit_developer_messages(
         self,
         workflow_id: str,
@@ -949,34 +964,42 @@ class OrchestratorService:
                 },
             )
 
-    async def _sync_plan_to_state(
+    async def _sync_plan_from_checkpoint(
         self,
         workflow_id: str,
-        plan_dict: dict[str, Any],
+        graph: CompiledStateGraph[Any],
+        config: RunnableConfig,
     ) -> None:
-        """Sync plan from LangGraph state to ServerExecutionState.
+        """Sync plan from LangGraph checkpoint to ServerExecutionState.
 
-        This ensures the plan is available via the REST API when a workflow
-        is blocked for approval. Without this, the API would return plan=None
-        because the plan only exists in the LangGraph checkpointer.
+        Uses LangGraph's get_state() API to fetch the current checkpoint state,
+        ensuring the plan is available via REST API when workflow is blocked.
 
         Args:
             workflow_id: The workflow ID.
-            plan_dict: The plan dictionary from the graph state output.
+            graph: The compiled LangGraph instance.
+            config: The RunnableConfig with thread_id.
         """
         try:
-            # Fetch current state
-            state = await self._repository.get(workflow_id)
-            if state is None:
+            # Fetch current checkpoint state from LangGraph (sync method, safe in async)
+            checkpoint_state = graph.get_state(config)
+            if checkpoint_state is None or checkpoint_state.values is None:
                 logger.warning(
-                    "Cannot sync plan - workflow not found",
+                    "Cannot sync plan - no checkpoint state",
                     workflow_id=workflow_id,
                 )
                 return
 
-            if state.execution_state is None:
+            plan_dict = checkpoint_state.values.get("plan")
+            if plan_dict is None:
+                logger.debug("No plan in checkpoint yet", workflow_id=workflow_id)
+                return
+
+            # Fetch ServerExecutionState
+            state = await self._repository.get(workflow_id)
+            if state is None or state.execution_state is None:
                 logger.warning(
-                    "Cannot sync plan - no execution_state",
+                    "Cannot sync plan - workflow or execution_state not found",
                     workflow_id=workflow_id,
                 )
                 return
@@ -994,10 +1017,11 @@ class OrchestratorService:
         except Exception as e:
             # Log but don't fail the workflow - plan sync is best-effort
             logger.warning(
-                "Failed to sync plan to state",
+                "Failed to sync plan from checkpoint",
                 workflow_id=workflow_id,
                 error=str(e),
             )
+
 
     async def recover_interrupted_workflows(self) -> None:
         """Recover workflows that were running when server crashed.

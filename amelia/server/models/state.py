@@ -109,6 +109,14 @@ class ServerExecutionState(BaseModel):
         default=None,
         description="Error message when failed",
     )
+    consecutive_errors: int = Field(
+        default=0,
+        description="Number of consecutive transient errors (resets on success)",
+    )
+    last_error_context: str | None = Field(
+        default=None,
+        description="Context from the most recent error (for debugging)",
+    )
 
     model_config = {
         "json_schema_extra": {
