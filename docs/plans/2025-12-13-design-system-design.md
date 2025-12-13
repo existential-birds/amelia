@@ -81,18 +81,54 @@ The color system uses **OKLCH** for perceptual uniformity - colors maintain cons
 | Status | Dark | Light | Meaning |
 |--------|------|-------|---------|
 | `running` | Gold #FFC857 | Blue #2E6B9C | In progress |
+| `thinking` | Gold #FFC857 (pulse) | Blue #2E6B9C (pulse) | Agent reasoning/RAG search |
+| `streaming` | Gold #FFC857 (blink) | Blue #2E6B9C (blink) | Token generation |
 | `completed` | Green #5B8A72 | Green #3D7A5A | Success |
 | `pending` | Gray #4A5C54 | Gray #8A9A90 | Queued |
-| `blocked` | Red #A33D2E | Red #8B3224 | Awaiting |
+| `blocked` | Red #A33D2E | Red #8B3224 | Awaiting input |
+| `interrupt` | Blue #5B9BD5 | Blue #2E6B9C | Human-in-the-loop gate |
 | `failed` | Red #A33D2E | Red #8B3224 | Error |
 
 **Status palettes:**
-- Dark: https://coolors.co/ffc857-5b8a72-4a5c54-a33d2e
+- Dark: https://coolors.co/ffc857-5b8a72-4a5c54-a33d2e-5b9bd5
 - Light: https://coolors.co/2e6b9c-3d7a5a-8a9a90-8b3224
 
 ### Full Brand Palette
 
 https://coolors.co/0d1a12-1f332e-ffc857-5b9bd5-5b8a72-a33d2e-eff8e2
+
+---
+
+## Animation
+
+Animations convey state changes. Three named animations for dashboard use only (static diagrams use color alone).
+
+| Name | Effect | Duration | Usage |
+|------|--------|----------|-------|
+| `pulse` | Opacity 1 → 0.6 → 1 | 2s ease-in-out infinite | `thinking` state |
+| `beacon` | Box-shadow glow 0 → 8px → 0 | 1.5s ease-in-out infinite | Attention needed |
+| `blink` | Opacity 1 → 0 → 1 | 0.8s steps(2) infinite | `streaming` cursor |
+
+### CSS Implementation
+
+```css
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+@keyframes beacon {
+  0%, 100% { box-shadow: 0 0 0 0 var(--color-primary); }
+  50% { box-shadow: 0 0 8px 2px var(--color-primary); }
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+```
+
+**Scope**: Dashboard (CSS) only. Mermaid and D2 diagrams are static and use color differentiation.
 
 ---
 
@@ -330,6 +366,45 @@ textColor: #1A2F23
 - **Code entities**: IBM Plex Mono
 - **Titles**: Barlow Condensed
 
+### Edge Styles
+
+Edges convey different types of flow in orchestration diagrams.
+
+| Flow Type | Style | Color | Usage |
+|-----------|-------|-------|-------|
+| Control flow | Solid (default) | `muted` (#88A896) | Agent-to-agent transitions |
+| Data/Context | Dashed (2px dash, 4px gap) | `muted` (#88A896) | State data passing |
+| Error/Interrupt | Dotted (2px dot, 2px gap) | `destructive` (#A33D2E) | Exception paths |
+
+### Human-in-the-Loop Gate
+
+Use a **diamond** node shape with `accent` stroke color to indicate mandatory human approval before proceeding.
+
+**D2 Example:**
+
+```d2
+approval: {
+  shape: diamond
+  style.stroke: "#5B9BD5"
+  style.fill: "#1F332E"
+  style.font-color: "#EFF8E2"
+}
+
+architect -> approval: plan complete
+approval -> developer: approved {
+  style.stroke-dash: 0
+}
+```
+
+**Mermaid Example:**
+
+```mermaid
+flowchart LR
+    A[Architect] --> B{Human Approval}
+    B -->|approved| C[Developer]
+    style B stroke:#5B9BD5,stroke-width:2px
+```
+
 ---
 
 ## Presentation Theme (Slidev)
@@ -373,8 +448,25 @@ slidev-theme-amelia/
 - Bullets: Gold dash prefix
 
 **Diagram**
+
 - Full-bleed, no padding
 - Caption: Small, muted, bottom-right
+
+**DiffView (Code Comparison)**
+
+- Two-column layout for "before/after" code demos
+- Left column: "Before" code with `destructive/15%` (#A33D2E at 15% opacity) background for removed lines
+- Right column: "After" code with `completed/15%` (#5B8A72 at 15% opacity) background for added lines
+- Header: Barlow Condensed, `xl`, centered above columns
+- Caption: Source Sans 3, `sm`, muted, centered below
+- Code font: IBM Plex Mono
+
+**Focus (Demo Spotlight)**
+
+- Dims background to near-black (#050A07)
+- Reduces non-active panel opacity to 0.3
+- Active element remains at full brightness
+- Usage: Live demos when explaining specific transitions
 
 ### Code Highlighting (Shiki)
 
