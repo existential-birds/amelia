@@ -150,7 +150,8 @@ def plan_only_command(
         )
 
         architect = Architect(DriverFactory.get_driver(active_profile.driver))
-        result = await architect.plan(state)
+        # Use issue_id as workflow_id for CLI mode
+        result = await architect.plan(state, workflow_id=issue_id)
         
         typer.echo("\n--- GENERATED PLAN ---")
         if result.task_dag and result.task_dag.tasks:
@@ -232,8 +233,16 @@ def review(
                     code_changes_for_review=code_changes
                 )
                 
+                # Create config with workflow_id for CLI mode
+                from langchain_core.runnables.config import RunnableConfig
+                config: RunnableConfig = {
+                    "configurable": {
+                        "thread_id": "LOCAL-REVIEW",
+                        "execution_mode": "cli",
+                    }
+                }
                 # Directly call the reviewer node, it will use the driver from profile
-                result_dict = await call_reviewer_node(initial_state)
+                result_dict = await call_reviewer_node(initial_state, config=config)
 
                 if result_dict.get("last_review"):
                     review_result = result_dict["last_review"]
