@@ -49,7 +49,7 @@ function StreamLogEntry({ event }: { event: StreamEvent }) {
         [{event.agent.toUpperCase()}]
       </span>
       <span className="text-foreground/80 break-words">
-        {event.tool_name ? `→ ${event.tool_name}` : event.content || event.type}
+        {event.tool_name ? `→ ${event.tool_name}` : event.content || event.subtype}
       </span>
     </div>
   );

@@ -88,13 +88,14 @@ export function createMockEvent(
 
 /**
  * Creates a mock StreamEvent with sensible defaults.
+ * Uses `subtype` (not `type`) to match the WebSocket payload format.
  * @param overrides - Optional partial object to override default values
  */
 export function createMockStreamEvent(
   overrides?: Partial<StreamEvent>
 ): StreamEvent {
   return {
-    type: StreamEventType.CLAUDE_THINKING,
+    subtype: StreamEventType.CLAUDE_THINKING,
     content: 'Test thinking content',
     timestamp: '2025-12-13T10:00:00Z',
     agent: 'architect',

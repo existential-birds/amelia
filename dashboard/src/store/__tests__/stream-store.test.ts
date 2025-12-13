@@ -38,7 +38,7 @@ describe('streamStore', () => {
   describe('addEvent', () => {
     it('should add event to events array', () => {
       const event = createMockStreamEvent({
-        type: StreamEventType.CLAUDE_THINKING,
+        subtype: StreamEventType.CLAUDE_THINKING,
         content: 'Analyzing requirements...',
       });
 
@@ -51,13 +51,13 @@ describe('streamStore', () => {
 
     it('should append to existing events maintaining order', () => {
       const event1 = createMockStreamEvent({
-        type: StreamEventType.CLAUDE_THINKING,
+        subtype: StreamEventType.CLAUDE_THINKING,
         content: 'First thought',
         timestamp: '2025-12-13T10:00:00Z',
       });
 
       const event2 = createMockStreamEvent({
-        type: StreamEventType.CLAUDE_TOOL_CALL,
+        subtype: StreamEventType.CLAUDE_TOOL_CALL,
         content: null,
         tool_name: 'read_file',
         tool_input: { path: '/src/main.py' },
@@ -65,7 +65,7 @@ describe('streamStore', () => {
       });
 
       const event3 = createMockStreamEvent({
-        type: StreamEventType.CLAUDE_TOOL_RESULT,
+        subtype: StreamEventType.CLAUDE_TOOL_RESULT,
         content: 'File contents...',
         timestamp: '2025-12-13T10:00:02Z',
       });
@@ -83,21 +83,21 @@ describe('streamStore', () => {
 
     it('should handle different event types correctly', () => {
       const thinkingEvent = createMockStreamEvent({
-        type: StreamEventType.CLAUDE_THINKING,
+        subtype: StreamEventType.CLAUDE_THINKING,
         content: 'Thinking...',
         tool_name: null,
         tool_input: null,
       });
 
       const toolCallEvent = createMockStreamEvent({
-        type: StreamEventType.CLAUDE_TOOL_CALL,
+        subtype: StreamEventType.CLAUDE_TOOL_CALL,
         content: null,
         tool_name: 'execute_command',
         tool_input: { command: 'ls -la' },
       });
 
       const agentOutputEvent = createMockStreamEvent({
-        type: StreamEventType.AGENT_OUTPUT,
+        subtype: StreamEventType.AGENT_OUTPUT,
         content: 'Task completed successfully',
         tool_name: null,
         tool_input: null,
@@ -109,9 +109,9 @@ describe('streamStore', () => {
 
       const events = useStreamStore.getState().events;
       expect(events).toHaveLength(3);
-      expect(events[0]!.type).toBe(StreamEventType.CLAUDE_THINKING);
-      expect(events[1]!.type).toBe(StreamEventType.CLAUDE_TOOL_CALL);
-      expect(events[2]!.type).toBe(StreamEventType.AGENT_OUTPUT);
+      expect(events[0]!.subtype).toBe(StreamEventType.CLAUDE_THINKING);
+      expect(events[1]!.subtype).toBe(StreamEventType.CLAUDE_TOOL_CALL);
+      expect(events[2]!.subtype).toBe(StreamEventType.AGENT_OUTPUT);
     });
 
     it('should respect maxEvents limit (buffer overflow)', () => {

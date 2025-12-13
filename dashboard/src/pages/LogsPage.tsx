@@ -66,10 +66,10 @@ function StreamLogItem({ event }: { event: StreamEvent }) {
     <div
       className={cn(
         'flex items-start gap-3 px-3 py-2 rounded border',
-        eventTypeColors[event.type]
+        eventTypeColors[event.subtype]
       )}
     >
-      <div className="mt-0.5">{eventTypeIcons[event.type]}</div>
+      <div className="mt-0.5">{eventTypeIcons[event.subtype]}</div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <span className="font-mono tabular-nums">
@@ -110,7 +110,7 @@ export default function LogsPage() {
 
   // Filter events
   const filteredEvents =
-    typeFilter === 'all' ? events : events.filter((e) => e.type === typeFilter);
+    typeFilter === 'all' ? events : events.filter((e) => e.subtype === typeFilter);
 
   // Auto-scroll when at bottom
   useEffect(() => {

@@ -161,7 +161,7 @@ describe('ActivityLog', () => {
       const streamEvent = createMockStreamEvent({
         workflow_id: 'wf-001',
         timestamp: '2025-12-01T14:32:20Z',
-        type: StreamEventType.CLAUDE_THINKING,
+        subtype: StreamEventType.CLAUDE_THINKING,
         content: 'Analyzing requirements...',
         agent: 'architect',
       });
@@ -185,7 +185,7 @@ describe('ActivityLog', () => {
       const streamEvent = createMockStreamEvent({
         workflow_id: 'wf-001',
         timestamp: '2025-12-01T14:32:20Z',
-        type: StreamEventType.CLAUDE_THINKING,
+        subtype: StreamEventType.CLAUDE_THINKING,
         content: 'Analyzing requirements...',
         agent: 'architect',
       });
@@ -239,7 +239,7 @@ describe('ActivityLog', () => {
         workflow_id: 'wf-001',
         timestamp: '2025-12-01T14:32:15Z', // Between the two workflow events
         content: 'Stream event in the middle',
-        type: StreamEventType.CLAUDE_THINKING,
+        subtype: StreamEventType.CLAUDE_THINKING,
       });
 
       vi.mocked(streamStore.useStreamStore).mockImplementation((selector: any) => {
@@ -268,7 +268,7 @@ describe('ActivityLog', () => {
       const toolCallEvent = createMockStreamEvent({
         workflow_id: 'wf-001',
         timestamp: '2025-12-01T14:32:20Z',
-        type: StreamEventType.CLAUDE_TOOL_CALL,
+        subtype: StreamEventType.CLAUDE_TOOL_CALL,
         content: null,
         tool_name: 'read_file',
         tool_input: { path: '/src/main.py' },

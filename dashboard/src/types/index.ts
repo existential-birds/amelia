@@ -514,11 +514,14 @@ export type StreamEventType =
  * A single stream event emitted during Claude LLM execution.
  * Stream events are emitted in real-time via WebSocket to show agent reasoning.
  *
+ * Note: Uses `subtype` instead of `type` to avoid collision with the wrapper
+ * message's `type: "stream"` field in WebSocket messages.
+ *
  * @example
  * ```typescript
  * // Thinking event
  * const thinking: StreamEvent = {
- *   type: 'claude_thinking',
+ *   subtype: 'claude_thinking',
  *   content: 'I need to analyze the requirements...',
  *   timestamp: '2025-12-13T10:30:00Z',
  *   agent: 'architect',
@@ -529,7 +532,7 @@ export type StreamEventType =
  *
  * // Tool call event
  * const toolCall: StreamEvent = {
- *   type: 'claude_tool_call',
+ *   subtype: 'claude_tool_call',
  *   content: null,
  *   timestamp: '2025-12-13T10:30:01Z',
  *   agent: 'developer',
@@ -540,8 +543,8 @@ export type StreamEventType =
  * ```
  */
 export interface StreamEvent {
-  /** Type of stream event. */
-  type: StreamEventType;
+  /** Subtype of stream event (uses subtype to avoid collision with message type). */
+  subtype: StreamEventType;
 
   /** Text content for thinking/output events, null for tool calls. */
   content: string | null;

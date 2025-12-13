@@ -87,7 +87,7 @@ interface StreamState {
  *
  * // Add a thinking event
  * addEvent({
- *   type: 'claude_thinking',
+ *   subtype: 'claude_thinking',
  *   content: 'I need to analyze the requirements...',
  *   timestamp: '2025-12-13T10:30:00Z',
  *   agent: 'architect',

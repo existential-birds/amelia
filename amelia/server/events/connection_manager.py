@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 from fastapi import WebSocket, WebSocketDisconnect
 
 from amelia.core.types import StreamEvent
-from amelia.server.models.events import WorkflowEvent
+from amelia.server.models.events import StreamEventPayload, WorkflowEvent
 
 
 if TYPE_CHECKING:
@@ -161,6 +161,10 @@ class ConnectionManager:
         Stream events are ephemeral real-time events, broadcast to all connected
         clients regardless of their subscription settings.
 
+        Converts StreamEvent (core type) to StreamEventPayload (WebSocket type)
+        which uses `subtype` instead of `type` to avoid collision with the
+        wrapper message's `type: "stream"` field.
+
         Args:
             event: The stream event to broadcast.
         """
@@ -170,9 +174,19 @@ class ConnectionManager:
         if not targets:
             return
 
+        # Convert StreamEvent to StreamEventPayload (type -> subtype)
+        stream_payload = StreamEventPayload(
+            subtype=event.type,
+            content=event.content,
+            agent=event.agent,
+            workflow_id=event.workflow_id,
+            timestamp=event.timestamp,
+            tool_name=event.tool_name,
+            tool_input=event.tool_input,
+        )
         payload = {
             "type": "stream",
-            "payload": event.model_dump(mode="json"),
+            "payload": stream_payload.model_dump(mode="json"),
         }
 
         async def send_to_client(ws: WebSocket) -> tuple[WebSocket, bool]:

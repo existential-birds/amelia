@@ -77,7 +77,7 @@ class TestConnectionManagerStream:
     async def test_broadcast_stream_payload_structure(
         self, manager, mock_websocket, sample_stream_event
     ):
-        """broadcast_stream() should send correct payload structure."""
+        """broadcast_stream() should send correct payload structure with subtype."""
         await manager.connect(mock_websocket)
 
         await manager.broadcast_stream(sample_stream_event)
@@ -89,9 +89,10 @@ class TestConnectionManagerStream:
         assert payload["type"] == "stream"
         assert "payload" in payload
 
-        # Verify stream event payload
+        # Verify StreamEventPayload uses subtype (not type)
         stream_payload = payload["payload"]
-        assert stream_payload["type"] == "claude_thinking"
+        assert "type" not in stream_payload, "Should use 'subtype' not 'type'"
+        assert stream_payload["subtype"] == "claude_thinking"
         assert stream_payload["content"] == "Analyzing requirements"
         assert stream_payload["agent"] == "developer"
         assert stream_payload["workflow_id"] == "wf-123"
@@ -200,6 +201,8 @@ class TestConnectionManagerStream:
         payload = mock_websocket.send_json.call_args[0][0]
         stream_payload = payload["payload"]
 
+        # Verify subtype is used (not type)
+        assert stream_payload["subtype"] == "claude_tool_result"
         assert stream_payload["tool_name"] == "execute_shell"
         assert stream_payload["tool_input"] == {"command": "ls -la", "timeout": 30}
 

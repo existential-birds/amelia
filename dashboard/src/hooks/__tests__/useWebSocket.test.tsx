@@ -305,7 +305,7 @@ describe('useWebSocket', () => {
       ws.triggerOpen();
 
       const streamEvent: StreamEvent = {
-        type: 'claude_thinking',
+        subtype: 'claude_thinking',
         content: 'Analyzing the requirements...',
         timestamp: '2025-12-13T10:00:00Z',
         agent: 'developer',
@@ -328,7 +328,7 @@ describe('useWebSocket', () => {
       ws.triggerOpen();
 
       const streamEvent: StreamEvent = {
-        type: 'claude_tool_call',
+        subtype: 'claude_tool_call',
         content: null,
         timestamp: '2025-12-13T10:01:00Z',
         agent: 'architect',
@@ -352,7 +352,7 @@ describe('useWebSocket', () => {
       ws.triggerOpen();
 
       const event1: StreamEvent = {
-        type: 'claude_thinking',
+        subtype: 'claude_thinking',
         content: 'First thought',
         timestamp: '2025-12-13T10:00:00Z',
         agent: 'developer',
@@ -362,7 +362,7 @@ describe('useWebSocket', () => {
       };
 
       const event2: StreamEvent = {
-        type: 'claude_tool_call',
+        subtype: 'claude_tool_call',
         content: null,
         timestamp: '2025-12-13T10:00:01Z',
         agent: 'developer',
@@ -372,7 +372,7 @@ describe('useWebSocket', () => {
       };
 
       const event3: StreamEvent = {
-        type: 'agent_output',
+        subtype: 'agent_output',
         content: 'Task completed successfully',
         timestamp: '2025-12-13T10:00:02Z',
         agent: 'developer',

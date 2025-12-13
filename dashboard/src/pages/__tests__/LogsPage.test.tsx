@@ -18,16 +18,16 @@ const renderWithRouter = (ui: React.ReactElement) => {
 
 // Helper to create mock stream events
 const createStreamEvent = (
-  type: StreamEventType,
+  subtype: StreamEventType,
   overrides?: Partial<StreamEvent>
 ): StreamEvent => ({
-  type,
-  content: type === StreamEventType.CLAUDE_THINKING ? 'Test thinking content' : null,
+  subtype,
+  content: subtype === StreamEventType.CLAUDE_THINKING ? 'Test thinking content' : null,
   timestamp: new Date().toISOString(),
   agent: 'developer',
   workflow_id: 'wf-123',
-  tool_name: type === StreamEventType.CLAUDE_TOOL_CALL ? 'test_tool' : null,
-  tool_input: type === StreamEventType.CLAUDE_TOOL_CALL ? { arg: 'value' } : null,
+  tool_name: subtype === StreamEventType.CLAUDE_TOOL_CALL ? 'test_tool' : null,
+  tool_input: subtype === StreamEventType.CLAUDE_TOOL_CALL ? { arg: 'value' } : null,
   ...overrides,
 });
 

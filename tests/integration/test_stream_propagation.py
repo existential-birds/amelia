@@ -78,7 +78,7 @@ class TestStreamEventPropagation:
         mock_websocket.send_json.assert_called_once()
         call_args = mock_websocket.send_json.call_args[0][0]
         assert call_args["type"] == "stream"
-        assert call_args["payload"]["type"] == "claude_thinking"
+        assert call_args["payload"]["subtype"] == "claude_thinking"
         assert call_args["payload"]["content"] == "Analyzing the codebase..."
         assert call_args["payload"]["agent"] == "developer"
 
@@ -154,7 +154,7 @@ class TestStreamEventPropagation:
         await asyncio.sleep(0.1)
 
         call_args = mock_websocket.send_json.call_args[0][0]
-        assert call_args["payload"]["type"] == "claude_tool_call"
+        assert call_args["payload"]["subtype"] == "claude_tool_call"
         assert call_args["payload"]["tool_name"] == "Read"
         assert call_args["payload"]["tool_input"] == {"file_path": "/src/main.py"}
 
@@ -315,7 +315,7 @@ class TestStreamEventTypes:
 
         call_args = mock_ws.send_json.call_args[0][0]
         assert call_args["type"] == "stream"
-        assert call_args["payload"]["type"] == expected_type_str
+        assert call_args["payload"]["subtype"] == expected_type_str
 
 
 class TestConversionHelper:
