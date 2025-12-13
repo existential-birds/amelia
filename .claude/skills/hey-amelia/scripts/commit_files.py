@@ -343,9 +343,9 @@ def commit_files(
             content = f.read()
 
         blob_sha = create_blob(token, repo, content)
-        # Use the file path as the repository path (can be customized if needed)
+        # Preserve the relative path structure in the repository
         file_blobs.append({
-            "path": Path(file_path).name,  # Just the filename
+            "path": file_path,
             "blob_sha": blob_sha,
         })
         print(f"  Created blob for {file_path}: {blob_sha[:7]}")
