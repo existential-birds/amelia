@@ -21,10 +21,11 @@ class TestCompetitiveReviewPersonaAttribution:
         Comments from competitive review should be prefixed with persona name
         so users can identify which perspective raised each concern.
         """
-        # Set up state with plan and code changes
+        # Set up state with plan, current_task_id, and code changes
         plan = mock_task_dag_factory(num_tasks=1)
         state = mock_execution_state_factory(
             plan=plan,
+            current_task_id="1",  # Required when plan has tasks
             code_changes_for_review="diff --git a/file.py"
         )
 
@@ -62,6 +63,7 @@ class TestCompetitiveReviewPersonaAttribution:
         plan = mock_task_dag_factory(num_tasks=1)
         state = mock_execution_state_factory(
             plan=plan,
+            current_task_id="1",  # Required when plan has tasks
             code_changes_for_review="diff --git a/file.py"
         )
 

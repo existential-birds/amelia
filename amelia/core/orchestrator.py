@@ -136,6 +136,10 @@ async def get_code_changes_for_review(state: ExecutionState) -> str:
 async def call_reviewer_node(state: ExecutionState) -> dict[str, Any]:
     """Orchestrator node for the Reviewer agent to review code changes.
 
+    The orchestrator is responsible for ensuring state is properly prepared
+    before calling agents. This includes setting current_task_id when a plan
+    has tasks.
+
     Args:
         state: Current execution state containing issue and plan information.
 
@@ -143,11 +147,23 @@ async def call_reviewer_node(state: ExecutionState) -> dict[str, Any]:
         Partial state dict with review results.
     """
     logger.info(f"Orchestrator: Calling Reviewer for issue {state.issue.id if state.issue else 'N/A'}")
+
+    # Ensure current_task_id is set if plan has tasks (orchestrator owns state management)
+    review_state = state
+    if state.plan and state.plan.tasks and not state.current_task_id:
+        # Use the first task as fallback - this shouldn't happen in normal flow
+        # since developer_node sets current_task_id, but handle defensively
+        logger.warning(
+            "current_task_id not set despite plan having tasks. "
+            "Setting to first task. This may indicate a workflow issue."
+        )
+        review_state = state.model_copy(update={"current_task_id": state.plan.tasks[0].id})
+
     driver = DriverFactory.get_driver(state.profile.driver)
     reviewer = Reviewer(driver)
 
-    code_changes = await get_code_changes_for_review(state)
-    review_result = await reviewer.review(state, code_changes)
+    code_changes = await get_code_changes_for_review(review_state)
+    review_result = await reviewer.review(review_state, code_changes)
 
     # Log the review completion
     logger.info(

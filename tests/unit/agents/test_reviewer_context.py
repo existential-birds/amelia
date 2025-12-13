@@ -335,3 +335,90 @@ index 1234567..abcdefg 100644
         assert context.system_prompt is not None
         # Should contain default "General" persona
         assert "General" in context.system_prompt
+
+
+class TestReviewerValidation:
+    """Tests for Reviewer agent state validation."""
+
+    async def test_reviewer_raises_when_plan_has_tasks_but_no_current_task_id(
+        self,
+        mock_execution_state_factory,
+        mock_task_dag_factory,
+        mock_async_driver_factory,
+    ):
+        """Reviewer should raise ValueError if plan has tasks but current_task_id is missing.
+
+        State preparation is the orchestrator's responsibility. The Reviewer should
+        not silently patch state but instead fail fast with a clear error message.
+        """
+        from amelia.agents.reviewer import Reviewer
+
+        plan = mock_task_dag_factory(num_tasks=2)
+        state = mock_execution_state_factory(
+            plan=plan,
+            current_task_id=None,  # Missing!
+            code_changes_for_review="diff --git a/file.py"
+        )
+
+        mock_driver = mock_async_driver_factory()
+        reviewer = Reviewer(mock_driver)
+
+        with pytest.raises(ValueError, match="current_task_id is required when plan has tasks"):
+            await reviewer.review(state, code_changes="diff --git a/file.py")
+
+    async def test_reviewer_allows_no_current_task_id_when_no_plan(
+        self,
+        mock_execution_state_factory,
+        mock_async_driver_factory,
+        mock_review_response_factory,
+    ):
+        """Reviewer should work without current_task_id when there's no plan.
+
+        This allows reviewing with just issue context when no task plan exists.
+        """
+        from amelia.agents.reviewer import Reviewer
+
+        state = mock_execution_state_factory(
+            plan=None,
+            current_task_id=None,
+            code_changes_for_review="diff --git a/file.py"
+        )
+
+        mock_driver = mock_async_driver_factory()
+        mock_driver.generate.return_value = mock_review_response_factory()
+
+        reviewer = Reviewer(mock_driver)
+
+        # Should not raise - falls back to issue context
+        result = await reviewer.review(state, code_changes="diff --git a/file.py")
+        assert result is not None
+
+    async def test_reviewer_allows_no_current_task_id_when_plan_has_no_tasks(
+        self,
+        mock_execution_state_factory,
+        mock_task_dag_factory,
+        mock_async_driver_factory,
+        mock_review_response_factory,
+    ):
+        """Reviewer should work without current_task_id when plan has no tasks.
+
+        Edge case: plan exists but is empty.
+        """
+        from amelia.agents.reviewer import Reviewer
+
+        # Create empty plan (no tasks)
+        plan = mock_task_dag_factory(tasks=[])
+        state = mock_execution_state_factory(
+            plan=plan,
+            current_task_id=None,
+            code_changes_for_review="diff --git a/file.py"
+        )
+
+        mock_driver = mock_async_driver_factory()
+        mock_driver.generate.return_value = mock_review_response_factory()
+
+        reviewer = Reviewer(mock_driver)
+
+        # Should not raise - plan has no tasks
+        result = await reviewer.review(state, code_changes="diff --git a/file.py")
+        assert result is not None

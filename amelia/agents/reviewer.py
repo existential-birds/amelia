@@ -163,17 +163,19 @@ class Reviewer:
         Returns:
             ReviewResult with approval status, comments, and severity.
         """
+        # Validate state: if plan has tasks, current_task_id must be set
+        # State preparation is the orchestrator's responsibility, not the agent's
+        if state.plan and state.plan.tasks and not state.current_task_id:
+            raise ValueError(
+                "current_task_id is required when plan has tasks. "
+                "The orchestrator must set current_task_id before calling review."
+            )
+
         # Prepare state for context strategy
-        # Set code_changes_for_review if not already set
+        # Set code_changes_for_review if not already set (passed as parameter)
         review_state = state
-        updates: dict[str, str | None] = {}
         if not state.code_changes_for_review:
-            updates["code_changes_for_review"] = code_changes
-        # Set current_task_id if not set but plan has tasks
-        if not state.current_task_id and state.plan and state.plan.tasks:
-            updates["current_task_id"] = state.plan.tasks[0].id
-        if updates:
-            review_state = state.model_copy(update=updates)
+            review_state = state.model_copy(update={"code_changes_for_review": code_changes})
 
         # Use context strategy to compile review context
         strategy = ReviewerContextStrategy(persona=persona)
