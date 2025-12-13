@@ -620,3 +620,34 @@ pnpm build:slides
 | Example diagrams | D2, Mermaid | `design-system/examples/` |
 | VitePress site | Markdown/Vue | `docs/site/` |
 | Presentations | Slidev | `docs/presentations/` |
+
+---
+
+## Deployment
+
+### GitHub Pages (VitePress)
+
+Host the documentation site on GitHub Pages using GitHub Actions.
+
+**Configuration:**
+
+```ts
+// docs/site/.vitepress/config.ts
+export default {
+  base: '/amelia/',  // For github.io/amelia/ (omit if using custom domain)
+  // ...
+}
+```
+
+**Workflow file:** `.github/workflows/docs.yml`
+
+| Step | Action |
+|------|--------|
+| Trigger | Push to `main` (docs/** paths) |
+| Build | `vitepress build docs/site` |
+| Deploy | `actions/deploy-pages@v4` |
+
+**GitHub Settings:**
+- Settings → Pages → Source: "GitHub Actions"
+
+**Fonts:** Self-host in `docs/site/public/fonts/` (WOFF2) to avoid external requests.
