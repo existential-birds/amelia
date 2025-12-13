@@ -525,6 +525,21 @@ Professional blue-based palette for consulting audiences. White backgrounds for 
 - **Single highlight color** — Reserve `consulting-bright` (#0077C8) for "our recommendation," "target state," or the key data point
 - **Color = meaning** — Never decorative; always functional
 
+#### Color Budget Rule (McKinsey Three-Color Rule)
+
+Each slide should use a maximum of **three colors** for data visualization:
+
+| Slot | Purpose | Default Color |
+|------|---------|---------------|
+| **Primary** | Key data point, "our company," recommendation | `consulting-bright` (#0077C8) |
+| **Neutral** | All other data series, comparison items | `consulting-neutral` (#9E9E9E) |
+| **Directional** | Positive/negative change (when showing trends) | `consulting-positive` or `consulting-negative` |
+
+**Enforcement:**
+- If you need more than 3 colors, the chart is too complex — split into multiple charts
+- Background, text, and borders don't count toward the 3-color budget
+- Exception: SCQA slides may use 4 colors (one per quadrant) for visual separation
+
 ---
 
 ### Consulting Typography
@@ -601,7 +616,10 @@ layouts/
 ├── consulting-comparison.vue   # Side-by-side analysis
 ├── consulting-takeaway.vue     # Key insight callout
 ├── consulting-waterfall.vue    # Bridge/waterfall chart
-└── consulting-timeline.vue     # Horizontal timeline
+├── consulting-timeline.vue     # Horizontal timeline
+├── consulting-layercake.vue    # Technology architecture stack
+├── consulting-chevron.vue      # Sequential process flow
+└── consulting-harvey.vue       # Qualitative comparison matrix
 ```
 
 #### consulting-action (Default)
@@ -827,7 +845,11 @@ components/
 ├── GhostPlaceholder.vue  # Wireframe placeholder
 ├── DataHighlight.vue     # KPI/metric display
 ├── WaterfallBar.vue      # Bridge chart segment
-└── RecommendationBox.vue # Executive recommendation
+├── RecommendationBox.vue # Executive recommendation
+├── HarveyBall.vue        # Qualitative comparison indicator
+├── LayerCakeDiagram.vue  # Technology architecture stack
+├── ChevronFlow.vue       # Sequential process visualization
+└── MarimekkoChart.vue    # 2D market composition chart
 ```
 
 #### ActionTitle
@@ -872,6 +894,99 @@ Large KPI/metric display for dashboards or summaries.
 />
 ```
 
+#### HarveyBall
+
+Qualitative comparison indicator for matrices (Build vs Buy, vendor comparisons).
+
+```vue
+<HarveyBall
+  fill="full"      <!-- empty | quarter | half | three-quarter | full -->
+  size="md"        <!-- sm (16px) | md (20px) | lg (24px) -->
+/>
+```
+
+**States:**
+| Fill | Visual | Meaning |
+|------|--------|---------|
+| `empty` | ○ | Does not meet criteria |
+| `quarter` | ◔ | Minimally meets criteria |
+| `half` | ◑ | Partially meets criteria |
+| `three-quarter` | ◕ | Mostly meets criteria |
+| `full` | ● | Fully meets criteria |
+
+**Styling:**
+- Circle stroke: `consulting-border` (#E0E0E0)
+- Fill color: `consulting-navy` (#051D49)
+- Always include legend explaining what "Full" means
+
+#### LayerCakeDiagram
+
+Stacked horizontal bands for visualizing technology architecture layers.
+
+```vue
+<LayerCakeDiagram :layers="[
+  { label: 'Experience Layer', sublabel: 'Teams, Slack, Web', highlight: false },
+  { label: 'Orchestration Layer', sublabel: 'Amelia', highlight: true },
+  { label: 'Model Layer', sublabel: 'GPT-4, Claude, Llama', highlight: false },
+  { label: 'Data Layer', sublabel: 'Vector stores, SQL', highlight: false },
+]" />
+```
+
+**Styling:**
+- Default band: `consulting-surface` background, `consulting-border` stroke
+- Highlighted band: `consulting-bright` left border (4px), slightly elevated shadow
+- Labels: Barlow Condensed 600, left-aligned
+- Sublabels: Source Sans 3 400, `consulting-muted`
+- Band height: 60-80px, full width
+- Gap between bands: 2px (to show separation)
+
+#### ChevronFlow
+
+Arrow-shaped process steps for visualizing sequential workflows (agentic processes).
+
+```vue
+<ChevronFlow :steps="[
+  { label: 'User Request', status: 'completed' },
+  { label: 'Amelia Reasoning', status: 'completed' },
+  { label: 'Tool Execution', status: 'active' },
+  { label: 'Decision', status: 'pending' },
+  { label: 'Action', status: 'pending' },
+]" />
+```
+
+**Styling:**
+- Shape: Chevron/arrow pointing right, interlocking
+- Status colors:
+  - `completed`: `consulting-positive` (#2E7D32)
+  - `active`: `consulting-bright` (#0077C8)
+  - `pending`: `consulting-neutral` (#9E9E9E)
+- Labels: Source Sans 3 600, centered in chevron
+- Height: 48px, width proportional to label
+- Overlap: 12px between chevrons
+
+#### WaterfallBar
+
+Individual segment for bridge/waterfall charts with connectors.
+
+```vue
+<WaterfallBar
+  value="$20M"
+  label="DC Consolidation"
+  type="decrease"    <!-- start | increase | decrease | end -->
+  showConnector
+/>
+```
+
+**Styling:**
+- Bar colors:
+  - `start` / `end`: `consulting-navy` (#051D49)
+  - `increase`: `consulting-negative` (#C62828) for costs, `consulting-positive` for revenue
+  - `decrease`: `consulting-positive` (#2E7D32) for cost savings
+- Connector: 1px solid `consulting-border`, horizontal line from bar top to next bar
+- Value label: IBM Plex Mono, positioned above bar
+- Category label: Source Sans 3, below bar
+- Bar width: 48-64px, gap: 24px
+
 ---
 
 ### Data Visualization Standards (Zelazny)
@@ -896,6 +1011,11 @@ Following Gene Zelazny's principles from "Say It With Charts":
 | Correlation | Scatter plot |
 | Distribution | Histogram |
 | Flow/process | Sankey or waterfall |
+| 2D comparison (size + composition) | Marimekko chart |
+| Qualitative comparison matrix | Harvey Balls table |
+| Value bridge (A → B) | Waterfall chart |
+| Technology architecture | Layer Cake diagram |
+| Sequential process | Chevron flow |
 
 #### Chart Construction Rules
 
@@ -912,6 +1032,46 @@ Following Gene Zelazny's principles from "Say It With Charts":
 5. **Axis clarity** — Units obvious, no excessive decimal places, sensible scales
 
 6. **Source citation** — Every chart has a source in the footer
+
+#### Chart Construction Checklist (Pre-Flight)
+
+Before finalizing any data visualization, validate against this checklist:
+
+- [ ] **Title is insight** — Action title states the conclusion, not "Revenue by Quarter"
+- [ ] **Sorted meaningfully** — Bars sorted by value (largest first) unless time-based
+- [ ] **Single highlight** — Only ONE data point uses `consulting-bright`; all others neutral
+- [ ] **Direct labels** — Data values labeled on/near data points, not in separate legend
+- [ ] **No chart junk** — No gridlines, no 3D effects, no background fills, no decorative elements
+- [ ] **Axis clarity** — Units obvious, sensible scale, no excessive decimals
+- [ ] **Source cited** — Footer contains data source with date
+- [ ] **Color budget** — Maximum 3 colors used (primary, neutral, directional)
+- [ ] **5-second test** — A new viewer can understand the main point in 5 seconds
+
+#### Marimekko Chart Specification
+
+Use Marimekko (Mekko) charts for 2D comparisons showing both segment size AND composition within segments.
+
+**When to use:**
+- Market share across segments where segment sizes differ
+- Revenue composition across business units of different sizes
+- Comparing "our position" across multiple markets
+
+**Structure:**
+- X-axis: Segment width proportional to segment size (e.g., market size)
+- Y-axis: Stacked percentages showing composition within segment
+- Total width = 100% of market
+
+**Styling:**
+
+| Element | Specification |
+|---------|---------------|
+| "Our company" segment | `consulting-bright` (#0077C8) |
+| Competitor segments | `consulting-neutral` (#9E9E9E) with varying opacity (90%, 70%, 50%) |
+| Segment borders | 1px `consulting-border` |
+| Segment labels | Source Sans 3, inside if >15% width, outside otherwise |
+| Width labels | IBM Plex Mono, below x-axis showing segment size |
+
+**Example caption:** "Acme holds 35% share in the largest segment (Enterprise, 45% of TAM)"
 
 #### Color Application in Charts
 
@@ -939,9 +1099,38 @@ The ghost deck approach enables rapid storyline validation before content creati
 1. **Define main message** — What is the single takeaway for the entire deck?
 2. **Build skeleton** — Create blank slides with action titles only
 3. **Review horizontal flow** — Read titles sequentially; do they tell a coherent story?
-4. **Mark data needs** — Note what analysis/data each slide requires
-5. **Validate with stakeholders** — Get buy-in on structure before content work
-6. **Fill content** — Only now create charts, write bullets, finalize design
+4. **Validate MECE structure** — Run the MECE checklist (below)
+5. **Mark data needs** — Note what analysis/data each slide requires
+6. **Validate with stakeholders** — Get buy-in on structure before content work
+7. **Fill content** — Only now create charts, write bullets, finalize design
+
+#### MECE Validation Checklist (Pyramid Principle)
+
+Before finalizing the ghost deck structure, validate the argument hierarchy:
+
+**Mutually Exclusive (No Overlap):**
+
+- [ ] Do the key supporting arguments overlap? (If "Cost" and "Efficiency" are separate points, ensure efficiency gains aren't counted as cost savings)
+- [ ] Could any two arguments be combined into one without losing meaning?
+- [ ] Are categories distinct enough that data points clearly belong to only one?
+
+**Collectively Exhaustive (No Gaps):**
+
+- [ ] What could a skeptic ask "What about X?" — have you covered X?
+- [ ] Have you addressed all major stakeholder concerns (Finance, Ops, Risk, Tech)?
+- [ ] For a technology recommendation: Have you covered Build vs Buy vs Partner?
+- [ ] For a strategy recommendation: Have you covered risks, alternatives, and implementation?
+
+**Pyramid Structure Validation:**
+
+- [ ] Does the Governing Thought (slide 1-2) answer the core question?
+- [ ] Does each Key Line Argument directly support the Governing Thought? (Test: "We should do X **because** [Key Line]")
+- [ ] Does each data point directly prove its Key Line Argument? (Test: "We know [Key Line] **because** [Data]")
+- [ ] Can you remove any slide without breaking the logical chain?
+
+**The "So What?" Test:**
+
+For each slide, ask: "So what?" If the answer isn't obvious from the action title, the slide needs revision.
 
 #### Ghost Deck Slide Example
 
@@ -1281,8 +1470,12 @@ pnpm build:slides
 | Mermaid light theme | JSON | `design-system/themes/mermaid/amelia-light.json` |
 | Slidev theme (Amelia) | Vue/CSS | `design-system/themes/slidev/styles/amelia.css` |
 | Slidev theme (Consulting) | Vue/CSS | `design-system/themes/slidev/styles/consulting.css` |
-| Consulting layouts | Vue | `design-system/themes/slidev/layouts/consulting-*.vue` |
-| Consulting components | Vue | `design-system/themes/slidev/components/` |
+| Consulting layouts (13 total) | Vue | `design-system/themes/slidev/layouts/consulting-*.vue` |
+| Consulting components (13 total) | Vue | `design-system/themes/slidev/components/` |
+| HarveyBall component | Vue | `design-system/themes/slidev/components/HarveyBall.vue` |
+| LayerCakeDiagram component | Vue | `design-system/themes/slidev/components/LayerCakeDiagram.vue` |
+| ChevronFlow component | Vue | `design-system/themes/slidev/components/ChevronFlow.vue` |
+| MarimekkoChart component | Vue | `design-system/themes/slidev/components/MarimekkoChart.vue` |
 | VitePress theme | Vue/CSS | `design-system/themes/vitepress/` |
 | Logo SVGs | SVG | `design-system/assets/logo/` |
 | Font files | WOFF2 | `design-system/assets/fonts/` |
