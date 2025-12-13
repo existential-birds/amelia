@@ -104,15 +104,6 @@ class ContextStrategy(ABC):
 
         messages: list[AgentMessage] = []
 
-        # Add system message if present
-        if context.system_prompt:
-            messages.append(
-                AgentMessage(
-                    role="system",
-                    content=context.system_prompt,
-                )
-            )
-
         # Build user message from sections with markdown headers
         if context.sections:
             section_parts = [

@@ -45,10 +45,10 @@ class DriverInterface(Protocol):
         """Execute prompt with autonomous tool access (agentic mode).
 
         Args:
-            messages: List of conversation messages (system, user, assistant).
+            messages: List of conversation messages (user, assistant only - no system messages).
             cwd: Working directory for execution context.
             session_id: Optional session ID to resume.
-            system_prompt: Optional system prompt to override any system messages in the list.
+            system_prompt: System prompt passed separately via context.system_prompt.
 
         Yields:
             Stream events from execution.

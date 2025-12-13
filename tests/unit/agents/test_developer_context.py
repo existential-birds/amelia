@@ -401,19 +401,14 @@ class TestDeveloperContextStrategy:
         context = strategy.compile(state)
         messages = strategy.to_messages(context)
 
-        # Should have at least a system message and a user message
-        assert len(messages) >= 1
-
-        # First message should be system if system_prompt is set
-        if context.system_prompt:
-            assert messages[0].role == "system"
-            assert messages[0].content == DeveloperContextStrategy.SYSTEM_PROMPT
-
-        # Should have user message with formatted sections
-        user_messages = [m for m in messages if m.role == "user"]
-        assert len(user_messages) >= 1
+        # System prompt is passed separately - to_messages only returns user messages
+        assert len(messages) == 1
+        assert messages[0].role == "user"
 
         # User message should contain task information
-        user_content = user_messages[0].content
+        user_content = messages[0].content
         assert "Integration test task" in user_content
         assert "src/app.py" in user_content
+
+        # Verify system_prompt is still set on the context
+        assert context.system_prompt == DeveloperContextStrategy.SYSTEM_PROMPT

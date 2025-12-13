@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from amelia.core.constants import ToolName
 from amelia.core.context import CompiledContext, ContextSection, ContextStrategy
 from amelia.core.exceptions import AgenticExecutionError
-from amelia.core.state import ExecutionState, Task
+from amelia.core.state import AgentMessage, ExecutionState, Task
 from amelia.drivers.base import DriverInterface
 
 
@@ -294,7 +294,11 @@ class Developer:
                 # Use context strategy for consistent message compilation
                 strategy = self.context_strategy()
                 context = strategy.compile(state)
-                messages = strategy.to_messages(context)
+                # Build messages: prepend system prompt if present, then user messages
+                messages: list[AgentMessage] = []
+                if context.system_prompt:
+                    messages.append(AgentMessage(role="system", content=context.system_prompt))
+                messages.extend(strategy.to_messages(context))
                 llm_response = await self.driver.generate(messages=messages)
                 return {"status": "completed", "output": llm_response}
 

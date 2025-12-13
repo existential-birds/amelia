@@ -48,42 +48,10 @@ class TestClaudeCliDriverAgenticMessages:
             assert len(events) == 2
             assert events[0].type == "assistant"
 
-    async def test_execute_agentic_with_system_message_in_list(self, mock_subprocess_process_factory):
-        """execute_agentic should extract system message from messages list."""
+    async def test_execute_agentic_with_explicit_system_prompt(self, mock_subprocess_process_factory):
+        """execute_agentic should use explicit system_prompt parameter."""
         driver = ClaudeCliDriver()
         messages = [
-            AgentMessage(role="system", content="You are a senior developer."),
-            AgentMessage(role="user", content="Implement feature X"),
-        ]
-
-        stream_lines = [
-            b'{"type":"assistant","message":{"content":[{"type":"text","text":"Working..."}]}}\n',
-            b'{"type":"result","session_id":"sess_001","subtype":"success"}\n',
-            b""
-        ]
-        mock_process = mock_subprocess_process_factory(stdout_lines=stream_lines, return_code=0)
-
-        with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=mock_process) as mock_exec:
-            events = []
-            async for event in driver.execute_agentic(messages, "/tmp"):
-                events.append(event)
-
-            # Verify --append-system-prompt was used
-            args = mock_exec.call_args[0]
-            assert "--append-system-prompt" in args
-            sys_idx = args.index("--append-system-prompt")
-            assert args[sys_idx + 1] == "You are a senior developer."
-
-            # Verify system message was NOT in the user prompt
-            written_prompt = mock_process.stdin.write.call_args[0][0].decode()
-            assert "SYSTEM:" not in written_prompt
-            assert "USER: Implement feature X" in written_prompt
-
-    async def test_execute_agentic_with_explicit_system_prompt_override(self, mock_subprocess_process_factory):
-        """execute_agentic should prefer explicit system_prompt parameter over messages."""
-        driver = ClaudeCliDriver()
-        messages = [
-            AgentMessage(role="system", content="You are a junior developer."),
             AgentMessage(role="user", content="Implement feature X"),
         ]
 
@@ -99,16 +67,15 @@ class TestClaudeCliDriverAgenticMessages:
             async for event in driver.execute_agentic(
                 messages,
                 "/tmp",
-                system_prompt="Override: You are a senior engineer."
+                system_prompt="You are a senior engineer."
             ):
                 events.append(event)
 
-            # Verify the override system prompt was used
+            # Verify the system prompt was passed to CLI
             args = mock_exec.call_args[0]
             assert "--append-system-prompt" in args
             sys_idx = args.index("--append-system-prompt")
-            # Should use the explicit parameter, not the message
-            assert args[sys_idx + 1] == "Override: You are a senior engineer."
+            assert args[sys_idx + 1] == "You are a senior engineer."
 
     async def test_execute_agentic_preserves_session_id(self, mock_subprocess_process_factory):
         """execute_agentic should still support session_id parameter."""

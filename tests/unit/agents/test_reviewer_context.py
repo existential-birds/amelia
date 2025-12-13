@@ -272,16 +272,15 @@ index 1234567..abcdefg 100644
 
         messages = strategy.to_messages(context)
 
-        # Should have system message
-        assert len(messages) >= 1
-        assert messages[0].role == "system"
-        assert "Security" in messages[0].content
-
-        # Should have user message with sections
-        assert len(messages) >= 2
-        assert messages[1].role == "user"
+        # System prompt is passed separately - to_messages only returns user messages
+        assert len(messages) == 1
+        assert messages[0].role == "user"
         # Should contain markdown headers for sections
-        assert "##" in messages[1].content
+        assert "##" in messages[0].content
+
+        # Verify system_prompt is still set on the context
+        assert context.system_prompt is not None
+        assert "Security" in context.system_prompt
 
     def test_compile_raises_when_no_code_changes(
         self,

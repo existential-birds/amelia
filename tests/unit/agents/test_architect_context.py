@@ -54,18 +54,14 @@ class TestArchitectContextStrategy:
         context = strategy.compile(state)
         messages = strategy.to_messages(context)
 
-        # Should have 2 messages: system + user
-        assert len(messages) == 2
-
-        # System message
-        assert messages[0].role == "system"
-        assert messages[0].content == ArchitectContextStrategy.SYSTEM_PROMPT
+        # System prompt is passed separately - to_messages only returns user messages
+        assert len(messages) == 1
 
         # User message with formatted sections
-        assert messages[1].role == "user"
-        assert "## Issue" in messages[1].content
-        assert "Implement feature X" in messages[1].content
-        assert "Feature description" in messages[1].content
+        assert messages[0].role == "user"
+        assert "## Issue" in messages[0].content
+        assert "Implement feature X" in messages[0].content
+        assert "Feature description" in messages[0].content
 
     def test_system_prompt_is_stable_and_constant(
         self, strategy, mock_execution_state_factory, mock_issue_factory

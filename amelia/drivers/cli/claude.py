@@ -473,20 +473,14 @@ class ClaudeCliDriver(CliDriver):
         """Execute prompt with full autonomous tool access (YOLO mode).
 
         Args:
-            messages: List of conversation messages (system, user, assistant).
+            messages: List of conversation messages (user, assistant only - no system messages).
             cwd: Working directory for Claude Code context.
             session_id: Optional session ID to resume.
-            system_prompt: Optional system prompt to override any system messages in the list.
+            system_prompt: System prompt passed separately via context.system_prompt.
 
         Yields:
             ClaudeStreamEvent objects including tool executions.
         """
-        # Extract system messages from the list if no explicit system_prompt provided
-        if system_prompt is None:
-            system_messages = [m for m in messages if m.role == "system"]
-            if system_messages:
-                system_prompt = "\n\n".join(m.content for m in system_messages if m.content)
-
         # Convert messages to prompt string (excluding system messages)
         prompt = self._convert_messages_to_prompt(messages)
 

@@ -22,12 +22,10 @@ class TestCompiledContext:
         strategy = ConcreteTestStrategy()
         messages = strategy.to_messages(context)
 
-        # Should have system message + user message with formatted section
-        assert len(messages) == 2
-        assert messages[0].role == "system"
-        assert messages[0].content == "You are a developer agent."
-        assert messages[1].role == "user"
-        assert messages[1].content == "## Issue\n\nFix bug in auth module"
+        # System prompt is passed separately - to_messages only returns user messages
+        assert len(messages) == 1
+        assert messages[0].role == "user"
+        assert messages[0].content == "## Issue\n\nFix bug in auth module"
 
     def test_to_messages_with_sections_multiple_sections(self):
         """Test to_messages formats multiple sections with markdown headers."""
@@ -44,10 +42,9 @@ class TestCompiledContext:
         strategy = ConcreteTestStrategy()
         messages = strategy.to_messages(context)
 
-        assert len(messages) == 2
-        assert messages[0].role == "system"
-        assert messages[0].content == "You are an architect."
-        assert messages[1].role == "user"
+        # System prompt is passed separately - to_messages only returns user messages
+        assert len(messages) == 1
+        assert messages[0].role == "user"
 
         # Check sections are formatted with headers and separated by double newlines
         expected_content = (
@@ -55,7 +52,7 @@ class TestCompiledContext:
             "## Current_Task\n\nWrite tests first\n\n"
             "## Plan\n\n3 tasks in sequence"
         )
-        assert messages[1].content == expected_content
+        assert messages[0].content == expected_content
 
     def test_to_messages_with_sections_no_system_prompt(self):
         """Test to_messages without system prompt, only sections."""
@@ -113,10 +110,8 @@ class TestCompiledContext:
         strategy = ConcreteTestStrategy()
         messages = strategy.to_messages(context)
 
-        # Should only have system message
-        assert len(messages) == 1
-        assert messages[0].role == "system"
-        assert messages[0].content == "System instruction"
+        # System prompt is passed separately - to_messages returns empty when no sections
+        assert len(messages) == 0
 
 
 class TestContextStrategy:

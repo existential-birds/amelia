@@ -233,14 +233,15 @@ class Architect:
         task_system_prompt = strategy.get_task_generation_system_prompt()
         task_user_prompt = strategy.get_task_generation_user_prompt()
 
-        # Convert compiled context to messages
+        # Convert compiled context to messages (user messages only)
         base_messages = strategy.to_messages(compiled_context)
 
-        # Replace system prompt with task-specific one and append user prompt
+        # Prepend task-specific system prompt and append user prompt
         messages = [
-            AgentMessage(role="system", content=task_system_prompt) if msg.role == "system" else msg
-            for msg in base_messages
-        ] + [AgentMessage(role="user", content=task_user_prompt)]
+            AgentMessage(role="system", content=task_system_prompt),
+            *base_messages,
+            AgentMessage(role="user", content=task_user_prompt),
+        ]
 
         response = await self.driver.generate(messages=messages, schema=TaskListResponse)
 
