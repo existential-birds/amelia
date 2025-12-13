@@ -125,7 +125,7 @@ class Reviewer:
         context_strategy: Strategy for compiling review context.
     """
 
-    context_strategy: type[ContextStrategy] = ReviewerContextStrategy
+    context_strategy: type[ReviewerContextStrategy] = ReviewerContextStrategy
 
     def __init__(self, driver: DriverInterface):
         """Initialize the Reviewer agent.
@@ -178,7 +178,7 @@ class Reviewer:
             review_state = state.model_copy(update={"code_changes_for_review": code_changes})
 
         # Use context strategy to compile review context
-        strategy = ReviewerContextStrategy(persona=persona)
+        strategy = self.context_strategy(persona=persona)
         compiled_context = strategy.compile(review_state)
 
         logger.debug(

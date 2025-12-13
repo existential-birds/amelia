@@ -282,7 +282,13 @@ class TestArchitect:
         # Verify design from state was actually used in driver call
         mock_driver.generate.assert_called_once()
         call_args = mock_driver.generate.call_args
-        messages = call_args.kwargs.get("messages") or call_args.args[0]
+        # Handle both positional and keyword arguments
+        if call_args.kwargs.get("messages"):
+            messages = call_args.kwargs["messages"]
+        elif len(call_args.args) > 0:
+            messages = call_args.args[0]
+        else:
+            messages = list(call_args.kwargs.values())[0] if call_args.kwargs else []
 
         # Concatenate all message content to check for design fields
         all_content = " ".join(msg.content for msg in messages if msg.content)
