@@ -35,6 +35,12 @@ interface WorkflowState {
   eventsByWorkflow: Record<string, WorkflowEvent[]>;
 
   /**
+   * Set of event IDs per workflow for O(1) duplicate detection.
+   * Kept in sync with eventsByWorkflow - rebuilt when trimming occurs.
+   */
+  eventIdsByWorkflow: Record<string, Set<string>>;
+
+  /**
    * ID of the last received event, used for reconnection backfill.
    * When reconnecting, this ID is sent to the server to retrieve
    * any missed events.
@@ -136,6 +142,7 @@ export const useWorkflowStore = create<WorkflowState>()(
   persist(
     (set) => ({
       eventsByWorkflow: {},
+      eventIdsByWorkflow: {},
       lastEventId: null,
       isConnected: false,
       connectionError: null,
@@ -143,27 +150,37 @@ export const useWorkflowStore = create<WorkflowState>()(
 
       addEvent: (event) =>
         set((state) => {
-          const existing = state.eventsByWorkflow[event.workflow_id] ?? [];
+          const existingIds =
+            state.eventIdsByWorkflow[event.workflow_id] ?? new Set<string>();
 
-          // Deduplicate by event ID - prevents duplicates from StrictMode
-          // double-effect invocation causing overlapping WebSocket connections.
-          // O(n) scan acceptable for low-frequency WebSocket events (<10/sec).
-          if (existing.some((e) => e.id === event.id)) {
+          // O(1) duplicate check - prevents duplicates from StrictMode
+          // double-effect invocation, reconnection backfill, or server retries.
+          if (existingIds.has(event.id)) {
             return state;
           }
 
+          const existing = state.eventsByWorkflow[event.workflow_id] ?? [];
           const updated = [...existing, event];
 
           // Trim oldest events if exceeding limit (keep most recent)
-          const trimmed =
-            updated.length > MAX_EVENTS_PER_WORKFLOW
-              ? updated.slice(-MAX_EVENTS_PER_WORKFLOW)
-              : updated;
+          const needsTrim = updated.length > MAX_EVENTS_PER_WORKFLOW;
+          const trimmed = needsTrim
+            ? updated.slice(-MAX_EVENTS_PER_WORKFLOW)
+            : updated;
+
+          // Rebuild Set if trimmed (to remove old IDs), otherwise clone and add
+          const newIds = needsTrim
+            ? new Set(trimmed.map((e) => e.id))
+            : new Set(existingIds).add(event.id);
 
           return {
             eventsByWorkflow: {
               ...state.eventsByWorkflow,
               [event.workflow_id]: trimmed,
+            },
+            eventIdsByWorkflow: {
+              ...state.eventIdsByWorkflow,
+              [event.workflow_id]: newIds,
             },
             lastEventId: event.id,
           };

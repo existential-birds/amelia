@@ -31,6 +31,7 @@ describe('workflowStore', () => {
   beforeEach(() => {
     useWorkflowStore.setState({
       eventsByWorkflow: {},
+      eventIdsByWorkflow: {},
       lastEventId: null,
       isConnected: false,
       connectionError: null,
@@ -128,6 +129,30 @@ describe('workflowStore', () => {
       // Verify no duplicate was added
       const events = useWorkflowStore.getState().eventsByWorkflow['wf-1'];
       expect(events).toHaveLength(2);
+    });
+
+    it('should dedupe events with same id from different objects', () => {
+      const event1 = createMockEvent({
+        id: 'evt-dedupe',
+        workflow_id: 'wf-1',
+        sequence: 1,
+        message: 'Original event',
+      });
+
+      // Create distinct object with same id (simulates JSON deserialization)
+      const event2 = { ...event1, message: 'Cloned event' };
+
+      // Verify they are different object references
+      expect(event1).not.toBe(event2);
+      expect(event1.id).toBe(event2.id);
+
+      useWorkflowStore.getState().addEvent(event1);
+      useWorkflowStore.getState().addEvent(event2);
+
+      // Should deduplicate by id, not object reference
+      const events = useWorkflowStore.getState().eventsByWorkflow['wf-1'];
+      expect(events).toHaveLength(1);
+      expect(events![0]!.message).toBe('Original event');
     });
 
     it('should allow same event ID across different workflows', () => {
