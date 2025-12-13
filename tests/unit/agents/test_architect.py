@@ -281,7 +281,7 @@ class TestArchitect:
         mock_driver.generate.return_value = mock_task_response
 
         architect = Architect(driver=mock_driver)
-        result = await architect.plan(state)
+        result = await architect.plan(state, workflow_id="test-workflow-123")
 
         # Verify plan was generated (driver was called)
         assert result.task_dag is not None
@@ -356,7 +356,7 @@ class TestArchitectStreamEmitter:
         architect = Architect(driver=mock_driver, stream_emitter=mock_emitter)
 
         # Generate plan
-        result = await architect.plan(state)
+        result = await architect.plan(state, workflow_id="test-workflow-123")
 
         # Verify plan was generated
         assert result.task_dag is not None
@@ -371,7 +371,7 @@ class TestArchitectStreamEmitter:
         assert isinstance(event, StreamEvent)
         assert event.type == StreamEventType.AGENT_OUTPUT
         assert event.agent == "architect"
-        assert event.workflow_id == "TEST-123"  # Falls back to issue ID
+        assert event.workflow_id == "test-workflow-123"  # Uses provided workflow_id
         assert "1 tasks" in event.content  # Generated plan with 1 tasks
         assert isinstance(event.timestamp, datetime)
 
@@ -392,7 +392,7 @@ class TestArchitectStreamEmitter:
         architect = Architect(driver=mock_driver)
 
         # Should not raise even without emitter
-        result = await architect.plan(state)
+        result = await architect.plan(state, workflow_id="test-workflow-123")
         assert result.task_dag is not None
 
     async def test_architect_emits_correct_task_count(
@@ -420,7 +420,7 @@ class TestArchitectStreamEmitter:
         mock_emitter = AsyncMock()
 
         architect = Architect(driver=mock_driver, stream_emitter=mock_emitter)
-        await architect.plan(state)
+        await architect.plan(state, workflow_id="test-workflow-123")
 
         # Verify the event contains correct count
         event = mock_emitter.call_args.args[0]
