@@ -81,7 +81,7 @@ class TestReviewerStreamEmitter:
 
         # Perform review
         code_changes = "diff --git a/test.py b/test.py\n+print('hello')"
-        result = await reviewer.review(state, code_changes)
+        result = await reviewer.review(state, code_changes, workflow_id="TEST-123")
 
         # Verify review was completed
         assert result.approved is True
@@ -95,7 +95,7 @@ class TestReviewerStreamEmitter:
         assert isinstance(event, StreamEvent)
         assert event.type == StreamEventType.AGENT_OUTPUT
         assert event.agent == "reviewer"
-        assert event.workflow_id == "TEST-123"  # Falls back to issue ID
+        assert event.workflow_id == "TEST-123"  # Uses provided workflow_id
         assert "Approved" in event.content
         assert isinstance(event.timestamp, datetime)
 
@@ -125,7 +125,7 @@ class TestReviewerStreamEmitter:
         reviewer = Reviewer(driver=mock_driver, stream_emitter=mock_emitter)
 
         code_changes = "diff --git a/test.py b/test.py\n+bad code"
-        result = await reviewer.review(state, code_changes)
+        result = await reviewer.review(state, code_changes, workflow_id="test-workflow-456")
 
         # Verify review was not approved
         assert result.approved is False
@@ -158,7 +158,7 @@ class TestReviewerStreamEmitter:
 
         # Should not raise even without emitter
         code_changes = "diff --git a/test.py b/test.py\n+print('test')"
-        result = await reviewer.review(state, code_changes)
+        result = await reviewer.review(state, code_changes, workflow_id="test-workflow-789")
         assert result.approved is True
 
     async def test_reviewer_emits_for_competitive_review(
@@ -191,7 +191,7 @@ class TestReviewerStreamEmitter:
         reviewer = Reviewer(driver=mock_driver, stream_emitter=mock_emitter)
 
         code_changes = "diff --git a/test.py b/test.py\n+good code"
-        result = await reviewer.review(state, code_changes)
+        result = await reviewer.review(state, code_changes, workflow_id="test-workflow-competitive")
 
         # Competitive review runs multiple personas, but only emits once per _single_review call
         # Since competitive review calls _single_review multiple times in parallel,
