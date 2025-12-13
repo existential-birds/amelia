@@ -198,9 +198,13 @@ class TestArchitect:
         )
 
     async def test_generate_task_dag_does_not_override_system_prompt(
-        self, architect, mock_execution_state_factory, mock_issue_factory, mock_driver
+        self, architect, mock_execution_state_factory, mock_issue_factory, mock_driver, monkeypatch
     ):
-        """Test that _generate_task_dag does not create its own system prompt."""
+        """Test that _generate_task_dag uses strategy's system prompt, not hardcoded text.
+
+        Uses a sentinel value to ensure the prompt genuinely comes from the strategy
+        method rather than coincidentally identical hardcoded text.
+        """
         issue = mock_issue_factory()
         state = mock_execution_state_factory(issue=issue)
 
@@ -216,30 +220,36 @@ class TestArchitect:
         mock_response = TaskListResponse(tasks=[mock_task])
         mock_driver.generate.return_value = mock_response
 
-        # Compile context
+        # Create strategy and patch its method to return a unique sentinel
         strategy = ArchitectContextStrategy()
+        sentinel_prompt = "SENTINEL_SYSTEM_PROMPT_12345_FOR_TEST_VERIFICATION"
+        monkeypatch.setattr(strategy, "get_task_generation_system_prompt", lambda: sentinel_prompt)
+
         compiled_context = strategy.compile(state)
 
         # Generate task DAG
         await architect._generate_task_dag(compiled_context, issue, strategy)
 
-        # Get the messages passed to driver
-        call_args = mock_driver.generate.call_args
-        messages = call_args.kwargs.get("messages") or call_args.args[0] if call_args.args else []
+        # Verify driver.generate was called
+        assert mock_driver.generate.called
 
-        # Should NOT find the old hardcoded system prompt text
-        old_hardcoded_prompt_snippet = "You are an expert software architect creating implementation plans"
+        # Get the messages passed to driver (handle both positional and keyword arguments)
+        call_args = mock_driver.generate.call_args
+        if call_args.kwargs.get("messages"):
+            messages = call_args.kwargs["messages"]
+        elif len(call_args.args) > 0:
+            messages = call_args.args[0]
+        else:
+            messages = list(call_args.kwargs.values())[0] if call_args.kwargs else []
 
         system_messages = [msg for msg in messages if msg.role == "system"]
-        for msg in system_messages:
-            # If this assertion fails, it means we're still using hardcoded prompts
-            # instead of getting them from the strategy
-            if old_hardcoded_prompt_snippet in msg.content:
-                # This is OK only if the strategy itself returns this text
-                strategy_prompt = strategy.get_task_generation_system_prompt()
-                assert msg.content == strategy_prompt, (
-                    "System prompt should only come from strategy, not be hardcoded in _generate_task_dag"
-                )
+        assert len(system_messages) > 0, f"Should have at least one system message. Got: {messages}"
+
+        # The system message must be our sentinel, proving it came from the strategy
+        assert system_messages[0].content == sentinel_prompt, (
+            "System prompt must come from strategy.get_task_generation_system_prompt(), "
+            "not be hardcoded in _generate_task_dag"
+        )
 
     async def test_plan_reads_design_from_state(
         self, mock_driver, mock_execution_state_factory, mock_issue_factory, mock_design_factory
@@ -268,3 +278,14 @@ class TestArchitect:
         assert result.task_dag is not None
         assert len(result.task_dag.tasks) == 1
         assert result.markdown_path is not None
+
+        # Verify design from state was actually used in driver call
+        mock_driver.generate.assert_called_once()
+        call_args = mock_driver.generate.call_args
+        messages = call_args.kwargs.get("messages") or call_args.args[0]
+
+        # Concatenate all message content to check for design fields
+        all_content = " ".join(msg.content for msg in messages if msg.content)
+        assert "Build it well" in all_content, (
+            "Design goal from state.design must appear in messages passed to driver"
+        )
