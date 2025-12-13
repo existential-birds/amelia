@@ -144,11 +144,17 @@ class Developer:
         self.execution_mode = execution_mode
         self._stream_emitter = stream_emitter
 
-    async def execute_current_task(self, state: ExecutionState) -> dict[str, Any]:
+    async def execute_current_task(
+        self,
+        state: ExecutionState,
+        *,
+        workflow_id: str,
+    ) -> dict[str, Any]:
         """Execute the current task from execution state.
 
         Args:
             state: Full execution state containing profile, plan, and current_task_id.
+            workflow_id: Workflow ID for stream events (required).
 
         Returns:
             Dict with status, task_id, and output.
@@ -167,20 +173,28 @@ class Developer:
         cwd = state.profile.working_dir or os.getcwd()
 
         if self.execution_mode == "agentic":
-            return await self._execute_agentic(task, cwd, state)
+            return await self._execute_agentic(task, cwd, state, workflow_id=workflow_id)
         else:
             result = await self._execute_structured(task, state)
             # Ensure task_id is included for consistency with agentic path
             result["task_id"] = task.id
             return result
 
-    async def _execute_agentic(self, task: Task, cwd: str, state: ExecutionState) -> dict[str, Any]:
+    async def _execute_agentic(
+        self,
+        task: Task,
+        cwd: str,
+        state: ExecutionState,
+        *,
+        workflow_id: str,
+    ) -> dict[str, Any]:
         """Execute task autonomously with full Claude tool access.
 
         Args:
             task: The task to execute.
             cwd: Working directory for execution.
             state: Full execution state for context compilation.
+            workflow_id: Workflow ID for stream events (required).
 
         Returns:
             Dict with status and output.
@@ -202,9 +216,6 @@ class Developer:
         messages = strategy.to_messages(context)
 
         logger.info(f"Starting agentic execution for task {task.id}")
-
-        # Get workflow_id from state (fallback to issue ID if not available)
-        workflow_id = getattr(state, "workflow_id", state.issue.id if state.issue else "unknown")
 
         async for event in self.driver.execute_agentic(messages, cwd, system_prompt=context.system_prompt):
             self._handle_stream_event(event, workflow_id)
