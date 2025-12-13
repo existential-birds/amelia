@@ -116,7 +116,25 @@ export default defineConfig({
       light: 'github-light',
       dark: 'github-dark'
     },
-    lineNumbers: true
+    lineNumbers: true,
+    // Register d2 as a custom language (D2 diagramming language)
+    languages: [
+      {
+        id: 'd2',
+        scopeName: 'source.d2',
+        // Use YAML-like highlighting as a reasonable approximation
+        grammar: {
+          patterns: [
+            { match: '#.*$', name: 'comment.line.d2' },
+            { match: '->|<-|<->|--|:', name: 'keyword.operator.d2' },
+            { match: '"[^"]*"', name: 'string.quoted.double.d2' },
+            { match: "'[^']*'", name: 'string.quoted.single.d2' },
+            { match: '\\b(shape|style|fill|stroke|font-color|opacity|label|icon|near|direction)\\b', name: 'keyword.control.d2' },
+            { match: '\\b[a-zA-Z_][a-zA-Z0-9_-]*\\b', name: 'variable.other.d2' }
+          ]
+        }
+      }
+    ]
   },
 
   // Head configuration
