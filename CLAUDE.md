@@ -154,6 +154,8 @@ Custom slash commands are in `.claude/commands/amelia/`. Key commands:
 | `/amelia:ensure-doc` | Verify code documentation (OpenAPI, docstrings) |
 | `/amelia:review-plan` | Review implementation plans with parallel agents |
 | `/amelia:skill-builder` | Create Claude Code skills with best practices |
+| `/amelia:12-factor-agents-analysis` | Analyze codebase against 12-Factor Agents methodology |
+| `/amelia:12-factor-apps-analysis` | Analyze codebase against 12-Factor App methodology |
 
 ## Skills
 
@@ -214,3 +216,9 @@ Custom skills are in `.claude/skills/`. These provide domain-specific knowledge:
 | Skill | Purpose |
 |-------|---------|
 | `github-projects` | GitHub Projects v2 via gh CLI
+
+**Architecture Analysis:**
+| Skill | Purpose |
+|-------|---------|
+| `agent-architecture-analysis` | Evaluate agentic codebases against 12-Factor Agents methodology |
+| `12-factor-apps` | Evaluate applications against 12-Factor App methodology |

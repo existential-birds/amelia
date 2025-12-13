@@ -353,7 +353,8 @@ When working on this project with [Claude Code](https://claude.ai/code), the fol
 | `/amelia:coderabbit-respond` | Respond to CodeRabbit review comments after evaluation |
 | `/amelia:gemini-respond` | Respond to Gemini Code Assist review comments after evaluation |
 | `/amelia:skill-builder` | Create Claude Code skills with comprehensive best practices |
-| `/amelia:12-factor-analysis <path>` | Analyze codebase against 12-Factor Agents methodology |
+| `/amelia:12-factor-agents-analysis <path>` | Analyze codebase against 12-Factor Agents methodology |
+| `/amelia:12-factor-apps-analysis <path>` | Analyze codebase against 12-Factor App methodology |
 
 ## Claude Code Skills
 
@@ -428,4 +429,5 @@ The following skills are available in `.claude/skills/` to help Claude Code unde
 
 | Skill | Triggers | Description |
 |-------|----------|-------------|
-| **agent-architecture-analysis** | `12-Factor`, `compliance`, `agent architecture` | Evaluate agentic codebases against 12-Factor Agents methodology |
+| **agent-architecture-analysis** | `12-Factor Agents`, `compliance`, `agent architecture` | Evaluate agentic codebases against 12-Factor Agents methodology |
+| **12-factor-apps** | `12-Factor App`, `SaaS`, `cloud-native` | Evaluate applications against 12-Factor App methodology |
