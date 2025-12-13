@@ -74,6 +74,8 @@ class ServerExecutionState(BaseModel):
         stage_timestamps: When each stage started.
         current_stage: Currently executing stage.
         failure_reason: Error message when status is "failed".
+        consecutive_errors: Number of consecutive transient errors (resets on success).
+        last_error_context: Context from the most recent error (for debugging).
     """
 
     id: str = Field(..., description="Unique workflow identifier")
