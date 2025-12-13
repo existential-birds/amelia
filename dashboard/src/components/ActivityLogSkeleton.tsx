@@ -1,5 +1,9 @@
 import { Skeleton } from '@/components/ui/skeleton';
 
+/**
+ * Props for the ActivityLogSkeleton component.
+ * @property lines - Number of skeleton lines to display (default: 5)
+ */
 interface ActivityLogSkeletonProps {
   lines?: number;
 }
