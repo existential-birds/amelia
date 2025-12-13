@@ -252,7 +252,7 @@ class Architect:
         )
 
         # Generate task DAG using compiled context
-        task_dag = await self._generate_task_dag(compiled_context, state.issue, strategy, state.design)
+        task_dag = await self._generate_task_dag(compiled_context, state.issue, strategy)
 
         # Save markdown
         markdown_path = self._save_markdown(task_dag, state.issue, state.design, output_dir)
@@ -264,7 +264,6 @@ class Architect:
         compiled_context: CompiledContext,
         issue: Issue,
         strategy: ArchitectContextStrategy,
-        design: Design | None = None,
     ) -> TaskDAG:
         """Generate TaskDAG using LLM.
 
@@ -272,7 +271,6 @@ class Architect:
             compiled_context: Compiled context from the strategy.
             issue: Original issue being planned.
             strategy: The context strategy instance for prompt generation.
-            design: Optional design context (for backward compatibility with markdown).
 
         Returns:
             TaskDAG containing structured tasks with TDD steps.
