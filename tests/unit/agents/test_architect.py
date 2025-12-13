@@ -240,3 +240,31 @@ class TestArchitect:
                 assert msg.content == strategy_prompt, (
                     "System prompt should only come from strategy, not be hardcoded in _generate_task_dag"
                 )
+
+    async def test_plan_reads_design_from_state(
+        self, mock_driver, mock_execution_state_factory, mock_issue_factory, mock_design_factory
+    ):
+        """Test plan() reads design from state, not from parameter."""
+        issue = mock_issue_factory(title="Build feature", description="Feature desc")
+        design = mock_design_factory(title="Feature Design", goal="Build it well")
+        state = mock_execution_state_factory(issue=issue, design=design)
+
+        # Mock driver to return a valid TaskListResponse
+        mock_task = Task(
+            id="1",
+            description="Create feature",
+            dependencies=[],
+            files=[],
+            steps=[],
+            commit_message="feat: add feature"
+        )
+        mock_response = TaskListResponse(tasks=[mock_task])
+        mock_driver.generate.return_value = mock_response
+
+        architect = Architect(driver=mock_driver)
+        result = await architect.plan(state)
+
+        # Verify plan was generated (driver was called)
+        assert result.task_dag is not None
+        assert len(result.task_dag.tasks) == 1
+        assert result.markdown_path is not None

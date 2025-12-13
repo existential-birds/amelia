@@ -215,16 +215,15 @@ class Architect:
     async def plan(
         self,
         state: ExecutionState,
-        design: Design | None = None,
         output_dir: str | None = None
     ) -> PlanOutput:
         """Generate a development plan from an issue and optional design.
 
         Creates a structured TaskDAG and saves a markdown version for human review.
+        Design context is read from state.design if present.
 
         Args:
-            state: The execution state containing the issue to plan for.
-            design: Optional design context to incorporate into the plan.
+            state: The execution state containing the issue and optional design.
             output_dir: Directory path where the markdown plan will be saved.
                 If None, uses profile's plan_output_dir from state.
 
@@ -253,10 +252,10 @@ class Architect:
         )
 
         # Generate task DAG using compiled context
-        task_dag = await self._generate_task_dag(compiled_context, state.issue, strategy, design)
+        task_dag = await self._generate_task_dag(compiled_context, state.issue, strategy, state.design)
 
         # Save markdown
-        markdown_path = self._save_markdown(task_dag, state.issue, design, output_dir)
+        markdown_path = self._save_markdown(task_dag, state.issue, state.design, output_dir)
 
         return PlanOutput(task_dag=task_dag, markdown_path=markdown_path)
 

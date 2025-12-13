@@ -201,11 +201,12 @@ def plan_only_command(
         # Create ExecutionState for the architect
         state = ExecutionState(
             profile=active_profile,
-            issue=issue
+            issue=issue,
+            design=design
         )
 
         architect = Architect(DriverFactory.get_driver(active_profile.driver))
-        result = await architect.plan(state, design=design)
+        result = await architect.plan(state)
         
         typer.echo("\n--- GENERATED PLAN ---")
         if result.task_dag and result.task_dag.tasks:
