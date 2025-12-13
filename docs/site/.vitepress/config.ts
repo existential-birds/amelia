@@ -86,7 +86,7 @@ export default defineConfig({
     // Footer
     footer: {
       message: 'Released under the MPL-2.0 License.',
-      copyright: 'Copyright © 2024 Amelia Project'
+      copyright: 'Copyright © 2024-2025 Amelia Project'
     },
 
     // Search configuration

@@ -82,7 +82,7 @@ const fillPath = getArcPath(fillPercentage[props.fill], radius - strokeWidth);
     :class="`harvey-ball--${size}`"
     :width="diameter"
     :height="diameter"
-    viewBox="0 0 ${diameter} ${diameter}"
+    :viewBox="`0 0 ${diameter} ${diameter}`"
     role="img"
     :aria-label="`${fill} filled indicator`"
   >

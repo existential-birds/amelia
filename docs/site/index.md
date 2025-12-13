@@ -11,7 +11,7 @@ hero:
       link: /guide/getting-started
     - theme: alt
       text: View on GitHub
-      link: https://github.com/yourusername/amelia
+      link: https://github.com/anderskev/amelia
   image:
     src: /logo/amelia-gold.svg
     alt: Amelia Logo
@@ -56,7 +56,7 @@ The Amelia Design System provides a cohesive visual language across all Amelia p
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/amelia.git
+git clone https://github.com/anderskev/amelia.git
 
 # Navigate to design system
 cd amelia/design-system

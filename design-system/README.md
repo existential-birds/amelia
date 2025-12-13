@@ -67,8 +67,7 @@ design-system/
 ├── tokens/
 │   ├── colors.css          # CSS custom properties (dark + light)
 │   ├── colors.json         # JSON for tooling
-│   ├── typography.css      # Font stacks, scale
-│   └── tokens.d.ts         # TypeScript definitions
+│   └── typography.css      # Font stacks, scale
 ├── themes/
 │   ├── d2/                  # D2 diagram themes
 │   ├── mermaid/             # Mermaid diagram themes
@@ -92,7 +91,7 @@ design-system/
 
 | Role | Dark Mode | Light Mode |
 |------|-----------|------------|
-| Background | Deep Forest #0D1A12 | Pale Sage #F7FAF5 |
+| Background | Deep Forest #0D1A12 | Warm Cream #FDF8F0 |
 | Surface | Cockpit Green #1F332E | Mist #E8F0E5 |
 | Accent | Aviation Gold #FFC857 | Forest Green #2D5A3D |
 | Foreground | Pale Sage #EFF8E2 | Deep Forest #0D1A12 |
@@ -124,4 +123,4 @@ If you need to update tokens:
 
 ## License
 
-MIT License - See LICENSE file for details.
+MPL-2.0 License - See LICENSE file for details.
