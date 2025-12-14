@@ -543,6 +543,9 @@ export type StreamEventType =
  * ```
  */
 export interface StreamEvent {
+  /** Unique identifier for this event (UUID). */
+  id: string;
+
   /** Subtype of stream event (uses subtype to avoid collision with message type). */
   subtype: StreamEventType;
 
