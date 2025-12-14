@@ -6,18 +6,25 @@ import subprocess
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
-
-from pytest import TempPathFactory
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 import yaml
+from pytest import TempPathFactory
 from typer.testing import CliRunner
 
 from amelia.agents.reviewer import ReviewResponse
 from amelia.core.context import CompiledContext, ContextSection
 from amelia.core.state import ExecutionState, ReviewResult, Severity, Task, TaskDAG, TaskStatus
-from amelia.core.types import Design, DriverType, Issue, Profile, Settings, StrategyType, TrackerType
+from amelia.core.types import (
+    Design,
+    DriverType,
+    Issue,
+    Profile,
+    Settings,
+    StrategyType,
+    TrackerType,
+)
 from amelia.drivers.base import DriverInterface
 from amelia.trackers.noop import NoopTracker
 
