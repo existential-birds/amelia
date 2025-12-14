@@ -44,20 +44,19 @@ class TestStreamEmitterIntegration:
             max_concurrent=5,
         )
 
-        # Create emitter for a workflow
-        workflow_id = "wf-test-123"
-        emitter = service._create_stream_emitter(workflow_id)
+        # Create emitter (events carry their own workflow_id)
+        emitter = service._create_stream_emitter()
 
         # Verify emitter is callable
         assert callable(emitter)
 
-        # Create a test stream event
+        # Create a test stream event (workflow_id is on the event itself)
         test_event = StreamEvent(
             type=StreamEventType.CLAUDE_THINKING,
             content="Testing stream emitter",
             timestamp=datetime.now(UTC),
             agent="developer",
-            workflow_id=workflow_id,
+            workflow_id="wf-test-123",
         )
 
         # Emit the event
@@ -191,8 +190,7 @@ class TestStreamEmitterIntegration:
             settings=test_settings,
         )
 
-        workflow_id = "wf-types-test"
-        emitter = service._create_stream_emitter(workflow_id)
+        emitter = service._create_stream_emitter()
 
         # Create event with type-specific fields
         event = StreamEvent(
@@ -200,7 +198,7 @@ class TestStreamEmitterIntegration:
             content=f"Testing {event_type.value}",
             timestamp=datetime.now(UTC),
             agent="developer",
-            workflow_id=workflow_id,
+            workflow_id="wf-types-test",
             tool_name="TestTool" if event_type == StreamEventType.CLAUDE_TOOL_CALL else None,
             tool_input={"test": "input"} if event_type == StreamEventType.CLAUDE_TOOL_CALL else None,
         )
@@ -211,7 +209,7 @@ class TestStreamEmitterIntegration:
         mock_event_bus.emit_stream.assert_called_once()
         emitted_event = mock_event_bus.emit_stream.call_args[0][0]
         assert emitted_event.type == event_type
-        assert emitted_event.workflow_id == workflow_id
+        assert emitted_event.workflow_id == "wf-types-test"
 
     async def test_multiple_workflows_have_isolated_emitters(
         self,
@@ -219,19 +217,19 @@ class TestStreamEmitterIntegration:
         mock_repository: AsyncMock,
         test_settings: MagicMock,
     ) -> None:
-        """Each workflow gets its own stream emitter with correct workflow_id."""
+        """Events from different workflows preserve their workflow_id."""
         service = OrchestratorService(
             event_bus=mock_event_bus,
             repository=mock_repository,
             settings=test_settings,
         )
 
-        # Create emitters for different workflows
+        # workflow_id is carried by each StreamEvent, not the emitter
         workflow_1 = "wf-001"
         workflow_2 = "wf-002"
 
-        emitter_1 = service._create_stream_emitter(workflow_1)
-        emitter_2 = service._create_stream_emitter(workflow_2)
+        # Single emitter can handle events from any workflow
+        emitter = service._create_stream_emitter()
 
         # Emit from first workflow
         event_1 = StreamEvent(
@@ -241,7 +239,7 @@ class TestStreamEmitterIntegration:
             agent="architect",
             workflow_id=workflow_1,
         )
-        await emitter_1(event_1)
+        await emitter(event_1)
 
         # Emit from second workflow
         event_2 = StreamEvent(
@@ -251,7 +249,7 @@ class TestStreamEmitterIntegration:
             agent="developer",
             workflow_id=workflow_2,
         )
-        await emitter_2(event_2)
+        await emitter(event_2)
 
         # Verify both events were emitted separately
         assert mock_event_bus.emit_stream.call_count == 2

@@ -3,6 +3,7 @@
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """Tests for ConnectionManager stream event broadcasting."""
 
+from collections.abc import Callable
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
@@ -17,18 +18,29 @@ class TestConnectionManagerStream:
     """Tests for ConnectionManager stream event broadcasting."""
 
     @pytest.fixture
-    def manager(self):
+    def manager(self) -> ConnectionManager:
         """Create ConnectionManager instance."""
         return ConnectionManager()
 
     @pytest.fixture
-    def mock_websocket(self):
+    def mock_websocket(self) -> AsyncMock:
         """Create mock WebSocket."""
         ws = AsyncMock()
         ws.accept = AsyncMock()
         ws.send_json = AsyncMock()
         ws.close = AsyncMock()
         return ws
+
+    @pytest.fixture
+    def websocket_factory(self) -> Callable[[], AsyncMock]:
+        """Factory for creating mock WebSocket instances."""
+        def _create() -> AsyncMock:
+            ws = AsyncMock()
+            ws.accept = AsyncMock()
+            ws.send_json = AsyncMock()
+            ws.close = AsyncMock()
+            return ws
+        return _create
 
     @pytest.fixture
     def sample_stream_event(self) -> StreamEvent:
@@ -42,16 +54,11 @@ class TestConnectionManagerStream:
         )
 
     async def test_broadcast_stream_sends_to_all_connections(
-        self, manager, mock_websocket, sample_stream_event
+        self, manager, websocket_factory, sample_stream_event
     ):
         """broadcast_stream() should send to all connections regardless of subscription."""
-        ws1 = AsyncMock()
-        ws1.accept = AsyncMock()
-        ws1.send_json = AsyncMock()
-
-        ws2 = AsyncMock()
-        ws2.accept = AsyncMock()
-        ws2.send_json = AsyncMock()
+        ws1 = websocket_factory()
+        ws2 = websocket_factory()
 
         # Connect both sockets
         await manager.connect(ws1)
@@ -92,7 +99,7 @@ class TestConnectionManagerStream:
         # Verify StreamEventPayload uses subtype (not type)
         stream_payload = payload["payload"]
         assert "type" not in stream_payload, "Should use 'subtype' not 'type'"
-        assert stream_payload["subtype"] == "claude_thinking"
+        assert stream_payload["subtype"] == StreamEventType.CLAUDE_THINKING.value
         assert stream_payload["content"] == "Analyzing requirements"
         assert stream_payload["agent"] == "developer"
         assert stream_payload["workflow_id"] == "wf-123"
@@ -116,13 +123,12 @@ class TestConnectionManagerStream:
         """broadcast_stream() should timeout slow clients and remove them."""
         await manager.connect(mock_websocket)
 
-        # Simulate slow client that times out
-        async def slow_send(*args, **kwargs):
-            import asyncio
+        # Simulate timeout by raising TimeoutError immediately
+        # This is what asyncio.wait_for raises when timeout expires
+        async def timeout_send(*args, **kwargs):
+            raise TimeoutError("Simulated send timeout")
 
-            await asyncio.sleep(10)  # Longer than 5s timeout
-
-        mock_websocket.send_json = slow_send
+        mock_websocket.send_json = timeout_send
 
         await manager.broadcast_stream(sample_stream_event)
 
@@ -137,16 +143,12 @@ class TestConnectionManagerStream:
         await manager.broadcast_stream(sample_stream_event)
 
     async def test_broadcast_stream_concurrent_sends(
-        self, manager, sample_stream_event
+        self, manager, websocket_factory, sample_stream_event
     ):
         """broadcast_stream() should send to multiple clients concurrently."""
         # Create multiple websockets
-        websockets = []
-        for _ in range(5):
-            ws = AsyncMock()
-            ws.accept = AsyncMock()
-            ws.send_json = AsyncMock()
-            websockets.append(ws)
+        websockets = [websocket_factory() for _ in range(5)]
+        for ws in websockets:
             await manager.connect(ws)
 
         # Broadcast stream event
@@ -202,24 +204,19 @@ class TestConnectionManagerStream:
         stream_payload = payload["payload"]
 
         # Verify subtype is used (not type)
-        assert stream_payload["subtype"] == "claude_tool_result"
+        assert stream_payload["subtype"] == StreamEventType.CLAUDE_TOOL_RESULT.value
         assert stream_payload["tool_name"] == "execute_shell"
         assert stream_payload["tool_input"] == {"command": "ls -la", "timeout": 30}
 
-    async def test_broadcast_stream_partial_failure(self, manager, sample_stream_event):
+    async def test_broadcast_stream_partial_failure(
+        self, manager, websocket_factory, sample_stream_event
+    ):
         """broadcast_stream() should continue if some clients fail."""
         # Create three websockets
-        ws1 = AsyncMock()
-        ws1.accept = AsyncMock()
-        ws1.send_json = AsyncMock()
-
-        ws2 = AsyncMock()
-        ws2.accept = AsyncMock()
+        ws1 = websocket_factory()
+        ws2 = websocket_factory()
         ws2.send_json = AsyncMock(side_effect=WebSocketDisconnect())  # Fails
-
-        ws3 = AsyncMock()
-        ws3.accept = AsyncMock()
-        ws3.send_json = AsyncMock()
+        ws3 = websocket_factory()
 
         await manager.connect(ws1)
         await manager.connect(ws2)

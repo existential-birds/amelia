@@ -22,7 +22,29 @@ from amelia.agents.architect import Architect
 from amelia.agents.developer import Developer
 from amelia.agents.reviewer import Reviewer
 from amelia.core.state import ExecutionState, TaskDAG
+from amelia.core.types import StreamEmitter
 from amelia.drivers.factory import DriverFactory
+
+
+def _extract_config_params(config: RunnableConfig | None) -> tuple[StreamEmitter | None, str]:
+    """Extract stream_emitter and workflow_id from RunnableConfig.
+
+    Args:
+        config: Optional RunnableConfig with configurable parameters.
+
+    Returns:
+        Tuple of (stream_emitter, workflow_id).
+
+    Raises:
+        ValueError: If workflow_id (thread_id) is not provided in config.configurable.
+    """
+    config = config or {}
+    configurable = config.get("configurable", {})
+    stream_emitter = configurable.get("stream_emitter")
+    workflow_id = configurable.get("thread_id")
+    if not workflow_id:
+        raise ValueError("workflow_id (thread_id) is required in config.configurable")
+    return stream_emitter, workflow_id
 
 
 # Define nodes for the graph
@@ -49,12 +71,7 @@ async def call_architect_node(
         raise ValueError("Cannot call Architect: no issue provided in state.")
 
     # Extract stream_emitter and workflow_id from config if available
-    config = config or {}
-    configurable = config.get("configurable", {})
-    stream_emitter = configurable.get("stream_emitter")
-    workflow_id = configurable.get("thread_id")
-    if not workflow_id:
-        raise ValueError("workflow_id (thread_id) is required in config.configurable")
+    stream_emitter, workflow_id = _extract_config_params(config)
 
     driver = DriverFactory.get_driver(state.profile.driver)
     architect = Architect(driver, stream_emitter=stream_emitter)
@@ -176,12 +193,7 @@ async def call_reviewer_node(
         review_state = state.model_copy(update={"current_task_id": state.plan.tasks[0].id})
 
     # Extract stream_emitter and workflow_id from config if available
-    config = config or {}
-    configurable = config.get("configurable", {})
-    stream_emitter = configurable.get("stream_emitter")
-    workflow_id = configurable.get("thread_id")
-    if not workflow_id:
-        raise ValueError("workflow_id (thread_id) is required in config.configurable")
+    stream_emitter, workflow_id = _extract_config_params(config)
 
     driver = DriverFactory.get_driver(state.profile.driver)
     reviewer = Reviewer(driver, stream_emitter=stream_emitter)
@@ -225,12 +237,7 @@ async def call_developer_node(
         return {}
 
     # Extract stream_emitter and workflow_id from config if available
-    config = config or {}
-    configurable = config.get("configurable", {})
-    stream_emitter = configurable.get("stream_emitter")
-    workflow_id = configurable.get("thread_id")
-    if not workflow_id:
-        raise ValueError("workflow_id (thread_id) is required in config.configurable")
+    stream_emitter, workflow_id = _extract_config_params(config)
 
     driver = DriverFactory.get_driver(state.profile.driver)
     developer = Developer(

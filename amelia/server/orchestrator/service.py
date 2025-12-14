@@ -108,13 +108,12 @@ class OrchestratorService:
             interrupt_before=["human_approval_node"],
         )
 
-    def _create_stream_emitter(self, workflow_id: str) -> StreamEmitter:
-        """Create a stream emitter callback for the given workflow.
+    def _create_stream_emitter(self) -> StreamEmitter:
+        """Create a stream emitter callback for broadcasting events.
 
         Stream events are broadcast via WebSocket but NOT persisted to the database.
-
-        Args:
-            workflow_id: The workflow ID to associate with emitted events.
+        Each StreamEvent already contains its own workflow_id, so the emitter
+        doesn't need workflow context.
 
         Returns:
             Async callback that broadcasts StreamEvent via WebSocket.
@@ -350,7 +349,7 @@ class OrchestratorService:
             graph = self._create_server_graph(checkpointer)
 
             # Create stream emitter and pass it via config
-            stream_emitter = self._create_stream_emitter(workflow_id)
+            stream_emitter = self._create_stream_emitter()
             config: RunnableConfig = {
                 "configurable": {
                     "thread_id": workflow_id,
@@ -614,7 +613,7 @@ class OrchestratorService:
             graph = self._create_server_graph(checkpointer)
 
             # Create stream emitter and pass it via config
-            stream_emitter = self._create_stream_emitter(workflow_id)
+            stream_emitter = self._create_stream_emitter()
             config: RunnableConfig = {
                 "configurable": {
                     "thread_id": workflow_id,
