@@ -12,6 +12,7 @@ from collections.abc import Awaitable, Callable
 from datetime import datetime
 from enum import StrEnum
 from typing import Any, Literal
+from uuid import uuid4
 
 from pydantic import BaseModel, Field
 
@@ -138,6 +139,7 @@ class StreamEvent(BaseModel):
     """Real-time streaming event from agent execution.
 
     Attributes:
+        id: Unique identifier for this event.
         type: Type of streaming event.
         content: Event content (optional).
         timestamp: When the event occurred.
@@ -146,6 +148,7 @@ class StreamEvent(BaseModel):
         tool_name: Name of tool being called/returning (optional).
         tool_input: Input parameters for tool call (optional).
     """
+    id: str = Field(default_factory=lambda: str(uuid4()))
     type: StreamEventType
     content: str | None = None
     timestamp: datetime
