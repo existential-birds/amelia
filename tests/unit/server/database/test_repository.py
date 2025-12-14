@@ -338,3 +338,11 @@ class TestWorkflowRepository:
         events = await repository.get_recent_events("wf-empty")
 
         assert len(events) == 0
+
+    @pytest.mark.parametrize("limit", [0, -1, -100])
+    async def test_get_recent_events_non_positive_limit(self, repository, limit):
+        """Should return empty list for non-positive limit values."""
+        # No need to create workflow - should return early before DB query
+        events = await repository.get_recent_events("any-workflow", limit=limit)
+
+        assert events == []

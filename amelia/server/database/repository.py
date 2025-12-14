@@ -478,6 +478,10 @@ class WorkflowRepository:
         Returns:
             List of events ordered by sequence ascending (oldest first).
         """
+        # Guard against non-positive limits (SQLite treats LIMIT -1 as no limit)
+        if limit <= 0:
+            return []
+
         rows = await self._db.fetch_all(
             """
             SELECT id, workflow_id, sequence, timestamp, agent, event_type,

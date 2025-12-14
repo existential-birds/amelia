@@ -176,17 +176,8 @@ async def test_emit_stream_multiple_events(
     event_bus: EventBus, sample_stream_event: StreamEvent
 ):
     """emit_stream() should handle multiple stream events correctly."""
-    broadcast_count = 0
-    broadcast_lock = asyncio.Lock()
-
     mock_manager = AsyncMock()
-
-    async def count_broadcasts(event: StreamEvent) -> None:
-        nonlocal broadcast_count
-        async with broadcast_lock:
-            broadcast_count += 1
-
-    mock_manager.broadcast_stream = count_broadcasts
+    mock_manager.broadcast_stream = AsyncMock()
     event_bus.set_connection_manager(mock_manager)
 
     # Emit multiple stream events
@@ -220,5 +211,9 @@ async def test_emit_stream_multiple_events(
     # Wait for all broadcasts to complete
     await event_bus.cleanup()
 
-    # All three events should have been broadcast
-    assert broadcast_count == 3
+    # Verify all three events were broadcast with correct payloads
+    assert mock_manager.broadcast_stream.await_count == 3
+    call_args = [call.args[0] for call in mock_manager.broadcast_stream.await_args_list]
+    assert event1 in call_args
+    assert event2 in call_args
+    assert event3 in call_args

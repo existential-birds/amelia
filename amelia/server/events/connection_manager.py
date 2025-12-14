@@ -207,6 +207,7 @@ class ConnectionManager:
 
         # Convert StreamEvent to StreamEventPayload (type -> subtype)
         stream_payload = StreamEventPayload(
+            id=event.id,
             subtype=event.type,
             content=event.content,
             agent=event.agent,

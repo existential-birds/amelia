@@ -124,6 +124,7 @@ class StreamEventPayload(BaseModel):
     wrapper message's `type: "stream"` field.
 
     Attributes:
+        id: Unique event identifier.
         subtype: Type of streaming event (thinking, tool_call, etc.).
         content: Event content (optional).
         agent: Agent name (architect, developer, reviewer).
@@ -133,6 +134,7 @@ class StreamEventPayload(BaseModel):
         tool_input: Input parameters for tool call (optional).
     """
 
+    id: str = Field(..., description="Unique event identifier")
     subtype: StreamEventType = Field(..., description="Type of streaming event")
     content: str | None = Field(default=None, description="Event content")
     agent: str = Field(..., description="Agent name")
