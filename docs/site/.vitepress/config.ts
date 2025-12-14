@@ -22,6 +22,9 @@ export default defineConfig({
   // Base path for deployment
   base: '/amelia/',
 
+  // Dark mode as default
+  appearance: 'dark',
+
   // Theme configuration
   themeConfig: {
     // Use text title styled with Bebas Neue (see style.css)

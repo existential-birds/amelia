@@ -6,67 +6,11 @@
 /* Fonts are loaded via /fonts/fonts.css in head config (VitePress handles base path) */
 
 /**
- * Colors - Dark Mode (Default)
- * Deep forest greens with gold accents
- * -------------------------------------------------------------------------- */
-
-:root {
-  /* Base colors */
-  --vp-c-bg: #0D1A12;
-  --vp-c-bg-alt: #1F332E;
-  --vp-c-bg-elv: #2B3D35;
-  --vp-c-text-1: #EFF8E2;
-  --vp-c-text-2: #88A896;
-  --vp-c-text-3: #5C7263;
-
-  /* Brand colors - Gold */
-  --vp-c-brand-1: #FFC857;
-  --vp-c-brand-2: #FFD580;
-  --vp-c-brand-3: #E5B350;
-  --vp-c-brand-soft: rgba(255, 200, 87, 0.16);
-
-  /* Default (muted/neutral) */
-  --vp-c-default-1: #88A896;
-  --vp-c-default-2: #5C7263;
-  --vp-c-default-3: #4A5C54;
-  --vp-c-default-soft: rgba(136, 168, 150, 0.16);
-
-  /* Tip - Green accent */
-  --vp-c-tip-1: #5B8A72;
-  --vp-c-tip-2: #6FA083;
-  --vp-c-tip-3: #4A7260;
-  --vp-c-tip-soft: rgba(91, 138, 114, 0.16);
-
-  /* Warning - Gold */
-  --vp-c-warning-1: #FFC857;
-  --vp-c-warning-2: #FFD580;
-  --vp-c-warning-3: #E5B350;
-  --vp-c-warning-soft: rgba(255, 200, 87, 0.16);
-
-  /* Danger - Red accent */
-  --vp-c-danger-1: #A33D2E;
-  --vp-c-danger-2: #C14D3A;
-  --vp-c-danger-3: #8B3224;
-  --vp-c-danger-soft: rgba(163, 61, 46, 0.16);
-
-  /* Info - Blue accent */
-  --vp-c-info-1: #5B9BD5;
-  --vp-c-info-2: #7AADE0;
-  --vp-c-info-3: #4A88C0;
-  --vp-c-info-soft: rgba(91, 155, 213, 0.16);
-
-  /* Background variations */
-  --vp-c-bg-soft: rgba(47, 61, 53, 0.3);
-  --vp-c-divider: rgba(47, 61, 53, 0.2);
-  --vp-c-gutter: rgba(47, 61, 53, 0.15);
-}
-
-/**
- * Colors - Light Mode
+ * Colors - Light Mode (VitePress default selector)
  * Daytime theme with warm cream backgrounds and professional blue accents
  * -------------------------------------------------------------------------- */
 
-.light {
+:root {
   /* Base colors */
   --vp-c-bg: #FDF8F0;
   --vp-c-bg-alt: #FFFDF9;
@@ -115,6 +59,62 @@
   --vp-c-bg-soft: rgba(26, 47, 35, 0.08);
   --vp-c-divider: rgba(26, 47, 35, 0.15);
   --vp-c-gutter: rgba(26, 47, 35, 0.1);
+}
+
+/**
+ * Colors - Dark Mode (VitePress .dark class selector)
+ * Deep forest greens with gold accents - DEFAULT theme via appearance: 'dark'
+ * -------------------------------------------------------------------------- */
+
+.dark {
+  /* Base colors */
+  --vp-c-bg: #0D1A12;
+  --vp-c-bg-alt: #1F332E;
+  --vp-c-bg-elv: #2B3D35;
+  --vp-c-text-1: #EFF8E2;
+  --vp-c-text-2: #88A896;
+  --vp-c-text-3: #5C7263;
+
+  /* Brand colors - Gold */
+  --vp-c-brand-1: #FFC857;
+  --vp-c-brand-2: #FFD580;
+  --vp-c-brand-3: #E5B350;
+  --vp-c-brand-soft: rgba(255, 200, 87, 0.16);
+
+  /* Default (muted/neutral) */
+  --vp-c-default-1: #88A896;
+  --vp-c-default-2: #5C7263;
+  --vp-c-default-3: #4A5C54;
+  --vp-c-default-soft: rgba(136, 168, 150, 0.16);
+
+  /* Tip - Green accent */
+  --vp-c-tip-1: #5B8A72;
+  --vp-c-tip-2: #6FA083;
+  --vp-c-tip-3: #4A7260;
+  --vp-c-tip-soft: rgba(91, 138, 114, 0.16);
+
+  /* Warning - Gold */
+  --vp-c-warning-1: #FFC857;
+  --vp-c-warning-2: #FFD580;
+  --vp-c-warning-3: #E5B350;
+  --vp-c-warning-soft: rgba(255, 200, 87, 0.16);
+
+  /* Danger - Red accent */
+  --vp-c-danger-1: #A33D2E;
+  --vp-c-danger-2: #C14D3A;
+  --vp-c-danger-3: #8B3224;
+  --vp-c-danger-soft: rgba(163, 61, 46, 0.16);
+
+  /* Info - Blue accent */
+  --vp-c-info-1: #5B9BD5;
+  --vp-c-info-2: #7AADE0;
+  --vp-c-info-3: #4A88C0;
+  --vp-c-info-soft: rgba(91, 155, 213, 0.16);
+
+  /* Background variations */
+  --vp-c-bg-soft: rgba(47, 61, 53, 0.3);
+  --vp-c-divider: rgba(47, 61, 53, 0.2);
+  --vp-c-gutter: rgba(47, 61, 53, 0.15);
 }
 
 /**
@@ -173,7 +173,8 @@
   --vp-button-brand-active-bg: var(--vp-c-brand-3);
 }
 
-.light {
+/* Light mode button text adjustments - need light text on dark blue buttons */
+html:not(.dark) {
   --vp-button-brand-text: #FFFDF9;
   --vp-button-brand-hover-text: #FFFDF9;
   --vp-button-brand-active-text: #FFFDF9;
@@ -242,7 +243,8 @@
   --vp-code-copy-code-active-text: var(--vp-c-brand-1);
 }
 
-.light {
+/* Light mode code block adjustments */
+html:not(.dark) {
   --vp-code-block-bg: rgba(26, 47, 35, 0.06);
   --vp-code-copy-code-border-color: rgba(46, 107, 156, 0.3);
   --vp-code-copy-code-bg: rgba(245, 241, 232, 0.9);
