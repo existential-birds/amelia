@@ -90,6 +90,7 @@ Review files matching: `**/ui/*.tsx`, `**/components/*.tsx`
 - Empty state messaging
 - Performance (memoization where beneficial)
 - Props typing (avoid `any`)
+- List items have stable unique keys (not array indices, use IDs from data)
 
 ### Conditional Agent: Graph/Flow Components
 
@@ -105,6 +106,18 @@ Check for:
 - `useUpdateNodeInternals` when handles change dynamically
 - `EdgeLabelRenderer` with `nodrag nopan` classes for interactive labels
 - `BaseEdge` usage with path utilities (`getBezierPath`, `getSmoothStepPath`)
+
+### Conditional Agent: Build/Dev Config
+
+**If vite.config.ts, webpack.config.js, or similar changed:**
+
+Review files matching: `vite.config.*`, `webpack.config.*`, `*.config.ts`
+
+Check for:
+- WebSocket proxy uses `http://` target (not `ws://`) for upgrade handling
+- Proxy config includes `changeOrigin: true` for proper CORS
+- HMR config points to correct port
+- Build output paths are correct
 
 ### Conditional Agent: Test Quality
 

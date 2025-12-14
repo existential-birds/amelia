@@ -39,6 +39,11 @@ git diff {BASE_SHA}..{HEAD_SHA}
 - DRY principle followed?
 - Edge cases handled?
 
+**Completeness & Observability:**
+- No stub implementations (empty lists, hardcoded values, TODO placeholders)?
+- External API calls handle pagination (e.g., `--paginate` for gh api)?
+- Critical paths have appropriate logging (debug for diagnostics, info for events)?
+
 **Architecture:**
 - Sound design decisions?
 - Scalability considerations?
@@ -57,7 +62,7 @@ If changes involve LLM-powered agents, orchestrators, or AI workflows, use the `
 | F8: Control Flow | Custom routing logic | Framework defaults only |
 | F9: Error Handling | Errors fed to LLM context | `logger.error()` without retry |
 | F10: Agent Focus | 3-10 steps, single responsibility | God agent with 20+ tools |
-| F12: Stateless Reducer | Immutable updates | `state.field = value` |
+| F12: Stateless Reducer | Immutable updates, `frozen=True` on event models | `state.field = value`, mutable Pydantic models |
 
 **Testing:**
 - Tests actually test logic (not mocks)?

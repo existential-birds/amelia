@@ -71,11 +71,21 @@ Review all changed `.py` files for general Python quality:
 - Specific exception types, not `Exception`
 - Re-raising with `from` to preserve stack trace
 
+**Database & Queries:**
+- Query parameters validated (LIMIT/OFFSET ≤ 0 returns early or raises)
+- No SQLite quirks exploitable (e.g., LIMIT -1 = no limit)
+- Connection/session cleanup in error paths
+
 **Code Quality:**
 - Google-style docstrings on public functions
 - No `print()` statements (use `logger` from loguru)
 - No mutable default arguments
 - f-strings preferred
+
+**Observability:**
+- Critical paths have `logger.debug()` for diagnostics (broadcast counts, target counts)
+- Key operations have `logger.info()` for operational visibility
+- Errors include context (IDs, counts) not just messages
 
 ### Agent 2: LangGraph Review (If core/orchestrator changed)
 
@@ -127,12 +137,19 @@ Additional checks:
 
 **Fixtures:**
 - Shared fixtures in `conftest.py`
-- No fixture duplication across test files
+- No fixture duplication across test files → centralize in root conftest
+- Factory fixtures (`make_foo()`) for variations, not static fixtures
 
 **Assertions:**
 - One concept per test
 - Descriptive test names
 - `pytest.raises` for expected exceptions
+- Assertions are precise (avoid `>=` or `>` when exact count is known)
+
+**DRY Patterns:**
+- Repetitive tests use `@pytest.mark.parametrize` instead of copy-paste
+- Use `AsyncMock` built-in tracking (`.await_count`, `.call_args`) instead of manual counters
+- Extract common setup to fixtures, not repeated in each test
 
 ## Step 4: Post-Fix Verification
 
