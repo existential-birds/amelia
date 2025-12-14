@@ -280,14 +280,16 @@ class ClaudeCliDriver(CliDriver):
             # The help says: --output-format <format> ... "json" (single result)
             cmd_args.extend(["--output-format", "json"])
 
-        # Create subprocess
+        # Create subprocess with increased buffer limit for large JSON responses
+        # Default is 64KB which is too small for architect plans
         try:
             process = await asyncio.create_subprocess_exec(
                 *cmd_args,
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                cwd=cwd
+                cwd=cwd,
+                limit=10 * 1024 * 1024,  # 10MB buffer for large JSON responses
             )
 
             # Write prompt to stdin
@@ -472,7 +474,8 @@ class ClaudeCliDriver(CliDriver):
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                cwd=cwd
+                cwd=cwd,
+                limit=10 * 1024 * 1024,  # 10MB buffer for large streaming responses
             )
 
             if process.stdin:
@@ -545,7 +548,8 @@ class ClaudeCliDriver(CliDriver):
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                cwd=cwd
+                cwd=cwd,
+                limit=10 * 1024 * 1024,  # 10MB buffer for large streaming responses
             )
 
             if process.stdin:
