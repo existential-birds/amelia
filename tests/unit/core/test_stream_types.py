@@ -111,3 +111,26 @@ class TestStreamEvent:
         )
         assert event.tool_input == tool_input
         assert isinstance(event.tool_input, dict)
+
+    def test_id_auto_generated(self) -> None:
+        """StreamEvent should auto-generate a unique UUID id."""
+        now = datetime.now(UTC)
+        event1 = StreamEvent(
+            type=StreamEventType.CLAUDE_THINKING,
+            timestamp=now,
+            agent="architect",
+            workflow_id="workflow-123",
+        )
+        event2 = StreamEvent(
+            type=StreamEventType.CLAUDE_THINKING,
+            timestamp=now,
+            agent="architect",
+            workflow_id="workflow-123",
+        )
+        # Each event has an id
+        assert event1.id is not None
+        assert event2.id is not None
+        # IDs are unique
+        assert event1.id != event2.id
+        # ID is a valid UUID string (36 chars with hyphens)
+        assert len(event1.id) == 36
