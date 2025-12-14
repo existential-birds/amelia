@@ -12,6 +12,7 @@
  */
 import { useCallback, useEffect, useRef } from 'react';
 import { useLoaderData, useNavigate, useParams } from 'react-router-dom';
+import { Copy } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { WorkflowEmptyState } from '@/components/WorkflowEmptyState';
@@ -20,6 +21,9 @@ import { StatusBadge } from '@/components/StatusBadge';
 import { WorkflowCanvas } from '@/components/WorkflowCanvas';
 import { ActivityLog } from '@/components/ActivityLog';
 import { JobQueue } from '@/components/JobQueue';
+import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { success } from '@/components/Toast';
 import { getActiveWorkflow } from '@/utils/workflow';
 import { useElapsedTime } from '@/hooks';
 import { buildPipeline } from '@/utils/pipeline';
@@ -62,6 +66,11 @@ export default function WorkflowsPage() {
     }
   }, [navigate]);
 
+  const handleCopy = useCallback((text: string) => {
+    navigator.clipboard.writeText(text);
+    success('Issue ID copied to clipboard');
+  }, []);
+
   // Clear selection when clicking outside the job queue
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -93,7 +102,25 @@ export default function WorkflowsPage() {
         <PageHeader.Left>
           <PageHeader.Label>WORKFLOW</PageHeader.Label>
           <div className="flex items-center gap-3">
-            <PageHeader.Title>{detail?.issue_id ?? 'SELECT JOB'}</PageHeader.Title>
+            <div className="flex items-center gap-2">
+              <PageHeader.Title>{detail?.issue_id ?? 'SELECT JOB'}</PageHeader.Title>
+              {detail?.issue_id && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                      onClick={() => handleCopy(detail.issue_id)}
+                      aria-label="Copy Issue ID"
+                    >
+                      <Copy className="size-3" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Copy Issue ID</TooltipContent>
+                </Tooltip>
+              )}
+            </div>
             {detail?.worktree_name && (
               <PageHeader.Subtitle>{detail.worktree_name}</PageHeader.Subtitle>
             )}
