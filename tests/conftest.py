@@ -4,6 +4,7 @@
 import os
 import subprocess
 from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
@@ -23,6 +24,8 @@ from amelia.core.types import (
     Profile,
     Settings,
     StrategyType,
+    StreamEvent,
+    StreamEventType,
     TrackerType,
 )
 from amelia.drivers.base import DriverInterface
@@ -483,3 +486,15 @@ def developer_test_context(mock_task_factory: Callable[..., Task], mock_executio
         )
         return mock_driver, state
     return _create
+
+
+@pytest.fixture
+def sample_stream_event() -> StreamEvent:
+    """Create sample StreamEvent for testing stream broadcasting."""
+    return StreamEvent(
+        type=StreamEventType.CLAUDE_THINKING,
+        content="Analyzing requirements",
+        timestamp=datetime.now(UTC),
+        agent="developer",
+        workflow_id="wf-123",
+    )

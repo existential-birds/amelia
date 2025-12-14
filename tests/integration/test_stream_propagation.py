@@ -32,19 +32,6 @@ class TestStreamEventPropagation:
         ws.send_json = AsyncMock()
         return ws
 
-    @pytest.fixture
-    def sample_stream_event(self) -> StreamEvent:
-        """Create a sample StreamEvent for testing."""
-        return StreamEvent(
-            type=StreamEventType.CLAUDE_THINKING,
-            content="Analyzing the codebase...",
-            timestamp=datetime.now(UTC),
-            agent="developer",
-            workflow_id="wf-test-123",
-            tool_name=None,
-            tool_input=None,
-        )
-
     async def test_emit_stream_broadcasts_to_websocket(
         self,
         event_bus: EventBus,
@@ -67,7 +54,7 @@ class TestStreamEventPropagation:
         call_args = mock_websocket.send_json.call_args[0][0]
         assert call_args["type"] == "stream"
         assert call_args["payload"]["subtype"] == "claude_thinking"
-        assert call_args["payload"]["content"] == "Analyzing the codebase..."
+        assert call_args["payload"]["content"] == "Analyzing requirements"
         assert call_args["payload"]["agent"] == "developer"
 
     async def test_stream_events_broadcast_to_all_clients(

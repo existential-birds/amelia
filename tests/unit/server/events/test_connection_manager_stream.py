@@ -33,17 +33,6 @@ class TestConnectionManagerStream:
             return ws
         return _create
 
-    @pytest.fixture
-    def sample_stream_event(self) -> StreamEvent:
-        """Create sample stream event."""
-        return StreamEvent(
-            type=StreamEventType.CLAUDE_THINKING,
-            content="Analyzing requirements",
-            timestamp=datetime.now(UTC),
-            agent="developer",
-            workflow_id="wf-123",
-        )
-
     async def test_broadcast_stream_sends_to_all_connections(
         self, manager, websocket_factory, sample_stream_event
     ):

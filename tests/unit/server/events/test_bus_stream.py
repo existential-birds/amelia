@@ -20,18 +20,6 @@ def event_bus() -> EventBus:
     return EventBus()
 
 
-@pytest.fixture
-def sample_stream_event() -> StreamEvent:
-    """Create sample stream event."""
-    return StreamEvent(
-        type=StreamEventType.CLAUDE_THINKING,
-        content="Analyzing requirements",
-        timestamp=datetime.now(UTC),
-        agent="developer",
-        workflow_id="wf-123",
-    )
-
-
 async def test_emit_stream_broadcasts_to_connection_manager(
     event_bus: EventBus, sample_stream_event: StreamEvent
 ):
