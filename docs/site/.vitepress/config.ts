@@ -225,7 +225,7 @@ export default defineConfig({
 
   // Head configuration
   head: [
-    ['link', { rel: 'icon', type: 'image/svg+xml', href: '/amelia/logo/amelia-gold.svg' }],
+    ['link', { rel: 'icon', type: 'image/svg+xml', href: '/amelia/favicon.svg' }],
     ['link', { rel: 'stylesheet', href: '/amelia/fonts/fonts.css' }]
   ]
 })
