@@ -15,9 +15,9 @@ You have just evaluated the greptile code review feedback using `/ka-greptile-re
    gh pr view --json number --jq '.number'
    ```
 
-2. **Get all greptile review comment IDs and content**:
+2. **Get all greptile review comment IDs and content** (use `--paginate` to ensure all comments are fetched):
    ```bash
-   gh api repos/{owner}/{repo}/pulls/{number}/comments \
+   gh api --paginate repos/{owner}/{repo}/pulls/{number}/comments \
      --jq '.[] | select(.user.login == "greptile-apps[bot]") | {id: .id, path: .path, line: .line, body: .body}'
    ```
 

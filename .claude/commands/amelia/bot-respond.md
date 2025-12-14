@@ -26,10 +26,10 @@ This command responds to comments from these code review assistants:
    gh pr view --json number --jq '.number'
    ```
 
-2. **Get all code review bot comments**:
+2. **Get all code review bot comments** (use `--paginate` to ensure all comments are fetched):
    ```bash
    # Get review comments from all supported bots
-   gh api repos/{owner}/{repo}/pulls/{number}/comments \
+   gh api --paginate repos/{owner}/{repo}/pulls/{number}/comments \
      --jq '.[] | select(.user.login == "coderabbitai[bot]" or .user.login == "gemini-code-assist[bot]" or .user.login == "greptile-apps[bot]" or .user.login == "copilot[bot]") | {id: .id, user: .user.login, path: .path, line: .line, body: .body}'
    ```
 
