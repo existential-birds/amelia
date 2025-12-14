@@ -18,8 +18,6 @@ import type { Theme } from 'vitepress'
 import DefaultTheme from 'vitepress/theme'
 import './style.css'
 import './custom.css'
-import ColorSwatch from './components/ColorSwatch.vue'
-import ColorPalette from './components/ColorPalette.vue'
 import ColorComparison from './components/ColorComparison.vue'
 import AnimatedWorkflowHero from './components/AnimatedWorkflowHero.vue'
 import TerminalHero from './components/TerminalHero.vue'
@@ -34,8 +32,6 @@ export default {
   },
   enhanceApp({ app, router, siteData }) {
     // Register custom components globally
-    app.component('ColorSwatch', ColorSwatch)
-    app.component('ColorPalette', ColorPalette)
     app.component('ColorComparison', ColorComparison)
     app.component('AnimatedWorkflowHero', AnimatedWorkflowHero)
     app.component('TerminalHero', TerminalHero)

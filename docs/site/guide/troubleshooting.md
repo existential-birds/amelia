@@ -47,13 +47,13 @@ RuntimeError: Failed to set WAL journal mode
 
 1. Check permissions on the database directory:
    ```bash
-   ls -la ~/.local/share/amelia/
-   chmod 755 ~/.local/share/amelia/
+   ls -la ~/.amelia/
+   chmod 755 ~/.amelia/
    ```
 
 2. Remove corrupted database and restart:
    ```bash
-   rm -rf ~/.local/share/amelia/amelia.db*
+   rm -rf ~/.amelia/amelia.db*
    amelia dev
    ```
 
@@ -101,7 +101,7 @@ WorkflowConflictError: Workflow abc123 already active for worktree /path/to/repo
 
 1. List active workflows:
    ```bash
-   amelia dev --status
+   amelia status
    ```
 
 2. Cancel the existing workflow:
@@ -133,7 +133,7 @@ RateLimitError: Concurrency limit exceeded: 5/5 workflows active
 
 1. Wait for existing workflows to complete or cancel them:
    ```bash
-   amelia dev --status           # Check active workflows
+   amelia status                 # Check active workflows
    amelia cancel <workflow-id>   # Cancel if needed
    ```
 
@@ -564,7 +564,7 @@ git push
 
 **Checklist:**
 1. Server running: `amelia dev`
-2. No existing workflow in worktree: `amelia dev --status`
+2. No existing workflow in worktree: `amelia status`
 3. Valid git repository: `git status`
 4. Issue ID valid (or use `tracker: noop`)
 
@@ -590,8 +590,8 @@ amelia reject <workflow-id> "Please use a different approach"
 If issues persist:
 
 1. **Check logs:**
-   - Server logs: `~/.local/share/amelia/logs/server.log`
-   - Workflow logs: `~/.local/share/amelia/logs/<workflow-id>/`
+   - Server logs: `~/.amelia/logs/server.log`
+   - Workflow logs: `~/.amelia/logs/<workflow-id>/`
 
 2. **Enable debug logging:**
    ```bash
