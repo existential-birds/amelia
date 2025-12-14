@@ -200,6 +200,52 @@ html:not(.dark) {
 }
 
 /**
+ * Component: Home Hero Layout Adjustments
+ * Make space for the animated workflow diagram
+ * -------------------------------------------------------------------------- */
+
+/* Adjust hero container for side-by-side layout on larger screens */
+@media (min-width: 960px) {
+  .VPHero .container {
+    display: flex;
+    align-items: center;
+    gap: 2rem;
+  }
+
+  .VPHero .main {
+    flex: 1;
+    max-width: 600px;
+  }
+
+  .VPHero .image {
+    flex: 0 0 400px;
+  }
+}
+
+/* Ensure the animated diagram scales nicely */
+.VPHero .image-container {
+  max-width: 400px;
+  margin: 0 auto;
+}
+
+/* Add subtle gradient background to hero area */
+.VPHome .VPHero {
+  background: radial-gradient(
+    ellipse at 70% 30%,
+    var(--vp-c-brand-soft) 0%,
+    transparent 50%
+  );
+}
+
+.dark .VPHome .VPHero {
+  background: radial-gradient(
+    ellipse at 70% 30%,
+    rgba(255, 200, 87, 0.03) 0%,
+    transparent 50%
+  );
+}
+
+/**
  * Component: Custom Block (Callouts)
  * -------------------------------------------------------------------------- */
 
