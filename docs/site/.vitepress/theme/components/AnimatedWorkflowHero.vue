@@ -250,6 +250,8 @@ const isApproved = () => currentAgent.value === 'approved'
 .connector.active {
   stroke: var(--vp-c-brand-1);
   stroke-width: 3;
+  stroke-dasharray: 10, 10;
+  animation: flowPulse 0.5s linear infinite;
 }
 
 .loop-connector {
@@ -276,4 +278,31 @@ const isApproved = () => currentAgent.value === 'approved'
 .agent-node.active .node-bg {
   animation: pulse 1.5s ease-in-out infinite;
 }
+
+/* Entrance animation */
+@keyframes fadeSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.workflow-hero {
+  animation: fadeSlideIn 0.6s ease-out;
+}
+
+/* Animated flow along connectors */
+@keyframes flowPulse {
+  0% {
+    stroke-dashoffset: 20;
+  }
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+
 </style>
