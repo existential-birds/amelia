@@ -135,7 +135,7 @@ class StreamEventType(StrEnum):
     AGENT_OUTPUT = "agent_output"
 
 
-class StreamEvent(BaseModel):
+class StreamEvent(BaseModel, frozen=True):
     """Real-time streaming event from agent execution.
 
     Attributes:
