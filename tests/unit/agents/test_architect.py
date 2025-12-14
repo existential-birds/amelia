@@ -385,10 +385,10 @@ class TestArchitectStreamEmitter:
         event = mock_emitter.call_args.args[0]
         assert event.workflow_id == "custom-workflow-id-123"
 
-class TestArchitectWorkflowIdRequired:
-    """Test that workflow_id is required for Architect.plan()."""
+class TestArchitectWorkflowId:
+    """Test workflow_id handling in Architect.plan()."""
 
-    async def test_plan_requires_workflow_id(
+    async def test_plan_works_with_workflow_id(
         self,
         mock_driver: MagicMock,
         mock_execution_state_factory: Callable[..., ExecutionState],
