@@ -95,6 +95,7 @@ export function createMockStreamEvent(
   overrides?: Partial<StreamEvent>
 ): StreamEvent {
   return {
+    id: `stream-${crypto.randomUUID()}`,
     subtype: StreamEventType.CLAUDE_THINKING,
     content: 'Test thinking content',
     timestamp: '2025-12-13T10:00:00Z',
