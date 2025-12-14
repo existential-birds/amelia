@@ -184,6 +184,10 @@ const isApproved = () => currentAgent.value === 'approved'
       <text x="340" y="200" class="loop-label">loop until</text>
       <text x="340" y="218" class="loop-label">approved</text>
     </svg>
+    <!-- Screen reader announcement -->
+    <span class="sr-only" role="status" aria-live="polite">
+      {{ isApproved() ? 'Workflow complete: changes approved' : `Current step: ${currentAgent}` }}
+    </span>
   </div>
 </template>
 
@@ -249,8 +253,8 @@ const isApproved = () => currentAgent.value === 'approved'
 
 .connector.active {
   stroke: var(--vp-c-brand-1);
-  stroke-width: 3;
-  stroke-dasharray: 10, 10;
+  stroke-width: 2;
+  stroke-dasharray: 6, 4;
   animation: flowPulse 0.5s linear infinite;
 }
 
@@ -298,11 +302,34 @@ const isApproved = () => currentAgent.value === 'approved'
 /* Animated flow along connectors */
 @keyframes flowPulse {
   0% {
-    stroke-dashoffset: 20;
+    stroke-dashoffset: 10;
   }
   100% {
     stroke-dashoffset: 0;
   }
 }
 
+/* Screen reader only utility */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* Respect user's reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  .workflow-hero,
+  .agent-node,
+  .connector,
+  .node-bg {
+    animation: none !important;
+    transition: none !important;
+  }
+}
 </style>
