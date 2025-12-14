@@ -23,15 +23,6 @@ class TestConnectionManagerStream:
         return ConnectionManager()
 
     @pytest.fixture
-    def mock_websocket(self) -> AsyncMock:
-        """Create mock WebSocket."""
-        ws = AsyncMock()
-        ws.accept = AsyncMock()
-        ws.send_json = AsyncMock()
-        ws.close = AsyncMock()
-        return ws
-
-    @pytest.fixture
     def websocket_factory(self) -> Callable[[], AsyncMock]:
         """Factory for creating mock WebSocket instances."""
         def _create() -> AsyncMock:
@@ -82,9 +73,10 @@ class TestConnectionManagerStream:
         assert call_args["payload"]["workflow_id"] == "wf-123"
 
     async def test_broadcast_stream_payload_structure(
-        self, manager, mock_websocket, sample_stream_event
+        self, manager, websocket_factory, sample_stream_event
     ):
         """broadcast_stream() should send correct payload structure with subtype."""
+        mock_websocket = websocket_factory()
         await manager.connect(mock_websocket)
 
         await manager.broadcast_stream(sample_stream_event)
@@ -106,9 +98,10 @@ class TestConnectionManagerStream:
         assert isinstance(stream_payload["timestamp"], str)  # JSON serialization
 
     async def test_broadcast_stream_handles_disconnected_socket(
-        self, manager, mock_websocket, sample_stream_event
+        self, manager, websocket_factory, sample_stream_event
     ):
         """broadcast_stream() should remove disconnected sockets gracefully."""
+        mock_websocket = websocket_factory()
         await manager.connect(mock_websocket)
         mock_websocket.send_json.side_effect = WebSocketDisconnect()
 
@@ -118,9 +111,10 @@ class TestConnectionManagerStream:
         assert manager.active_connections == 0
 
     async def test_broadcast_stream_timeout_handling(
-        self, manager, mock_websocket, sample_stream_event
+        self, manager, websocket_factory, sample_stream_event
     ):
         """broadcast_stream() should timeout slow clients and remove them."""
+        mock_websocket = websocket_factory()
         await manager.connect(mock_websocket)
 
         # Simulate timeout by raising TimeoutError immediately
@@ -159,9 +153,10 @@ class TestConnectionManagerStream:
             ws.send_json.assert_awaited_once()
 
     async def test_broadcast_stream_serializes_datetime(
-        self, manager, mock_websocket
+        self, manager, websocket_factory
     ):
         """broadcast_stream() should serialize datetime to ISO string."""
+        mock_websocket = websocket_factory()
         timestamp = datetime(2025, 1, 15, 10, 30, 0, tzinfo=UTC)
         event = StreamEvent(
             type=StreamEventType.CLAUDE_TOOL_CALL,
@@ -184,9 +179,10 @@ class TestConnectionManagerStream:
         assert "2025-01-15T10:30:00" in stream_payload["timestamp"]
 
     async def test_broadcast_stream_with_tool_data(
-        self, manager, mock_websocket
+        self, manager, websocket_factory
     ):
         """broadcast_stream() should include tool data when present."""
+        mock_websocket = websocket_factory()
         event = StreamEvent(
             type=StreamEventType.CLAUDE_TOOL_RESULT,
             content="file contents",
