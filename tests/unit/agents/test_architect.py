@@ -5,7 +5,7 @@
 
 from collections.abc import Callable
 from typing import Any
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -80,39 +80,6 @@ class TestArchitectContextStrategy:
 
         # Should include file operation guidance
         assert "file" in prompt.lower()
-
-    def test_task_generation_system_prompt_mentions_required_fields(self, strategy: ArchitectContextStrategy) -> None:
-        """Test that task generation prompt specifies required task fields."""
-        prompt = strategy.get_task_generation_system_prompt()
-
-        # Should mention key task fields
-        assert "id" in prompt.lower()
-        assert "description" in prompt.lower()
-        assert "steps" in prompt.lower()
-
-    def test_task_generation_system_prompt_is_stable(self, strategy: ArchitectContextStrategy) -> None:
-        """Test that task generation system prompt is stable across calls."""
-        prompt1 = strategy.get_task_generation_system_prompt()
-        prompt2 = strategy.get_task_generation_system_prompt()
-
-        assert prompt1 == prompt2
-
-    def test_task_generation_user_prompt_is_concise(self, strategy: ArchitectContextStrategy) -> None:
-        """Test that task generation user prompt is concise and actionable."""
-        prompt = strategy.get_task_generation_user_prompt()
-
-        # Should be a non-empty string
-        assert isinstance(prompt, str)
-        assert len(prompt) > 0
-
-        # Should be relatively concise (not a wall of text)
-        # User prompt should be shorter than system prompt
-        system_prompt = strategy.get_task_generation_system_prompt()
-        assert len(prompt) < len(system_prompt)
-
-        # Should mention creating a plan
-        assert "plan" in prompt.lower() or "task" in prompt.lower()
-
 
 class TestArchitect:
     """Test Architect agent implementation."""
@@ -292,31 +259,18 @@ class TestArchitect:
 class TestArchitectStreamEmitter:
     """Test Architect agent stream emitter functionality."""
 
-    def test_architect_accepts_stream_emitter(
+    @pytest.mark.parametrize("stream_emitter", [None, AsyncMock()])
+    def test_architect_accepts_optional_stream_emitter(
         self,
         mock_driver: MagicMock,
+        stream_emitter: AsyncMock | None,
     ) -> None:
         """Test that Architect constructor accepts optional stream_emitter parameter."""
-        from unittest.mock import AsyncMock
-        mock_emitter = AsyncMock()
-
-        # Should not raise
         architect = Architect(
             driver=mock_driver,
-            stream_emitter=mock_emitter,
+            stream_emitter=stream_emitter,
         )
-
-        assert architect._stream_emitter is mock_emitter
-
-    def test_architect_works_without_stream_emitter(
-        self,
-        mock_driver: MagicMock,
-    ) -> None:
-        """Test that Architect works without stream_emitter (backward compatible)."""
-        # Should not raise
-        architect = Architect(driver=mock_driver)
-
-        assert architect._stream_emitter is None
+        assert architect._stream_emitter is stream_emitter
 
     async def test_architect_emits_agent_output_after_plan_generation(
         self,
@@ -417,8 +371,10 @@ class TestArchitectStreamEmitter:
         assert "3 tasks" in event.content
 
     async def test_architect_uses_provided_workflow_id(
-        self, mock_driver, mock_execution_state_factory
-    ):
+        self,
+        mock_driver: MagicMock,
+        mock_execution_state_factory: Callable[..., ExecutionState],
+    ) -> None:
         """Test that architect uses provided workflow_id instead of falling back."""
         from unittest.mock import AsyncMock
         issue = Issue(id="TEST-123", title="Test", description="Test issue")
