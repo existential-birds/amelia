@@ -137,14 +137,14 @@ const props = withDefaults(defineProps<Props>(), {
   display: flex;
   flex-direction: column;
   transition: all 0.3s ease;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--foreground) 10%, transparent);
 }
 
 .comparison-option.recommended {
   border-color: var(--primary);
   border-width: 3px;
   background: linear-gradient(135deg, var(--card) 0%, var(--muted) 100%);
-  box-shadow: 0 4px 12px rgba(91, 138, 114, 0.2);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--primary) 20%, transparent);
 }
 
 .option-header {
@@ -220,7 +220,7 @@ const props = withDefaults(defineProps<Props>(), {
 /* Hover effect for non-recommended options */
 .comparison-option:not(.recommended):hover {
   border-color: var(--accent);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--foreground) 15%, transparent);
   transform: translateY(-2px);
 }
 </style>

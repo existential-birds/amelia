@@ -57,17 +57,4 @@
   margin-top: 0;
 }
 
-/* Light mode overrides */
-.light .cover {
-  background-color: var(--background);
-  color: var(--foreground);
-}
-
-.light .cover :deep(h1) {
-  color: var(--foreground);
-}
-
-.light .cover :deep(p) {
-  color: var(--muted-foreground);
-}
 </style>

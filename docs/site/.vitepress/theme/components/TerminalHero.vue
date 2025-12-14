@@ -301,12 +301,12 @@ onUnmounted(() => {
 .terminal-hero {
   max-width: 800px;
   margin: 0 auto;
-  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', 'Consolas', monospace;
+  font-family: var(--vp-font-family-mono);
   font-size: 14px;
   line-height: 1.6;
   border-radius: 8px;
   overflow: hidden;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 8px 32px var(--shadow-color-strong);
 }
 
 /* Window chrome */

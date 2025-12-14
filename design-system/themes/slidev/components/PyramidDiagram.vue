@@ -42,6 +42,10 @@ const props = defineProps<Props>();
  */
 const getLayerWidth = (index: number): number => {
   const maxLayers = props.layers.length;
+  // Single layer: use default width
+  if (maxLayers === 1) {
+    return 70;
+  }
   // Top layer at 40%, bottom at 100%, linear interpolation
   return 40 + ((100 - 40) * index) / (maxLayers - 1);
 };

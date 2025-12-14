@@ -96,9 +96,9 @@ const fillPath = getArcPath(fillPercentage[props.fill], radius - strokeWidth);
       :stroke-width="strokeWidth"
     />
 
-    <!-- Filled portion -->
+    <!-- Filled portion (partial fills only; full handled by circle below) -->
     <path
-      v-if="fillPath"
+      v-if="fillPath && fill !== 'full'"
       :d="fillPath"
       :fill="'var(--primary)'"
       class="harvey-ball-fill"

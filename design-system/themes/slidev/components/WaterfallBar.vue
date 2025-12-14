@@ -42,7 +42,11 @@ const props = withDefaults(defineProps<Props>(), {
  * Parse value as number
  */
 const numericValue = computed(() => {
-  return typeof props.value === 'number' ? props.value : parseFloat(props.value);
+  if (typeof props.value === 'number') {
+    return props.value;
+  }
+  const parsed = parseFloat(props.value);
+  return isNaN(parsed) ? 0 : parsed;
 });
 
 /**

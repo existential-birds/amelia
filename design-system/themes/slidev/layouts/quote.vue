@@ -127,29 +127,4 @@
   bottom: -0.2em;
 }
 
-/* Light mode overrides */
-.light .quote {
-  background-color: var(--background);
-  color: var(--foreground);
-}
-
-.light .quote :deep(h1),
-.light .quote :deep(blockquote) {
-  color: var(--foreground);
-}
-
-.light .quote :deep(h1)::before,
-.light .quote :deep(h1)::after,
-.light .quote :deep(blockquote)::before,
-.light .quote :deep(blockquote)::after {
-  color: var(--primary);
-}
-
-.light .quote::before {
-  background-color: var(--accent);
-}
-
-.light .quote :deep(p) {
-  color: var(--muted-foreground);
-}
 </style>

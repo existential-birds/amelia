@@ -36,7 +36,7 @@ interface Props {
   steps: Step[];
 }
 
-const props = defineProps<Props>();
+defineProps<Props>();
 
 /**
  * Get the background color based on step status

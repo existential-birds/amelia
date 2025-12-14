@@ -84,6 +84,7 @@
   border: 2px solid var(--border);
   border-radius: 0.5rem;
   padding: 1.5rem;
+  min-height: 0;
   overflow-y: auto;
   transition: border-color 0.2s ease;
 }

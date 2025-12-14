@@ -114,21 +114,4 @@ defineProps<{
   font-style: italic;
 }
 
-/* Dark mode chart background */
-@media (prefers-color-scheme: dark) {
-  .data-chart {
-    background-color: var(--card);
-  }
-}
-
-/* Light mode chart background */
-@media (prefers-color-scheme: light) {
-  .data-chart {
-    background-color: var(--card);
-  }
-}
-
-.light .data-chart {
-  background-color: var(--card);
-}
 </style>

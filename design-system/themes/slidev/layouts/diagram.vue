@@ -84,22 +84,4 @@
   overflow-x: auto;
 }
 
-/* Light mode overrides */
-.light .diagram {
-  background-color: var(--background);
-  color: var(--foreground);
-}
-
-.light .diagram :deep(h1) {
-  color: var(--muted-foreground);
-}
-
-.light .diagram :deep(p) {
-  color: var(--muted-foreground);
-}
-
-.light .diagram :deep(pre) {
-  background-color: var(--card);
-  border-color: var(--border);
-}
 </style>

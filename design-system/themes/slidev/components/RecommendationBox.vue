@@ -32,30 +32,26 @@ const props = defineProps<Props>();
 /**
  * Configuration for each box type
  */
-const typeConfig: Record<BoxType, { icon: string; label: string; color: string; bgColor: string }> = {
+const typeConfig: Record<BoxType, { icon: string; label: string; color: string }> = {
   recommendation: {
     icon: '💡',
     label: 'Recommendation',
     color: 'var(--primary)',
-    bgColor: 'var(--primary)',
   },
   warning: {
     icon: '⚠️',
     label: 'Warning',
     color: 'var(--destructive)',
-    bgColor: 'var(--destructive)',
   },
   insight: {
     icon: '🔍',
     label: 'Key Insight',
     color: 'var(--accent)',
-    bgColor: 'var(--accent)',
   },
   action: {
     icon: '✓',
     label: 'Action Item',
     color: 'var(--status-completed)',
-    bgColor: 'var(--status-completed)',
   },
 };
 
@@ -65,7 +61,7 @@ const config = typeConfig[props.type];
 <template>
   <div
     class="recommendation-box"
-    :class="`recommendation-box--${type}`"
+    :class="`recommendation-box--${props.type}`"
     :style="{
       borderLeftColor: config.color,
     }"
@@ -179,8 +175,8 @@ const config = typeConfig[props.type];
   color: var(--status-completed);
 }
 
-/* Light mode adjustments */
-@media (prefers-color-scheme: light), .light {
+/* Light mode adjustments - system preference */
+@media (prefers-color-scheme: light) {
   .recommendation-box {
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
   }
@@ -188,6 +184,15 @@ const config = typeConfig[props.type];
   .recommendation-box:hover {
     box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
   }
+}
+
+/* Light mode adjustments - explicit .light class */
+.light .recommendation-box {
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+.light .recommendation-box:hover {
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
 }
 
 /* Responsive adjustments */

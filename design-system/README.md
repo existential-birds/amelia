@@ -44,11 +44,13 @@ The Amelia Design System provides:
 ### Using Diagram Themes
 
 **D2:**
+
 ```d2
 # Copy vars block from design-system/themes/d2/amelia-dark.d2
 ```
 
 **Mermaid:**
+
 ```markdown
 # Use frontmatter from design-system/themes/mermaid/amelia-dark.md
 ```

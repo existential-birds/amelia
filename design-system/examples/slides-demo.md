@@ -1,4 +1,6 @@
 ---
+# Path is relative to the deck file location
+# Adjust based on where your slides.md file is located relative to the theme
 theme: ./themes/slidev
 title: Amelia Design System Demo
 info: Demonstration of all Amelia presentation layouts
@@ -127,7 +129,7 @@ title: Next Quarter Roadmap
 objective: Ship core features and improve developer experience
 ---
 
-## Q1 2025 Deliverables
+## Q1 20XX Deliverables
 
 ::actions::
 
@@ -139,7 +141,7 @@ objective: Ship core features and improve developer experience
 
 ::timeline::
 
-**Launch Date:** March 31, 2025
+**Launch Date:** [Target Date]
 
 **Owner:** Engineering Team
 
@@ -345,6 +347,6 @@ Questions? Feedback? Contributions?
 
 <div class="absolute bottom-10">
   <div class="text-sm opacity-75">
-    github.com/your-org/amelia • docs.amelia.dev
+    [Your GitHub URL] • [Your Docs URL]
   </div>
 </div>

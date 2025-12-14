@@ -21,8 +21,7 @@ const agents = [
   { id: 'reviewer', label: 'Reviewer', sublabel: 'validates' }
 ] as const
 
-onMounted(() => {
-  // Cycle through agents every 2 seconds
+const startInterval = () => {
   animationInterval = setInterval(() => {
     switch (currentAgent.value) {
       case 'architect':
@@ -36,9 +35,17 @@ onMounted(() => {
         if (cycleCount.value >= 1) {
           currentAgent.value = 'approved'
           cycleCount.value = 0
-          // Reset to architect after showing approved
+          // Stop interval during approved state to avoid race condition
+          if (animationInterval) {
+            clearInterval(animationInterval)
+            animationInterval = null
+          }
+          // Single timeout to transition back to architect
           animationTimeout = setTimeout(() => {
             currentAgent.value = 'architect'
+            animationTimeout = null
+            // Restart the interval for the next cycle
+            startInterval()
           }, 1500)
         } else {
           // Loop back to developer (simulating revision)
@@ -46,11 +53,12 @@ onMounted(() => {
           cycleCount.value++
         }
         break
-      case 'approved':
-        currentAgent.value = 'architect'
-        break
     }
   }, 2000)
+}
+
+onMounted(() => {
+  startInterval()
 })
 
 onUnmounted(() => {

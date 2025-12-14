@@ -6,6 +6,8 @@ Demonstrates the core orchestrator pattern with human-in-the-loop gate using Mer
 
 ```mermaid
 %%{init: { "theme": "base", "themeVariables": { "primaryColor": "#1F332E", "primaryTextColor": "#EFF8E2", "primaryBorderColor": "#FFC857", "secondaryColor": "#4A5C54", "tertiaryColor": "#0D1A12", "lineColor": "#88A896", "fontFamily": "Source Sans 3" } } }%%
+%% Note: For production use, consider referencing the design system's Mermaid theme config
+%% from design-system/themes/mermaid/amelia-dark.md instead of repeating themeVariables inline
 flowchart LR
     %% Nodes
     Issue([Issue])

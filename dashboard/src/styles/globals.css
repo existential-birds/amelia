@@ -83,8 +83,8 @@
 }
 
 /*
- * Light mode (default) - Dark Theme
- * Note: Our "light" mode IS dark (deep forest green aesthetic)
+ * Base Theme - Dark Forest Green Aesthetic
+ * Note: This defines the default/base theme with a dark forest green color palette
  */
 :root {
   /* Core backgrounds */

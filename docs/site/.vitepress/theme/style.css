@@ -11,6 +11,12 @@
  * -------------------------------------------------------------------------- */
 
 :root {
+  /* Shadow colors (OKLCH) */
+  --shadow-color-subtle: oklch(0% 0 0 / 0.05);
+  --shadow-color-soft: oklch(0% 0 0 / 0.1);
+  --shadow-color-medium: oklch(0% 0 0 / 0.15);
+  --shadow-color-strong: oklch(0% 0 0 / 0.4);
+
   /* Base colors */
   --vp-c-bg: #FDF8F0;
   --vp-c-bg-alt: #FFFDF9;

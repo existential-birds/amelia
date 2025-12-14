@@ -193,14 +193,14 @@ const copyToClipboard = async (text: string, index: number, side: 'dark' | 'ligh
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(0, 0, 0, 0.1);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  border: 1px solid var(--shadow-color-soft);
+  box-shadow: 0 2px 4px var(--shadow-color-subtle);
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
 .swatch-container:hover {
   transform: scale(1.02);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 8px var(--shadow-color-soft);
 }
 
 .swatch-container:active {
