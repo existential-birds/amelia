@@ -86,7 +86,7 @@ design-system/
 1. **Dark-First** - Optimized for extended developer sessions
 2. **Light Mode for Presentations** - Projector-friendly alternative
 3. **OKLCH Colors** - Perceptually uniform color space
-4. **Accessible** - WCAG 2.1 AA compliant contrast ratios
+4. **Accessible** - Designed for WCAG 2.1 AA contrast on primary text/background pairs (`--foreground` on `--background`, `--muted-foreground` on `--muted`)
 
 ## Color Palette
 

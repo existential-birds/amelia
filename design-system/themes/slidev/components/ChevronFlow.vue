@@ -81,10 +81,11 @@ const getStatusIcon = (status: StepStatus): string => {
 </script>
 
 <template>
-  <div class="chevron-flow" role="navigation" aria-label="Process flow">
+  <div class="chevron-flow" role="list" aria-label="Process flow">
     <div
       v-for="(step, index) in steps"
       :key="index"
+      role="listitem"
       class="chevron-step"
       :class="`chevron-step--${step.status}`"
       :style="{

@@ -18,8 +18,8 @@ const prefersReducedMotion = ref(false)
 const executeStep = ref(0) // 0 = not started, 1-3 = steps
 
 // Animation control
-let animationActive = true
-let animationTimeout: number | null = null
+const animationActive = ref(true)
+const animationTimeouts = new Set<number>()
 const fullCommand = 'amelia start 127 --profile work'
 
 // Line visibility control
@@ -69,7 +69,7 @@ const startAnimation = async () => {
   isTyping.value = true
 
   for (let i = 0; i <= fullCommand.length; i++) {
-    if (!animationActive) return // Cancelled
+    if (!animationActive.value) return // Cancelled
     typedCommand.value = fullCommand.slice(0, i)
     await sleep(2500 / fullCommand.length)
   }
@@ -145,14 +145,18 @@ const startAnimation = async () => {
 
   // Restart animation cleanly
   executeStep.value = 0
-  if (animationActive) {
+  if (animationActive.value) {
     startAnimation()
   }
 }
 
 const sleep = (ms: number): Promise<void> => {
   return new Promise((resolve) => {
-    animationTimeout = window.setTimeout(resolve, ms)
+    const timeoutId = window.setTimeout(() => {
+      animationTimeouts.delete(timeoutId)
+      resolve()
+    }, ms)
+    animationTimeouts.add(timeoutId)
   })
 }
 
@@ -166,11 +170,9 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  animationActive = false
-  if (animationTimeout) {
-    clearTimeout(animationTimeout)
-    animationTimeout = null
-  }
+  animationActive.value = false
+  animationTimeouts.forEach((timeoutId) => clearTimeout(timeoutId))
+  animationTimeouts.clear()
 })
 </script>
 
@@ -178,6 +180,7 @@ onUnmounted(() => {
   <div
     class="terminal-hero"
     :class="{ 'reduced-motion': prefersReducedMotion }"
+    role="region"
     aria-label="Amelia terminal workflow demonstration"
   >
     <!-- Window chrome -->

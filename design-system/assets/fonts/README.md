@@ -19,10 +19,8 @@ This directory contains self-hosted font files for the Amelia design system. All
 
 ### Source Sans 3
 - **Purpose**: Body text font
-- **Weights**: 400 (Regular), 600 (SemiBold)
-- **Files**:
-  - `source-sans-3-400.woff2`
-  - `source-sans-3-600.woff2`
+- **Type**: Variable font (weight range 200-900)
+- **Files**: `source-sans-3-variable.woff2`
 
 ### IBM Plex Mono
 - **Purpose**: Monospace font for code
@@ -93,20 +91,38 @@ curl -s "https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap" \
   | xargs curl -o bebas-neue-regular.woff2
 
 # Barlow Condensed
-curl -o barlow-condensed-500.woff2 "https://fonts.gstatic.com/s/barlowcondensed/v13/HTxwL3I-JCGChYJ8VI-L6OO_au7B4-Lwz3bWuQ.woff2"
-curl -o barlow-condensed-600.woff2 "https://fonts.gstatic.com/s/barlowcondensed/v13/HTxwL3I-JCGChYJ8VI-L6OO_au7B4873z3bWuQ.woff2"
-curl -o barlow-condensed-700.woff2 "https://fonts.gstatic.com/s/barlowcondensed/v13/HTxwL3I-JCGChYJ8VI-L6OO_au7B46r2z3bWuQ.woff2"
+curl -s "https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500&display=swap" \
+  -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" \
+  | grep -o 'https://[^)]*\.woff2' | head -1 \
+  | xargs curl -o barlow-condensed-500.woff2
 
-# Source Sans 3
-curl -o source-sans-3-400.woff2 "https://fonts.gstatic.com/s/sourcesans3/v19/nwpStKy2OAdR1K-IwhWudF-R3w8aZQ.woff2"
-curl -o source-sans-3-600.woff2 "https://fonts.gstatic.com/s/sourcesans3/v19/nwpStKy2OAdR1K-IwhWudF-R3w8aZQ.woff2"
+curl -s "https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600&display=swap" \
+  -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" \
+  | grep -o 'https://[^)]*\.woff2' | head -1 \
+  | xargs curl -o barlow-condensed-600.woff2
+
+curl -s "https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700&display=swap" \
+  -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" \
+  | grep -o 'https://[^)]*\.woff2' | head -1 \
+  | xargs curl -o barlow-condensed-700.woff2
+
+# Source Sans 3 (variable font - single file for all weights)
+curl -s "https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@200..900&display=swap" \
+  -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" \
+  | grep -o 'https://[^)]*\.woff2' | head -1 \
+  | xargs curl -o source-sans-3-variable.woff2
 
 # IBM Plex Mono
-curl -o ibm-plex-mono-400.woff2 "https://fonts.gstatic.com/s/ibmplexmono/v20/-F63fjptAgt5VM-kVkqdyU8n1i8q1w.woff2"
-curl -o ibm-plex-mono-500.woff2 "https://fonts.gstatic.com/s/ibmplexmono/v20/-F6qfjptAgt5VM-kVkqdyU8n3twJwlBFgg.woff2"
+curl -s "https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400&display=swap" \
+  -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" \
+  | grep -o 'https://[^)]*\.woff2' | head -1 \
+  | xargs curl -o ibm-plex-mono-400.woff2
 
-# Copy to VitePress
-cp *.woff2 ../../docs/site/public/fonts/
+curl -s "https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&display=swap" \
+  -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" \
+  | grep -o 'https://[^)]*\.woff2' | head -1 \
+  | xargs curl -o ibm-plex-mono-500.woff2
+
+# Copy to docs site
+cp *.woff2 ../../../docs/site/public/fonts/
 ```
-
-Note: Check the Google Fonts CSS URLs for updated version numbers (e.g., v13, v19, v20) when updating.

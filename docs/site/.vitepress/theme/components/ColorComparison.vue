@@ -284,7 +284,6 @@ const copyToClipboard = async (text: string, index: number, side: 'dark' | 'ligh
   }
 
   .cell-swatch::before {
-    content: attr(data-label);
     font-size: 0.7rem;
     font-weight: 600;
     text-transform: uppercase;

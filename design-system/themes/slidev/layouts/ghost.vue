@@ -160,9 +160,9 @@ defineProps<{
   z-index: 1;
   margin-top: 2rem;
   padding: 1rem 1.5rem;
-  background-color: oklch(85% 0.1 85);
-  color: oklch(20% 0.04 150);
-  border-left: 4px solid oklch(75% 0.14 85);
+  background-color: var(--sticky-bg, oklch(85% 0.1 85));
+  color: var(--sticky-color, oklch(20% 0.04 150));
+  border-left: 4px solid var(--sticky-border, oklch(75% 0.14 85));
   border-radius: 0.25rem;
   box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.1);
   font-family: var(--font-mono);
@@ -175,7 +175,7 @@ defineProps<{
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin-bottom: 0.5rem;
-  color: oklch(45% 0.18 25);
+  color: var(--sticky-label, oklch(45% 0.18 25));
 }
 
 .notes-content {
@@ -205,8 +205,8 @@ defineProps<{
   }
 
   .ghost-notes {
-    background-color: oklch(90% 0.08 75);
-    color: oklch(20% 0.04 150);
+    --sticky-bg: oklch(90% 0.08 75);
+    --sticky-color: oklch(20% 0.04 150);
   }
 }
 
@@ -219,7 +219,7 @@ defineProps<{
 }
 
 .light .ghost-notes {
-  background-color: oklch(90% 0.08 75);
-  color: oklch(20% 0.04 150);
+  --sticky-bg: oklch(90% 0.08 75);
+  --sticky-color: oklch(20% 0.04 150);
 }
 </style>

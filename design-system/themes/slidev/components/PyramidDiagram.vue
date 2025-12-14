@@ -51,10 +51,11 @@ const getLayerWidth = (index: number): number => {
 };
 
 /**
- * Calculate opacity for each layer to create depth effect
+ * Calculate opacity for each layer to create depth effect.
+ * Clamped to minimum 0.1 to ensure visibility for pyramids with many layers.
  */
 const getLayerOpacity = (index: number): number => {
-  return 1 - (index * 0.1);
+  return Math.max(0.1, 1 - index * 0.1);
 };
 </script>
 

@@ -1,7 +1,6 @@
 ---
-# Path is relative to the deck file location
-# Adjust based on where your slides.md file is located relative to the theme
-theme: ./themes/slidev
+# Path is relative to this file's location (design-system/examples/)
+theme: ../themes/slidev
 title: Amelia Design System Demo
 info: Demonstration of all Amelia presentation layouts
 colorSchema: both
@@ -98,11 +97,6 @@ graph LR
     D --> E[Reviewer Checks]
     E -->|Changes Needed| D
     E -->|Approved| F[Complete]
-
-    style A fill:#4f46e5
-    style F fill:#10b981
-    style C fill:#f59e0b
-    style E fill:#f59e0b
 ```
 
 Diagrams are optimized for visual clarity with ample spacing and centered alignment.

@@ -42,21 +42,13 @@
   src: url('./barlow-condensed-700.woff2') format('woff2');
 }
 
-/* Source Sans 3 - Body text font */
+/* Source Sans 3 - Body text font (variable font) */
 @font-face {
   font-family: 'Source Sans 3';
   font-style: normal;
-  font-weight: 400;
+  font-weight: 200 900;
   font-display: swap;
-  src: url('./source-sans-3-400.woff2') format('woff2');
-}
-
-@font-face {
-  font-family: 'Source Sans 3';
-  font-style: normal;
-  font-weight: 600;
-  font-display: swap;
-  src: url('./source-sans-3-600.woff2') format('woff2');
+  src: url('./source-sans-3-variable.woff2') format('woff2-variations');
 }
 
 /* IBM Plex Mono - Monospace font for code */
