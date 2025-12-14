@@ -4,6 +4,7 @@
 """Unit tests for Architect agent."""
 
 from collections.abc import Callable
+from datetime import datetime
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
@@ -11,7 +12,7 @@ import pytest
 
 from amelia.agents.architect import Architect, ArchitectContextStrategy, TaskListResponse
 from amelia.core.state import ExecutionState, Task
-from amelia.core.types import Design, Issue
+from amelia.core.types import Design, Issue, StreamEvent, StreamEventType
 
 
 def _extract_messages_from_call(call_args: Any) -> list[Any]:
@@ -280,11 +281,6 @@ class TestArchitectStreamEmitter:
         mock_task_response: TaskListResponse,
     ) -> None:
         """Test that Architect emits AGENT_OUTPUT event after generating plan."""
-        from datetime import datetime
-        from unittest.mock import AsyncMock
-
-        from amelia.core.types import StreamEvent, StreamEventType
-
         issue = mock_issue_factory(id="TEST-123", title="Build feature", description="Feature desc")
         state = mock_execution_state_factory(
             issue=issue,
@@ -346,10 +342,6 @@ class TestArchitectStreamEmitter:
         mock_issue_factory: Callable[..., Issue],
     ) -> None:
         """Test that Architect emits event with correct task count."""
-        from unittest.mock import AsyncMock
-
-        from amelia.core.state import Task
-
         issue = mock_issue_factory(id="TEST-789", title="Test", description="Test")
         state = mock_execution_state_factory(issue=issue)
 
@@ -376,7 +368,6 @@ class TestArchitectStreamEmitter:
         mock_execution_state_factory: Callable[..., ExecutionState],
     ) -> None:
         """Test that architect uses provided workflow_id instead of falling back."""
-        from unittest.mock import AsyncMock
         issue = Issue(id="TEST-123", title="Test", description="Test issue")
         state = mock_execution_state_factory(issue=issue)
 
@@ -398,13 +389,11 @@ class TestArchitectWorkflowIdRequired:
     async def test_plan_requires_workflow_id(
         self,
         mock_driver: MagicMock,
-        mock_execution_state_factory,
-        mock_issue_factory,
-        mock_task_response,
+        mock_execution_state_factory: Callable[..., ExecutionState],
+        mock_issue_factory: Callable[..., Issue],
+        mock_task_response: TaskListResponse,
     ) -> None:
         """Test that plan() requires workflow_id parameter."""
-        from unittest.mock import AsyncMock
-
         issue = mock_issue_factory(id="TEST-123")
         state = mock_execution_state_factory(issue=issue)
         mock_driver.generate.return_value = mock_task_response

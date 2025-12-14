@@ -141,8 +141,7 @@ class TestReviewerStreamEmitter:
         code_changes = "diff --git a/test.py b/test.py\n+good code"
         result = await reviewer.review(state, code_changes, workflow_id="test-workflow-competitive")
 
-        # Competitive review runs multiple personas, but only emits once per _single_review call
-        # Since competitive review calls _single_review multiple times in parallel,
-        # we should see multiple emissions
-        assert mock_emitter.call_count >= 1
+        # Competitive review uses 3 personas (Security, Performance, Usability),
+        # each calling _single_review which emits one event, so expect exactly 3 emissions
+        assert mock_emitter.call_count == 3
         assert result.approved is True
