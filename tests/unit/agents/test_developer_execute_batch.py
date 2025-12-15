@@ -6,8 +6,6 @@ from collections.abc import Callable
 from typing import Any
 from unittest.mock import AsyncMock, patch
 
-import pytest
-
 from amelia.agents.developer import Developer, ValidationResult
 from amelia.core.state import (
     BatchResult,
@@ -522,7 +520,6 @@ class TestRecoverFromBlocker:
     ) -> None:
         """Test recovery starts from the blocked step, not the beginning."""
         from amelia.core.state import (
-            BatchResult,
             BlockerReport,
             ExecutionPlan,
         )
