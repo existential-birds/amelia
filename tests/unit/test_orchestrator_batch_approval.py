@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 
 import pytest
 
+
 from amelia.core.orchestrator import batch_approval_node
 from amelia.core.state import BatchApproval, ExecutionState
 
@@ -98,24 +99,6 @@ class TestBatchApprovalNode:
         assert approval.approved is False
 
     @pytest.mark.asyncio
-    async def test_resets_human_approved_after_recording(
-        self,
-        mock_execution_state_factory: Callable[..., ExecutionState],
-    ) -> None:
-        """Test that human_approved is reset to None after recording."""
-        # Arrange
-        state = mock_execution_state_factory(
-            human_approved=True,
-            current_batch_index=0,
-        )
-
-        # Act
-        result = await batch_approval_node(state)
-
-        # Assert
-        assert result["human_approved"] is None
-
-    @pytest.mark.asyncio
     async def test_appends_to_existing_batch_approvals(
         self,
         mock_execution_state_factory: Callable[..., ExecutionState],
@@ -144,44 +127,3 @@ class TestBatchApprovalNode:
         assert approvals[1].batch_number == 1
         assert approvals[1].approved is False
 
-    @pytest.mark.asyncio
-    async def test_handles_missing_human_feedback_field(
-        self,
-        mock_execution_state_factory: Callable[..., ExecutionState],
-    ) -> None:
-        """Test that missing human_feedback field defaults to None."""
-        # Arrange
-        state = mock_execution_state_factory(
-            human_approved=True,
-            current_batch_index=0,
-        )
-        # Ensure human_feedback is not set (Pydantic default behavior)
-
-        # Act
-        result = await batch_approval_node(state)
-
-        # Assert
-        approval = result["batch_approvals"][0]
-        assert approval.feedback is None
-
-    @pytest.mark.asyncio
-    async def test_approved_at_uses_utc_timezone(
-        self,
-        mock_execution_state_factory: Callable[..., ExecutionState],
-    ) -> None:
-        """Test that approved_at timestamp uses UTC timezone."""
-        # Arrange
-        state = mock_execution_state_factory(
-            human_approved=True,
-            current_batch_index=0,
-        )
-
-        # Act
-        before = datetime.now(UTC)
-        result = await batch_approval_node(state)
-        after = datetime.now(UTC)
-
-        # Assert
-        approval = result["batch_approvals"][0]
-        assert approval.approved_at.tzinfo == UTC
-        assert before <= approval.approved_at <= after

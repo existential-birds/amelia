@@ -12,65 +12,6 @@ from amelia.core.types import DeveloperStatus
 class TestRouteAfterDeveloper:
     """Tests for route_after_developer routing function."""
 
-    def test_all_done_routes_to_reviewer(self, mock_execution_state_factory):
-        """When developer_status is ALL_DONE, should route to reviewer."""
-        state = mock_execution_state_factory(developer_status=DeveloperStatus.ALL_DONE)
-
-        result = route_after_developer(state)
-
-        assert result == "reviewer", (
-            "route_after_developer should return 'reviewer' when "
-            "developer_status is ALL_DONE"
-        )
-
-    def test_batch_complete_routes_to_batch_approval(self, mock_execution_state_factory):
-        """When developer_status is BATCH_COMPLETE, should route to batch_approval."""
-        state = mock_execution_state_factory(developer_status=DeveloperStatus.BATCH_COMPLETE)
-
-        result = route_after_developer(state)
-
-        assert result == "batch_approval", (
-            "route_after_developer should return 'batch_approval' when "
-            "developer_status is BATCH_COMPLETE"
-        )
-
-    def test_blocked_routes_to_blocker_resolution(self, mock_execution_state_factory):
-        """When developer_status is BLOCKED, should route to blocker_resolution."""
-        state = mock_execution_state_factory(developer_status=DeveloperStatus.BLOCKED)
-
-        result = route_after_developer(state)
-
-        assert result == "blocker_resolution", (
-            "route_after_developer should return 'blocker_resolution' when "
-            "developer_status is BLOCKED"
-        )
-
-    def test_executing_routes_to_developer(self, mock_execution_state_factory):
-        """When developer_status is EXECUTING, should route back to developer."""
-        state = mock_execution_state_factory(developer_status=DeveloperStatus.EXECUTING)
-
-        result = route_after_developer(state)
-
-        assert result == "developer", (
-            "route_after_developer should return 'developer' when "
-            "developer_status is EXECUTING (continue executing)"
-        )
-
-    def test_default_executing_status(self, mock_execution_state_factory):
-        """When developer_status is not explicitly set, should default to EXECUTING."""
-        # Create state without explicitly setting developer_status (uses default)
-        state = mock_execution_state_factory()
-
-        # Verify default is EXECUTING
-        assert state.developer_status == DeveloperStatus.EXECUTING
-
-        result = route_after_developer(state)
-
-        assert result == "developer", (
-            "route_after_developer should return 'developer' for default "
-            "EXECUTING status"
-        )
-
     @pytest.mark.parametrize(
         "status,expected_route",
         [

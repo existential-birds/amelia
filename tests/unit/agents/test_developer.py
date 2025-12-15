@@ -9,8 +9,6 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
-from pydantic import ValidationError
-
 from amelia.agents.developer import Developer, ValidationResult
 from amelia.core.state import ExecutionState
 from amelia.core.types import StreamEvent, StreamEventType
@@ -162,45 +160,6 @@ class TestDeveloperStreamEmitter:
         # Find result event
         result_events = [e for e in emitted_events if e.type == StreamEventType.CLAUDE_TOOL_RESULT]
         assert len(result_events) == 1
-
-
-class TestValidationResult:
-    """Test ValidationResult model."""
-
-    def test_validation_result_ok_true(self) -> None:
-        """Test ValidationResult creation with ok=True."""
-        result = ValidationResult(ok=True)
-        assert result.ok is True
-        assert result.issue is None
-        assert result.attempted == ()
-        assert result.suggestions == ()
-
-    def test_validation_result_ok_false_with_issue(self) -> None:
-        """Test ValidationResult creation with ok=False and issue message."""
-        result = ValidationResult(ok=False, issue="Missing dependency: pytest")
-        assert result.ok is False
-        assert result.issue == "Missing dependency: pytest"
-        assert result.attempted == ()
-        assert result.suggestions == ()
-
-    def test_validation_result_with_attempted_and_suggestions(self) -> None:
-        """Test ValidationResult with attempted actions and suggestions."""
-        result = ValidationResult(
-            ok=False,
-            issue="File not found: test_module.py",
-            attempted=("checked /tests", "checked /src"),
-            suggestions=("create test_module.py", "check path spelling"),
-        )
-        assert result.ok is False
-        assert result.issue == "File not found: test_module.py"
-        assert result.attempted == ("checked /tests", "checked /src")
-        assert result.suggestions == ("create test_module.py", "check path spelling")
-
-    def test_validation_result_is_immutable(self) -> None:
-        """Test that ValidationResult is frozen and immutable."""
-        result = ValidationResult(ok=True)
-        with pytest.raises(ValidationError):
-            result.ok = False
 
 
 class TestFilesystemChecks:

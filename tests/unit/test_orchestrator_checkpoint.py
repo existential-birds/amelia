@@ -12,290 +12,84 @@ from amelia.core.state import ExecutionBatch, PlanStep
 from amelia.core.types import Profile, TrustLevel
 
 
-class TestShouldCheckpoint:
-    """Tests for should_checkpoint function."""
+@pytest.fixture
+def make_batch() -> Callable[[str], ExecutionBatch]:
+    """Factory to create batches with specified risk level."""
 
-    @pytest.fixture
-    def low_risk_batch(self) -> ExecutionBatch:
-        """Create a low-risk batch for testing."""
+    def _make(risk_level: str) -> ExecutionBatch:
         step = PlanStep(
-            id="step-1",
-            description="Run tests",
+            id=f"step-{risk_level}",
+            description=f"Test {risk_level} step",
             action_type="command",
-            command="pytest",
-            risk_level="low",
+            command="echo test",
+            risk_level=risk_level,
         )
         return ExecutionBatch(
             batch_number=1,
             steps=(step,),
-            risk_summary="low",
-            description="Low risk operations",
+            risk_summary=risk_level,
+            description=f"{risk_level.title()} risk operations",
         )
 
-    @pytest.fixture
-    def medium_risk_batch(self) -> ExecutionBatch:
-        """Create a medium-risk batch for testing."""
-        step = PlanStep(
-            id="step-2",
-            description="Update config",
-            action_type="code",
-            file_path="config.py",
-            risk_level="medium",
-        )
-        return ExecutionBatch(
-            batch_number=2,
-            steps=(step,),
-            risk_summary="medium",
-            description="Medium risk operations",
-        )
+    return _make
 
-    @pytest.fixture
-    def high_risk_batch(self) -> ExecutionBatch:
-        """Create a high-risk batch for testing."""
-        step = PlanStep(
-            id="step-3",
-            description="Deploy to production",
-            action_type="command",
-            command="kubectl apply -f prod.yaml",
-            risk_level="high",
-        )
-        return ExecutionBatch(
-            batch_number=3,
-            steps=(step,),
-            risk_summary="high",
-            description="High risk operations",
-        )
 
-    def test_paranoid_always_checkpoints_low_risk(
+class TestShouldCheckpoint:
+    """Tests for should_checkpoint function."""
+
+    @pytest.mark.parametrize(
+        "trust_level,risk_level,checkpoint_enabled,expected",
+        [
+            # PARANOID: always checkpoints when enabled
+            (TrustLevel.PARANOID, "low", True, True),
+            (TrustLevel.PARANOID, "medium", True, True),
+            (TrustLevel.PARANOID, "high", True, True),
+            # STANDARD: always checkpoints when enabled
+            (TrustLevel.STANDARD, "low", True, True),
+            (TrustLevel.STANDARD, "medium", True, True),
+            (TrustLevel.STANDARD, "high", True, True),
+            # AUTONOMOUS: only high-risk checkpoints when enabled
+            (TrustLevel.AUTONOMOUS, "low", True, False),
+            (TrustLevel.AUTONOMOUS, "medium", True, False),
+            (TrustLevel.AUTONOMOUS, "high", True, True),
+            # Disabled: never checkpoints regardless of trust/risk
+            (TrustLevel.PARANOID, "low", False, False),
+            (TrustLevel.STANDARD, "medium", False, False),
+            (TrustLevel.AUTONOMOUS, "high", False, False),
+            (TrustLevel.PARANOID, "high", False, False),
+        ],
+        ids=[
+            "paranoid_low_enabled",
+            "paranoid_medium_enabled",
+            "paranoid_high_enabled",
+            "standard_low_enabled",
+            "standard_medium_enabled",
+            "standard_high_enabled",
+            "autonomous_low_enabled",
+            "autonomous_medium_enabled",
+            "autonomous_high_enabled",
+            "paranoid_low_disabled",
+            "standard_medium_disabled",
+            "autonomous_high_disabled",
+            "disabled_overrides_paranoid_high",
+        ],
+    )
+    def test_checkpoint_decision_matrix(
         self,
-        low_risk_batch: ExecutionBatch,
+        trust_level: TrustLevel,
+        risk_level: str,
+        checkpoint_enabled: bool,
+        expected: bool,
+        make_batch: Callable[[str], ExecutionBatch],
         mock_profile_factory: Callable[..., Profile],
     ) -> None:
-        """Test PARANOID trust level always checkpoints, even for low-risk batches."""
-        # Arrange
+        """Test checkpoint decisions across all trust/risk/enabled combinations."""
+        batch = make_batch(risk_level)
         profile = mock_profile_factory(
-            trust_level=TrustLevel.PARANOID,
-            batch_checkpoint_enabled=True,
+            trust_level=trust_level,
+            batch_checkpoint_enabled=checkpoint_enabled,
         )
 
-        # Act
-        result = should_checkpoint(low_risk_batch, profile)
+        result = should_checkpoint(batch, profile)
 
-        # Assert
-        assert result is True
-
-    def test_paranoid_always_checkpoints_medium_risk(
-        self,
-        medium_risk_batch: ExecutionBatch,
-        mock_profile_factory: Callable[..., Profile],
-    ) -> None:
-        """Test PARANOID trust level always checkpoints for medium-risk batches."""
-        # Arrange
-        profile = mock_profile_factory(
-            trust_level=TrustLevel.PARANOID,
-            batch_checkpoint_enabled=True,
-        )
-
-        # Act
-        result = should_checkpoint(medium_risk_batch, profile)
-
-        # Assert
-        assert result is True
-
-    def test_paranoid_always_checkpoints_high_risk(
-        self,
-        high_risk_batch: ExecutionBatch,
-        mock_profile_factory: Callable[..., Profile],
-    ) -> None:
-        """Test PARANOID trust level always checkpoints for high-risk batches."""
-        # Arrange
-        profile = mock_profile_factory(
-            trust_level=TrustLevel.PARANOID,
-            batch_checkpoint_enabled=True,
-        )
-
-        # Act
-        result = should_checkpoint(high_risk_batch, profile)
-
-        # Assert
-        assert result is True
-
-    def test_standard_always_checkpoints_low_risk(
-        self,
-        low_risk_batch: ExecutionBatch,
-        mock_profile_factory: Callable[..., Profile],
-    ) -> None:
-        """Test STANDARD trust level always checkpoints, even for low-risk batches."""
-        # Arrange
-        profile = mock_profile_factory(
-            trust_level=TrustLevel.STANDARD,
-            batch_checkpoint_enabled=True,
-        )
-
-        # Act
-        result = should_checkpoint(low_risk_batch, profile)
-
-        # Assert
-        assert result is True
-
-    def test_standard_always_checkpoints_medium_risk(
-        self,
-        medium_risk_batch: ExecutionBatch,
-        mock_profile_factory: Callable[..., Profile],
-    ) -> None:
-        """Test STANDARD trust level always checkpoints for medium-risk batches."""
-        # Arrange
-        profile = mock_profile_factory(
-            trust_level=TrustLevel.STANDARD,
-            batch_checkpoint_enabled=True,
-        )
-
-        # Act
-        result = should_checkpoint(medium_risk_batch, profile)
-
-        # Assert
-        assert result is True
-
-    def test_standard_always_checkpoints_high_risk(
-        self,
-        high_risk_batch: ExecutionBatch,
-        mock_profile_factory: Callable[..., Profile],
-    ) -> None:
-        """Test STANDARD trust level always checkpoints for high-risk batches."""
-        # Arrange
-        profile = mock_profile_factory(
-            trust_level=TrustLevel.STANDARD,
-            batch_checkpoint_enabled=True,
-        )
-
-        # Act
-        result = should_checkpoint(high_risk_batch, profile)
-
-        # Assert
-        assert result is True
-
-    def test_autonomous_does_not_checkpoint_low_risk(
-        self,
-        low_risk_batch: ExecutionBatch,
-        mock_profile_factory: Callable[..., Profile],
-    ) -> None:
-        """Test AUTONOMOUS trust level does NOT checkpoint for low-risk batches."""
-        # Arrange
-        profile = mock_profile_factory(
-            trust_level=TrustLevel.AUTONOMOUS,
-            batch_checkpoint_enabled=True,
-        )
-
-        # Act
-        result = should_checkpoint(low_risk_batch, profile)
-
-        # Assert
-        assert result is False
-
-    def test_autonomous_does_not_checkpoint_medium_risk(
-        self,
-        medium_risk_batch: ExecutionBatch,
-        mock_profile_factory: Callable[..., Profile],
-    ) -> None:
-        """Test AUTONOMOUS trust level does NOT checkpoint for medium-risk batches."""
-        # Arrange
-        profile = mock_profile_factory(
-            trust_level=TrustLevel.AUTONOMOUS,
-            batch_checkpoint_enabled=True,
-        )
-
-        # Act
-        result = should_checkpoint(medium_risk_batch, profile)
-
-        # Assert
-        assert result is False
-
-    def test_autonomous_checkpoints_high_risk(
-        self,
-        high_risk_batch: ExecutionBatch,
-        mock_profile_factory: Callable[..., Profile],
-    ) -> None:
-        """Test AUTONOMOUS trust level checkpoints only for high-risk batches."""
-        # Arrange
-        profile = mock_profile_factory(
-            trust_level=TrustLevel.AUTONOMOUS,
-            batch_checkpoint_enabled=True,
-        )
-
-        # Act
-        result = should_checkpoint(high_risk_batch, profile)
-
-        # Assert
-        assert result is True
-
-    def test_checkpoint_disabled_never_checkpoints_low_risk(
-        self,
-        low_risk_batch: ExecutionBatch,
-        mock_profile_factory: Callable[..., Profile],
-    ) -> None:
-        """Test that batch_checkpoint_enabled=False prevents checkpoint for low-risk."""
-        # Arrange
-        profile = mock_profile_factory(
-            trust_level=TrustLevel.PARANOID,
-            batch_checkpoint_enabled=False,
-        )
-
-        # Act
-        result = should_checkpoint(low_risk_batch, profile)
-
-        # Assert
-        assert result is False
-
-    def test_checkpoint_disabled_never_checkpoints_medium_risk(
-        self,
-        medium_risk_batch: ExecutionBatch,
-        mock_profile_factory: Callable[..., Profile],
-    ) -> None:
-        """Test that batch_checkpoint_enabled=False prevents checkpoint for medium-risk."""
-        # Arrange
-        profile = mock_profile_factory(
-            trust_level=TrustLevel.STANDARD,
-            batch_checkpoint_enabled=False,
-        )
-
-        # Act
-        result = should_checkpoint(medium_risk_batch, profile)
-
-        # Assert
-        assert result is False
-
-    def test_checkpoint_disabled_never_checkpoints_high_risk(
-        self,
-        high_risk_batch: ExecutionBatch,
-        mock_profile_factory: Callable[..., Profile],
-    ) -> None:
-        """Test that batch_checkpoint_enabled=False prevents checkpoint even for high-risk."""
-        # Arrange
-        profile = mock_profile_factory(
-            trust_level=TrustLevel.AUTONOMOUS,
-            batch_checkpoint_enabled=False,
-        )
-
-        # Act
-        result = should_checkpoint(high_risk_batch, profile)
-
-        # Assert
-        assert result is False
-
-    def test_checkpoint_disabled_overrides_paranoid(
-        self,
-        high_risk_batch: ExecutionBatch,
-        mock_profile_factory: Callable[..., Profile],
-    ) -> None:
-        """Test that batch_checkpoint_enabled=False takes precedence over PARANOID trust level."""
-        # Arrange
-        profile = mock_profile_factory(
-            trust_level=TrustLevel.PARANOID,
-            batch_checkpoint_enabled=False,
-        )
-
-        # Act
-        result = should_checkpoint(high_risk_batch, profile)
-
-        # Assert
-        assert result is False
+        assert result is expected

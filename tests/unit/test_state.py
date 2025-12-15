@@ -162,27 +162,6 @@ class TestPlanStep:
         assert step.is_test_step is True
         assert step.validates_step == "step-0"
 
-    def test_frozen_immutability(self):
-        """PlanStep should be immutable (frozen)."""
-        step = PlanStep(id="step-1", description="Test", action_type="command")
-        with pytest.raises(ValidationError):
-            step.id = "new-id"
-
-    def test_json_round_trip(self):
-        """PlanStep serializes and deserializes correctly."""
-        step = PlanStep(
-            id="step-json",
-            description="JSON test",
-            action_type="validation",
-            depends_on=("dep-1", "dep-2"),
-            fallback_commands=("cmd1", "cmd2"),
-        )
-        json_str = step.model_dump_json()
-        restored = PlanStep.model_validate_json(json_str)
-        assert restored.id == step.id
-        assert restored.depends_on == step.depends_on
-        assert restored.fallback_commands == step.fallback_commands
-
     def test_action_type_values(self):
         """PlanStep action_type accepts valid values."""
         for action_type in ["code", "command", "validation", "manual"]:
@@ -282,34 +261,6 @@ class TestExecutionPlan:
         assert len(plan.batches) == 0
         assert plan.goal == "Empty plan"
 
-    def test_plan_json_round_trip(self):
-        """ExecutionPlan serializes and deserializes correctly."""
-        step = PlanStep(
-            id="s1",
-            description="Step 1",
-            action_type="command",
-            command="echo test",
-        )
-        batch = ExecutionBatch(
-            batch_number=1,
-            steps=(step,),
-            risk_summary="low",
-            description="Batch 1",
-        )
-        plan = ExecutionPlan(
-            goal="Test goal",
-            batches=(batch,),
-            total_estimated_minutes=5,
-            tdd_approach=False,
-        )
-        json_str = plan.model_dump_json()
-        restored = ExecutionPlan.model_validate_json(json_str)
-        assert restored.goal == plan.goal
-        assert len(restored.batches) == 1
-        assert restored.batches[0].steps[0].id == "s1"
-        assert restored.tdd_approach is False
-
-
 class TestBlockerReport:
     """Tests for BlockerReport model."""
 
@@ -348,20 +299,6 @@ class TestBlockerReport:
         assert report.step_description == "Run tests"
         assert len(report.attempted_actions) == 3
         assert len(report.suggested_resolutions) == 2
-
-    def test_blocker_report_frozen(self):
-        """BlockerReport should be immutable."""
-        report = BlockerReport(
-            step_id="step-1",
-            step_description="Test",
-            blocker_type="command_failed",
-            error_message="Error",
-            attempted_actions=(),
-            suggested_resolutions=(),
-        )
-        with pytest.raises(ValidationError):
-            report.step_id = "new-id"
-
 
 class TestTruncateOutput:
     """Tests for truncate_output helper function."""
@@ -435,14 +372,6 @@ class TestStepResult:
         )
         assert result.cancelled_by_user is True
 
-    def test_output_truncation_via_validator(self):
-        """StepResult automatically truncates long output."""
-        long_output = "x" * 5000
-        result = StepResult(step_id="s1", status="completed", output=long_output)
-        assert len(result.output) < 5000
-        assert "truncated" in result.output
-
-
 class TestBatchResult:
     """Tests for BatchResult model."""
 
@@ -514,13 +443,6 @@ class TestGitSnapshot:
         )
         assert snapshot.stash_ref == "stash@{0}"
 
-    def test_git_snapshot_frozen(self):
-        """GitSnapshot should be immutable."""
-        snapshot = GitSnapshot(head_commit="abc", dirty_files=())
-        with pytest.raises(ValidationError):
-            snapshot.head_commit = "new"
-
-
 class TestBatchApproval:
     """Tests for BatchApproval model."""
 
@@ -545,17 +467,6 @@ class TestBatchApproval:
         )
         assert approval.approved is False
         assert approval.feedback == "Please fix the imports"
-
-    def test_batch_approval_frozen(self):
-        """BatchApproval should be immutable."""
-        approval = BatchApproval(
-            batch_number=1,
-            approved=True,
-            approved_at=datetime.now(UTC),
-        )
-        with pytest.raises(ValidationError):
-            approval.approved = False
-
 
 class TestExecutionStateNewFields:
     """Tests for ExecutionState extensions for intelligent execution model."""

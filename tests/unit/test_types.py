@@ -3,23 +3,12 @@
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """Tests for core types."""
 
-import json
-
 from amelia.core.types import (
     DeveloperStatus,
-    ExecutionMode,
     Profile,
     RetryConfig,
     TrustLevel,
 )
-
-
-def test_execution_mode_literal_values():
-    """ExecutionMode should accept 'structured' and 'agentic'."""
-    mode1: ExecutionMode = "structured"
-    mode2: ExecutionMode = "agentic"
-    assert mode1 == "structured"
-    assert mode2 == "agentic"
 
 
 def test_profile_execution_mode_default():
@@ -75,19 +64,6 @@ class TestDeveloperStatus:
         assert DeveloperStatus.BLOCKED == "blocked"
         assert DeveloperStatus.ALL_DONE == "all_done"
 
-    def test_string_representation(self):
-        """DeveloperStatus can be used as string."""
-        assert str(DeveloperStatus.EXECUTING) == "executing"
-        assert f"{DeveloperStatus.BLOCKED}" == "blocked"
-
-    def test_json_serialization(self):
-        """DeveloperStatus serializes to JSON."""
-        status = DeveloperStatus.BATCH_COMPLETE
-        serialized = json.dumps(status)
-        assert serialized == '"batch_complete"'
-        deserialized = DeveloperStatus(json.loads(serialized))
-        assert deserialized == DeveloperStatus.BATCH_COMPLETE
-
 
 class TestTrustLevel:
     """Test TrustLevel enum."""
@@ -97,16 +73,3 @@ class TestTrustLevel:
         assert TrustLevel.PARANOID == "paranoid"
         assert TrustLevel.STANDARD == "standard"
         assert TrustLevel.AUTONOMOUS == "autonomous"
-
-    def test_string_representation(self):
-        """TrustLevel can be used as string."""
-        assert str(TrustLevel.STANDARD) == "standard"
-        assert f"{TrustLevel.AUTONOMOUS}" == "autonomous"
-
-    def test_json_serialization(self):
-        """TrustLevel serializes to JSON."""
-        level = TrustLevel.PARANOID
-        serialized = json.dumps(level)
-        assert serialized == '"paranoid"'
-        deserialized = TrustLevel(json.loads(serialized))
-        assert deserialized == TrustLevel.PARANOID

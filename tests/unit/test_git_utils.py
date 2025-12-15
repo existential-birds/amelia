@@ -192,15 +192,6 @@ async def test_revert_with_no_changes(git_repo: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_take_git_snapshot_default_repo_path() -> None:
-    """Test that default repo_path uses current working directory."""
-    # This test verifies the function can be called without repo_path
-    # We can't test it in isolation without changing cwd, so we just verify the signature works
-    # The actual test would require setting up cwd to a git repo
-    pass
-
-
-@pytest.mark.asyncio
 async def test_get_batch_changed_files_with_deleted_file(git_repo: Path) -> None:
     """Test that deleted files are included in changed files."""
     # Take snapshot
