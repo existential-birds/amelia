@@ -4,6 +4,7 @@
 import asyncio
 import json
 from collections.abc import AsyncIterator
+from datetime import UTC, datetime
 from typing import Any, Literal
 
 from loguru import logger
@@ -11,7 +12,9 @@ from pydantic import BaseModel, ValidationError
 
 from amelia.core.constants import ToolName
 from amelia.core.state import AgentMessage
+from amelia.core.types import StreamEvent, StreamEventType
 from amelia.drivers.cli.base import CliDriver
+from amelia.logging import log_claude_result
 from amelia.tools.safe_file import SafeFileWriter
 from amelia.tools.safe_shell import SafeShellExecutor
 
@@ -58,6 +61,39 @@ def _is_clarification_request(text: str) -> bool:
     return text.count("?") >= 2
 
 
+async def _read_lines_chunked(
+    stream: asyncio.StreamReader,
+    chunk_size: int = 64 * 1024,  # 64KB chunks
+) -> AsyncIterator[bytes]:
+    """Read lines from a stream using chunks to handle arbitrarily large lines.
+
+    This avoids the LimitOverrunError that occurs with readline() when a single
+    line exceeds the buffer limit. Uses read() which is not subject to the limit.
+
+    Args:
+        stream: The asyncio StreamReader to read from.
+        chunk_size: Size of chunks to read at a time.
+
+    Yields:
+        Complete lines as bytes (without trailing newline).
+    """
+    buffer = b""
+    while True:
+        chunk = await stream.read(chunk_size)
+        if not chunk:
+            # End of stream - yield any remaining data
+            if buffer:
+                yield buffer
+            break
+
+        buffer += chunk
+
+        # Process all complete lines in the buffer
+        while b"\n" in buffer:
+            line, buffer = buffer.split(b"\n", 1)
+            yield line
+
+
 class ClaudeStreamEvent(BaseModel):
     """Event from Claude CLI stream-json output.
 
@@ -67,12 +103,22 @@ class ClaudeStreamEvent(BaseModel):
         tool_name: Tool name for tool_use events.
         tool_input: Tool input parameters for tool_use events.
         session_id: Session ID from result events for session continuity.
+        result_text: Final result text from result events.
+        subtype: Result subtype (success/error) from result events.
+        duration_ms: Execution duration in milliseconds from result events.
+        num_turns: Number of turns in the conversation from result events.
+        cost_usd: Total cost in USD from result events.
     """
     type: ClaudeStreamEventType
     content: str | None = None
     tool_name: str | None = None
     tool_input: dict[str, Any] | None = None
     session_id: str | None = None
+    result_text: str | None = None
+    subtype: str | None = None
+    duration_ms: int | None = None
+    num_turns: int | None = None
+    cost_usd: float | None = None
 
     @classmethod
     def from_stream_json(cls, line: str) -> "ClaudeStreamEvent | None":
@@ -95,11 +141,16 @@ class ClaudeStreamEvent(BaseModel):
 
         msg_type = data.get("type", "")
 
-        # Handle result events (contain session_id)
+        # Handle result events (contain session_id and final result)
         if msg_type == "result":
             return cls(
                 type="result",
-                session_id=data.get("session_id")
+                session_id=data.get("session_id"),
+                result_text=data.get("result"),
+                subtype=data.get("subtype"),
+                duration_ms=data.get("duration_ms"),
+                num_turns=data.get("num_turns"),
+                cost_usd=data.get("total_cost_usd"),
             )
 
         # Handle assistant messages (contain content blocks)
@@ -126,6 +177,42 @@ class ClaudeStreamEvent(BaseModel):
 
         # Unknown type - return as system event
         return cls(type="system", content=f"Unknown event type: {msg_type}")
+
+
+def convert_to_stream_event(
+    event: ClaudeStreamEvent,
+    agent: str,
+    workflow_id: str,
+) -> StreamEvent | None:
+    """Convert CLI driver event to unified StreamEvent.
+
+    Args:
+        event: Raw event from Claude CLI.
+        agent: Agent name ("developer", "architect", "reviewer").
+        workflow_id: Current workflow ID.
+
+    Returns:
+        Converted StreamEvent, or None for events to skip.
+    """
+    type_mapping = {
+        "assistant": StreamEventType.CLAUDE_THINKING,
+        "tool_use": StreamEventType.CLAUDE_TOOL_CALL,
+        "result": StreamEventType.CLAUDE_TOOL_RESULT,
+    }
+
+    stream_type = type_mapping.get(event.type)
+    if stream_type is None:
+        return None  # Skip error/system events for now
+
+    return StreamEvent(
+        type=stream_type,
+        content=event.content,
+        timestamp=datetime.now(UTC),
+        agent=agent,
+        workflow_id=workflow_id,
+        tool_name=event.tool_name,
+        tool_input=event.tool_input,
+    )
 
 
 class ClaudeCliDriver(CliDriver):
@@ -242,14 +329,16 @@ class ClaudeCliDriver(CliDriver):
             # The help says: --output-format <format> ... "json" (single result)
             cmd_args.extend(["--output-format", "json"])
 
-        # Create subprocess
+        # Create subprocess with increased buffer limit for large JSON responses
+        # Default is 64KB which is too small for architect plans
         try:
             process = await asyncio.create_subprocess_exec(
                 *cmd_args,
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                cwd=cwd
+                cwd=cwd,
+                limit=10 * 1024 * 1024,  # 10MB buffer for large JSON responses
             )
 
             # Write prompt to stdin
@@ -258,19 +347,14 @@ class ClaudeCliDriver(CliDriver):
                 await process.stdin.drain()
                 process.stdin.close()
 
-            stdout_buffer = []
-            stderr_buffer = []
+            stdout_buffer: list[str] = []
+            stderr_buffer: list[str] = []
 
             async def read_stdout() -> None:
-                """Read stdout line by line and append to buffer with debug logging."""
+                """Read stdout using chunked reading to avoid LimitOverrunError."""
                 if process.stdout is not None:
-                    while True:
-                        line = await process.stdout.readline()
-                        if not line:
-                            break
-                        text = line.decode()
-                        logger.opt(raw=True).debug(text)
-                        stdout_buffer.append(text)
+                    async for line in _read_lines_chunked(process.stdout):
+                        stdout_buffer.append(line.decode())
 
             async def read_stderr() -> None:
                 """Read stderr stream and append to buffer."""
@@ -282,7 +366,8 @@ class ClaudeCliDriver(CliDriver):
             await asyncio.gather(read_stdout(), read_stderr())
             await process.wait()
             
-            stdout_str = "".join(stdout_buffer).strip()
+            # Join with newlines since _read_lines_chunked strips them
+            stdout_str = "\n".join(stdout_buffer).strip()
             stderr_str = "".join(stderr_buffer).strip()
 
             if process.returncode != 0:
@@ -292,9 +377,19 @@ class ClaudeCliDriver(CliDriver):
                 try:
                     # Parse JSON output
                     data = json.loads(stdout_str)
-                    
+
                     # Unwrap Claude CLI result wrapper if present
                     if isinstance(data, dict) and data.get("type") == "result":
+                        # Pretty-print the result to server logs
+                        log_claude_result(
+                            result_type="result",
+                            session_id=data.get("session_id"),
+                            result_text=data.get("result"),
+                            subtype=data.get("subtype"),
+                            duration_ms=data.get("duration_ms"),
+                            num_turns=data.get("num_turns"),
+                            cost_usd=data.get("total_cost_usd"),
+                        )
                         if data.get("subtype") == "success":
                             # Extract the actual model output
                             # It should be in 'structured_output' for --json-schema calls
@@ -434,7 +529,8 @@ class ClaudeCliDriver(CliDriver):
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                cwd=cwd
+                cwd=cwd,
+                limit=10 * 1024 * 1024,  # 10MB buffer for large streaming responses
             )
 
             if process.stdin:
@@ -442,15 +538,25 @@ class ClaudeCliDriver(CliDriver):
                 await process.stdin.drain()
                 process.stdin.close()
 
-            # Stream stdout line by line
+            # Stream stdout line by line using chunked reading
+            # This avoids LimitOverrunError for lines > buffer limit
             if process.stdout:
-                while True:
-                    line = await process.stdout.readline()
-                    if not line:
-                        break
-
+                async for line in _read_lines_chunked(process.stdout):
                     event = ClaudeStreamEvent.from_stream_json(line.decode())
                     if event:
+                        # Pretty-print to server logs
+                        log_claude_result(
+                            result_type=event.type,
+                            content=event.content,
+                            session_id=event.session_id,
+                            tool_name=event.tool_name,
+                            tool_input=event.tool_input,
+                            result_text=event.result_text,
+                            subtype=event.subtype,
+                            duration_ms=event.duration_ms,
+                            num_turns=event.num_turns,
+                            cost_usd=event.cost_usd,
+                        )
                         yield event
 
             await process.wait()
@@ -507,7 +613,8 @@ class ClaudeCliDriver(CliDriver):
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                cwd=cwd
+                cwd=cwd,
+                limit=10 * 1024 * 1024,  # 10MB buffer for large streaming responses
             )
 
             if process.stdin:
@@ -515,17 +622,26 @@ class ClaudeCliDriver(CliDriver):
                 await process.stdin.drain()
                 process.stdin.close()
 
+            # Stream stdout using chunked reading to avoid LimitOverrunError
             if process.stdout:
-                while True:
-                    line = await process.stdout.readline()
-                    if not line:
-                        break
-
+                async for line in _read_lines_chunked(process.stdout):
                     event = ClaudeStreamEvent.from_stream_json(line.decode())
                     if event:
+                        # Pretty-print to server logs
+                        log_claude_result(
+                            result_type=event.type,
+                            content=event.content,
+                            session_id=event.session_id,
+                            tool_name=event.tool_name,
+                            tool_input=event.tool_input,
+                            result_text=event.result_text,
+                            subtype=event.subtype,
+                            duration_ms=event.duration_ms,
+                            num_turns=event.num_turns,
+                            cost_usd=event.cost_usd,
+                        )
                         if event.type == "tool_use":
                             self.tool_call_history.append(event)
-                            logger.info(f"Tool call: {event.tool_name}")
                         yield event
 
             await process.wait()

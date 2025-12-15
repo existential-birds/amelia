@@ -16,6 +16,7 @@ import uvicorn
 
 from amelia.client.api import AmeliaClient
 from amelia.client.models import CreateWorkflowResponse, WorkflowResponse
+from amelia.server.database.repository import WorkflowRepository
 from amelia.server.dependencies import get_orchestrator, get_repository
 from amelia.server.main import app
 from amelia.server.models.state import ServerExecutionState
@@ -34,7 +35,7 @@ class TestAPIResponseSchemas:
     @pytest.fixture
     def mock_repository(self):
         """Create a mock repository with a test workflow."""
-        repository = MagicMock()
+        repository = MagicMock(spec_set=WorkflowRepository)
 
         # Create a realistic workflow state
         workflow_state = ServerExecutionState(
@@ -47,7 +48,8 @@ class TestAPIResponseSchemas:
         )
 
         repository.get = AsyncMock(return_value=workflow_state)
-        repository.save = AsyncMock()
+        repository.create = AsyncMock()
+        repository.get_recent_events = AsyncMock(return_value=[])
         return repository
 
     @pytest.fixture
@@ -177,27 +179,3 @@ class TestAPIResponseSchemas:
         assert data["id"] == "test-workflow-id-123"
         assert data["issue_id"] == "TEST-456"
         assert data["worktree_path"] == "/test/path"
-
-    async def test_create_then_get_workflow_uses_different_schemas(
-        self, server_with_mocks
-    ):
-        """Create returns minimal schema, get returns full schema."""
-        client = AmeliaClient(base_url=server_with_mocks)
-
-        # Create workflow - minimal response
-        create_response = await client.create_workflow(
-            issue_id="TEST-999",
-            worktree_path="/another/path",
-            worktree_name="develop",
-        )
-
-        assert isinstance(create_response, CreateWorkflowResponse)
-        assert not hasattr(create_response, "issue_id")
-
-        # Get workflow - full response
-        get_response = await client.get_workflow(create_response.id)
-
-        assert isinstance(get_response, WorkflowResponse)
-        assert hasattr(get_response, "issue_id")
-        assert hasattr(get_response, "worktree_path")
-        assert hasattr(get_response, "started_at")

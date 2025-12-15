@@ -19,7 +19,7 @@ You have just evaluated the CodeRabbit feedback using `/amelia:coderabbit-review
 
 2. **Get unreplied CodeRabbit comments** (filters out already-replied comments and duplicates):
    ```bash
-   gh api --paginate repos/{owner}/{repo}/pulls/{number}/comments | jq '
+   gh api --paginate repos/{owner}/{repo}/pulls/{number}/comments | jq -s 'add |
      # Get root CodeRabbit comments (not replies to other comments)
      [.[] | select(.user.login == "coderabbitai[bot]" and .in_reply_to_id == null)] as $roots |
      # Get IDs that hey-amelia has already replied to

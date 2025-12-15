@@ -28,6 +28,8 @@ This roadmap is informed by industry research on agentic AI systems. Key finding
 | Sectioning vs Voting patterns | Phase 8 adds both parallelization strategies |
 | "Evaluation lacks granularity" | Phase 10 adds per-agent, per-step metrics |
 
+See [Knowledge Agents Research Analysis](../analysis/knowledge-agents-research.md) for full research synthesis.
+
 ---
 
 ## Phase 1: Core Orchestration [Complete]

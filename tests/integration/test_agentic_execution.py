@@ -54,7 +54,8 @@ class TestAgenticExecution:
             mock_driver.execute_agentic = mock_execute_agentic
             mock_factory.get_driver.return_value = mock_driver
 
-            result_dict = await call_developer_node(agentic_state)
+            config = {"configurable": {"thread_id": "test-workflow-1"}}
+            result_dict = await call_developer_node(agentic_state, config)
 
             # Nodes now return partial state dicts, not full ExecutionState
             assert result_dict["plan"].tasks[0].status == "completed"
@@ -73,7 +74,8 @@ class TestAgenticExecution:
             mock_driver.execute_agentic = mock_execute_agentic
             mock_factory.get_driver.return_value = mock_driver
 
-            await call_developer_node(agentic_state)
+            config = {"configurable": {"thread_id": "test-workflow-2"}}
+            await call_developer_node(agentic_state, config)
 
             assert captured_cwd == "/tmp/test"
 
@@ -103,9 +105,14 @@ class TestAgenticExecution:
             mock_developer.execute_current_task.return_value = {"status": "completed", "output": "done"}
             mock_developer_class.return_value = mock_developer
 
-            await call_developer_node(state)
+            config = {"configurable": {"thread_id": "test-workflow-3"}}
+            await call_developer_node(state, config)
 
             # Developer should be initialized with structured mode
-            mock_developer_class.assert_called_once_with(mock_driver, execution_mode="structured")
+            mock_developer_class.assert_called_once_with(
+                mock_driver,
+                execution_mode="structured",
+                stream_emitter=None,
+            )
             # execute_current_task should be called
             mock_developer.execute_current_task.assert_called_once()

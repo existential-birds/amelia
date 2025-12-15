@@ -43,7 +43,7 @@ class TestCompetitiveReviewPersonaAttribution:
         # Override profile strategy for competitive review
         state.profile = state.profile.model_copy(update={"strategy": "competitive"})
 
-        result = await reviewer.review(state, code_changes="diff --git a/file.py")
+        result = await reviewer.review(state, code_changes="diff --git a/file.py", workflow_id="test-workflow")
 
         # Each comment should be prefixed with its persona
         assert any("Security" in c for c in result.comments), \
@@ -81,7 +81,7 @@ class TestCompetitiveReviewPersonaAttribution:
         # Override profile strategy for competitive review
         state.profile = state.profile.model_copy(update={"strategy": "competitive"})
 
-        result = await reviewer.review(state, code_changes="diff --git a/file.py")
+        result = await reviewer.review(state, code_changes="diff --git a/file.py", workflow_id="test-workflow")
 
         # Should only have comments from Performance (the one that had comments)
         assert len(result.comments) == 1

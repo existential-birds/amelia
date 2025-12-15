@@ -2,12 +2,14 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 import asyncio
+from datetime import UTC, datetime
 
 from loguru import logger
 from pydantic import BaseModel, Field
 
 from amelia.core.context import CompiledContext, ContextSection, ContextStrategy
 from amelia.core.state import ExecutionState, ReviewResult, Severity
+from amelia.core.types import StreamEmitter, StreamEvent, StreamEventType
 from amelia.drivers.base import DriverInterface
 
 
@@ -127,15 +129,27 @@ class Reviewer:
 
     context_strategy: type[ReviewerContextStrategy] = ReviewerContextStrategy
 
-    def __init__(self, driver: DriverInterface):
+    def __init__(
+        self,
+        driver: DriverInterface,
+        stream_emitter: StreamEmitter | None = None,
+    ):
         """Initialize the Reviewer agent.
 
         Args:
             driver: LLM driver interface for generating reviews.
+            stream_emitter: Optional callback for streaming events.
         """
         self.driver = driver
+        self._stream_emitter = stream_emitter
 
-    async def review(self, state: ExecutionState, code_changes: str) -> ReviewResult:
+    async def review(
+        self,
+        state: ExecutionState,
+        code_changes: str,
+        *,
+        workflow_id: str,
+    ) -> ReviewResult:
         """Review code changes in context of execution state and issue.
 
         Selects single or competitive review strategy based on profile settings.
@@ -143,22 +157,31 @@ class Reviewer:
         Args:
             state: Current execution state containing issue and profile context.
             code_changes: Diff or description of code changes to review.
+            workflow_id: Workflow ID for stream events (required).
 
         Returns:
             ReviewResult with approval status, comments, and severity level.
         """
         if state.profile.strategy == "competitive":
-            return await self._competitive_review(state, code_changes)
+            return await self._competitive_review(state, code_changes, workflow_id=workflow_id)
         else: # Default to single review
-            return await self._single_review(state, code_changes, persona="General")
+            return await self._single_review(state, code_changes, persona="General", workflow_id=workflow_id)
 
-    async def _single_review(self, state: ExecutionState, code_changes: str, persona: str) -> ReviewResult:
+    async def _single_review(
+        self,
+        state: ExecutionState,
+        code_changes: str,
+        persona: str,
+        *,
+        workflow_id: str,
+    ) -> ReviewResult:
         """Performs a single review with a specified persona.
 
         Args:
             state: Current execution state containing issue context.
             code_changes: Diff or description of code changes to review.
             persona: Review perspective (e.g., "Security", "Performance").
+            workflow_id: Workflow ID for stream events (required).
 
         Returns:
             ReviewResult with approval status, comments, and severity.
@@ -193,6 +216,17 @@ class Reviewer:
 
         response = await self.driver.generate(messages=prompt_messages, schema=ReviewResponse)
 
+        # Emit completion event before return
+        if self._stream_emitter is not None:
+            event = StreamEvent(
+                type=StreamEventType.AGENT_OUTPUT,
+                content=f"Review completed: {'Approved' if response.approved else 'Changes requested'}",
+                timestamp=datetime.now(UTC),
+                agent="reviewer",
+                workflow_id=workflow_id,
+            )
+            await self._stream_emitter(event)
+
         return ReviewResult(
             reviewer_persona=persona,
             approved=response.approved,
@@ -200,32 +234,39 @@ class Reviewer:
             severity=response.severity
         )
 
-    async def _competitive_review(self, state: ExecutionState, code_changes: str) -> ReviewResult:
+    async def _competitive_review(
+        self,
+        state: ExecutionState,
+        code_changes: str,
+        *,
+        workflow_id: str,
+    ) -> ReviewResult:
         """Performs competitive review using multiple personas in parallel.
 
         Args:
             state: Current execution state containing issue context.
             code_changes: Diff or description of code changes to review.
+            workflow_id: Workflow ID for stream events (required).
 
         Returns:
             Aggregated ReviewResult combining feedback from all personas.
         """
         personas = ["Security", "Performance", "Usability"] # Example personas
-        
+
         # Run reviews in parallel
-        review_tasks = [self._single_review(state, code_changes, persona) for persona in personas]
+        review_tasks = [self._single_review(state, code_changes, persona, workflow_id=workflow_id) for persona in personas]
         results = await asyncio.gather(*review_tasks)
 
         # Aggregate results (simple aggregation: if any disapproves, overall disapproves)
         overall_approved = all(res.approved for res in results)
-        
+
         # Prefix comments with persona name to preserve attribution
         all_comments = [
             f"[{res.reviewer_persona}] {comment}"
             for res in results
             for comment in res.comments
         ]
-        
+
         # Determine overall severity (e.g., highest severity from any review)
         severity_order: dict[Severity, int] = {"low": 0, "medium": 1, "high": 2, "critical": 3}
         severity_from_value: dict[int, Severity] = {v: k for k, v in severity_order.items()}

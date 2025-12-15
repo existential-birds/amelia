@@ -43,11 +43,14 @@ class GithubTracker(BaseTracker):
                 "GitHub CLI 'gh' not found. Install from https://cli.github.com"
             ) from e
 
-    def get_issue(self, issue_id: str) -> Issue:
+    def get_issue(self, issue_id: str, *, cwd: str | None = None) -> Issue:
         """Fetch an issue from GitHub.
 
         Args:
             issue_id: The GitHub issue number (e.g., '123') or full reference (e.g., 'owner/repo#123').
+            cwd: Working directory to run gh CLI in. The gh CLI determines which
+                repository to query based on the git remote in this directory.
+                If None, uses the current process directory.
 
         Returns:
             An Issue object containing the GitHub issue's metadata and description.
@@ -61,6 +64,7 @@ class GithubTracker(BaseTracker):
                 capture_output=True,
                 text=True,
                 check=True,
+                cwd=cwd,
             )
             data = json.loads(result.stdout)
             return Issue(

@@ -7,6 +7,7 @@ Uses colors from the Amelia dashboard for consistent branding across
 CLI and web interfaces.
 """
 
+import json
 import sys
 from typing import TYPE_CHECKING
 
@@ -130,3 +131,151 @@ def log_server_startup(host: str, port: int, database_path: str, version: str) -
     ]
     sys.stderr.write("\n".join(config_lines))
     sys.stderr.flush()
+
+
+def _ansi_color(hex_color: str) -> str:
+    """Convert hex color to ANSI 24-bit escape code.
+
+    Args:
+        hex_color: Hex color string (e.g., "#FFC857").
+
+    Returns:
+        ANSI escape code for the color.
+    """
+    hex_color = hex_color.lstrip("#")
+    r, g, b = int(hex_color[0:2], 16), int(hex_color[2:4], 16), int(hex_color[4:6], 16)
+    return f"\033[38;2;{r};{g};{b}m"
+
+
+def log_claude_result(
+    result_type: str,
+    content: str | None = None,
+    session_id: str | None = None,
+    tool_name: str | None = None,
+    tool_input: dict[str, object] | None = None,
+    result_text: str | None = None,
+    subtype: str | None = None,
+    duration_ms: int | None = None,
+    num_turns: int | None = None,
+    cost_usd: float | None = None,
+) -> None:
+    """Pretty-print Claude CLI results using the dashboard color palette.
+
+    Formats Claude CLI stream events with visual distinction using
+    complementary colors from the Amelia dashboard theme.
+
+    Args:
+        result_type: Type of result (assistant, tool_use, result, error, system).
+        content: Text content for assistant/error/system events.
+        session_id: Session ID from result events.
+        tool_name: Tool name for tool_use events.
+        tool_input: Tool input parameters for tool_use events.
+        result_text: Final result text from result events.
+        subtype: Result subtype (success/error) from result events.
+        duration_ms: Execution duration in milliseconds.
+        num_turns: Number of turns in the conversation.
+        cost_usd: Total cost in USD.
+    """
+    # ANSI color codes from palette
+    gold = _ansi_color(COLORS["gold"])
+    sage = _ansi_color(COLORS["sage_green"])
+    blue = _ansi_color(COLORS["blue"])
+    muted = _ansi_color(COLORS["sage_muted"])
+    rust = _ansi_color(COLORS["rust_red"])
+    cream = _ansi_color(COLORS["cream"])
+    pending = _ansi_color(COLORS["sage_pending"])
+
+    # Box drawing character for visual structure
+    vertical = "│"
+
+    lines: list[str] = []
+
+    if result_type == "assistant":
+        # Claude's thinking/response - use cream for main text
+        header = f"{blue}◆ Claude{RESET}"
+        lines.append(f"  {header}")
+        if content:
+            # Wrap content at ~80 chars and indent
+            for line in content.split("\n"):
+                wrapped = line[:120] + ("…" if len(line) > 120 else "")
+                lines.append(f"  {muted}{vertical}{RESET} {cream}{wrapped}{RESET}")
+
+    elif result_type == "tool_use":
+        # Tool execution - use gold for emphasis
+        header = f"{gold}⚡ Tool: {tool_name or 'unknown'}{RESET}"
+        lines.append(f"  {header}")
+        if tool_input:
+            # Pretty-print tool input with truncation
+            try:
+                input_str = json.dumps(tool_input, indent=2)
+                input_lines = input_str.split("\n")
+                # Limit to first 10 lines to avoid log spam
+                for line in input_lines[:10]:
+                    lines.append(f"  {muted}{vertical}{RESET} {pending}{line}{RESET}")
+                if len(input_lines) > 10:
+                    lines.append(f"  {muted}{vertical}{RESET} {pending}... ({len(input_lines) - 10} more lines){RESET}")
+            except (TypeError, ValueError):
+                lines.append(f"  {muted}{vertical}{RESET} {pending}{str(tool_input)[:200]}{RESET}")
+
+    elif result_type == "result":
+        # Completion result - use sage green for success, rust for error
+        is_success = subtype == "success"
+        status_color = sage if is_success else rust
+        status_icon = "✓" if is_success else "✗"
+        header = f"{status_color}{status_icon} Result{RESET}"
+        lines.append(f"  {header}")
+
+        # Stats line with duration, turns, and cost
+        stats_parts = []
+        if duration_ms is not None:
+            duration_sec = duration_ms / 1000
+            if duration_sec >= 60:
+                mins = int(duration_sec // 60)
+                secs = duration_sec % 60
+                stats_parts.append(f"{mins}m {secs:.1f}s")
+            else:
+                stats_parts.append(f"{duration_sec:.1f}s")
+        if num_turns is not None:
+            stats_parts.append(f"{num_turns} turns")
+        if cost_usd is not None:
+            stats_parts.append(f"${cost_usd:.4f}")
+        if stats_parts:
+            stats = f" {muted}•{RESET} ".join(
+                f"{gold}{part}{RESET}" for part in stats_parts
+            )
+            lines.append(f"  {muted}{vertical}{RESET} {stats}")
+
+        # Session ID (truncated)
+        if session_id:
+            short_session = session_id[:8] + "…" if len(session_id) > 8 else session_id
+            lines.append(f"  {muted}{vertical}{RESET} {muted}session:{RESET} {blue}{short_session}{RESET}")
+
+        # Result text preview (first ~200 chars, first line only)
+        if result_text:
+            # Get first non-empty line
+            first_line = result_text.strip().split("\n")[0]
+            total_lines = len(result_text.strip().split("\n"))
+            preview = first_line[:200] + ("…" if len(first_line) > 200 else "")
+            lines.append(f"  {muted}{vertical}{RESET} {cream}{preview}{RESET}")
+            if total_lines > 1:
+                lines.append(f"  {muted}{vertical} ({total_lines} lines total){RESET}")
+
+    elif result_type == "error":
+        # Error - use rust red
+        header = f"{rust}✗ Error{RESET}"
+        lines.append(f"  {header}")
+        if content:
+            for line in content.split("\n")[:5]:  # Limit error lines
+                lines.append(f"  {muted}{vertical}{RESET} {rust}{line}{RESET}")
+
+    elif result_type == "system":
+        # System message - use muted sage
+        header = f"{muted}○ System{RESET}"
+        lines.append(f"  {header}")
+        if content:
+            lines.append(f"  {muted}{vertical} {content}{RESET}")
+
+    # Output to stderr (same as loguru)
+    if lines:
+        sys.stderr.write("\n".join(lines) + "\n")
+        sys.stderr.flush()

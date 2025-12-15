@@ -458,6 +458,7 @@ export interface RejectRequest {
 export type WebSocketMessage =
   | { type: 'ping' }
   | { type: 'event'; payload: WorkflowEvent }
+  | { type: 'stream'; payload: StreamEvent }
   | { type: 'backfill_complete'; count: number }
   | { type: 'backfill_expired'; message: string };
 
@@ -485,6 +486,87 @@ export type WebSocketClientMessage =
   | { type: 'unsubscribe'; workflow_id: string }
   | { type: 'subscribe_all' }
   | { type: 'pong' };
+
+// ============================================================================
+// Stream Event Types
+// ============================================================================
+
+/**
+ * Types of stream events emitted during Claude LLM execution.
+ * These events provide real-time insight into agent reasoning and tool usage.
+ *
+ * @example
+ * ```typescript
+ * const eventType: StreamEventType = StreamEventType.CLAUDE_THINKING;
+ * ```
+ */
+export const StreamEventType = {
+  CLAUDE_THINKING: 'claude_thinking',
+  CLAUDE_TOOL_CALL: 'claude_tool_call',
+  CLAUDE_TOOL_RESULT: 'claude_tool_result',
+  AGENT_OUTPUT: 'agent_output',
+} as const;
+
+export type StreamEventType =
+  (typeof StreamEventType)[keyof typeof StreamEventType];
+
+/**
+ * A single stream event emitted during Claude LLM execution.
+ * Stream events are emitted in real-time via WebSocket to show agent reasoning.
+ *
+ * Note: Uses `subtype` instead of `type` to avoid collision with the wrapper
+ * message's `type: "stream"` field in WebSocket messages.
+ *
+ * @example
+ * ```typescript
+ * // Thinking event
+ * const thinking: StreamEvent = {
+ *   subtype: 'claude_thinking',
+ *   content: 'I need to analyze the requirements...',
+ *   timestamp: '2025-12-13T10:30:00Z',
+ *   agent: 'architect',
+ *   workflow_id: 'wf123',
+ *   tool_name: null,
+ *   tool_input: null
+ * };
+ *
+ * // Tool call event
+ * const toolCall: StreamEvent = {
+ *   subtype: 'claude_tool_call',
+ *   content: null,
+ *   timestamp: '2025-12-13T10:30:01Z',
+ *   agent: 'developer',
+ *   workflow_id: 'wf123',
+ *   tool_name: 'read_file',
+ *   tool_input: { path: '/src/main.py' }
+ * };
+ * ```
+ */
+export interface StreamEvent {
+  /** Unique identifier for this event (UUID). */
+  id: string;
+
+  /** Subtype of stream event (uses subtype to avoid collision with message type). */
+  subtype: StreamEventType;
+
+  /** Text content for thinking/output events, null for tool calls. */
+  content: string | null;
+
+  /** ISO 8601 timestamp when the event was emitted. */
+  timestamp: string;
+
+  /** Name of the agent that emitted this event (e.g., 'architect', 'developer'). */
+  agent: string;
+
+  /** ID of the workflow this event belongs to. */
+  workflow_id: string;
+
+  /** Name of the tool being called, null for non-tool events. */
+  tool_name: string | null;
+
+  /** Input parameters for the tool call, null for non-tool events. */
+  tool_input: Record<string, unknown> | null;
+}
 
 // ============================================================================
 // UI State Types

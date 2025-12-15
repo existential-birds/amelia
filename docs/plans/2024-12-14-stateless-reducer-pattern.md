@@ -6,6 +6,8 @@
 
 **Architecture:** All Pydantic models become frozen (immutable). Nodes return partial `dict` updates instead of full state. **Task status is derived from a `task_results` dict (not stored in Task model) for parallel safety. Driver sessions are scoped by agent in a `driver_sessions` dict. Custom reducers (`dict_merge`, `set_union`) handle concurrent dict/set updates.** Profile is accessed via `config["configurable"]["profile"]` with `profile_id` stored in state for replay determinism. Native LangGraph checkpointers handle persistence.
 
+**Research Validation:** This pattern is explicitly validated by industry research - LangGraph cited for "replay, time-travel debugging, and robust state persistence." The stateless approach enables the ~15× token overhead of multi-agent systems to be managed through proper context engineering.
+
 **Tech Stack:** Python 3.12+, Pydantic v2 (frozen models), LangGraph v1.0+ (SqliteSaver, Annotated reducers), pytest-asyncio
 
 ---
@@ -294,7 +296,7 @@ def set_union(left: set, right: set) -> set:
     return (left or set()) | (right or set())
 ```
 
-2. Add TaskResult and HistoryEntry models:
+2. Add TaskResult, HistoryEntry, and TokenMetrics models:
 
 ```python
 class TaskResult(BaseModel):
@@ -308,6 +310,25 @@ class TaskResult(BaseModel):
     completed_at: datetime | None = None
 
 
+class TokenMetrics(BaseModel):
+    """Token usage tracking for multi-agent systems (research: ~15× token cost)."""
+    model_config = ConfigDict(frozen=True)
+
+    agent_tokens: dict[str, int] = Field(default_factory=dict)  # Total tokens per agent
+    total_input_tokens: int = 0
+    total_output_tokens: int = 0
+
+
+def token_merge(left: TokenMetrics, right: TokenMetrics) -> TokenMetrics:
+    """Merge reducer for TokenMetrics."""
+    merged_agent_tokens = {**(left.agent_tokens or {}), **(right.agent_tokens or {})}
+    return TokenMetrics(
+        agent_tokens=merged_agent_tokens,
+        total_input_tokens=(left.total_input_tokens or 0) + (right.total_input_tokens or 0),
+        total_output_tokens=(left.total_output_tokens or 0) + (right.total_output_tokens or 0),
+    )
+
+
 class HistoryEntry(BaseModel):
     """Structured history entry for agent actions."""
     model_config = ConfigDict(frozen=True)
@@ -316,6 +337,7 @@ class HistoryEntry(BaseModel):
     actor: str
     event: str
     detail: dict[str, Any] = Field(default_factory=dict)
+    tokens_used: int = 0  # Enables budget tracking per action
 ```
 
 3. Update ALL model classes to be frozen:
@@ -389,6 +411,9 @@ class ExecutionState(BaseModel):
     # --- Idempotency ---
     completed_steps: Annotated[set[str], set_union] = Field(default_factory=set)
 
+    # --- Token tracking (research: multi-agent ~15× token cost) ---
+    token_metrics: Annotated[TokenMetrics, token_merge] = Field(default_factory=TokenMetrics)
+
     # --- Single-writer fields ---
     last_review: ReviewResult | None = None
     human_approved: bool | None = None
@@ -409,6 +434,20 @@ class ExecutionState(BaseModel):
         return [t for t in self.plan.tasks if self.get_task_status(t.id) == "pending"
                 and all(d in completed_ids for d in t.dependencies)]
 ```
+
+**Note: Profile Model Updates**
+
+While not in `state.py`, the `Profile` model (in `amelia/core/types.py`) should be updated to include dynamic orchestration fields for future use:
+
+```python
+# In Profile model updates for dynamic orchestration
+max_replans: int = 3  # Prevent infinite replan loops (answers Open Question #1)
+escalation_threshold: float = 0.7  # Confidence below this triggers human approval
+context_compaction_threshold: int = 50000  # Trigger summarization above this token count
+max_agent_output_tokens: int = 2000  # Research: condensed summaries
+```
+
+These fields enable confidence-based routing and token budget management as identified in multi-agent research.
 
 **Tests - tests/unit/test_state.py:**
 
@@ -1437,6 +1476,22 @@ git commit -m "chore: export new stateless types and validate implementation"
 
 ---
 
+## Research Foundation
+
+This implementation plan incorporates findings from knowledge agent research:
+
+| Pattern | Research Source | Implementation |
+|---------|-----------------|----------------|
+| Stateless Reducer | LangGraph best practices | Frozen models, partial dict returns |
+| Token Tracking | "~15× token cost" finding | TokenMetrics with reducer |
+| Scoped Sessions | "Parallel nodes race on single session" | driver_sessions dict keyed by agent |
+| Replay Determinism | "Checkpoints don't capture config" | profile_id in state |
+| Confidence Routing | LangChain survey findings | escalation_threshold in Profile |
+
+The design addresses critical review findings while incorporating industry-validated patterns for production agent systems.
+
+---
+
 ## Execution Summary
 
 | Wave | Tasks | Parallel Subagents | Dependencies |
@@ -1460,7 +1515,7 @@ git commit -m "chore: export new stateless types and validate implementation"
 - [ ] Driver sessions scoped by agent in `driver_sessions` dict
 - [ ] `profile_id` stored in state for replay determinism
 - [ ] `completed_steps` set tracks idempotency
-- [ ] Custom reducers (`dict_merge`, `set_union`) defined
+- [ ] Custom reducers (`dict_merge`, `set_union`, `token_merge`) defined
 - [ ] `get_ready_tasks()` is a method on ExecutionState
 - [ ] List fields use `Annotated[list, add]` for parallel safety
 - [ ] Dict fields use `Annotated[dict, dict_merge]` for parallel safety
@@ -1468,6 +1523,10 @@ git commit -m "chore: export new stateless types and validate implementation"
 - [ ] All nodes access Profile via `config["configurable"]["profile"]`
 - [ ] ExecutionState has no `profile` field (only `profile_id`)
 - [ ] `get_state_history()` works for time-travel debugging
+- [ ] **TokenMetrics tracks token usage per agent** (research requirement)
+- [ ] **HistoryEntry includes tokens_used field** (enables budget tracking)
+- [ ] **Profile includes escalation_threshold** (confidence-based routing)
+- [ ] **Profile includes max_replans** (prevents infinite loops)
 - [ ] `uv run mypy amelia` passes
 - [ ] `uv run ruff check amelia tests` passes
 - [ ] `uv run pytest` passes (all tests green)

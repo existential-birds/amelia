@@ -255,3 +255,94 @@ class TestWorkflowRepository:
         # Verify event was saved
         max_seq = await repository.get_max_event_sequence("wf-pydantic")
         assert max_seq == 1
+
+    async def test_get_recent_events(self, repository, make_event):
+        """Should return recent events for a workflow in chronological order."""
+        # Create a workflow
+        state = ServerExecutionState(
+            id="wf-recent",
+            issue_id="ISSUE-789",
+            worktree_path="/path/to/worktree",
+            worktree_name="feat-789",
+            workflow_status="in_progress",
+            started_at=datetime.now(UTC),
+        )
+        await repository.create(state)
+
+        # Create events with sequences 1, 2, 3
+        for seq in [1, 2, 3]:
+            event = make_event(
+                id=f"evt-recent-{seq}",
+                workflow_id="wf-recent",
+                sequence=seq,
+                timestamp=datetime.now(UTC),
+                message=f"Event {seq}",
+            )
+            await repository.save_event(event)
+
+        # Get recent events
+        events = await repository.get_recent_events("wf-recent")
+
+        assert len(events) == 3
+        # Should be in chronological order (oldest first)
+        assert events[0].id == "evt-recent-1"
+        assert events[1].id == "evt-recent-2"
+        assert events[2].id == "evt-recent-3"
+
+    async def test_get_recent_events_with_limit(self, repository, make_event):
+        """Should respect limit parameter."""
+        # Create a workflow
+        state = ServerExecutionState(
+            id="wf-limited",
+            issue_id="ISSUE-LIM",
+            worktree_path="/path/to/worktree",
+            worktree_name="feat-lim",
+            workflow_status="in_progress",
+            started_at=datetime.now(UTC),
+        )
+        await repository.create(state)
+
+        # Create 5 events
+        for seq in range(1, 6):
+            event = make_event(
+                id=f"evt-lim-{seq}",
+                workflow_id="wf-limited",
+                sequence=seq,
+                timestamp=datetime.now(UTC),
+                message=f"Event {seq}",
+            )
+            await repository.save_event(event)
+
+        # Get only 2 most recent events
+        events = await repository.get_recent_events("wf-limited", limit=2)
+
+        assert len(events) == 2
+        # Should return most recent 2, in chronological order
+        assert events[0].id == "evt-lim-4"
+        assert events[1].id == "evt-lim-5"
+
+    async def test_get_recent_events_empty(self, repository):
+        """Should return empty list for workflow with no events."""
+        # Create a workflow
+        state = ServerExecutionState(
+            id="wf-empty",
+            issue_id="ISSUE-EMPTY",
+            worktree_path="/path/to/worktree",
+            worktree_name="feat-empty",
+            workflow_status="in_progress",
+            started_at=datetime.now(UTC),
+        )
+        await repository.create(state)
+
+        # Get recent events for workflow with no events
+        events = await repository.get_recent_events("wf-empty")
+
+        assert len(events) == 0
+
+    @pytest.mark.parametrize("limit", [0, -1, -100])
+    async def test_get_recent_events_non_positive_limit(self, repository, limit):
+        """Should return empty list for non-positive limit values."""
+        # No need to create workflow - should return early before DB query
+        events = await repository.get_recent_events("any-workflow", limit=limit)
+
+        assert events == []

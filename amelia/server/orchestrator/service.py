@@ -19,7 +19,7 @@ from loguru import logger
 
 from amelia.core.orchestrator import create_orchestrator_graph
 from amelia.core.state import ExecutionState, TaskDAG
-from amelia.core.types import Settings
+from amelia.core.types import Settings, StreamEmitter, StreamEvent
 from amelia.server.database.repository import WorkflowRepository
 from amelia.server.events.bus import EventBus
 from amelia.server.exceptions import (
@@ -108,6 +108,21 @@ class OrchestratorService:
             interrupt_before=["human_approval_node"],
         )
 
+    def _create_stream_emitter(self) -> StreamEmitter:
+        """Create a stream emitter callback for broadcasting events.
+
+        Stream events are broadcast via WebSocket but NOT persisted to the database.
+        Each StreamEvent already contains its own workflow_id, so the emitter
+        doesn't need workflow context.
+
+        Returns:
+            Async callback that broadcasts StreamEvent via WebSocket.
+        """
+        async def emit(event: StreamEvent) -> None:
+            self._event_bus.emit_stream(event)
+
+        return emit
+
     async def start_workflow(
         self,
         issue_id: str,
@@ -163,9 +178,9 @@ class OrchestratorService:
                 raise ValueError(f"Profile '{profile_name}' not found in settings")
             loaded_profile = self._settings.profiles[profile_name]
 
-            # Fetch issue from tracker
+            # Fetch issue from tracker (pass worktree_path so gh CLI uses correct repo)
             tracker = create_tracker(loaded_profile)
-            issue = tracker.get_issue(issue_id)
+            issue = tracker.get_issue(issue_id, cwd=worktree_path)
 
             # Initialize ExecutionState with the loaded profile and issue
             execution_state = ExecutionState(profile=loaded_profile, issue=issue)
@@ -333,10 +348,13 @@ class OrchestratorService:
             # CRITICAL: Pass interrupt_before to enable server-mode approval
             graph = self._create_server_graph(checkpointer)
 
+            # Create stream emitter and pass it via config
+            stream_emitter = self._create_stream_emitter()
             config: RunnableConfig = {
                 "configurable": {
                     "thread_id": workflow_id,
                     "execution_mode": "server",
+                    "stream_emitter": stream_emitter,
                 }
             }
 
@@ -594,10 +612,13 @@ class OrchestratorService:
         ) as checkpointer:
             graph = self._create_server_graph(checkpointer)
 
+            # Create stream emitter and pass it via config
+            stream_emitter = self._create_stream_emitter()
             config: RunnableConfig = {
                 "configurable": {
                     "thread_id": workflow_id,
                     "execution_mode": "server",
+                    "stream_emitter": stream_emitter,
                 }
             }
 
@@ -805,6 +826,12 @@ class OrchestratorService:
         """
         for node_name, output in chunk.items():
             if node_name in STAGE_NODES:
+                # Update current_stage in workflow state
+                state = await self._repository.get(workflow_id)
+                if state is not None:
+                    state.current_stage = node_name
+                    await self._repository.update(state)
+
                 # Emit both started and completed for each node update
                 # (astream "updates" mode gives us the result after completion)
                 await self._emit(

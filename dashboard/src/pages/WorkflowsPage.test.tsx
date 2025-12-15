@@ -104,6 +104,11 @@ function renderWithRouter(
             element: <WorkflowsPage />,
             loader: ({ params }) => {
               // Return the appropriate detail based on the workflow ID
+              // When workflows is empty (past workflow case), use loaderData.detail directly
+              if (loaderData.workflows.length === 0 && loaderData.detail) {
+                return { workflows: loaderData.workflows, detail: loaderData.detail };
+              }
+              // Otherwise, look up by ID for switching between workflows
               if (params.id === 'wf-002') {
                 return { workflows: loaderData.workflows, detail: mockSecondWorkflowDetail };
               }
@@ -128,13 +133,29 @@ describe('WorkflowsPage', () => {
     vi.mocked(formatElapsedTime).mockReturnValue('2h 15m');
   });
 
-  it('should render WorkflowEmptyState when no workflows', async () => {
+  it('should render WorkflowEmptyState when no workflows and no detail', async () => {
     vi.mocked(getActiveWorkflow).mockReturnValue(null);
 
     renderWithRouter({ workflows: [], detail: null }, '/workflows');
 
     await waitFor(() => {
       expect(screen.getByText(/no active workflows/i)).toBeInTheDocument();
+    });
+  });
+
+  it('should display workflow detail when no active workflows but detail exists (past workflow)', async () => {
+    vi.mocked(getActiveWorkflow).mockReturnValue(null);
+
+    // Simulate viewing a past workflow when no active workflows exist
+    renderWithRouter({ workflows: [], detail: mockWorkflowDetail }, '/workflows/wf-001');
+
+    await waitFor(() => {
+      // Should NOT show the WorkflowEmptyState component (uses data-slot="empty-state")
+      const emptyState = document.querySelector('[data-slot="empty-state"]');
+      expect(emptyState).not.toBeInTheDocument();
+      // Should show the workflow detail in the header
+      const pageHeader = screen.getByRole('banner');
+      expect(within(pageHeader).getByText('PROJ-123')).toBeInTheDocument();
     });
   });
 

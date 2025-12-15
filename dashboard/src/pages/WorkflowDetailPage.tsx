@@ -15,7 +15,7 @@ import { ActivityLog } from '@/components/ActivityLog';
 import { ApprovalControls } from '@/components/ApprovalControls';
 import { WorkflowCanvas } from '@/components/WorkflowCanvas';
 import { buildPipeline } from '@/utils/pipeline';
-import { useElapsedTime } from '@/hooks';
+import { useElapsedTime, useAutoRevalidation } from '@/hooks';
 import { workflowDetailLoader } from '@/loaders';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
@@ -31,6 +31,9 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 export default function WorkflowDetailPage() {
   const { workflow } = useLoaderData<typeof workflowDetailLoader>();
   const elapsedTime = useElapsedTime(workflow);
+
+  // Auto-revalidate when this workflow's status changes (approval events, completion, etc.)
+  useAutoRevalidation(workflow?.id);
 
   if (!workflow) {
     return (

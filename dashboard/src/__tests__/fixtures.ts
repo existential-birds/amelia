@@ -9,12 +9,14 @@
  * Provides both factory functions and pre-configured mock data for various workflow states.
  */
 
-import type {
-  WorkflowSummary,
-  WorkflowDetail,
-  WorkflowEvent,
-  TaskDAG,
-  TaskNode,
+import {
+  StreamEventType,
+  type WorkflowSummary,
+  type WorkflowDetail,
+  type WorkflowEvent,
+  type StreamEvent,
+  type TaskDAG,
+  type TaskNode,
 } from '../types';
 
 // ============================================================================
@@ -80,6 +82,27 @@ export function createMockEvent(
     message: 'Test event',
     data: undefined,
     correlation_id: undefined,
+    ...overrides,
+  };
+}
+
+/**
+ * Creates a mock StreamEvent with sensible defaults.
+ * Uses `subtype` (not `type`) to match the WebSocket payload format.
+ * @param overrides - Optional partial object to override default values
+ */
+export function createMockStreamEvent(
+  overrides?: Partial<StreamEvent>
+): StreamEvent {
+  return {
+    id: `stream-${crypto.randomUUID()}`,
+    subtype: StreamEventType.CLAUDE_THINKING,
+    content: 'Test thinking content',
+    timestamp: '2025-12-13T10:00:00Z',
+    agent: 'architect',
+    workflow_id: 'wf-test-123',
+    tool_name: null,
+    tool_input: null,
     ...overrides,
   };
 }

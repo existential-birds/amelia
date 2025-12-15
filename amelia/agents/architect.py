@@ -1,7 +1,8 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
-from datetime import date
+import os
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 from loguru import logger
@@ -9,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from amelia.core.context import CompiledContext, ContextSection, ContextStrategy
 from amelia.core.state import AgentMessage, ExecutionState, Task, TaskDAG
-from amelia.core.types import Design, Issue
+from amelia.core.types import Design, Issue, StreamEmitter, StreamEvent, StreamEventType
 from amelia.drivers.base import DriverInterface
 
 
@@ -60,7 +61,7 @@ class ArchitectContextStrategy(ContextStrategy):
     SYSTEM_PROMPT = """You are a senior software architect creating implementation plans.
 You analyze issues and produce structured task DAGs with clear dependencies."""
 
-    ALLOWED_SECTIONS = {"issue", "design"}
+    ALLOWED_SECTIONS = {"issue", "design", "codebase"}
 
     def get_task_generation_system_prompt(self) -> str:
         """Get the detailed system prompt for task DAG generation.
@@ -93,6 +94,13 @@ For each task, provide:
   5. Commit (include commit message)
 - commit_message: Conventional commit message (e.g., "feat: add auth middleware")
 
+CRITICAL - Shell command restrictions:
+- Each command must be a SINGLE command - NO command chaining
+- NEVER use: && || ; | > >> < ` $( ${ or newlines in commands
+- WRONG: "cd src && npm test" or "npm install && npm run build"
+- CORRECT: Create separate steps for each command
+- If a command needs to run in a specific directory, use the full path or create separate cd step
+
 Each step should be 2-5 minutes of work. Include complete code, not placeholders."""
 
     def get_task_generation_user_prompt(self) -> str:
@@ -105,7 +113,7 @@ Each step should be 2-5 minutes of work. Include complete code, not placeholders
             User prompt string for task generation.
         """
         return """Create a detailed implementation plan with bite-sized TDD tasks.
-Ensure exact file paths, complete code in steps, and commands with expected output."""
+Ensure exact file paths, complete code in steps, and single-command shell instructions (no && or chaining)."""
 
     def _format_design_section(self, design: Design) -> str:
         """Format Design into structured markdown for context.
@@ -147,6 +155,64 @@ Ensure exact file paths, complete code in steps, and commands with expected outp
 
         return "\n\n".join(parts)
 
+    def _scan_codebase(self, working_dir: str, max_files: int = 500) -> str:
+        """Scan the codebase directory and return a file tree structure.
+
+        Args:
+            working_dir: Path to the working directory to scan.
+            max_files: Maximum number of files to include (default 500).
+
+        Returns:
+            Formatted string with file tree structure.
+        """
+        # Common directories and files to ignore
+        ignore_dirs = {
+            ".git", ".svn", ".hg",
+            "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache",
+            "node_modules", ".venv", "venv", "env",
+            "dist", "build", ".next", ".nuxt",
+            "coverage", ".coverage", "htmlcov",
+            ".idea", ".vscode",
+            "eggs", "*.egg-info",
+        }
+        ignore_files = {".DS_Store", "Thumbs.db", ".gitignore"}
+
+        files: list[str] = []
+        root_path = Path(working_dir)
+
+        for dirpath, dirnames, filenames in os.walk(root_path):
+            # Filter out ignored directories (modifies dirnames in-place)
+            dirnames[:] = [d for d in dirnames if d not in ignore_dirs and not d.endswith(".egg-info")]
+
+            rel_dir = Path(dirpath).relative_to(root_path)
+
+            for filename in filenames:
+                if filename in ignore_files:
+                    continue
+                if len(files) >= max_files:
+                    break
+
+                rel_path = rel_dir / filename if str(rel_dir) != "." else Path(filename)
+                files.append(str(rel_path))
+
+            if len(files) >= max_files:
+                break
+
+        # Sort files for consistent output
+        files.sort()
+
+        if not files:
+            return "No files found in working directory."
+
+        # Format as a simple file list
+        file_list = "\n".join(f"- {f}" for f in files)
+        header = f"## File Structure ({len(files)} files)\n\n"
+
+        if len(files) >= max_files:
+            header += f"(Truncated to first {max_files} files)\n\n"
+
+        return header + file_list
+
     def compile(self, state: ExecutionState) -> CompiledContext:
         """Compile ExecutionState into context for planning.
 
@@ -185,6 +251,17 @@ Ensure exact file paths, complete code in steps, and commands with expected outp
                 )
             )
 
+        # Codebase section (optional - when working_dir is set)
+        if state.profile.working_dir:
+            codebase_content = self._scan_codebase(state.profile.working_dir)
+            sections.append(
+                ContextSection(
+                    name="codebase",
+                    content=codebase_content,
+                    source="state.profile.working_dir",
+                )
+            )
+
         # Validate all sections before returning
         self.validate_sections(sections)
 
@@ -204,18 +281,26 @@ class Architect:
 
     context_strategy: type[ArchitectContextStrategy] = ArchitectContextStrategy
 
-    def __init__(self, driver: DriverInterface):
+    def __init__(
+        self,
+        driver: DriverInterface,
+        stream_emitter: StreamEmitter | None = None,
+    ):
         """Initialize the Architect agent.
 
         Args:
             driver: LLM driver interface for generating plans.
+            stream_emitter: Optional callback for streaming events.
         """
         self.driver = driver
+        self._stream_emitter = stream_emitter
 
     async def plan(
         self,
         state: ExecutionState,
-        output_dir: str | None = None
+        output_dir: str | None = None,
+        *,
+        workflow_id: str,
     ) -> PlanOutput:
         """Generate a development plan from an issue and optional design.
 
@@ -226,6 +311,7 @@ class Architect:
             state: The execution state containing the issue and optional design.
             output_dir: Directory path where the markdown plan will be saved.
                 If None, uses profile's plan_output_dir from state.
+            workflow_id: Workflow ID for stream events (required).
 
         Returns:
             PlanOutput containing the task DAG and path to the saved markdown file.
@@ -240,19 +326,41 @@ class Architect:
         if output_dir is None:
             output_dir = state.profile.plan_output_dir
 
+        # Resolve relative paths to working_dir (not server CWD)
+        output_path = Path(output_dir)
+        if not output_path.is_absolute() and state.profile.working_dir:
+            output_dir = str(Path(state.profile.working_dir) / output_path)
+
         # Compile context using strategy
         strategy = self.context_strategy()
         compiled_context = strategy.compile(state)
 
+        # Calculate system prompt length for logging
+        prompt_length = (
+            len(compiled_context.system_prompt)
+            if compiled_context.system_prompt
+            else 0
+        )
         logger.debug(
             "Compiled context",
             agent="architect",
             sections=[s.name for s in compiled_context.sections],
-            system_prompt_length=len(compiled_context.system_prompt) if compiled_context.system_prompt else 0
+            system_prompt_length=prompt_length
         )
 
         # Generate task DAG using compiled context
         task_dag = await self._generate_task_dag(compiled_context, state.issue, strategy)
+
+        # Emit completion event
+        if self._stream_emitter is not None:
+            event = StreamEvent(
+                type=StreamEventType.AGENT_OUTPUT,
+                content=f"Generated plan with {len(task_dag.tasks)} tasks",
+                timestamp=datetime.now(UTC),
+                agent="architect",
+                workflow_id=workflow_id,
+            )
+            await self._stream_emitter(event)
 
         # Save markdown
         markdown_path = self._save_markdown(task_dag, state.issue, state.design, output_dir)
@@ -343,10 +451,16 @@ class Architect:
         architecture = design.architecture if design else "See task descriptions below."
         tech_stack = ", ".join(design.tech_stack) if design else "See implementation details."
 
+        # Build the markdown header with Claude instructions
+        claude_instruction = (
+            "> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans "
+            "to implement this plan task-by-task."
+        )
+
         lines = [
             f"# {title} Implementation Plan",
             "",
-            "> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.",
+            claude_instruction,
             "",
             f"**Goal:** {goal}",
             "",

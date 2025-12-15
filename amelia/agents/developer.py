@@ -13,7 +13,9 @@ from amelia.core.constants import ToolName
 from amelia.core.context import CompiledContext, ContextSection, ContextStrategy
 from amelia.core.exceptions import AgenticExecutionError
 from amelia.core.state import AgentMessage, ExecutionState, Task
+from amelia.core.types import StreamEmitter
 from amelia.drivers.base import DriverInterface
+from amelia.drivers.cli.claude import convert_to_stream_event
 
 
 DeveloperStatus = Literal["completed", "failed", "in_progress"]
@@ -125,21 +127,34 @@ class Developer:
 
     context_strategy: type[ContextStrategy] = DeveloperContextStrategy
 
-    def __init__(self, driver: DriverInterface, execution_mode: ExecutionMode = "structured"):
+    def __init__(
+        self,
+        driver: DriverInterface,
+        execution_mode: ExecutionMode = "structured",
+        stream_emitter: StreamEmitter | None = None,
+    ):
         """Initialize the Developer agent.
 
         Args:
             driver: LLM driver interface for task execution and tool access.
             execution_mode: Execution mode. Defaults to "structured".
+            stream_emitter: Optional callback for streaming events.
         """
         self.driver = driver
         self.execution_mode = execution_mode
+        self._stream_emitter = stream_emitter
 
-    async def execute_current_task(self, state: ExecutionState) -> dict[str, Any]:
+    async def execute_current_task(
+        self,
+        state: ExecutionState,
+        *,
+        workflow_id: str,
+    ) -> dict[str, Any]:
         """Execute the current task from execution state.
 
         Args:
             state: Full execution state containing profile, plan, and current_task_id.
+            workflow_id: Workflow ID for stream events (required).
 
         Returns:
             Dict with status, task_id, and output.
@@ -158,20 +173,28 @@ class Developer:
         cwd = state.profile.working_dir or os.getcwd()
 
         if self.execution_mode == "agentic":
-            return await self._execute_agentic(task, cwd, state)
+            return await self._execute_agentic(task, cwd, state, workflow_id=workflow_id)
         else:
             result = await self._execute_structured(task, state)
             # Ensure task_id is included for consistency with agentic path
             result["task_id"] = task.id
             return result
 
-    async def _execute_agentic(self, task: Task, cwd: str, state: ExecutionState) -> dict[str, Any]:
+    async def _execute_agentic(
+        self,
+        task: Task,
+        cwd: str,
+        state: ExecutionState,
+        *,
+        workflow_id: str,
+    ) -> dict[str, Any]:
         """Execute task autonomously with full Claude tool access.
 
         Args:
             task: The task to execute.
             cwd: Working directory for execution.
             state: Full execution state for context compilation.
+            workflow_id: Workflow ID for stream events (required).
 
         Returns:
             Dict with status and output.
@@ -195,19 +218,21 @@ class Developer:
         logger.info(f"Starting agentic execution for task {task.id}")
 
         async for event in self.driver.execute_agentic(messages, cwd, system_prompt=context.system_prompt):
-            self._handle_stream_event(event)
+            self._handle_stream_event(event, workflow_id)
 
             if event.type == "error":
                 raise AgenticExecutionError(event.content or "Unknown error")
 
         return {"status": "completed", "task_id": task.id, "output": "Agentic execution completed"}
 
-    def _handle_stream_event(self, event: Any) -> None:
-        """Display streaming event to terminal.
+    def _handle_stream_event(self, event: Any, workflow_id: str) -> None:
+        """Display streaming event to terminal and emit via callback.
 
         Args:
             event: Stream event to display.
+            workflow_id: Current workflow ID.
         """
+        # Terminal display (existing logic)
         if event.type == "tool_use":
             typer.secho(f"  -> {event.tool_name}", fg=typer.colors.CYAN)
             if event.tool_input:
@@ -223,6 +248,18 @@ class Developer:
 
         elif event.type == "error":
             typer.secho(f"  Error: {event.content}", fg=typer.colors.RED)
+
+        # Emit via callback if configured
+        if self._stream_emitter is not None:
+            stream_event = convert_to_stream_event(event, "developer", workflow_id)
+            if stream_event is not None:
+                # Fire-and-forget: emit stream event without blocking
+                emit_task: asyncio.Task[None] = asyncio.create_task(self._stream_emitter(stream_event))  # type: ignore[arg-type]
+                emit_task.add_done_callback(
+                    lambda t: logger.exception("Stream emitter failed", exc_info=t.exception())
+                    if t.exception()
+                    else None
+                )
 
     async def _execute_structured(self, task: Task, state: ExecutionState) -> dict[str, Any]:
         """Execute task using structured step-by-step approach.
