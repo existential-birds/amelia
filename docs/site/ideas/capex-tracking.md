@@ -1,8 +1,6 @@
 # Capitalization Tracking Design
 
-*Brainstorming session: 2025-12-07*
-
----
+> **Created by:** hey-amelia bot with Claude Opus 4.5
 
 ## Overview
 

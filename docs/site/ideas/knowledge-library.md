@@ -1,8 +1,6 @@
 # Knowledge Library Design
 
-**Date:** 2025-12-06
-**Status:** Draft
-**Phase:** 13 (before AWS AgentCore)
+> **Created by:** hey-amelia bot with Claude Opus 4.5
 
 ## Overview
 

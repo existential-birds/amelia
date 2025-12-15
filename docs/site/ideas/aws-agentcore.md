@@ -1,9 +1,6 @@
 # AWS AgentCore Deployment Design
 
-> **Status:** Draft (Research Complete)
-> **Date:** 2025-12-06
-> **Author:** Brainstorming session
-> **Last Updated:** 2025-12-06 (added research findings)
+> **Created by:** hey-amelia bot with Claude Opus 4.5
 
 ## Overview
 

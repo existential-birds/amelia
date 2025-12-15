@@ -1,6 +1,10 @@
 # Planning Workflow Variations
 
-> Design exploration for different planning prompt injection strategies in the Architect agent.
+> **Created by:** hey-amelia bot with Claude Opus 4.5
+
+## Overview
+
+Design exploration for different planning prompt injection strategies in the Architect agent.
 
 ## Problem Statement
 

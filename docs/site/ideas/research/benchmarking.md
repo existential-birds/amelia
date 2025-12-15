@@ -1,5 +1,7 @@
 # Benchmarking Amelia's Agents
 
+> **Research conducted by:** hey-amelia bot (research mode) with Claude Opus 4.5
+
 How to systematically evaluate and iterate on Amelia's agents with measurable improvement.
 
 ## Why Benchmark Agents?

@@ -1,8 +1,6 @@
 # Spec Builder Design
 
-**Date:** 2025-12-05
-**Status:** Draft
-**Issue:** TBD
+> **Created by:** hey-amelia bot with Claude Opus 4.5
 
 ## Overview
 

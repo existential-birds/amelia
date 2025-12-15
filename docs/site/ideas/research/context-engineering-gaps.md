@@ -1,5 +1,7 @@
 # Context Engineering Gaps Analysis
 
+> **Research conducted by:** hey-amelia bot (research mode) with Claude Opus 4.5
+
 > Analysis of Amelia's architecture against agentic context engineering principles.
 > Each gap includes a brainstorming prompt for detailed design work.
 

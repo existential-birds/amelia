@@ -1,8 +1,6 @@
-# Phase 12: Debate Mode Design
+# Debate Mode Design
 
-> **Status:** Draft
-> **Created:** 2025-12-05
-> **Author:** Brainstorming session
+> **Created by:** hey-amelia bot with Claude Opus 4.5
 
 ## Overview
 

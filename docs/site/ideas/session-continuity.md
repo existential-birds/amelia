@@ -1,8 +1,6 @@
 # Session Continuity Design
 
-**Date:** 2025-12-13
-**Status:** Draft
-**Phase:** 3 (per [Roadmap](/reference/roadmap))
+> **Created by:** hey-amelia bot with Claude Opus 4.5
 
 ## Overview
 

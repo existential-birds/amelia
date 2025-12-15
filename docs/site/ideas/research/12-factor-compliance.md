@@ -1,5 +1,7 @@
 # 12-Factor Agents Compliance Analysis
 
+> **Research conducted by:** hey-amelia bot (research mode) with Claude Opus 4.5
+
 > Analyzing Amelia's alignment with the [12-Factor Agents](https://github.com/humanlayer/12-factor-agents) methodology.
 
 ## Executive Summary
