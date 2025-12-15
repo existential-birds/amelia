@@ -130,6 +130,7 @@ docs/.doctrees/
 docs/site/.vitepress/dist/
 docs/site/.vitepress/cache/
 docs/site/node_modules/
+docs/site/logs/
 
 # Distribution
 *.tar.gz
