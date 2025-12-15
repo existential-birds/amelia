@@ -129,9 +129,20 @@ export function ApprovalControls({
               className="flex flex-col gap-3"
             >
               <div className="flex flex-col gap-2">
-                <label htmlFor="feedback" className="text-sm font-medium">
-                  Rejection feedback
-                </label>
+                <div className="flex justify-between items-center">
+                  <label htmlFor="feedback" className="text-sm font-medium">
+                    Rejection feedback
+                  </label>
+                  <span
+                    id="feedback-counter"
+                    className={cn(
+                      "text-xs text-muted-foreground",
+                      rejectionFeedback.length >= 500 && "text-destructive"
+                    )}
+                  >
+                    {rejectionFeedback.length}/500
+                  </span>
+                </div>
                 <textarea
                   id="feedback"
                   name="feedback"
@@ -140,6 +151,9 @@ export function ApprovalControls({
                   placeholder="Explain why this plan needs revision..."
                   rows={3}
                   required
+                  autoFocus
+                  maxLength={500}
+                  aria-describedby="feedback-counter"
                   disabled={isPending}
                   className={cn(
                     "placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input w-full min-w-0 rounded-md border bg-transparent px-3 py-2 text-base shadow-xs transition-[color,box-shadow] outline-none disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm resize-none",
