@@ -4,7 +4,15 @@ This folder contains active implementation plans for in-progress work. Plans are
 
 ## Active Plans
 
-*No active plans at this time.*
+| Plan | Description |
+|------|-------------|
+| [Claude Streaming](./2025-12-13-claude-streaming-impl.md) | Real-time Claude Code streaming output in dashboard |
+
+## Reference Documents
+
+| Document | Description |
+|----------|-------------|
+| [Design System Spec](./2025-12-13-design-system-design.md) | Design specification for unified visual language |
 
 ## Plan Lifecycle
 

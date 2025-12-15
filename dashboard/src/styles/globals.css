@@ -12,13 +12,13 @@
 
 /*
  * ============================================================================
- * DESIGN TOKENS - Aviation Theme
+ * DESIGN TOKENS
  * ============================================================================
  * All colors use CSS variables for consistent theming.
  * Components reference these via Tailwind classes: bg-background, text-primary, etc.
  *
- * Note: ai-elements components use these same CSS variables, so the aviation
- * theme automatically applies to queue, canvas, node, edge, and other
+ * Note: ai-elements components use these same CSS variables, so the theme
+ * automatically applies to queue, canvas, node, edge, and other
  * ai-elements components without additional configuration.
  *
  * TAILWIND v4: Uses @theme inline directive to map CSS vars to utilities.
@@ -83,8 +83,8 @@
 }
 
 /*
- * Light mode (default) - Aviation Dark Theme
- * Note: Our "light" mode IS dark (aviation cockpit aesthetic)
+ * Base Theme - Dark Forest Green Aesthetic
+ * Note: This defines the default/base theme with a dark forest green color palette
  */
 :root {
   /* Core backgrounds */
@@ -99,7 +99,7 @@
   --popover: oklch(18% 0.025 150);
   --popover-foreground: oklch(95% 0.02 120);
 
-  /* Primary accent - Aviation Gold */
+  /* Primary accent - Gold */
   --primary: oklch(82% 0.16 85);              /* #FFC857 - Gold */
   --primary-foreground: oklch(8% 0.02 150);   /* Dark text on gold */
 
@@ -147,7 +147,7 @@
   --chart-3: oklch(65% 0.12 240);             /* Blue */
   --chart-4: oklch(50% 0.2 25);               /* Red */
   --chart-5: oklch(60% 0.05 150);             /* Gray */
-  --sidebar-ring: hsl(217.2 91.2% 59.8%);
+  --sidebar-ring: oklch(62% 0.214 259);
 }
 
 /*
@@ -179,7 +179,7 @@
     font-family: var(--font-mono);
   }
 
-  /* Custom scrollbar for aviation aesthetic */
+  /* Custom scrollbar styling */
   ::-webkit-scrollbar {
     width: 8px;
     height: 8px;
@@ -271,29 +271,5 @@
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
-  }
-}
-/*
- ---break---
- */
-.dark {
-  --sidebar: hsl(240 5.9% 10%);
-  --sidebar-foreground: hsl(240 4.8% 95.9%);
-  --sidebar-primary: hsl(224.3 76.3% 48%);
-  --sidebar-primary-foreground: hsl(0 0% 100%);
-  --sidebar-accent: hsl(240 3.7% 15.9%);
-  --sidebar-accent-foreground: hsl(240 4.8% 95.9%);
-  --sidebar-border: hsl(240 3.7% 15.9%);
-  --sidebar-ring: hsl(217.2 91.2% 59.8%);
-}
-/*
- ---break---
- */
-@layer base {
-  * {
-    @apply border-border outline-ring/50;
-  }
-  body {
-    @apply bg-background text-foreground;
   }
 }

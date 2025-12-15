@@ -65,7 +65,7 @@ export function Layout() {
             aria-hidden="true"
           />
 
-          {/* Cockpit glass scanlines - z-[100] */}
+          {/* Glass scanlines - z-[100] */}
           <div
             className="absolute inset-0 pointer-events-none z-[100]"
             style={{

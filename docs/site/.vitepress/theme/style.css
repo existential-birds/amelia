@@ -1,0 +1,370 @@
+/**
+ * Customize default theme styling by overriding CSS variables:
+ * https://github.com/vuejs/vitepress/blob/main/src/client/theme-default/styles/vars.css
+ */
+
+/* Fonts are loaded via /fonts/fonts.css in head config (VitePress handles base path) */
+
+/**
+ * Colors - Light Mode (VitePress default selector)
+ * Daytime theme with warm cream backgrounds and professional blue accents
+ * -------------------------------------------------------------------------- */
+
+:root {
+  /* Shadow colors (OKLCH) */
+  --shadow-color-subtle: oklch(0% 0 0 / 0.05);
+  --shadow-color-soft: oklch(0% 0 0 / 0.1);
+  --shadow-color-medium: oklch(0% 0 0 / 0.15);
+  --shadow-color-strong: oklch(0% 0 0 / 0.4);
+
+  /* Base colors */
+  --vp-c-bg: #FDF8F0;
+  --vp-c-bg-alt: #FFFDF9;
+  --vp-c-bg-elv: #F5F1E8;
+  --vp-c-text-1: #1A2F23;
+  --vp-c-text-2: #5C7263;
+  --vp-c-text-3: #88A896;
+
+  /* Brand colors - Professional Blue */
+  --vp-c-brand-1: #2E6B9C;
+  --vp-c-brand-2: #4A88C0;
+  --vp-c-brand-3: #235782;
+  --vp-c-brand-soft: rgba(46, 107, 156, 0.16);
+
+  /* Default (muted/neutral) */
+  --vp-c-default-1: #5C7263;
+  --vp-c-default-2: #88A896;
+  --vp-c-default-3: #B8AE9C;
+  --vp-c-default-soft: rgba(92, 114, 99, 0.16);
+
+  /* Tip - Green accent */
+  --vp-c-tip-1: #3D7552;
+  --vp-c-tip-2: #5B8A72;
+  --vp-c-tip-3: #2E5E40;
+  --vp-c-tip-soft: rgba(61, 117, 82, 0.16);
+
+  /* Warning - Gold */
+  --vp-c-warning-1: #E8B84A;
+  --vp-c-warning-2: #F0C766;
+  --vp-c-warning-3: #D4A63D;
+  --vp-c-warning-soft: rgba(232, 184, 74, 0.16);
+
+  /* Danger - Red accent */
+  --vp-c-danger-1: #8B3224;
+  --vp-c-danger-2: #A33D2E;
+  --vp-c-danger-3: #72271C;
+  --vp-c-danger-soft: rgba(139, 50, 36, 0.16);
+
+  /* Info - Blue accent */
+  --vp-c-info-1: #2E6B9C;
+  --vp-c-info-2: #4A88C0;
+  --vp-c-info-3: #235782;
+  --vp-c-info-soft: rgba(46, 107, 156, 0.16);
+
+  /* Background variations */
+  --vp-c-bg-soft: rgba(26, 47, 35, 0.08);
+  --vp-c-divider: rgba(26, 47, 35, 0.15);
+  --vp-c-gutter: rgba(26, 47, 35, 0.1);
+
+  /* Heading colors - Terracotta (light mode) */
+  --vp-c-heading-1: oklch(50% 0.15 30);   /* Deep terracotta */
+  --vp-c-heading-2: oklch(55% 0.13 35);   /* Lighter terracotta */
+
+  /* Terminal Hero - inverted theme (light site → dark terminal) */
+  --terminal-bg: #0D1A12;            /* Deep forest background */
+  --terminal-text: #EFF8E2;          /* Light cream text */
+  --terminal-text-dim: #88A896;      /* Muted green */
+  --terminal-accent: #FFC857;        /* Gold accent */
+  --terminal-success: #5B8A72;       /* Brighter green */
+  --terminal-chrome: #2B3D35;        /* Darker forest chrome */
+  --terminal-border: #4A5C54;        /* Subtle forest border */
+}
+
+/**
+ * Colors - Dark Mode (VitePress .dark class selector)
+ * Deep forest greens with gold accents - DEFAULT theme via appearance: 'dark'
+ * -------------------------------------------------------------------------- */
+
+.dark {
+  /* Base colors */
+  --vp-c-bg: #0D1A12;
+  --vp-c-bg-alt: #1F332E;
+  --vp-c-bg-elv: #2B3D35;
+  --vp-c-text-1: #EFF8E2;
+  --vp-c-text-2: #88A896;
+  --vp-c-text-3: #5C7263;
+
+  /* Brand colors - Gold */
+  --vp-c-brand-1: #FFC857;
+  --vp-c-brand-2: #FFD580;
+  --vp-c-brand-3: #E5B350;
+  --vp-c-brand-soft: rgba(255, 200, 87, 0.16);
+
+  /* Default (muted/neutral) */
+  --vp-c-default-1: #88A896;
+  --vp-c-default-2: #5C7263;
+  --vp-c-default-3: #4A5C54;
+  --vp-c-default-soft: rgba(136, 168, 150, 0.16);
+
+  /* Tip - Green accent */
+  --vp-c-tip-1: #5B8A72;
+  --vp-c-tip-2: #6FA083;
+  --vp-c-tip-3: #4A7260;
+  --vp-c-tip-soft: rgba(91, 138, 114, 0.16);
+
+  /* Warning - Gold */
+  --vp-c-warning-1: #FFC857;
+  --vp-c-warning-2: #FFD580;
+  --vp-c-warning-3: #E5B350;
+  --vp-c-warning-soft: rgba(255, 200, 87, 0.16);
+
+  /* Danger - Red accent */
+  --vp-c-danger-1: #A33D2E;
+  --vp-c-danger-2: #C14D3A;
+  --vp-c-danger-3: #8B3224;
+  --vp-c-danger-soft: rgba(163, 61, 46, 0.16);
+
+  /* Info - Blue accent */
+  --vp-c-info-1: #5B9BD5;
+  --vp-c-info-2: #7AADE0;
+  --vp-c-info-3: #4A88C0;
+  --vp-c-info-soft: rgba(91, 155, 213, 0.16);
+
+  /* Background variations */
+  --vp-c-bg-soft: rgba(47, 61, 53, 0.3);
+  --vp-c-divider: rgba(47, 61, 53, 0.2);
+  --vp-c-gutter: rgba(47, 61, 53, 0.15);
+
+  /* Heading colors - Coral (dark mode) */
+  --vp-c-heading-1: oklch(72% 0.14 35);   /* Warm coral */
+  --vp-c-heading-2: oklch(68% 0.12 40);   /* Slightly muted coral */
+
+  /* Terminal Hero - inverted theme (dark site → light terminal) */
+  --terminal-bg: #FDF8F0;            /* Cream/warm background */
+  --terminal-text: #1A2F23;          /* Dark forest green text */
+  --terminal-text-dim: #5C7263;      /* Muted green */
+  --terminal-accent: #2E6B9C;        /* Professional blue accent */
+  --terminal-success: #3D7552;       /* Green */
+  --terminal-chrome: #F5F1E8;        /* Light cream chrome */
+  --terminal-border: #B8AE9C;        /* Subtle border */
+}
+
+/**
+ * Component: Base & Typography
+ * -------------------------------------------------------------------------- */
+
+:root {
+  /* Font families */
+  --vp-font-family-base: "Source Sans 3", sans-serif;
+  --vp-font-family-mono: "IBM Plex Mono", monospace;
+
+  /* Custom heading font */
+  --amelia-font-heading: "Barlow Condensed", sans-serif;
+  --amelia-font-display: "Bebas Neue", sans-serif;
+}
+
+/* Apply heading font to all headings */
+.vp-doc h1,
+.vp-doc h2,
+.vp-doc h3,
+.vp-doc h4,
+.vp-doc h5,
+.vp-doc h6 {
+  font-family: var(--amelia-font-heading);
+  font-weight: 600;
+}
+
+.vp-doc h1 {
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+/* Heading colors - Coral/Terracotta for visual excitement */
+.vp-doc h1,
+.vp-doc h2 {
+  color: var(--vp-c-heading-1);
+}
+
+.vp-doc h3,
+.vp-doc h4,
+.vp-doc h5,
+.vp-doc h6 {
+  color: var(--vp-c-heading-2);
+}
+
+/* Nav title with Bebas Neue display font */
+.VPNavBarTitle .title {
+  font-family: var(--amelia-font-display);
+  font-size: 1.5rem;
+  font-weight: 400;
+  letter-spacing: 0.05em;
+  color: var(--vp-c-brand-1);
+}
+
+
+/**
+ * Component: Button
+ * -------------------------------------------------------------------------- */
+
+:root {
+  --vp-button-brand-border: var(--vp-c-brand-1);
+  --vp-button-brand-text: #0D1A12;
+  --vp-button-brand-bg: var(--vp-c-brand-1);
+  --vp-button-brand-hover-border: var(--vp-c-brand-2);
+  --vp-button-brand-hover-text: #0D1A12;
+  --vp-button-brand-hover-bg: var(--vp-c-brand-2);
+  --vp-button-brand-active-border: var(--vp-c-brand-3);
+  --vp-button-brand-active-text: #0D1A12;
+  --vp-button-brand-active-bg: var(--vp-c-brand-3);
+}
+
+/* Light mode button text adjustments - need light text on dark blue buttons */
+html:not(.dark) {
+  --vp-button-brand-text: #FFFDF9;
+  --vp-button-brand-hover-text: #FFFDF9;
+  --vp-button-brand-active-text: #FFFDF9;
+}
+
+/**
+ * Component: Home
+ * -------------------------------------------------------------------------- */
+
+:root {
+  --vp-home-hero-name-color: transparent;
+  --vp-home-hero-name-background: linear-gradient(
+    120deg,
+    var(--vp-c-brand-1) 30%,
+    var(--vp-c-info-1)
+  );
+  --vp-home-hero-image-background-image: linear-gradient(
+    -45deg,
+    var(--vp-c-brand-soft) 50%,
+    var(--vp-c-info-soft) 50%
+  );
+  --vp-home-hero-image-filter: blur(40px);
+}
+
+/* Light mode hero gradient - terracotta to professional blue for visual interest */
+html:not(.dark) {
+  --vp-home-hero-name-background: linear-gradient(
+    120deg,
+    oklch(50% 0.15 30) 30%,
+    #2E6B9C
+  );
+}
+
+/**
+ * Component: Home Hero Layout Adjustments
+ * Make space for the animated workflow diagram
+ * -------------------------------------------------------------------------- */
+
+/* Adjust hero container for side-by-side layout on larger screens */
+@media (min-width: 960px) {
+  .VPHero .container {
+    display: flex;
+    align-items: center;
+    gap: 2rem;
+  }
+
+  .VPHero .main {
+    flex: 1;
+    max-width: 600px;
+  }
+
+  .VPHero .image {
+    flex: 0 0 400px;
+  }
+}
+
+/* Ensure the animated diagram scales nicely */
+.VPHero .image-container {
+  max-width: 400px;
+  margin: 0 auto;
+}
+
+/* Add subtle gradient background to hero area */
+.VPHome .VPHero {
+  background: radial-gradient(
+    ellipse at 70% 30%,
+    var(--vp-c-brand-soft) 0%,
+    transparent 50%
+  );
+}
+
+.dark .VPHome .VPHero {
+  background: radial-gradient(
+    ellipse at 70% 30%,
+    rgba(255, 200, 87, 0.03) 0%,
+    transparent 50%
+  );
+}
+
+/**
+ * Component: Custom Block (Callouts)
+ * -------------------------------------------------------------------------- */
+
+:root {
+  /* Info callout - Blue */
+  --vp-custom-block-info-border: var(--vp-c-info-1);
+  --vp-custom-block-info-text: var(--vp-c-text-1);
+  --vp-custom-block-info-bg: var(--vp-c-info-soft);
+  --vp-custom-block-info-code-bg: rgba(91, 155, 213, 0.1);
+
+  /* Tip callout - Green */
+  --vp-custom-block-tip-border: var(--vp-c-tip-1);
+  --vp-custom-block-tip-text: var(--vp-c-text-1);
+  --vp-custom-block-tip-bg: var(--vp-c-tip-soft);
+  --vp-custom-block-tip-code-bg: rgba(91, 138, 114, 0.1);
+
+  /* Warning callout - Gold */
+  --vp-custom-block-warning-border: var(--vp-c-warning-1);
+  --vp-custom-block-warning-text: var(--vp-c-text-1);
+  --vp-custom-block-warning-bg: var(--vp-c-warning-soft);
+  --vp-custom-block-warning-code-bg: rgba(255, 200, 87, 0.1);
+
+  /* Danger callout - Red */
+  --vp-custom-block-danger-border: var(--vp-c-danger-1);
+  --vp-custom-block-danger-text: var(--vp-c-text-1);
+  --vp-custom-block-danger-bg: var(--vp-c-danger-soft);
+  --vp-custom-block-danger-code-bg: rgba(163, 61, 46, 0.1);
+}
+
+/**
+ * Component: Code
+ * -------------------------------------------------------------------------- */
+
+:root {
+  --vp-code-block-bg: rgba(47, 61, 53, 0.4);
+  --vp-code-tab-divider: var(--vp-c-divider);
+  --vp-code-copy-code-border-color: rgba(255, 200, 87, 0.3);
+  --vp-code-copy-code-bg: rgba(47, 61, 53, 0.6);
+  --vp-code-copy-code-hover-border-color: var(--vp-c-brand-1);
+  --vp-code-copy-code-hover-bg: rgba(47, 61, 53, 0.8);
+  --vp-code-copy-code-active-text: var(--vp-c-brand-1);
+}
+
+/* Light mode code block adjustments */
+html:not(.dark) {
+  --vp-code-block-bg: rgba(26, 47, 35, 0.06);
+  --vp-code-copy-code-border-color: rgba(46, 107, 156, 0.3);
+  --vp-code-copy-code-bg: rgba(245, 241, 232, 0.9);
+  --vp-code-copy-code-hover-border-color: var(--vp-c-brand-1);
+  --vp-code-copy-code-hover-bg: #FFFDF9;
+}
+
+/**
+ * Component: Algolia Search
+ * -------------------------------------------------------------------------- */
+
+.DocSearch {
+  --docsearch-primary-color: var(--vp-c-brand-1) !important;
+  --docsearch-highlight-color: var(--vp-c-brand-1) !important;
+  --docsearch-text-color: var(--vp-c-text-1) !important;
+  --docsearch-modal-background: var(--vp-c-bg-alt) !important;
+  --docsearch-searchbox-background: var(--vp-c-bg) !important;
+  --docsearch-searchbox-focus-background: var(--vp-c-bg) !important;
+  --docsearch-hit-color: var(--vp-c-text-2) !important;
+  --docsearch-hit-active-color: var(--vp-c-text-1) !important;
+  --docsearch-hit-background: var(--vp-c-bg) !important;
+  --docsearch-footer-background: var(--vp-c-bg) !important;
+}

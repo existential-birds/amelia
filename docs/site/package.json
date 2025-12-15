@@ -1,0 +1,30 @@
+{
+  "name": "@amelia/design-system-docs",
+  "version": "0.1.0",
+  "description": "Amelia Design System documentation site built with VitePress by hey-amelia bot",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vitepress dev",
+    "build": "vitepress build",
+    "preview": "vitepress preview",
+    "docs:dev": "vitepress dev",
+    "docs:build": "vitepress build",
+    "docs:preview": "vitepress preview"
+  },
+  "dependencies": {
+    "vue": "^3.4.0"
+  },
+  "devDependencies": {
+    "vitepress": "^1.5.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "MPL-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/anderskev/amelia.git",
+    "directory": "docs/site"
+  }
+}

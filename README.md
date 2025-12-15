@@ -4,7 +4,7 @@
 
 [Amelia](https://en.wikipedia.org/wiki/Amelia_Earhart) is a local agentic coding system that orchestrates software development tasks through multiple AI agents with specialized roles.
 
-See the [**Roadmap**](docs/roadmap.md) for where we're headed and [**Current Status**](#current-status) for where we are.
+See the [**Roadmap**](https://anderskev.github.io/amelia/reference/roadmap) for where we're headed and [**Current Status**](#current-status) for where we are.
 
 ## Prerequisites
 
@@ -52,7 +52,7 @@ profiles:
 EOF
 ```
 
-See **[Configuration](docs/usage.md#configuration)** for all available parameters including retry settings, execution modes, and driver options.
+See **[Configuration](https://anderskev.github.io/amelia/guide/configuration)** for all available parameters including retry settings, execution modes, and driver options.
 
 ### 3. Create or Select an Issue
 
@@ -153,7 +153,7 @@ amelia plan-only 123          # Generate plan without executing
 amelia review --local         # Review uncommitted changes
 ```
 
-See the **[Usage Guide](docs/usage.md)** for complete CLI reference, API endpoints, and example workflows.
+See the **[Usage Guide](https://anderskev.github.io/amelia/guide/usage)** for complete CLI reference, API endpoints, and example workflows.
 
 ## Configuration
 
@@ -169,19 +169,21 @@ profiles:
     strategy: single
 ```
 
-See [Configuration Reference](docs/configuration.md) for full details.
+See [Configuration Reference](https://anderskev.github.io/amelia/guide/configuration) for full details.
 
 ## Learn More
 
-- **[Usage Guide](docs/usage.md)** - CLI commands, REST API reference, and example workflows
-- [Configuration Reference](docs/configuration.md) - Full settings documentation
-- [Troubleshooting](docs/troubleshooting.md) - Common issues and solutions
-- [Concepts: Understanding Agentic AI](docs/concepts.md) - How agents, drivers, and orchestration work
-- [Architecture & Data Flow](docs/architecture.md) - Technical deep dive with diagrams
-- [Roadmap](docs/roadmap.md) - Detailed development phases and vision
-- [Benchmarking LLM Agents](docs/benchmarking.md) - How to systematically evaluate and iterate on agents
-- [12-Factor Agents Compliance](docs/analysis/12-factor-agents-compliance.md) - How Amelia aligns with the 12-Factor Agents methodology
-- [Brainstorming](docs/brainstorming/) - Design explorations created using the superpowers:brainstorming skill
+**[Documentation Site](https://anderskev.github.io/amelia/)** - Full VitePress documentation
+
+- **[Usage Guide](https://anderskev.github.io/amelia/guide/usage)** - CLI commands, REST API reference, and example workflows
+- [Configuration Reference](https://anderskev.github.io/amelia/guide/configuration) - Full settings documentation
+- [Troubleshooting](https://anderskev.github.io/amelia/guide/troubleshooting) - Common issues and solutions
+- [Concepts: Understanding Agentic AI](https://anderskev.github.io/amelia/architecture/concepts) - How agents, drivers, and orchestration work
+- [Architecture & Data Flow](https://anderskev.github.io/amelia/architecture/overview) - Technical deep dive with diagrams
+- [Roadmap](https://anderskev.github.io/amelia/reference/roadmap) - Detailed development phases and vision
+- [Benchmarking LLM Agents](https://anderskev.github.io/amelia/ideas/research/benchmarking) - How to systematically evaluate and iterate on agents
+- [12-Factor Agents Compliance](https://anderskev.github.io/amelia/ideas/research/12-factor-compliance) - How Amelia aligns with the 12-Factor Agents methodology
+- [Ideas & Brainstorming](https://anderskev.github.io/amelia/ideas/) - Design explorations created using the superpowers:brainstorming skill
 
 > **Note:** `docs/plans/` contains temporary planning documents for in-progress work. These should be deleted once their corresponding plans are executed and merged.
 

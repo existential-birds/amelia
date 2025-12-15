@@ -4,7 +4,7 @@
 
 ## Overview
 
-The Amelia Design System is built on the **aviation cockpit aesthetic** - the visual language of flight instruments, navigation charts, and control panels. This reflects what Amelia does: orchestrating complex autonomous operations with precision, status awareness, and clarity under pressure.
+The Amelia Design System provides a unified visual language for an AI orchestrator, emphasizing precision, status awareness, and clarity under pressure.
 
 ### Goals
 
@@ -30,9 +30,9 @@ The Amelia Design System is built on the **aviation cockpit aesthetic** - the vi
 
 1. **Instrument Clarity** - Information hierarchy is immediate. Status is visible at a glance. No ambiguity about what's running, blocked, or complete.
 
-2. **Dark-First, Light-Ready** - The primary experience is dark (cockpit at night), but all elements must work on light backgrounds (printed charts, projector displays).
+2. **Dark-First, Light-Ready** - The primary experience is dark, but all elements must work on light backgrounds (printed materials, projector displays).
 
-3. **Gold Signals Action** - Aviation gold (#FFC857) means "active" or "in progress." It draws attention without alarm. On light backgrounds, aviation blue takes this role.
+3. **Gold Signals Action** - Gold (#FFC857) means "active" or "in progress." It draws attention without alarm. On light backgrounds, blue takes this role.
 
 4. **Typography Has Altitude** - Display text (Bebas Neue) is bold and commanding. Body text (Source Sans 3) is readable in any condition. Code (IBM Plex Mono) is precise.
 
@@ -69,7 +69,7 @@ The color system uses **OKLCH** for perceptual uniformity - colors maintain cons
 | `surface` | oklch(99% 0.01 85) | #FFFDF9 | Cards, elevated |
 | `foreground` | oklch(20% 0.04 150) | #1A2F23 | Forest green text |
 | `muted` | oklch(45% 0.03 150) | #5C7263 | Secondary text |
-| `primary` | oklch(45% 0.12 240) | #2E6B9C | Aviation blue (links) |
+| `primary` | oklch(45% 0.12 240) | #2E6B9C | Blue (links) |
 | `accent` | oklch(75% 0.14 85) | #E8B84A | Gold (decorative only) |
 | `destructive` | oklch(45% 0.18 25) | #8B3224 | Errors |
 | `border` | oklch(25% 0.03 150 / 15%) | — | Subtle dividers |
@@ -184,7 +184,7 @@ The Amelia logo is a **typographic wordmark** - the word "AMELIA" set in Bebas N
 
 | Context | Color | Token |
 |---------|-------|-------|
-| Dark backgrounds | Aviation Gold #FFC857 | `primary` |
+| Dark backgrounds | Gold #FFC857 | `primary` |
 | Light backgrounds | Forest Green #1F332E | `surface` (dark) |
 | Monochrome dark | Off-white #EFF8E2 | `foreground` |
 | Monochrome light | Forest Green #1A2F23 | `foreground` (light) |

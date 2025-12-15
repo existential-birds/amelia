@@ -1,0 +1,138 @@
+/*
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/.
+ */
+
+/**
+ * Custom CSS
+ *
+ * Additional customizations beyond the base theme.
+ * This file is optional and can be used for project-specific overrides.
+ */
+
+/**
+ * Component: Navigation Bar
+ * -------------------------------------------------------------------------- */
+
+/* Add subtle border to nav */
+.VPNav {
+  border-bottom: 1px solid var(--vp-c-divider);
+}
+
+/**
+ * Component: Sidebar
+ * -------------------------------------------------------------------------- */
+
+/* Highlight active sidebar item with gold accent */
+.VPSidebar .is-active > .item .link {
+  color: var(--vp-c-brand-1);
+}
+
+/**
+ * Component: Code Groups
+ * -------------------------------------------------------------------------- */
+
+/* Improve code group tab styling */
+.vp-code-group .tabs {
+  background: var(--vp-c-bg-alt);
+  border-bottom: 1px solid var(--vp-c-divider);
+}
+
+.vp-code-group .tabs label {
+  color: var(--vp-c-text-2);
+  transition: color 0.2s;
+}
+
+.vp-code-group .tabs label:hover {
+  color: var(--vp-c-brand-1);
+}
+
+.vp-code-group .tabs input:checked + label {
+  color: var(--vp-c-brand-1);
+  border-bottom-color: var(--vp-c-brand-1);
+}
+
+/**
+ * Component: Enhanced Hero "Get Started" Button
+ * -------------------------------------------------------------------------- */
+
+/* Make the hero brand button larger and more commanding */
+.VPHero .actions .VPButton.brand {
+  /* Increased size */
+  padding: 1rem 2.5rem;
+  font-size: 1.25rem;
+  font-weight: 600;
+
+  /* Subtle glow/shadow effect */
+  box-shadow:
+    0 4px 16px var(--shadow-color-soft),
+    0 0 24px var(--vp-c-brand-soft);
+
+  /* Smooth transitions */
+  transition: all 0.3s ease;
+
+  /* Position context for arrow pseudo-element */
+  position: relative;
+
+  /* Add space for the arrow */
+  padding-right: 3rem;
+}
+
+/* Enhanced hover state */
+.VPHero .actions .VPButton.brand:hover {
+  box-shadow:
+    0 6px 24px var(--shadow-color-medium),
+    0 0 32px var(--vp-c-brand-soft);
+  transform: translateY(-2px);
+}
+
+/* Enhanced active state */
+.VPHero .actions .VPButton.brand:active {
+  transform: translateY(0);
+}
+
+/* SVG arrow icon via ::after pseudo-element */
+.VPHero .actions .VPButton.brand::after {
+  content: '';
+  position: absolute;
+  right: 1.25rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1rem;
+  height: 1rem;
+
+  /* SVG arrow as mask - allows background-color to control arrow color */
+  --arrow-svg: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='black'%3E%3Cpath fill-rule='evenodd' d='M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z' clip-rule='evenodd'/%3E%3C/svg%3E");
+  -webkit-mask-image: var(--arrow-svg);
+  mask-image: var(--arrow-svg);
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+
+  /* Arrow color inherits from button text */
+  background-color: currentColor;
+
+  /* Smooth transition on hover */
+  transition: transform 0.3s ease, background-color 0.3s ease;
+}
+
+/* Arrow animation on hover - subtle shift to the right */
+.VPHero .actions .VPButton.brand:hover::after {
+  transform: translateY(-50%) translateX(4px);
+}
+
+/**
+ * Component: Hero Image (Mobile)
+ * -------------------------------------------------------------------------- */
+
+/* Hide hero image container on mobile/tablet - diagram is too complex */
+@media (max-width: 1024px) {
+  .VPHero .image-container,
+  .VPHero .image {
+    display: none;
+  }
+}

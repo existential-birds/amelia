@@ -12,7 +12,7 @@ This folder contains visual design mockups and prototypes for the Amelia dashboa
 
 ## Design Principles
 
-The Amelia dashboard follows an **aviation/cockpit aesthetic**:
+The Amelia dashboard uses a **dark-first professional aesthetic**:
 - Dark theme with deep green backgrounds
 - Gold accent colors for primary actions and status
 - Barlow Condensed and Bebas Neue typography
