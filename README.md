@@ -79,7 +79,8 @@ amelia start 123
 amelia review --local
 ```
 
-> **Tip:** Use `tracker: noop` in your config to test without a real issue tracker. This creates a mock issue from the ID you provide.
+> [!TIP]
+> Use `tracker: noop` in your config to test without a real issue tracker. This creates a mock issue from the ID you provide.
 
 ## Alternative Installation
 
@@ -105,7 +106,8 @@ cd /path/to/amelia
 AMELIA_SETTINGS=/path/to/your/project/settings.amelia.yaml uv run amelia plan-only 123
 ```
 
-> **Note:** Amelia reads `settings.amelia.yaml` from the current working directory (or via `AMELIA_SETTINGS`). Run commands from your project root so agents have access to your codebase context.
+> [!NOTE]
+> Amelia reads `settings.amelia.yaml` from the current working directory (or via `AMELIA_SETTINGS`). Run commands from your project root so agents have access to your codebase context.
 
 ## How It Works
 
@@ -165,7 +167,8 @@ For full documentation, visit **[anderskev.github.io/amelia](https://anderskev.g
 
 **Limitations:**
 
-_This is an experimental project. Set expectations accordingly._
+> [!WARNING]
+> This is an experimental project. Set expectations accordingly.
 
 **Web Dashboard (early access):**
 - Core pages implemented: Workflows (with canvas visualization), Workflow Detail, History
