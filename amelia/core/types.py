@@ -23,6 +23,20 @@ StrategyType = Literal["single", "competitive"]
 ExecutionMode = Literal["structured", "agentic"]
 
 
+class TrustLevel(StrEnum):
+    """How much autonomy the Developer gets.
+
+    Attributes:
+        PARANOID: Approve every step.
+        STANDARD: Approve batches (default).
+        AUTONOMOUS: Auto-approve low/medium, stop only for high-risk or blockers.
+    """
+
+    PARANOID = "paranoid"
+    STANDARD = "standard"
+    AUTONOMOUS = "autonomous"
+
+
 class RetryConfig(BaseModel):
     """Retry configuration for transient failures.
 
@@ -55,6 +69,8 @@ class Profile(BaseModel):
         plan_output_dir: Directory for storing generated plans.
         working_dir: Working directory for agentic execution.
         retry: Retry configuration for transient failures.
+        trust_level: How much autonomy the Developer gets.
+        batch_checkpoint_enabled: Whether to pause for human approval between batches.
     """
 
     name: str
@@ -65,6 +81,8 @@ class Profile(BaseModel):
     plan_output_dir: str = "docs/plans"
     working_dir: str | None = None
     retry: RetryConfig = Field(default_factory=RetryConfig)
+    trust_level: TrustLevel = TrustLevel.STANDARD
+    batch_checkpoint_enabled: bool = True
 
 class Settings(BaseModel):
     """Global settings for Amelia.
@@ -118,6 +136,22 @@ class Design(BaseModel):
     relevant_files: list[str] = Field(default_factory=list)
     conventions: str | None = None
     raw_content: str
+
+
+class DeveloperStatus(StrEnum):
+    """Developer agent execution status.
+
+    Attributes:
+        EXECUTING: Developer is actively executing steps.
+        BATCH_COMPLETE: A batch finished, ready for checkpoint.
+        BLOCKED: Execution blocked, needs human help.
+        ALL_DONE: All batches completed successfully.
+    """
+
+    EXECUTING = "executing"
+    BATCH_COMPLETE = "batch_complete"
+    BLOCKED = "blocked"
+    ALL_DONE = "all_done"
 
 
 class StreamEventType(StrEnum):

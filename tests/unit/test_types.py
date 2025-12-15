@@ -3,7 +3,15 @@
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """Tests for core types."""
 
-from amelia.core.types import ExecutionMode, Profile, RetryConfig
+import json
+
+from amelia.core.types import (
+    DeveloperStatus,
+    ExecutionMode,
+    Profile,
+    RetryConfig,
+    TrustLevel,
+)
 
 
 def test_execution_mode_literal_values():
@@ -55,3 +63,50 @@ class TestProfileRetryConfig:
         assert profile.retry.max_retries == 5
         assert profile.retry.base_delay == 2.0
         assert profile.retry.max_delay == 120.0
+
+
+class TestDeveloperStatus:
+    """Test DeveloperStatus enum."""
+
+    def test_enum_values(self):
+        """DeveloperStatus has expected values."""
+        assert DeveloperStatus.EXECUTING == "executing"
+        assert DeveloperStatus.BATCH_COMPLETE == "batch_complete"
+        assert DeveloperStatus.BLOCKED == "blocked"
+        assert DeveloperStatus.ALL_DONE == "all_done"
+
+    def test_string_representation(self):
+        """DeveloperStatus can be used as string."""
+        assert str(DeveloperStatus.EXECUTING) == "executing"
+        assert f"{DeveloperStatus.BLOCKED}" == "blocked"
+
+    def test_json_serialization(self):
+        """DeveloperStatus serializes to JSON."""
+        status = DeveloperStatus.BATCH_COMPLETE
+        serialized = json.dumps(status)
+        assert serialized == '"batch_complete"'
+        deserialized = DeveloperStatus(json.loads(serialized))
+        assert deserialized == DeveloperStatus.BATCH_COMPLETE
+
+
+class TestTrustLevel:
+    """Test TrustLevel enum."""
+
+    def test_enum_values(self):
+        """TrustLevel has expected values."""
+        assert TrustLevel.PARANOID == "paranoid"
+        assert TrustLevel.STANDARD == "standard"
+        assert TrustLevel.AUTONOMOUS == "autonomous"
+
+    def test_string_representation(self):
+        """TrustLevel can be used as string."""
+        assert str(TrustLevel.STANDARD) == "standard"
+        assert f"{TrustLevel.AUTONOMOUS}" == "autonomous"
+
+    def test_json_serialization(self):
+        """TrustLevel serializes to JSON."""
+        level = TrustLevel.PARANOID
+        serialized = json.dumps(level)
+        assert serialized == '"paranoid"'
+        deserialized = TrustLevel(json.loads(serialized))
+        assert deserialized == TrustLevel.PARANOID
