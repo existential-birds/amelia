@@ -4,6 +4,13 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 
+/**
+ * @fileoverview Component barrel exports for the Amelia dashboard.
+ *
+ * Re-exports domain components, AI elements, shadcn UI primitives,
+ * and custom React Flow node/edge types.
+ */
+
 // =============================================================================
 // Domain Components
 // =============================================================================
