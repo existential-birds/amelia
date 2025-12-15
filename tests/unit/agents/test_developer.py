@@ -9,6 +9,7 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
+
 from amelia.agents.developer import Developer, ValidationResult
 from amelia.core.state import ExecutionState
 from amelia.core.types import StreamEvent, StreamEventType

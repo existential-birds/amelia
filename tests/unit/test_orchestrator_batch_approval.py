@@ -8,7 +8,6 @@ from datetime import UTC, datetime
 
 import pytest
 
-
 from amelia.core.orchestrator import batch_approval_node
 from amelia.core.state import BatchApproval, ExecutionState
 
