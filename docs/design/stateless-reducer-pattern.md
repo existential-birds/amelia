@@ -99,6 +99,28 @@ def set_union(left: set, right: set) -> set:
     return (left or set()) | (right or set())
 
 
+class TokenMetrics(BaseModel):
+    """Token usage tracking for context budget management.
+
+    Research finding: Multi-agent systems consume ~15× more tokens.
+    Tracking enables compaction triggers and budget enforcement.
+    """
+    model_config = ConfigDict(frozen=True)
+
+    total_input: int = 0
+    total_output: int = 0
+    by_agent: dict[str, int] = Field(default_factory=dict)
+
+def token_merge(left: TokenMetrics, right: TokenMetrics) -> TokenMetrics:
+    """Merge token metrics from parallel agents."""
+    merged_by_agent = {**(left.by_agent or {}), **(right.by_agent or {})}
+    return TokenMetrics(
+        total_input=left.total_input + right.total_input,
+        total_output=left.total_output + right.total_output,
+        by_agent=merged_by_agent,
+    )
+
+
 class TaskResult(BaseModel):
     """Result of executing a task. Stored in task_results dict."""
     model_config = ConfigDict(frozen=True)
@@ -127,6 +149,7 @@ class HistoryEntry(BaseModel):
     actor: str  # agent/node name
     event: str  # e.g., "task_started", "review_completed"
     detail: dict[str, Any] = Field(default_factory=dict)
+    tokens_used: int = 0  # Track per-entry token usage for budget management
 
 
 class ExecutionState(BaseModel):
@@ -164,6 +187,9 @@ class ExecutionState(BaseModel):
 
     # --- Idempotency (tracks completed steps for replay) ---
     completed_steps: Annotated[set[str], set_union] = Field(default_factory=set)
+
+    # --- Token tracking (for context budget management) ---
+    token_metrics: Annotated[TokenMetrics, token_merge] = Field(default_factory=TokenMetrics)
 
     # --- Single-writer fields (no reducer needed) ---
     last_review: ReviewResult | None = None
@@ -414,6 +440,19 @@ async def developer_node(state: ExecutionState, config: RunnableConfig) -> dict:
 | `amelia/drivers/api_driver.py` | Implement stateless pattern |
 | `amelia/tools/shell.py` | Accept explicit cwd parameter |
 
+## Research Validation
+
+This pattern aligns with industry research on agentic AI systems:
+
+| Requirement | Research Finding | Implementation |
+|-------------|------------------|----------------|
+| Time-travel debugging | LangGraph cited for "replay, time-travel debugging" | Native checkpointer + frozen models |
+| Parallel safety | "Multi-agent systems require state isolation" | Annotated reducers (dict_merge, set_union) |
+| Token efficiency | "~15× more tokens than chat" | TokenMetrics tracking with compaction triggers |
+| Context management | "Compaction = summarizing and reinitiating" | token_metrics enables threshold-based compaction |
+
+The stateless reducer pattern is explicitly validated by LangGraph's design and Anthropic's agent research.
+
 ## Summary
 
 | Concept | Pattern |
@@ -423,6 +462,7 @@ async def developer_node(state: ExecutionState, config: RunnableConfig) -> dict:
 | **Driver Sessions** | Scoped: `driver_sessions: dict[str, DriverSession]` |
 | **Parallelism** | `Annotated` with `add`, `dict_merge`, `set_union` reducers |
 | **Replay Safety** | `profile_id` + `completed_steps` set |
+| **Token Tracking** | `token_metrics: TokenMetrics` with reducer |
 | **Profile Config** | `config["configurable"]["profile"]` |
 | **Persistence** | Native LangGraph checkpointer |
 

@@ -15,6 +15,21 @@ These principles, informed by [Anthropic's research on effective agent harnesses
 5. **Incremental Accountability** - Every change is committed, logged, and recoverable
 6. **Environment as Truth** - Git history and artifacts are the source of truth, not agent memory
 
+## Research Foundation
+
+This roadmap is informed by industry research on agentic AI systems. Key findings incorporated:
+
+| Research Finding | Impact on Roadmap |
+|------------------|-------------------|
+| Orchestrator-worker: 90.2% improvement (Anthropic) | Phase 1 agent architecture validated |
+| Reflexion: 91% vs 80% on coding (Shinn et al.) | Phase 4 adds self-reflection protocol |
+| Multi-agent: ~15× token cost | Phase 3 adds concrete token budgets |
+| "LLMs can't plan alone" (Kambhampati 2024) | Dynamic orchestration adds plan verification |
+| Sectioning vs Voting patterns | Phase 8 adds both parallelization strategies |
+| "Evaluation lacks granularity" | Phase 10 adds per-agent, per-step metrics |
+
+See [Knowledge Agents Research Analysis](../analysis/knowledge-agents-research.md) for full research synthesis.
+
 ---
 
 ## Phase 1: Core Orchestration [Complete]
@@ -73,6 +88,8 @@ Long-running agents fail across context windows because each session starts fres
 - Session kickoff protocol (verify environment, review history, select next feature)
 - One-feature-per-session discipline to prevent context exhaustion
 - Mergeable state guarantee—every session ends with passing tests and committed changes
+- **Token budget enforcement**: 2,000 token limit per agent output (research-based)
+- **Compaction triggers**: Auto-summarize when context exceeds 50,000 tokens
 
 **12-Factor Compliance:**
 - **F5 (Unified State)**: `amelia-progress.json` becomes single source of truth, Git-reconstructible
@@ -100,6 +117,8 @@ A major failure mode: agents mark features complete without proper verification.
 - Pre-completion verification: run happy paths, check for errors, capture evidence
 - Feature tracking with explicit passing/failing status
 - Health checks at session start—tests must pass before new work begins
+- **Self-reflection protocol**: Developer self-reviews before Reviewer (Reflexion pattern: 91% vs 80% on HumanEval)
+- **Two-stage verification**: Internal reflection → External review → Automated testing
 
 **12-Factor Compliance:**
 - **F9 (Compact Errors)**: Verification failures produce structured error context for retry attempts
@@ -172,6 +191,8 @@ Run multiple independent workflows concurrently, each isolated in its own worktr
 - DAG-aware task scheduling within workflows
 - Resource management (LLM rate limiting, compute allocation)
 - Fire-and-forget execution with notifications on completion
+- **Sectioning pattern**: Parallel execution of independent subtasks (research-validated)
+- **Voting pattern**: Run high-stakes tasks multiple times, resolve conflicts for consensus
 
 **12-Factor Compliance:**
 - **F5 (Unified State)**: Each worktree maintains isolated, serializable state
@@ -210,6 +231,8 @@ Track outcomes, learn from patterns, and automatically improve agent behavior ba
 - Reviewer pattern detection (preemptively address common feedback)
 - Project-specific knowledge base (idioms, pitfalls, architectural decisions)
 - Prompt refinement via A/B testing with benchmark suite
+- **Per-agent metrics**: Track success rate, token usage, latency per agent type
+- **Per-step metrics**: Identify bottleneck steps in workflows (research: "evaluation lacks granularity")
 
 **12-Factor Compliance:**
 - **F2 (Own Your Prompts)**: A/B testing infrastructure enables prompt iteration without code changes
@@ -411,6 +434,10 @@ class RequestHumanInput(BaseModel):
     urgency: Literal["low", "medium", "high"]
     format: Literal["yes_no", "multiple_choice", "free_text"]
     options: list[str] | None
+    # Research-informed additions
+    confidence: float  # Agent's confidence in proceeding without input
+    stakes: Literal["low", "medium", "high"]  # Impact of wrong decision
+    timeout_action: Literal["proceed", "wait", "fail"]  # What to do if no response
 ```
 
 #### Gap 5: Error Self-Healing Loop (F9)

@@ -97,6 +97,14 @@ class ReplanRequest(BaseModel):
 
 
 # --- Agent Outputs ---
+class AgentOutputBase(BaseModel):
+    """Base class for all agent outputs with confidence tracking."""
+    model_config = ConfigDict(frozen=True)
+
+    confidence: float = Field(ge=0.0, le=1.0, default=1.0)
+    uncertainty_factors: tuple[str, ...] = ()
+
+
 class AnalysisResult(BaseModel):
     """Output from Analyst agent."""
     model_config = ConfigDict(frozen=True)
@@ -307,6 +315,33 @@ class PlannedStep(BaseModel):
     reason: str  # Why this agent at this position
 ```
 
+## Plan Verification
+
+Before Developer executes, verify the TaskDAG symbolically:
+
+```python
+class PlanVerificationResult(BaseModel):
+    """Result of symbolic plan verification."""
+    model_config = ConfigDict(frozen=True)
+
+    valid: bool
+    violations: tuple[str, ...] = ()
+    suggested_fixes: tuple[str, ...] = ()
+
+async def verify_plan(plan: TaskDAG, codebase: CodebaseContext) -> PlanVerificationResult:
+    """Verify plan before execution.
+
+    Checks:
+    - DAG is acyclic
+    - Referenced files exist in codebase
+    - Task dependencies are satisfiable
+    - Scope matches complexity estimate
+    """
+    ...
+```
+
+This addresses research finding: "LLMs can't plan, but can help planning in LLM-modulo frameworks" (Kambhampati et al. 2024).
+
 ### Planner Node
 
 ```python
@@ -391,6 +426,23 @@ def dispatcher_node(state: ExecutionState, config: RunnableConfig) -> Command:
             },
         )
 
+    # Confidence-based escalation (research: "self-assess confidence scores")
+    prev_output = state.get_agent_output(current_step.agent)
+    if prev_output and hasattr(prev_output, 'confidence'):
+        if prev_output.confidence < profile.escalation_threshold:
+            return Command(
+                goto="human_approval",
+                update={
+                    "pending_approval_for": current_step.agent,
+                    "workflow_status": "awaiting_approval",
+                    "history": [HistoryEntry(
+                        actor="dispatcher",
+                        event="confidence_escalation",
+                        detail={"confidence": prev_output.confidence, "agent": current_step.agent},
+                    )],
+                },
+            )
+
     # Route to agent
     return Command(goto=f"{current_step.agent}_node")
 ```
@@ -410,11 +462,19 @@ def reducer_node(state: ExecutionState) -> Command:
     # Check if current agent failed
     current_step = state.get_current_step()
     if current_step and current_step.status == "failed":
-        # Could auto-replan on failure, or fail the workflow
-        return Command(
-            goto=END,
-            update={"workflow_status": "failed"},
-        )
+        # TDAG pattern: adapt when subtasks fail
+        if state.workflow and state.workflow.replanned_count < profile.max_replans:
+            return Command(
+                goto="planner_node",
+                update={
+                    "replan_request": ReplanRequest(
+                        requested_by=current_step.agent,
+                        reason=f"Agent {current_step.agent} failed, attempting recovery",
+                        suggested_agents=(),
+                    ),
+                },
+            )
+        return Command(goto=END, update={"workflow_status": "failed"})
 
     # Advance to next step
     if state.workflow:
@@ -501,6 +561,11 @@ class Profile(BaseModel):
 
     # Planner can escalate approval for specific workflows
     auto_approve_trivial: bool = True  # Skip approval for trivial scope
+
+    # Research-informed additions
+    max_replans: int = 3  # Prevent infinite replan loops
+    escalation_threshold: float = 0.7  # Confidence below this triggers human approval
+    max_agent_output_tokens: int = 2000  # Research: subagents return condensed summaries
 ```
 
 Human approval node with `interrupt_before`:
@@ -689,9 +754,23 @@ Planner replans: [architect, developer, security_reviewer, reviewer]
 - [ ] All existing tests pass
 - [ ] New workflow patterns have test coverage
 
+## Research Foundation
+
+This design is informed by industry research on agentic AI systems:
+
+| Pattern | Research Finding | Implementation |
+|---------|------------------|----------------|
+| Orchestrator-Worker | 90.2% improvement over single agent (Anthropic) | Planner → specialized agents |
+| Dynamic Decomposition | Outperforms static planning (TDAG) | ReplanRequest mechanism |
+| Confidence Routing | "Self-assess confidence scores" (LangChain survey) | escalation_threshold in Profile |
+| Plan Verification | "LLMs can't plan alone" (Kambhampati 2024) | verify_plan step |
+| Failure Recovery | TDAG "adapts when subtasks fail" | Failure-triggered replanning |
+
+See `/Users/ka/Downloads/knowledge_agents_research.md` for full research analysis.
+
 ## Open Questions
 
-1. **Should Planner have retry limits for replanning?** (Prevent infinite loops)
-2. **How to handle partial agent failure?** (Retry same agent vs replan vs fail)
-3. **Should we support parallel agent execution?** (Multiple developers on different tasks)
+1. **Should Planner have retry limits for replanning?** Yes, max_replans=3 prevents infinite loops
+2. **How to handle partial agent failure?** Failure-triggered replanning with retry counter, fail workflow after max_replans
+3. **Should we support parallel agent execution?** Phase 8 will add sectioning (parallel independent tasks) and voting (same task multiple times for consensus)
 4. **How to visualize workflow in dashboard?** (React Flow integration)
