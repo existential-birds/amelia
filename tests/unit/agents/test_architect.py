@@ -61,6 +61,52 @@ def mock_task_response() -> TaskListResponse:
     return TaskListResponse(tasks=[mock_task])
 
 
+@pytest.fixture
+def make_step() -> Callable[..., PlanStep]:
+    """Factory for creating PlanStep instances.
+
+    Returns:
+        A factory function that creates PlanStep with configurable parameters.
+    """
+    def _create(
+        step_id: str,
+        description: str = "Test step",
+        risk_level: str = "low",
+        action_type: str = "code",
+        is_test_step: bool = False,
+    ) -> PlanStep:
+        return PlanStep(
+            id=step_id,
+            description=description,
+            action_type=action_type,
+            risk_level=risk_level,
+            is_test_step=is_test_step,
+        )
+    return _create
+
+
+@pytest.fixture
+def make_batch() -> Callable[..., ExecutionBatch]:
+    """Factory for creating ExecutionBatch instances.
+
+    Returns:
+        A factory function that creates ExecutionBatch with configurable parameters.
+    """
+    def _create(
+        batch_number: int,
+        steps: tuple[PlanStep, ...],
+        risk_summary: str = "low",
+        description: str = "",
+    ) -> ExecutionBatch:
+        return ExecutionBatch(
+            batch_number=batch_number,
+            steps=steps,
+            risk_summary=risk_summary,
+            description=description,
+        )
+    return _create
+
+
 class TestArchitectContextStrategy:
     """Test ArchitectContextStrategy methods for task generation."""
 
@@ -521,42 +567,6 @@ class TestGenerateExecutionPlan:
     """Test Architect.generate_execution_plan() method."""
 
     @pytest.fixture
-    def make_step(self) -> Callable[..., PlanStep]:
-        """Factory for creating PlanStep instances."""
-        def _create(
-            step_id: str,
-            description: str = "Test step",
-            risk_level: str = "low",
-            action_type: str = "code",
-            is_test_step: bool = False,
-        ) -> PlanStep:
-            return PlanStep(
-                id=step_id,
-                description=description,
-                action_type=action_type,
-                risk_level=risk_level,
-                is_test_step=is_test_step,
-            )
-        return _create
-
-    @pytest.fixture
-    def make_batch(self) -> Callable[..., ExecutionBatch]:
-        """Factory for creating ExecutionBatch instances."""
-        def _create(
-            batch_number: int,
-            steps: tuple[PlanStep, ...],
-            risk_summary: str = "low",
-            description: str = "",
-        ) -> ExecutionBatch:
-            return ExecutionBatch(
-                batch_number=batch_number,
-                steps=steps,
-                risk_summary=risk_summary,
-                description=description,
-            )
-        return _create
-
-    @pytest.fixture
     def mock_execution_plan_output(
         self,
         make_step: Callable[..., PlanStep],
@@ -771,40 +781,6 @@ class TestGenerateExecutionPlan:
 
 class TestValidateAndSplitBatches:
     """Test validate_and_split_batches helper for batch size enforcement."""
-
-    @pytest.fixture
-    def make_step(self) -> Callable[..., PlanStep]:
-        """Factory for creating PlanStep instances."""
-        def _create(
-            step_id: str,
-            description: str = "Test step",
-            risk_level: str = "low",
-            action_type: str = "code",
-        ) -> PlanStep:
-            return PlanStep(
-                id=step_id,
-                description=description,
-                action_type=action_type,
-                risk_level=risk_level,
-            )
-        return _create
-
-    @pytest.fixture
-    def make_batch(self) -> Callable[..., ExecutionBatch]:
-        """Factory for creating ExecutionBatch instances."""
-        def _create(
-            batch_number: int,
-            steps: tuple[PlanStep, ...],
-            risk_summary: str = "low",
-            description: str = "",
-        ) -> ExecutionBatch:
-            return ExecutionBatch(
-                batch_number=batch_number,
-                steps=steps,
-                risk_summary=risk_summary,
-                description=description,
-            )
-        return _create
 
     def test_batch_within_limits_passes_unchanged(
         self,

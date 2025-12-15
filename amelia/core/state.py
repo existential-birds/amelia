@@ -447,14 +447,18 @@ class ExecutionState(BaseModel):
         driver_session_id: Session ID for CLI driver session continuity (works with any driver).
         workflow_status: Status of the workflow (running, completed, failed).
         agent_history: History of agent actions/messages for context tracking.
+            Uses operator.add reducer - new entries are appended across state updates.
         execution_plan: New execution plan (replaces task_dag for Developer).
         current_batch_index: Index of the current batch being executed.
         batch_results: Results from completed batches.
+            Uses operator.add reducer - new results are appended across state updates.
         developer_status: Current status of the Developer agent.
         current_blocker: Active blocker report if execution is blocked.
         blocker_resolution: Human's response to resolve blocker.
         batch_approvals: Records of human approvals for batches.
+            Uses operator.add reducer - new approvals are appended across state updates.
         skipped_step_ids: IDs of steps that were skipped (for cascade handling).
+            Uses merge_sets reducer - sets are unioned across state updates.
         git_snapshot_before_batch: Git state snapshot for potential revert.
     """
 
