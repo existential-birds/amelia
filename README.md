@@ -79,7 +79,8 @@ amelia start 123
 amelia review --local
 ```
 
-> **Tip:** Use `tracker: noop` in your config to test without a real issue tracker. This creates a mock issue from the ID you provide.
+> [!TIP]
+> Use `tracker: noop` in your config to test without a real issue tracker. This creates a mock issue from the ID you provide.
 
 ## Alternative Installation
 
@@ -105,34 +106,12 @@ cd /path/to/amelia
 AMELIA_SETTINGS=/path/to/your/project/settings.amelia.yaml uv run amelia plan-only 123
 ```
 
-> **Note:** Amelia reads `settings.amelia.yaml` from the current working directory (or via `AMELIA_SETTINGS`). Run commands from your project root so agents have access to your codebase context.
+> [!NOTE]
+> Amelia reads `settings.amelia.yaml` from the current working directory (or via `AMELIA_SETTINGS`). Run commands from your project root so agents have access to your codebase context.
 
 ## How It Works
 
-### Agent Roles
-
-| Agent | Input | Output | Example |
-|-------|-------|--------|---------|
-| **Architect** | Issue description + codebase context | TaskDAG (ordered tasks with dependencies) | "Add login feature" → 5 tasks: create model, add routes, write tests... |
-| **Developer** | Single task from TaskDAG | Code changes via shell/git tools | Executes `git checkout -b`, writes files, runs tests |
-| **Reviewer** | Git diff of changes | Approval or rejection with feedback | "Missing input validation in login handler" |
-
-### Why Drivers?
-
-Enterprise environments often prohibit direct API calls to external LLMs. The driver abstraction lets you:
-
-- **`api:openai`** - Direct API calls via pydantic-ai (fastest, requires API key)
-- **`cli:claude`** - Wraps Claude CLI (works with enterprise SSO, no API key needed)
-
-Switch drivers without code changes:
-
-```yaml
-profiles:
-  work:
-    driver: cli:claude  # Uses approved enterprise CLI
-  home:
-    driver: api:openai  # Direct API access
-```
+Amelia orchestrates configurable AI agents through a workflow graph. See [Architecture](https://anderskev.github.io/amelia/architecture/overview) for data flow and [Concepts](https://anderskev.github.io/amelia/architecture/concepts) for how agents and drivers work.
 
 ## CLI Commands
 
@@ -171,25 +150,15 @@ profiles:
 
 See [Configuration Reference](https://anderskev.github.io/amelia/guide/configuration) for full details.
 
-## Learn More
+## Documentation
 
-**[Documentation Site](https://anderskev.github.io/amelia/)** - Full VitePress documentation
-
-- **[Usage Guide](https://anderskev.github.io/amelia/guide/usage)** - CLI commands, REST API reference, and example workflows
-- [Configuration Reference](https://anderskev.github.io/amelia/guide/configuration) - Full settings documentation
-- [Troubleshooting](https://anderskev.github.io/amelia/guide/troubleshooting) - Common issues and solutions
-- [Concepts: Understanding Agentic AI](https://anderskev.github.io/amelia/architecture/concepts) - How agents, drivers, and orchestration work
-- [Architecture & Data Flow](https://anderskev.github.io/amelia/architecture/overview) - Technical deep dive with diagrams
-- [Roadmap](https://anderskev.github.io/amelia/reference/roadmap) - Detailed development phases and vision
-- [Benchmarking LLM Agents](https://anderskev.github.io/amelia/ideas/research/benchmarking) - How to systematically evaluate and iterate on agents
-- [12-Factor Agents Compliance](https://anderskev.github.io/amelia/ideas/research/12-factor-compliance) - How Amelia aligns with the 12-Factor Agents methodology
-- [Ideas & Brainstorming](https://anderskev.github.io/amelia/ideas/) - Design explorations created using the superpowers:brainstorming skill
-
-> **Note:** `docs/plans/` contains temporary planning documents for in-progress work. These should be deleted once their corresponding plans are executed and merged.
+For full documentation, visit **[anderskev.github.io/amelia](https://anderskev.github.io/amelia/)**.
 
 ## Current Status
 
-**What works:**
+> [!WARNING]
+> This is an experimental project. Set expectations accordingly.
+
 - Full orchestrator loop with human approval gates (CLI and web dashboard)
 - CLI driver (Claude CLI wrapper) with structured outputs, streaming, and agentic execution
 - Local code review with competitive strategy
@@ -197,31 +166,3 @@ See [Configuration Reference](https://anderskev.github.io/amelia/guide/configura
 - Real tool execution in Developer agent (shell commands, file writes)
 - FastAPI server with SQLite persistence and WebSocket event streaming
 - Web dashboard with workflow visualization, real-time activity log, and approval controls
-
-**Limitations:**
-
-_This is an experimental project. Set expectations accordingly._
-
-**Web Dashboard (early access):**
-- Core pages implemented: Workflows (with canvas visualization), Workflow Detail, History
-- Logs page still shows "Coming soon" placeholder
-- Real-time updates via WebSocket with connection status indicator
-- Approval controls functional (approve/reject plans from browser)
-- Not yet battle-tested in production workflows
-
-**API Driver (OpenAI):**
-- No agentic execution support (structured mode only)
-- API key validation is incomplete
-- Less tested than CLI driver
-
-**Orchestrator:**
-- Failed tasks permanently block all dependent tasks (no retry or skip mechanism)
-- `RetryConfig` is defined but not actually used anywhere
-- Server crash recovery is a placeholder (interrupted workflows not recovered)
-- Workflow detail API missing token usage and event history
-
-**Not Implemented:**
-- Checkpoint resumption after interruption
-- Session continuity across runs
-- Task prioritization (all ready tasks treated equally)
-- Structured error categories or retry strategies
