@@ -14,7 +14,6 @@ This is an example **design document** produced by the Architect agent. Design d
 ---
 
 > Transforming Developer from blind executor to intelligent plan follower with batch checkpoints and blocker handling.
-> Complements [Dynamic Orchestration](./dynamic-orchestration.md) and [Stateless Reducer Pattern](./stateless-reducer-pattern.md).
 
 ## Problem Statement
 
