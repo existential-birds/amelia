@@ -39,10 +39,10 @@ function StreamLogEntry({ event }: { event: StreamEvent }) {
   return (
     <div
       data-slot="stream-log-item"
-      className="grid grid-cols-[70px_120px_1fr] gap-3 py-1.5 border-b border-border/30 font-mono text-sm bg-primary/5"
+      className="relative grid grid-cols-[100px_120px_1fr] gap-3 py-1.5 border-b border-border/30 font-mono text-sm bg-primary/5"
     >
-      <span className="text-muted-foreground tabular-nums flex items-center gap-1">
-        <Zap className="w-3 h-3 text-primary" />
+      <Zap className="absolute -left-4 top-1/2 -translate-y-1/2 w-3 h-3 text-primary" aria-hidden="true" />
+      <span className="text-muted-foreground tabular-nums">
         {formatTime(event.timestamp)}
       </span>
       <span className="font-semibold text-primary">
