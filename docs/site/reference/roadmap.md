@@ -3,6 +3,8 @@
 > **Vision:** Complete end-to-end workflow control without ever opening GitHub, Jira, or any tracker web UI—with agents that maintain context across sessions and verify their own work. Built on the assumption that LLMs will continually improve, so Amelia automatically gets better as models advance.
 >
 > **Architecture:** Aligned with the [12-Factor Agents](https://github.com/humanlayer/12-factor-agents) methodology for building reliable LLM-powered software. See also [Context Engineering Gaps](/ideas/research/context-engineering-gaps) for agentic context management requirements.
+>
+> **Track Progress:** [GitHub Project Board](https://github.com/users/anderskev/projects/2)
 
 ## Design Principles
 

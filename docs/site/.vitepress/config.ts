@@ -95,6 +95,15 @@ export default defineConfig({
             { text: 'Configuration', link: '/guide/configuration' },
             { text: 'Troubleshooting', link: '/guide/troubleshooting' }
           ]
+        },
+        {
+          text: 'Example Artifacts',
+          items: [
+            { text: 'Overview', link: '/guide/artifacts/' },
+            { text: 'Design Example', link: '/guide/artifacts/design-example' },
+            { text: 'Plan Example', link: '/guide/artifacts/plan-example' },
+            { text: 'Review Example', link: '/guide/artifacts/review-example' }
+          ]
         }
       ],
       '/architecture/': [
