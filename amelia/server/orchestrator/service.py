@@ -178,9 +178,9 @@ class OrchestratorService:
                 raise ValueError(f"Profile '{profile_name}' not found in settings")
             loaded_profile = self._settings.profiles[profile_name]
 
-            # Fetch issue from tracker
+            # Fetch issue from tracker (pass worktree_path so gh CLI uses correct repo)
             tracker = create_tracker(loaded_profile)
-            issue = tracker.get_issue(issue_id)
+            issue = tracker.get_issue(issue_id, cwd=worktree_path)
 
             # Initialize ExecutionState with the loaded profile and issue
             execution_state = ExecutionState(profile=loaded_profile, issue=issue)

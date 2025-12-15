@@ -90,6 +90,38 @@ class TestGithubTrackerConfigValidation:
             assert tracker is not None
 
 
+class TestGithubTrackerGetIssue:
+    """Test GithubTracker issue fetching behavior."""
+
+    def test_get_issue_passes_cwd_to_subprocess(self):
+        """GithubTracker.get_issue should pass cwd to subprocess.run.
+
+        This ensures gh CLI runs in the correct directory to determine
+        which repository to query (based on git remote).
+        """
+        with patch("subprocess.run") as mock_run:
+            # First call is auth validation in __init__
+            mock_auth_result = MagicMock()
+            mock_auth_result.returncode = 0
+            mock_auth_result.stdout = "Logged in to github.com as user"
+
+            # Second call is the actual issue fetch
+            mock_issue_result = MagicMock()
+            mock_issue_result.returncode = 0
+            mock_issue_result.stdout = '{"title": "Test Issue", "body": "Description", "state": "open"}'
+
+            mock_run.side_effect = [mock_auth_result, mock_issue_result]
+
+            tracker = GithubTracker()
+            issue = tracker.get_issue("123", cwd="/some/worktree/path")
+
+            # Verify subprocess.run was called with cwd parameter
+            issue_fetch_call = mock_run.call_args_list[1]
+            assert issue_fetch_call.kwargs.get("cwd") == "/some/worktree/path"
+            assert issue.id == "123"
+            assert issue.title == "Test Issue"
+
+
 class TestNoopTracker:
     """Test NoopTracker behavior."""
 
@@ -100,3 +132,9 @@ class TestNoopTracker:
         assert issue.id == "ANY-123"
         assert issue.title == "Placeholder Issue"
         assert issue.description == "Tracker not configured"
+
+    def test_get_issue_accepts_cwd_parameter(self):
+        """NoopTracker should accept cwd parameter (ignored)."""
+        tracker = NoopTracker()
+        issue = tracker.get_issue("ANY-123", cwd="/some/path")
+        assert issue.id == "ANY-123"
