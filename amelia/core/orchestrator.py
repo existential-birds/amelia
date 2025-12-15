@@ -22,10 +22,42 @@ from loguru import logger
 from amelia.agents.architect import Architect
 from amelia.agents.developer import Developer
 from amelia.agents.reviewer import Reviewer
-from amelia.core.state import BatchApproval, ExecutionState, TaskDAG
-from amelia.core.types import DeveloperStatus, StreamEmitter
+from amelia.core.state import BatchApproval, ExecutionBatch, ExecutionState, TaskDAG
+from amelia.core.types import DeveloperStatus, Profile, StreamEmitter, TrustLevel
 from amelia.drivers.factory import DriverFactory
 from amelia.tools.git_utils import revert_to_git_snapshot
+
+
+def should_checkpoint(batch: ExecutionBatch, profile: Profile) -> bool:
+    """Determine if we should pause for human approval.
+
+    Logic based on trust_level:
+    1. If batch_checkpoint_enabled is False → never checkpoint
+    2. TrustLevel.PARANOID → always checkpoint (return True)
+    3. TrustLevel.STANDARD → always checkpoint (return True)
+    4. TrustLevel.AUTONOMOUS → only checkpoint for high-risk batches (risk_summary == "high")
+
+    Args:
+        batch: The execution batch to evaluate.
+        profile: The profile containing trust level and checkpoint settings.
+
+    Returns:
+        True if we should pause for human approval, False otherwise.
+    """
+    # Rule 1: If checkpoints are disabled, never checkpoint
+    if not profile.batch_checkpoint_enabled:
+        return False
+
+    # Rule 2 & 3: PARANOID and STANDARD always checkpoint
+    if profile.trust_level in (TrustLevel.PARANOID, TrustLevel.STANDARD):
+        return True
+
+    # Rule 4: AUTONOMOUS only checkpoints for high-risk batches
+    if profile.trust_level == TrustLevel.AUTONOMOUS:
+        return batch.risk_summary == "high"
+
+    # Default to safe behavior: checkpoint
+    return True
 
 
 def _extract_config_params(config: RunnableConfig | None) -> tuple[StreamEmitter | None, str]:
@@ -441,9 +473,21 @@ async def call_developer_node(
         tasks=updated_tasks, original_issue=state.plan.original_issue
     )
 
+    # Determine developer_status for routing
+    # Check if there are more ready tasks after this execution
+    remaining_ready_tasks = updated_plan.get_ready_tasks()
+
+    if remaining_ready_tasks:
+        # More tasks to execute - continue developer loop
+        developer_status = DeveloperStatus.EXECUTING
+    else:
+        # No more ready tasks - all done, go to reviewer
+        developer_status = DeveloperStatus.ALL_DONE
+
     return {
         "plan": updated_plan,
-        "current_task_id": ready_tasks[0].id if ready_tasks else state.current_task_id
+        "current_task_id": ready_tasks[0].id if ready_tasks else state.current_task_id,
+        "developer_status": developer_status,
     }
 
 # Define a conditional edge to decide if more tasks need to be run
@@ -522,6 +566,36 @@ def route_after_developer(state: ExecutionState) -> str:
     else:  # EXECUTING or default
         return "developer"
 
+def route_batch_approval(state: ExecutionState) -> str:
+    """Route based on batch approval status.
+
+    Args:
+        state: Current execution state containing human_approved flag.
+
+    Returns:
+        Route string based on approval:
+        - 'developer' if human_approved is True (continue to next batch)
+        - END if human_approved is False or None (user rejected, stop workflow)
+    """
+    if state.human_approved:
+        return "developer"
+    return END
+
+def route_blocker_resolution(state: ExecutionState) -> str:
+    """Route based on blocker resolution outcome.
+
+    Args:
+        state: Current execution state containing workflow_status.
+
+    Returns:
+        Route string based on workflow status:
+        - END if workflow_status is 'aborted'
+        - 'developer' otherwise (continue after fix/skip)
+    """
+    if state.workflow_status == "aborted":
+        return END
+    return "developer"
+
 def create_orchestrator_graph(
     checkpoint_saver: BaseCheckpointSaver[Any] | None = None,
     interrupt_before: list[str] | None = None,
@@ -531,7 +605,10 @@ def create_orchestrator_graph(
     Args:
         checkpoint_saver: Optional checkpoint saver for state persistence.
         interrupt_before: List of node names to interrupt before executing.
-            Use ["human_approval_node"] for server-mode human-in-the-loop.
+            If None and checkpoint_saver is provided, defaults to:
+            ["human_approval_node", "batch_approval_node", "blocker_resolution_node"]
+            for server-mode human-in-the-loop.
+            If None and checkpoint_saver is not provided, no interrupts (backwards compatible).
 
     Returns:
         Compiled StateGraph ready for execution.
@@ -543,6 +620,8 @@ def create_orchestrator_graph(
     workflow.add_node("human_approval_node", human_approval_node)
     workflow.add_node("developer_node", call_developer_node)
     workflow.add_node("reviewer_node", call_reviewer_node)
+    workflow.add_node("batch_approval_node", batch_approval_node)
+    workflow.add_node("blocker_resolution_node", blocker_resolution_node)
 
     # Set entry point
     workflow.set_entry_point("architect_node")
@@ -560,13 +639,39 @@ def create_orchestrator_graph(
         }
     )
 
-    # Developer -> Reviewer (after all development tasks are done)
+    # Developer -> route based on developer_status
+    # - "reviewer" if ALL_DONE (all batches completed)
+    # - "batch_approval" if BATCH_COMPLETE (batch finished, needs approval)
+    # - "blocker_resolution" if BLOCKED (execution blocked, needs human help)
+    # - "developer" if EXECUTING (continue executing steps)
     workflow.add_conditional_edges(
         "developer_node",
-        should_continue_developer,
+        route_after_developer,
         {
-            "continue": "developer_node",
-            "end": "reviewer_node"
+            "reviewer": "reviewer_node",
+            "batch_approval": "batch_approval_node",
+            "blocker_resolution": "blocker_resolution_node",
+            "developer": "developer_node",
+        }
+    )
+
+    # Batch approval -> continue to developer or END based on approval
+    workflow.add_conditional_edges(
+        "batch_approval_node",
+        route_batch_approval,
+        {
+            "developer": "developer_node",
+            END: END,
+        }
+    )
+
+    # Blocker resolution -> continue to developer or END based on resolution
+    workflow.add_conditional_edges(
+        "blocker_resolution_node",
+        route_blocker_resolution,
+        {
+            "developer": "developer_node",
+            END: END,
         }
     )
 
@@ -579,6 +684,15 @@ def create_orchestrator_graph(
             "end": END
         }
     )
+
+    # Set default interrupt_before only if checkpoint_saver is provided and interrupt_before is None
+    # This maintains backwards compatibility - old code without checkpointer won't interrupt
+    if interrupt_before is None and checkpoint_saver is not None:
+        interrupt_before = [
+            "human_approval_node",
+            "batch_approval_node",
+            "blocker_resolution_node",
+        ]
 
     return workflow.compile(
         checkpointer=checkpoint_saver,

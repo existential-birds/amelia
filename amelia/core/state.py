@@ -462,7 +462,7 @@ class ExecutionState(BaseModel):
     last_review: ReviewResult | None = None
     code_changes_for_review: str | None = None
     driver_session_id: str | None = None
-    workflow_status: Literal["running", "completed", "failed"] = "running"
+    workflow_status: Literal["running", "completed", "failed", "aborted"] = "running"
     agent_history: list[str] = Field(default_factory=list)
 
     # New execution plan (coexists with task_dag during migration)
