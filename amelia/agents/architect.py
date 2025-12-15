@@ -326,6 +326,11 @@ class Architect:
         if output_dir is None:
             output_dir = state.profile.plan_output_dir
 
+        # Resolve relative paths to working_dir (not server CWD)
+        output_path = Path(output_dir)
+        if not output_path.is_absolute() and state.profile.working_dir:
+            output_dir = str(Path(state.profile.working_dir) / output_path)
+
         # Compile context using strategy
         strategy = self.context_strategy()
         compiled_context = strategy.compile(state)
