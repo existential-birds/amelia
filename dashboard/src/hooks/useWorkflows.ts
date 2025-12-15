@@ -55,7 +55,14 @@ export function useWorkflows() {
 
   // Revalidate when we receive status-changing events
   useEffect(() => {
-    const statusEvents = ['workflow_completed', 'workflow_failed', 'workflow_started'];
+    const statusEvents = [
+      'workflow_completed',
+      'workflow_failed',
+      'workflow_started',
+      'approval_required',
+      'approval_granted',
+      'approval_rejected',
+    ];
     const recentEvents = Object.values(eventsByWorkflow).flat();
 
     // Find the latest status-changing event within the 5-second window

@@ -23,13 +23,15 @@ class NoopTracker(BaseTracker):
     The factory accepts both "noop" and "none" as aliases for this tracker.
     """
 
-    def get_issue(self, issue_id: str) -> Issue:
+    def get_issue(self, issue_id: str, *, cwd: str | None = None) -> Issue:
         """Return a placeholder issue without making any external calls.
 
         Args:
             issue_id: The issue identifier to use for the placeholder.
+            cwd: Unused. NoopTracker doesn't make external calls.
 
         Returns:
             A placeholder Issue object with generic title and description.
         """
+        del cwd  # Unused
         return Issue(id=issue_id, title="Placeholder Issue", description="Tracker not configured")

@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 from loguru import logger
 
+from amelia.core.types import StreamEvent
 from amelia.server.models import WorkflowEvent
 
 
@@ -113,6 +114,21 @@ class EventBus:
         # Broadcast to WebSocket clients
         if self._connection_manager:
             task = asyncio.create_task(self._connection_manager.broadcast(event))
+            self._broadcast_tasks.add(task)
+            task.add_done_callback(self._handle_broadcast_done)
+
+    def emit_stream(self, event: StreamEvent) -> None:
+        """Emit a stream event to WebSocket clients without persistence.
+
+        Stream events are ephemeral - they're broadcast in real-time but
+        not stored in the database. Unlike emit(), this does NOT call
+        regular WorkflowEvent subscribers.
+
+        Args:
+            event: The stream event to broadcast.
+        """
+        if self._connection_manager:
+            task = asyncio.create_task(self._connection_manager.broadcast_stream(event))
             self._broadcast_tasks.add(task)
             task.add_done_callback(self._handle_broadcast_done)
 

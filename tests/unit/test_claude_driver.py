@@ -2,7 +2,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 import json
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from pydantic import BaseModel
@@ -55,7 +55,7 @@ class TestClaudeCliDriver:
 
     async def test_generate_text_success(self, driver, messages, mock_subprocess_process_factory):
         mock_process = mock_subprocess_process_factory(
-            stdout_lines=[b"I am fine, ", b"thank you.", b""],
+            stdout_lines=[b"I am fine, thank you."],
             return_code=0
         )
 
@@ -392,24 +392,17 @@ class TestClaudeCliDriverStreaming:
 
     @pytest.fixture
     def stream_lines(self):
-        """Fixture providing mock stream-json output lines."""
+        """Fixture providing mock stream-json output lines (without trailing newlines)."""
         return [
-            b'{"type":"assistant","message":{"content":[{"type":"text","text":"Hello"}]}}\n',
-            b'{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Read","input":{"file_path":"/x.py"}}]}}\n',
-            b'{"type":"assistant","message":{"content":[{"type":"text","text":"Done!"}]}}\n',
-            b'{"type":"result","session_id":"sess_xyz789","subtype":"success"}\n',
-            b''  # EOF
+            b'{"type":"assistant","message":{"content":[{"type":"text","text":"Hello"}]}}',
+            b'{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Read","input":{"file_path":"/x.py"}}]}}',
+            b'{"type":"assistant","message":{"content":[{"type":"text","text":"Done!"}]}}',
+            b'{"type":"result","session_id":"sess_xyz789","subtype":"success"}',
         ]
 
-    async def test_generate_stream_yields_events(self, driver, messages, stream_lines):
+    async def test_generate_stream_yields_events(self, driver, messages, stream_lines, mock_subprocess_process_factory):
         """Test that generate_stream yields ClaudeStreamEvent objects."""
-        mock_process = AsyncMock()
-        mock_process.stdin = MagicMock()
-        mock_process.stdin.drain = AsyncMock()
-        mock_process.stdout.readline = AsyncMock(side_effect=stream_lines)
-        mock_process.stderr.read = AsyncMock(return_value=b"")
-        mock_process.returncode = 0
-        mock_process.wait = AsyncMock(return_value=0)
+        mock_process = mock_subprocess_process_factory(stdout_lines=stream_lines, return_code=0)
 
         with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=mock_process):
             events = []
@@ -426,15 +419,9 @@ class TestClaudeCliDriverStreaming:
             assert events[3].type == "result"
             assert events[3].session_id == "sess_xyz789"
 
-    async def test_generate_stream_captures_session_id(self, driver, messages, stream_lines):
+    async def test_generate_stream_captures_session_id(self, driver, messages, stream_lines, mock_subprocess_process_factory):
         """Test that generate_stream captures session_id from result event."""
-        mock_process = AsyncMock()
-        mock_process.stdin = MagicMock()
-        mock_process.stdin.drain = AsyncMock()
-        mock_process.stdout.readline = AsyncMock(side_effect=stream_lines)
-        mock_process.stderr.read = AsyncMock(return_value=b"")
-        mock_process.returncode = 0
-        mock_process.wait = AsyncMock(return_value=0)
+        mock_process = mock_subprocess_process_factory(stdout_lines=stream_lines, return_code=0)
 
         with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=mock_process):
             session_id = None

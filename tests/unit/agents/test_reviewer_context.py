@@ -364,7 +364,7 @@ class TestReviewerValidation:
         reviewer = Reviewer(mock_driver)
 
         with pytest.raises(ValueError, match="current_task_id is required when plan has tasks"):
-            await reviewer.review(state, code_changes="diff --git a/file.py")
+            await reviewer.review(state, code_changes="diff --git a/file.py", workflow_id="test-workflow")
 
     async def test_reviewer_allows_no_current_task_id_when_no_plan(
         self,
@@ -390,7 +390,7 @@ class TestReviewerValidation:
         reviewer = Reviewer(mock_driver)
 
         # Should not raise - falls back to issue context
-        result = await reviewer.review(state, code_changes="diff --git a/file.py")
+        result = await reviewer.review(state, code_changes="diff --git a/file.py", workflow_id="test-workflow")
         assert result is not None
 
     async def test_reviewer_allows_no_current_task_id_when_plan_has_no_tasks(
@@ -420,5 +420,5 @@ class TestReviewerValidation:
         reviewer = Reviewer(mock_driver)
 
         # Should not raise - plan has no tasks
-        result = await reviewer.review(state, code_changes="diff --git a/file.py")
+        result = await reviewer.review(state, code_changes="diff --git a/file.py", workflow_id="test-workflow")
         assert result is not None

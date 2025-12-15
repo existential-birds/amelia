@@ -761,6 +761,86 @@ class TestStartWorkflowWithRetry:
         orchestrator._run_workflow_with_retry.assert_called_once()
 
 
+# =============================================================================
+# Stage Handling Tests
+# =============================================================================
+
+
+async def test_handle_stream_chunk_updates_current_stage(
+    orchestrator: OrchestratorService,
+    mock_repository: AsyncMock,
+    mock_event_bus: EventBus,
+):
+    """_handle_stream_chunk should update current_stage when stage starts."""
+    # Setup mock workflow state
+    mock_state = ServerExecutionState(
+        id="wf-1",
+        issue_id="ISSUE-123",
+        worktree_path="/path/to/worktree",
+        worktree_name="feat-123",
+        workflow_status="in_progress",
+        started_at=datetime.now(UTC),
+        current_stage=None,  # Initially null
+    )
+    mock_repository.get.return_value = mock_state
+
+    # Process a stage node chunk
+    chunk = {"architect_node": {"some": "output"}}
+    await orchestrator._handle_stream_chunk("wf-1", chunk)
+
+    # Should fetch state, update current_stage, and persist
+    mock_repository.get.assert_called_with("wf-1")
+    mock_repository.update.assert_called_once()
+
+    # Verify the state was updated with correct stage
+    updated_state = mock_repository.update.call_args[0][0]
+    assert updated_state.current_stage == "architect_node"
+
+
+async def test_handle_stream_chunk_updates_stage_for_each_stage_node(
+    orchestrator: OrchestratorService,
+    mock_repository: AsyncMock,
+):
+    """_handle_stream_chunk should update current_stage for all STAGE_NODES."""
+    from amelia.server.orchestrator.service import STAGE_NODES
+
+    for stage_node in STAGE_NODES:
+        # Reset mocks for each iteration
+        mock_repository.reset_mock()
+
+        mock_state = ServerExecutionState(
+            id="wf-1",
+            issue_id="ISSUE-123",
+            worktree_path="/path/to/worktree",
+            worktree_name="feat-123",
+            workflow_status="in_progress",
+            started_at=datetime.now(UTC),
+        )
+        mock_repository.get.return_value = mock_state
+
+        chunk = {stage_node: {"output": "data"}}
+        await orchestrator._handle_stream_chunk("wf-1", chunk)
+
+        # Should update state with this stage
+        mock_repository.update.assert_called_once()
+        updated_state = mock_repository.update.call_args[0][0]
+        assert updated_state.current_stage == stage_node, f"Failed for {stage_node}"
+
+
+async def test_handle_stream_chunk_ignores_non_stage_nodes(
+    orchestrator: OrchestratorService,
+    mock_repository: AsyncMock,
+):
+    """_handle_stream_chunk should not update current_stage for non-stage nodes."""
+    # Process a non-stage node chunk
+    chunk = {"some_other_node": {"output": "data"}}
+    await orchestrator._handle_stream_chunk("wf-1", chunk)
+
+    # Should not try to update state
+    mock_repository.get.assert_not_called()
+    mock_repository.update.assert_not_called()
+
+
 async def test_get_workflow_by_worktree_uses_cache(
     orchestrator: OrchestratorService,
     mock_repository: AsyncMock,

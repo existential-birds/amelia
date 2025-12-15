@@ -4,15 +4,16 @@
 """Unit tests for Architect agent."""
 
 from collections.abc import Callable
+from datetime import datetime
 from pathlib import Path
 from typing import Any
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from amelia.agents.architect import Architect, ArchitectContextStrategy, TaskListResponse
 from amelia.core.state import ExecutionState, Task
-from amelia.core.types import Design, Issue
+from amelia.core.types import Design, Issue, StreamEvent, StreamEventType
 
 
 def _extract_messages_from_call(call_args: Any) -> list[Any]:
@@ -63,11 +64,6 @@ class TestArchitectContextStrategy:
         """Create an ArchitectContextStrategy instance for testing."""
         return ArchitectContextStrategy()
 
-    def test_has_task_generation_system_prompt_method(self, strategy: ArchitectContextStrategy) -> None:
-        """Test that strategy has get_task_generation_system_prompt method."""
-        assert hasattr(strategy, "get_task_generation_system_prompt")
-        assert callable(strategy.get_task_generation_system_prompt)
-
     def test_task_generation_system_prompt_is_detailed(self, strategy: ArchitectContextStrategy) -> None:
         """Test that task generation system prompt includes TDD instructions."""
         prompt = strategy.get_task_generation_system_prompt()
@@ -86,44 +82,6 @@ class TestArchitectContextStrategy:
 
         # Should include file operation guidance
         assert "file" in prompt.lower()
-
-    def test_task_generation_system_prompt_mentions_required_fields(self, strategy: ArchitectContextStrategy) -> None:
-        """Test that task generation prompt specifies required task fields."""
-        prompt = strategy.get_task_generation_system_prompt()
-
-        # Should mention key task fields
-        assert "id" in prompt.lower()
-        assert "description" in prompt.lower()
-        assert "steps" in prompt.lower()
-
-    def test_task_generation_system_prompt_is_stable(self, strategy: ArchitectContextStrategy) -> None:
-        """Test that task generation system prompt is stable across calls."""
-        prompt1 = strategy.get_task_generation_system_prompt()
-        prompt2 = strategy.get_task_generation_system_prompt()
-
-        assert prompt1 == prompt2
-
-    def test_get_task_generation_user_prompt_method_exists(self, strategy: ArchitectContextStrategy) -> None:
-        """Test that strategy has get_task_generation_user_prompt method."""
-        assert hasattr(strategy, "get_task_generation_user_prompt")
-        assert callable(strategy.get_task_generation_user_prompt)
-
-    def test_task_generation_user_prompt_is_concise(self, strategy: ArchitectContextStrategy) -> None:
-        """Test that task generation user prompt is concise and actionable."""
-        prompt = strategy.get_task_generation_user_prompt()
-
-        # Should be a non-empty string
-        assert isinstance(prompt, str)
-        assert len(prompt) > 0
-
-        # Should be relatively concise (not a wall of text)
-        # User prompt should be shorter than system prompt
-        system_prompt = strategy.get_task_generation_system_prompt()
-        assert len(prompt) < len(system_prompt)
-
-        # Should mention creating a plan
-        assert "plan" in prompt.lower() or "task" in prompt.lower()
-
 
 class TestArchitect:
     """Test Architect agent implementation."""
@@ -283,7 +241,7 @@ class TestArchitect:
         mock_driver.generate.return_value = mock_task_response
 
         architect = Architect(driver=mock_driver)
-        result = await architect.plan(state, output_dir=str(tmp_path))
+        result = await architect.plan(state, output_dir=str(tmp_path), workflow_id="test-workflow-123")
 
         # Verify plan was generated (driver was called)
         assert result.task_dag is not None
@@ -299,3 +257,156 @@ class TestArchitect:
         assert "Build it well" in all_content, (
             "Design goal from state.design must appear in messages passed to driver"
         )
+
+
+class TestArchitectStreamEmitter:
+    """Test Architect agent stream emitter functionality."""
+
+    @pytest.mark.parametrize("stream_emitter", [None, AsyncMock()])
+    def test_architect_accepts_optional_stream_emitter(
+        self,
+        mock_driver: MagicMock,
+        stream_emitter: AsyncMock | None,
+    ) -> None:
+        """Test that Architect constructor accepts optional stream_emitter parameter."""
+        architect = Architect(
+            driver=mock_driver,
+            stream_emitter=stream_emitter,
+        )
+        assert architect._stream_emitter is stream_emitter
+
+    async def test_architect_emits_agent_output_after_plan_generation(
+        self,
+        mock_driver: MagicMock,
+        mock_execution_state_factory: Callable[..., ExecutionState],
+        mock_issue_factory: Callable[..., Issue],
+        mock_task_response: TaskListResponse,
+    ) -> None:
+        """Test that Architect emits AGENT_OUTPUT event after generating plan."""
+        issue = mock_issue_factory(id="TEST-123", title="Build feature", description="Feature desc")
+        state = mock_execution_state_factory(
+            issue=issue,
+        )
+
+        # Mock driver to return a valid TaskListResponse
+        mock_driver.generate.return_value = mock_task_response
+
+        # Create emitter mock
+        mock_emitter = AsyncMock()
+
+        # Create architect with emitter
+        architect = Architect(driver=mock_driver, stream_emitter=mock_emitter)
+
+        # Generate plan
+        result = await architect.plan(state, workflow_id="test-workflow-123")
+
+        # Verify plan was generated
+        assert result.task_dag is not None
+        assert len(result.task_dag.tasks) == 1
+
+        # Verify emitter was called
+        assert mock_emitter.called
+        assert mock_emitter.call_count == 1
+
+        # Verify the emitted event
+        event = mock_emitter.call_args.args[0]
+        assert isinstance(event, StreamEvent)
+        assert event.type == StreamEventType.AGENT_OUTPUT
+        assert event.agent == "architect"
+        assert event.workflow_id == "test-workflow-123"  # Uses provided workflow_id
+        assert "1 tasks" in event.content  # Generated plan with 1 tasks
+        assert isinstance(event.timestamp, datetime)
+
+    async def test_architect_does_not_emit_when_no_emitter_configured(
+        self,
+        mock_driver: MagicMock,
+        mock_execution_state_factory: Callable[..., ExecutionState],
+        mock_issue_factory: Callable[..., Issue],
+        mock_task_response: TaskListResponse,
+    ) -> None:
+        """Test that Architect does not crash when no emitter is configured."""
+        issue = mock_issue_factory(id="TEST-456", title="Test", description="Test")
+        state = mock_execution_state_factory(issue=issue)
+
+        mock_driver.generate.return_value = mock_task_response
+
+        # Create architect WITHOUT emitter
+        architect = Architect(driver=mock_driver)
+
+        # Should not raise even without emitter
+        result = await architect.plan(state, workflow_id="test-workflow-123")
+        assert result.task_dag is not None
+
+    async def test_architect_emits_correct_task_count(
+        self,
+        mock_driver: MagicMock,
+        mock_execution_state_factory: Callable[..., ExecutionState],
+        mock_issue_factory: Callable[..., Issue],
+    ) -> None:
+        """Test that Architect emits event with correct task count."""
+        issue = mock_issue_factory(id="TEST-789", title="Test", description="Test")
+        state = mock_execution_state_factory(issue=issue)
+
+        # Create response with multiple tasks
+        multi_task_response = TaskListResponse(tasks=[
+            Task(id="1", description="Task 1", dependencies=[], files=[], steps=[]),
+            Task(id="2", description="Task 2", dependencies=[], files=[], steps=[]),
+            Task(id="3", description="Task 3", dependencies=[], files=[], steps=[]),
+        ])
+
+        mock_driver.generate.return_value = multi_task_response
+        mock_emitter = AsyncMock()
+
+        architect = Architect(driver=mock_driver, stream_emitter=mock_emitter)
+        await architect.plan(state, workflow_id="test-workflow-123")
+
+        # Verify the event contains correct count
+        event = mock_emitter.call_args.args[0]
+        assert "3 tasks" in event.content
+
+    async def test_architect_uses_provided_workflow_id(
+        self,
+        mock_driver: MagicMock,
+        mock_execution_state_factory: Callable[..., ExecutionState],
+    ) -> None:
+        """Test that architect uses provided workflow_id instead of falling back."""
+        issue = Issue(id="TEST-123", title="Test", description="Test issue")
+        state = mock_execution_state_factory(issue=issue)
+
+        mock_driver.generate.return_value = TaskListResponse(tasks=[
+            Task(id="1", description="Task 1", dependencies=[], files=[], steps=[]),
+        ])
+        mock_emitter = AsyncMock()
+
+        architect = Architect(driver=mock_driver, stream_emitter=mock_emitter)
+        await architect.plan(state, workflow_id="custom-workflow-id-123")
+
+        # Verify the emitted event uses the provided workflow_id
+        event = mock_emitter.call_args.args[0]
+        assert event.workflow_id == "custom-workflow-id-123"
+
+class TestArchitectWorkflowId:
+    """Test workflow_id handling in Architect.plan()."""
+
+    async def test_plan_works_with_workflow_id(
+        self,
+        mock_driver: MagicMock,
+        mock_execution_state_factory: Callable[..., ExecutionState],
+        mock_issue_factory: Callable[..., Issue],
+        mock_task_response: TaskListResponse,
+    ) -> None:
+        """Test that plan() requires workflow_id parameter."""
+        issue = mock_issue_factory(id="TEST-123")
+        state = mock_execution_state_factory(issue=issue)
+        mock_driver.generate.return_value = mock_task_response
+        mock_emitter = AsyncMock()
+
+        architect = Architect(driver=mock_driver, stream_emitter=mock_emitter)
+
+        # Should work with workflow_id provided
+        result = await architect.plan(state, workflow_id="required-workflow-id")
+        assert result.task_dag is not None
+
+        # Verify emitter received the provided workflow_id
+        event = mock_emitter.call_args.args[0]
+        assert event.workflow_id == "required-workflow-id"

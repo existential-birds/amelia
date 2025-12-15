@@ -84,11 +84,11 @@ class TestArchitectContextStrategy:
         assert context1.system_prompt == context2.system_prompt
         assert context1.system_prompt == ArchitectContextStrategy.SYSTEM_PROMPT
 
-    def test_only_issue_and_design_sections_allowed(self, strategy):
-        """Test that only 'issue' and 'design' sections are allowed (Gap 5)."""
+    def test_only_issue_design_and_codebase_sections_allowed(self, strategy):
+        """Test that only 'issue', 'design', and 'codebase' sections are allowed."""
         # Verify ALLOWED_SECTIONS is defined correctly
         assert hasattr(ArchitectContextStrategy, "ALLOWED_SECTIONS")
-        assert {"issue", "design"} == ArchitectContextStrategy.ALLOWED_SECTIONS
+        assert {"issue", "design", "codebase"} == ArchitectContextStrategy.ALLOWED_SECTIONS
 
         # Valid sections should pass validation
         valid_sections = [
@@ -97,7 +97,7 @@ class TestArchitectContextStrategy:
         strategy.validate_sections(valid_sections)  # Should not raise
 
     def test_compile_raises_for_disallowed_sections(self, strategy):
-        """Test compile raises ValueError when attempting to add disallowed section (Gap 5)."""
+        """Test compile raises ValueError when attempting to add disallowed section."""
         # Invalid section name should raise ValueError
         invalid_sections = [
             ContextSection(name="issue", content="Valid"),
@@ -108,7 +108,7 @@ class TestArchitectContextStrategy:
             strategy.validate_sections(invalid_sections)
 
         assert "Section 'task' not allowed" in str(exc_info.value)
-        assert "Allowed sections: ['design', 'issue']" in str(exc_info.value)
+        assert "Allowed sections: ['codebase', 'design', 'issue']" in str(exc_info.value)
 
     def test_compile_formats_issue_with_title_and_description(
         self, strategy, mock_execution_state_factory, mock_issue_factory
@@ -261,3 +261,51 @@ class TestArchitectContextStrategy:
         # Should have only issue section
         assert len(context.sections) == 1
         assert context.sections[0].name == "issue"
+
+    def test_compile_includes_codebase_section_when_working_dir_set(
+        self, strategy, mock_execution_state_factory, mock_issue_factory, mock_profile_factory, tmp_path
+    ):
+        """Test compile includes codebase section when profile.working_dir is set."""
+        # Create a test directory structure
+        (tmp_path / "src").mkdir()
+        (tmp_path / "src" / "main.py").write_text("print('hello')")
+        (tmp_path / "tests").mkdir()
+        (tmp_path / "tests" / "test_main.py").write_text("def test_main(): pass")
+        (tmp_path / "README.md").write_text("# Project")
+
+        issue = mock_issue_factory(title="Add feature", description="Feature desc")
+        profile = mock_profile_factory(working_dir=str(tmp_path))
+        state = mock_execution_state_factory(issue=issue, profile=profile)
+
+        context = strategy.compile(state)
+
+        # Should have two sections: issue and codebase
+        section_names = [s.name for s in context.sections]
+        assert "issue" in section_names
+        assert "codebase" in section_names
+
+        # Codebase section should contain file structure
+        codebase_section = next(s for s in context.sections if s.name == "codebase")
+        assert "src/main.py" in codebase_section.content or "src\\main.py" in codebase_section.content
+        assert "tests/test_main.py" in codebase_section.content or "tests\\test_main.py" in codebase_section.content
+        assert "README.md" in codebase_section.content
+
+    def test_compile_excludes_codebase_section_when_working_dir_not_set(
+        self, strategy, mock_execution_state_factory, mock_issue_factory
+    ):
+        """Test compile excludes codebase section when profile.working_dir is None."""
+        issue = mock_issue_factory(title="Add feature", description="Feature desc")
+        state = mock_execution_state_factory(issue=issue)
+        # Ensure working_dir is None
+        state.profile.working_dir = None
+
+        context = strategy.compile(state)
+
+        # Should have only issue section, no codebase
+        section_names = [s.name for s in context.sections]
+        assert "issue" in section_names
+        assert "codebase" not in section_names
+
+    def test_codebase_section_allowed_in_allowed_sections(self, strategy):
+        """Test that 'codebase' is in ALLOWED_SECTIONS."""
+        assert "codebase" in ArchitectContextStrategy.ALLOWED_SECTIONS

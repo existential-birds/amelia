@@ -19,3 +19,4 @@ export { useWebSocket } from './useWebSocket';
 export { useWorkflows } from './useWorkflows';
 export { useWorkflowActions } from './useWorkflowActions';
 export { useElapsedTime } from './useElapsedTime';
+export { useAutoRevalidation } from './useAutoRevalidation';

@@ -217,9 +217,12 @@ async def get_workflow(
     if workflow is None:
         raise WorkflowNotFoundError(workflow_id=workflow_id)
 
-    # TODO: Fetch token usage and recent events
+    # TODO: Fetch token usage
     token_usage = None
-    recent_events: list[dict[str, object]] = []
+
+    # Fetch recent events from database
+    events = await repository.get_recent_events(workflow_id, limit=50)
+    recent_events = [event.model_dump(mode="json") for event in events]
 
     return WorkflowDetailResponse(
         id=workflow.id,

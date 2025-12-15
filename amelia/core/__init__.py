@@ -18,3 +18,8 @@ from amelia.core.exceptions import (
     SecurityError as SecurityError,
     ShellInjectionError as ShellInjectionError,
 )
+from amelia.core.types import (
+    StreamEmitter as StreamEmitter,
+    StreamEvent as StreamEvent,
+    StreamEventType as StreamEventType,
+)

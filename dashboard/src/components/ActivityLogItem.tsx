@@ -1,7 +1,7 @@
 /**
  * @fileoverview Individual log entry in the activity log.
  */
-import { cn } from '@/lib/utils';
+import { cn, formatTime } from '@/lib/utils';
 import type { WorkflowEvent } from '@/types';
 
 /**
@@ -10,16 +10,6 @@ import type { WorkflowEvent } from '@/types';
  */
 interface ActivityLogItemProps {
   event: WorkflowEvent;
-}
-
-/**
- * Formats an ISO timestamp to HH:MM:SS format.
- * @param isoString - ISO 8601 timestamp string
- * @returns Time string in HH:MM:SS format
- */
-function formatTime(isoString: string): string {
-  const date = new Date(isoString);
-  return date.toISOString().slice(11, 19);
 }
 
 /** Color mapping for different agent types in the log. */
@@ -46,7 +36,7 @@ export function ActivityLogItem({ event }: ActivityLogItemProps) {
   return (
     <div
       data-slot="activity-log-item"
-      className="grid grid-cols-[70px_120px_1fr] gap-3 py-1.5 border-b border-border/30 font-mono text-sm"
+      className="grid grid-cols-[100px_120px_1fr] gap-3 py-1.5 border-b border-border/30 font-mono text-sm"
     >
       <span className="text-muted-foreground tabular-nums">
         {formatTime(event.timestamp)}

@@ -79,6 +79,9 @@ describe('useWorkflows', () => {
       'workflow_started',
       'workflow_completed',
       'workflow_failed',
+      'approval_required',
+      'approval_granted',
+      'approval_rejected',
     ] as const)('should auto-revalidate on recent %s event', (event_type) => {
       const now = new Date('2025-12-06T10:00:00Z');
       vi.setSystemTime(now);

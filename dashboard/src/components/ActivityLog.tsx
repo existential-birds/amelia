@@ -2,10 +2,12 @@
  * @fileoverview Real-time activity log for workflow events.
  */
 import { useEffect, useRef, useMemo } from 'react';
+import { Radio, Zap } from 'lucide-react';
 import { ActivityLogItem } from '@/components/ActivityLogItem';
 import { useWorkflowStore } from '@/store/workflowStore';
-import { cn } from '@/lib/utils';
-import type { WorkflowEvent } from '@/types';
+import { useStreamStore } from '@/store/stream-store';
+import { cn, formatTime } from '@/lib/utils';
+import type { WorkflowEvent, StreamEvent } from '@/types';
 
 /**
  * Props for the ActivityLog component.
@@ -20,11 +22,48 @@ interface ActivityLogProps {
 }
 
 /**
+ * Unified log entry type that can represent either a workflow event or a stream event.
+ */
+type LogEntry =
+  | { kind: 'workflow'; event: WorkflowEvent }
+  | { kind: 'stream'; event: StreamEvent };
+
+/**
+ * Component to render stream events in the activity log.
+ * Displays stream events with a distinctive visual style to differentiate from workflow events.
+ *
+ * @param props - Component props
+ * @param props.event - The stream event to display
+ */
+function StreamLogEntry({ event }: { event: StreamEvent }) {
+  return (
+    <div
+      data-slot="stream-log-item"
+      className="relative grid grid-cols-[100px_120px_1fr] gap-3 py-1.5 border-b border-border/30 font-mono text-sm bg-primary/5"
+    >
+      <Zap className="absolute -left-4 top-1/2 -translate-y-1/2 w-3 h-3 text-primary" aria-hidden="true" />
+      <span className="text-muted-foreground tabular-nums">
+        {formatTime(event.timestamp)}
+      </span>
+      <span className="font-semibold text-primary">
+        [{event.agent.toUpperCase()}]
+      </span>
+      <span className="text-foreground/80 break-words">
+        {event.tool_name ? `→ ${event.tool_name}` : event.content || event.subtype}
+      </span>
+    </div>
+  );
+}
+
+/**
  * Displays a scrollable log of workflow events with real-time updates.
  *
  * Merges initial server-loaded events with real-time WebSocket events,
  * deduplicating by event ID. Auto-scrolls to bottom when new events arrive.
  * Includes terminal-style scanlines overlay for visual effect.
+ *
+ * When live mode is enabled, also shows stream events (thinking, tool calls, etc.)
+ * interleaved with workflow events in chronological order.
  *
  * @param props - Component props
  * @returns The activity log UI
@@ -43,13 +82,39 @@ export function ActivityLog({ workflowId, initialEvents = [], className }: Activ
   // Real-time events from WebSocket (via Zustand store)
   const { eventsByWorkflow } = useWorkflowStore();
 
+  // Stream store for live mode and stream events
+  const streamEvents = useStreamStore((state) => state.events);
+  const liveMode = useStreamStore((state) => state.liveMode);
+  const setLiveMode = useStreamStore((state) => state.setLiveMode);
+
   // Merge: loader events + any new real-time events (deduplicated by id)
-  const events = useMemo(() => {
+  const workflowEvents = useMemo(() => {
     const realtimeEvents = eventsByWorkflow[workflowId] || [];
     const loaderEventIds = new Set(initialEvents.map(e => e.id));
     const newEvents = realtimeEvents.filter(e => !loaderEventIds.has(e.id));
     return [...initialEvents, ...newEvents];
   }, [initialEvents, eventsByWorkflow, workflowId]);
+
+  // Build unified log entries by merging workflow and stream events
+  const logEntries: LogEntry[] = useMemo(() => {
+    // Start with workflow events
+    const entries: LogEntry[] = workflowEvents.map(event => ({ kind: 'workflow' as const, event }));
+
+    // If live mode is enabled, add stream events for this workflow
+    if (liveMode) {
+      const workflowStreamEvents = streamEvents.filter(e => e.workflow_id === workflowId);
+      entries.push(...workflowStreamEvents.map(event => ({ kind: 'stream' as const, event })));
+    }
+
+    // Sort all entries by timestamp, with id as secondary sort for stability
+    return entries.sort((a, b) => {
+      const timeA = new Date(a.event.timestamp).getTime();
+      const timeB = new Date(b.event.timestamp).getTime();
+      const timeDiff = timeA - timeB;
+      if (timeDiff !== 0) return timeDiff;
+      return a.event.id.localeCompare(b.event.id);
+    });
+  }, [workflowEvents, streamEvents, liveMode, workflowId]);
 
   // Auto-scroll to bottom when new events arrive
   // Note: scrollIntoView check needed because jsdom doesn't implement it
@@ -57,7 +122,7 @@ export function ActivityLog({ workflowId, initialEvents = [], className }: Activ
     if (scrollRef.current?.scrollIntoView) {
       scrollRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [events.length]);
+  }, [logEntries.length]);
 
   return (
     <div
@@ -68,9 +133,28 @@ export function ActivityLog({ workflowId, initialEvents = [], className }: Activ
         <h3 className="font-heading text-xs font-semibold tracking-widest text-muted-foreground">
           ACTIVITY LOG
         </h3>
-        <span className="font-mono text-xs text-muted-foreground">
-          {events.length} events
-        </span>
+        <div className="flex items-center gap-3">
+          {/* Live mode toggle */}
+          <button
+            type="button"
+            onClick={() => setLiveMode(!liveMode)}
+            className={cn(
+              'flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium transition-colors',
+              liveMode
+                ? 'bg-primary/20 text-primary'
+                : 'bg-muted text-muted-foreground hover:bg-muted/80'
+            )}
+            aria-pressed={liveMode}
+            title={liveMode ? 'Hide live stream events' : 'Show live stream events'}
+          >
+            <Radio className={cn('w-3 h-3', liveMode && 'animate-pulse')} />
+            Live
+          </button>
+
+          <span className="font-mono text-xs text-muted-foreground">
+            {logEntries.length} events
+          </span>
+        </div>
       </div>
 
       <div
@@ -88,14 +172,18 @@ export function ActivityLog({ workflowId, initialEvents = [], className }: Activ
           aria-hidden="true"
         />
 
-        {events.length === 0 ? (
+        {logEntries.length === 0 ? (
           <p className="text-center text-muted-foreground py-8">
             No activity yet
           </p>
         ) : (
           <div className="relative z-0 space-y-0">
-            {events.map((event) => (
-              <ActivityLogItem key={event.id} event={event} />
+            {logEntries.map((entry) => (
+              entry.kind === 'workflow' ? (
+                <ActivityLogItem key={`workflow-${entry.event.id}`} event={entry.event} />
+              ) : (
+                <StreamLogEntry key={`stream-${entry.event.id}`} event={entry.event} />
+              )
             ))}
 
             {/* Blinking cursor */}

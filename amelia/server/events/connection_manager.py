@@ -7,11 +7,13 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import suppress
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from fastapi import WebSocket, WebSocketDisconnect
+from loguru import logger
 
-from amelia.server.models.events import WorkflowEvent
+from amelia.core.types import StreamEvent
+from amelia.server.models.events import StreamEventPayload, WorkflowEvent
 
 
 if TYPE_CHECKING:
@@ -110,6 +112,27 @@ class ConnectionManager:
                 # Empty set = subscribed to all
                 self._connections[websocket] = set()
 
+
+    async def _send_to_client(
+        self, ws: WebSocket, payload: dict[str, Any], timeout: float = 5.0
+    ) -> tuple[WebSocket, bool]:
+        """Send payload to a single client with timeout.
+
+        Args:
+            ws: The WebSocket connection to send to.
+            payload: The JSON-serializable payload to send.
+            timeout: Maximum seconds to wait for send (default 5.0).
+
+        Returns:
+            Tuple of (websocket, success) where success is True if sent,
+            False on disconnect/timeout errors.
+        """
+        try:
+            await asyncio.wait_for(ws.send_json(payload), timeout=timeout)
+            return (ws, True)
+        except (WebSocketDisconnect, TimeoutError, ConnectionResetError, ConnectionError):
+            return (ws, False)
+
     async def broadcast(self, event: WorkflowEvent) -> None:
         """Broadcast event to subscribed connections concurrently.
 
@@ -129,6 +152,14 @@ class ConnectionManager:
                 if not subscribed_ids or event.workflow_id in subscribed_ids:
                     targets.append(ws)
 
+        logger.debug(
+            "broadcast_targets",
+            event_type=event.event_type.value,
+            workflow_id=event.workflow_id,
+            target_count=len(targets),
+            total_connections=len(self._connections),
+        )
+
         if not targets:
             return
 
@@ -137,17 +168,63 @@ class ConnectionManager:
             "payload": event.model_dump(mode="json"),
         }
 
-        async def send_to_client(ws: WebSocket) -> tuple[WebSocket, bool]:
-            """Send to single client with timeout. Returns (ws, success)."""
-            try:
-                await asyncio.wait_for(ws.send_json(payload), timeout=5.0)
-                return (ws, True)
-            except (WebSocketDisconnect, TimeoutError, ConnectionResetError, ConnectionError):
-                return (ws, False)
-
-        results = await asyncio.gather(*(send_to_client(ws) for ws in targets))
+        results = await asyncio.gather(
+            *(self._send_to_client(ws, payload) for ws in targets)
+        )
 
         # Remove failed connections
+        failed = [ws for ws, success in results if not success]
+        succeeded = len(targets) - len(failed)
+        logger.debug(
+            "broadcast_complete",
+            event_type=event.event_type.value,
+            succeeded=succeeded,
+            failed=len(failed),
+        )
+        if failed:
+            async with self._lock:
+                for ws in failed:
+                    self._connections.pop(ws, None)
+
+    async def broadcast_stream(self, event: StreamEvent) -> None:
+        """Broadcast stream event to all connections (no filtering by workflow).
+
+        Stream events are ephemeral real-time events, broadcast to all connected
+        clients regardless of their subscription settings.
+
+        Converts StreamEvent (core type) to StreamEventPayload (WebSocket type)
+        which uses `subtype` instead of `type` to avoid collision with the
+        wrapper message's `type: "stream"` field.
+
+        Args:
+            event: The stream event to broadcast.
+        """
+        async with self._lock:
+            targets = list(self._connections.keys())
+
+        if not targets:
+            return
+
+        # Convert StreamEvent to StreamEventPayload (type -> subtype)
+        stream_payload = StreamEventPayload(
+            id=event.id,
+            subtype=event.type,
+            content=event.content,
+            agent=event.agent,
+            workflow_id=event.workflow_id,
+            timestamp=event.timestamp,
+            tool_name=event.tool_name,
+            tool_input=event.tool_input,
+        )
+        payload = {
+            "type": "stream",
+            "payload": stream_payload.model_dump(mode="json"),
+        }
+
+        results = await asyncio.gather(
+            *(self._send_to_client(ws, payload) for ws in targets)
+        )
+
         failed = [ws for ws, success in results if not success]
         if failed:
             async with self._lock:

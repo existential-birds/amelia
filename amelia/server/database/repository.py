@@ -465,3 +465,36 @@ class WorkflowRepository:
         )
 
         return [self._row_to_event(row) for row in rows]
+
+    async def get_recent_events(
+        self, workflow_id: str, limit: int = 50
+    ) -> list[WorkflowEvent]:
+        """Get the most recent events for a workflow.
+
+        Args:
+            workflow_id: The workflow to get events for.
+            limit: Maximum number of events to return (default 50).
+
+        Returns:
+            List of events ordered by sequence ascending (oldest first).
+        """
+        # Guard against non-positive limits (SQLite treats LIMIT -1 as no limit)
+        if limit <= 0:
+            return []
+
+        rows = await self._db.fetch_all(
+            """
+            SELECT id, workflow_id, sequence, timestamp, agent, event_type,
+                   message, data_json, correlation_id
+            FROM events
+            WHERE workflow_id = ?
+            ORDER BY sequence DESC
+            LIMIT ?
+            """,
+            (workflow_id, limit),
+        )
+
+        # Reverse to get oldest first (UI expects chronological order)
+        events = [self._row_to_event(row) for row in rows]
+        events.reverse()
+        return events

@@ -5,12 +5,18 @@
  * In production, logs can be suppressed or sent to a logging service.
  */
 
+/** Log severity levels supported by the logger. */
 type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
+/**
+ * Context object for structured logging.
+ * Allows arbitrary key-value pairs for contextual data.
+ */
 interface LogContext {
   [key: string]: unknown;
 }
 
+/** Log level severities mapped to numeric values for filtering comparison. */
 const LOG_LEVELS: Record<LogLevel, number> = {
   debug: 0,
   info: 1,
@@ -18,13 +24,25 @@ const LOG_LEVELS: Record<LogLevel, number> = {
   error: 3,
 };
 
-// In production, suppress debug/info logs
+/** Minimum log level - in production, suppress debug/info logs. */
 const MIN_LOG_LEVEL: LogLevel = import.meta.env.PROD ? 'warn' : 'debug';
 
+/**
+ * Determines if a log message should be emitted based on level filtering.
+ * @param level - The log level to check
+ * @returns True if the level meets the minimum threshold
+ */
 function shouldLog(level: LogLevel): boolean {
   return LOG_LEVELS[level] >= LOG_LEVELS[MIN_LOG_LEVEL];
 }
 
+/**
+ * Formats a log message with timestamp, level, and optional context.
+ * @param level - Log severity level
+ * @param message - The log message
+ * @param context - Optional structured context data
+ * @returns Formatted log string
+ */
 function formatMessage(level: LogLevel, message: string, context?: LogContext): string {
   const timestamp = new Date().toISOString();
   const contextStr = context ? ` ${JSON.stringify(context)}` : '';

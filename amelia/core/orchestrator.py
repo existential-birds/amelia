@@ -22,15 +22,41 @@ from amelia.agents.architect import Architect
 from amelia.agents.developer import Developer
 from amelia.agents.reviewer import Reviewer
 from amelia.core.state import ExecutionState, TaskDAG
+from amelia.core.types import StreamEmitter
 from amelia.drivers.factory import DriverFactory
 
 
+def _extract_config_params(config: RunnableConfig | None) -> tuple[StreamEmitter | None, str]:
+    """Extract stream_emitter and workflow_id from RunnableConfig.
+
+    Args:
+        config: Optional RunnableConfig with configurable parameters.
+
+    Returns:
+        Tuple of (stream_emitter, workflow_id).
+
+    Raises:
+        ValueError: If workflow_id (thread_id) is not provided in config.configurable.
+    """
+    config = config or {}
+    configurable = config.get("configurable", {})
+    stream_emitter = configurable.get("stream_emitter")
+    workflow_id = configurable.get("thread_id")
+    if not workflow_id:
+        raise ValueError("workflow_id (thread_id) is required in config.configurable")
+    return stream_emitter, workflow_id
+
+
 # Define nodes for the graph
-async def call_architect_node(state: ExecutionState) -> dict[str, Any]:
+async def call_architect_node(
+    state: ExecutionState,
+    config: RunnableConfig | None = None,
+) -> dict[str, Any]:
     """Orchestrator node for the Architect agent to generate a plan.
 
     Args:
         state: Current execution state containing the issue and profile.
+        config: Optional RunnableConfig with stream_emitter in configurable.
 
     Returns:
         Partial state dict with the generated plan.
@@ -44,9 +70,12 @@ async def call_architect_node(state: ExecutionState) -> dict[str, Any]:
     if state.issue is None:
         raise ValueError("Cannot call Architect: no issue provided in state.")
 
+    # Extract stream_emitter and workflow_id from config if available
+    stream_emitter, workflow_id = _extract_config_params(config)
+
     driver = DriverFactory.get_driver(state.profile.driver)
-    architect = Architect(driver)
-    plan_output = await architect.plan(state)
+    architect = Architect(driver, stream_emitter=stream_emitter)
+    plan_output = await architect.plan(state, workflow_id=workflow_id)
 
     # Log the agent action
     logger.info(
@@ -133,7 +162,10 @@ async def get_code_changes_for_review(state: ExecutionState) -> str:
     except Exception as e:
         return f"Failed to execute git diff: {str(e)}"
 
-async def call_reviewer_node(state: ExecutionState) -> dict[str, Any]:
+async def call_reviewer_node(
+    state: ExecutionState,
+    config: RunnableConfig | None = None,
+) -> dict[str, Any]:
     """Orchestrator node for the Reviewer agent to review code changes.
 
     The orchestrator is responsible for ensuring state is properly prepared
@@ -142,6 +174,7 @@ async def call_reviewer_node(state: ExecutionState) -> dict[str, Any]:
 
     Args:
         state: Current execution state containing issue and plan information.
+        config: Optional RunnableConfig with stream_emitter in configurable.
 
     Returns:
         Partial state dict with review results.
@@ -159,11 +192,14 @@ async def call_reviewer_node(state: ExecutionState) -> dict[str, Any]:
         )
         review_state = state.model_copy(update={"current_task_id": state.plan.tasks[0].id})
 
+    # Extract stream_emitter and workflow_id from config if available
+    stream_emitter, workflow_id = _extract_config_params(config)
+
     driver = DriverFactory.get_driver(state.profile.driver)
-    reviewer = Reviewer(driver)
+    reviewer = Reviewer(driver, stream_emitter=stream_emitter)
 
     code_changes = await get_code_changes_for_review(review_state)
-    review_result = await reviewer.review(review_state, code_changes)
+    review_result = await reviewer.review(review_state, code_changes, workflow_id=workflow_id)
 
     # Log the review completion
     logger.info(
@@ -179,13 +215,17 @@ async def call_reviewer_node(state: ExecutionState) -> dict[str, Any]:
 
     return {"last_review": review_result}
 
-async def call_developer_node(state: ExecutionState) -> dict[str, Any]:
+async def call_developer_node(
+    state: ExecutionState,
+    config: RunnableConfig | None = None,
+) -> dict[str, Any]:
     """Orchestrator node for the Developer agent to execute tasks.
 
     Executes ready tasks, passing execution_mode and working directory from profile.
 
     Args:
         state: Current execution state containing the plan and tasks.
+        config: Optional RunnableConfig with stream_emitter in configurable.
 
     Returns:
         Partial state dict with task results.
@@ -196,8 +236,15 @@ async def call_developer_node(state: ExecutionState) -> dict[str, Any]:
         logger.info("Orchestrator: No plan or tasks to execute.")
         return {}
 
+    # Extract stream_emitter and workflow_id from config if available
+    stream_emitter, workflow_id = _extract_config_params(config)
+
     driver = DriverFactory.get_driver(state.profile.driver)
-    developer = Developer(driver, execution_mode=state.profile.execution_mode)
+    developer = Developer(
+        driver,
+        execution_mode=state.profile.execution_mode,
+        stream_emitter=stream_emitter,
+    )
 
     ready_tasks = state.plan.get_ready_tasks()
 
@@ -221,7 +268,7 @@ async def call_developer_node(state: ExecutionState) -> dict[str, Any]:
         try:
             # Create state with current task ID for execution
             current_state = state.model_copy(update={"current_task_id": task.id})
-            result = await developer.execute_current_task(current_state)
+            result = await developer.execute_current_task(current_state, workflow_id=workflow_id)
 
             if result.get("status") == "completed":
                 # Update status to completed (immutably)

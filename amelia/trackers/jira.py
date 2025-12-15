@@ -43,11 +43,12 @@ class JiraTracker(BaseTracker):
                 f"Missing required environment variables for JiraTracker: {', '.join(missing)}"
             )
 
-    def get_issue(self, issue_id: str) -> Issue:
+    def get_issue(self, issue_id: str, *, cwd: str | None = None) -> Issue:
         """Fetch an issue from Jira.
 
         Args:
             issue_id: The Jira issue key (e.g., 'PROJECT-123').
+            cwd: Unused. Jira uses API calls, not CLI, so working directory is irrelevant.
 
         Returns:
             An Issue object containing the Jira issue's metadata and description.
@@ -55,6 +56,7 @@ class JiraTracker(BaseTracker):
         Raises:
             ValueError: If the issue cannot be fetched or does not exist.
         """
+        del cwd  # Unused - Jira uses API, not CLI
         url = f"{self.jira_url}/rest/api/3/issue/{issue_id}"
 
         try:

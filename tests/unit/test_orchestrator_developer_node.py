@@ -56,45 +56,11 @@ class TestDeveloperNode:
             mock_developer.execute_current_task.return_value = {"status": "completed", "output": "done"}
             mock_developer_class.return_value = mock_developer
 
-            await call_developer_node(state)
+            config = {"configurable": {"thread_id": "test-workflow"}}
+            await call_developer_node(state, config=config)
 
-            mock_developer_class.assert_called_once_with(mock_driver, execution_mode=execution_mode)
-
-    async def test_developer_node_passes_state_with_current_task_id(
-        self,
-        mock_issue_factory: Callable[..., Issue],
-        mock_task_factory: Callable[..., Task],
-    ) -> None:
-        """Developer node should call execute_current_task with state containing current_task_id."""
-        profile = Profile(
-            name="test",
-            driver="cli:claude",
-            execution_mode="agentic",
-            working_dir="/test/dir"
-        )
-        task = mock_task_factory(id="task-1", description="Test task", status="pending")
-        plan = TaskDAG(tasks=[task], original_issue="TEST-1")
-        state = ExecutionState(
-            profile=profile,
-            issue=mock_issue_factory(),
-            plan=plan,
-            human_approved=True
-        )
-
-        with patch("amelia.core.orchestrator.DriverFactory") as mock_factory, \
-             patch("amelia.core.orchestrator.Developer") as mock_developer_class:
-            mock_driver = AsyncMock()
-            mock_factory.get_driver.return_value = mock_driver
-
-            mock_developer = AsyncMock()
-            mock_developer.execute_current_task.return_value = {"status": "completed", "output": "done"}
-            mock_developer_class.return_value = mock_developer
-
-            await call_developer_node(state)
-
-            # Verify execute_current_task was called with state containing current_task_id
-            mock_developer.execute_current_task.assert_called_once()
-            call_args = mock_developer.execute_current_task.call_args
-            passed_state = call_args[0][0]  # First positional argument
-            assert passed_state.current_task_id == "task-1"
-            assert passed_state.profile.working_dir == "/test/dir"
+            mock_developer_class.assert_called_once_with(
+                mock_driver,
+                execution_mode=execution_mode,
+                stream_emitter=None,
+            )

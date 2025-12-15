@@ -14,9 +14,9 @@ describe('ActivityLogItem', () => {
     message: 'Issue #8 parsed. Creating task DAG for benchmark framework.',
   });
 
-  it('renders timestamp in HH:MM:SS format', () => {
+  it('renders timestamp in HH:MM:SS.mmm format', () => {
     render(<ActivityLogItem event={mockEvent} />);
-    expect(screen.getByText('14:32:07')).toBeInTheDocument();
+    expect(screen.getByText('14:32:07.000')).toBeInTheDocument();
   });
 
   it('renders agent name in brackets', () => {

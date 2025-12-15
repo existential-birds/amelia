@@ -1,5 +1,9 @@
 import { Skeleton } from '@/components/ui/skeleton';
 
+/**
+ * Props for the JobQueueSkeleton component.
+ * @property count - Number of skeleton items to display (default: 3)
+ */
 interface JobQueueSkeletonProps {
   count?: number;
 }
