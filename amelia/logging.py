@@ -254,8 +254,11 @@ def log_claude_result(
         if result_text:
             # Get first non-empty line
             first_line = result_text.strip().split("\n")[0]
+            total_lines = len(result_text.strip().split("\n"))
             preview = first_line[:200] + ("…" if len(first_line) > 200 else "")
             lines.append(f"  {muted}{vertical}{RESET} {cream}{preview}{RESET}")
+            if total_lines > 1:
+                lines.append(f"  {muted}{vertical} ({total_lines} lines total){RESET}")
 
     elif result_type == "error":
         # Error - use rust red
