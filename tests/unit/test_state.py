@@ -16,6 +16,7 @@ from amelia.core.state import (
     PlanStep,
     StepResult,
     TaskDAG,
+    merge_sets,
     truncate_output,
 )
 from amelia.core.types import DeveloperStatus, Profile, TrustLevel
@@ -631,3 +632,33 @@ class TestProfileTrustLevel:
         restored = Profile.model_validate(data)
         assert restored.trust_level == TrustLevel.AUTONOMOUS
         assert restored.batch_checkpoint_enabled is False
+
+
+
+class TestMergeSets:
+    """Tests for merge_sets LangGraph reducer."""
+
+    def test_merge_set_with_set(self):
+        """merge_sets handles in-memory node returns (sets)."""
+        result = merge_sets({"a", "b"}, {"c", "d"})
+        assert result == {"a", "b", "c", "d"}
+
+    def test_merge_set_with_list(self):
+        """merge_sets handles JSON-serialized input (lists)."""
+        result = merge_sets({"a", "b"}, ["c", "d"])
+        assert result == {"a", "b", "c", "d"}
+
+    def test_merge_empty_set_with_empty_list(self):
+        """merge_sets handles initial state from JSON (the original bug)."""
+        result = merge_sets(set(), [])
+        assert result == set()
+
+    def test_merge_sets_with_overlap(self):
+        """merge_sets deduplicates overlapping elements."""
+        result = merge_sets({"a", "b"}, {"b", "c"})
+        assert result == {"a", "b", "c"}
+
+    def test_merge_empty_set_with_non_empty_list(self):
+        """merge_sets handles first addition to initially empty set."""
+        result = merge_sets(set(), ["a", "b"])
+        assert result == {"a", "b"}

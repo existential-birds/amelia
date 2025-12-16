@@ -30,8 +30,15 @@ MAX_OUTPUT_LINES = 100
 MAX_OUTPUT_CHARS = 4000
 
 
-def merge_sets(left: set[str], right: set[str]) -> set[str]:
-    """LangGraph reducer for set union."""
+def merge_sets(left: set[str], right: set[str] | list[str]) -> set[str]:
+    """LangGraph reducer for set union.
+
+    Accepts both set and list for right because:
+    - Node returns provide sets in-memory
+    - Initial state and checkpoint restore pass lists (JSON has no set type)
+    """
+    if isinstance(right, list):
+        right = set(right)
     return left | right
 
 
