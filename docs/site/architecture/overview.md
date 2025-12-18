@@ -4,6 +4,9 @@ This document provides a technical overview of Amelia's architecture, component 
 
 ## System Overview
 
+<details>
+<summary>System Architecture (Mermaid source)</summary>
+
 ```mermaid
 %%{init: { "theme": "base", "themeVariables": { "primaryColor": "#1F332E", "primaryTextColor": "#EFF8E2", "primaryBorderColor": "#FFC857", "lineColor": "#5B9BD5", "fontFamily": "Source Sans 3, sans-serif" }}}%%
 flowchart TB
@@ -119,6 +122,8 @@ flowchart TB
     class shell,file,gitsnapshot toolStyle
 ```
 
+</details>
+
 ## Component Breakdown
 
 | Layer | Location | Purpose | Key Abstractions |
@@ -152,6 +157,9 @@ Amelia uses a server-based execution architecture where CLI commands communicate
 5. **Human Approval Gate**: Workflow blocks at `human_approval_node` using LangGraph interrupt until user approves/rejects via CLI or Dashboard
 
 ### Sequence Diagram
+
+<details>
+<summary>Sequence Diagram (Mermaid source)</summary>
 
 ```mermaid
 sequenceDiagram
@@ -250,6 +258,8 @@ sequenceDiagram
     end
 ```
 
+</details>
+
 ## Key Types
 
 All types are defined as frozen Pydantic models for immutability.
@@ -310,6 +320,9 @@ The LangGraph state machine consists of these nodes:
 
 ### Orchestrator Flow
 
+<details>
+<summary>Orchestrator Flow (Mermaid source)</summary>
+
 ```mermaid
 %%{init: { "theme": "base", "themeVariables": { "primaryColor": "#1F332E", "primaryTextColor": "#EFF8E2", "primaryBorderColor": "#FFC857", "lineColor": "#5B9BD5", "fontFamily": "Source Sans 3, sans-serif" }}}%%
 flowchart LR
@@ -349,6 +362,8 @@ flowchart LR
     class BlockerRes blocker
     class End1,End2,End3 cancelled
 ```
+
+</details>
 
 ## Security Architecture
 
