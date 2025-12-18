@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { ApprovalControls } from './ApprovalControls';
 
@@ -50,5 +51,16 @@ describe('ApprovalControls', () => {
   it('hides buttons when not pending', () => {
     renderWithRouter('wf-001', 'Test', 'approved');
     expect(screen.queryByRole('button', { name: /approve/i })).not.toBeInTheDocument();
+  });
+
+  it('focuses textarea when reject is clicked', async () => {
+    const user = userEvent.setup();
+    renderWithRouter('wf-001', 'Test');
+
+    await user.click(screen.getByRole('button', { name: /reject/i }));
+
+    const textarea = screen.getByRole('textbox', { name: /rejection feedback/i });
+    expect(textarea).toBeInTheDocument();
+    expect(textarea).toHaveFocus();
   });
 });
