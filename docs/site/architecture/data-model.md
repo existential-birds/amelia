@@ -65,7 +65,7 @@ Defines how much autonomy the Developer gets during execution.
 
 | Value | Description |
 |-------|-------------|
-| `PARANOID` | Approve every step. |
+| `PARANOID` | Approve every batch. |
 | `STANDARD` | Approve batches (default). |
 | `AUTONOMOUS` | Auto-approve low/medium risk, stop only for high-risk or blockers. |
 
