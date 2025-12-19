@@ -256,7 +256,7 @@ Instrument LangGraph agents with Langfuse callback handler:
 ```python
 from langfuse.callback import CallbackHandler
 
-async def run_agent(state: ExecutionState, profile: Profile) -> ExecutionState:
+async def run_agent(state: ExecutionState, profile: Profile, agent_type: str) -> ExecutionState:
     langfuse_handler = CallbackHandler(
         trace_name=f"agent-{agent_type}",
         metadata={
@@ -295,6 +295,7 @@ def export_failure_to_benchmark(
         },
         expected_output=expected_behavior,
         metadata={
+            # Note: current_agent is a proposed addition to ExecutionState
             "agent": state.current_agent,
             "failure_reason": failure_reason,
             "difficulty": estimate_difficulty(state),
@@ -330,6 +331,9 @@ async def run_experiment(
     for item in dataset.items:
         # Run agent with variant prompt
         trace = await run_agent_with_prompt(item.input, prompt_variant)
+
+        # Link trace to dataset item (creates DatasetRun entry)
+        item.link(trace)
 
         # Apply evaluators
         for evaluator in evaluators:
