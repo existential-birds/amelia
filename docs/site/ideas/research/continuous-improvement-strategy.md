@@ -1,7 +1,7 @@
 # Continuous Improvement Strategy for Amelia
 
-> **Created by:** hey-amelia bot with Claude Opus 4.5 and Gemini 3 Pro with Deep Research  
-> **Version:** 2.0 — Revised based on technical review feedback
+> **Created by:** hey-amelia bot with Claude Opus 4.5 and Gemini 3 Pro with Deep Research
+> **Version:** 2.1 — Added Langfuse integration architecture (Option B: Langfuse as backend, Amelia dashboard as UI)
 
 A strategic framework for building a quality flywheel that compounds agent performance over time.
 
@@ -186,6 +186,263 @@ The following techniques from current research will be evaluated for later phase
 | **Process Reward Models** | Learned reward functions evaluating trajectories | Train a model to predict quality scores from action sequences |
 | **Multi-Agent Collaboration** | Agents debate or pair-program | Two Developer agents collaborate on complex implementations |
 
+### Part I: Langfuse Integration Architecture
+
+Rather than building custom benchmark infrastructure from scratch, we integrate [Langfuse](https://langfuse.com/)—an open-source LLM engineering platform—as the evaluation backend while retaining Amelia's dashboard as the primary UI.
+
+**Why Langfuse:**
+- Open-source and self-hostable (Docker Compose)
+- Built-in dataset management, experiment execution, and scoring
+- Python SDK with native LangGraph integration
+- REST API for pulling data into custom dashboards
+
+#### Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         AMELIA ORCHESTRATOR                             │
+│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐                 │
+│  │  Architect  │    │  Developer  │    │  Reviewer   │                 │
+│  └──────┬──────┘    └──────┬──────┘    └──────┬──────┘                 │
+│         │                  │                  │                         │
+│         └──────────────────┼──────────────────┘                         │
+│                            │                                            │
+│                   ┌────────▼────────┐                                   │
+│                   │ Langfuse Python │  ← Traces, scores, experiments    │
+│                   │      SDK        │                                   │
+│                   └────────┬────────┘                                   │
+└────────────────────────────┼────────────────────────────────────────────┘
+                             │
+                             ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                     LANGFUSE (Self-Hosted)                              │
+│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐                 │
+│  │  Datasets   │    │ Experiments │    │   Scores    │                 │
+│  │  (benchmarks)│   │ (variants)  │    │  (metrics)  │                 │
+│  └─────────────┘    └─────────────┘    └─────────────┘                 │
+│                                                                         │
+│  ┌─────────────────────────────────────────────────────────────────┐   │
+│  │                    Traces (trajectory data)                      │   │
+│  └─────────────────────────────────────────────────────────────────┘   │
+└────────────────────────────┬────────────────────────────────────────────┘
+                             │
+                             │ REST API / SDK Query
+                             ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                      AMELIA DASHBOARD                                   │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐         │
+│  │ Benchmark Suite │  │   Experiment    │  │    Metrics      │         │
+│  │    Overview     │  │   Comparison    │  │   Dashboard     │         │
+│  └─────────────────┘  └─────────────────┘  └─────────────────┘         │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+#### Data Model Mapping
+
+| Strategy Concept | Langfuse Primitive | Storage |
+|------------------|-------------------|---------|
+| Benchmark test case | Dataset Item | `input`, `expected_output`, `metadata` |
+| Agent trajectory | Trace + Spans | Full execution path with nested observations |
+| Evaluation result | Score | `name`, `value`, `reasoning`, linked to trace |
+| Prompt variant | Prompt (versioned) | Template with variables, model config |
+| Experiment run | Dataset Run | Links prompt version + dataset + scores |
+
+#### Integration Points
+
+**1. Agent Tracing (Real-time)**
+
+Instrument LangGraph agents with Langfuse callback handler:
+
+```python
+from langfuse.callback import CallbackHandler
+
+async def run_agent(state: ExecutionState, profile: Profile, agent_type: str) -> ExecutionState:
+    langfuse_handler = CallbackHandler(
+        trace_name=f"agent-{agent_type}",
+        metadata={
+            "issue_id": state.issue.id,
+            "profile": profile.name,
+            "agent": agent_type,
+        }
+    )
+    # LangGraph automatically propagates callbacks
+    return await graph.ainvoke(state, config={"callbacks": [langfuse_handler]})
+```
+
+**2. Benchmark Factory (Auto-Export)**
+
+When `human_approval_node` rejects output, export to Langfuse dataset:
+
+```python
+from langfuse import Langfuse
+
+langfuse = Langfuse()
+
+def export_failure_to_benchmark(
+    state: ExecutionState,
+    failure_reason: str,
+    expected_behavior: str,
+) -> None:
+    """Auto-export production failures as benchmark cases."""
+    dataset = langfuse.get_or_create_dataset(
+        name="amelia-failures",
+        description="Auto-captured production failures"
+    )
+    dataset.create_item(
+        input={
+            "issue": state.issue.model_dump(),
+            "plan": state.plan.model_dump() if state.plan else None,
+        },
+        expected_output=expected_behavior,
+        metadata={
+            # Note: current_agent is a proposed addition to ExecutionState
+            "agent": state.current_agent,
+            "failure_reason": failure_reason,
+            "difficulty": estimate_difficulty(state),
+            "category": categorize_failure(failure_reason),
+            "timestamp": datetime.utcnow().isoformat(),
+        }
+    )
+```
+
+**3. Experiment Execution (Prompt Variant Testing)**
+
+Run prompt variants against benchmark datasets:
+
+```python
+from langfuse import Langfuse
+
+langfuse = Langfuse()
+
+async def run_experiment(
+    prompt_variant: str,
+    dataset_name: str,
+    evaluators: list[Callable],
+) -> ExperimentResult:
+    """Execute prompt variant against benchmark dataset."""
+    experiment = langfuse.create_experiment(
+        name=f"reviewer-{prompt_variant}",
+        dataset_name=dataset_name,
+        prompt_id=prompt_variant,
+    )
+
+    dataset = langfuse.get_dataset(dataset_name)
+
+    for item in dataset.items:
+        # Run agent with variant prompt
+        trace = await run_agent_with_prompt(item.input, prompt_variant)
+
+        # Link trace to dataset item (creates DatasetRun entry)
+        item.link(trace)
+
+        # Apply evaluators
+        for evaluator in evaluators:
+            score = evaluator(
+                input=item.input,
+                output=trace.output,
+                expected=item.expected_output,
+            )
+            langfuse.score(
+                trace_id=trace.id,
+                name=evaluator.__name__,
+                value=score.value,
+                comment=score.reasoning,
+            )
+
+    return experiment.get_results()
+```
+
+**4. Dashboard Data Integration**
+
+Pull aggregated metrics into Amelia dashboard via Langfuse SDK:
+
+```python
+from langfuse import Langfuse
+
+langfuse = Langfuse()
+
+async def get_benchmark_metrics(
+    dataset_name: str,
+    experiment_ids: list[str],
+) -> BenchmarkMetrics:
+    """Fetch metrics for dashboard display."""
+    metrics = []
+
+    for experiment_id in experiment_ids:
+        # Query experiment results
+        runs = langfuse.api.dataset_runs.list(
+            dataset_name=dataset_name,
+            run_name=experiment_id,
+        )
+
+        # Aggregate scores by category
+        scores = langfuse.api.scores.list(
+            trace_ids=[run.trace_id for run in runs.data],
+        )
+
+        metrics.append({
+            "experiment": experiment_id,
+            "accuracy": calculate_accuracy(scores),
+            "by_category": group_by_category(scores),
+            "by_difficulty": group_by_difficulty(scores),
+        })
+
+    return BenchmarkMetrics(experiments=metrics)
+```
+
+#### Dashboard Views
+
+The Amelia dashboard extends to include benchmark-specific views:
+
+| View | Data Source | Purpose |
+|------|-------------|---------|
+| **Benchmark Overview** | `GET /datasets` | List test suites, case counts, coverage gaps |
+| **Experiment Comparison** | `GET /dataset-runs` | Side-by-side prompt variant performance |
+| **Metrics Timeline** | `GET /scores` with time filters | Historical accuracy, regression detection |
+| **Failure Analysis** | `GET /traces` with low scores | Drill into specific failures, export to benchmarks |
+
+#### Infrastructure Setup
+
+**Local Development:**
+
+```bash
+# Start Langfuse (from langfuse repo)
+cd ../langfuse
+pnpm run infra:dev:up  # PostgreSQL, ClickHouse, Redis, MinIO
+pnpm run dev           # Web + Worker
+
+# Configure Amelia
+export LANGFUSE_HOST=http://localhost:3000
+export LANGFUSE_PUBLIC_KEY=pk-...
+export LANGFUSE_SECRET_KEY=sk-...
+```
+
+**Production (Docker Compose):**
+
+```yaml
+# docker-compose.yml addition
+services:
+  langfuse:
+    image: langfuse/langfuse:latest
+    environment:
+      DATABASE_URL: postgresql://...
+      NEXTAUTH_SECRET: ...
+      LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES: true
+    ports:
+      - "3001:3000"  # Langfuse web UI (optional, for debugging)
+```
+
+#### Benefits of This Approach
+
+| Benefit | Description |
+|---------|-------------|
+| **Reduced implementation effort** | Langfuse provides datasets, experiments, scoring out of the box |
+| **Unified trajectory logging** | All agent executions automatically traced with full observability |
+| **Experiment comparison** | Built-in side-by-side analysis of prompt variants |
+| **Custom dashboard retained** | Amelia dashboard pulls data via API, maintains UX consistency |
+| **Open-source** | No licensing cost, full control over data, self-hosted |
+| **LangGraph native** | First-class callback integration, no wrapper code needed |
+
 ---
 
 ## Metrics Framework
@@ -262,15 +519,20 @@ The Reviewer is the ideal starting point:
 - **Immediate value**: Better code review quality while building the improvement system
 
 **Deliverables:**
-- Benchmark framework (test cases, runner, evaluator, reporter)
-- Initial Reviewer test suite with 50+ cases and dual-test criteria
-- Unified trajectory logging system
-- Metrics dashboard with per-category, per-difficulty breakdowns
+- Langfuse integration layer (`amelia/integrations/langfuse/`)
+  - Agent tracing via callback handler
+  - Dataset management wrapper
+  - Experiment runner for prompt variants
+- Initial Reviewer test suite with 50+ cases in Langfuse datasets (dual-test criteria)
+- Amelia dashboard benchmark views
+  - Benchmark overview (dataset listing, coverage metrics)
+  - Experiment comparison (side-by-side prompt variant results)
+  - Metrics timeline (historical accuracy, regression alerts)
 - Documented iteration workflow for prompt optimization
-- Failure auto-export to benchmark factory (with data sanitization)
-- CI/CD integration: benchmark suite runs on every agent change, blocking deployment on regressions
+- Failure auto-export to Langfuse datasets (with data sanitization)
+- CI/CD integration: experiment runner on agent changes, blocking deployment on regressions
 
-**Timeline**: 8-10 weeks
+**Timeline**: 6-8 weeks (reduced from 8-10 due to Langfuse infrastructure)
 
 **Exit criteria for Phase 2**: Phase 1 is complete when:
 - Benchmark suite covers ≥50 test cases across all difficulty levels
@@ -288,13 +550,13 @@ Extending to Architect and Developer agents presents additional challenges:
 | **Developer** | Success depends on tests, review, production behavior | Adapt SWE-bench methodology; use review iterations as quality signal |
 
 **Deliverables:**
-- Extended benchmark suite covering Developer tasks (code generation, bug fixes, refactoring)
-- Extended benchmark suite covering Architect tasks (plan quality, requirement coverage)
+- Extended Langfuse datasets covering Developer tasks (code generation, bug fixes, refactoring)
+- Extended Langfuse datasets covering Architect tasks (plan quality, requirement coverage)
 - Multi-agent selection mechanism for complex tickets (spawn parallel configurations, select best)
-- Prompt template externalization for A/B testing at scale
-- Turn count tracking and efficiency optimization
-- Token and cost optimization metrics alongside quality metrics
-- Human feedback collection mechanism (thumbs up/down on agent outputs)
+- Langfuse prompt management for A/B testing at scale (versioned prompts with experiment linking)
+- Turn count tracking via Langfuse trace spans and efficiency scoring
+- Token and cost metrics via Langfuse usage tracking
+- Human feedback collection via Langfuse annotation queues (thumbs up/down on agent outputs)
 
 **Additional capabilities to evaluate:**
 - Self-reflection step for Developer agent (internal quality check before Reviewer handoff)
@@ -422,6 +684,11 @@ This contingency ensures the strategy has a path forward even if we hit fundamen
 
 ## Research References
 
+**Evaluation infrastructure:**
+- [Langfuse](https://langfuse.com/) — Open-source LLM engineering platform; datasets, experiments, scoring, tracing
+- [Langfuse Python SDK](https://langfuse.com/docs/sdk/python) — Programmatic experiment execution with LangGraph integration
+- [Langfuse Experiments](https://langfuse.com/docs/evaluation/experiments/experiments-via-sdk) — Dataset-driven prompt variant testing
+
 **Benchmarking methodology:**
 - SWE-bench dual-test criteria for measuring code agent performance
 - [Harbor framework](https://github.com/laude-institute/harbor) — Container-based agent evaluation with RL integration
@@ -453,15 +720,16 @@ This contingency ensures the strategy has a path forward even if we hit fundamen
 This strategy establishes a foundation for continuous agent improvement through:
 
 1. **System clarity**: Defined roles for Architect, Developer, and Reviewer agents with clear capability boundaries
-2. **Benchmark infrastructure** that provides objective measurement with dual-test criteria
-3. **Benchmark factory** that auto-captures production failures as training signal with appropriate data handling
+2. **Langfuse integration**: Open-source evaluation backend providing datasets, experiments, scoring, and tracing out of the box
+3. **Benchmark factory** that auto-captures production failures as Langfuse dataset items with appropriate data handling
 4. **RL-inspired optimization** applied at the prompt layer without model fine-tuning
-5. **Efficiency metrics** (turn count, cost) alongside quality metrics
-6. **Human-facing metrics** (manual intervention rate, user satisfaction) ensuring real-world adoption success
+5. **Efficiency metrics** (turn count, cost) tracked via Langfuse trace spans
+6. **Human-facing metrics** (manual intervention rate, user satisfaction) via Langfuse annotation queues
 7. **Outcome-based verification** that allows agent flexibility while ensuring task completion
 8. **Safeguards** against overfitting, reward hacking, regression, and model limitations
 9. **Phased implementation** with clear exit criteria and contingency planning
-10. **Adoption strategy** focused on developer productivity wins with structured rollout program
+10. **Custom dashboard** retained—Amelia dashboard pulls metrics from Langfuse API for unified UX
+11. **Adoption strategy** focused on developer productivity wins with structured rollout program
 
 The end state is a quality flywheel where each iteration compounds—an agent system that gets measurably better over time rather than requiring constant manual intervention.
 
