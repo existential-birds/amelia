@@ -404,6 +404,7 @@ The Amelia dashboard extends to include benchmark-specific views:
 #### Infrastructure Setup
 
 **Local Development:**
+
 ```bash
 # Start Langfuse (from langfuse repo)
 cd ../langfuse
@@ -417,6 +418,7 @@ export LANGFUSE_SECRET_KEY=sk-...
 ```
 
 **Production (Docker Compose):**
+
 ```yaml
 # docker-compose.yml addition
 services:
