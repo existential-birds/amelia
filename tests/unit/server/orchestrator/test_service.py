@@ -560,7 +560,7 @@ class TestApproveWorkflowResume:
     @patch("amelia.server.orchestrator.service.AsyncSqliteSaver")
     @patch("amelia.server.orchestrator.service.create_orchestrator_graph")
     async def test_approve_updates_state_and_resumes(
-        self, mock_create_graph, mock_saver_class, orchestrator, mock_repository
+        self, mock_create_graph, mock_saver_class, orchestrator, mock_repository, langgraph_mock_factory
     ):
         """approve_workflow updates graph state and resumes execution."""
         # Setup blocked workflow
@@ -574,24 +574,20 @@ class TestApproveWorkflowResume:
         mock_repository.get.return_value = workflow
         orchestrator._active_tasks["/tmp/test"] = ("wf-123", AsyncMock())
 
-        # Setup mock graph
-        mock_graph = MagicMock()
-        mock_graph.aupdate_state = AsyncMock()
-        # astream_events should return the iterator directly
-        mock_graph.astream_events = MagicMock(return_value=AsyncIteratorMock([]))
-        mock_create_graph.return_value = mock_graph
-
-        mock_saver = AsyncMock()
-        mock_saver_class.from_conn_string.return_value.__aenter__ = AsyncMock(
-            return_value=mock_saver
+        # Setup LangGraph mocks using factory
+        mocks = langgraph_mock_factory(
+            aget_state_return=MagicMock(values={"human_approved": True}, next=[])
         )
-        mock_saver_class.from_conn_string.return_value.__aexit__ = AsyncMock()
+        mock_create_graph.return_value = mocks.graph
+        mock_saver_class.from_conn_string.return_value = (
+            mocks.saver_class.from_conn_string.return_value
+        )
 
         await orchestrator.approve_workflow("wf-123")
 
         # Verify state was updated with approval
-        mock_graph.aupdate_state.assert_called_once()
-        call_args = mock_graph.aupdate_state.call_args
+        mocks.graph.aupdate_state.assert_called_once()
+        call_args = mocks.graph.aupdate_state.call_args
         assert call_args[0][1] == {"human_approved": True}
 
 
