@@ -419,6 +419,7 @@ async def test_approve_workflow_success(
     orchestrator: OrchestratorService,
     mock_repository: AsyncMock,
     mock_event_bus: EventBus,
+    langgraph_mock_factory,
 ):
     """Should approve blocked workflow."""
     received_events = []
@@ -435,19 +436,14 @@ async def test_approve_workflow_success(
     )
     mock_repository.get.return_value = mock_state
 
-    # Setup mock graph
-    mock_graph = MagicMock()
-    mock_graph.aupdate_state = AsyncMock()
-    mock_graph.aget_state = AsyncMock(return_value=MagicMock(values={"human_approved": True}, next=[]))
-    # astream should return an async iterator
-    mock_graph.astream = MagicMock(return_value=AsyncIteratorMock([]))
-    mock_create_graph.return_value = mock_graph
-
-    mock_saver = AsyncMock()
-    mock_saver_class.from_conn_string.return_value.__aenter__ = AsyncMock(
-        return_value=mock_saver
+    # Setup LangGraph mocks using factory
+    mocks = langgraph_mock_factory(
+        aget_state_return=MagicMock(values={"human_approved": True}, next=[])
     )
-    mock_saver_class.from_conn_string.return_value.__aexit__ = AsyncMock()
+    mock_create_graph.return_value = mocks.graph
+    mock_saver_class.from_conn_string.return_value = (
+        mocks.saver_class.from_conn_string.return_value
+    )
 
     # Simulate workflow waiting for approval
     orchestrator._approval_events["wf-1"] = asyncio.Event()
