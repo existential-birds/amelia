@@ -28,7 +28,6 @@ const sharedSidebar = [
     text: 'Research',
     items: [
       { text: 'Benchmarking', link: '/ideas/research/benchmarking' },
-      { text: 'Continuous Improvement', link: '/ideas/research/continuous-improvement-strategy' },
       { text: '12-Factor Compliance', link: '/ideas/research/12-factor-compliance' },
       { text: 'Context Engineering', link: '/ideas/research/context-engineering-gaps' },
       { text: 'Knowledge Agents', link: '/ideas/research/knowledge-agents' }

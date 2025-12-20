@@ -2,7 +2,7 @@
 
 > **Note:** Documents in this section are exploratory designs created through brainstorming sessions. They represent ideas under consideration but **are not commitments**. Some may never be implemented, others may change significantly before implementation.
 
-These documents are created by **hey-amelia** using Claude Opus 4.5, Gemini 3 Pro, and Open GPT 5.2 through structured exploration and Socratic questioning.
+These documents are created using the [superpowers:brainstorming](https://github.com/obra/superpowers) skill in Claude Code, which provides structured exploration through Socratic questioning.
 
 ## Current Explorations
 
