@@ -528,7 +528,7 @@ class TestRejectWorkflowGraphState:
     @patch("amelia.server.orchestrator.service.AsyncSqliteSaver")
     @patch("amelia.server.orchestrator.service.create_orchestrator_graph")
     async def test_reject_updates_graph_state(
-        self, mock_create_graph, mock_saver_class, orchestrator, mock_repository
+        self, mock_create_graph, mock_saver_class, orchestrator, mock_repository, langgraph_mock_factory
     ):
         """reject_workflow updates graph state with human_approved=False."""
         workflow = ServerExecutionState(
@@ -540,20 +540,17 @@ class TestRejectWorkflowGraphState:
         )
         mock_repository.get.return_value = workflow
 
-        mock_graph = AsyncMock()
-        mock_graph.aupdate_state = AsyncMock()
-        mock_create_graph.return_value = mock_graph
-
-        mock_saver = AsyncMock()
-        mock_saver_class.from_conn_string.return_value.__aenter__ = AsyncMock(
-            return_value=mock_saver
+        # Setup LangGraph mocks using factory
+        mocks = langgraph_mock_factory()
+        mock_create_graph.return_value = mocks.graph
+        mock_saver_class.from_conn_string.return_value = (
+            mocks.saver_class.from_conn_string.return_value
         )
-        mock_saver_class.from_conn_string.return_value.__aexit__ = AsyncMock()
 
         await orchestrator.reject_workflow("wf-123", "Not ready")
 
-        mock_graph.aupdate_state.assert_called_once()
-        call_args = mock_graph.aupdate_state.call_args
+        mocks.graph.aupdate_state.assert_called_once()
+        call_args = mocks.graph.aupdate_state.call_args
         assert call_args[0][1] == {"human_approved": False}
 
 
