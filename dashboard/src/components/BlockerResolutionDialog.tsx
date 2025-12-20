@@ -282,7 +282,7 @@ export function BlockerResolutionDialog({
       </Dialog>
 
       {/* Keep Changes Confirmation */}
-      <AlertDialog open={showKeepChangesAlert}>
+      <AlertDialog open={showKeepChangesAlert} onOpenChange={setShowKeepChangesAlert}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Are you sure you want to abort and keep changes?</AlertDialogTitle>
@@ -304,7 +304,7 @@ export function BlockerResolutionDialog({
       </AlertDialog>
 
       {/* Revert Batch Confirmation */}
-      <AlertDialog open={showRevertAlert}>
+      <AlertDialog open={showRevertAlert} onOpenChange={setShowRevertAlert}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Are you sure you want to abort and revert?</AlertDialogTitle>

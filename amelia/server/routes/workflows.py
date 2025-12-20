@@ -73,7 +73,7 @@ async def create_workflow(
         plan_only=request.plan_only,
     )
 
-    logger.info(f"Created workflow {workflow_id} for issue {request.issue_id}")
+    logger.info("Created workflow", workflow_id=workflow_id, issue_id=request.issue_id)
 
     return CreateWorkflowResponse(
         id=workflow_id,
@@ -147,7 +147,7 @@ async def list_workflows(
             after_started_at_str, after_id = decoded.split("|", 1)
             after_started_at = datetime.fromisoformat(after_started_at_str)
         except (ValueError, UnicodeDecodeError) as e:
-            logger.warning(f"Invalid cursor: {e}")
+            logger.warning("Invalid cursor", error=str(e))
             raise HTTPException(
                 status_code=400,
                 detail="Invalid cursor format",
@@ -327,7 +327,7 @@ async def cancel_workflow(
         InvalidStateError: If workflow is not in a cancellable state.
     """
     await orchestrator.cancel_workflow(workflow_id)
-    logger.info(f"Cancelled workflow {workflow_id}")
+    logger.info("Cancelled workflow", workflow_id=workflow_id)
     return ActionResponse(status="cancelled", workflow_id=workflow_id)
 
 
@@ -350,7 +350,7 @@ async def approve_workflow(
         InvalidStateError: If workflow is not in blocked state.
     """
     await orchestrator.approve_workflow(workflow_id)
-    logger.info(f"Approved workflow {workflow_id}")
+    logger.info("Approved workflow", workflow_id=workflow_id)
     return ActionResponse(status="approved", workflow_id=workflow_id)
 
 
@@ -375,7 +375,7 @@ async def reject_workflow(
         InvalidStateError: If workflow is not in blocked state.
     """
     await orchestrator.reject_workflow(workflow_id, request.feedback)
-    logger.info(f"Rejected workflow {workflow_id}: {request.feedback}")
+    logger.info("Rejected workflow", workflow_id=workflow_id, feedback=request.feedback)
     return ActionResponse(status="rejected", workflow_id=workflow_id)
 
 
@@ -405,7 +405,7 @@ async def approve_batch(
     """
     # TODO: Validate batch_number matches current batch index when batch-specific approval is implemented
     await orchestrator.approve_workflow(workflow_id)
-    logger.info(f"Approved batch {batch_number} for workflow {workflow_id}")
+    logger.info("Approved batch", batch_number=batch_number, workflow_id=workflow_id)
     return ActionResponse(status="approved", workflow_id=workflow_id)
 
 
@@ -482,9 +482,7 @@ def configure_exception_handlers(app: FastAPI) -> None:
         Returns:
             JSONResponse with 409 status code.
         """
-        logger.warning(
-            f"Workflow conflict: {exc.workflow_id} at {exc.worktree_path}"
-        )
+        logger.warning("Workflow conflict", workflow_id=exc.workflow_id, worktree_path=exc.worktree_path)
         error = ErrorResponse(
             code="WORKFLOW_CONFLICT",
             error=str(exc),
@@ -511,9 +509,7 @@ def configure_exception_handlers(app: FastAPI) -> None:
         Returns:
             JSONResponse with 429 status code and Retry-After header.
         """
-        logger.warning(
-            f"Concurrency limit exceeded: {exc.current_count}/{exc.max_concurrent}"
-        )
+        logger.warning("Concurrency limit exceeded", current_count=exc.current_count, max_concurrent=exc.max_concurrent)
         error = ErrorResponse(
             code="CONCURRENCY_LIMIT",
             error=str(exc),
@@ -541,9 +537,7 @@ def configure_exception_handlers(app: FastAPI) -> None:
         Returns:
             JSONResponse with 422 status code.
         """
-        logger.warning(
-            f"Invalid state for workflow {exc.workflow_id}: {exc.current_status}"
-        )
+        logger.warning("Invalid state for workflow", workflow_id=exc.workflow_id, current_status=exc.current_status)
         error = ErrorResponse(
             code="INVALID_STATE",
             error=str(exc),
@@ -570,7 +564,7 @@ def configure_exception_handlers(app: FastAPI) -> None:
         Returns:
             JSONResponse with 404 status code.
         """
-        logger.warning(f"Workflow not found: {exc.workflow_id}")
+        logger.warning("Workflow not found", workflow_id=exc.workflow_id)
         error = ErrorResponse(
             code="NOT_FOUND",
             error=str(exc),
@@ -594,7 +588,7 @@ def configure_exception_handlers(app: FastAPI) -> None:
         Returns:
             JSONResponse with 400 status code.
         """
-        logger.warning(f"Invalid worktree: {exc.worktree_path} - {exc.reason}")
+        logger.warning("Invalid worktree", worktree_path=exc.worktree_path, reason=exc.reason)
         error = ErrorResponse(
             code="INVALID_WORKTREE",
             error=str(exc),
@@ -621,7 +615,7 @@ def configure_exception_handlers(app: FastAPI) -> None:
         Returns:
             JSONResponse with 400 status code.
         """
-        logger.warning(f"Validation error: {exc}")
+        logger.warning("Validation error", error=str(exc))
         # Convert error objects to JSON-serializable format
         errors: list[dict[str, object]] = []
         for error in exc.errors():
@@ -660,7 +654,7 @@ def configure_exception_handlers(app: FastAPI) -> None:
         Returns:
             JSONResponse with 500 status code.
         """
-        logger.exception(f"Unhandled exception: {exc}")
+        logger.exception("Unhandled exception", error=str(exc))
         error = ErrorResponse(
             code="INTERNAL_ERROR",
             error=str(exc),
