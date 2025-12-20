@@ -12,22 +12,6 @@ Amelia is a **local agentic coding orchestrator** that coordinates specialized A
 
 The [roadmap](/reference/roadmap) charts a path toward **complete end-to-end workflow control**—where developers never need to open GitHub, Jira, or any tracker web UI. Built on the assumption that LLMs will continually improve, Amelia automatically gets better as models advance.
 
-| Phase | Focus | Key Capability |
-|-------|-------|----------------|
-| **3** | Session Continuity | Structured handoffs for long-running work across context windows |
-| **4** | Verification Framework | Browser automation so agents test as humans would |
-| **5** | Bidirectional Tracker Sync | Create, update, transition, and close issues from CLI |
-| **6** | Pull Request Lifecycle | PR creation through merge, including review feedback handling |
-| **7** | Quality Gates | Automated linting, type checking, tests, security scans before review |
-| **8** | Parallel Execution | Concurrent workflows on independent issues with DAG scheduling |
-| **9** | Chat Integration | Slack/Discord for approvals and status from mobile |
-| **10** | Continuous Improvement | Success tracking, pattern detection, prompt refinement via A/B testing |
-| **11** | Spec Builder | Document-assisted design with RAG over reference materials |
-| **12** | Debate Mode | Multi-agent deliberation for complex design decisions |
-| **13** | Knowledge Library | Shared framework knowledge for developers and agents |
-| **14** | Capitalization Tracking | Map PRs to initiatives for financial reporting |
-| **15** | Cloud Deployment | Parallel workflow execution in AWS without local resource limits |
-
 **Design Principles** (informed by [Anthropic's research on effective agent harnesses](https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents)):
 - **Model Improvement as Tailwind** — Prefer prompts over code, delegation over hardcoding
 - **Structured Handoffs** — Explicit state transfer mechanisms for cross-session work
