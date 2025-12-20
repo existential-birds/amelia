@@ -833,7 +833,7 @@ Test:
 - [ ] Developer validates steps before execution (doesn't blindly crash)
 - [ ] Developer tries fallback commands before blocking
 - [ ] Exit codes are primary validation; regex only when specified
-- [ ] Batch checkpoints pause for human review (respects trust_level)
+- [x] Batch checkpoints pause for human review (respects trust_level)
 - [ ] Blockers report what was tried and suggest resolutions
 - [ ] Cascade skips handled correctly (dependent steps auto-skipped)
 - [ ] High-risk steps isolated in their own batches

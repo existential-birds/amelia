@@ -41,8 +41,6 @@ Defines the runtime environment and constraints.
 | `plan_output_dir` | `str` | `"docs/plans"` | Directory for storing generated plans. |
 | `working_dir` | `str \| None` | `None` | Working directory for agentic execution. |
 | `retry` | `RetryConfig` | `RetryConfig()` | Retry configuration for transient failures. |
-| `trust_level` | `TrustLevel` | `TrustLevel.STANDARD` | How much autonomy the Developer gets. |
-| `batch_checkpoint_enabled` | `bool` | `True` | Whether to pause for human approval between batches. |
 
 **Location:** `amelia/core/types.py`
 
@@ -56,60 +54,6 @@ Root configuration object.
 | `profiles` | `dict[str, Profile]` | Dictionary mapping profile names to Profile objects. |
 
 **Location:** `amelia/core/types.py`
-
-## Enums and Type Aliases
-
-### TrustLevel
-
-Defines how much autonomy the Developer gets during execution.
-
-| Value | Description |
-|-------|-------------|
-| `PARANOID` | Approve every batch. |
-| `STANDARD` | Approve batches (default). |
-| `AUTONOMOUS` | Auto-approve low/medium risk, stop only for high-risk or blockers. |
-
-**Location:** `amelia/core/types.py`
-
-### DeveloperStatus
-
-Developer agent execution status.
-
-| Value | Description |
-|-------|-------------|
-| `EXECUTING` | Developer is actively executing steps. |
-| `BATCH_COMPLETE` | A batch finished, ready for checkpoint. |
-| `BLOCKED` | Execution blocked, needs human help. |
-| `ALL_DONE` | All batches completed successfully. |
-
-**Location:** `amelia/core/types.py`
-
-### StreamEventType
-
-Types of streaming events from Claude Code.
-
-| Value | Description |
-|-------|-------------|
-| `CLAUDE_THINKING` | Claude is analyzing and planning. |
-| `CLAUDE_TOOL_CALL` | Claude is calling a tool. |
-| `CLAUDE_TOOL_RESULT` | Tool execution result. |
-| `AGENT_OUTPUT` | Agent has produced output. |
-
-**Location:** `amelia/core/types.py`
-
-### Type Aliases (Execution)
-
-Additional type aliases used throughout the execution model.
-
-| Type | Definition | Description |
-|------|------------|-------------|
-| `RiskLevel` | `"low" \| "medium" \| "high"` | Risk level for steps and batches. |
-| `ActionType` | `"code" \| "command" \| "validation" \| "manual"` | Type of action in a plan step. |
-| `BlockerType` | `"command_failed" \| "validation_failed" \| "needs_judgment" \| "unexpected_state" \| "dependency_skipped" \| "user_cancelled"` | Type of blocker encountered during execution. |
-| `StepStatus` | `"completed" \| "skipped" \| "failed" \| "cancelled"` | Execution status of a single step. |
-| `BatchStatus` | `"complete" \| "blocked" \| "partial"` | Execution status of a batch. |
-
-**Location:** `amelia/core/state.py`
 
 ## Domain Entities
 
@@ -146,150 +90,7 @@ Structured design from brainstorming output.
 
 **Location:** `amelia/core/types.py`
 
-## Execution Plan Models
-
-The new batched execution model uses these entities. These replace the legacy TaskDAG model.
-
-### PlanStep
-
-A single step in an execution plan.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `id` | `str` | — | Unique identifier for tracking. |
-| `description` | `str` | — | Human-readable description. |
-| `action_type` | `ActionType` | — | Type of action (code, command, validation, manual). |
-| `file_path` | `str \| None` | `None` | File path for code actions. |
-| `code_change` | `str \| None` | `None` | Exact code or diff for code actions. |
-| `command` | `str \| None` | `None` | Shell command to execute. |
-| `cwd` | `str \| None` | `None` | Working directory (relative to repo root). |
-| `fallback_commands` | `tuple[str, ...]` | `()` | Alternative commands to try if primary fails. |
-| `expect_exit_code` | `int` | `0` | Expected exit code (primary validation). |
-| `expected_output_pattern` | `str \| None` | `None` | Regex for stdout (secondary, stripped of ANSI). |
-| `validation_command` | `str \| None` | `None` | Command to run for validation actions. |
-| `success_criteria` | `str \| None` | `None` | Description of what success looks like. |
-| `risk_level` | `RiskLevel` | `"medium"` | Risk level (low, medium, high). |
-| `estimated_minutes` | `int` | `2` | Estimated time to complete (2-5 min typically). |
-| `requires_human_judgment` | `bool` | `False` | Whether step needs human review. |
-| `depends_on` | `tuple[str, ...]` | `()` | Step IDs this depends on. |
-| `is_test_step` | `bool` | `False` | Whether this is a test step. |
-| `validates_step` | `str \| None` | `None` | Step ID this validates. |
-
-**Location:** `amelia/core/state.py`
-
-### ExecutionBatch
-
-A batch of steps to execute before checkpoint.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `batch_number` | `int` | — | Sequential batch number. |
-| `steps` | `tuple[PlanStep, ...]` | — | Steps in this batch. |
-| `risk_summary` | `RiskLevel` | — | Overall risk level of the batch. |
-| `description` | `str` | `""` | Description of why these steps are grouped. |
-
-**Notes:**
-- Architect defines batches based on semantic grouping
-- System enforces size limits (max 5 low-risk, max 3 medium-risk)
-
-**Location:** `amelia/core/state.py`
-
-### ExecutionPlan
-
-Complete plan with batched execution.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `goal` | `str` | — | Overall goal or objective. |
-| `batches` | `tuple[ExecutionBatch, ...]` | — | Sequence of execution batches. |
-| `total_estimated_minutes` | `int` | — | Total estimated time for all batches. |
-| `tdd_approach` | `bool` | `True` | Whether to use TDD approach. |
-
-**Notes:**
-- Created by Architect, consumed by Developer
-- Batches are defined upfront for predictable checkpoints
-
-**Location:** `amelia/core/state.py`
-
-## Execution Result Models
-
-These models track the results of executing plans.
-
-### StepResult
-
-Result of executing a single step.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `step_id` | `str` | — | ID of the step. |
-| `status` | `StepStatus` | — | Execution status (completed, skipped, failed, cancelled). |
-| `output` | `str \| None` | `None` | Truncated command output (max 100 lines, 4000 chars). |
-| `error` | `str \| None` | `None` | Error message if failed. |
-| `executed_command` | `str \| None` | `None` | Actual command run (may differ from plan if fallback). |
-| `duration_seconds` | `float` | `0.0` | Time taken to execute. |
-| `cancelled_by_user` | `bool` | `False` | Whether user cancelled the step. |
-
-**Notes:**
-- Output is automatically truncated to prevent state bloat
-
-**Location:** `amelia/core/state.py`
-
-### BatchResult
-
-Result of executing a batch.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `batch_number` | `int` | — | The batch number. |
-| `status` | `BatchStatus` | — | Batch status (complete, blocked, partial). |
-| `completed_steps` | `tuple[StepResult, ...]` | — | Results for completed steps. |
-| `blocker` | `BlockerReport \| None` | `None` | Blocker report if execution was blocked. |
-
-**Location:** `amelia/core/state.py`
-
-### BlockerReport
-
-Report when execution is blocked.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `step_id` | `str` | — | ID of the step that blocked. |
-| `step_description` | `str` | — | Description of the blocked step. |
-| `blocker_type` | `BlockerType` | — | Type of blocker encountered. |
-| `error_message` | `str` | — | Error message describing the blocker. |
-| `attempted_actions` | `tuple[str, ...]` | — | Actions the agent already tried. |
-| `suggested_resolutions` | `tuple[str, ...]` | — | Agent's suggestions for human (labeled as AI suggestions in UI). |
-
-**Location:** `amelia/core/state.py`
-
-### BatchApproval
-
-Record of human approval for a batch.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `batch_number` | `int` | — | The batch number that was approved/rejected. |
-| `approved` | `bool` | — | Whether the batch was approved. |
-| `feedback` | `str \| None` | `None` | Optional feedback from human. |
-| `approved_at` | `datetime` | — | Timestamp of approval/rejection. |
-
-**Location:** `amelia/core/state.py`
-
-### GitSnapshot
-
-Git state snapshot for potential revert.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `head_commit` | `str` | — | Git HEAD commit hash before batch. |
-| `dirty_files` | `tuple[str, ...]` | `()` | Files modified before batch started. |
-| `stash_ref` | `str \| None` | `None` | Optional stash reference if changes were stashed. |
-
-**Location:** `amelia/core/state.py`
-
-## Legacy Execution Entities
-
-**Note:** These entities are part of the legacy TaskDAG model. The new architecture uses ExecutionPlan/ExecutionBatch/PlanStep instead.
+## Execution Entities
 
 ### TaskStep
 
@@ -382,65 +183,16 @@ The central state object for the LangGraph orchestrator.
 |-------|------|---------|-------------|
 | `profile` | `Profile` | — | Active profile configuration. |
 | `issue` | `Issue \| None` | `None` | The issue being worked on. |
-| `design` | `Design \| None` | `None` | Optional design context from brainstorming or external upload. |
-| `plan` | `TaskDAG \| None` | `None` | The task execution plan (DAG) - legacy model. |
-| `current_task_id` | `str \| None` | `None` | ID of the currently executing task (legacy). |
+| `plan` | `TaskDAG \| None` | `None` | The task execution plan (DAG). |
+| `current_task_id` | `str \| None` | `None` | ID of the currently executing task. |
 | `human_approved` | `bool \| None` | `None` | Whether human approval was granted for the plan. |
-| `human_feedback` | `str \| None` | `None` | Optional feedback from human during approval. |
-| `last_review` | `ReviewResult \| None` | `None` | Most recent review result (only latest matters for decisions). |
+| `review_results` | `list[ReviewResult]` | `[]` | List of review results from code reviews. |
+| `messages` | `list[AgentMessage]` | `[]` | Conversation history between agents. |
 | `code_changes_for_review` | `str \| None` | `None` | Staged code changes for review. |
-| `driver_session_id` | `str \| None` | `None` | Session ID for driver session continuity (works with any driver). |
-| `workflow_status` | `"running" \| "completed" \| "failed" \| "aborted"` | `"running"` | Status of the workflow. |
-| `agent_history` | `Annotated[list[str], operator.add]` | `[]` | History of agent actions/messages (uses add reducer). |
-| `execution_plan` | `ExecutionPlan \| None` | `None` | New execution plan (replaces TaskDAG for Developer). |
-| `current_batch_index` | `int` | `0` | Index of the current batch being executed. |
-| `batch_results` | `Annotated[list[BatchResult], operator.add]` | `[]` | Results from completed batches (uses add reducer). |
-| `developer_status` | `DeveloperStatus` | `DeveloperStatus.EXECUTING` | Current status of the Developer agent. |
-| `current_blocker` | `BlockerReport \| None` | `None` | Active blocker report if execution is blocked. |
-| `blocker_resolution` | `str \| None` | `None` | Human's response to resolve blocker. |
-| `batch_approvals` | `Annotated[list[BatchApproval], operator.add]` | `[]` | Records of human approvals for batches (uses add reducer). |
-| `skipped_step_ids` | `Annotated[set[str], merge_sets]` | `set()` | IDs of steps that were skipped (uses merge_sets reducer). |
-| `git_snapshot_before_batch` | `GitSnapshot \| None` | `None` | Git state snapshot for potential revert. |
-
-**Notes:**
-- Fields using `operator.add` reducer append new values across state updates
-- `skipped_step_ids` uses `merge_sets` reducer for set union across state updates
-- `workflow_status` now includes "aborted" state for user-cancelled workflows
+| `claude_session_id` | `str \| None` | `None` | Session ID for Claude CLI session continuity. |
+| `workflow_status` | `"running" \| "completed" \| "failed"` | `"running"` | Status of the workflow. |
 
 **Location:** `amelia/core/state.py`
-
-## Streaming Models
-
-These models enable real-time streaming of agent execution events.
-
-### StreamEvent
-
-Real-time streaming event from agent execution.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `id` | `str` | `uuid4()` | Unique identifier for this event. |
-| `type` | `StreamEventType` | — | Type of streaming event. |
-| `content` | `str \| None` | `None` | Event content (optional). |
-| `timestamp` | `datetime` | — | When the event occurred. |
-| `agent` | `str` | — | Agent name (architect, developer, reviewer). |
-| `workflow_id` | `str` | — | Unique workflow identifier. |
-| `tool_name` | `str \| None` | `None` | Name of tool being called/returning (optional). |
-| `tool_input` | `dict[str, Any] \| None` | `None` | Input parameters for tool call (optional). |
-
-**Notes:**
-- Immutable (frozen) model for streaming events
-- Used for real-time UI updates during agent execution
-
-**Location:** `amelia/core/types.py`
-
-### StreamEmitter
-
-Type alias for async streaming event emitter function.
-
-**Definition:** `Callable[[StreamEvent], Awaitable[None]]`
-
-**Location:** `amelia/core/types.py`
 
 ## Server Models
 
@@ -534,35 +286,17 @@ Token consumption tracking per agent with cache-aware cost calculation.
 ```
 Settings
 └── profiles: Dict[str, Profile]
-    ├── retry: RetryConfig
-    └── trust_level: TrustLevel (enum)
+    └── retry: RetryConfig
 
-ExecutionState (core orchestrator state)
+ExecutionState
 ├── profile: Profile
 ├── issue: Issue
-├── design: Design
-├── plan: TaskDAG (legacy)
+├── plan: TaskDAG
 │   └── tasks: List[Task]
 │       ├── files: List[FileOperation]
 │       └── steps: List[TaskStep]
-├── execution_plan: ExecutionPlan (new)
-│   └── batches: Tuple[ExecutionBatch]
-│       └── steps: Tuple[PlanStep]
-├── batch_results: List[BatchResult] (operator.add reducer)
-│   └── completed_steps: Tuple[StepResult]
-│       └── blocker: BlockerReport | None
-├── batch_approvals: List[BatchApproval] (operator.add reducer)
-├── skipped_step_ids: Set[str] (merge_sets reducer)
-├── git_snapshot_before_batch: GitSnapshot
-├── current_blocker: BlockerReport
-├── last_review: ReviewResult
-├── agent_history: List[str] (operator.add reducer)
-└── developer_status: DeveloperStatus (enum)
-
-StreamEvent (real-time events)
-├── type: StreamEventType (enum)
-├── workflow_id → ExecutionState
-└── emitted via StreamEmitter callable
+├── review_results: List[ReviewResult]
+└── messages: List[AgentMessage]
 
 ServerConfig (singleton)
 
