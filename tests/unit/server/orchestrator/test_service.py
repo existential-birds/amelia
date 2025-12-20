@@ -474,6 +474,7 @@ async def test_reject_workflow_success(
     orchestrator: OrchestratorService,
     mock_repository: AsyncMock,
     mock_event_bus: EventBus,
+    langgraph_mock_factory,
 ):
     """Should reject blocked workflow."""
     received_events = []
@@ -490,16 +491,12 @@ async def test_reject_workflow_success(
     )
     mock_repository.get.return_value = mock_state
 
-    # Setup mock graph
-    mock_graph = AsyncMock()
-    mock_graph.aupdate_state = AsyncMock()
-    mock_create_graph.return_value = mock_graph
-
-    mock_saver = AsyncMock()
-    mock_saver_class.from_conn_string.return_value.__aenter__ = AsyncMock(
-        return_value=mock_saver
+    # Setup LangGraph mocks using factory
+    mocks = langgraph_mock_factory()
+    mock_create_graph.return_value = mocks.graph
+    mock_saver_class.from_conn_string.return_value = (
+        mocks.saver_class.from_conn_string.return_value
     )
-    mock_saver_class.from_conn_string.return_value.__aexit__ = AsyncMock()
 
     # Create fake task
     task = asyncio.create_task(asyncio.sleep(100))
