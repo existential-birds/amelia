@@ -20,6 +20,12 @@ from loguru import logger
 from amelia.core.orchestrator import create_orchestrator_graph
 from amelia.core.state import ExecutionState, TaskDAG
 from amelia.core.types import Settings, StreamEmitter, StreamEvent
+from amelia.ext import WorkflowEventType as ExtWorkflowEventType
+from amelia.ext.hooks import (
+    check_policy_workflow_start,
+    emit_workflow_event,
+    flush_exporters,
+)
 from amelia.server.database.repository import WorkflowRepository
 from amelia.server.events.bus import EventBus
 from amelia.server.exceptions import (
@@ -169,7 +175,7 @@ class OrchestratorService:
             if current_count >= self._max_concurrent:
                 raise ConcurrencyLimitError(self._max_concurrent, current_count)
 
-            # Create workflow record
+            # Create workflow ID early for policy check
             workflow_id = str(uuid4())
 
             # Load the profile (use provided profile name or active profile as fallback)
@@ -177,6 +183,20 @@ class OrchestratorService:
             if profile_name not in self._settings.profiles:
                 raise ValueError(f"Profile '{profile_name}' not found in settings")
             loaded_profile = self._settings.profiles[profile_name]
+
+            # Check policy hooks before starting workflow
+            # This allows Enterprise to enforce rate limits, quotas, etc.
+            if not await check_policy_workflow_start(
+                workflow_id=workflow_id,
+                profile=loaded_profile,
+                issue_id=issue_id,
+            ):
+                logger.warning(
+                    "Workflow start denied by policy hook",
+                    workflow_id=workflow_id,
+                    issue_id=issue_id,
+                )
+                raise ValueError("Workflow start denied by policy")
 
             # Fetch issue from tracker (pass worktree_path so gh CLI uses correct repo)
             tracker = create_tracker(loaded_profile)
@@ -270,6 +290,13 @@ class OrchestratorService:
         # Persist the cancelled status to database
         await self._repository.set_status(workflow_id, "cancelled")
 
+        # Emit extension hook for cancellation
+        await emit_workflow_event(
+            ExtWorkflowEventType.CANCELLED,
+            workflow_id=workflow_id,
+            metadata={"reason": reason} if reason else None,
+        )
+
         logger.info(
             "Workflow cancelled",
             workflow_id=workflow_id,
@@ -289,6 +316,9 @@ class OrchestratorService:
                 task.cancel()
                 with contextlib.suppress(TimeoutError, asyncio.CancelledError):
                     await asyncio.wait_for(task, timeout=timeout)
+
+        # Flush any buffered audit events during graceful shutdown
+        await flush_exporters()
 
     def get_active_workflows(self) -> list[str]:
         """Return list of active worktree paths.
@@ -365,6 +395,13 @@ class OrchestratorService:
                 data={"issue_id": state.issue_id},
             )
 
+            # Emit extension hook for audit/analytics (fire-and-forget, errors logged)
+            await emit_workflow_event(
+                ExtWorkflowEventType.STARTED,
+                workflow_id=workflow_id,
+                metadata={"issue_id": state.issue_id},
+            )
+
             try:
                 await self._repository.set_status(workflow_id, "in_progress")
 
@@ -398,6 +435,12 @@ class OrchestratorService:
                             "Plan ready for review - awaiting human approval",
                             data={"paused_at": "human_approval_node"},
                         )
+                        # Emit extension hook for approval gate
+                        await emit_workflow_event(
+                            ExtWorkflowEventType.APPROVAL_REQUESTED,
+                            workflow_id=workflow_id,
+                            stage="human_approval_node",
+                        )
                         await self._repository.set_status(workflow_id, "blocked")
                         break
                     # Emit stage events for each node that completes
@@ -409,6 +452,12 @@ class OrchestratorService:
                         EventType.WORKFLOW_COMPLETED,
                         "Workflow completed successfully",
                         data={"final_stage": state.current_stage},
+                    )
+                    # Emit extension hook for completion
+                    await emit_workflow_event(
+                        ExtWorkflowEventType.COMPLETED,
+                        workflow_id=workflow_id,
+                        stage=state.current_stage,
                     )
                     await self._repository.set_status(workflow_id, "completed")
 
@@ -467,6 +516,12 @@ class OrchestratorService:
                         f"Workflow failed after {attempt} attempts: {e!s}",
                         data={"error": str(e), "attempts": attempt},
                     )
+                    # Emit extension hook for failure
+                    await emit_workflow_event(
+                        ExtWorkflowEventType.FAILED,
+                        workflow_id=workflow_id,
+                        metadata={"error": str(e), "attempts": attempt},
+                    )
                     await self._repository.set_status(
                         workflow_id,
                         "failed",
@@ -501,6 +556,12 @@ class OrchestratorService:
                     EventType.WORKFLOW_FAILED,
                     f"Workflow failed: {e!s}",
                     data={"error": str(e), "error_type": "non-transient"},
+                )
+                # Emit extension hook for failure
+                await emit_workflow_event(
+                    ExtWorkflowEventType.FAILED,
+                    workflow_id=workflow_id,
+                    metadata={"error": str(e), "error_type": "non-transient"},
                 )
                 await self._repository.set_status(
                     workflow_id, "failed", failure_reason=str(e)
@@ -603,6 +664,11 @@ class OrchestratorService:
                 EventType.APPROVAL_GRANTED,
                 "Plan approved",
             )
+            # Emit extension hook for approval
+            await emit_workflow_event(
+                ExtWorkflowEventType.APPROVAL_GRANTED,
+                workflow_id=workflow_id,
+            )
 
             logger.info("Workflow approved", workflow_id=workflow_id)
 
@@ -649,6 +715,11 @@ class OrchestratorService:
                     EventType.WORKFLOW_COMPLETED,
                     "Workflow completed successfully",
                 )
+                # Emit extension hook for completion
+                await emit_workflow_event(
+                    ExtWorkflowEventType.COMPLETED,
+                    workflow_id=workflow_id,
+                )
                 await self._repository.set_status(workflow_id, "completed")
 
             except Exception as e:
@@ -658,6 +729,12 @@ class OrchestratorService:
                     EventType.WORKFLOW_FAILED,
                     f"Workflow failed: {e!s}",
                     data={"error": str(e)},
+                )
+                # Emit extension hook for failure
+                await emit_workflow_event(
+                    ExtWorkflowEventType.FAILED,
+                    workflow_id=workflow_id,
+                    metadata={"error": str(e)},
                 )
                 await self._repository.set_status(
                     workflow_id, "failed", failure_reason=str(e)
@@ -704,6 +781,12 @@ class OrchestratorService:
                 workflow_id,
                 EventType.APPROVAL_REJECTED,
                 f"Plan rejected: {feedback}",
+            )
+            # Emit extension hook for rejection
+            await emit_workflow_event(
+                ExtWorkflowEventType.APPROVAL_DENIED,
+                workflow_id=workflow_id,
+                metadata={"feedback": feedback},
             )
 
             # Cancel the waiting task
