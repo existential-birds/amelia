@@ -7,10 +7,11 @@
 /**
  * @fileoverview Workflow detail page with full status display.
  */
-import { useLoaderData } from 'react-router-dom';
+import { useLoaderData, useNavigate } from 'react-router-dom';
 import { PageHeader } from '@/components/PageHeader';
 import { StatusBadge } from '@/components/StatusBadge';
 import { WorkflowProgress } from '@/components/WorkflowProgress';
+import { WorkflowEmptyState } from '@/components/WorkflowEmptyState';
 import { ActivityLog } from '@/components/ActivityLog';
 import { ApprovalControls } from '@/components/ApprovalControls';
 import { WorkflowCanvas } from '@/components/WorkflowCanvas';
@@ -30,6 +31,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
  */
 export default function WorkflowDetailPage() {
   const { workflow } = useLoaderData<typeof workflowDetailLoader>();
+  const navigate = useNavigate();
   const elapsedTime = useElapsedTime(workflow);
 
   // Auto-revalidate when this workflow's status changes (approval events, completion, etc.)
@@ -37,14 +39,16 @@ export default function WorkflowDetailPage() {
 
   if (!workflow) {
     return (
-      <div className="flex flex-col items-center justify-center h-full gap-4 text-center">
-        <div className="text-destructive font-semibold">
-          Workflow not found
-        </div>
-        <p className="text-muted-foreground">
-          The requested workflow could not be loaded.
-        </p>
-      </div>
+      <WorkflowEmptyState
+        variant="error"
+        title="Workflow Not Found"
+        description="The requested workflow could not be loaded."
+        action={{
+          label: 'Back to Workflows',
+          onClick: () => navigate('/workflows'),
+        }}
+        className="h-full border-none"
+      />
     );
   }
 

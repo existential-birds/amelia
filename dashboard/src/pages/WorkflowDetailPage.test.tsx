@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import WorkflowDetailPage from './WorkflowDetailPage';
 import { createMockWorkflowDetail } from '@/__tests__/fixtures';
@@ -48,6 +48,10 @@ function renderWithRouter(loaderData: { workflow: typeof mockWorkflow | null }) 
         loader: () => loaderData,
         HydrateFallback: () => null,
       },
+      {
+        path: '/workflows',
+        element: <div>Workflows List</div>,
+      },
     ],
     { initialEntries: ['/workflows/wf-001'] }
   );
@@ -85,5 +89,21 @@ describe('WorkflowDetailPage', () => {
       const activityLogHeaders = screen.getAllByText('ACTIVITY LOG');
       expect(activityLogHeaders.length).toBeGreaterThanOrEqual(1);
     });
+  });
+
+  it('should render structured empty state with action when workflow is missing', async () => {
+    renderWithRouter({ workflow: null });
+
+    // Check for title and description
+    expect(await screen.findByText('Workflow Not Found')).toBeInTheDocument();
+    expect(screen.getByText('The requested workflow could not be loaded.')).toBeInTheDocument();
+
+    // Check for action button
+    const button = screen.getByRole('button', { name: /back to workflows/i });
+    expect(button).toBeInTheDocument();
+
+    // Verify navigation
+    fireEvent.click(button);
+    expect(await screen.findByText('Workflows List')).toBeInTheDocument();
   });
 });
