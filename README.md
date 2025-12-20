@@ -4,9 +4,9 @@
 
 ![Amelia Terminal](docs/design/terminal_screen.jpg)
 
-[Amelia](https://en.wikipedia.org/wiki/Amelia_Earhart) is a local agentic coding system that orchestrates software development tasks through multiple AI agents with specialized roles.
+[Amelia](https://en.wikipedia.org/wiki/Amelia_Earhart) is a local agentic coding system that orchestrates software development through Architect, Developer, and Reviewer agents. They argue about your code so you don't have to.
 
-See the [**Roadmap**](https://anderskev.github.io/amelia/reference/roadmap) for where we're headed and [**Current Status**](#current-status) for where we are.
+See the [**Roadmap**](https://anderskev.github.io/amelia/reference/roadmap) for where we're headed and [**Current Status**](#current-status) for where we are. They're different places.
 
 ## Prerequisites
 
@@ -18,8 +18,6 @@ See the [**Roadmap**](https://anderskev.github.io/amelia/reference/roadmap) for 
   - Claude CLI installed (for `cli:claude` driver)
 
 ## Quick Start
-
-Use Amelia in any existing Git repository to automate development tasks.
 
 ![Amelia Dashboard Design Mock](docs/design/desktop_screen.jpg)
 
@@ -82,7 +80,7 @@ amelia review --local
 ```
 
 > [!TIP]
-> Use `tracker: noop` in your config to test without a real issue tracker. This creates a mock issue from the ID you provide.
+> Use `tracker: noop` to test without a real issue tracker. Amelia will pretend the issue exists. It's very committed to the bit.
 
 ## Alternative Installation
 
@@ -109,7 +107,7 @@ AMELIA_SETTINGS=/path/to/your/project/settings.amelia.yaml uv run amelia plan-on
 ```
 
 > [!NOTE]
-> Amelia reads `settings.amelia.yaml` from the current working directory (or via `AMELIA_SETTINGS`). Run commands from your project root so agents have access to your codebase context.
+> Amelia reads `settings.amelia.yaml` from the current working directory (or via `AMELIA_SETTINGS`). Run commands from your project root—agents can't help with code they can't see.
 
 ## How It Works
 
@@ -163,7 +161,7 @@ Amelia Core is licensed under the [Mozilla Public License 2.0](LICENSE).
 ## Current Status
 
 > [!WARNING]
-> This is an experimental project. Set expectations accordingly.
+> This is an experimental project. It will occasionally do something baffling. So will you. You'll figure it out together.
 
 - Full orchestrator loop with human approval gates (CLI and web dashboard)
 - CLI driver (Claude CLI wrapper) with structured outputs, streaming, and agentic execution

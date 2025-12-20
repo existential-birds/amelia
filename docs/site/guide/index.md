@@ -1,16 +1,16 @@
 # User Guide
 
-Welcome to the Amelia user guide. This section covers everything you need to use Amelia in your projects.
+This guide gets you from zero to orchestrating AI agents in about three minutes. Possibly four if you read slowly.
 
 ## Quick Links
 
-- [Usage](/guide/usage) - CLI commands, API reference, example workflows
-- [Configuration](/guide/configuration) - Profile setup, driver options, retry settings
-- [Troubleshooting](/guide/troubleshooting) - Common issues and solutions
+- [Usage](/guide/usage) — CLI commands, API reference, example workflows
+- [Configuration](/guide/configuration) — Profile setup, driver options, retry settings
+- [Troubleshooting](/guide/troubleshooting) — Common issues and solutions
 
 ## Getting Started
 
-1. **Install Amelia**
+1. **Install Amelia** (the easy part)
    ```bash
    uv tool install git+https://github.com/anderskev/amelia.git
    ```
@@ -29,9 +29,10 @@ Welcome to the Amelia user guide. This section covers everything you need to use
    ```bash
    amelia plan-only 123  # Generate plan for issue #123
    ```
+   If this works, you now have AI agents arguing about your codebase. Congratulations.
 
-## Next Steps
+## What's Next
 
-- Read the full [Usage Guide](/guide/usage) for all CLI commands
-- Configure [drivers and trackers](/guide/configuration) for your environment
-- Understand [how agents work](/architecture/concepts)
+- [Usage Guide](/guide/usage) — all the CLI commands you'll actually use
+- [Configuration](/guide/configuration) — drivers and trackers for your environment
+- [Architecture](/architecture/concepts) — how the agents work

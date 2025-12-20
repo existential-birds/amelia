@@ -139,3 +139,4 @@ docs/site/logs/
 # IDE/Tool config
 .specify/
 .gemini/
+.feedback-log.csv
