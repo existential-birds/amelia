@@ -21,6 +21,7 @@ from amelia.core.orchestrator import create_orchestrator_graph
 from amelia.core.state import ExecutionState, TaskDAG
 from amelia.core.types import Settings, StreamEmitter, StreamEvent
 from amelia.ext import WorkflowEventType as ExtWorkflowEventType
+from amelia.ext.exceptions import PolicyDeniedError
 from amelia.ext.hooks import (
     check_policy_workflow_start,
     emit_workflow_event,
@@ -186,17 +187,22 @@ class OrchestratorService:
 
             # Check policy hooks before starting workflow
             # This allows Enterprise to enforce rate limits, quotas, etc.
-            if not await check_policy_workflow_start(
+            allowed, hook_name = await check_policy_workflow_start(
                 workflow_id=workflow_id,
                 profile=loaded_profile,
                 issue_id=issue_id,
-            ):
+            )
+            if not allowed:
                 logger.warning(
                     "Workflow start denied by policy hook",
                     workflow_id=workflow_id,
                     issue_id=issue_id,
+                    hook_name=hook_name,
                 )
-                raise ValueError("Workflow start denied by policy")
+                raise PolicyDeniedError(
+                    reason="Workflow start denied by policy",
+                    hook_name=hook_name,
+                )
 
             # Fetch issue from tracker (pass worktree_path so gh CLI uses correct repo)
             tracker = create_tracker(loaded_profile)
@@ -442,6 +448,12 @@ class OrchestratorService:
                             stage="human_approval_node",
                         )
                         await self._repository.set_status(workflow_id, "blocked")
+                        # Emit PAUSED event for workflow being blocked
+                        await emit_workflow_event(
+                            ExtWorkflowEventType.PAUSED,
+                            workflow_id=workflow_id,
+                            stage="human_approval_node",
+                        )
                         break
                     # Emit stage events for each node that completes
                     await self._handle_stream_chunk(workflow_id, chunk)
@@ -651,6 +663,12 @@ class OrchestratorService:
                 workflow_id=workflow_id,
                 current_status=workflow.workflow_status,
             )
+
+        # Emit RESUMED event for workflow being unblocked
+        await emit_workflow_event(
+            ExtWorkflowEventType.RESUMED,
+            workflow_id=workflow_id,
+        )
 
         async with self._approval_lock:
             # Signal the approval event if it exists (for legacy flow)

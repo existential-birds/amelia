@@ -137,6 +137,5 @@ docs/site/logs/
 *.whl
 
 # IDE/Tool config
-.codex/
 .specify/
 .gemini/

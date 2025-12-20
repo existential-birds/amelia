@@ -32,7 +32,7 @@ uv run amelia plan-only ISSUE-123                # Generate plan only
 uv run amelia review --local                     # Review uncommitted changes
 ```
 
-**Pre-push hook**: A git pre-push hook runs `ruff check`, `mypy`, and `pytest` before every push. All checks must pass to push to remote.
+**Pre-push hook**: A git pre-push hook runs `ruff check`, `mypy`, `check_boundaries.py`, and `pytest` before every push. All checks must pass to push to remote.
 
 ## Dashboard Frontend
 
@@ -84,6 +84,7 @@ The orchestrator loops between Developer and Reviewer until changes are approved
 | **Drivers** | `amelia/drivers/` | LLM abstraction - `api:openai` (pydantic-ai) or `cli:claude` (CLI wrapper) |
 | **Trackers** | `amelia/trackers/` | Issue source abstraction - `jira`, `github`, `noop` |
 | **Tools** | `amelia/tools/` | Shell execution, git utilities |
+| **Extensions** | `amelia/ext/` | Protocols for optional integrations (policy hooks, audit exporters, analytics sinks) |
 
 ### Driver Abstraction
 

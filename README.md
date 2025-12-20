@@ -1,5 +1,7 @@
 # Amelia: Agentic Orchestrator
 
+[![License: MPL 2.0](https://img.shields.io/badge/License-MPL_2.0-brightgreen.svg)](https://opensource.org/licenses/MPL-2.0)
+
 ![Amelia Terminal](docs/design/terminal_screen.jpg)
 
 [Amelia](https://en.wikipedia.org/wiki/Amelia_Earhart) is a local agentic coding system that orchestrates software development tasks through multiple AI agents with specialized roles.
@@ -153,6 +155,12 @@ See [Configuration Reference](https://anderskev.github.io/amelia/guide/configura
 ## Documentation
 
 For full documentation, visit **[anderskev.github.io/amelia](https://anderskev.github.io/amelia/)**.
+
+## License
+
+Amelia Core is licensed under the [Mozilla Public License 2.0](LICENSE).
+
+Commercial add-ons (multi-tenancy, centralized management, enterprise integrations) live in a separate private repository. Core remains fully open and functional without any commercial components.
 
 ## Current Status
 
