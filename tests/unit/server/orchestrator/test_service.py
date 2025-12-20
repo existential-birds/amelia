@@ -440,9 +440,7 @@ async def test_approve_workflow_success(
         aget_state_return=MagicMock(values={"human_approved": True}, next=[])
     )
     mock_create_graph.return_value = mocks.graph
-    mock_saver_class.from_conn_string.return_value = (
-        mocks.saver_class.from_conn_string.return_value
-    )
+    mock_saver_class.from_conn_string.return_value = mocks.saver_class.from_conn_string.return_value
 
     # Simulate workflow waiting for approval
     orchestrator._approval_events["wf-1"] = asyncio.Event()
@@ -493,9 +491,7 @@ async def test_reject_workflow_success(
     # Setup LangGraph mocks using factory
     mocks = langgraph_mock_factory()
     mock_create_graph.return_value = mocks.graph
-    mock_saver_class.from_conn_string.return_value = (
-        mocks.saver_class.from_conn_string.return_value
-    )
+    mock_saver_class.from_conn_string.return_value = mocks.saver_class.from_conn_string.return_value
 
     # Create fake task
     task = asyncio.create_task(asyncio.sleep(100))
@@ -542,9 +538,7 @@ class TestRejectWorkflowGraphState:
         # Setup LangGraph mocks using factory
         mocks = langgraph_mock_factory()
         mock_create_graph.return_value = mocks.graph
-        mock_saver_class.from_conn_string.return_value = (
-            mocks.saver_class.from_conn_string.return_value
-        )
+        mock_saver_class.from_conn_string.return_value = mocks.saver_class.from_conn_string.return_value
 
         await orchestrator.reject_workflow("wf-123", "Not ready")
 
@@ -578,9 +572,7 @@ class TestApproveWorkflowResume:
             aget_state_return=MagicMock(values={"human_approved": True}, next=[])
         )
         mock_create_graph.return_value = mocks.graph
-        mock_saver_class.from_conn_string.return_value = (
-            mocks.saver_class.from_conn_string.return_value
-        )
+        mock_saver_class.from_conn_string.return_value = mocks.saver_class.from_conn_string.return_value
 
         await orchestrator.approve_workflow("wf-123")
 

@@ -1,11 +1,5 @@
 """Tests for LangGraph mock fixtures."""
 
-from typing import TYPE_CHECKING
-
-
-if TYPE_CHECKING:
-    pass
-
 
 class TestLangGraphMockFactory:
     """Tests for the langgraph_mock_factory fixture."""
