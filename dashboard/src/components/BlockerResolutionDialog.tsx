@@ -282,7 +282,7 @@ export function BlockerResolutionDialog({
       </Dialog>
 
       {/* Keep Changes Confirmation */}
-      <AlertDialog open={showKeepChangesAlert}>
+      <AlertDialog open={showKeepChangesAlert} onOpenChange={setShowKeepChangesAlert}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Are you sure you want to abort and keep changes?</AlertDialogTitle>
@@ -292,7 +292,7 @@ export function BlockerResolutionDialog({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setShowKeepChangesAlert(false)}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleKeepChanges}
               className="bg-destructive hover:bg-destructive/90 focus-visible:ring-destructive/50"
@@ -304,7 +304,7 @@ export function BlockerResolutionDialog({
       </AlertDialog>
 
       {/* Revert Batch Confirmation */}
-      <AlertDialog open={showRevertAlert}>
+      <AlertDialog open={showRevertAlert} onOpenChange={setShowRevertAlert}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Are you sure you want to abort and revert?</AlertDialogTitle>
@@ -314,7 +314,7 @@ export function BlockerResolutionDialog({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setShowRevertAlert(false)}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleRevertBatch}
               className="bg-destructive hover:bg-destructive/90 focus-visible:ring-destructive/50"
