@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 # Type alias for JSON-compatible values used in metadata fields.
 # Using Any here because metadata can contain arbitrary JSON-like structures
 # (str, int, float, bool, None, lists, nested dicts) that vary by use case.
-JsonValue = Any
+type JsonValue = Any
 
 
 if TYPE_CHECKING:

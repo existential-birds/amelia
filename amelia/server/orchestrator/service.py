@@ -459,13 +459,16 @@ class OrchestratorService:
                     await self._handle_stream_chunk(workflow_id, chunk)
 
                 if not was_interrupted:
+                    # Workflow completed without interruption (no human approval needed).
+                    # Note: A separate COMPLETED emission exists in approve_workflow() for
+                    # workflows that resume after human approval. These are mutually exclusive
+                    # code paths - only one COMPLETED event is ever emitted per workflow.
                     await self._emit(
                         workflow_id,
                         EventType.WORKFLOW_COMPLETED,
                         "Workflow completed successfully",
                         data={"final_stage": state.current_stage},
                     )
-                    # Emit extension hook for completion
                     await emit_workflow_event(
                         ExtWorkflowEventType.COMPLETED,
                         workflow_id=workflow_id,
@@ -728,12 +731,15 @@ class OrchestratorService:
                         continue
                     await self._handle_stream_chunk(workflow_id, chunk)
 
+                # Workflow completed after human approval.
+                # Note: A separate COMPLETED emission exists in _run_workflow_loop() for
+                # workflows that complete without interruption. These are mutually exclusive
+                # code paths - only one COMPLETED event is ever emitted per workflow.
                 await self._emit(
                     workflow_id,
                     EventType.WORKFLOW_COMPLETED,
                     "Workflow completed successfully",
                 )
-                # Emit extension hook for completion
                 await emit_workflow_event(
                     ExtWorkflowEventType.COMPLETED,
                     workflow_id=workflow_id,

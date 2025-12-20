@@ -144,6 +144,15 @@ async def check_policy_approval(
 ) -> bool | None:
     """Check if policy hooks want to override an approval request.
 
+    This is an extension point for Enterprise packages to implement automatic
+    approval/denial policies. It is not currently called by the orchestrator
+    service but is exported and tested for future integration.
+
+    Enterprise use cases:
+        - Auto-approve workflows from trusted issuers
+        - Auto-deny workflows that exceed cost thresholds
+        - Integrate with external approval systems (e.g., PagerDuty, ServiceNow)
+
     Args:
         workflow_id: Unique identifier for the workflow.
         approval_type: Type of approval being requested.

@@ -22,6 +22,8 @@ Usage:
 
 from __future__ import annotations
 
+import threading
+
 from amelia.ext.noop import (
     NoopAnalyticsSink,
     NoopAuditExporter,
@@ -44,7 +46,8 @@ _NOOP_AUDIT_EXPORTERS: list[AuditExporter] = [NoopAuditExporter()]
 _NOOP_ANALYTICS_SINKS: list[AnalyticsSink] = [NoopAnalyticsSink()]
 _NOOP_AUTH_PROVIDER: AuthProvider = NoopAuthProvider()
 
-
+# Lock for thread-safe registry initialization.
+_registry_lock = threading.Lock()
 
 
 class ExtensionRegistry:
@@ -173,11 +176,15 @@ def get_registry() -> ExtensionRegistry:
     """Get the global extension registry.
 
     Creates the registry on first access (lazy initialization).
+    Thread-safe via double-checked locking pattern.
 
     Returns:
         The global ExtensionRegistry instance.
     """
     global _registry
     if _registry is None:
-        _registry = ExtensionRegistry()
+        with _registry_lock:
+            # Double-check after acquiring lock.
+            if _registry is None:
+                _registry = ExtensionRegistry()
     return _registry
