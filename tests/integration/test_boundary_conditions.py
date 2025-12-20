@@ -149,6 +149,7 @@ class TestBatchIndexValidIndex:
     @pytest.mark.parametrize("developer_status,expected_route", [
         (DeveloperStatus.BATCH_COMPLETE, "batch_approval"),
         (DeveloperStatus.EXECUTING, "developer"),
+        (DeveloperStatus.ALL_DONE, "reviewer"),
     ])
     def test_route_after_developer_valid_index(
         self,

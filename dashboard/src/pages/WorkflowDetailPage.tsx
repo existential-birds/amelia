@@ -178,7 +178,7 @@ export default function WorkflowDetailPage() {
   const currentStage = workflow.current_stage as AgentStage | null;
   const completedStages = getCompletedStages(workflow.current_stage);
 
-  // Open blocker dialog automatically when there's a blocker
+  // Show blocker dialog when user clicks the blocker indicator
   const shouldShowBlockerDialog = currentBlocker !== null && blockerDialogOpen;
 
   return (

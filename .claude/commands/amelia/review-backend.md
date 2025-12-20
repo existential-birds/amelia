@@ -90,7 +90,7 @@ Review all changed `.py` files for general Python quality:
 - Critical paths have `logger.debug()` for diagnostics (broadcast counts, target counts)
 - Key operations have `logger.info()` for operational visibility
 - Errors include context (IDs, counts) not just messages
-- Loguru structured logging: use f-strings or `.bind()`, NOT keyword arguments (`logger.info("msg", key=val)` doesn't work - use `logger.bind(key=val).info("msg")` or `logger.info(f"msg: key={val}")`)
+- Loguru structured logging: use keyword arguments for structured fields (`logger.info("msg", key=val)` works - fields appear in `record["extra"]` and render as key=value pairs). Use `.bind()` only for multi-log context.
 
 ### Agent 2: LangGraph Review (If core/orchestrator changed)
 

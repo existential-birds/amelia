@@ -106,7 +106,7 @@ async def create_review_workflow(
         profile=request.profile,
     )
 
-    logger.info(f"Created review workflow {workflow_id}")
+    logger.info("Created review workflow", workflow_id=workflow_id)
 
     return CreateWorkflowResponse(
         id=workflow_id,
@@ -448,14 +448,15 @@ async def resolve_blocker(
         "abort_revert": "aborted",
         "fix": "fix_provided",
     }
-    status = status_map.get(request.action, "resolved")
+    response_status = status_map.get(request.action, "resolved")
 
     logger.info(
-        f"Blocker resolved for workflow {workflow_id}",
+        "Blocker resolved for workflow",
+        workflow_id=workflow_id,
         action=request.action,
         feedback=request.feedback,
     )
-    return ActionResponse(status=status, workflow_id=workflow_id)
+    return ActionResponse(status=response_status, workflow_id=workflow_id)
 
 
 def configure_exception_handlers(app: FastAPI) -> None:

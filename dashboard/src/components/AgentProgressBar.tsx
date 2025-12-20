@@ -90,6 +90,7 @@ export function AgentProgressBar({
                 data-completed={completed || undefined}
                 data-current={current || undefined}
                 data-pending={pending || undefined}
+                aria-current={current ? 'step' : undefined}
                 className={cn(
                   'flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-all',
                   // Completed state

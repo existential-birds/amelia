@@ -54,6 +54,7 @@ def _create_batch(risk_summary: str) -> ExecutionBatch:
         # STANDARD always checkpoints when enabled
         (TrustLevel.STANDARD, True, "low", True),
         (TrustLevel.STANDARD, True, "medium", True),
+        (TrustLevel.STANDARD, True, "high", True),
         # AUTONOMOUS only checkpoints high risk when enabled
         (TrustLevel.AUTONOMOUS, True, "low", False),
         (TrustLevel.AUTONOMOUS, True, "medium", False),
@@ -68,6 +69,7 @@ def _create_batch(risk_summary: str) -> ExecutionBatch:
         "paranoid_enabled_high",
         "standard_enabled_low",
         "standard_enabled_medium",
+        "standard_enabled_high",
         "autonomous_enabled_low",
         "autonomous_enabled_medium",
         "autonomous_enabled_high",
