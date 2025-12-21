@@ -479,13 +479,13 @@ async def call_developer_node(
         )
         raise ValueError(error_msg)
 
-    # Extract stream_emitter from config if available
-    stream_emitter, _ = _extract_config_params(config)
+    # Extract stream_emitter, workflow_id, and profile from config if available
+    stream_emitter, workflow_id, profile = _extract_config_params(config)
 
-    driver = DriverFactory.get_driver(state.profile.driver)
+    driver = DriverFactory.get_driver(profile.driver)
     developer = Developer(
         driver,
-        execution_mode=state.profile.execution_mode,
+        execution_mode=profile.execution_mode,
         stream_emitter=stream_emitter,
     )
 
