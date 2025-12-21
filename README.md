@@ -8,6 +8,19 @@
 
 See the [**Roadmap**](https://anderskev.github.io/amelia/reference/roadmap) for where we're headed and [**Current Status**](#current-status) for where we are. They're different places.
 
+## Current Status
+
+> [!WARNING]
+> This is an experimental project. It will occasionally do something baffling. So will you. You'll figure it out together.
+
+- Full orchestrator loop with human approval gates (CLI and web dashboard)
+- CLI driver (Claude CLI wrapper) with structured outputs, streaming, and agentic execution
+- Local code review with competitive strategy
+- GitHub tracker integration (via `gh` CLI)
+- Real tool execution in Developer agent (shell commands, file writes)
+- FastAPI server with SQLite persistence and WebSocket event streaming
+- Web dashboard with workflow visualization, real-time activity log, and approval controls
+
 ## Prerequisites
 
 - **Python 3.12+** - Required for type hints and async features
@@ -163,16 +176,3 @@ Amelia Core is licensed under the [Mozilla Public License 2.0](LICENSE).
 A commercial license is required only for restricted uses: reselling, repackaging, hosting as a service, or embedding Amelia in paid products. Internal use at your company does not require a commercial license.
 
 See [LICENSING.md](LICENSING.md) for details and examples.
-
-## Current Status
-
-> [!WARNING]
-> This is an experimental project. It will occasionally do something baffling. So will you. You'll figure it out together.
-
-- Full orchestrator loop with human approval gates (CLI and web dashboard)
-- CLI driver (Claude CLI wrapper) with structured outputs, streaming, and agentic execution
-- Local code review with competitive strategy
-- GitHub tracker integration (via `gh` CLI)
-- Real tool execution in Developer agent (shell commands, file writes)
-- FastAPI server with SQLite persistence and WebSocket event streaming
-- Web dashboard with workflow visualization, real-time activity log, and approval controls
