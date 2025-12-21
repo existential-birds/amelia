@@ -313,6 +313,9 @@ class AgentMessage(BaseModel):
 class ExecutionState(BaseModel):
     """State for the LangGraph orchestrator execution.
 
+    This model is frozen (immutable) to support the stateless reducer pattern.
+    Use model_copy(update={...}) to create modified copies.
+
     Attributes:
         profile: Active profile configuration.
         issue: The issue being worked on.
@@ -340,6 +343,8 @@ class ExecutionState(BaseModel):
         git_snapshot_before_batch: Git state snapshot for potential revert.
         review_iteration: Current iteration in review-fix loop.
     """
+
+    model_config = ConfigDict(frozen=True)
 
     profile: Profile
     issue: Issue | None = None

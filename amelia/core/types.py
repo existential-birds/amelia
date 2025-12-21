@@ -14,7 +14,7 @@ from enum import StrEnum
 from typing import Any, Literal
 from uuid import uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 DriverType = Literal["cli:claude", "api:openai", "cli", "api"]
@@ -60,6 +60,9 @@ class RetryConfig(BaseModel):
 class Profile(BaseModel):
     """Configuration profile for Amelia execution.
 
+    This model is frozen (immutable) to support the stateless reducer pattern.
+    Use model_copy(update={...}) to create modified copies.
+
     Attributes:
         name: Profile name (e.g., 'work', 'personal').
         driver: LLM driver type (e.g., 'api:openai', 'cli:claude').
@@ -73,6 +76,8 @@ class Profile(BaseModel):
         batch_checkpoint_enabled: Whether to pause for human approval between batches.
         max_review_iterations: Maximum review-fix loop iterations before terminating.
     """
+
+    model_config = ConfigDict(frozen=True)
 
     name: str
     driver: DriverType

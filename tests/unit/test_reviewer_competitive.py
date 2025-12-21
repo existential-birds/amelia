@@ -21,9 +21,10 @@ class TestCompetitiveReviewPersonaAttribution:
         Comments from competitive review should be prefixed with persona name
         so users can identify which perspective raised each concern.
         """
-        # Set up state with execution plan and code changes
+        # Set up state with execution plan, code changes, and competitive strategy
         plan = mock_execution_plan_factory(num_batches=1)
         state = mock_execution_state_factory(
+            profile_preset="api_competitive",
             execution_plan=plan,
             current_batch_index=0,
             code_changes_for_review="diff --git a/file.py"
@@ -40,8 +41,6 @@ class TestCompetitiveReviewPersonaAttribution:
         mock_driver.generate = AsyncMock(side_effect=lambda **kwargs: next(responses))
 
         reviewer = Reviewer(mock_driver)
-        # Override profile strategy for competitive review
-        state.profile = state.profile.model_copy(update={"strategy": "competitive"})
 
         result = await reviewer.review(state, code_changes="diff --git a/file.py", workflow_id="test-workflow")
 
@@ -62,6 +61,7 @@ class TestCompetitiveReviewPersonaAttribution:
         """Personas with no comments should not add empty prefixed entries."""
         plan = mock_execution_plan_factory(num_batches=1)
         state = mock_execution_state_factory(
+            profile_preset="api_competitive",
             execution_plan=plan,
             current_batch_index=0,
             code_changes_for_review="diff --git a/file.py"
@@ -78,8 +78,6 @@ class TestCompetitiveReviewPersonaAttribution:
         mock_driver.generate = AsyncMock(side_effect=lambda **kwargs: next(responses))
 
         reviewer = Reviewer(mock_driver)
-        # Override profile strategy for competitive review
-        state.profile = state.profile.model_copy(update={"strategy": "competitive"})
 
         result = await reviewer.review(state, code_changes="diff --git a/file.py", workflow_id="test-workflow")
 

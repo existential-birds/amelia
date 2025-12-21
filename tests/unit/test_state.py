@@ -628,3 +628,64 @@ class TestMergeSets:
         """merge_sets handles first addition to initially empty set."""
         result = merge_sets(set(), ["a", "b"])
         assert result == {"a", "b"}
+
+
+class TestExecutionStateImmutability:
+    """Tests for ExecutionState frozen model behavior."""
+
+    def test_execution_state_is_frozen(self):
+        """ExecutionState should be immutable (frozen=True)."""
+        import pytest
+        from pydantic import ValidationError
+
+        profile = Profile(name="test", driver="cli:claude")
+        state = ExecutionState(profile=profile)
+
+        with pytest.raises(ValidationError, match="frozen"):
+            state.workflow_status = "completed"
+
+    def test_execution_state_model_copy_creates_new_instance(self):
+        """ExecutionState.model_copy creates a new instance with updates."""
+        profile = Profile(name="test", driver="cli:claude")
+        state = ExecutionState(profile=profile)
+
+        updated = state.model_copy(update={"workflow_status": "completed"})
+
+        assert state.workflow_status == "running"  # Original unchanged
+        assert updated.workflow_status == "completed"  # New instance updated
+        assert state is not updated
+
+    def test_execution_state_nested_profile_also_frozen(self):
+        """Profile within ExecutionState is also frozen."""
+        import pytest
+        from pydantic import ValidationError
+
+        profile = Profile(name="test", driver="cli:claude")
+        state = ExecutionState(profile=profile)
+
+        with pytest.raises(ValidationError, match="frozen"):
+            state.profile.name = "modified"
+
+
+class TestProfileImmutability:
+    """Tests for Profile frozen model behavior."""
+
+    def test_profile_is_frozen(self):
+        """Profile should be immutable (frozen=True)."""
+        import pytest
+        from pydantic import ValidationError
+
+        profile = Profile(name="test", driver="cli:claude")
+
+        with pytest.raises(ValidationError, match="frozen"):
+            profile.name = "modified"
+
+    def test_profile_model_copy_creates_new_instance(self):
+        """Profile.model_copy creates a new instance with updates."""
+        profile = Profile(name="test", driver="cli:claude", strategy="single")
+
+        updated = profile.model_copy(update={"strategy": "competitive"})
+
+        assert profile.strategy == "single"  # Original unchanged
+        assert updated.strategy == "competitive"  # New instance updated
+        assert profile is not updated

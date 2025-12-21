@@ -291,13 +291,13 @@ class TestArchitectContextStrategy:
         assert "README.md" in codebase_section.content
 
     def test_compile_excludes_codebase_section_when_working_dir_not_set(
-        self, strategy, mock_execution_state_factory, mock_issue_factory
+        self, strategy, mock_execution_state_factory, mock_issue_factory, mock_profile_factory
     ):
         """Test compile excludes codebase section when profile.working_dir is None."""
         issue = mock_issue_factory(title="Add feature", description="Feature desc")
-        state = mock_execution_state_factory(issue=issue)
-        # Ensure working_dir is None
-        state.profile.working_dir = None
+        # Create profile with working_dir=None explicitly
+        profile = mock_profile_factory(working_dir=None)
+        state = mock_execution_state_factory(issue=issue, profile=profile)
 
         context = strategy.compile(state)
 
