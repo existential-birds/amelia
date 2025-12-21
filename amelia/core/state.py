@@ -317,7 +317,8 @@ class ExecutionState(BaseModel):
     Use model_copy(update={...}) to create modified copies.
 
     Attributes:
-        profile: Active profile configuration.
+        profile_id: ID of the active profile (for replay determinism).
+            The actual Profile object is passed via config["configurable"]["profile"].
         issue: The issue being worked on.
         design: Optional design context from brainstorming or external upload.
         human_approved: Whether human approval was granted for the plan.
@@ -346,7 +347,7 @@ class ExecutionState(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    profile: Profile
+    profile_id: str
     issue: Issue | None = None
     design: Design | None = None
     human_approved: bool | None = None

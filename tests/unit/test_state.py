@@ -683,3 +683,22 @@ class TestProfileImmutability:
         assert profile.strategy == "single"  # Original unchanged
         assert updated.strategy == "competitive"  # New instance updated
         assert profile is not updated
+
+
+class TestExecutionStateProfileId:
+    """Tests for profile_id field in ExecutionState."""
+
+    def test_profile_id_is_required(self) -> None:
+        """ExecutionState requires profile_id string."""
+        state = ExecutionState(profile_id="work-profile")
+        assert state.profile_id == "work-profile"
+
+    def test_profile_id_must_be_string(self) -> None:
+        """profile_id must be a string, not a Profile object."""
+        with pytest.raises(ValidationError):
+            ExecutionState(profile_id=123)  # type: ignore
+
+    def test_no_profile_field_exists(self) -> None:
+        """ExecutionState should not have a profile field."""
+        state = ExecutionState(profile_id="test")
+        assert not hasattr(state, "profile")
