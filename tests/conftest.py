@@ -6,7 +6,7 @@ import subprocess
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -478,3 +478,84 @@ def sample_stream_event() -> StreamEvent:
         agent="developer",
         workflow_id="wf-123",
     )
+
+
+class LangGraphMocks(NamedTuple):
+    """Container for LangGraph mock objects.
+
+    Attributes:
+        graph: Mock CompiledStateGraph with aupdate_state, astream, aget_state.
+        saver: Mock AsyncSqliteSaver instance.
+        saver_class: Mock AsyncSqliteSaver class (for patching).
+        create_graph: Mock create_orchestrator_graph function.
+    """
+
+    graph: MagicMock
+    saver: AsyncMock
+    saver_class: MagicMock
+    create_graph: MagicMock
+
+
+@pytest.fixture
+def langgraph_mock_factory(
+    async_iterator_mock_factory: Callable[[list[Any]], AsyncIteratorMock],
+) -> Callable[..., LangGraphMocks]:
+    """Factory fixture for creating LangGraph mock objects.
+
+    Creates properly configured mocks for:
+    - AsyncSqliteSaver (as async context manager)
+    - create_orchestrator_graph (returns mock graph)
+    - CompiledStateGraph (with aupdate_state, astream, aget_state)
+
+    Args:
+        astream_items: Items for the mock astream iterator. Defaults to [].
+        aget_state_return: Return value for aget_state. Defaults to empty state.
+
+    Returns:
+        LangGraphMocks NamedTuple with all configured mocks.
+
+    Example:
+        def test_example(langgraph_mock_factory):
+            mocks = langgraph_mock_factory(
+                astream_items=[{"node": "data"}, {"__interrupt__": ("pause",)}]
+            )
+            # Use mocks.graph, mocks.saver_class in your test
+    """
+
+    def _create(
+        astream_items: list[Any] | None = None,
+        aget_state_return: Any = None,
+    ) -> LangGraphMocks:
+        if astream_items is None:
+            astream_items = []
+        if aget_state_return is None:
+            aget_state_return = MagicMock(values={}, next=[])
+
+        # Create mock graph with all required methods
+        mock_graph = MagicMock()
+        mock_graph.aupdate_state = AsyncMock()
+        mock_graph.aget_state = AsyncMock(return_value=aget_state_return)
+        # astream returns iterator directly (not wrapped in AsyncMock)
+        mock_graph.astream = lambda *args, **kwargs: async_iterator_mock_factory(
+            astream_items
+        )
+
+        # Create mock saver as async context manager
+        mock_saver = AsyncMock()
+        mock_saver_class = MagicMock()
+        mock_saver_class.from_conn_string.return_value.__aenter__ = AsyncMock(
+            return_value=mock_saver
+        )
+        mock_saver_class.from_conn_string.return_value.__aexit__ = AsyncMock()
+
+        # Create mock create_graph that returns our graph
+        mock_create_graph = MagicMock(return_value=mock_graph)
+
+        return LangGraphMocks(
+            graph=mock_graph,
+            saver=mock_saver,
+            saver_class=mock_saver_class,
+            create_graph=mock_create_graph,
+        )
+
+    return _create

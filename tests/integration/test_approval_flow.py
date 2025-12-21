@@ -24,7 +24,6 @@ from amelia.server.database.repository import WorkflowRepository
 from amelia.server.models.events import EventType, WorkflowEvent
 from amelia.server.models.state import ServerExecutionState
 from amelia.server.orchestrator.service import OrchestratorService
-from tests.conftest import AsyncIteratorMock
 
 
 @pytest.fixture
@@ -137,19 +136,15 @@ class TestLifecycleEvents:
         mock_repository,
         temp_checkpoint_db,
         mock_settings,
+        langgraph_mock_factory,
     ):
         """WORKFLOW_STARTED event is emitted at the start."""
-        # Setup mock graph that completes immediately
-        mock_graph = AsyncMock()
-        # Use lambda to return iterator directly without AsyncMock wrapper
-        mock_graph.astream = lambda *args, **kwargs: AsyncIteratorMock([])
-        mock_create_graph.return_value = mock_graph
-
-        mock_saver = AsyncMock()
-        mock_saver_class.from_conn_string.return_value.__aenter__ = AsyncMock(
-            return_value=mock_saver
+        # Setup LangGraph mocks using factory
+        mocks = langgraph_mock_factory()
+        mock_create_graph.return_value = mocks.graph
+        mock_saver_class.from_conn_string.return_value = (
+            mocks.saver_class.from_conn_string.return_value
         )
-        mock_saver_class.from_conn_string.return_value.__aexit__ = AsyncMock()
 
         service = OrchestratorService(
             event_tracker,
@@ -191,37 +186,19 @@ class TestGraphInterruptHandling:
         mock_repository,
         temp_checkpoint_db,
         mock_settings,
+        langgraph_mock_factory,
     ):
         """__interrupt__ chunk sets status to blocked and emits APPROVAL_REQUIRED."""
-        # Create async iterator that yields __interrupt__ chunk (new astream API)
-        class InterruptIterator:
-            def __init__(self):
-                self._items = [
-                    {"architect_node": {}},  # First node completes
-                    {"__interrupt__": ("Paused for approval",)},  # Interrupt signal
-                ]
-                self._index = 0
-
-            def __aiter__(self):
-                return self
-
-            async def __anext__(self):
-                if self._index >= len(self._items):
-                    raise StopAsyncIteration
-                item = self._items[self._index]
-                self._index += 1
-                return item
-
-        mock_graph = AsyncMock()
-        # Use astream (not astream_events) to match the updated implementation
-        mock_graph.astream = lambda *args, **kwargs: InterruptIterator()
-        mock_create_graph.return_value = mock_graph
-
-        mock_saver = AsyncMock()
-        mock_saver_class.from_conn_string.return_value.__aenter__ = AsyncMock(
-            return_value=mock_saver
+        # Setup LangGraph mocks with custom interrupt sequence
+        interrupt_items = [
+            {"architect_node": {}},  # First node completes
+            {"__interrupt__": ("Paused for approval",)},  # Interrupt signal
+        ]
+        mocks = langgraph_mock_factory(astream_items=interrupt_items)
+        mock_create_graph.return_value = mocks.graph
+        mock_saver_class.from_conn_string.return_value = (
+            mocks.saver_class.from_conn_string.return_value
         )
-        mock_saver_class.from_conn_string.return_value.__aexit__ = AsyncMock()
 
         service = OrchestratorService(
             event_tracker,
