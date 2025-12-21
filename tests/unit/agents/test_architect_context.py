@@ -404,3 +404,50 @@ class TestArchitectSessionId:
         # Verify return value includes session_id
         assert result_session_id == "new-sess-456"
         assert result_plan is not None
+
+
+class TestArchitectNodeProfileFromConfig:
+    """Tests for call_architect_node using profile from config."""
+
+    async def test_architect_node_uses_profile_from_config(
+        self,
+        mock_profile_factory,
+        mock_issue_factory,
+    ) -> None:
+        """call_architect_node should get profile from config, not state."""
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        from langchain_core.runnables.config import RunnableConfig
+
+        from amelia.core.orchestrator import call_architect_node
+        from amelia.core.state import ExecutionState
+
+        profile = mock_profile_factory()
+        issue = mock_issue_factory()
+
+        # State has profile_id, not profile object
+        state = ExecutionState(profile_id=profile.name, issue=issue)
+
+        # Profile is in config
+        config: RunnableConfig = {
+            "configurable": {
+                "thread_id": "wf-test",
+                "profile": profile,
+            }
+        }
+
+        # Mock the Architect to avoid actual LLM calls
+        with patch("amelia.core.orchestrator.Architect") as mock_arch:
+            mock_arch_instance = MagicMock()
+            mock_arch_instance.generate_execution_plan = AsyncMock(
+                return_value=(MagicMock(), "session-123")
+            )
+            mock_arch.return_value = mock_arch_instance
+
+            # Should not raise, should use profile from config
+            result = await call_architect_node(state, config)
+
+            # Verify Architect was created
+            mock_arch.assert_called_once()
+            # Verify generate_execution_plan was called
+            mock_arch_instance.generate_execution_plan.assert_called_once()

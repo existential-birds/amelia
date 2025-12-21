@@ -122,10 +122,10 @@ async def call_architect_node(
     if state.issue is None:
         raise ValueError("Cannot call Architect: no issue provided in state.")
 
-    # Extract stream_emitter and workflow_id from config if available
-    stream_emitter, workflow_id = _extract_config_params(config)
+    # Extract stream_emitter, workflow_id, and profile from config
+    stream_emitter, workflow_id, profile = _extract_config_params(config)
 
-    driver = DriverFactory.get_driver(state.profile.driver)
+    driver = DriverFactory.get_driver(profile.driver)
     architect = Architect(driver, stream_emitter=stream_emitter)
 
     # Handle plan_only mode - generate plan with markdown and exit
