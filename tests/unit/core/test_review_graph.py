@@ -76,49 +76,57 @@ class TestShouldContinueReviewFix:
 
     def test_returns_end_when_approved(self, mock_profile_factory: Callable[..., Profile], mock_review_result_factory: Callable[..., ReviewResult]) -> None:
         """Returns END when review is approved."""
+        profile = mock_profile_factory()
         state = ExecutionState(
-            profile=mock_profile_factory(),
+            profile_id=profile.name,
             last_review=mock_review_result_factory(approved=True, comments=[], severity="low"),
             review_iteration=0,
         )
+        config = {"configurable": {"thread_id": "test-workflow", "profile": profile}}
 
-        result = should_continue_review_fix(state)
+        result = should_continue_review_fix(state, config=config)
 
         assert result == "__end__"
 
     def test_returns_end_at_max_iterations(self, mock_profile_factory: Callable[..., Profile], mock_review_result_factory: Callable[..., ReviewResult]) -> None:
         """Returns END when max iterations (3) reached, even if not approved."""
+        profile = mock_profile_factory()
         state = ExecutionState(
-            profile=mock_profile_factory(),
+            profile_id=profile.name,
             last_review=mock_review_result_factory(approved=False, comments=["Still wrong"], severity="medium"),
             review_iteration=3,
         )
+        config = {"configurable": {"thread_id": "test-workflow", "profile": profile}}
 
-        result = should_continue_review_fix(state)
+        result = should_continue_review_fix(state, config=config)
 
         assert result == "__end__"
 
     def test_returns_developer_when_rejected_under_max(self, mock_profile_factory: Callable[..., Profile], mock_review_result_factory: Callable[..., ReviewResult]) -> None:
         """Returns 'developer' when review rejected and under max iterations."""
+        profile = mock_profile_factory()
         state = ExecutionState(
-            profile=mock_profile_factory(),
+            profile_id=profile.name,
             last_review=mock_review_result_factory(approved=False, comments=["Fix this"], severity="medium"),
             review_iteration=1,
         )
+        config = {"configurable": {"thread_id": "test-workflow", "profile": profile}}
 
-        result = should_continue_review_fix(state)
+        result = should_continue_review_fix(state, config=config)
 
         assert result == "developer"
 
     def test_continues_at_iteration_2(self, mock_profile_factory: Callable[..., Profile], mock_review_result_factory: Callable[..., ReviewResult]) -> None:
         """At iteration 2, still continues to developer (max is 3)."""
+        profile = mock_profile_factory()
         state = ExecutionState(
-            profile=mock_profile_factory(),
+            profile_id=profile.name,
             last_review=mock_review_result_factory(approved=False, comments=["Almost"], severity="low"),
             review_iteration=2,
         )
+        config = {"configurable": {"thread_id": "test-workflow", "profile": profile}}
 
-        result = should_continue_review_fix(state)
+        result = should_continue_review_fix(state, config=config)
 
         assert result == "developer"
 
@@ -135,8 +143,9 @@ class TestCallDeveloperNodeForReview:
     ) -> None:
         """Returns review_iteration in result dict with incremented value."""
         # Create a state with a rejected review and review_iteration=1
+        profile = mock_profile_factory()
         state = ExecutionState(
-            profile=mock_profile_factory(),
+            profile_id=profile.name,
             issue=mock_issue_factory(),
             execution_plan=mock_execution_plan_factory(),
             last_review=mock_review_result_factory(
@@ -153,12 +162,14 @@ class TestCallDeveloperNodeForReview:
             "current_batch_index": 1,
         }
 
+        config = {"configurable": {"thread_id": "test-workflow", "profile": profile}}
+
         with patch(
             "amelia.core.orchestrator.call_developer_node",
             new_callable=AsyncMock,
             return_value=mock_developer_result,
         ):
-            result = await call_developer_node_for_review(state, config=None)
+            result = await call_developer_node_for_review(state, config=config)
 
         # Assert review_iteration is in the result and incremented
         assert "review_iteration" in result

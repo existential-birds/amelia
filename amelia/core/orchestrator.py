@@ -537,11 +537,15 @@ def route_approval(state: ExecutionState) -> Literal["approve", "reject"]:
     """
     return "approve" if state.human_approved else "reject"
 
-def route_after_developer(state: ExecutionState) -> Literal["reviewer", "batch_approval", "blocker_resolution", "developer", "__end__"]:
+def route_after_developer(
+    state: ExecutionState,
+    config: RunnableConfig | None = None,
+) -> Literal["reviewer", "batch_approval", "blocker_resolution", "developer", "__end__"]:
     """Route based on Developer status.
 
     Args:
         state: Current execution state containing developer_status.
+        config: Optional RunnableConfig with profile in configurable.
 
     Returns:
         Route string based on developer_status:
@@ -579,15 +583,18 @@ def route_after_developer(state: ExecutionState) -> Literal["reviewer", "batch_a
             )
             return "reviewer"
 
+        # Extract profile from config
+        _, _, profile = _extract_config_params(config)
+
         current_batch = state.execution_plan.batches[state.current_batch_index]
-        if should_checkpoint(current_batch, state.profile):
+        if should_checkpoint(current_batch, profile):
             return "batch_approval"
         else:
             logger.info(
                 "Skipping batch approval checkpoint",
                 batch_number=current_batch.batch_number,
                 risk_summary=current_batch.risk_summary,
-                trust_level=state.profile.trust_level.value,
+                trust_level=profile.trust_level.value,
             )
             return "developer"
     elif state.developer_status == DeveloperStatus.BLOCKED:
@@ -670,8 +677,15 @@ def create_synthetic_plan_from_review(review: ReviewResult) -> ExecutionPlan:
     )
 
 
-def should_continue_review_fix(state: ExecutionState) -> Literal["developer", "__end__"]:
+def should_continue_review_fix(
+    state: ExecutionState,
+    config: RunnableConfig | None = None,
+) -> Literal["developer", "__end__"]:
     """Determine next step in review-fix loop.
+
+    Args:
+        state: Current execution state containing last_review.
+        config: Optional RunnableConfig with profile in configurable.
 
     Returns:
         "developer" if review rejected and under max iterations,
@@ -679,7 +693,11 @@ def should_continue_review_fix(state: ExecutionState) -> Literal["developer", "_
     """
     if state.last_review and state.last_review.approved:
         return "__end__"
-    max_iterations = state.profile.max_review_iterations if state.profile else 3
+
+    # Extract profile from config
+    _, _, profile = _extract_config_params(config)
+    max_iterations = profile.max_review_iterations
+
     if state.review_iteration >= max_iterations:
         logger.warning(
             "Max review iterations reached, terminating loop",
