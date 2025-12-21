@@ -159,9 +159,9 @@ async def test_start_workflow_success(
         assert state.worktree_path == valid_worktree
         assert state.worktree_name == "feat-123"
         assert state.workflow_status == "pending"
-        # Verify execution_state is initialized with profile
+        # Verify execution_state is initialized with profile_id
         assert state.execution_state is not None
-        assert state.execution_state.profile.name == "test"
+        assert state.execution_state.profile_id == "test"
 
 
 async def test_start_workflow_conflict(
@@ -434,6 +434,7 @@ async def test_approve_workflow_success(
         worktree_name="feat-123",
         workflow_status="blocked",
         started_at=datetime.now(UTC),
+        execution_state=ExecutionState(profile_id="test"),
     )
     mock_repository.get.return_value = mock_state
 
@@ -487,6 +488,7 @@ async def test_reject_workflow_success(
         worktree_name="feat-123",
         workflow_status="blocked",
         started_at=datetime.now(UTC),
+        execution_state=ExecutionState(profile_id="test"),
     )
     mock_repository.get.return_value = mock_state
 
@@ -534,6 +536,7 @@ class TestRejectWorkflowGraphState:
             worktree_path="/tmp/test",
             worktree_name="test",
             workflow_status="blocked",
+            execution_state=ExecutionState(profile_id="test"),
         )
         mock_repository.get.return_value = workflow
 
@@ -565,6 +568,7 @@ class TestApproveWorkflowResume:
             worktree_path="/tmp/test",
             worktree_name="test",
             workflow_status="blocked",
+            execution_state=ExecutionState(profile_id="test"),
         )
         mock_repository.get.return_value = workflow
         orchestrator._active_tasks["/tmp/test"] = ("wf-123", AsyncMock())
@@ -942,7 +946,7 @@ class TestSyncPlanFromCheckpoint:
             worktree_name="feat-123",
             workflow_status="in_progress",
             started_at=datetime.now(UTC),
-            execution_state=ExecutionState(profile=profile),
+            execution_state=ExecutionState(profile_id=profile.name),
         )
         mock_repository.get.return_value = mock_state
 
