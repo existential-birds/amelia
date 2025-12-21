@@ -97,15 +97,11 @@ Yes. MPL-2.0 explicitly allows "Larger Works" - you can combine Amelia with prop
 
 ### What if we're uncertain about our use case?
 
-Reach out. We're happy to clarify whether your specific situation requires a Commercial License.
-
-### Is there a grace period for startups?
-
-Contact us to discuss startup-friendly terms.
+Reach out - we're happy to clarify whether your specific situation falls under Restricted Uses.
 
 ## Contact
 
-For Commercial License inquiries:
+For licensing questions:
 
 - **Email**: licensing@YOURDOMAIN.com
 - **GitHub**: Open an issue with the label `licensing`
