@@ -5,6 +5,9 @@
 
 from datetime import UTC, datetime
 
+import pytest
+from pydantic import ValidationError
+
 from amelia.core.state import (
     BatchApproval,
     BatchResult,
@@ -635,9 +638,6 @@ class TestExecutionStateImmutability:
 
     def test_execution_state_is_frozen(self):
         """ExecutionState should be immutable (frozen=True)."""
-        import pytest
-        from pydantic import ValidationError
-
         profile = Profile(name="test", driver="cli:claude")
         state = ExecutionState(profile=profile)
 
@@ -657,9 +657,6 @@ class TestExecutionStateImmutability:
 
     def test_execution_state_nested_profile_also_frozen(self):
         """Profile within ExecutionState is also frozen."""
-        import pytest
-        from pydantic import ValidationError
-
         profile = Profile(name="test", driver="cli:claude")
         state = ExecutionState(profile=profile)
 
@@ -672,9 +669,6 @@ class TestProfileImmutability:
 
     def test_profile_is_frozen(self):
         """Profile should be immutable (frozen=True)."""
-        import pytest
-        from pydantic import ValidationError
-
         profile = Profile(name="test", driver="cli:claude")
 
         with pytest.raises(ValidationError, match="frozen"):
