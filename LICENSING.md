@@ -101,12 +101,7 @@ Reach out - we're happy to clarify whether your specific situation falls under R
 
 ## Contact
 
-For licensing questions:
-
-- **Email**: legal@anderskev.com
-- **GitHub**: Open an issue with the label `licensing`
-
-For general questions about licensing, feel free to open a GitHub Discussion.
+For licensing questions, email legal@anderskev.com.
 
 ---
 
