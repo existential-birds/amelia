@@ -89,4 +89,18 @@ If you have questions about this CLA or the contribution process, please:
 
 ---
 
+## Signature for Offline Agreement
+
+If you are asked to provide a signed copy (e.g., for corporate requirements), please complete the information below and send it to the Maintainers.
+
+| | Contributor |
+|---|---|
+| **Signature** | _________________________ |
+| **Name** | _________________________ |
+| **Title** | _________________________ |
+| **Date** | _________________________ |
+| **Email** | _________________________ |
+
+---
+
 *This CLA is effective as of the date of your first contribution and applies to all subsequent contributions.*

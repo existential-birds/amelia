@@ -14,13 +14,13 @@ This Commercial License Agreement ("Agreement") is a template. A signed agreemen
 
 **"Licensor"** means [LEGAL ENTITY NAME].
 
-**"Restricted Uses"** has the meaning set forth in [LICENSING.md](LICENSING.md).
+**"Restricted Uses"** has the meaning set forth in [LICENSING.md](LICENSING.md#restricted-uses-require-commercial-license).
 
 ## 2. Grant of License
 
 Subject to the terms of this Agreement and payment of applicable Fees, Licensor grants Licensee a non-exclusive, non-transferable, worldwide license to:
 
-- Use Amelia for Restricted Uses as defined in LICENSING.md
+- Use Amelia for Restricted Uses as defined in [LICENSING.md](LICENSING.md#restricted-uses-require-commercial-license)
 - Modify Amelia for Licensee's use under this Agreement
 - Distribute Amelia or derivative works as permitted by the scope of the commercial agreement
 
