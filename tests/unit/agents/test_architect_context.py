@@ -25,9 +25,9 @@ class TestArchitectContextStrategy:
             title="Implement authentication system",
             description="Build a secure authentication system with JWT tokens",
         )
-        state = mock_execution_state_factory(issue=issue)
+        state, profile = mock_execution_state_factory(issue=issue)
 
-        context = strategy.compile(state)
+        context = strategy.compile(state, profile)
 
         # Should have system prompt
         assert context.system_prompt == ArchitectContextStrategy.SYSTEM_PROMPT
@@ -49,9 +49,9 @@ class TestArchitectContextStrategy:
         issue = mock_issue_factory(
             title="Implement feature X", description="Feature description"
         )
-        state = mock_execution_state_factory(issue=issue)
+        state, profile = mock_execution_state_factory(issue=issue)
 
-        context = strategy.compile(state)
+        context = strategy.compile(state, profile)
         messages = strategy.to_messages(context)
 
         # System prompt is passed separately - to_messages only returns user messages
@@ -74,11 +74,11 @@ class TestArchitectContextStrategy:
         # Test stability across different compiles
         issue1 = mock_issue_factory(title="Issue 1", description="Description 1")
         issue2 = mock_issue_factory(title="Issue 2", description="Description 2")
-        state1 = mock_execution_state_factory(issue=issue1)
-        state2 = mock_execution_state_factory(issue=issue2)
+        state1, profile1 = mock_execution_state_factory(issue=issue1)
+        state2, profile2 = mock_execution_state_factory(issue=issue2)
 
-        context1 = strategy.compile(state1)
-        context2 = strategy.compile(state2)
+        context1 = strategy.compile(state1, profile1)
+        context2 = strategy.compile(state2, profile2)
 
         # System prompts should be identical
         assert context1.system_prompt == context2.system_prompt
@@ -118,9 +118,9 @@ class TestArchitectContextStrategy:
             title="Refactor authentication module",
             description="The current auth module needs refactoring to support OAuth2",
         )
-        state = mock_execution_state_factory(issue=issue)
+        state, profile = mock_execution_state_factory(issue=issue)
 
-        context = strategy.compile(state)
+        context = strategy.compile(state, profile)
 
         issue_section = context.sections[0]
         assert issue_section.name == "issue"
@@ -138,9 +138,9 @@ class TestArchitectContextStrategy:
     ):
         """Test that all sections have non-empty content."""
         issue = mock_issue_factory(title="Test Issue", description="Test description")
-        state = mock_execution_state_factory(issue=issue)
+        state, profile = mock_execution_state_factory(issue=issue)
 
-        context = strategy.compile(state)
+        context = strategy.compile(state, profile)
 
         for section in context.sections:
             assert len(section.content.strip()) > 0
@@ -153,10 +153,10 @@ class TestArchitectContextStrategy:
 
         # Create state without issue
         profile = mock_profile_factory()
-        state = ExecutionState(profile=profile, issue=None)
+        state = ExecutionState(profile_id=profile.name, issue=None)
 
         with pytest.raises(ValueError) as exc_info:
-            strategy.compile(state)
+            strategy.compile(state, profile)
 
         assert "Issue context is required for planning" in str(exc_info.value)
 
@@ -165,10 +165,10 @@ class TestArchitectContextStrategy:
     ):
         """Test compile raises ValueError when issue has no title or description."""
         issue = mock_issue_factory(title="", description="")
-        state = mock_execution_state_factory(issue=issue)
+        state, profile = mock_execution_state_factory(issue=issue)
 
         with pytest.raises(ValueError) as exc_info:
-            strategy.compile(state)
+            strategy.compile(state, profile)
 
         assert "Issue context is required for planning" in str(exc_info.value)
 
@@ -185,9 +185,9 @@ class TestArchitectContextStrategy:
     ):
         """Test compile works when issue has only title or only description."""
         issue = mock_issue_factory(title=title, description=description)
-        state = mock_execution_state_factory(issue=issue)
+        state, profile = mock_execution_state_factory(issue=issue)
 
-        context = strategy.compile(state)
+        context = strategy.compile(state, profile)
 
         assert len(context.sections) == 1
         expected_content = title if title else description
@@ -233,9 +233,9 @@ class TestArchitectContextStrategy:
             goal="Secure authentication",
             architecture="JWT-based",
         )
-        state = mock_execution_state_factory(issue=issue, design=design)
+        state, profile = mock_execution_state_factory(issue=issue, design=design)
 
-        context = strategy.compile(state)
+        context = strategy.compile(state, profile)
 
         # Should have two sections: issue and design
         assert len(context.sections) == 2
@@ -254,9 +254,9 @@ class TestArchitectContextStrategy:
     ):
         """Test compile excludes design section when state.design is None."""
         issue = mock_issue_factory(title="Build feature", description="Feature desc")
-        state = mock_execution_state_factory(issue=issue, design=None)
+        state, profile = mock_execution_state_factory(issue=issue, design=None)
 
-        context = strategy.compile(state)
+        context = strategy.compile(state, profile)
 
         # Should have only issue section
         assert len(context.sections) == 1
@@ -275,9 +275,9 @@ class TestArchitectContextStrategy:
 
         issue = mock_issue_factory(title="Add feature", description="Feature desc")
         profile = mock_profile_factory(working_dir=str(tmp_path))
-        state = mock_execution_state_factory(issue=issue, profile=profile)
+        state, profile = mock_execution_state_factory(issue=issue, profile=profile)
 
-        context = strategy.compile(state)
+        context = strategy.compile(state, profile)
 
         # Should have two sections: issue and codebase
         section_names = [s.name for s in context.sections]
@@ -297,9 +297,9 @@ class TestArchitectContextStrategy:
         issue = mock_issue_factory(title="Add feature", description="Feature desc")
         # Create profile with working_dir=None explicitly
         profile = mock_profile_factory(working_dir=None)
-        state = mock_execution_state_factory(issue=issue, profile=profile)
+        state, profile = mock_execution_state_factory(issue=issue, profile=profile)
 
-        context = strategy.compile(state)
+        context = strategy.compile(state, profile)
 
         # Should have only issue section, no codebase
         section_names = [s.name for s in context.sections]
@@ -391,10 +391,10 @@ class TestArchitectSessionId:
         # Driver returns (output, new_session_id)
         mock_driver = mock_async_driver_factory(generate_return=(mock_output, "new-sess-456"))
 
-        state = mock_execution_state_factory(driver_session_id="existing-sess-123")
+        state, profile = mock_execution_state_factory(driver_session_id="existing-sess-123")
 
         architect = Architect(mock_driver)
-        result_plan, result_session_id = await architect.generate_execution_plan(state.issue, state)
+        result_plan, result_session_id = await architect.generate_execution_plan(state.issue, state, profile)
 
         # Verify driver was called with session_id from state
         mock_driver.generate.assert_called_once()

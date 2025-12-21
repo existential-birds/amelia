@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 
 from amelia.core.context import CompiledContext, ContextSection, ContextStrategy
 from amelia.core.state import ExecutionState, ReviewResult, Severity
-from amelia.core.types import StreamEmitter, StreamEvent, StreamEventType
+from amelia.core.types import Profile, StreamEmitter, StreamEvent, StreamEventType
 from amelia.drivers.base import DriverInterface
 
 
@@ -188,6 +188,7 @@ class Reviewer:
         self,
         state: ExecutionState,
         code_changes: str,
+        profile: Profile,
         *,
         workflow_id: str,
     ) -> tuple[ReviewResult, str | None]:
@@ -196,22 +197,24 @@ class Reviewer:
         Selects single or competitive review strategy based on profile settings.
 
         Args:
-            state: Current execution state containing issue and profile context.
+            state: Current execution state containing issue context.
             code_changes: Diff or description of code changes to review.
+            profile: The profile containing review strategy settings.
             workflow_id: Workflow ID for stream events (required).
 
         Returns:
             Tuple of (ReviewResult, session_id from driver).
         """
-        if state.profile.strategy == "competitive":
-            return await self._competitive_review(state, code_changes, workflow_id=workflow_id)
+        if profile.strategy == "competitive":
+            return await self._competitive_review(state, code_changes, profile, workflow_id=workflow_id)
         else: # Default to single review
-            return await self._single_review(state, code_changes, persona="General", workflow_id=workflow_id)
+            return await self._single_review(state, code_changes, profile, persona="General", workflow_id=workflow_id)
 
     async def _single_review(
         self,
         state: ExecutionState,
         code_changes: str,
+        profile: Profile,
         persona: str,
         *,
         workflow_id: str,
@@ -221,6 +224,7 @@ class Reviewer:
         Args:
             state: Current execution state containing issue context.
             code_changes: Diff or description of code changes to review.
+            profile: The profile containing working directory settings.
             persona: Review perspective (e.g., "Security", "Performance").
             workflow_id: Workflow ID for stream events (required).
 
@@ -250,7 +254,7 @@ class Reviewer:
         response, new_session_id = await self.driver.generate(
             messages=prompt_messages,
             schema=ReviewResponse,
-            cwd=state.profile.working_dir,
+            cwd=profile.working_dir,
             session_id=state.driver_session_id,
         )
 
@@ -277,6 +281,7 @@ class Reviewer:
         self,
         state: ExecutionState,
         code_changes: str,
+        profile: Profile,
         *,
         workflow_id: str,
     ) -> tuple[ReviewResult, str | None]:
@@ -285,6 +290,7 @@ class Reviewer:
         Args:
             state: Current execution state containing issue context.
             code_changes: Diff or description of code changes to review.
+            profile: The profile containing working directory settings.
             workflow_id: Workflow ID for stream events (required).
 
         Returns:
@@ -295,7 +301,7 @@ class Reviewer:
         personas = ["Security", "Performance", "Usability"] # Example personas
 
         # Run reviews in parallel
-        review_tasks = [self._single_review(state, code_changes, persona, workflow_id=workflow_id) for persona in personas]
+        review_tasks = [self._single_review(state, code_changes, profile, persona, workflow_id=workflow_id) for persona in personas]
         results_with_sessions = await asyncio.gather(*review_tasks)
 
         # Unpack results (session_ids discarded for competitive reviews)

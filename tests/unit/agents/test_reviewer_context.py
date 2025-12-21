@@ -51,11 +51,12 @@ index 1234567..abcdefg 100644
             num_batches=1,
             steps_per_batch=2,
         )
-        return mock_execution_state_factory(
+        state, _profile = mock_execution_state_factory(
             execution_plan=plan,
             current_batch_index=0,
             code_changes_for_review=code_diff
         )
+        return state
 
     def test_compile_with_code_diff(self, strategy, state_with_batch, code_diff):
         """Test compile produces context with code diff section."""
@@ -104,7 +105,7 @@ index 1234567..abcdefg 100644
     ):
         """Test compile falls back to issue when no batch is present."""
         # State with issue but no execution plan
-        state = mock_execution_state_factory(
+        state, profile = mock_execution_state_factory(
             execution_plan=None,
             code_changes_for_review=code_diff
         )
@@ -126,8 +127,9 @@ index 1234567..abcdefg 100644
     ):
         """Test raises ValueError when state has no batch and no issue."""
         # State with no execution_plan AND no issue
+        profile = mock_profile_factory()
         state = ExecutionState(
-            profile=mock_profile_factory(),
+            profile_id=profile.name,
             issue=None,
             execution_plan=None,
             code_changes_for_review=code_diff
@@ -197,7 +199,7 @@ index 1234567..abcdefg 100644
     ):
         """Test raises ValueError when state has no code changes."""
         plan = mock_execution_plan_factory(num_batches=1)
-        state = mock_execution_state_factory(
+        state, profile = mock_execution_state_factory(
             execution_plan=plan,
             code_changes_for_review=None
         )
@@ -249,7 +251,7 @@ class TestReviewerValidation:
         """
         from amelia.agents.reviewer import Reviewer
 
-        state = mock_execution_state_factory(
+        state, profile = mock_execution_state_factory(
             execution_plan=None,
             code_changes_for_review="diff --git a/file.py"
         )
@@ -260,7 +262,7 @@ class TestReviewerValidation:
         reviewer = Reviewer(mock_driver)
 
         # Should not raise - falls back to issue context
-        result = await reviewer.review(state, code_changes="diff --git a/file.py", workflow_id="test-workflow")
+        result, _ = await reviewer.review(state, code_changes="diff --git a/file.py", profile=profile, workflow_id="test-workflow")
         assert result is not None
 
     async def test_reviewer_works_with_empty_batches(
@@ -279,7 +281,7 @@ class TestReviewerValidation:
             total_estimated_minutes=0,
             tdd_approach=False,
         )
-        state = mock_execution_state_factory(
+        state, profile = mock_execution_state_factory(
             execution_plan=empty_plan,
             code_changes_for_review="diff --git a/file.py"
         )
@@ -290,7 +292,7 @@ class TestReviewerValidation:
         reviewer = Reviewer(mock_driver)
 
         # Should not raise - falls back to issue context
-        result = await reviewer.review(state, code_changes="diff --git a/file.py", workflow_id="test-workflow")
+        result, _ = await reviewer.review(state, code_changes="diff --git a/file.py", profile=profile, workflow_id="test-workflow")
         assert result is not None
 
 
@@ -309,13 +311,13 @@ class TestReviewerSessionId:
         mock_response = mock_review_response_factory(approved=True)
         mock_driver = mock_async_driver_factory(generate_return=(mock_response, "new-sess"))
 
-        state = mock_execution_state_factory(
+        state, profile = mock_execution_state_factory(
             driver_session_id="review-sess-123",
             code_changes_for_review="diff content",
         )
 
         reviewer = Reviewer(mock_driver)
-        result, result_session_id = await reviewer._single_review(state, "diff", "General", workflow_id="wf-1")
+        result, result_session_id = await reviewer._single_review(state, "diff", profile, "General", workflow_id="wf-1")
 
         mock_driver.generate.assert_called_once()
         call_kwargs = mock_driver.generate.call_args.kwargs

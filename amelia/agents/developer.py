@@ -21,7 +21,7 @@ from amelia.core.state import (
     PlanStep,
     StepResult,
 )
-from amelia.core.types import DeveloperStatus, ExecutionMode, StreamEmitter
+from amelia.core.types import DeveloperStatus, ExecutionMode, Profile, StreamEmitter
 from amelia.core.utils import strip_ansi
 from amelia.drivers.base import DriverInterface
 from amelia.tools.git_utils import take_git_snapshot
@@ -269,26 +269,26 @@ class Developer:
         # - For now, just return filesystem check result
         return fs_result
 
-    def _resolve_working_dir(self, step: PlanStep, state: ExecutionState) -> str | None:
+    def _resolve_working_dir(self, step: PlanStep, profile: Profile) -> str | None:
         """Resolve the working directory for step execution.
 
         Priority:
         1. step.cwd (relative to repo root, resolved to absolute)
-        2. state.profile.working_dir
+        2. profile.working_dir
         3. None (use current directory)
 
         Args:
             step: The plan step being executed.
-            state: The current execution state.
+            profile: The profile containing working directory settings.
 
         Returns:
             Absolute path to working directory, or None for current directory.
         """
         if step.cwd:
             # step.cwd is relative to repo root (working_dir)
-            base = state.profile.working_dir or "."
+            base = profile.working_dir or "."
             return str(Path(base) / step.cwd)
-        return state.profile.working_dir
+        return profile.working_dir
 
     def _resolve_file_path(self, file_path: str, working_dir: str | None) -> str:
         """Resolve a file path relative to working directory.
@@ -313,13 +313,13 @@ class Developer:
     async def _execute_step_with_fallbacks(
         self,
         step: PlanStep,
-        state: ExecutionState
+        profile: Profile
     ) -> StepResult:
         """Execute step, trying fallbacks if primary fails.
 
         Args:
             step: The plan step to execute.
-            state: The current execution state.
+            profile: The profile containing working directory settings.
 
         Returns:
             StepResult with status "completed" or "failed".
@@ -327,7 +327,7 @@ class Developer:
         start_time = time.time()
 
         # Resolve working directory for this step
-        working_dir = self._resolve_working_dir(step, state)
+        working_dir = self._resolve_working_dir(step, profile)
         logger.debug(
             "Executing step",
             step_id=step.id,
@@ -484,6 +484,7 @@ class Developer:
         self,
         batch: ExecutionBatch,
         state: ExecutionState,
+        profile: Profile,
     ) -> BatchResult:
         """Execute a batch with LLM judgment.
 
@@ -503,12 +504,13 @@ class Developer:
         Args:
             batch: The execution batch containing steps to execute.
             state: Current execution state with skipped_step_ids and other context.
+            profile: The profile containing working directory settings.
 
         Returns:
             BatchResult with status "complete" or "blocked".
         """
         # 1. Take git snapshot for potential rollback
-        repo_path = Path(state.profile.working_dir) if state.profile.working_dir else None
+        repo_path = Path(profile.working_dir) if profile.working_dir else None
         _git_snapshot = await take_git_snapshot(repo_path)
         logger.debug(
             "Git snapshot taken before batch execution",
@@ -567,7 +569,7 @@ class Developer:
                 )
 
             # 2c. Execute step with fallback handling
-            result = await self._execute_step_with_fallbacks(step, state)
+            result = await self._execute_step_with_fallbacks(step, profile)
 
             if result.status == "failed":
                 logger.warning(
@@ -576,7 +578,7 @@ class Developer:
                     action_type=step.action_type,
                     error=result.error,
                     executed_command=result.executed_command,
-                    working_dir=state.profile.working_dir or "cwd",
+                    working_dir=profile.working_dir or "cwd",
                 )
                 # Determine blocker type based on action type
                 blocker_type = (
@@ -625,6 +627,7 @@ class Developer:
     async def _recover_from_blocker(
         self,
         state: ExecutionState,
+        profile: Profile,
     ) -> BatchResult:
         """Continue execution after human resolves blocker.
 
@@ -634,6 +637,7 @@ class Developer:
 
         Args:
             state: Current execution state with current_blocker and blocker_resolution.
+            profile: The profile containing working directory settings.
 
         Returns:
             BatchResult with status "complete" or "blocked".
@@ -660,7 +664,7 @@ class Developer:
                 previously_completed = list(last_result.completed_steps)
 
         # Take git snapshot (in case we need to rollback after recovery attempt)
-        repo_path = Path(state.profile.working_dir) if state.profile.working_dir else None
+        repo_path = Path(profile.working_dir) if profile.working_dir else None
         _git_snapshot = await take_git_snapshot(repo_path)
         logger.debug(
             "Git snapshot taken before recovery",
@@ -731,7 +735,7 @@ class Developer:
                 )
 
             # Execute step
-            result = await self._execute_step_with_fallbacks(step, state)
+            result = await self._execute_step_with_fallbacks(step, profile)
 
             if result.status == "failed":
                 logger.warning(
@@ -781,7 +785,7 @@ class Developer:
             blocker=None,
         )
 
-    async def run(self, state: ExecutionState) -> dict[str, Any]:
+    async def run(self, state: ExecutionState, profile: Profile) -> dict[str, Any]:
         """Main execution - follows plan with judgment.
 
         This is the new intelligent execution method that replaces the
@@ -789,6 +793,7 @@ class Developer:
 
         Args:
             state: Full execution state with execution_plan, current_batch_index, etc.
+            profile: The profile containing working directory and other settings.
 
         Returns:
             Dict with developer_status and related state updates:
@@ -811,10 +816,10 @@ class Developer:
 
         # Check if we're recovering from a blocker
         if state.blocker_resolution and state.blocker_resolution not in ("skip", "abort"):
-            result = await self._recover_from_blocker(state)
+            result = await self._recover_from_blocker(state, profile)
         else:
             batch = plan.batches[current_batch_idx]
-            result = await self._execute_batch(batch, state)
+            result = await self._execute_batch(batch, state, profile)
 
         if result.status == "blocked":
             return {

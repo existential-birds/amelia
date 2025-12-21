@@ -16,7 +16,7 @@ from amelia.core.state import (
     ExecutionState,
     RiskLevel,
 )
-from amelia.core.types import Design, Issue, StreamEmitter, StreamEvent, StreamEventType
+from amelia.core.types import Design, Issue, Profile, StreamEmitter, StreamEvent, StreamEventType
 from amelia.drivers.base import DriverInterface
 
 
@@ -263,11 +263,12 @@ Ensure each step is 2-5 minutes, includes proper dependencies, and validation st
 
         return header + file_list
 
-    def compile(self, state: ExecutionState) -> CompiledContext:
+    def compile(self, state: ExecutionState, profile: Profile) -> CompiledContext:
         """Compile ExecutionState into context for planning.
 
         Args:
             state: The current execution state.
+            profile: The profile containing working directory settings.
 
         Returns:
             CompiledContext with system prompt and relevant sections.
@@ -302,13 +303,13 @@ Ensure each step is 2-5 minutes, includes proper dependencies, and validation st
             )
 
         # Codebase section (optional - when working_dir is set)
-        if state.profile.working_dir:
-            codebase_content = self._scan_codebase(state.profile.working_dir)
+        if profile.working_dir:
+            codebase_content = self._scan_codebase(profile.working_dir)
             sections.append(
                 ContextSection(
                     name="codebase",
                     content=codebase_content,
-                    source="state.profile.working_dir",
+                    source="profile.working_dir",
                 )
             )
 
@@ -348,6 +349,7 @@ class Architect:
     async def plan(
         self,
         state: ExecutionState,
+        profile: Profile,
         output_dir: str | None = None,
         *,
         workflow_id: str,
@@ -359,8 +361,9 @@ class Architect:
 
         Args:
             state: The execution state containing the issue and optional design.
+            profile: The profile containing plan output directory and working directory settings.
             output_dir: Directory path where the markdown plan will be saved.
-                If None, uses profile's plan_output_dir from state.
+                If None, uses profile's plan_output_dir.
             workflow_id: Workflow ID for stream events (required).
 
         Returns:
@@ -374,15 +377,15 @@ class Architect:
 
         # Use profile's output directory if not specified
         if output_dir is None:
-            output_dir = state.profile.plan_output_dir
+            output_dir = profile.plan_output_dir
 
         # Resolve relative paths to working_dir (not server CWD)
         output_path = Path(output_dir)
-        if not output_path.is_absolute() and state.profile.working_dir:
-            output_dir = str(Path(state.profile.working_dir) / output_path)
+        if not output_path.is_absolute() and profile.working_dir:
+            output_dir = str(Path(profile.working_dir) / output_path)
 
         # Generate execution plan using the new batched execution model
-        execution_plan, _session_id = await self.generate_execution_plan(state.issue, state)
+        execution_plan, _session_id = await self.generate_execution_plan(state.issue, state, profile)
 
         # Count total steps for logging
         total_steps = sum(len(batch.steps) for batch in execution_plan.batches)
@@ -407,6 +410,7 @@ class Architect:
         self,
         issue: Issue,
         state: ExecutionState,
+        profile: Profile,
     ) -> tuple[ExecutionPlan, str | None]:
         """Generate batched execution plan for an issue.
 
@@ -416,13 +420,14 @@ class Architect:
         Args:
             issue: The issue to generate a plan for.
             state: The current execution state containing context.
+            profile: The profile containing working directory settings.
 
         Returns:
             Tuple of (validated ExecutionPlan, session_id from driver).
         """
         # Compile context using strategy
         strategy = self.context_strategy()
-        compiled_context = strategy.compile(state)
+        compiled_context = strategy.compile(state, profile)
 
         # Get execution plan prompts from strategy
         system_prompt = strategy.get_execution_plan_system_prompt()
@@ -442,7 +447,7 @@ class Architect:
         response, new_session_id = await self.driver.generate(
             messages=messages,
             schema=ExecutionPlanOutput,
-            cwd=state.profile.working_dir,
+            cwd=profile.working_dir,
             session_id=state.driver_session_id,
         )
 

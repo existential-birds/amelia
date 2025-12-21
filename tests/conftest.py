@@ -169,7 +169,11 @@ def mock_execution_plan_factory() -> Callable[..., ExecutionPlan]:
 
 @pytest.fixture
 def mock_execution_state_factory(mock_profile_factory: Callable[..., Profile], mock_issue_factory: Callable[..., Issue]) -> Callable[..., ExecutionState]:
-    """Factory fixture for creating ExecutionState instances."""
+    """Factory fixture for creating ExecutionState instances.
+
+    Returns a tuple of (state, profile) where profile is the Profile object
+    that was used to create the state (extracted from kwargs or created).
+    """
     def _create(
         profile: Profile | None = None,
         profile_preset: str = "cli_single",
@@ -178,19 +182,24 @@ def mock_execution_state_factory(mock_profile_factory: Callable[..., Profile], m
         code_changes_for_review: str | None = None,
         design: Design | None = None,
         **kwargs: Any
-    ) -> ExecutionState:
+    ) -> tuple[ExecutionState, Profile]:
         if profile is None:
             profile = mock_profile_factory(preset=profile_preset)
         if issue is None:
             issue = mock_issue_factory()
-        return ExecutionState(
-            profile=profile,
+
+        # Extract profile_id from profile
+        profile_id = kwargs.pop("profile_id", profile.name)
+
+        state = ExecutionState(
+            profile_id=profile_id,
             issue=issue,
             execution_plan=execution_plan,
             code_changes_for_review=code_changes_for_review,
             design=design,
             **kwargs
         )
+        return state, profile
     return _create
 
 

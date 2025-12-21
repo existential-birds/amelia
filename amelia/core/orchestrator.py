@@ -132,6 +132,7 @@ async def call_architect_node(
     if state.plan_only:
         plan_output = await architect.plan(
             state=state,
+            profile=profile,
             workflow_id=workflow_id or "plan-only",
         )
         logger.info(
@@ -152,6 +153,7 @@ async def call_architect_node(
     execution_plan, new_session_id = await architect.generate_execution_plan(
         issue=state.issue,
         state=state,
+        profile=profile,
     )
 
     # Log the agent action
@@ -416,7 +418,7 @@ async def call_reviewer_node(
     reviewer = Reviewer(driver, stream_emitter=stream_emitter)
 
     code_changes = await get_code_changes_for_review(state)
-    review_result, new_session_id = await reviewer.review(state, code_changes, workflow_id=workflow_id)
+    review_result, new_session_id = await reviewer.review(state, code_changes, profile, workflow_id=workflow_id)
 
     # Log the review completion
     logger.info(
@@ -490,7 +492,7 @@ async def call_developer_node(
     )
 
     # Developer.run() handles all batch execution logic and returns state updates
-    return await developer.run(state)
+    return await developer.run(state, profile)
 
 def should_continue_review_loop(state: ExecutionState) -> Literal["re_evaluate", "end"]:
     """Determine if review loop should continue based on last review.
