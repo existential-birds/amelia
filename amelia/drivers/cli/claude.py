@@ -409,11 +409,11 @@ class ClaudeCliDriver(CliDriver):
                                     except json.JSONDecodeError:
                                         # Model returned text instead of structured JSON
                                         preview = result_content[:500] + "..." if len(result_content) > 500 else result_content
-                                        session_id = data.get("session_id")
+                                        error_session_id = data.get("session_id")
 
                                         if _is_clarification_request(result_content):
                                             # Claude is asking for clarification
-                                            session_info = f" (session_id: {session_id})" if session_id else ""
+                                            session_info = f" (session_id: {error_session_id})" if error_session_id else ""
                                             raise RuntimeError(
                                                 f"Claude requested clarification instead of producing structured output{session_info}.\n\n"
                                                 f"This typically happens when the issue/prompt lacks sufficient detail.\n"

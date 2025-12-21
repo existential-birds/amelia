@@ -288,7 +288,9 @@ class Reviewer:
             workflow_id: Workflow ID for stream events (required).
 
         Returns:
-            Tuple of (aggregated ReviewResult, last session_id from driver).
+            Tuple of (aggregated ReviewResult, None).
+            Note: session_id is always None for competitive reviews since multiple
+            parallel sessions are used and returning any single one would be misleading.
         """
         personas = ["Security", "Performance", "Usability"] # Example personas
 
@@ -296,13 +298,8 @@ class Reviewer:
         review_tasks = [self._single_review(state, code_changes, persona, workflow_id=workflow_id) for persona in personas]
         results_with_sessions = await asyncio.gather(*review_tasks)
 
-        # Unpack results and session_ids
+        # Unpack results (session_ids discarded for competitive reviews)
         results = [r for r, _ in results_with_sessions]
-        # Use the last non-None session_id (competitive reviews run in parallel)
-        last_session_id = next(
-            (sid for _, sid in reversed(results_with_sessions) if sid is not None),
-            None
-        )
 
         # Aggregate results (simple aggregation: if any disapproves, overall disapproves)
         overall_approved = all(res.approved for res in results)
@@ -326,4 +323,4 @@ class Reviewer:
             comments=all_comments,
             severity=overall_severity
         )
-        return aggregated_result, last_session_id
+        return aggregated_result, None
