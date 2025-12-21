@@ -103,6 +103,24 @@ Reach out. We're happy to clarify whether your specific situation requires a Com
 
 Contact us to discuss startup-friendly terms.
 
+## Contributing
+
+Contributions to Amelia are subject to the [Contributor License Agreement (CLA)](CLA.md).
+
+### Why a CLA?
+
+Because Amelia uses dual licensing, we need contributors to grant rights that allow us to:
+- Distribute contributions under MPL-2.0 (open source)
+- Include contributions in commercially-licensed versions
+
+The CLA grants us these rights explicitly. You retain copyright to your contributions; the CLA simply ensures we can include them in both licensing tracks.
+
+**Acceptance is simple**: by submitting a pull request, you agree to the CLA. No signatures or paperwork required.
+
+## Commercial License Template
+
+For the commercial license agreement template, see [COMMERCIAL_LICENSE.md](COMMERCIAL_LICENSE.md). A signed agreement is required for the commercial license to be effective.
+
 ## Contact
 
 For Commercial License inquiries:

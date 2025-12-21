@@ -156,7 +156,13 @@ For full documentation, visit **[anderskev.github.io/amelia](https://anderskev.g
 
 ## License
 
-Amelia Core is licensed under the [Mozilla Public License 2.0](LICENSE). For commercial licensing options, see [LICENSING.md](LICENSING.md).
+Amelia Core is licensed under the [Mozilla Public License 2.0](LICENSE).
+
+### Commercial Licensing
+
+A commercial license is required only for restricted uses: reselling, repackaging, hosting as a service, or embedding Amelia in paid products. Internal use at your company does not require a commercial license.
+
+See [LICENSING.md](LICENSING.md) for details and examples.
 
 ## Current Status
 

@@ -55,7 +55,7 @@ Licensee retains ownership of:
 ## 6. Contribution of Modifications
 
 If Licensee contributes modifications back to the open-source project:
-- Such contributions are subject to the project's Contributor License Agreement
+- Such contributions are subject to the project's [Contributor License Agreement](CLA.md)
 - Licensor may incorporate contributions into future versions
 - Licensee retains the right to use their own modifications
 

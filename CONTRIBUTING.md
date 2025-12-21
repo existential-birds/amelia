@@ -15,14 +15,15 @@ Thank you for your interest in contributing to Amelia! This document provides gu
 
 ## Contributor License Agreement
 
-By submitting a contribution to Amelia, you agree to the [Contributor License Agreement (CLA)](docs/legal/cla.md).
+By submitting a contribution to Amelia, you agree to the [Contributor License Agreement (CLA)](CLA.md).
 
-Amelia uses a dual-licensing model (MPL-2.0 + Commercial License). The CLA ensures we can:
-- Distribute your contributions under the open-source license
-- Offer commercial licenses to organizations that need them
-- Maintain the project's long-term sustainability
+Amelia uses a dual-licensing model (MPL-2.0 + Commercial License). The CLA grants us the rights needed to:
+- Distribute your contributions under MPL-2.0
+- Include your contributions in commercially-licensed versions
 
-The CLA is designed to be fair and lightweight. For most contributions, submitting a pull request implies agreement. See the [full CLA](docs/legal/cla.md) for details.
+You retain copyright to your contributions. The CLA simply ensures we can include them in both licensing tracks.
+
+**By submitting a pull request, you agree to the CLA.** No signatures or paperwork required. See the [full CLA](CLA.md) for details.
 
 ## Development Setup
 
