@@ -99,7 +99,7 @@ class TestApiDriverSystemMessages:
         # Override the default mock result output for this test
         mock_openai_agent["result"].output = ResponseSchema(message="Test")
 
-        result = await driver.generate(messages, schema=ResponseSchema)
+        result, session_id = await driver.generate(messages, schema=ResponseSchema)
 
         # Verify Agent was created with both system_prompt and output_type
         call_kwargs = mock_openai_agent["agent_class"].call_args[1]
@@ -107,3 +107,4 @@ class TestApiDriverSystemMessages:
         assert call_kwargs["output_type"] is ResponseSchema
         assert isinstance(result, ResponseSchema)
         assert result.message == "Test"
+        assert session_id is None  # API driver doesn't support sessions

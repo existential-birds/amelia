@@ -46,7 +46,7 @@ class ApiDriver(DriverInterface):
             raise ValueError(f"Unsupported provider in model '{model}'. ApiDriver only supports 'openai:' models.")
         self.model_name = model
 
-    async def generate(self, messages: list[AgentMessage], schema: type[BaseModel] | None = None, **kwargs: Any) -> Any:
+    async def generate(self, messages: list[AgentMessage], schema: type[BaseModel] | None = None, **kwargs: Any) -> tuple[Any, str | None]:
         """Generate a response from the OpenAI model.
 
         Args:
@@ -55,7 +55,9 @@ class ApiDriver(DriverInterface):
             **kwargs: Additional arguments (unused).
 
         Returns:
-            Model output, either as string or parsed schema instance.
+            Tuple of (output, session_id):
+            - output: Model output, either as string or parsed schema instance
+            - session_id: Always None for API driver (no session support)
 
         Raises:
             ValueError: If message list is empty or does not end with a user message.
@@ -117,7 +119,8 @@ class ApiDriver(DriverInterface):
                 usage=str(result.usage()) if hasattr(result, 'usage') else "N/A",
                 model=self.model_name,
             )
-            return result.output
+            # Return tuple with None session_id (API drivers don't support sessions)
+            return (result.output, None)
         except Exception as e:
             raise RuntimeError(f"ApiDriver generation failed: {e}") from e
 

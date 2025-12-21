@@ -8,6 +8,11 @@ from pydantic import BaseModel
 
 from amelia.core.state import AgentMessage
 
+# Type alias for generate return value: (output, session_id)
+# output is str when no schema, or instance of schema when schema provided
+# session_id is None when driver doesn't support sessions or no session was returned
+GenerateResult = tuple[Any, str | None]
+
 
 class DriverInterface(Protocol):
     """Abstract interface for interaction with LLMs.
@@ -16,7 +21,7 @@ class DriverInterface(Protocol):
     Defines the contract for LLM generation, tool execution, and agentic mode.
     """
 
-    async def generate(self, messages: list[AgentMessage], schema: type[BaseModel] | None = None, **kwargs: Any) -> Any:
+    async def generate(self, messages: list[AgentMessage], schema: type[BaseModel] | None = None, **kwargs: Any) -> GenerateResult:
         """Generate a response from the model.
 
         Args:
@@ -25,7 +30,9 @@ class DriverInterface(Protocol):
             **kwargs: Driver-specific parameters (e.g., cwd, session_id).
 
         Returns:
-            Either a string (if no schema) or an instance of the schema.
+            GenerateResult tuple of (output, session_id):
+            - output: str (if no schema) or instance of schema
+            - session_id: str if driver supports sessions, None otherwise
         """
         ...
 

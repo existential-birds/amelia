@@ -278,7 +278,7 @@ class ClaudeCliDriver(CliDriver):
         messages: list[AgentMessage],
         schema: type[BaseModel] | None = None,
         **kwargs: Any
-    ) -> Any:
+    ) -> tuple[Any, str | None]:
         """Generates a response using the 'claude' CLI.
 
         Args:
@@ -289,10 +289,13 @@ class ClaudeCliDriver(CliDriver):
                 - cwd: Optional working directory for Claude CLI context.
 
         Returns:
-            Either a string (if no schema) or an instance of the schema.
+            Tuple of (output, session_id):
+            - output: str (if no schema) or instance of the schema
+            - session_id: str if returned from CLI, None otherwise
         """
         session_id = kwargs.get("session_id")
         cwd = kwargs.get("cwd")
+        session_id_result: str | None = None
 
         # Extract system messages for separate handling
         system_messages = [m for m in messages if m.role == "system"]
@@ -380,6 +383,8 @@ class ClaudeCliDriver(CliDriver):
 
                     # Unwrap Claude CLI result wrapper if present
                     if isinstance(data, dict) and data.get("type") == "result":
+                        # Capture session_id from result wrapper
+                        session_id_result = data.get("session_id")
                         # Pretty-print the result to server logs
                         log_claude_result(
                             result_type="result",
@@ -437,14 +442,14 @@ class ClaudeCliDriver(CliDriver):
                     if isinstance(data, list) and "tasks" in schema.model_fields:
                          data = {"tasks": data}
 
-                    return schema.model_validate(data)
+                    return (schema.model_validate(data), session_id_result)
                 except json.JSONDecodeError as e:
                     raise RuntimeError(f"Failed to parse JSON from Claude CLI output: {stdout_str}. Error: {e}") from e
                 except ValidationError as e:
                     raise RuntimeError(f"Claude CLI output did not match schema: {e}") from e
             else:
                 # Return raw text
-                return stdout_str
+                return (stdout_str, session_id_result)
 
         except Exception as e:
             # Log the error or re-raise appropriately. 

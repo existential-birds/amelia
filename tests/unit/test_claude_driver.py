@@ -2,6 +2,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 import json
+from collections.abc import Callable
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -60,9 +61,10 @@ class TestClaudeCliDriver:
         )
 
         with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=mock_process) as mock_exec:
-            response = await driver._generate_impl(messages)
+            response, session_id = await driver._generate_impl(messages)
 
             assert response == "I am fine, thank you."
+            assert session_id is None  # No result wrapper, so no session_id
             mock_exec.assert_called_once()
             args = mock_exec.call_args[0]
             assert args[0] == "claude"
@@ -79,11 +81,12 @@ class TestClaudeCliDriver:
         )
 
         with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=mock_process) as mock_exec:
-            response = await driver._generate_impl(messages, schema=_TestModel)
+            response, session_id = await driver._generate_impl(messages, schema=_TestModel)
 
             assert isinstance(response, _TestModel)
             assert response.reasoning == "ok"
             assert response.answer == "good"
+            assert session_id is None  # No result wrapper, so no session_id
 
             mock_exec.assert_called_once()
             args = mock_exec.call_args[0]
@@ -103,10 +106,11 @@ class TestClaudeCliDriver:
         )
 
         with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=mock_process):
-            response = await driver._generate_impl(messages, schema=_TestListModel)
+            response, session_id = await driver._generate_impl(messages, schema=_TestListModel)
 
             assert isinstance(response, _TestListModel)
             assert response.tasks == ["task1", "task2"]
+            assert session_id is None
             mock_process.stdin.write.assert_called_once()
             mock_process.stdin.drain.assert_called_once()
             mock_process.stdin.close.assert_called_once()
@@ -125,11 +129,12 @@ class TestClaudeCliDriver:
         )
 
         with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=mock_process):
-            response = await driver._generate_impl(messages, schema=_TestModel)
+            response, session_id = await driver._generate_impl(messages, schema=_TestModel)
 
             assert isinstance(response, _TestModel)
             assert response.reasoning == "from envelope"
             assert response.answer == "structured"
+            assert session_id == "test-session"
 
     async def test_generate_json_from_result_envelope_result_field(self, driver, messages, mock_subprocess_process_factory):
         """Test parsing JSON from result field when structured_output is missing."""
@@ -146,11 +151,12 @@ class TestClaudeCliDriver:
         )
 
         with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=mock_process):
-            response = await driver._generate_impl(messages, schema=_TestModel)
+            response, session_id = await driver._generate_impl(messages, schema=_TestModel)
 
             assert isinstance(response, _TestModel)
             assert response.reasoning == "from result"
             assert response.answer == "parsed"
+            assert session_id == "test-session"
 
     async def test_generate_json_from_result_envelope_text_raises_error(self, driver, messages, mock_subprocess_process_factory):
         """Test that plain text in result field raises clear error."""
@@ -245,9 +251,10 @@ class TestClaudeCliDriverResumeAndCwd:
         )
 
         with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=mock_process) as mock_exec:
-            response = await driver._generate_impl(messages, session_id="sess_resume123")
+            response, session_id = await driver._generate_impl(messages, session_id="sess_resume123")
 
             assert response == "Resumed response"
+            assert session_id is None  # No result wrapper in plain text response
             mock_exec.assert_called_once()
             args = mock_exec.call_args[0]
             assert "--resume" in args
@@ -261,9 +268,10 @@ class TestClaudeCliDriverResumeAndCwd:
         )
 
         with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=mock_process) as mock_exec:
-            response = await driver._generate_impl(messages, cwd="/workspace/project")
+            response, session_id = await driver._generate_impl(messages, cwd="/workspace/project")
 
             assert response == "Response from cwd"
+            assert session_id is None
             kwargs = mock_exec.call_args[1]
             assert kwargs.get("cwd") == "/workspace/project"
 
@@ -577,6 +585,70 @@ class TestClaudeCliDriverAgentic:
             mock_exec.assert_called_once()
             args = mock_exec.call_args[0]
             assert "--append-system-prompt" not in args
+
+
+class TestClaudeCliDriverSessionIdReturn:
+    """Tests for session_id capture in generate return value."""
+
+    async def test_generate_returns_session_id_from_result(
+        self,
+        mock_subprocess_process_factory: Callable[..., AsyncMock],
+    ) -> None:
+        """Test that generate returns session_id when schema is provided."""
+        from amelia.drivers.cli.claude import ClaudeCliDriver
+        from amelia.core.state import AgentMessage
+
+        class TestOutput(BaseModel):
+            value: str
+
+        # Result event with session_id
+        result_json = json.dumps({
+            "type": "result",
+            "subtype": "success",
+            "session_id": "sess-abc123",
+            "structured_output": {"value": "test"}
+        })
+
+        mock_process = mock_subprocess_process_factory(
+            stdout_lines=[result_json.encode()],
+            return_code=0
+        )
+
+        with patch("asyncio.create_subprocess_exec", return_value=mock_process):
+            driver = ClaudeCliDriver()
+            messages = [AgentMessage(role="user", content="test")]
+            result = await driver.generate(messages, schema=TestOutput)
+
+        # Result should be tuple of (output, session_id)
+        assert isinstance(result, tuple)
+        output, session_id = result
+        assert isinstance(output, TestOutput)
+        assert output.value == "test"
+        assert session_id == "sess-abc123"
+
+    async def test_generate_returns_session_id_without_schema(
+        self,
+        mock_subprocess_process_factory: Callable[..., AsyncMock],
+    ) -> None:
+        """Test that generate returns session_id even without schema."""
+        from amelia.drivers.cli.claude import ClaudeCliDriver
+        from amelia.core.state import AgentMessage
+
+        mock_process = mock_subprocess_process_factory(
+            stdout_lines=[b"plain text response"],
+            return_code=0
+        )
+
+        with patch("asyncio.create_subprocess_exec", return_value=mock_process):
+            driver = ClaudeCliDriver()
+            messages = [AgentMessage(role="user", content="test")]
+            result = await driver.generate(messages)
+
+        # Without JSON result wrapper, session_id is None
+        assert isinstance(result, tuple)
+        output, session_id = result
+        assert output == "plain text response"
+        assert session_id is None
 
 
 class TestClarificationDetection:
