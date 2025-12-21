@@ -1,6 +1,20 @@
 # Contributing to Amelia
 
-Thank you for your interest in contributing to Amelia! This document provides guidelines and information for contributors.
+Thank you for your interest in Amelia!
+
+## External Contributions
+
+We welcome bug reports, feature requests, and feedback via [GitHub Issues](https://github.com/anderskev/amelia/issues).
+
+**Code contributions (pull requests) are not accepted from external contributors.** Amelia uses a dual-licensing model that requires all code to be authored by the project maintainers. See [LICENSING.md](LICENSING.md) for details.
+
+If you've found a bug or have an idea for improvement, please open an issue - we appreciate the feedback.
+
+---
+
+## Internal Development Guide
+
+*The following sections are for internal contributors.*
 
 ## Table of Contents
 
