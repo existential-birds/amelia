@@ -133,7 +133,6 @@ class TestReviewGraphExecution:
         # Developer attempts to execute (even if it fails due to synthetic plan issues)
         # The important thing is the loop executed correctly
 
-    @pytest.mark.xfail(reason="See #112: review_iteration not properly terminating loop")
     async def test_review_fix_loop_max_iterations_terminates(
         self,
         review_graph: CompiledStateGraph[Any],

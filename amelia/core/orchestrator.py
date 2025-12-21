@@ -684,21 +684,22 @@ async def call_developer_node_for_review(
 
     Creates a synthetic plan from review comments and increments iteration counter.
     """
-    # Create synthetic plan from review comments
     if not state.last_review:
         raise ValueError("Cannot call developer for review without review results")
 
     synthetic_plan = create_synthetic_plan_from_review(state.last_review)
+    new_review_iteration = state.review_iteration + 1
 
-    # Update state with synthetic plan context
     updated_state = state.model_copy(update={
         "execution_plan": synthetic_plan,
         "current_batch_index": 0,
-        "review_iteration": state.review_iteration + 1,
+        "review_iteration": new_review_iteration,
     })
 
-    # Call the actual developer node
-    return await call_developer_node(updated_state, config=config)
+    developer_result = await call_developer_node(updated_state, config=config)
+
+    # Include review_iteration in return so LangGraph persists the increment
+    return {**developer_result, "review_iteration": new_review_iteration}
 
 
 def create_review_graph(checkpointer: BaseCheckpointSaver[Any]) -> CompiledStateGraph[Any]:
