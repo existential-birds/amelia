@@ -4,6 +4,7 @@ Thank you for your interest in contributing to Amelia! This document provides gu
 
 ## Table of Contents
 
+- [Contributor License Agreement](#contributor-license-agreement)
 - [Development Setup](#development-setup)
 - [Build & Development Commands](#build--development-commands)
 - [Code Conventions](#code-conventions)
@@ -11,6 +12,17 @@ Thank you for your interest in contributing to Amelia! This document provides gu
 - [GitHub Workflow](#github-workflow)
 - [Commit Messages](#commit-messages)
 - [Pull Request Process](#pull-request-process)
+
+## Contributor License Agreement
+
+By submitting a contribution to Amelia, you agree to the [Contributor License Agreement (CLA)](docs/legal/cla.md).
+
+Amelia uses a dual-licensing model (MPL-2.0 + Commercial License). The CLA ensures we can:
+- Distribute your contributions under the open-source license
+- Offer commercial licenses to organizations that need them
+- Maintain the project's long-term sustainability
+
+The CLA is designed to be fair and lightweight. For most contributions, submitting a pull request implies agreement. See the [full CLA](docs/legal/cla.md) for details.
 
 ## Development Setup
 
