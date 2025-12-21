@@ -10,7 +10,9 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from langchain_core.runnables.config import RunnableConfig
 
+from amelia.core.state import ExecutionState
 from amelia.core.types import Settings
 from amelia.server.database.repository import WorkflowRepository
 from amelia.server.events.bus import EventBus
@@ -910,3 +912,116 @@ async def test_start_workflow_denied_by_policy_hook(
     finally:
         # Cleanup: remove the hook to avoid affecting other tests
         registry.clear()
+
+
+# =============================================================================
+# Plan Sync Tests
+# =============================================================================
+
+
+class TestSyncPlanFromCheckpoint:
+    """Tests for _sync_plan_from_checkpoint method."""
+
+    async def test_sync_plan_updates_execution_state(
+        self,
+        orchestrator: OrchestratorService,
+        mock_repository: AsyncMock,
+        mock_execution_plan_factory,
+        mock_profile_factory,
+    ):
+        """_sync_plan_from_checkpoint should update execution_state with plan from checkpoint."""
+        # Create execution plan
+        execution_plan = mock_execution_plan_factory(goal="Test goal", num_batches=2)
+
+        # Create mock workflow with execution_state (no plan yet)
+        profile = mock_profile_factory()
+        mock_state = ServerExecutionState(
+            id="wf-sync",
+            issue_id="ISSUE-123",
+            worktree_path="/path/to/worktree",
+            worktree_name="feat-123",
+            workflow_status="in_progress",
+            started_at=datetime.now(UTC),
+            execution_state=ExecutionState(profile=profile),
+        )
+        mock_repository.get.return_value = mock_state
+
+        # Create mock graph with checkpoint containing execution_plan
+        mock_graph = MagicMock()
+        checkpoint_values = {"execution_plan": execution_plan.model_dump()}
+        mock_graph.aget_state = AsyncMock(
+            return_value=MagicMock(values=checkpoint_values)
+        )
+
+        config: RunnableConfig = {"configurable": {"thread_id": "wf-sync"}}
+
+        # Call _sync_plan_from_checkpoint
+        await orchestrator._sync_plan_from_checkpoint("wf-sync", mock_graph, config)
+
+        # Verify repository.update was called
+        mock_repository.update.assert_called_once()
+
+        # Verify the updated state has the execution_plan
+        updated_state = mock_repository.update.call_args[0][0]
+        assert updated_state.execution_state.execution_plan is not None
+        assert updated_state.execution_state.execution_plan.goal == "Test goal"
+
+    async def test_sync_plan_no_checkpoint_state(
+        self,
+        orchestrator: OrchestratorService,
+        mock_repository: AsyncMock,
+    ):
+        """_sync_plan_from_checkpoint should return early if no checkpoint state."""
+        mock_graph = MagicMock()
+        mock_graph.aget_state = AsyncMock(return_value=None)
+
+        config: RunnableConfig = {"configurable": {"thread_id": "wf-no-state"}}
+
+        # Should not raise, just return early
+        await orchestrator._sync_plan_from_checkpoint("wf-no-state", mock_graph, config)
+
+        # Repository should not be called
+        mock_repository.get.assert_not_called()
+        mock_repository.update.assert_not_called()
+
+    async def test_sync_plan_no_execution_plan_in_checkpoint(
+        self,
+        orchestrator: OrchestratorService,
+        mock_repository: AsyncMock,
+    ):
+        """_sync_plan_from_checkpoint should return early if no execution_plan in checkpoint."""
+        mock_graph = MagicMock()
+        mock_graph.aget_state = AsyncMock(
+            return_value=MagicMock(values={"some_other_key": "value"})
+        )
+
+        config: RunnableConfig = {"configurable": {"thread_id": "wf-no-plan"}}
+
+        # Should not raise, just return early
+        await orchestrator._sync_plan_from_checkpoint("wf-no-plan", mock_graph, config)
+
+        # Repository.get should not be called since we exit before that
+        mock_repository.get.assert_not_called()
+
+    async def test_sync_plan_workflow_not_found(
+        self,
+        orchestrator: OrchestratorService,
+        mock_repository: AsyncMock,
+        mock_execution_plan_factory,
+    ):
+        """_sync_plan_from_checkpoint should return early if workflow not found."""
+        execution_plan = mock_execution_plan_factory()
+        mock_graph = MagicMock()
+        mock_graph.aget_state = AsyncMock(
+            return_value=MagicMock(values={"execution_plan": execution_plan.model_dump()})
+        )
+
+        mock_repository.get.return_value = None  # Workflow not found
+
+        config: RunnableConfig = {"configurable": {"thread_id": "wf-missing"}}
+
+        # Should not raise, just log warning and return
+        await orchestrator._sync_plan_from_checkpoint("wf-missing", mock_graph, config)
+
+        # Repository.update should not be called
+        mock_repository.update.assert_not_called()

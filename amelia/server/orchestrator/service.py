@@ -1699,7 +1699,10 @@ class OrchestratorService:
             execution_plan = ExecutionPlan.model_validate(execution_plan_dict)
 
             # Update the execution_state with the execution_plan
-            state.execution_state.execution_plan = execution_plan
+            # ExecutionState is frozen, so we use model_copy to create an updated instance
+            state.execution_state = state.execution_state.model_copy(
+                update={"execution_plan": execution_plan}
+            )
 
             # Save back to repository
             await self._repository.update(state)
