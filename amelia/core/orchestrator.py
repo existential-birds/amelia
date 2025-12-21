@@ -142,7 +142,7 @@ async def call_architect_node(
         }
 
     # Normal mode - generate execution plan
-    execution_plan = await architect.generate_execution_plan(
+    execution_plan, new_session_id = await architect.generate_execution_plan(
         issue=state.issue,
         state=state,
     )
@@ -155,8 +155,11 @@ async def call_architect_node(
         details={"batch_count": len(execution_plan.batches)},
     )
 
-    # Return partial state update with execution plan
-    return {"execution_plan": execution_plan}
+    # Return partial state update with execution plan and captured session_id
+    return {
+        "execution_plan": execution_plan,
+        "driver_session_id": new_session_id,
+    }
 
 async def human_approval_node(
     state: ExecutionState,
@@ -406,7 +409,7 @@ async def call_reviewer_node(
     reviewer = Reviewer(driver, stream_emitter=stream_emitter)
 
     code_changes = await get_code_changes_for_review(state)
-    review_result = await reviewer.review(state, code_changes, workflow_id=workflow_id)
+    review_result, new_session_id = await reviewer.review(state, code_changes, workflow_id=workflow_id)
 
     # Log the review completion
     logger.info(
@@ -420,7 +423,10 @@ async def call_reviewer_node(
         },
     )
 
-    return {"last_review": review_result}
+    return {
+        "last_review": review_result,
+        "driver_session_id": new_session_id,
+    }
 
 async def call_developer_node(
     state: ExecutionState,

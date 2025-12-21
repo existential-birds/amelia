@@ -31,10 +31,11 @@ class TestCompetitiveReviewPersonaAttribution:
         )
 
         # Mock driver to return different comments for each persona
+        # Now returns (response, session_id) tuple
         responses = iter([
-            ReviewResponse(approved=True, comments=["Input validation needed"], severity="medium"),
-            ReviewResponse(approved=True, comments=["Consider caching"], severity="low"),
-            ReviewResponse(approved=True, comments=["Add loading states"], severity="low"),
+            (ReviewResponse(approved=True, comments=["Input validation needed"], severity="medium"), None),
+            (ReviewResponse(approved=True, comments=["Consider caching"], severity="low"), None),
+            (ReviewResponse(approved=True, comments=["Add loading states"], severity="low"), None),
         ])
 
         mock_driver = AsyncMock()
@@ -42,7 +43,7 @@ class TestCompetitiveReviewPersonaAttribution:
 
         reviewer = Reviewer(mock_driver)
 
-        result = await reviewer.review(state, code_changes="diff --git a/file.py", workflow_id="test-workflow")
+        result, _session_id = await reviewer.review(state, code_changes="diff --git a/file.py", workflow_id="test-workflow")
 
         # Each comment should be prefixed with its persona
         assert any("Security" in c for c in result.comments), \
@@ -67,11 +68,11 @@ class TestCompetitiveReviewPersonaAttribution:
             code_changes_for_review="diff --git a/file.py"
         )
 
-        # One persona has no comments
+        # One persona has no comments - returns (response, session_id) tuple
         responses = iter([
-            ReviewResponse(approved=True, comments=[], severity="low"),
-            ReviewResponse(approved=True, comments=["Consider optimization"], severity="low"),
-            ReviewResponse(approved=True, comments=[], severity="low"),
+            (ReviewResponse(approved=True, comments=[], severity="low"), None),
+            (ReviewResponse(approved=True, comments=["Consider optimization"], severity="low"), None),
+            (ReviewResponse(approved=True, comments=[], severity="low"), None),
         ])
 
         mock_driver = AsyncMock()
@@ -79,7 +80,7 @@ class TestCompetitiveReviewPersonaAttribution:
 
         reviewer = Reviewer(mock_driver)
 
-        result = await reviewer.review(state, code_changes="diff --git a/file.py", workflow_id="test-workflow")
+        result, _session_id = await reviewer.review(state, code_changes="diff --git a/file.py", workflow_id="test-workflow")
 
         # Should only have comments from Performance (the one that had comments)
         assert len(result.comments) == 1

@@ -190,7 +190,7 @@ class Reviewer:
         code_changes: str,
         *,
         workflow_id: str,
-    ) -> ReviewResult:
+    ) -> tuple[ReviewResult, str | None]:
         """Review code changes in context of execution state and issue.
 
         Selects single or competitive review strategy based on profile settings.
@@ -201,7 +201,7 @@ class Reviewer:
             workflow_id: Workflow ID for stream events (required).
 
         Returns:
-            ReviewResult with approval status, comments, and severity level.
+            Tuple of (ReviewResult, session_id from driver).
         """
         if state.profile.strategy == "competitive":
             return await self._competitive_review(state, code_changes, workflow_id=workflow_id)
@@ -215,7 +215,7 @@ class Reviewer:
         persona: str,
         *,
         workflow_id: str,
-    ) -> ReviewResult:
+    ) -> tuple[ReviewResult, str | None]:
         """Performs a single review with a specified persona.
 
         Args:
@@ -225,7 +225,7 @@ class Reviewer:
             workflow_id: Workflow ID for stream events (required).
 
         Returns:
-            ReviewResult with approval status, comments, and severity.
+            Tuple of (ReviewResult, session_id from driver).
         """
         # Prepare state for context strategy
         # Set code_changes_for_review if not already set (passed as parameter)
@@ -247,7 +247,7 @@ class Reviewer:
         # Convert to messages
         prompt_messages = strategy.to_messages(compiled_context)
 
-        response, _new_session_id = await self.driver.generate(
+        response, new_session_id = await self.driver.generate(
             messages=prompt_messages,
             schema=ReviewResponse,
             cwd=state.profile.working_dir,
@@ -265,12 +265,13 @@ class Reviewer:
             )
             await self._stream_emitter(event)
 
-        return ReviewResult(
+        result = ReviewResult(
             reviewer_persona=persona,
             approved=response.approved,
             comments=response.comments,
             severity=response.severity
         )
+        return result, new_session_id
 
     async def _competitive_review(
         self,
@@ -278,7 +279,7 @@ class Reviewer:
         code_changes: str,
         *,
         workflow_id: str,
-    ) -> ReviewResult:
+    ) -> tuple[ReviewResult, str | None]:
         """Performs competitive review using multiple personas in parallel.
 
         Args:
@@ -287,13 +288,21 @@ class Reviewer:
             workflow_id: Workflow ID for stream events (required).
 
         Returns:
-            Aggregated ReviewResult combining feedback from all personas.
+            Tuple of (aggregated ReviewResult, last session_id from driver).
         """
         personas = ["Security", "Performance", "Usability"] # Example personas
 
         # Run reviews in parallel
         review_tasks = [self._single_review(state, code_changes, persona, workflow_id=workflow_id) for persona in personas]
-        results = await asyncio.gather(*review_tasks)
+        results_with_sessions = await asyncio.gather(*review_tasks)
+
+        # Unpack results and session_ids
+        results = [r for r, _ in results_with_sessions]
+        # Use the last non-None session_id (competitive reviews run in parallel)
+        last_session_id = next(
+            (sid for _, sid in reversed(results_with_sessions) if sid is not None),
+            None
+        )
 
         # Aggregate results (simple aggregation: if any disapproves, overall disapproves)
         overall_approved = all(res.approved for res in results)
@@ -311,9 +320,10 @@ class Reviewer:
         overall_severity_value = max(severity_order.get(res.severity, 0) for res in results)
         overall_severity = severity_from_value[overall_severity_value]
 
-        return ReviewResult(
+        aggregated_result = ReviewResult(
             reviewer_persona="Competitive-Aggregated",
             approved=overall_approved,
             comments=all_comments,
             severity=overall_severity
         )
+        return aggregated_result, last_session_id

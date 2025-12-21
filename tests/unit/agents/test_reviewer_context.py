@@ -315,8 +315,12 @@ class TestReviewerSessionId:
         )
 
         reviewer = Reviewer(mock_driver)
-        await reviewer._single_review(state, "diff", "General", workflow_id="wf-1")
+        result, result_session_id = await reviewer._single_review(state, "diff", "General", workflow_id="wf-1")
 
         mock_driver.generate.assert_called_once()
         call_kwargs = mock_driver.generate.call_args.kwargs
         assert call_kwargs.get("session_id") == "review-sess-123"
+
+        # Verify return value includes session_id
+        assert result_session_id == "new-sess"
+        assert result is not None

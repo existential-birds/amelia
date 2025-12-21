@@ -383,7 +383,6 @@ class TestArchitectSessionId:
     ):
         """Test that Architect passes session_id from state to driver."""
         from amelia.agents.architect import Architect, ExecutionPlanOutput
-        from amelia.core.state import ExecutionPlan, ExecutionBatch, PlanStep
 
         # Create mock plan output
         mock_plan = mock_execution_plan_factory()
@@ -395,9 +394,13 @@ class TestArchitectSessionId:
         state = mock_execution_state_factory(driver_session_id="existing-sess-123")
 
         architect = Architect(mock_driver)
-        await architect.generate_execution_plan(state.issue, state)
+        result_plan, result_session_id = await architect.generate_execution_plan(state.issue, state)
 
         # Verify driver was called with session_id from state
         mock_driver.generate.assert_called_once()
         call_kwargs = mock_driver.generate.call_args.kwargs
         assert call_kwargs.get("session_id") == "existing-sess-123"
+
+        # Verify return value includes session_id
+        assert result_session_id == "new-sess-456"
+        assert result_plan is not None

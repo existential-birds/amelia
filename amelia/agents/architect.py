@@ -382,7 +382,7 @@ class Architect:
             output_dir = str(Path(state.profile.working_dir) / output_path)
 
         # Generate execution plan using the new batched execution model
-        execution_plan = await self.generate_execution_plan(state.issue, state)
+        execution_plan, _session_id = await self.generate_execution_plan(state.issue, state)
 
         # Count total steps for logging
         total_steps = sum(len(batch.steps) for batch in execution_plan.batches)
@@ -407,7 +407,7 @@ class Architect:
         self,
         issue: Issue,
         state: ExecutionState,
-    ) -> ExecutionPlan:
+    ) -> tuple[ExecutionPlan, str | None]:
         """Generate batched execution plan for an issue.
 
         Uses the new ExecutionPlan format with batched steps, risk assessment,
@@ -418,7 +418,7 @@ class Architect:
             state: The current execution state containing context.
 
         Returns:
-            Validated ExecutionPlan with properly sized batches.
+            Tuple of (validated ExecutionPlan, session_id from driver).
         """
         # Compile context using strategy
         strategy = self.context_strategy()
@@ -439,7 +439,7 @@ class Architect:
         ]
 
         # Call driver with ExecutionPlanOutput schema
-        response, _new_session_id = await self.driver.generate(
+        response, new_session_id = await self.driver.generate(
             messages=messages,
             schema=ExecutionPlanOutput,
             cwd=state.profile.working_dir,
@@ -461,7 +461,7 @@ class Architect:
         for warning in warnings:
             logger.warning(warning, agent="architect")
 
-        return validated_plan
+        return validated_plan, new_session_id
 
     def _save_markdown(
         self,
