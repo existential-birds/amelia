@@ -19,7 +19,7 @@ from loguru import logger
 
 from amelia.core.orchestrator import create_orchestrator_graph, create_review_graph
 from amelia.core.state import ExecutionPlan, ExecutionState
-from amelia.core.types import Issue, Settings, StreamEmitter, StreamEvent
+from amelia.core.types import Issue, Profile, Settings, StreamEmitter, StreamEvent
 from amelia.ext import WorkflowEventType as ExtWorkflowEventType
 from amelia.ext.exceptions import PolicyDeniedError
 from amelia.ext.hooks import (
@@ -133,6 +133,24 @@ class OrchestratorService:
             self._event_bus.emit_stream(event)
 
         return emit
+
+    async def _get_profile_or_fail(self, workflow_id: str, profile_id: str) -> Profile | None:
+        """Look up profile by ID and handle missing profile consistently.
+
+        Args:
+            workflow_id: Workflow ID for logging and status updates.
+            profile_id: Profile ID to look up in settings.
+
+        Returns:
+            Profile if found, None if not found (after setting workflow to failed).
+        """
+        if profile_id not in self._settings.profiles:
+            logger.error("Profile not found", workflow_id=workflow_id, profile_id=profile_id)
+            await self._repository.set_status(
+                workflow_id, "failed", failure_reason=f"Profile '{profile_id}' not found"
+            )
+            return None
+        return self._settings.profiles[profile_id]
 
     async def start_workflow(
         self,
@@ -490,14 +508,9 @@ class OrchestratorService:
             return
 
         # Get profile from settings using profile_id
-        profile_id = state.execution_state.profile_id
-        if profile_id not in self._settings.profiles:
-            logger.error("Profile not found", workflow_id=workflow_id, profile_id=profile_id)
-            await self._repository.set_status(
-                workflow_id, "failed", failure_reason=f"Profile '{profile_id}' not found"
-            )
+        profile = await self._get_profile_or_fail(workflow_id, state.execution_state.profile_id)
+        if profile is None:
             return
-        profile = self._settings.profiles[profile_id]
 
         async with AsyncSqliteSaver.from_conn_string(
             str(self._checkpoint_path)
@@ -621,13 +634,9 @@ class OrchestratorService:
             return
 
         # Get profile from settings using profile_id
-        profile_id = state.execution_state.profile_id
-        if profile_id not in self._settings.profiles:
-            await self._repository.set_status(
-                workflow_id, "failed", failure_reason=f"Profile '{profile_id}' not found"
-            )
+        profile = await self._get_profile_or_fail(workflow_id, state.execution_state.profile_id)
+        if profile is None:
             return
-        profile = self._settings.profiles[profile_id]
         retry_config = profile.retry
         attempt = 0
 
@@ -735,14 +744,9 @@ class OrchestratorService:
             return
 
         # Get profile from settings using profile_id
-        profile_id = state.execution_state.profile_id
-        if profile_id not in self._settings.profiles:
-            logger.error("Profile not found", workflow_id=workflow_id, profile_id=profile_id)
-            await self._repository.set_status(
-                workflow_id, "failed", failure_reason=f"Profile '{profile_id}' not found"
-            )
+        profile = await self._get_profile_or_fail(workflow_id, state.execution_state.profile_id)
+        if profile is None:
             return
-        profile = self._settings.profiles[profile_id]
 
         async with AsyncSqliteSaver.from_conn_string(
             str(self._checkpoint_path)
@@ -917,14 +921,9 @@ class OrchestratorService:
         if workflow.execution_state is None:
             logger.error("No execution_state in workflow", workflow_id=workflow_id)
             return
-        profile_id = workflow.execution_state.profile_id
-        if profile_id not in self._settings.profiles:
-            logger.error("Profile not found", workflow_id=workflow_id, profile_id=profile_id)
-            await self._repository.set_status(
-                workflow_id, "failed", failure_reason=f"Profile '{profile_id}' not found"
-            )
+        profile = await self._get_profile_or_fail(workflow_id, workflow.execution_state.profile_id)
+        if profile is None:
             return
-        profile = self._settings.profiles[profile_id]
 
         # Resume LangGraph execution with updated state
         async with AsyncSqliteSaver.from_conn_string(
@@ -1133,11 +1132,9 @@ class OrchestratorService:
         if workflow.execution_state is None:
             logger.error("No execution_state in workflow", workflow_id=workflow_id)
             return
-        profile_id = workflow.execution_state.profile_id
-        if profile_id not in self._settings.profiles:
-            logger.error("Profile not found", workflow_id=workflow_id, profile_id=profile_id)
+        profile = await self._get_profile_or_fail(workflow_id, workflow.execution_state.profile_id)
+        if profile is None:
             return
-        profile = self._settings.profiles[profile_id]
 
         # Update LangGraph state to record rejection
         async with AsyncSqliteSaver.from_conn_string(
@@ -1219,14 +1216,9 @@ class OrchestratorService:
         if workflow.execution_state is None:
             logger.error("No execution_state in workflow", workflow_id=workflow_id)
             return
-        profile_id = workflow.execution_state.profile_id
-        if profile_id not in self._settings.profiles:
-            logger.error("Profile not found", workflow_id=workflow_id, profile_id=profile_id)
-            await self._repository.set_status(
-                workflow_id, "failed", failure_reason=f"Profile '{profile_id}' not found"
-            )
+        profile = await self._get_profile_or_fail(workflow_id, workflow.execution_state.profile_id)
+        if profile is None:
             return
-        profile = self._settings.profiles[profile_id]
 
         # Resume LangGraph execution with blocker_resolution set
         async with AsyncSqliteSaver.from_conn_string(

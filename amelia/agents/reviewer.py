@@ -78,12 +78,12 @@ Analyze the provided code changes and provide a comprehensive review."""
 
         return "\n\n".join(parts)
 
-    def compile(self, state: ExecutionState, profile: Profile) -> CompiledContext:
+    def compile(self, state: ExecutionState, _profile: Profile) -> CompiledContext:
         """Compile ExecutionState into review context.
 
         Args:
             state: Current execution state containing task and code changes.
-            profile: The profile configuration for this workflow (unused in reviewer).
+            _profile: The profile configuration for this workflow (unused in reviewer).
 
         Returns:
             CompiledContext with system prompt and relevant sections.
