@@ -6,7 +6,7 @@ Complete reference for using Amelia in your projects.
 
 ```bash
 # Install amelia as a global tool
-uv tool install git+https://github.com/anderskev/amelia.git
+uv tool install git+https://github.com/existential-birds/amelia.git
 
 # Set your API key
 export OPENAI_API_KEY="sk-..."

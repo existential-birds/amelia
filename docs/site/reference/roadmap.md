@@ -4,7 +4,7 @@
 >
 > **Architecture:** Aligned with the [12-Factor Agents](https://github.com/humanlayer/12-factor-agents) methodology for building reliable LLM-powered software. See also [Context Engineering Gaps](/ideas/research/context-engineering-gaps) for agentic context management requirements.
 >
-> **Track Progress:** [GitHub Project Board](https://github.com/users/anderskev/projects/2)
+> **Track Progress:** [GitHub Project Board](https://github.com/orgs/existential-birds/projects/2)
 
 ## Design Principles
 

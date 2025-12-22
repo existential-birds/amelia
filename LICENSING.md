@@ -101,7 +101,7 @@ Reach out - we're happy to clarify whether your specific situation falls under R
 
 ## Contact
 
-For licensing questions, email legal@anderskev.com.
+For licensing questions, email legal@existentialbirds.com.
 
 ---
 

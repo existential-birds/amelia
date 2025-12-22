@@ -6,7 +6,7 @@
 
 [Amelia](https://en.wikipedia.org/wiki/Amelia_Earhart) is a local agentic coding system that orchestrates software development through Architect, Developer, and Reviewer agents. They argue about your code so you don't have to.
 
-See the [**Roadmap**](https://anderskev.github.io/amelia/reference/roadmap) for where we're headed.
+See the [**Roadmap**](https://existential-birds.github.io/amelia/reference/roadmap) for where we're headed.
 
 ## Current Status
 
@@ -41,7 +41,7 @@ See the [**Roadmap**](https://anderskev.github.io/amelia/reference/roadmap) for 
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Install amelia as a global tool
-uv tool install git+https://github.com/anderskev/amelia.git
+uv tool install git+https://github.com/existential-birds/amelia.git
 
 # Set your API key
 export OPENAI_API_KEY="sk-..."
@@ -65,7 +65,7 @@ profiles:
 EOF
 ```
 
-See **[Configuration](https://anderskev.github.io/amelia/guide/configuration)** for all available parameters including retry settings, execution modes, and driver options.
+See **[Configuration](https://existential-birds.github.io/amelia/guide/configuration)** for all available parameters including retry settings, execution modes, and driver options.
 
 ### 3. Create or Select an Issue
 
@@ -103,7 +103,7 @@ If you prefer not to install globally:
 
 ```bash
 # Clone the repo
-git clone https://github.com/anderskev/amelia.git
+git clone https://github.com/existential-birds/amelia.git
 cd amelia
 uv sync
 
@@ -124,7 +124,7 @@ AMELIA_SETTINGS=/path/to/your/project/settings.amelia.yaml uv run amelia plan-on
 
 ## How It Works
 
-Amelia orchestrates configurable AI agents through a workflow graph. See [Architecture](https://anderskev.github.io/amelia/architecture/overview) for data flow and [Concepts](https://anderskev.github.io/amelia/architecture/concepts) for how agents and drivers work.
+Amelia orchestrates configurable AI agents through a workflow graph. See [Architecture](https://existential-birds.github.io/amelia/architecture/overview) for data flow and [Concepts](https://existential-birds.github.io/amelia/architecture/concepts) for how agents and drivers work.
 
 ## CLI Commands
 
@@ -145,7 +145,7 @@ amelia plan-only 123          # Generate plan without executing
 amelia review --local         # Review uncommitted changes
 ```
 
-See the **[Usage Guide](https://anderskev.github.io/amelia/guide/usage)** for complete CLI reference, API endpoints, and example workflows.
+See the **[Usage Guide](https://existential-birds.github.io/amelia/guide/usage)** for complete CLI reference, API endpoints, and example workflows.
 
 ## Configuration
 
@@ -161,11 +161,11 @@ profiles:
     strategy: single
 ```
 
-See [Configuration Reference](https://anderskev.github.io/amelia/guide/configuration) for full details.
+See [Configuration Reference](https://existential-birds.github.io/amelia/guide/configuration) for full details.
 
 ## Documentation
 
-For full documentation, visit **[anderskev.github.io/amelia](https://anderskev.github.io/amelia/)**.
+For full documentation, visit **[existential-birds.github.io/amelia](https://existential-birds.github.io/amelia/)**.
 
 ## License
 

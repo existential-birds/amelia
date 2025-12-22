@@ -4,7 +4,7 @@
 
 I appreciate your efforts to responsibly disclose your findings.
 
-To report a security issue, please use the GitHub Security Advisory ["Report a Vulnerability"](https://github.com/anderskev/amelia/security/advisories/new) tab.
+To report a security issue, please use the GitHub Security Advisory ["Report a Vulnerability"](https://github.com/existential-birds/amelia/security/advisories/new) tab.
 
 I will respond with next steps and keep you informed of progress towards a fix.
 

@@ -4,7 +4,7 @@ Thank you for your interest in Amelia!
 
 ## External Contributions
 
-We welcome bug reports, feature requests, and feedback via [GitHub Issues](https://github.com/anderskev/amelia/issues).
+We welcome bug reports, feature requests, and feedback via [GitHub Issues](https://github.com/existential-birds/amelia/issues).
 
 **Code contributions (pull requests) are not accepted from external contributors.** Amelia uses a dual-licensing model that requires all code to be authored by the project maintainers. See [LICENSING.md](LICENSING.md) for details.
 
@@ -41,7 +41,7 @@ If you've found a bug or have an idea for improvement, please open an issue - we
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Clone the repository
-git clone https://github.com/anderskev/amelia.git
+git clone https://github.com/existential-birds/amelia.git
 cd amelia
 
 # Sync dependencies (installs runtime + dev dependencies)

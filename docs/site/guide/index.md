@@ -12,7 +12,7 @@ This guide gets you from zero to orchestrating AI agents in about three minutes.
 
 1. **Install Amelia** (the easy part)
    ```bash
-   uv tool install git+https://github.com/anderskev/amelia.git
+   uv tool install git+https://github.com/existential-birds/amelia.git
    ```
 
 2. **Create configuration** in your project root:
