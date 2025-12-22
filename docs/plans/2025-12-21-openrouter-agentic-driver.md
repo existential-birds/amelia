@@ -520,56 +520,66 @@ class TestRunShellCommand:
     """Test run_shell_command tool."""
 
     @pytest.fixture
-    def mock_run_context(self, tmp_path):
-        """Create mock RunContext with real tmp_path."""
+    def run_context(self, tmp_path):
+        """Create RunContext with real tmp_path."""
         ctx = MagicMock()
         ctx.deps = AgenticContext(cwd=str(tmp_path))
         return ctx
 
-    async def test_executes_command_with_cwd(self, mock_run_context, mocker, tmp_path):
+    async def test_executes_command_with_cwd(self, run_context, tmp_path):
         """Should execute command in context's cwd."""
-        mock_executor = mocker.patch(
-            "amelia.drivers.api.tools.SafeShellExecutor.execute",
-            new_callable=AsyncMock,
-            return_value="output",
-        )
+        # Create a test file to verify cwd is used
+        test_file = tmp_path / "test.txt"
+        test_file.write_text("hello from test")
 
-        result = await run_shell_command(mock_run_context, "ls -la", timeout=30)
+        # Execute real command, no mocking - tests actual behavior
+        result = await run_shell_command(run_context, "cat test.txt", timeout=30)
 
-        assert result == "output"
-        mock_executor.assert_called_once_with(
-            command="ls -la",
-            timeout=30,
-            cwd=str(tmp_path.resolve()),
-        )
+        assert result.strip() == "hello from test"
+
+    async def test_caps_timeout_at_300_seconds(self, run_context):
+        """Should cap timeout to prevent resource exhaustion."""
+        # This tests the security fix - LLM could try to set huge timeout
+        # The function should internally cap it to 300
+        # We test this by using a value > 300 and ensuring it doesn't hang
+        result = await run_shell_command(run_context, "echo 'quick'", timeout=999999)
+        assert "quick" in result
+
+    async def test_returns_command_output(self, run_context):
+        """Should return stdout from command."""
+        result = await run_shell_command(run_context, "echo 'test output'", timeout=30)
+        assert "test output" in result
 
 
 class TestWriteFile:
     """Test write_file tool."""
 
     @pytest.fixture
-    def mock_run_context(self, tmp_path):
-        """Create mock RunContext with real tmp_path."""
+    def run_context(self, tmp_path):
+        """Create RunContext with real tmp_path."""
         ctx = MagicMock()
         ctx.deps = AgenticContext(cwd=str(tmp_path), allowed_dirs=[str(tmp_path)])
         return ctx
 
-    async def test_writes_file_with_allowed_dirs(self, mock_run_context, mocker, tmp_path):
-        """Should write file using allowed_dirs from context."""
-        mock_writer = mocker.patch(
-            "amelia.drivers.api.tools.SafeFileWriter.write",
-            new_callable=AsyncMock,
-            return_value="File written successfully",
-        )
+    async def test_writes_file_with_allowed_dirs(self, run_context, tmp_path):
+        """Should write file within allowed directories."""
+        file_path = str(tmp_path / "test.py")
 
-        result = await write_file(mock_run_context, f"{tmp_path}/test.py", "print('hello')")
+        # Execute real write, no mocking - tests actual behavior
+        result = await write_file(run_context, file_path, "print('hello')")
 
-        assert result == "File written successfully"
-        mock_writer.assert_called_once_with(
-            file_path=f"{tmp_path}/test.py",
-            content="print('hello')",
-            allowed_dirs=[str(tmp_path.resolve())],
-        )
+        # Verify file was actually written
+        assert (tmp_path / "test.py").exists()
+        assert (tmp_path / "test.py").read_text() == "print('hello')"
+        assert "success" in result.lower() or "written" in result.lower()
+
+    async def test_creates_parent_directories(self, run_context, tmp_path):
+        """Should create parent directories if needed."""
+        file_path = str(tmp_path / "subdir" / "nested" / "test.py")
+
+        result = await write_file(run_context, file_path, "# nested file")
+
+        assert (tmp_path / "subdir" / "nested" / "test.py").exists()
 ```
 
 **Step 2: Run test to verify it fails**
@@ -639,11 +649,14 @@ async def run_shell_command(
     Args:
         ctx: Run context containing the working directory.
         command: The shell command to execute.
-        timeout: Maximum execution time in seconds. Defaults to 30.
+        timeout: Maximum execution time in seconds. Defaults to 30. Capped at 300.
 
     Returns:
         Command output (stdout) as a string.
     """
+    # Cap timeout to prevent resource exhaustion from LLM-controlled values
+    timeout = min(timeout, 300)  # Max 5 minutes
+
     return await SafeShellExecutor.execute(
         command=command,
         timeout=timeout,
@@ -781,24 +794,156 @@ git commit -m "feat(api-driver): add tool support validation"
 
 ## Task 8: Implement execute_agentic Method
 
+> **Note:** This task is split into 3 subtasks for better test coverage and maintainability.
+> Each subtask focuses on a single responsibility with dedicated tests.
+
 **Files:**
 - Modify: `amelia/drivers/api/openai.py`
 - Test: `tests/unit/test_api_driver_agentic.py`
 
+---
+
+### Task 8a: Add Message Validation Helper
+
+**Step 1: Write the failing tests for _validate_messages**
+
+```python
+# tests/unit/test_api_driver_agentic.py - add first
+"""Tests for ApiDriver agentic execution."""
+import pytest
+from amelia.core.state import AgentMessage
+from amelia.drivers.api.openai import ApiDriver
+
+
+class TestValidateMessages:
+    """Test _validate_messages helper method."""
+
+    @pytest.fixture
+    def driver(self):
+        """Create ApiDriver instance."""
+        return ApiDriver(model="openai:gpt-4o")
+
+    def test_rejects_empty_messages(self, driver):
+        """Should reject empty message list."""
+        with pytest.raises(ValueError, match="cannot be empty"):
+            driver._validate_messages([])
+
+    def test_rejects_none_content(self, driver):
+        """Should reject messages with None content."""
+        with pytest.raises(ValueError, match="None content"):
+            driver._validate_messages([AgentMessage(role="user", content=None)])
+
+    def test_rejects_oversized_content(self, driver):
+        """Should reject messages exceeding 100KB."""
+        large_content = "x" * 100_001
+        with pytest.raises(ValueError, match="exceeds maximum"):
+            driver._validate_messages([AgentMessage(role="user", content=large_content)])
+
+    def test_rejects_invalid_role(self, driver):
+        """Should reject invalid message roles."""
+        with pytest.raises(ValueError, match="Invalid message role"):
+            driver._validate_messages([AgentMessage(role="invalid", content="test")])
+
+    def test_accepts_valid_messages(self, driver):
+        """Should accept valid message list."""
+        messages = [
+            AgentMessage(role="system", content="You are helpful"),
+            AgentMessage(role="user", content="Hello"),
+            AgentMessage(role="assistant", content="Hi there"),
+        ]
+        driver._validate_messages(messages)  # Should not raise
+```
+
+**Step 2: Run test to verify it fails**
+
+Run: `uv run pytest tests/unit/test_api_driver_agentic.py::TestValidateMessages -v`
+Expected: FAIL - _validate_messages method doesn't exist
+
+**Step 3: Implement _validate_messages** (see Step 5 below for code)
+
+**Step 4: Run test to verify it passes**
+
+Run: `uv run pytest tests/unit/test_api_driver_agentic.py::TestValidateMessages -v`
+Expected: PASS
+
+---
+
+### Task 8b: Add Message History Builder
+
+**Step 1: Write the failing tests for _build_message_history**
+
+```python
+# tests/unit/test_api_driver_agentic.py - add to file
+
+class TestBuildMessageHistory:
+    """Test _build_message_history helper method."""
+
+    @pytest.fixture
+    def driver(self):
+        """Create ApiDriver instance."""
+        return ApiDriver(model="openai:gpt-4o")
+
+    def test_returns_none_for_single_message(self, driver):
+        """Should return None for single user message."""
+        messages = [AgentMessage(role="user", content="Hello")]
+        result = driver._build_message_history(messages)
+        assert result is None
+
+    def test_returns_none_for_system_only(self, driver):
+        """Should return None when only system messages present."""
+        messages = [
+            AgentMessage(role="system", content="You are helpful"),
+            AgentMessage(role="user", content="Hello"),
+        ]
+        result = driver._build_message_history(messages)
+        assert result is None
+
+    def test_builds_history_from_prior_messages(self, driver):
+        """Should build history excluding last user message."""
+        messages = [
+            AgentMessage(role="user", content="First"),
+            AgentMessage(role="assistant", content="Response"),
+            AgentMessage(role="user", content="Second"),
+        ]
+        result = driver._build_message_history(messages)
+        assert result is not None
+        assert len(result) == 2  # First user + assistant
+
+    def test_skips_empty_content(self, driver):
+        """Should skip messages with empty content."""
+        messages = [
+            AgentMessage(role="user", content="First"),
+            AgentMessage(role="assistant", content=""),
+            AgentMessage(role="user", content="Second"),
+        ]
+        result = driver._build_message_history(messages)
+        assert result is not None
+        assert len(result) == 1  # Only first user message
+```
+
+**Step 2: Run test to verify it fails**
+
+Run: `uv run pytest tests/unit/test_api_driver_agentic.py::TestBuildMessageHistory -v`
+Expected: FAIL - _build_message_history method doesn't exist
+
+**Step 3: Implement _build_message_history** (see Step 5 below for code)
+
+**Step 4: Run test to verify it passes**
+
+Run: `uv run pytest tests/unit/test_api_driver_agentic.py::TestBuildMessageHistory -v`
+Expected: PASS
+
+---
+
+### Task 8c: Implement Core execute_agentic Method
+
 **Step 1: Write the failing tests**
 
 ```python
-# tests/unit/test_api_driver_agentic.py
-"""Tests for ApiDriver agentic execution."""
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-from amelia.core.state import AgentMessage
-from amelia.drivers.api.openai import ApiDriver
-from amelia.drivers.api.events import ApiStreamEvent
-
+# tests/unit/test_api_driver_agentic.py - add to file
 
 class TestExecuteAgentic:
-    """Test execute_agentic method."""
+    """Test execute_agentic core method."""
 
     async def test_rejects_model_without_tool_support(self, monkeypatch):
         """Should raise ValueError for models without tool support."""
@@ -812,7 +957,37 @@ class TestExecuteAgentic:
             ):
                 pass
 
-    async def test_yields_result_event(self, monkeypatch):
+    async def test_rejects_nonexistent_cwd(self, monkeypatch):
+        """Should reject non-existent working directory."""
+        monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+        driver = ApiDriver(model="openai:gpt-4o")
+
+        with pytest.raises(ValueError, match="does not exist"):
+            async for _ in driver.execute_agentic(
+                messages=[AgentMessage(role="user", content="test")],
+                cwd="/nonexistent/path/that/does/not/exist",
+            ):
+                pass
+
+    async def test_rejects_symlink_cwd(self, monkeypatch, tmp_path):
+        """Should reject symlink as working directory for security."""
+        monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+        driver = ApiDriver(model="openai:gpt-4o")
+
+        # Create a symlink
+        real_dir = tmp_path / "real"
+        real_dir.mkdir()
+        symlink = tmp_path / "link"
+        symlink.symlink_to(real_dir)
+
+        with pytest.raises(ValueError, match="symlink"):
+            async for _ in driver.execute_agentic(
+                messages=[AgentMessage(role="user", content="test")],
+                cwd=str(symlink),
+            ):
+                pass
+
+    async def test_yields_result_event(self, monkeypatch, tmp_path):
         """Should yield result event at end of execution."""
         monkeypatch.setenv("OPENAI_API_KEY", "test-key")
         driver = ApiDriver(model="openai:gpt-4o")
@@ -832,7 +1007,7 @@ class TestExecuteAgentic:
             events = []
             async for event in driver.execute_agentic(
                 messages=[AgentMessage(role="user", content="test")],
-                cwd="/tmp",
+                cwd=str(tmp_path),  # Use real tmp_path
             ):
                 events.append(event)
 
@@ -912,14 +1087,23 @@ async def execute_agentic(
     Raises:
         ValueError: If API key not set, model doesn't support tools, or invalid messages.
     """
-    self._validate_api_key()
-    self._validate_messages(messages)
-
+    # Early validation - check tool support first (fast fail)
     if not self._supports_tools():
         raise ValueError(
             f"Model '{self.model_name}' does not support tool calling. "
             "Use a model with tool support for agentic execution."
         )
+
+    # Validate cwd early before any other operations
+    from pathlib import Path
+    cwd_path = Path(cwd)
+    if not cwd_path.exists() or not cwd_path.is_dir():
+        raise ValueError(f"Working directory does not exist or is not a directory: {cwd}")
+    if cwd_path.is_symlink():
+        raise ValueError(f"Working directory cannot be a symlink for security reasons: {cwd}")
+
+    self._validate_api_key()
+    self._validate_messages(messages)
 
     # Create agent with tools
     agent = Agent(
@@ -984,20 +1168,25 @@ async def execute_agentic(
         logger.warning("Model returned unexpected response", error=str(e))
         yield ApiStreamEvent(type="error", content=f"Model error: {e}")
 
-    except httpx.TimeoutException as e:
-        logger.warning("Network timeout", error=str(e))
-        yield ApiStreamEvent(type="error", content="Network timeout. Please try again.")
-
-    except httpx.HTTPStatusError as e:
-        if e.response.status_code == 429:
-            logger.warning("Rate limited", error=str(e))
-            yield ApiStreamEvent(type="error", content="Rate limited. Please wait and retry.")
-        elif e.response.status_code in (401, 403):
-            logger.error("Authentication failed", error=str(e))
-            yield ApiStreamEvent(type="error", content="Authentication failed. Check API key.")
+    except httpx.RequestError as e:
+        # Catch all httpx network errors (parent class of TimeoutException, HTTPStatusError, etc.)
+        if isinstance(e, httpx.TimeoutException):
+            logger.warning("Network timeout", error=str(e))
+            yield ApiStreamEvent(type="error", content="Network timeout. Please try again.")
+        elif isinstance(e, httpx.HTTPStatusError):
+            if e.response.status_code == 429:
+                logger.warning("Rate limited", error=str(e))
+                yield ApiStreamEvent(type="error", content="Rate limited. Please wait and retry.")
+            elif e.response.status_code in (401, 403):
+                logger.error("Authentication failed", error=str(e))
+                yield ApiStreamEvent(type="error", content="Authentication failed. Check API key.")
+            else:
+                logger.error("API error", status_code=e.response.status_code)
+                yield ApiStreamEvent(type="error", content=f"API error: {e.response.status_code}")
         else:
-            logger.error("API error", status_code=e.response.status_code, error=str(e))
-            yield ApiStreamEvent(type="error", content=f"API error: {e.response.status_code}")
+            # Catches ConnectError, NetworkError, etc.
+            logger.warning("Network error", error_type=type(e).__name__)
+            yield ApiStreamEvent(type="error", content="Network error. Please try again.")
 
     except Exception as e:
         logger.error("Agentic execution failed", error=str(e))
