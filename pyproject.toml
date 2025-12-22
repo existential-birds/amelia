@@ -80,6 +80,5 @@ strict = true
 module = [
     "langgraph.checkpoint.sqlite",
     "langgraph.checkpoint.sqlite.aio",
-    "psutil",
 ]
 ignore_missing_imports = true

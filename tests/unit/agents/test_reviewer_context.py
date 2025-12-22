@@ -378,3 +378,8 @@ class TestReviewerNodeConfig:
             mock_rev.return_value = mock_rev_instance
 
             await call_reviewer_node(state, config)
+
+            # Verify Reviewer was created
+            mock_rev.assert_called_once()
+            # Verify review was called
+            mock_rev_instance.review.assert_called_once()
