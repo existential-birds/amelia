@@ -40,13 +40,12 @@ from amelia.tools.git_utils import revert_to_git_snapshot
 # to determine whether to route to batch_approval_node based on trust_level.
 # See ExecutionBatch.risk_summary and Profile.trust_level for context.
 def should_checkpoint(batch: ExecutionBatch, profile: Profile) -> bool:
-    """Determine if we should pause for human approval.
+    """Determine if execution should pause for human approval after a batch.
 
     Logic based on trust_level:
-    1. If batch_checkpoint_enabled is False → never checkpoint
-    2. TrustLevel.PARANOID → always checkpoint (return True)
-    3. TrustLevel.STANDARD → always checkpoint (return True)
-    4. TrustLevel.AUTONOMOUS → only checkpoint for high-risk batches (risk_summary == "high")
+    1. If batch_checkpoint_enabled is False, never checkpoint
+    2. TrustLevel.PARANOID or STANDARD always checkpoint
+    3. TrustLevel.AUTONOMOUS only checkpoints for high-risk batches
 
     Args:
         batch: The execution batch to evaluate.
@@ -73,6 +72,8 @@ def should_checkpoint(batch: ExecutionBatch, profile: Profile) -> bool:
 
 def _extract_config_params(config: RunnableConfig | None) -> tuple[StreamEmitter | None, str]:
     """Extract stream_emitter and workflow_id from RunnableConfig.
+
+    Extracts values from config.configurable dictionary. workflow_id is required.
 
     Args:
         config: Optional RunnableConfig with configurable parameters.
@@ -356,9 +357,9 @@ async def blocker_resolution_node(state: ExecutionState) -> dict[str, Any]:
     }
 
 async def get_code_changes_for_review(state: ExecutionState) -> str:
-    """Retrieves code changes for review.
+    """Retrieve code changes for review from state or git diff.
 
-    Prioritizes changes from state, otherwise attempts to get git diff.
+    Prioritizes changes from state.code_changes_for_review, falls back to git diff HEAD.
 
     Args:
         state: Current execution state that may contain code changes.
@@ -486,7 +487,7 @@ async def call_developer_node(
     return await developer.run(state)
 
 def should_continue_review_loop(state: ExecutionState) -> Literal["re_evaluate", "end"]:
-    """Determine if review loop should continue based on last review.
+    """Determine if review loop should continue based on last review result.
 
     Args:
         state: Current execution state containing last review and plan.
@@ -508,7 +509,7 @@ def should_continue_review_loop(state: ExecutionState) -> Literal["re_evaluate",
     return "end"
 
 def route_after_architect(state: ExecutionState) -> Literal["end", "human_approval"]:
-    """Route after architect based on plan_only mode.
+    """Route after architect node based on plan_only mode.
 
     Args:
         state: Current execution state containing plan_only flag.
@@ -520,7 +521,7 @@ def route_after_architect(state: ExecutionState) -> Literal["end", "human_approv
     return "end" if state.plan_only else "human_approval"
 
 def route_approval(state: ExecutionState) -> Literal["approve", "reject"]:
-    """Route based on human approval status.
+    """Route based on human approval status from state.
 
     Args:
         state: Current execution state containing human_approved flag.
@@ -531,7 +532,7 @@ def route_approval(state: ExecutionState) -> Literal["approve", "reject"]:
     return "approve" if state.human_approved else "reject"
 
 def route_after_developer(state: ExecutionState) -> Literal["reviewer", "batch_approval", "blocker_resolution", "developer", "__end__"]:
-    """Route based on Developer status.
+    """Route based on Developer agent status and batch completion state.
 
     Args:
         state: Current execution state containing developer_status.
@@ -589,10 +590,10 @@ def route_after_developer(state: ExecutionState) -> Literal["reviewer", "batch_a
         return "developer"
 
 def route_batch_approval(state: ExecutionState) -> Literal["developer", "__end__"]:
-    """Route based on batch approval status.
+    """Route based on batch approval status from batch_approvals record.
 
-    Uses the batch_approvals record created by batch_approval_node, NOT human_approved.
-    This is because batch_approval_node resets human_approved to None before routing.
+    Uses the batch_approvals record created by batch_approval_node, NOT human_approved,
+    because batch_approval_node resets human_approved to None before routing.
 
     Args:
         state: Current execution state containing batch_approvals list.
@@ -608,7 +609,7 @@ def route_batch_approval(state: ExecutionState) -> Literal["developer", "__end__
     return "__end__"
 
 def route_blocker_resolution(state: ExecutionState) -> Literal["developer", "__end__"]:
-    """Route based on blocker resolution outcome.
+    """Route based on blocker resolution outcome and workflow status.
 
     Args:
         state: Current execution state containing workflow_status.
@@ -625,7 +626,7 @@ def route_blocker_resolution(state: ExecutionState) -> Literal["developer", "__e
 # Review-fix loop helper functions
 
 def create_synthetic_plan_from_review(review: ReviewResult) -> ExecutionPlan:
-    """Create a synthetic execution plan from review comments for the developer.
+    """Create a synthetic execution plan from review comments for developer fixes.
 
     Args:
         review: The review result with comments.
@@ -664,7 +665,10 @@ def create_synthetic_plan_from_review(review: ReviewResult) -> ExecutionPlan:
 
 
 def should_continue_review_fix(state: ExecutionState) -> Literal["developer", "__end__"]:
-    """Determine next step in review-fix loop.
+    """Determine next step in review-fix loop based on approval and iteration count.
+
+    Args:
+        state: Current execution state with last_review and review_iteration.
 
     Returns:
         "developer" if review rejected and under max iterations,
@@ -689,6 +693,16 @@ async def call_developer_node_for_review(
     """Developer node for review-fix loop.
 
     Creates a synthetic plan from review comments and increments iteration counter.
+
+    Args:
+        state: Current execution state containing last_review.
+        config: Optional RunnableConfig with stream_emitter in configurable.
+
+    Returns:
+        Partial state dict with developer_status and review_iteration.
+
+    Raises:
+        ValueError: If no last_review exists in state.
     """
     if not state.last_review:
         raise ValueError("Cannot call developer for review without review results")
@@ -709,10 +723,16 @@ async def call_developer_node_for_review(
 
 
 def create_review_graph(checkpointer: BaseCheckpointSaver[Any]) -> CompiledStateGraph[Any]:
-    """Create a graph for review-fix loop: reviewer ↔ developer until approved.
+    """Create a graph for review-fix loop between reviewer and developer.
 
     The graph runs autonomously without human approval pauses.
     Max 3 iterations to prevent infinite loops.
+
+    Args:
+        checkpointer: Checkpoint saver for state persistence.
+
+    Returns:
+        Compiled StateGraph for review-fix loop execution.
     """
     graph = StateGraph(ExecutionState)
     graph.add_node("reviewer", call_reviewer_node)

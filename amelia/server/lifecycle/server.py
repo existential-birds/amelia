@@ -102,6 +102,9 @@ class ServerLifecycle:
         logger.info("Server shutdown complete")
 
     async def _wait_for_workflows_to_finish(self) -> None:
-        """Wait for all active workflows to complete."""
+        """Wait for all active workflows to complete by polling orchestrator.
+
+        Polls every second until no active workflows remain.
+        """
         while self._orchestrator.get_active_workflows():
             await asyncio.sleep(1)

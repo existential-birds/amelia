@@ -47,11 +47,11 @@ console = Console()
 def is_amelia_dev_repo() -> bool:
     """Detect if running in the Amelia development repository.
 
+    Checks for presence of amelia/ directory, dashboard/package.json,
+    and .git/ directory to determine development mode.
+
     Returns:
-        True if all three conditions are met:
-        - amelia/ directory exists (Python package)
-        - dashboard/package.json exists
-        - .git/ directory exists
+        True if all three conditions are met, False otherwise.
     """
     cwd = Path.cwd()
     return (
@@ -62,7 +62,7 @@ def is_amelia_dev_repo() -> bool:
 
 
 def check_pnpm_installed() -> bool:
-    """Check if pnpm is available in PATH.
+    """Check if pnpm package manager is available in PATH.
 
     Returns:
         True if pnpm is available, False otherwise.
@@ -71,7 +71,7 @@ def check_pnpm_installed() -> bool:
 
 
 def check_node_installed() -> bool:
-    """Check if Node.js is available in PATH.
+    """Check if Node.js runtime is available in PATH.
 
     Returns:
         True if Node.js is available, False otherwise.
@@ -80,7 +80,7 @@ def check_node_installed() -> bool:
 
 
 def check_node_modules_exist() -> bool:
-    """Check if dashboard/node_modules exists.
+    """Check if dashboard/node_modules directory exists.
 
     Returns:
         True if node_modules directory exists, False otherwise.
@@ -89,7 +89,7 @@ def check_node_modules_exist() -> bool:
 
 
 def check_port_available(host: str, port: int) -> bool:
-    """Check if a port is available for binding.
+    """Check if a TCP port is available for binding.
 
     Args:
         host: Host address to check.
@@ -97,6 +97,9 @@ def check_port_available(host: str, port: int) -> bool:
 
     Returns:
         True if port is available, False if already in use.
+
+    Raises:
+        OSError: If socket operation fails for reasons other than port in use.
     """
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         try:
@@ -111,8 +114,11 @@ def check_port_available(host: str, port: int) -> bool:
 async def run_pnpm_install() -> bool:
     """Run pnpm install in the dashboard directory.
 
+    Executes pnpm install asynchronously and streams output to console
+    with colored dashboard prefix.
+
     Returns:
-        True if installation succeeded, False otherwise.
+        True if installation succeeded (exit code 0), False otherwise.
     """
     console.print(DASHBOARD_PREFIX + Text("Installing dependencies...", style=CREAM))
 
@@ -137,16 +143,16 @@ async def run_pnpm_install() -> bool:
 
 
 def _get_log_level_style(text: str) -> str:
-    """Determine the style based on log level prefix in text.
+    """Determine the color style based on log level prefix in text.
 
     Parses uvicorn-style log output (e.g., "INFO:     message") and returns
-    the appropriate color from the Amelia palette.
+    the appropriate color from the Amelia dashboard palette.
 
     Args:
-        text: Log line text to parse.
+        text: Log line text to parse for level detection.
 
     Returns:
-        Color style string for the detected log level.
+        Color style string from Amelia palette (RUST, GOLD, CREAM, or MOSS).
     """
     text_upper = text.upper()
     if text_upper.startswith("ERROR") or text_upper.startswith("CRITICAL"):
@@ -166,12 +172,16 @@ async def stream_output(
     prefix: Text,
     is_stderr: bool = False,
 ) -> None:
-    """Stream output from a subprocess with colored prefix.
+    """Stream subprocess output to console with colored prefix and log level styling.
+
+    Reads lines from an asyncio stream and prints them with a colored prefix
+    and log-level-based styling. The is_stderr parameter is kept for API
+    compatibility but ignored since uvicorn writes all logs to stderr.
 
     Args:
         stream: The asyncio stream to read from.
-        prefix: The colored prefix to prepend to each line.
-        is_stderr: Whether this is stderr (ignored, we parse log levels instead).
+        prefix: The colored Rich Text prefix to prepend to each line.
+        is_stderr: Unused, kept for API compatibility.
     """
     # Note: is_stderr is kept for API compatibility but we parse log levels instead
     # because uvicorn writes all logs (including INFO) to stderr
@@ -352,16 +362,19 @@ async def run_dev_mode(
     no_dashboard: bool,
     is_dev_repo: bool,
 ) -> int:
-    """Run the development server with optional dashboard.
+    """Run the development server with optional dashboard integration.
+
+    Starts the uvicorn server and optionally the Vite dashboard dev server,
+    managing their lifecycles and handling graceful shutdown on signals.
 
     Args:
-        host: Host to bind to.
-        port: Port to bind to.
-        no_dashboard: If True, skip starting the dashboard.
-        is_dev_repo: Whether we're in the Amelia dev repo.
+        host: Host address to bind server to.
+        port: Port number to bind server to.
+        no_dashboard: If True, skip starting the dashboard dev server.
+        is_dev_repo: Whether running in the Amelia development repository.
 
     Returns:
-        Exit code (0 for success).
+        Exit code (0 for success, 1 for failure).
     """
     manager = ProcessManager()
     loop = asyncio.get_running_loop()

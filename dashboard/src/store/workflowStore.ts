@@ -21,10 +21,19 @@ const MAX_EVENTS_PER_WORKFLOW = 500;
  * Zustand store state for real-time WebSocket events and connection state.
  *
  * Note: Workflow data and UI state (including selection) come from React Router loaders and URL params.
- * This store only manages:
- * - Real-time events from WebSocket
- * - Connection state
- * - Pending actions for optimistic UI
+ * This store only manages real-time events from WebSocket, connection state, and pending actions for optimistic UI.
+ *
+ * @property eventsByWorkflow - Real-time events grouped by workflow ID, auto-trimmed
+ * @property eventIdsByWorkflow - Event ID sets per workflow for O(1) duplicate detection
+ * @property lastEventId - Last received event ID for reconnection backfill
+ * @property isConnected - Whether WebSocket connection is active
+ * @property connectionError - Error message from last connection failure, or null
+ * @property pendingActions - Action IDs currently being executed (in-flight requests)
+ * @property addEvent - Adds a new event to the store for a workflow
+ * @property setLastEventId - Updates the last seen event ID
+ * @property setConnected - Updates WebSocket connection state
+ * @property addPendingAction - Marks an action as pending (in-flight)
+ * @property removePendingAction - Removes an action from pending list
  */
 interface WorkflowState {
   /**

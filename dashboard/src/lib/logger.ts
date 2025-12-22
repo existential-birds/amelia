@@ -5,18 +5,25 @@
  * In production, logs can be suppressed or sent to a logging service.
  */
 
-/** Log severity levels supported by the logger. */
+/**
+ * Log severity levels supported by the logger.
+ * Ordered from lowest to highest severity: debug < info < warn < error.
+ */
 type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 /**
  * Context object for structured logging.
- * Allows arbitrary key-value pairs for contextual data.
+ * Allows arbitrary key-value pairs for contextual data that will be serialized to JSON.
+ * @property [key: string] - Arbitrary context properties
  */
 interface LogContext {
   [key: string]: unknown;
 }
 
-/** Log level severities mapped to numeric values for filtering comparison. */
+/**
+ * Log level severities mapped to numeric values for filtering comparison.
+ * Higher numbers represent higher severity levels.
+ */
 const LOG_LEVELS: Record<LogLevel, number> = {
   debug: 0,
   info: 1,
@@ -24,13 +31,17 @@ const LOG_LEVELS: Record<LogLevel, number> = {
   error: 3,
 };
 
-/** Minimum log level - in production, suppress debug/info logs. */
+/**
+ * Minimum log level - in production, suppress debug/info logs.
+ * Development: debug, Production: warn.
+ */
 const MIN_LOG_LEVEL: LogLevel = import.meta.env.PROD ? 'warn' : 'debug';
 
 /**
  * Determines if a log message should be emitted based on level filtering.
+ * Compares the provided level against MIN_LOG_LEVEL.
  * @param level - The log level to check
- * @returns True if the level meets the minimum threshold
+ * @returns True if the level meets or exceeds the minimum threshold
  */
 function shouldLog(level: LogLevel): boolean {
   return LOG_LEVELS[level] >= LOG_LEVELS[MIN_LOG_LEVEL];
@@ -38,9 +49,10 @@ function shouldLog(level: LogLevel): boolean {
 
 /**
  * Formats a log message with timestamp, level, and optional context.
+ * Format: [ISO timestamp] [LEVEL] message {contextJSON}
  * @param level - Log severity level
  * @param message - The log message
- * @param context - Optional structured context data
+ * @param context - Optional structured context data to append as JSON
  * @returns Formatted log string
  */
 function formatMessage(level: LogLevel, message: string, context?: LogContext): string {
@@ -52,8 +64,15 @@ function formatMessage(level: LogLevel, message: string, context?: LogContext): 
 /**
  * Structured logger with level-based filtering.
  *
- * In development: all levels are logged.
- * In production: only warn and error are logged.
+ * Provides debug, info, warn, and error methods with automatic filtering
+ * based on environment (development logs all, production logs only warn/error).
+ * All messages include timestamps and optional structured context.
+ *
+ * @example
+ * ```typescript
+ * logger.info('User logged in', { userId: '123' });
+ * logger.error('Failed to save', new Error('Network timeout'));
+ * ```
  */
 export const logger = {
   debug(message: string, context?: LogContext): void {

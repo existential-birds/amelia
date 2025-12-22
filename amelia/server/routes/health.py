@@ -50,13 +50,13 @@ class HealthResponse(BaseModel):
 
 
 def get_database_status() -> DatabaseStatus:
-    """Return database status.
+    """Return database health status for local orchestrator.
 
     For a local orchestrator, if the app started successfully,
     the database is operational. No active probing needed.
 
     Returns:
-        DatabaseStatus indicating healthy state.
+        DatabaseStatus indicating healthy state with WAL mode.
     """
     return DatabaseStatus(status="healthy", mode="wal")
 

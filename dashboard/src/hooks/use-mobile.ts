@@ -3,7 +3,10 @@
  */
 import * as React from "react"
 
-/** Breakpoint threshold for mobile detection (in pixels). */
+/**
+ * Breakpoint threshold for mobile detection (in pixels).
+ * Viewport widths below this value are considered mobile.
+ */
 const MOBILE_BREAKPOINT = 768
 
 /**

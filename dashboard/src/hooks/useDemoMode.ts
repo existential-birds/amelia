@@ -2,6 +2,8 @@ import { useSearchParams } from "react-router-dom";
 
 /**
  * Demo mode state returned by useDemoMode hook and getDemoMode helper.
+ * @property isDemo - Whether any demo mode is active
+ * @property demoType - The specific demo type (e.g., 'infinite') or null
  */
 export interface DemoModeState {
   /** Whether any demo mode is active */

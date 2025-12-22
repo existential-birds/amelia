@@ -27,7 +27,15 @@ export interface WorkflowNodeData extends Record<string, unknown> {
 /** Type definition for workflow nodes used in React Flow. */
 export type WorkflowNodeType = Node<WorkflowNodeData, 'workflow'>;
 
-/** Style properties for node status. */
+/**
+ * Style properties for node status.
+ * @property pinClass - CSS classes for the map pin icon
+ * @property containerClass - CSS classes for the container opacity
+ * @property glowClass - CSS classes for glow effects
+ * @property borderClass - CSS classes for border styling
+ * @property backgroundClass - CSS classes for background color
+ * @property shadowClass - CSS classes for shadow effects
+ */
 type StatusStyle = {
   pinClass: string;
   containerClass: string;
@@ -37,7 +45,10 @@ type StatusStyle = {
   shadowClass: string;
 };
 
-/** Style configuration for each node status. */
+/**
+ * Style configuration for each node status.
+ * Maps each status to its visual appearance (colors, animations, shadows).
+ */
 const statusStyles: Record<NodeStatus, StatusStyle> = {
   completed: {
     pinClass: 'text-status-completed',
@@ -78,8 +89,9 @@ const statusStyles: Record<NodeStatus, StatusStyle> = {
  *
  * Displays a map pin icon, label, optional subtitle, and token count.
  * Visual appearance changes based on status (completed, active, pending, blocked).
+ * Includes React Flow handles for connecting edges.
  *
- * @param props - React Flow node props
+ * @param props - React Flow node props containing WorkflowNodeData
  * @returns The workflow node UI
  */
 function WorkflowNodeComponent({ data }: NodeProps<WorkflowNodeType>) {

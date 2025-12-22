@@ -5,6 +5,9 @@ import type { WorkflowSummary, WorkflowDetail } from '@/types';
 
 /**
  * Sorts workflows by start time in descending order (most recent first).
+ * @param a - First workflow to compare
+ * @param b - Second workflow to compare
+ * @returns Negative if b is newer, positive if a is newer, 0 if equal or missing timestamps
  */
 function sortByStartTimeDesc(a: WorkflowSummary, b: WorkflowSummary): number {
   if (!a.started_at || !b.started_at) return 0;
@@ -45,7 +48,8 @@ export function getActiveWorkflow(workflows: WorkflowSummary[]): WorkflowSummary
 
 /**
  * Determines the end time for elapsed time calculation.
- *
+ * Uses completed_at if available, otherwise uses current time for in-progress workflows,
+ * or the last event timestamp for blocked/failed/canceled workflows.
  * @param workflow - The workflow detail
  * @returns End time in milliseconds since epoch
  */

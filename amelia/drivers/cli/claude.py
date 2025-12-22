@@ -45,11 +45,14 @@ _CLARIFICATION_PHRASES = [
 def _is_clarification_request(text: str) -> bool:
     """Detect if Claude is asking for clarification instead of producing output.
 
+    Checks for common clarification phrases and multiple question marks
+    to identify when Claude needs more information from the user.
+
     Args:
-        text: The text response from Claude.
+        text: The text response from Claude to analyze.
 
     Returns:
-        True if the response appears to be asking for clarification.
+        True if the response appears to be requesting clarification, False otherwise.
     """
     text_lower = text.lower()
 
@@ -67,15 +70,16 @@ async def _read_lines_chunked(
 ) -> AsyncIterator[bytes]:
     """Read lines from a stream using chunks to handle arbitrarily large lines.
 
-    This avoids the LimitOverrunError that occurs with readline() when a single
-    line exceeds the buffer limit. Uses read() which is not subject to the limit.
+    Avoids LimitOverrunError that occurs with readline() when a single line
+    exceeds the buffer limit by using read() which is not subject to limits.
+    Buffers partial lines and yields complete lines as they arrive.
 
     Args:
         stream: The asyncio StreamReader to read from.
-        chunk_size: Size of chunks to read at a time.
+        chunk_size: Size of chunks to read at a time in bytes. Defaults to 64KB.
 
     Yields:
-        Complete lines as bytes (without trailing newline).
+        Complete lines as bytes without trailing newline characters.
     """
     buffer = b""
     while True:
@@ -184,15 +188,19 @@ def convert_to_stream_event(
     agent: str,
     workflow_id: str,
 ) -> StreamEvent | None:
-    """Convert CLI driver event to unified StreamEvent.
+    """Convert Claude CLI driver event to unified StreamEvent format.
+
+    Maps Claude CLI event types (assistant, tool_use, result) to the
+    unified StreamEvent types used throughout Amelia. Skips error and
+    system events.
 
     Args:
-        event: Raw event from Claude CLI.
-        agent: Agent name ("developer", "architect", "reviewer").
-        workflow_id: Current workflow ID.
+        event: Raw event from Claude CLI stream.
+        agent: Agent name (e.g., "developer", "architect", "reviewer").
+        workflow_id: Current workflow identifier.
 
     Returns:
-        Converted StreamEvent, or None for events to skip.
+        Converted StreamEvent with mapped type, or None for unsupported event types.
     """
     type_mapping = {
         "assistant": StreamEventType.CLAUDE_THINKING,

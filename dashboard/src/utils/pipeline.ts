@@ -3,7 +3,14 @@
  */
 import type { WorkflowDetail, PlanStep, ExecutionBatch } from '@/types';
 
-/** Node in the pipeline visualization. */
+/**
+ * Node in the pipeline visualization.
+ * @property id - Unique identifier for the node
+ * @property label - Primary label displayed in the node
+ * @property subtitle - Optional secondary text displayed below the label
+ * @property status - Current execution status of the node
+ * @property tokens - Optional token count to display
+ */
 export interface PipelineNode {
   id: string;
   label: string;
@@ -12,7 +19,13 @@ export interface PipelineNode {
   tokens?: string;
 }
 
-/** Edge connecting pipeline nodes. */
+/**
+ * Edge connecting pipeline nodes.
+ * @property from - Source node ID
+ * @property to - Target node ID
+ * @property label - Label displayed on the edge
+ * @property status - Status determining the edge's visual style
+ */
 export interface PipelineEdge {
   from: string;
   to: string;
@@ -20,7 +33,11 @@ export interface PipelineEdge {
   status: 'completed' | 'active' | 'pending';
 }
 
-/** Pipeline data structure for WorkflowCanvas. */
+/**
+ * Pipeline data structure for WorkflowCanvas.
+ * @property nodes - Array of pipeline nodes to render
+ * @property edges - Array of edges connecting the nodes
+ */
 export interface Pipeline {
   nodes: PipelineNode[];
   edges: PipelineEdge[];
@@ -29,8 +46,8 @@ export interface Pipeline {
 /**
  * Truncates text to a maximum length, adding ellipsis if needed.
  * @param text - Text to truncate
- * @param maxLength - Maximum length (default 20)
- * @returns Truncated text
+ * @param maxLength - Maximum length before truncation (default 20)
+ * @returns Truncated text with ellipsis, or original text if within limit
  */
 function truncateText(text: string, maxLength = 20): string {
   if (text.length <= maxLength) {
@@ -41,8 +58,9 @@ function truncateText(text: string, maxLength = 20): string {
 
 /**
  * Generates a label for a step node from the step description.
+ * Truncates long descriptions to fit within node constraints.
  * @param step - The plan step
- * @returns Short label for the step
+ * @returns Truncated step description suitable for display
  */
 function getStepLabel(step: PlanStep): string {
   return truncateText(step.description);
@@ -50,10 +68,11 @@ function getStepLabel(step: PlanStep): string {
 
 /**
  * Determines the status of a batch based on current execution position.
+ * Past batches are completed, current batch matches workflow status, future batches are pending.
  * @param batchIndex - Index of this batch
  * @param currentBatchIndex - Index of the currently executing batch
  * @param workflowStatus - Current workflow status
- * @returns Status for visualization
+ * @returns Status for visualization (completed, active, blocked, or pending)
  */
 function getBatchStatus(
   batchIndex: number,

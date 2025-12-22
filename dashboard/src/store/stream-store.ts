@@ -22,6 +22,13 @@ const MAX_STREAM_EVENTS = 1000;
  * This store manages real-time stream events from Claude LLM execution,
  * including thinking tokens, tool calls, and agent outputs. Events are
  * buffered with automatic trimming to prevent memory issues.
+ *
+ * @property events - Array of stream events in chronological order
+ * @property liveMode - Whether live streaming mode is enabled
+ * @property maxEvents - Maximum number of events to retain in buffer
+ * @property addEvent - Adds a new stream event to the store
+ * @property setLiveMode - Toggles live streaming mode
+ * @property clearEvents - Clears all events from the store
  */
 interface StreamState {
   /**
