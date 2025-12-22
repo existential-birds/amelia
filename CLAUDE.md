@@ -28,7 +28,7 @@ uv run pytest -k "test_name"           # By name pattern
 
 # CLI commands
 uv run amelia start ISSUE-123 --profile work     # Full orchestrator loop
-uv run amelia plan-only ISSUE-123                # Generate plan only
+uv run amelia plan ISSUE-123                     # Generate plan only
 uv run amelia review --local                     # Review uncommitted changes
 ```
 
@@ -79,8 +79,8 @@ The orchestrator loops between Developer and Reviewer until changes are approved
 
 | Layer | Location | Purpose |
 |-------|----------|---------|
-| **Core** | `amelia/core/` | LangGraph orchestrator, state types (`ExecutionState`, `TaskDAG`), shared types (`Profile`, `Issue`) |
-| **Agents** | `amelia/agents/` | Architect (planning), Developer (execution), Reviewer (review), Project Manager (issue fetch) |
+| **Core** | `amelia/core/` | LangGraph orchestrator, state types (`ExecutionState`, `ExecutionPlan`), shared types (`Profile`, `Issue`) |
+| **Agents** | `amelia/agents/` | Architect (planning), Developer (execution), Reviewer (review) |
 | **Drivers** | `amelia/drivers/` | LLM abstraction - `api:openai` (pydantic-ai) or `cli:claude` (CLI wrapper) |
 | **Trackers** | `amelia/trackers/` | Issue source abstraction - `jira`, `github`, `noop` |
 | **Tools** | `amelia/tools/` | Shell execution, git utilities |
@@ -135,92 +135,3 @@ For PRs with significant changes, create a manual test plan that the `amelia-qa`
 - The file is auto-detected when the PR is opened and posted as a comment
 - After the PR is merged, delete the test plan file (it's preserved in the PR comment)
 
-## Slash Commands
-
-Custom slash commands are in `.claude/commands/amelia/`. Key commands:
-
-| Command | Purpose |
-|---------|---------|
-| `/amelia:create-pr` | Create PR with standardized description template |
-| `/amelia:update-pr-desc` | Update existing PR description after changes |
-| `/amelia:commit-push` | Commit and push with Conventional Commits format |
-| `/amelia:review` | Launch code review agent for production readiness |
-| `/amelia:review-frontend` | Comprehensive React Router v7 frontend review |
-| `/amelia:review-tests` | Review test code for usefulness and conciseness |
-| `/amelia:gen-test-plan` | Generate manual test plan for PR |
-| `/amelia:run-test-plan` | Execute test plan in isolated worktree |
-| `/amelia:gen-release-notes` | Generate release notes since a tag |
-| `/amelia:greptile-review` | Fetch and evaluate greptile-apps bot comments |
-| `/amelia:respond-review` | Reply to review comments after fixes |
-| `/amelia:eval-feedback` | Evaluate code review feedback |
-| `/amelia:ensure-doc` | Verify code documentation (OpenAPI, docstrings) |
-| `/amelia:review-plan` | Review implementation plans with parallel agents |
-| `/amelia:skill-builder` | Create Claude Code skills with best practices |
-| `/amelia:12-factor-agents-analysis` | Analyze codebase against 12-Factor Agents methodology |
-| `/amelia:12-factor-apps-analysis` | Analyze codebase against 12-Factor App methodology |
-
-## Skills
-
-Custom skills are in `.claude/skills/`. These provide domain-specific knowledge:
-
-**LangGraph:**
-| Skill | Purpose |
-|-------|---------|
-| `langgraph-architecture` | Architectural decisions for LangGraph applications |
-| `langgraph-implementation` | Implementing stateful agent graphs, nodes/edges, state schemas |
-| `langgraph-code-review` | Review LangGraph code for bugs and anti-patterns |
-
-**PydanticAI:**
-| Skill | Purpose |
-|-------|---------|
-| `pydantic-ai-agent-creation` | Create PydanticAI agents with type-safe dependencies |
-| `pydantic-ai-tool-system` | Register and implement PydanticAI tools |
-| `pydantic-ai-dependency-injection` | Dependency injection using RunContext |
-| `pydantic-ai-model-integration` | Configure LLM providers, fallback models |
-| `pydantic-ai-testing` | Test PydanticAI agents using TestModel, FunctionModel |
-| `pydantic-ai-common-pitfalls` | Avoid common mistakes in PydanticAI agents |
-
-**React Flow:**
-| Skill | Purpose |
-|-------|---------|
-| `react-flow-architecture` | Architectural guidance for node-based UIs with React Flow |
-| `react-flow-implementation` | Implementing React Flow nodes, edges, handles, state |
-| `react-flow-advanced` | Advanced patterns: sub-flows, layouts, drag-and-drop |
-| `react-flow-code-review` | Review React Flow code for anti-patterns |
-| `react-flow` | React Flow workflow visualization, custom nodes/edges |
-
-**Frontend:**
-| Skill | Purpose |
-|-------|---------|
-| `shadcn-ui` | shadcn/ui components, CVA patterns, Radix primitives |
-| `tailwind-v4` | Tailwind CSS v4 with CSS-first config, @theme directive |
-| `react-router-v7` | React Router v7 patterns and navigation |
-| `zustand-state` | Zustand state management patterns |
-
-**AI Integration:**
-| Skill | Purpose |
-|-------|---------|
-| `vercel-ai-sdk` | Chat interfaces with streaming, useChat hook |
-| `ai-elements` | Vercel AI Elements for chat interfaces, tool execution, reasoning displays |
-
-**Data Processing:**
-| Skill | Purpose |
-|-------|---------|
-| `docling` | Document parsing for PDF, DOCX, PPTX, HTML, images (15+ formats) |
-| `sqlite-vec` | Vector similarity search in SQLite for embeddings and semantic search |
-
-**Testing:**
-| Skill | Purpose |
-|-------|---------|
-| `vitest-testing` | Vitest patterns, mocking, async testing |
-
-**Tooling:**
-| Skill | Purpose |
-|-------|---------|
-| `github-projects` | GitHub Projects v2 via gh CLI
-
-**Architecture Analysis:**
-| Skill | Purpose |
-|-------|---------|
-| `agent-architecture-analysis` | Evaluate agentic codebases against 12-Factor Agents methodology |
-| `12-factor-apps` | Evaluate applications against 12-Factor App methodology |
