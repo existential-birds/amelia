@@ -121,13 +121,13 @@ export default defineConfig({
 
     // Social links
     socialLinks: [
-      { icon: 'github', link: 'https://github.com/anderskev/amelia' }
+      { icon: 'github', link: 'https://github.com/existential-birds/amelia' }
     ],
 
     // Footer
     footer: {
-      message: 'Built by hey-amelia bot. Released under the <a href="https://github.com/anderskev/amelia/blob/main/LICENSE">MPL-2.0 License</a>.',
-      copyright: 'Copyright © 2024-2025 <a href="https://anderskev.com">@anderskev</a>'
+      message: 'Built by hey-amelia bot. Released under the <a href="https://github.com/existential-birds/amelia/blob/main/LICENSE">MPL-2.0 License</a>.',
+      copyright: 'Copyright © 2024-2025 <a href="https://github.com/existential-birds">@existential-birds</a>'
     },
 
     // Search configuration

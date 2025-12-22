@@ -8,7 +8,7 @@ description: Example design document showing how Amelia's Architect agent struct
 ::: info Artifact Type
 This is an example **design document** produced by the Architect agent. Design documents define the technical approach for implementing a feature, including data models, state management, and integration points.
 
-**Source:** [GitHub Issue #100](https://github.com/anderskev/amelia/issues/100)
+**Source:** [GitHub Issue #100](https://github.com/existential-birds/amelia/issues/100)
 :::
 
 ---

@@ -219,7 +219,7 @@ uv sync
 
 If using `uv tool install`, reinstall:
 ```bash
-uv tool install --reinstall git+https://github.com/anderskev/amelia.git
+uv tool install --reinstall git+https://github.com/existential-birds/amelia.git
 ```
 
 ### Profile not found
@@ -533,7 +533,7 @@ git push
 
 3. Reinstall with uv:
    ```bash
-   uv tool install --reinstall git+https://github.com/anderskev/amelia.git
+   uv tool install --reinstall git+https://github.com/existential-birds/amelia.git
    ```
 
 4. Or run from source with uv:
@@ -605,5 +605,5 @@ If issues persist:
    ```
 
 4. **File an issue:**
-   - GitHub: https://github.com/anderskev/amelia/issues
+   - GitHub: https://github.com/existential-birds/amelia/issues
    - Include: error message, logs, `amelia --version`, OS/Python version

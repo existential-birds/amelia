@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: Documentation
-    url: https://github.com/anderskev/amelia#readme
+    url: https://github.com/existential-birds/amelia#readme
     about: Check the README for setup and usage information
   - name: Discussions
-    url: https://github.com/anderskev/amelia/discussions
+    url: https://github.com/existential-birds/amelia/discussions
     about: Ask questions and share ideas with the community

@@ -28,7 +28,7 @@ def _check_dependencies() -> None:
             f"\n[ERROR] Missing required dependencies: {', '.join(missing)}\n\n"
             "The Amelia server requires these packages to be installed.\n\n"
             "If you installed Amelia as a tool, reinstall with:\n\n"
-            "    uv tool install --reinstall git+https://github.com/anderskev/amelia.git\n\n"
+            "    uv tool install --reinstall git+https://github.com/existential-birds/amelia.git\n\n"
             "If you're running from source, use:\n\n"
             "    uv run amelia server\n\n"
             "Or install the missing packages directly:\n\n"
