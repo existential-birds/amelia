@@ -50,7 +50,7 @@ def _slugify(text: str) -> str:
     """Convert text to URL-friendly slug.
 
     Args:
-        text: Input text to convert.
+        text: Input text to convert to slug format.
 
     Returns:
         Lowercase, hyphenated string truncated to 50 characters.
@@ -594,7 +594,7 @@ class Architect:
 
 
 def validate_and_split_batches(plan: ExecutionPlan) -> tuple[ExecutionPlan, list[str]]:
-    """Validate Architect batches and split if needed.
+    """Validate Architect batches and split if needed to enforce size limits.
 
     Enforces maximum batch sizes based on risk level:
     - Low risk: max 5 steps

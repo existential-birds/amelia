@@ -24,7 +24,10 @@ console = Console()
 
 
 def _get_worktree_context() -> tuple[str, str]:
-    """Get worktree context with error handling.
+    """Get current git worktree context with error handling.
+
+    Wraps get_worktree_context() and converts exceptions to user-friendly
+    error messages before exiting.
 
     Returns:
         Tuple of (worktree_path, worktree_name).
@@ -47,14 +50,17 @@ def _handle_workflow_api_error(
     exc: ServerUnreachableError | WorkflowConflictError | RateLimitError | InvalidRequestError,
     worktree_path: str | None = None,
 ) -> None:
-    """Handle workflow API errors with appropriate user messaging.
+    """Handle workflow API errors with user-friendly messaging and guidance.
+
+    Displays error-specific messages with suggested actions for recovery.
+    Always exits with code 1.
 
     Args:
-        exc: The exception to handle.
-        worktree_path: Worktree path for conflict error messages.
+        exc: The exception to handle from the API client.
+        worktree_path: Optional worktree path for context in error messages.
 
     Raises:
-        typer.Exit: Always exits with code 1.
+        typer.Exit: Always exits with code 1 after displaying error.
     """
     if isinstance(exc, ServerUnreachableError):
         console.print(f"[red]Error:[/red] {exc}")
@@ -85,13 +91,14 @@ def start_command(
         typer.Option("--profile", "-p", help="Profile name for configuration"),
     ] = None,
 ) -> None:
-    """Start a workflow for an issue.
+    """Start a new workflow for an issue in the current worktree.
 
-    Detects the current git worktree and creates a new workflow via the API server.
+    Detects the current git worktree context and creates a new workflow
+    via the Amelia API server. Displays workflow details and dashboard URL.
 
     Args:
-        issue_id: Issue ID to work on (e.g., ISSUE-123).
-        profile: Profile name for configuration.
+        issue_id: Issue identifier to work on (e.g., ISSUE-123).
+        profile: Optional profile name for driver and tracker configuration.
     """
     worktree_path, worktree_name = _get_worktree_context()
 
@@ -125,14 +132,14 @@ def plan_command(
         typer.Option("--profile", "-p", help="Profile name for configuration"),
     ] = None,
 ) -> None:
-    """Generate a plan for an issue without executing it.
+    """Generate an implementation plan for an issue without executing it.
 
-    Detects the current git worktree and creates a plan-only workflow via the API server.
-    The plan will be saved to docs/plans/ when complete.
+    Creates a plan-only workflow via the API server. The Architect agent
+    generates a detailed plan saved to docs/plans/ without executing code changes.
 
     Args:
-        issue_id: Issue ID to work on (e.g., ISSUE-123).
-        profile: Profile name for configuration.
+        issue_id: Issue identifier to generate plan for (e.g., ISSUE-123).
+        profile: Optional profile name for LLM driver configuration.
     """
     worktree_path, worktree_name = _get_worktree_context()
 
@@ -164,12 +171,13 @@ def plan_command(
 def reject_command(
     reason: str,
 ) -> None:
-    """Reject the workflow plan in the current worktree.
+    """Reject the workflow plan in the current worktree with feedback.
 
-    Provide a reason that will be sent to the Architect agent for replanning.
+    Sends rejection reason to the Architect agent, which will replan
+    based on the provided feedback.
 
     Args:
-        reason: Reason for rejecting the plan
+        reason: Detailed reason for rejecting the plan to guide replanning.
     """
     # Detect worktree context
     try:
@@ -213,7 +221,8 @@ def reject_command(
 def approve_command() -> None:
     """Approve the workflow plan in the current worktree.
 
-    Auto-detects the workflow from the current git worktree.
+    Auto-detects the active workflow from the current git worktree context
+    and approves the pending plan, allowing execution to continue.
     """
     # Detect worktree context
     try:
@@ -262,13 +271,13 @@ def status_command(
         typer.Option("--all", "-a", help="Show workflows from all worktrees"),
     ] = False,
 ) -> None:
-    """Show status of active workflows.
+    """Show status of active workflows in a formatted table.
 
-    By default, shows workflow for the current worktree only.
-    Use --all to see workflows from all worktrees.
+    By default shows the workflow for the current worktree only.
+    Use --all to display workflows across all worktrees.
 
     Args:
-        all_worktrees: Show workflows from all worktrees.
+        all_worktrees: If True, show workflows from all worktrees instead of current only.
     """
     # Detect worktree context (if filtering to current)
     worktree_path = None
@@ -329,10 +338,11 @@ def cancel_command(
 ) -> None:
     """Cancel the active workflow in the current worktree.
 
-    Requires confirmation unless --force is used.
+    Auto-detects the workflow from the current git worktree and cancels it.
+    Prompts for confirmation unless --force is specified.
 
     Args:
-        force: Skip confirmation prompt.
+        force: If True, skip the confirmation prompt.
     """
     # Detect worktree context
     try:

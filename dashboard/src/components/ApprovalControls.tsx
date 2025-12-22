@@ -8,13 +8,20 @@ import { Loader } from '@/components/ai-elements/loader';
 import { Check, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-/** Response shape from approve/reject actions. */
+/**
+ * Response shape from approve/reject actions.
+ * @property success - Whether the action completed successfully
+ * @property error - Error message if the action failed
+ */
 interface ActionResponse {
   success: boolean;
   error?: string;
 }
 
-/** Possible states for the approval workflow. */
+/**
+ * Possible states for the approval workflow.
+ * pending: awaiting user decision, approved: plan accepted, rejected: plan needs revision.
+ */
 type ApprovalStatus = 'pending' | 'approved' | 'rejected';
 
 /**

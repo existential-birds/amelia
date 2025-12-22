@@ -66,10 +66,13 @@ class EventBus:
         self._connection_manager = manager
 
     def _handle_broadcast_done(self, task: asyncio.Task[None]) -> None:
-        """Handle completion of broadcast task.
+        """Handle completion of WebSocket broadcast task.
+
+        Removes completed task from tracking set and logs any exceptions
+        that occurred during broadcast.
 
         Args:
-            task: The completed broadcast task.
+            task: The completed asyncio broadcast task.
         """
         self._broadcast_tasks.discard(task)
         if not task.cancelled():

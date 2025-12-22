@@ -54,7 +54,10 @@ class WorktreeHealthChecker:
             logger.info("WorktreeHealthChecker stopped")
 
     async def _check_loop(self) -> None:
-        """Periodically check all active worktrees."""
+        """Periodically check all active worktrees for health issues.
+
+        Runs continuously until task is cancelled, sleeping between checks.
+        """
         while True:
             await asyncio.sleep(self._check_interval)
             try:
@@ -67,7 +70,10 @@ class WorktreeHealthChecker:
                 )
 
     async def _check_all_worktrees(self) -> None:
-        """Check health of all active workflow worktrees."""
+        """Check health of all active workflow worktrees and cancel unhealthy ones.
+
+        Cancels workflows whose worktrees have been deleted.
+        """
         for worktree_path in self._orchestrator.get_active_workflows():
             if not await self._is_worktree_healthy(worktree_path):
                 workflow = await self._orchestrator.get_workflow_by_worktree(
@@ -85,7 +91,7 @@ class WorktreeHealthChecker:
                     )
 
     def _check_worktree_sync(self, path: Path) -> bool:
-        """Synchronous filesystem checks for worktree health.
+        """Perform synchronous filesystem checks for worktree health.
 
         Args:
             path: Path to worktree directory.
@@ -104,10 +110,10 @@ class WorktreeHealthChecker:
         return git_path.exists()
 
     async def _is_worktree_healthy(self, worktree_path: str) -> bool:
-        """Check if worktree directory still exists and is valid.
+        """Check if worktree directory still exists and is a valid git repository.
 
         Performs async filesystem check using thread pool to avoid blocking
-        the event loop on slow/network filesystems.
+        the event loop on slow or network filesystems.
 
         Args:
             worktree_path: Absolute path to worktree.

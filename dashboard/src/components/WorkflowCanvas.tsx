@@ -30,12 +30,18 @@ interface WorkflowCanvasProps {
   className?: string;
 }
 
-/** Custom node types for React Flow. */
+/**
+ * Custom node types for React Flow.
+ * Maps the 'workflow' type to the WorkflowNode component.
+ */
 const nodeTypes: NodeTypes = {
   workflow: WorkflowNode,
 };
 
-/** Maps edge status to stroke color CSS variable. */
+/**
+ * Maps edge status to stroke color CSS variable.
+ * Uses Tailwind CSS custom properties for theming.
+ */
 const edgeColors: Record<string, string> = {
   completed: 'var(--status-completed)',
   active: 'var(--primary)',

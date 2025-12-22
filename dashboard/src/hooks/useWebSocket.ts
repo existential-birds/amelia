@@ -11,10 +11,8 @@ import type { WebSocketMessage, WorkflowEvent } from '../types';
 
 /**
  * Derive WebSocket URL from window.location.
- * - http: → ws:
- * - https: → wss:
- * - Use the same host as the current page
- * - Path is always /ws/events
+ * Converts HTTP protocol to WS, HTTPS to WSS. Uses current host with /ws/events path.
+ * @returns WebSocket URL (ws://host/ws/events or wss://host/ws/events)
  */
 function deriveWebSocketUrl(): string {
   // Handle SSR/tests where window might not exist
@@ -29,10 +27,7 @@ function deriveWebSocketUrl(): string {
 
 /**
  * Base URL for the WebSocket connection.
- * Priority:
- * 1. VITE_WS_BASE_URL env variable (if set)
- * 2. Derived from window.location (production)
- * 3. Fallback to ws://localhost:8420/ws/events (SSR/tests)
+ * Priority: VITE_WS_BASE_URL env var, then derived from window.location, then fallback.
  */
 const WS_BASE_URL = import.meta.env.VITE_WS_BASE_URL || deriveWebSocketUrl();
 

@@ -63,6 +63,10 @@ export interface WorkflowDetailLoaderData {
  * Result object returned by React Router actions (approve, reject, cancel).
  * Indicates whether the action succeeded and which action was performed.
  *
+ * @property success - Whether the action was successfully executed
+ * @property action - Which action was performed (approved, rejected, or cancelled)
+ * @property error - Error message if the action failed, otherwise undefined
+ *
  * @example
  * ```typescript
  * // Success case

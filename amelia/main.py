@@ -43,23 +43,23 @@ app.command(name="cancel", help="Cancel the active workflow in the current workt
 def main_callback() -> None:
     """Initialize the Amelia CLI application.
 
-    Configures logging for all CLI commands. Called automatically by Typer
-    before any subcommand execution.
-
-    Returns:
-        None.
+    Configures logging with the Amelia dashboard color palette.
+    Called automatically by Typer before any subcommand execution.
     """
     configure_logging()
 
 def _get_active_profile(settings: Settings, profile_name: str | None) -> Profile:
-    """Get the active profile from settings, either specified or default.
+    """Get the active profile from settings.
+
+    Returns the specified profile if provided, otherwise returns the
+    default active profile from settings.
 
     Args:
         settings: Application settings containing profile configurations.
-        profile_name: Optional specific profile name to use, or None for default.
+        profile_name: Optional specific profile name, or None for default.
 
     Returns:
-        The requested Profile object.
+        The requested Profile object with driver and tracker configuration.
 
     Raises:
         typer.Exit: If the specified profile name is not found in settings.
@@ -73,13 +73,16 @@ def _get_active_profile(settings: Settings, profile_name: str | None) -> Profile
         return settings.profiles[settings.active_profile]
 
 def _safe_load_settings() -> Settings:
-    """Load settings from configuration file with error handling.
+    """Load settings from YAML configuration with error handling.
+
+    Wraps load_settings() and converts exceptions to user-friendly
+    error messages before exiting.
 
     Returns:
-        Application settings loaded from YAML configuration.
+        Application Settings object loaded from settings.amelia.yaml.
 
     Raises:
-        typer.Exit: If settings file is not found or fails to load.
+        typer.Exit: If settings file is not found or fails to parse.
     """
     try:
         return load_settings()

@@ -16,11 +16,12 @@ async def stream_workflow_events(
 ) -> None:
     """Stream workflow events via WebSocket and display in terminal.
 
-    Automatically exits when the WebSocket connection closes (workflow completes or fails).
+    Connects to the workflow WebSocket endpoint and prints formatted events
+    to the console. Automatically exits when the workflow completes or fails.
 
     Args:
         workflow_id: The workflow ID to stream events for.
-        base_url: The API base URL.
+        base_url: The Amelia API base URL. Defaults to http://localhost:8420.
     """
     console = Console()
     ws_url = base_url.replace("http://", "ws://").replace("https://", "wss://") + f"/api/ws/{workflow_id}"
@@ -38,11 +39,14 @@ async def stream_workflow_events(
 
 
 def _display_event(console: Console, event: dict[str, Any]) -> None:
-    """Display a workflow event in the terminal.
+    """Display a workflow event in the terminal with Rich formatting.
+
+    Formats different event types (reviewer_completed, developer_started, etc.)
+    with appropriate styling and detail level.
 
     Args:
-        console: Rich console for output.
-        event: Event dictionary from WebSocket.
+        console: Rich Console instance for formatted output.
+        event: Event dictionary from WebSocket containing type, message, and data.
     """
     event_type = event.get("type", "unknown")
 

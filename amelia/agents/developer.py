@@ -33,7 +33,10 @@ def validate_command_result(
     stdout: str,
     step: PlanStep
 ) -> bool:
-    """Validate command result. Exit code is always checked first.
+    """Validate command result against expected criteria.
+
+    Exit code is always checked first. If expected_output_pattern is specified,
+    stdout is also validated after ANSI codes are stripped.
 
     Args:
         exit_code: The exit code returned by the command.
@@ -67,8 +70,7 @@ def get_cascade_skips(
 ) -> dict[str, str]:
     """Find all steps that depend on a skipped/failed step.
 
-    Uses iterative approach to find transitive dependencies.
-    Returns dict mapping step_id -> reason for skip.
+    Uses iterative approach to find transitive dependencies across all batches.
 
     Args:
         step_id: ID of the step that was originally skipped/failed.

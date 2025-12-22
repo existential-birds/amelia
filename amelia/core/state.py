@@ -30,11 +30,17 @@ MAX_OUTPUT_CHARS = 4000
 
 
 def merge_sets(left: set[str], right: set[str] | list[str]) -> set[str]:
-    """LangGraph reducer for set union.
+    """LangGraph reducer for set union operations.
 
-    Accepts both set and list for right because:
-    - Node returns provide sets in-memory
-    - Initial state and checkpoint restore pass lists (JSON has no set type)
+    Accepts both set and list for right because node returns provide sets in-memory
+    while initial state and checkpoint restore pass lists (JSON has no set type).
+
+    Args:
+        left: Existing set to merge into.
+        right: New values as set or list to merge.
+
+    Returns:
+        Union of left and right as a set.
     """
     if isinstance(right, list):
         right = set(right)
@@ -44,7 +50,8 @@ def merge_sets(left: set[str], right: set[str] | list[str]) -> set[str]:
 def truncate_output(output: str | None) -> str | None:
     """Truncate command output to prevent state bloat.
 
-    Keeps first 50 lines + last 50 lines if output exceeds limit.
+    Keeps first 50 lines and last 50 lines if output exceeds MAX_OUTPUT_LINES.
+    Also enforces MAX_OUTPUT_CHARS character limit.
 
     Args:
         output: The output string to truncate.

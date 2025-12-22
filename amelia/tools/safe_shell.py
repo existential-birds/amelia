@@ -36,14 +36,13 @@ class SafeShellExecutor:
 
     @classmethod
     def _check_for_metacharacters(cls, command: str) -> None:
-        """
-        Check for shell metacharacters that could enable injection.
+        """Check for shell metacharacters that could enable injection.
 
         Args:
-            command: The raw command string to check
+            command: Raw command string to check for metacharacters.
 
         Raises:
-            ShellInjectionError: If metacharacters are detected
+            ShellInjectionError: If blocked metacharacters are detected.
         """
         for char in BLOCKED_SHELL_METACHARACTERS:
             if char in command:
@@ -54,16 +53,15 @@ class SafeShellExecutor:
 
     @classmethod
     def _check_blocked_commands(cls, cmd_name: str) -> None:
-        """
-        Check if command is in the blocklist.
+        """Check if command is in the blocklist.
 
-        Also handles command variants like mkfs.ext4 (blocks anything starting with mkfs.).
+        Handles command variants like mkfs.ext4 (blocks anything starting with mkfs.).
 
         Args:
-            cmd_name: The command name (first argument)
+            cmd_name: Command name (first argument) to check.
 
         Raises:
-            BlockedCommandError: If command is blocked
+            BlockedCommandError: If command is blocked for security reasons.
         """
         cmd_lower = cmd_name.lower()
 
@@ -85,14 +83,13 @@ class SafeShellExecutor:
 
     @classmethod
     def _check_dangerous_patterns(cls, command: str) -> None:
-        """
-        Check if command matches any dangerous patterns.
+        """Check if command matches any dangerous patterns.
 
         Args:
-            command: The full command string
+            command: Full command string to check for dangerous patterns.
 
         Raises:
-            DangerousCommandError: If a dangerous pattern is matched
+            DangerousCommandError: If a dangerous pattern is matched.
         """
         for pattern in DANGEROUS_PATTERNS:
             if pattern.search(command):
@@ -107,15 +104,14 @@ class SafeShellExecutor:
         cmd_name: str,
         allowed_commands: frozenset[str],
     ) -> None:
-        """
-        Check if command is in the strict mode allowlist.
+        """Check if command is in the strict mode allowlist.
 
         Args:
-            cmd_name: The command name
-            allowed_commands: Set of allowed command names
+            cmd_name: Command name to check against allowlist.
+            allowed_commands: Set of allowed command names for strict mode.
 
         Raises:
-            CommandNotAllowedError: If command not in allowlist
+            CommandNotAllowedError: If command not in allowlist.
         """
         if cmd_name not in allowed_commands:
             raise CommandNotAllowedError(
@@ -130,23 +126,22 @@ class SafeShellExecutor:
         strict_mode: bool,
         allowed_commands: frozenset[str] | None,
     ) -> list[str]:
-        """
-        Validate command against all security layers.
+        """Validate command against all security layers.
 
         Args:
-            command: The raw command string
-            strict_mode: If True, also check allowlist
-            allowed_commands: Custom allowlist for strict mode
+            command: Raw command string to validate.
+            strict_mode: If True, also check against allowlist.
+            allowed_commands: Custom allowlist for strict mode (defaults to STRICT_MODE_ALLOWED_COMMANDS).
 
         Returns:
-            Parsed command as list of arguments
+            Parsed command as list of arguments.
 
         Raises:
-            ValueError: If command is empty
-            ShellInjectionError: If metacharacters detected
-            BlockedCommandError: If command is blocked
-            DangerousCommandError: If dangerous pattern matched
-            CommandNotAllowedError: If strict mode and not in allowlist
+            ValueError: If command is empty or has invalid syntax.
+            ShellInjectionError: If metacharacters are detected.
+            BlockedCommandError: If command is blocked.
+            DangerousCommandError: If dangerous pattern is matched.
+            CommandNotAllowedError: If strict mode enabled and command not in allowlist.
         """
         # Check for empty command
         stripped = command.strip()

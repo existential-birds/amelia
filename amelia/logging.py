@@ -37,21 +37,16 @@ RESET = "\033[0m"
 
 
 def _log_format(record: "Record") -> str:
-    """Custom log format with dashboard colors.
+    """Generate custom log format string with Amelia dashboard colors.
+
+    Creates a colored log format using Loguru color tags. Applies different
+    colors based on log level and includes structured extra fields if present.
 
     Args:
-        record: Loguru record containing log metadata and message.
+        record: Loguru record containing log metadata, message, and level.
 
     Returns:
-        Format string with ANSI color codes for the log message.
-
-    Note:
-        Colors by level:
-            - DEBUG: sage muted (#88A896)
-            - INFO: blue (#5B9BD5)
-            - SUCCESS: sage green (#5B8A72)
-            - WARNING: gold (#FFC857)
-            - ERROR/CRITICAL: rust red (#A33D2E)
+        Formatted string with Loguru color tags for the log message.
     """
     level = record["level"].name
 
@@ -102,10 +97,13 @@ def _log_format(record: "Record") -> str:
 
 
 def configure_logging(level: str = "INFO") -> None:
-    """Configure loguru logging with Amelia dashboard colors.
+    """Configure loguru logging with Amelia dashboard color palette.
+
+    Removes default handler and adds custom formatted handler with
+    dashboard-themed colors and structured field support.
 
     Args:
-        level: Minimum log level to display.
+        level: Minimum log level to display (e.g., "DEBUG", "INFO", "WARNING").
     """
     # Remove default handler
     logger.remove()
@@ -120,13 +118,16 @@ def configure_logging(level: str = "INFO") -> None:
 
 
 def log_server_startup(host: str, port: int, database_path: str, version: str) -> None:
-    """Log server startup information with styled formatting.
+    """Log server startup information with Amelia-styled formatting.
+
+    Outputs colored server configuration details including version, URL,
+    and database path using the Amelia dashboard color palette.
 
     Args:
-        host: Server bind host.
-        port: Server bind port.
-        database_path: Path to SQLite database.
-        version: Application version.
+        host: Server bind host address.
+        port: Server bind port number.
+        database_path: Path to SQLite database file.
+        version: Application version string.
     """
     # Log configuration details with consistent styling
     gold = "\033[38;2;255;200;87m"
@@ -145,13 +146,13 @@ def log_server_startup(host: str, port: int, database_path: str, version: str) -
 
 
 def _ansi_color(hex_color: str) -> str:
-    """Convert hex color to ANSI 24-bit escape code.
+    """Convert hex color code to ANSI 24-bit escape sequence.
 
     Args:
-        hex_color: Hex color string (e.g., "#FFC857").
+        hex_color: Hex color string with or without # prefix (e.g., "#FFC857").
 
     Returns:
-        ANSI escape code for the color.
+        ANSI escape code for 24-bit RGB foreground color.
     """
     hex_color = hex_color.lstrip("#")
     r, g, b = int(hex_color[0:2], 16), int(hex_color[2:4], 16), int(hex_color[4:6], 16)
@@ -170,22 +171,23 @@ def log_claude_result(
     num_turns: int | None = None,
     cost_usd: float | None = None,
 ) -> None:
-    """Pretty-print Claude CLI results using the dashboard color palette.
+    """Pretty-print Claude CLI stream events with dashboard color styling.
 
-    Formats Claude CLI stream events with visual distinction using
-    complementary colors from the Amelia dashboard theme.
+    Formats different Claude CLI event types (assistant messages, tool calls,
+    results, errors, system messages) with visual distinction using the
+    Amelia dashboard color palette. Outputs to stderr.
 
     Args:
-        result_type: Type of result (assistant, tool_use, result, error, system).
+        result_type: Event type (assistant, tool_use, result, error, system).
         content: Text content for assistant/error/system events.
-        session_id: Session ID from result events.
+        session_id: Session ID from result events for session continuity.
         tool_name: Tool name for tool_use events.
-        tool_input: Tool input parameters for tool_use events.
+        tool_input: Tool input parameters dictionary for tool_use events.
         result_text: Final result text from result events.
-        subtype: Result subtype (success/error) from result events.
-        duration_ms: Execution duration in milliseconds.
-        num_turns: Number of turns in the conversation.
-        cost_usd: Total cost in USD.
+        subtype: Result subtype indicating success or error.
+        duration_ms: Execution duration in milliseconds from result events.
+        num_turns: Number of conversation turns from result events.
+        cost_usd: Total cost in USD from result events.
     """
     # ANSI color codes from palette
     gold = _ansi_color(COLORS["gold"])
