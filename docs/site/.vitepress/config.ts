@@ -16,9 +16,7 @@ const sharedSidebar = [
     items: [
       { text: 'Overview', link: '/ideas/' },
       { text: 'Session Continuity', link: '/ideas/session-continuity' },
-      { text: 'CAPEX Tracking', link: '/ideas/capex-tracking' },
       { text: 'Knowledge Library', link: '/ideas/knowledge-library' },
-      { text: 'AWS AgentCore', link: '/ideas/aws-agentcore' },
       { text: 'Debate Mode', link: '/ideas/debate-mode' },
       { text: 'Spec Builder', link: '/ideas/spec-builder' },
       { text: 'Planning Workflows', link: '/ideas/planning-workflows' }
