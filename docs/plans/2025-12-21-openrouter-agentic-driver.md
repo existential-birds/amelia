@@ -271,6 +271,20 @@ class TestApiKeyValidation:
         monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
         driver = ApiDriver(model="openrouter:anthropic/claude-3.5-sonnet")
         driver._validate_api_key()  # Should not raise
+
+    def test_openai_rejects_empty_key(self, monkeypatch):
+        """OpenAI validation should reject empty string key."""
+        monkeypatch.setenv("OPENAI_API_KEY", "")
+        driver = ApiDriver(model="openai:gpt-4o")
+        with pytest.raises(ValueError, match="not set or empty"):
+            driver._validate_api_key()
+
+    def test_openai_rejects_whitespace_key(self, monkeypatch):
+        """OpenAI validation should reject whitespace-only key."""
+        monkeypatch.setenv("OPENAI_API_KEY", "   ")
+        driver = ApiDriver(model="openai:gpt-4o")
+        with pytest.raises(ValueError, match="not set or empty"):
+            driver._validate_api_key()
 ```
 
 **Step 2: Run tests to verify they fail**
@@ -287,18 +301,20 @@ def _validate_api_key(self) -> None:
     """Validate that the appropriate API key is set for the provider.
 
     Raises:
-        ValueError: If the required API key environment variable is not set.
+        ValueError: If the required API key environment variable is not set or empty.
     """
     if self._provider == "openai":
-        if not os.environ.get("OPENAI_API_KEY"):
+        key = os.environ.get("OPENAI_API_KEY", "").strip()
+        if not key:
             raise ValueError(
-                "OPENAI_API_KEY environment variable is not set. "
+                "OPENAI_API_KEY environment variable is not set or empty. "
                 "Please configure it to use OpenAI models."
             )
     elif self._provider == "openrouter":
-        if not os.environ.get("OPENROUTER_API_KEY"):
+        key = os.environ.get("OPENROUTER_API_KEY", "").strip()
+        if not key:
             raise ValueError(
-                "OPENROUTER_API_KEY environment variable is not set. "
+                "OPENROUTER_API_KEY environment variable is not set or empty. "
                 "Please configure it to use OpenRouter models."
             )
 ```
@@ -472,29 +488,45 @@ from amelia.drivers.api.tools import AgenticContext, run_shell_command, write_fi
 class TestAgenticContext:
     """Test AgenticContext dataclass."""
 
-    def test_create_context_with_cwd(self):
+    def test_create_context_with_cwd(self, tmp_path):
         """Should create context with cwd."""
-        ctx = AgenticContext(cwd="/tmp/work")
-        assert ctx.cwd == "/tmp/work"
+        ctx = AgenticContext(cwd=str(tmp_path))
+        assert ctx.cwd == str(tmp_path.resolve())
         assert ctx.allowed_dirs is None
 
-    def test_create_context_with_allowed_dirs(self):
+    def test_create_context_with_allowed_dirs(self, tmp_path):
         """Should create context with allowed_dirs."""
-        ctx = AgenticContext(cwd="/tmp/work", allowed_dirs=["/tmp/work", "/tmp/out"])
-        assert ctx.allowed_dirs == ["/tmp/work", "/tmp/out"]
+        subdir = tmp_path / "subdir"
+        subdir.mkdir()
+        ctx = AgenticContext(cwd=str(tmp_path), allowed_dirs=[str(tmp_path), str(subdir)])
+        assert len(ctx.allowed_dirs) == 2
+
+    def test_raises_for_nonexistent_cwd(self):
+        """Should raise ValueError for non-existent cwd."""
+        with pytest.raises(ValueError, match="does not exist"):
+            AgenticContext(cwd="/nonexistent/path/that/does/not/exist")
+
+    def test_resolves_symlinks(self, tmp_path):
+        """Should resolve symlinks in paths."""
+        real_dir = tmp_path / "real"
+        real_dir.mkdir()
+        symlink = tmp_path / "link"
+        symlink.symlink_to(real_dir)
+        ctx = AgenticContext(cwd=str(symlink))
+        assert ctx.cwd == str(real_dir.resolve())
 
 
 class TestRunShellCommand:
     """Test run_shell_command tool."""
 
     @pytest.fixture
-    def mock_run_context(self):
-        """Create mock RunContext."""
+    def mock_run_context(self, tmp_path):
+        """Create mock RunContext with real tmp_path."""
         ctx = MagicMock()
-        ctx.deps = AgenticContext(cwd="/tmp/work")
+        ctx.deps = AgenticContext(cwd=str(tmp_path))
         return ctx
 
-    async def test_executes_command_with_cwd(self, mock_run_context, mocker):
+    async def test_executes_command_with_cwd(self, mock_run_context, mocker, tmp_path):
         """Should execute command in context's cwd."""
         mock_executor = mocker.patch(
             "amelia.drivers.api.tools.SafeShellExecutor.execute",
@@ -508,7 +540,7 @@ class TestRunShellCommand:
         mock_executor.assert_called_once_with(
             command="ls -la",
             timeout=30,
-            cwd="/tmp/work",
+            cwd=str(tmp_path.resolve()),
         )
 
 
@@ -516,13 +548,13 @@ class TestWriteFile:
     """Test write_file tool."""
 
     @pytest.fixture
-    def mock_run_context(self):
-        """Create mock RunContext."""
+    def mock_run_context(self, tmp_path):
+        """Create mock RunContext with real tmp_path."""
         ctx = MagicMock()
-        ctx.deps = AgenticContext(cwd="/tmp/work", allowed_dirs=["/tmp/work"])
+        ctx.deps = AgenticContext(cwd=str(tmp_path), allowed_dirs=[str(tmp_path)])
         return ctx
 
-    async def test_writes_file_with_allowed_dirs(self, mock_run_context, mocker):
+    async def test_writes_file_with_allowed_dirs(self, mock_run_context, mocker, tmp_path):
         """Should write file using allowed_dirs from context."""
         mock_writer = mocker.patch(
             "amelia.drivers.api.tools.SafeFileWriter.write",
@@ -530,13 +562,13 @@ class TestWriteFile:
             return_value="File written successfully",
         )
 
-        result = await write_file(mock_run_context, "/tmp/work/test.py", "print('hello')")
+        result = await write_file(mock_run_context, f"{tmp_path}/test.py", "print('hello')")
 
         assert result == "File written successfully"
         mock_writer.assert_called_once_with(
-            file_path="/tmp/work/test.py",
+            file_path=f"{tmp_path}/test.py",
             content="print('hello')",
-            allowed_dirs=["/tmp/work"],
+            allowed_dirs=[str(tmp_path.resolve())],
         )
 ```
 
@@ -570,6 +602,28 @@ class AgenticContext:
 
     cwd: str
     allowed_dirs: list[str] | None = None
+
+    def __post_init__(self):
+        """Validate and normalize paths."""
+        from pathlib import Path
+
+        cwd_path = Path(self.cwd)
+        if not cwd_path.exists():
+            raise ValueError(f"Working directory does not exist: {self.cwd}")
+        if not cwd_path.is_dir():
+            raise ValueError(f"Working directory is not a directory: {self.cwd}")
+
+        # Resolve symlinks and normalize
+        self.cwd = str(cwd_path.resolve())
+
+        if self.allowed_dirs:
+            resolved = []
+            for d in self.allowed_dirs:
+                p = Path(d)
+                if not p.exists():
+                    raise ValueError(f"Allowed directory does not exist: {d}")
+                resolved.append(str(p.resolve()))
+            self.allowed_dirs = resolved
 
 
 async def run_shell_command(
@@ -682,7 +736,9 @@ Expected: FAIL - _supports_tools method doesn't exist
 ```python
 # amelia/drivers/api/openai.py - add after SUPPORTED_PROVIDERS constant
 
-# Models known NOT to support tool calling
+# Models known NOT to support tool calling.
+# Note: This list may become stale as new models are released.
+# Most modern models support tools; we reject known non-tool models.
 _NO_TOOL_MODELS = frozenset({
     "gpt-3.5-turbo-instruct",
     "text-davinci-003",
@@ -809,17 +865,19 @@ Expected: FAIL - execute_agentic raises NotImplementedError
 import uuid
 from collections.abc import AsyncIterator
 
+import httpx
+from pydantic_ai import UnexpectedModelBehavior
+from pydantic_ai.agent import CallToolsNode
+from pydantic_ai.messages import ToolCallPart
+
 from amelia.drivers.api.events import ApiStreamEvent
 from amelia.drivers.api.tools import AgenticContext, run_shell_command, write_file
 ```
 
-**Step 4: Add session management methods**
+**Step 4: Add session management method**
 
 ```python
 # amelia/drivers/api/openai.py - add to ApiDriver class
-
-# Class-level session storage
-_session_histories: dict[str, list[Any]] = {}
 
 def _generate_session_id(self) -> str:
     """Generate a unique session ID.
@@ -839,24 +897,23 @@ async def execute_agentic(
     self,
     messages: list[AgentMessage],
     cwd: str,
-    session_id: str | None = None,
-    system_prompt: str | None = None,
+    instructions: str | None = None,
 ) -> AsyncIterator[ApiStreamEvent]:
     """Execute prompt with autonomous tool access using pydantic-ai.
 
     Args:
         messages: List of conversation messages.
         cwd: Working directory for execution context.
-        session_id: Optional session ID for continuity.
-        system_prompt: System prompt for the agent.
+        instructions: Runtime instructions for the agent.
 
     Yields:
         ApiStreamEvent objects as tools execute.
 
     Raises:
-        ValueError: If API key not set or model doesn't support tools.
+        ValueError: If API key not set, model doesn't support tools, or invalid messages.
     """
     self._validate_api_key()
+    self._validate_messages(messages)
 
     if not self._supports_tools():
         raise ValueError(
@@ -868,7 +925,6 @@ async def execute_agentic(
     agent = Agent(
         self.model_name,
         output_type=str,
-        system_prompt=system_prompt or "",
         tools=[run_shell_command, write_file],
     )
 
@@ -881,6 +937,9 @@ async def execute_agentic(
         raise ValueError("Messages must end with a user message")
     current_prompt = non_system[-1].content
 
+    if not current_prompt or not current_prompt.strip():
+        raise ValueError("User message cannot be empty")
+
     # Build message history from prior messages
     history = self._build_message_history(messages)
 
@@ -891,26 +950,20 @@ async def execute_agentic(
             current_prompt,
             deps=context,
             message_history=history,
+            instructions=instructions,  # Pass runtime instructions here
         ) as agent_run:
             async for node in agent_run:
-                # Check node type and yield appropriate events
-                if hasattr(node, "tool_calls"):
-                    # Tool call node
-                    for tool_call in node.tool_calls:
-                        yield ApiStreamEvent(
-                            type="tool_use",
-                            tool_name=tool_call.tool_name,
-                            tool_input=dict(tool_call.args) if hasattr(tool_call.args, "items") else {"args": tool_call.args},
-                        )
-
-                if hasattr(node, "results"):
-                    # Tool result node
-                    for tool_result in node.results:
-                        yield ApiStreamEvent(
-                            type="tool_result",
-                            tool_name=getattr(tool_result, "tool_name", "unknown"),
-                            tool_result=str(tool_result.content) if hasattr(tool_result, "content") else str(tool_result),
-                        )
+                # Process tool calls from CallToolsNode
+                if isinstance(node, CallToolsNode):
+                    for part in node.model_response.parts:
+                        if isinstance(part, ToolCallPart):
+                            yield ApiStreamEvent(
+                                type="tool_use",
+                                tool_name=part.tool_name,
+                                tool_input=part.args_as_dict(),
+                            )
+                    # Note: Tool results are handled internally by pydantic-ai.
+                    # If you need to track results, emit events from tool functions.
 
             # Final result
             yield ApiStreamEvent(
@@ -919,9 +972,61 @@ async def execute_agentic(
                 session_id=new_session_id,
             )
 
+    except ValueError as e:
+        logger.info("Validation failed", error=str(e))
+        yield ApiStreamEvent(type="error", content=f"Invalid input: {e}")
+
+    except TimeoutError as e:
+        logger.warning("Execution timeout", error=str(e))
+        yield ApiStreamEvent(type="error", content="Execution timed out. Try smaller tasks.")
+
+    except UnexpectedModelBehavior as e:
+        logger.warning("Model returned unexpected response", error=str(e))
+        yield ApiStreamEvent(type="error", content=f"Model error: {e}")
+
+    except httpx.TimeoutException as e:
+        logger.warning("Network timeout", error=str(e))
+        yield ApiStreamEvent(type="error", content="Network timeout. Please try again.")
+
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 429:
+            logger.warning("Rate limited", error=str(e))
+            yield ApiStreamEvent(type="error", content="Rate limited. Please wait and retry.")
+        elif e.response.status_code in (401, 403):
+            logger.error("Authentication failed", error=str(e))
+            yield ApiStreamEvent(type="error", content="Authentication failed. Check API key.")
+        else:
+            logger.error("API error", status_code=e.response.status_code, error=str(e))
+            yield ApiStreamEvent(type="error", content=f"API error: {e.response.status_code}")
+
     except Exception as e:
-        logger.error(f"Agentic execution failed: {e}")
-        yield ApiStreamEvent(type="error", content=str(e))
+        logger.error("Agentic execution failed", error=str(e))
+        yield ApiStreamEvent(type="error", content="An unexpected error occurred. Check logs.")
+
+def _validate_messages(self, messages: list[AgentMessage]) -> None:
+    """Validate message list for security and sanity.
+
+    Args:
+        messages: List of messages to validate.
+
+    Raises:
+        ValueError: If messages are invalid.
+    """
+    if not messages:
+        raise ValueError("Messages list cannot be empty")
+
+    for msg in messages:
+        if msg.content is None:
+            raise ValueError(f"Message with role '{msg.role}' has None content")
+
+        if len(msg.content) > 100_000:  # 100KB limit
+            raise ValueError(
+                f"Message content exceeds maximum length (100KB). "
+                f"Got {len(msg.content)} characters."
+            )
+
+        if msg.role not in ("system", "user", "assistant"):
+            raise ValueError(f"Invalid message role: {msg.role}")
 
 def _build_message_history(self, messages: list[AgentMessage]) -> list[ModelMessage] | None:
     """Build pydantic-ai message history from AgentMessages.
@@ -1025,7 +1130,7 @@ class TestOpenRouterAgenticIntegration:
         async for event in driver.execute_agentic(
             messages=[AgentMessage(role="user", content="Run 'echo hello' and tell me the output")],
             cwd=str(tmp_path),
-            system_prompt="You are a helpful assistant. Use tools to complete tasks.",
+            instructions="You are a helpful assistant. Use tools to complete tasks.",
         ):
             events.append(event)
 
