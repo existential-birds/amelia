@@ -1098,3 +1098,84 @@ profiles:
 
         settings = orchestrator._load_settings_for_worktree(str(tmp_path))
         assert settings is None
+
+    async def test_start_workflow_uses_worktree_settings(
+        self,
+        orchestrator: OrchestratorService,
+        mock_repository: AsyncMock,
+        tmp_path: Path,
+    ):
+        """start_workflow uses settings from worktree directory, not server settings."""
+        # Create valid worktree with .git
+        worktree = tmp_path / "worktree"
+        worktree.mkdir()
+        (worktree / ".git").touch()
+
+        # Create worktree-specific settings with different profile name
+        # Use noop tracker to avoid gh CLI calls
+        settings_content = """
+active_profile: worktree_profile
+profiles:
+  worktree_profile:
+    name: worktree_profile
+    driver: cli:claude
+    tracker: noop
+    strategy: single
+"""
+        (worktree / "settings.amelia.yaml").write_text(settings_content)
+
+        with patch.object(orchestrator, "_run_workflow_with_retry", new=AsyncMock()):
+            workflow_id = await orchestrator.start_workflow(
+                issue_id="ISSUE-123",
+                worktree_path=str(worktree),
+                worktree_name="feat-123",
+            )
+
+        # Verify workflow was created with worktree profile
+        call_args = mock_repository.create.call_args
+        state = call_args[0][0]
+        assert state.execution_state.profile_id == "worktree_profile"
+
+    async def test_start_workflow_fails_gracefully_when_worktree_settings_invalid(
+        self,
+        orchestrator: OrchestratorService,
+        mock_repository: AsyncMock,
+        tmp_path: Path,
+    ):
+        """start_workflow fails workflow gracefully when worktree settings are invalid."""
+        # Create valid worktree with .git
+        worktree = tmp_path / "worktree"
+        worktree.mkdir()
+        (worktree / ".git").touch()
+
+        # Create invalid settings (missing required fields)
+        (worktree / "settings.amelia.yaml").write_text("invalid: config\n")
+
+        with pytest.raises(ValueError) as exc_info:
+            await orchestrator.start_workflow(
+                issue_id="ISSUE-123",
+                worktree_path=str(worktree),
+                worktree_name="feat-123",
+            )
+
+        # Should fail with clear error about settings
+        assert "settings" in str(exc_info.value).lower() or "profile" in str(exc_info.value).lower()
+
+    async def test_start_workflow_falls_back_to_server_settings_when_no_worktree_settings(
+        self,
+        orchestrator: OrchestratorService,
+        mock_repository: AsyncMock,
+        valid_worktree: str,
+    ):
+        """start_workflow uses server settings when worktree has no settings file."""
+        with patch.object(orchestrator, "_run_workflow_with_retry", new=AsyncMock()):
+            workflow_id = await orchestrator.start_workflow(
+                issue_id="ISSUE-123",
+                worktree_path=valid_worktree,
+                worktree_name="feat-123",
+            )
+
+        # Should use server's active profile (from mock_settings fixture: "test")
+        call_args = mock_repository.create.call_args
+        state = call_args[0][0]
+        assert state.execution_state.profile_id == "test"

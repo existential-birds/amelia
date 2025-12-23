@@ -260,11 +260,24 @@ class OrchestratorService:
             # Create workflow ID early for policy check
             workflow_id = str(uuid4())
 
+            # Load settings: prefer worktree settings, fallback to server settings
+            worktree_settings = self._load_settings_for_worktree(worktree_path)
+            effective_settings = worktree_settings if worktree_settings is not None else self._settings
+
+            # If worktree has a settings file but it failed to load, that's an error
+            if worktree_settings is None:
+                settings_path = Path(worktree_path) / "settings.amelia.yaml"
+                if settings_path.exists():
+                    raise ValueError(
+                        f"Failed to load settings from {settings_path}. "
+                        "Check the file format and ensure all required fields are present."
+                    )
+
             # Load the profile (use provided profile name or active profile as fallback)
-            profile_name = profile or self._settings.active_profile
-            if profile_name not in self._settings.profiles:
+            profile_name = profile or effective_settings.active_profile
+            if profile_name not in effective_settings.profiles:
                 raise ValueError(f"Profile '{profile_name}' not found in settings")
-            loaded_profile = self._settings.profiles[profile_name]
+            loaded_profile = effective_settings.profiles[profile_name]
 
             # Check policy hooks before starting workflow
             # This allows Enterprise to enforce rate limits, quotas, etc.
