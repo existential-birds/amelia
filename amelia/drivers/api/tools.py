@@ -1,5 +1,6 @@
 """Tool definitions for pydantic-ai agentic execution."""
 from dataclasses import dataclass
+from pathlib import Path
 
 from pydantic_ai import RunContext
 
@@ -21,8 +22,6 @@ class AgenticContext:
 
     def __post_init__(self) -> None:
         """Validate and normalize paths."""
-        from pathlib import Path
-
         cwd_path = Path(self.cwd)
         if not cwd_path.exists():
             raise ValueError(f"Working directory does not exist: {self.cwd}")

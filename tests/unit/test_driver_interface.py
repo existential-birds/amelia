@@ -15,24 +15,28 @@ from amelia.drivers.cli.claude import ClaudeCliDriver
 class TestInterfaceCompliance:
     """Test both drivers implement execute_agentic correctly."""
 
-    def test_api_driver_accepts_instructions_parameter(self, monkeypatch):
-        """ApiDriver.execute_agentic should accept instructions parameter."""
+    def test_api_driver_accepts_required_parameters(self, monkeypatch):
+        """ApiDriver.execute_agentic should accept all interface parameters."""
         monkeypatch.setenv("OPENAI_API_KEY", "test-key")
         driver = ApiDriver(model="openai:gpt-4o")
 
-        # Verify the method signature includes instructions
+        # Verify the method signature includes all required parameters
         sig = inspect.signature(driver.execute_agentic)
-        assert "instructions" in sig.parameters, "execute_agentic must accept 'instructions' parameter"
+        assert "messages" in sig.parameters, "execute_agentic must accept 'messages' parameter"
         assert "cwd" in sig.parameters, "execute_agentic must accept 'cwd' parameter"
+        assert "session_id" in sig.parameters, "execute_agentic must accept 'session_id' parameter"
+        assert "instructions" in sig.parameters, "execute_agentic must accept 'instructions' parameter"
 
-    def test_claude_driver_accepts_instructions_parameter(self):
-        """ClaudeCliDriver.execute_agentic should accept instructions parameter."""
+    def test_claude_driver_accepts_required_parameters(self):
+        """ClaudeCliDriver.execute_agentic should accept all interface parameters."""
         driver = ClaudeCliDriver()
 
-        # Verify the method signature includes instructions
+        # Verify the method signature includes all required parameters
         sig = inspect.signature(driver.execute_agentic)
-        assert "instructions" in sig.parameters, "execute_agentic must accept 'instructions' parameter"
+        assert "messages" in sig.parameters, "execute_agentic must accept 'messages' parameter"
         assert "cwd" in sig.parameters, "execute_agentic must accept 'cwd' parameter"
+        assert "session_id" in sig.parameters, "execute_agentic must accept 'session_id' parameter"
+        assert "instructions" in sig.parameters, "execute_agentic must accept 'instructions' parameter"
 
     def test_claude_driver_does_not_use_system_prompt_parameter(self):
         """ClaudeCliDriver.execute_agentic should NOT have system_prompt parameter."""

@@ -50,12 +50,19 @@ class DriverInterface(Protocol):
         """
         ...
 
-    def execute_agentic(self, messages: list[AgentMessage], cwd: str, instructions: str | None = None) -> AsyncIterator[Any]:
+    def execute_agentic(
+        self,
+        messages: list[AgentMessage],
+        cwd: str,
+        session_id: str | None = None,
+        instructions: str | None = None,
+    ) -> AsyncIterator[Any]:
         """Execute prompt with autonomous tool access (agentic mode).
 
         Args:
             messages: List of conversation messages (user, assistant only - no system messages).
             cwd: Working directory for execution context.
+            session_id: Optional session ID for resuming previous conversations.
             instructions: Optional runtime instructions for the agent.
 
         Yields:

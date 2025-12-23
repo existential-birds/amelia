@@ -28,6 +28,7 @@ from amelia.drivers.base import DriverInterface
 from amelia.tools.safe_file import SafeFileWriter
 from amelia.tools.safe_shell import SafeShellExecutor
 
+
 MAX_MESSAGE_SIZE = 100_000  # 100KB per message
 MAX_TOTAL_SIZE = 500_000  # 500KB total across all messages
 MAX_INSTRUCTIONS_SIZE = 10_000  # 10KB max instructions
@@ -251,6 +252,7 @@ class ApiDriver(DriverInterface):
         self,
         messages: list[AgentMessage],
         cwd: str,
+        session_id: str | None = None,
         instructions: str | None = None,
     ) -> AsyncIterator[ApiStreamEvent]:
         """Execute prompt with autonomous tool access using pydantic-ai.
@@ -258,6 +260,8 @@ class ApiDriver(DriverInterface):
         Args:
             messages: List of conversation messages.
             cwd: Working directory for execution context.
+            session_id: Optional session ID (accepted for interface compatibility,
+                        pydantic-ai manages conversation state via message_history).
             instructions: Runtime instructions for the agent.
 
         Yields:
@@ -266,6 +270,13 @@ class ApiDriver(DriverInterface):
         Raises:
             ValueError: If invalid messages or cwd.
         """
+        # Note: session_id is accepted for interface compatibility but not used
+        # pydantic-ai manages its own conversation state via message_history
+        if session_id:
+            logger.debug(
+                "session_id parameter provided but not used for continuity. "
+                "Pydantic-ai manages conversation state via message_history parameter instead."
+            )
 
         self._validate_messages(messages)
         self._validate_instructions(instructions)
