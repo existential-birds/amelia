@@ -3,7 +3,6 @@
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """Tests for tracker factory configuration."""
 
-import pytest
 
 from amelia.core.types import Profile
 from amelia.trackers.factory import create_tracker
