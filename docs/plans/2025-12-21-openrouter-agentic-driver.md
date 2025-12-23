@@ -14,12 +14,12 @@
 | Task 4: Create Stream Event Types | ✅ Complete | `feat(api-driver): add ApiStreamEvent for agentic execution` |
 | Task 6: Create Agentic Context and Tool Definitions | ✅ Complete | `feat(api-driver): add agentic tool definitions` |
 | Task 6: Implement execute_agentic Method (8a/8b/8c) | ✅ Complete | `feat(api-driver): implement execute_agentic with pydantic-ai` |
-| Task 7: Standardize execute_agentic Interface | ⏳ Pending | |
-| Task 9: Run Full Test Suite and Lint | ⏳ Pending | |
-| Task 10: Integration Test (Optional) | ⏳ Pending | |
+| Task 7: Standardize execute_agentic Interface | ✅ Complete | `refactor(drivers): standardize execute_agentic to use instructions parameter` |
+| Task 9: Run Full Test Suite and Lint | ✅ Complete | `chore: fix lint and type issues` |
+| Task 10: Integration Test (Optional) | ✅ Complete | `test: add OpenRouter agentic integration test` |
 
 **Last Updated:** 2025-12-22
-**Next Task:** Task 7: Standardize execute_agentic Interface
+**Status:** ✅ All Tasks Complete
 
 ---
 
