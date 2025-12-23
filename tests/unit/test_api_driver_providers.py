@@ -1,6 +1,8 @@
 """Tests for ApiDriver OpenRouter integration."""
+import os
 from unittest.mock import patch
 
+import pytest
 from pydantic_ai.models.openrouter import OpenRouterModel
 
 from amelia.drivers.api.openai import OPENROUTER_APP_TITLE, OPENROUTER_APP_URL, ApiDriver
@@ -20,9 +22,17 @@ class TestApiDriverInit:
         assert driver.model_name == ApiDriver.DEFAULT_MODEL
 
 
+# Skip tests that require API key when not available (e.g., in CI)
+requires_openrouter_key = pytest.mark.skipif(
+    not os.environ.get("OPENROUTER_API_KEY"),
+    reason="OPENROUTER_API_KEY not set - skipping tests that hit the API",
+)
+
+
 class TestBuildModel:
     """Test _build_model method."""
 
+    @requires_openrouter_key
     def test_model_name_passed_correctly(self):
         """Should pass model name to OpenRouterModel."""
         driver = ApiDriver(model="google/gemini-pro")
@@ -30,6 +40,7 @@ class TestBuildModel:
         assert isinstance(model, OpenRouterModel)
         assert model.model_name == "google/gemini-pro"
 
+    @requires_openrouter_key
     def test_openrouter_model_has_app_attribution(self):
         """Should configure OpenRouter provider with app URL and title."""
         driver = ApiDriver(model="meta-llama/llama-3-70b")
