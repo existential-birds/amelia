@@ -120,7 +120,5 @@ class TestExecuteAgentic:
 
             # Should have at least a result event
             assert len(events) >= 1, "No events yielded"
-            if events[-1].type == "error":
-                print(f"Error event: {events[-1].content}")
             assert events[-1].type == "result", f"Expected result, got {events[-1].type}: {events[-1].content if events[-1].type == 'error' else ''}"
             assert events[-1].session_id is not None

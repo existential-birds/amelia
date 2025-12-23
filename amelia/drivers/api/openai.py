@@ -70,6 +70,11 @@ class ApiDriver(DriverInterface):
             OpenRouterModel configured with app attribution headers.
         """
         api_key = os.environ.get("OPENROUTER_API_KEY", "")
+        if not api_key:
+            raise ValueError(
+                "OPENROUTER_API_KEY environment variable not set. "
+                "Set OPENROUTER_API_KEY env var or use a different provider."
+            )
         provider = OpenRouterProvider(
             api_key=api_key,
             app_url=OPENROUTER_APP_URL,
@@ -98,6 +103,8 @@ class ApiDriver(DriverInterface):
             )
 
         for msg in messages:
+            if msg.content is None:
+                raise ValueError(f"Message with role '{msg.role}' has None content")
             if not msg.content.strip():
                 raise ValueError(f"Message with role '{msg.role}' has empty or whitespace-only content")
 
