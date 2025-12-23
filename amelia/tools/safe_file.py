@@ -64,6 +64,7 @@ class SafeFileWriter:
         file_path: str,
         content: str,
         allowed_dirs: list[str] | None = None,
+        base_dir: str | None = None,
     ) -> str:
         """
         Write content to a file with path traversal protection.
@@ -72,6 +73,7 @@ class SafeFileWriter:
             file_path: Path to write to (absolute or relative)
             content: Content to write
             allowed_dirs: List of allowed directories (defaults to cwd)
+            base_dir: Base directory for resolving relative paths (defaults to first allowed_dir)
 
         Returns:
             Success message
@@ -89,9 +91,12 @@ class SafeFileWriter:
 
         resolved_allowed = [Path(d).resolve() for d in allowed_dirs]
 
+        # Resolve relative paths against base_dir (defaults to first allowed dir)
+        resolve_base = Path(base_dir).resolve() if base_dir else resolved_allowed[0]
+
         path = Path(file_path)
         if not path.is_absolute():
-            path = Path.cwd() / path
+            path = resolve_base / path
         resolved_path = path.resolve()
 
         if not cls._is_path_within_allowed(resolved_path, resolved_allowed):

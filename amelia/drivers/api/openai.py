@@ -1,6 +1,7 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
+import asyncio
 import os
 import uuid
 from collections.abc import AsyncIterator
@@ -18,6 +19,9 @@ from pydantic_ai.messages import (
     ToolCallPart,
     UserPromptPart,
 )
+from pydantic_ai.models import Model
+from pydantic_ai.models.openrouter import OpenRouterModel
+from pydantic_ai.providers.openrouter import OpenRouterProvider
 
 from amelia.core.constants import ToolName
 from amelia.core.exceptions import SecurityError
@@ -32,6 +36,10 @@ from amelia.tools.safe_shell import SafeShellExecutor
 MAX_MESSAGE_SIZE = 100_000  # 100KB per message
 MAX_TOTAL_SIZE = 500_000  # 500KB total across all messages
 MAX_INSTRUCTIONS_SIZE = 10_000  # 10KB max instructions
+
+# OpenRouter app attribution
+OPENROUTER_APP_URL = "https://github.com/existential-birds/amelia"
+OPENROUTER_APP_TITLE = "Amelia"
 
 
 class ApiDriver(DriverInterface):
@@ -53,6 +61,29 @@ class ApiDriver(DriverInterface):
         """
         self.model_name = model
         self._provider = model.split(":")[0] if ":" in model else "openai"
+
+    def _build_model(self) -> str | Model:
+        """Build the appropriate model object for the provider.
+
+        For OpenRouter, creates an explicit model with app attribution.
+        For other providers, returns the model string for auto-selection.
+
+        Returns:
+            Model object or string identifier.
+        """
+        if self._provider == "openrouter":
+            # Extract model name (e.g., "anthropic/claude-3.5-sonnet" from "openrouter:anthropic/claude-3.5-sonnet")
+            model_name = self.model_name.split(":", 1)[1] if ":" in self.model_name else self.model_name
+
+            api_key = os.environ.get("OPENROUTER_API_KEY", "")
+            provider = OpenRouterProvider(
+                api_key=api_key,
+                app_url=OPENROUTER_APP_URL,
+                app_title=OPENROUTER_APP_TITLE,
+            )
+            return OpenRouterModel(model_name, provider=provider)
+
+        return self.model_name
 
     def _validate_messages(self, messages: list[AgentMessage]) -> None:
         """Validate message list for security and sanity.
@@ -166,7 +197,7 @@ class ApiDriver(DriverInterface):
 
         # Create agent with system prompt if present
         agent = Agent(
-            self.model_name,
+            self._build_model(),
             output_type=schema if schema else str,
             system_prompt=system_prompt if system_prompt else ()
         )
@@ -283,7 +314,7 @@ class ApiDriver(DriverInterface):
 
         # Create agent with tools
         agent = Agent(
-            self.model_name,
+            self._build_model(),
             output_type=str,
             tools=[run_shell_command, write_file],
         )
@@ -338,6 +369,14 @@ class ApiDriver(DriverInterface):
             logger.warning("Security violation", error=str(e))
             yield ApiStreamEvent(type="error", content=f"Security violation: {e}")
 
+        except GeneratorExit:
+            # Consumer closed the generator (e.g., via break) - just exit cleanly
+            return
+
         except Exception as e:
+            # Handle cancel scope cleanup errors from pydantic-ai/anyio during generator close
+            if "cancel scope" in str(e).lower() or isinstance(e.__cause__, asyncio.CancelledError):
+                logger.debug("Generator cleanup during cancel scope", error=str(e))
+                return
             logger.error("Agentic execution failed", error=str(e), error_type=type(e).__name__)
             yield ApiStreamEvent(type="error", content=str(e))

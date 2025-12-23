@@ -111,3 +111,34 @@ class TestSafeFileWriterSecurity:
                 "content",
                 allowed_dirs=[str(tmp_path.parent)],
             )
+
+    async def test_base_dir_resolves_relative_paths(self, tmp_path: Path):
+        """Relative paths should resolve against base_dir, not process cwd."""
+        # Create a subdirectory to use as base_dir
+        base = tmp_path / "workdir"
+        base.mkdir()
+
+        # Write using a relative path with explicit base_dir
+        # Process cwd is NOT base, so this tests the fix for the bug
+        result = await SafeFileWriter.write(
+            "output.txt",  # relative path
+            "test content",
+            allowed_dirs=[str(base)],
+            base_dir=str(base),
+        )
+        assert "Successfully" in result
+        assert (base / "output.txt").read_text() == "test content"
+
+    async def test_base_dir_defaults_to_first_allowed_dir(self, tmp_path: Path):
+        """When base_dir is None, relative paths resolve against first allowed_dir."""
+        base = tmp_path / "allowed"
+        base.mkdir()
+
+        result = await SafeFileWriter.write(
+            "default_base.txt",  # relative path
+            "content",
+            allowed_dirs=[str(base)],
+            # No base_dir specified - should use allowed_dirs[0]
+        )
+        assert "Successfully" in result
+        assert (base / "default_base.txt").read_text() == "content"

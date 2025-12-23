@@ -103,4 +103,5 @@ async def write_file(
         file_path=file_path,
         content=content,
         allowed_dirs=allowed_dirs,
+        base_dir=ctx.deps.cwd,
     )
