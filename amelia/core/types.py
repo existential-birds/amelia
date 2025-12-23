@@ -17,7 +17,7 @@ from uuid import uuid4
 from pydantic import BaseModel, ConfigDict, Field
 
 
-DriverType = Literal["cli:claude", "api:openai", "api:openrouter", "cli", "api"]
+DriverType = Literal["cli:claude", "api:openrouter", "cli", "api"]
 TrackerType = Literal["jira", "github", "none", "noop"]
 StrategyType = Literal["single", "competitive"]
 ExecutionMode = Literal["structured", "agentic"]
@@ -66,6 +66,8 @@ class Profile(BaseModel):
     Attributes:
         name: Profile name (e.g., 'work', 'personal').
         driver: LLM driver type (e.g., 'api:openai', 'cli:claude').
+        model: LLM model identifier (e.g., 'openai:gpt-4o', 'openrouter:anthropic/claude-3.5-sonnet').
+            Required for api:openrouter driver to specify which model to use.
         tracker: Issue tracker type (jira, github, none, noop).
         strategy: Review strategy (single or competitive).
         execution_mode: Execution mode (structured or agentic).
@@ -81,6 +83,7 @@ class Profile(BaseModel):
 
     name: str
     driver: DriverType
+    model: str | None = None
     tracker: TrackerType = "none"
     strategy: StrategyType = "single"
     execution_mode: ExecutionMode = "structured"

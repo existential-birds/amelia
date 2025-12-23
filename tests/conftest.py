@@ -107,9 +107,9 @@ def mock_profile_factory(tmp_path_factory: TempPathFactory) -> Callable[..., Pro
         if preset == "cli_single":
             return Profile(name="test_cli", driver="cli:claude", tracker="noop", strategy="single", **kwargs)
         elif preset == "api_single":
-            return Profile(name="test_api", driver="api:openai", tracker="noop", strategy="single", **kwargs)
+            return Profile(name="test_api", driver="api:openrouter", tracker="noop", strategy="single", **kwargs)
         elif preset == "api_competitive":
-            return Profile(name="test_comp", driver="api:openai", tracker="noop", strategy="competitive", **kwargs)
+            return Profile(name="test_comp", driver="api:openrouter", tracker="noop", strategy="competitive", **kwargs)
         return Profile(name=name, driver=driver, tracker=tracker, strategy=strategy, **kwargs)
     return _create
 

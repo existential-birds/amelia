@@ -24,7 +24,7 @@ class TestOpenRouterAgenticIntegration:
 
     async def test_simple_shell_command(self, tmp_path):
         """Should execute a simple shell command via OpenRouter."""
-        driver = ApiDriver(model="openrouter:anthropic/claude-3.5-sonnet")
+        driver = ApiDriver(model="anthropic/claude-3.5-sonnet")
 
         events = []
         async for event in driver.execute_agentic(
@@ -41,7 +41,7 @@ class TestOpenRouterAgenticIntegration:
 
     async def test_file_write(self, tmp_path):
         """Should write a file via OpenRouter."""
-        driver = ApiDriver(model="openrouter:anthropic/claude-3.5-sonnet")
+        driver = ApiDriver(model="anthropic/claude-3.5-sonnet")
 
         events = []
         async for event in driver.execute_agentic(

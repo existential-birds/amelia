@@ -149,7 +149,7 @@ def make_issue(
 
 def make_profile(
     name: str = "test",
-    driver: str = "api:openai",
+    driver: str = "api:openrouter",
     tracker: str = "noop",
     strategy: str = "single",
     trust_level: TrustLevel = TrustLevel.STANDARD,

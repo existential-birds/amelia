@@ -398,7 +398,7 @@ class TestCreateWorkflow:
                 "worktree_path": "/tmp/worktree-456",
                 "worktree_name": "custom-name",
                 "profile": "work",
-                "driver": "api:openai",
+                "driver": "api:openrouter",
             },
         )
 
@@ -410,7 +410,7 @@ class TestCreateWorkflow:
         call_kwargs = mock_orchestrator.start_workflow.call_args.kwargs
         assert call_kwargs["worktree_name"] == "custom-name"
         assert call_kwargs["profile"] == "work"
-        assert call_kwargs["driver"] == "api:openai"
+        assert call_kwargs["driver"] == "api:openrouter"
 
     async def test_create_workflow_conflict(
         self,

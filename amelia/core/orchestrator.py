@@ -126,7 +126,7 @@ async def call_architect_node(
     # Extract stream_emitter, workflow_id, and profile from config
     stream_emitter, workflow_id, profile = _extract_config_params(config)
 
-    driver = DriverFactory.get_driver(profile.driver)
+    driver = DriverFactory.get_driver(profile.driver, model=profile.model)
     architect = Architect(driver, stream_emitter=stream_emitter)
 
     # Handle plan_only mode - generate plan with markdown and exit
@@ -415,7 +415,7 @@ async def call_reviewer_node(
     # Extract stream_emitter, workflow_id, and profile from config
     stream_emitter, workflow_id, profile = _extract_config_params(config)
 
-    driver = DriverFactory.get_driver(profile.driver)
+    driver = DriverFactory.get_driver(profile.driver, model=profile.model)
     reviewer = Reviewer(driver, stream_emitter=stream_emitter)
 
     code_changes = await get_code_changes_for_review(state)
@@ -485,7 +485,7 @@ async def call_developer_node(
     # Extract stream_emitter, workflow_id, and profile from config if available
     stream_emitter, workflow_id, profile = _extract_config_params(config)
 
-    driver = DriverFactory.get_driver(profile.driver)
+    driver = DriverFactory.get_driver(profile.driver, model=profile.model)
     developer = Developer(
         driver,
         execution_mode=profile.execution_mode,

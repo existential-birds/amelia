@@ -22,7 +22,7 @@ def test_load_settings_valid(tmp_path):
             },
             "home": {
                 "name": "home",
-                "driver": "api:openai",
+                "driver": "api:openrouter",
                 "tracker": "github",
                 "strategy": "competitive"
             }
@@ -93,7 +93,7 @@ def test_load_settings_explicit_path_overrides_env_var(tmp_path, monkeypatch):
         "profiles": {
             "from_explicit": {
                 "name": "from_explicit",
-                "driver": "api:openai",
+                "driver": "api:openrouter",
                 "tracker": "github",
                 "strategy": "competitive"
             }
@@ -115,4 +115,4 @@ def test_load_settings_explicit_path_overrides_env_var(tmp_path, monkeypatch):
     settings = load_settings(config_path=explicit_path)
 
     assert settings.active_profile == "from_explicit"
-    assert settings.profiles["from_explicit"].driver == "api:openai"
+    assert settings.profiles["from_explicit"].driver == "api:openrouter"

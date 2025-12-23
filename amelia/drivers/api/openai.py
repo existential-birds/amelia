@@ -43,47 +43,39 @@ OPENROUTER_APP_TITLE = "Amelia"
 
 
 class ApiDriver(DriverInterface):
-    """Real OpenAI API-based driver using pydantic-ai.
+    """OpenRouter API-based driver using pydantic-ai.
 
-    Provides LLM generation capabilities through OpenAI's API.
+    Provides LLM generation capabilities through OpenRouter's API,
+    which supports models from OpenAI, Anthropic, Google, and others.
 
     Attributes:
-        model_name: The OpenAI model identifier in format 'openai:model-name'.
+        model_name: The model identifier (e.g., 'anthropic/claude-sonnet-4-20250514').
     """
 
-    def __init__(self, model: str = 'openai:gpt-4o'):
+    DEFAULT_MODEL = "anthropic/claude-sonnet-4-20250514"
+
+    def __init__(self, model: str | None = None):
         """Initialize the API driver.
 
         Args:
-            model: Model identifier in format 'provider:model-name'.
-                   Pydantic-ai validates provider support at runtime.
-                   Defaults to 'openai:gpt-4o'.
+            model: Model identifier for OpenRouter (e.g., 'anthropic/claude-sonnet-4-20250514').
+                   See https://openrouter.ai/models for available models.
         """
-        self.model_name = model
-        self._provider = model.split(":")[0] if ":" in model else "openai"
+        self.model_name = model or self.DEFAULT_MODEL
 
-    def _build_model(self) -> str | Model:
-        """Build the appropriate model object for the provider.
-
-        For OpenRouter, creates an explicit model with app attribution.
-        For other providers, returns the model string for auto-selection.
+    def _build_model(self) -> Model:
+        """Build the OpenRouter model with app attribution.
 
         Returns:
-            Model object or string identifier.
+            OpenRouterModel configured with app attribution headers.
         """
-        if self._provider == "openrouter":
-            # Extract model name (e.g., "anthropic/claude-3.5-sonnet" from "openrouter:anthropic/claude-3.5-sonnet")
-            model_name = self.model_name.split(":", 1)[1] if ":" in self.model_name else self.model_name
-
-            api_key = os.environ.get("OPENROUTER_API_KEY", "")
-            provider = OpenRouterProvider(
-                api_key=api_key,
-                app_url=OPENROUTER_APP_URL,
-                app_title=OPENROUTER_APP_TITLE,
-            )
-            return OpenRouterModel(model_name, provider=provider)
-
-        return self.model_name
+        api_key = os.environ.get("OPENROUTER_API_KEY", "")
+        provider = OpenRouterProvider(
+            api_key=api_key,
+            app_url=OPENROUTER_APP_URL,
+            app_title=OPENROUTER_APP_TITLE,
+        )
+        return OpenRouterModel(self.model_name, provider=provider)
 
     def _validate_messages(self, messages: list[AgentMessage]) -> None:
         """Validate message list for security and sanity.
@@ -188,8 +180,8 @@ class ApiDriver(DriverInterface):
             ValueError: If message list is empty or does not end with a user message.
             RuntimeError: If API call fails.
         """
-        if not os.environ.get("OPENAI_API_KEY"):
-            raise ValueError("OPENAI_API_KEY environment variable is not set. Please configure it to use the ApiDriver.")
+        if not os.environ.get("OPENROUTER_API_KEY"):
+            raise ValueError("OPENROUTER_API_KEY environment variable is not set. Please configure it to use the ApiDriver.")
 
         # Extract system messages and combine them into a single system prompt
         system_messages = [msg for msg in messages if msg.role == 'system']

@@ -22,7 +22,7 @@ async def test_orchestrator_parallel_review_api() -> None:
     """Verifies concurrent API calls during competitive review with an API driver."""
     profile = make_profile(
         name="api_comp_reviewer",
-        driver="api:openai",
+        driver="api:openrouter",
         tracker="noop",
         strategy="competitive",
     )
@@ -140,7 +140,7 @@ async def test_orchestrator_node_passes_working_dir_as_cwd(
     # Create profile with working_dir set
     profile = make_profile(
         name="test",
-        driver="api:openai",
+        driver="api:openrouter",
         working_dir="/test/project",
     )
 

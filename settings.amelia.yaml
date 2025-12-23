@@ -6,6 +6,7 @@ active_profile: test
 profiles:
   test:
     name: test
-    driver: cli:claude
+    driver: api:openrouter
+    model: x-ai/grok-code-fast-1
     tracker: github
     strategy: single

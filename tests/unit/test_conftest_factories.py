@@ -51,7 +51,7 @@ class TestFactoryCustomization:
         comp = mock_profile_factory(preset="api_competitive")
 
         assert cli.driver == "cli:claude"
-        assert api.driver == "api:openai"
+        assert api.driver == "api:openrouter"
         assert comp.strategy == "competitive"
 
     def test_execution_plan_factory_custom_batches(self, mock_execution_plan_factory):
