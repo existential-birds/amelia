@@ -32,7 +32,8 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: 'dist',
+    outDir: '../amelia/server/static',
+    emptyOutDir: true,
     sourcemap: true,
     rollupOptions: {
       output: {

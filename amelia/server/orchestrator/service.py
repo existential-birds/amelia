@@ -134,12 +134,18 @@ class OrchestratorService:
 
         return emit
 
-    async def _get_profile_or_fail(self, workflow_id: str, profile_id: str) -> Profile | None:
+    async def _get_profile_or_fail(
+        self,
+        workflow_id: str,
+        profile_id: str,
+        worktree_path: str | None = None,
+    ) -> Profile | None:
         """Look up profile by ID and handle missing profile consistently.
 
         Args:
             workflow_id: Workflow ID for logging and status updates.
             profile_id: Profile ID to look up in settings.
+            worktree_path: Optional worktree path to set as working_dir fallback.
 
         Returns:
             Profile if found, None if not found (after setting workflow to failed).
@@ -150,7 +156,15 @@ class OrchestratorService:
                 workflow_id, "failed", failure_reason=f"Profile '{profile_id}' not found"
             )
             return None
-        return self._settings.profiles[profile_id]
+
+        profile = self._settings.profiles[profile_id]
+
+        # Ensure working_dir is set to worktree_path for git operations
+        # Create a copy to avoid mutating the shared settings profile
+        if profile.working_dir is None and worktree_path:
+            profile = profile.model_copy(update={"working_dir": worktree_path})
+
+        return profile
 
     async def start_workflow(
         self,
@@ -507,8 +521,10 @@ class OrchestratorService:
             )
             return
 
-        # Get profile from settings using profile_id
-        profile = await self._get_profile_or_fail(workflow_id, state.execution_state.profile_id)
+        # Get profile from settings using profile_id (with worktree_path fallback)
+        profile = await self._get_profile_or_fail(
+            workflow_id, state.execution_state.profile_id, state.worktree_path
+        )
         if profile is None:
             return
 
@@ -633,8 +649,10 @@ class OrchestratorService:
             )
             return
 
-        # Get profile from settings using profile_id
-        profile = await self._get_profile_or_fail(workflow_id, state.execution_state.profile_id)
+        # Get profile from settings using profile_id (with worktree_path fallback)
+        profile = await self._get_profile_or_fail(
+            workflow_id, state.execution_state.profile_id, state.worktree_path
+        )
         if profile is None:
             return
         retry_config = profile.retry
@@ -743,8 +761,10 @@ class OrchestratorService:
             )
             return
 
-        # Get profile from settings using profile_id
-        profile = await self._get_profile_or_fail(workflow_id, state.execution_state.profile_id)
+        # Get profile from settings using profile_id (with worktree_path fallback)
+        profile = await self._get_profile_or_fail(
+            workflow_id, state.execution_state.profile_id, state.worktree_path
+        )
         if profile is None:
             return
 
@@ -917,11 +937,13 @@ class OrchestratorService:
 
             logger.info("Workflow approved", workflow_id=workflow_id)
 
-        # Get profile from settings using profile_id
+        # Get profile from settings using profile_id (with worktree_path fallback)
         if workflow.execution_state is None:
             logger.error("No execution_state in workflow", workflow_id=workflow_id)
             return
-        profile = await self._get_profile_or_fail(workflow_id, workflow.execution_state.profile_id)
+        profile = await self._get_profile_or_fail(
+            workflow_id, workflow.execution_state.profile_id, workflow.worktree_path
+        )
         if profile is None:
             return
 
@@ -1128,11 +1150,13 @@ class OrchestratorService:
                 feedback=feedback,
             )
 
-        # Get profile from settings using profile_id
+        # Get profile from settings using profile_id (with worktree_path fallback)
         if workflow.execution_state is None:
             logger.error("No execution_state in workflow", workflow_id=workflow_id)
             return
-        profile = await self._get_profile_or_fail(workflow_id, workflow.execution_state.profile_id)
+        profile = await self._get_profile_or_fail(
+            workflow_id, workflow.execution_state.profile_id, workflow.worktree_path
+        )
         if profile is None:
             return
 
@@ -1212,11 +1236,13 @@ class OrchestratorService:
                 resolution=blocker_resolution,
             )
 
-        # Get profile from settings using profile_id
+        # Get profile from settings using profile_id (with worktree_path fallback)
         if workflow.execution_state is None:
             logger.error("No execution_state in workflow", workflow_id=workflow_id)
             return
-        profile = await self._get_profile_or_fail(workflow_id, workflow.execution_state.profile_id)
+        profile = await self._get_profile_or_fail(
+            workflow_id, workflow.execution_state.profile_id, workflow.worktree_path
+        )
         if profile is None:
             return
 
