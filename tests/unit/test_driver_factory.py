@@ -21,6 +21,11 @@ class TestDriverFactory:
         driver = DriverFactory.get_driver("api:openai")
         assert isinstance(driver, ApiDriver)
 
+    def test_get_api_openrouter_driver(self):
+        """Factory should return ApiDriver for api:openrouter."""
+        driver = DriverFactory.get_driver("api:openrouter", model="openrouter:anthropic/claude-3.5-sonnet")
+        assert isinstance(driver, ApiDriver)
+
     def test_unknown_driver_raises(self):
         with pytest.raises(ValueError, match="Unknown driver key"):
             DriverFactory.get_driver("invalid:driver")

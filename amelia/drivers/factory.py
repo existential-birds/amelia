@@ -25,9 +25,9 @@ class DriverFactory:
         Raises:
             ValueError: If driver_key is not recognized.
         """
-        if driver_key == "cli:claude" or driver_key == "cli":
+        if driver_key in ("cli:claude", "cli"):
             return ClaudeCliDriver(**kwargs)
-        elif driver_key == "api:openai" or driver_key == "api":
+        elif driver_key in ("api:openai", "api:openrouter", "api"):
             return ApiDriver(**kwargs)
         else:
             raise ValueError(f"Unknown driver key: {driver_key}")
