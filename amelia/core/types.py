@@ -17,7 +17,7 @@ from uuid import uuid4
 from pydantic import BaseModel, ConfigDict, Field
 
 
-DriverType = Literal["cli:claude", "api:openai", "cli", "api"]
+DriverType = Literal["cli:claude", "api:openai", "api:openrouter", "cli", "api"]
 TrackerType = Literal["jira", "github", "none", "noop"]
 StrategyType = Literal["single", "competitive"]
 ExecutionMode = Literal["structured", "agentic"]
