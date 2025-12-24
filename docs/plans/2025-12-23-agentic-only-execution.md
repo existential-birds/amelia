@@ -18,7 +18,7 @@
 
 ### Current Architecture (Complex Security)
 
-```
+```text
 ┌─────────────────────────────────────────────────────┐
 │ Developer Node                                       │
 │  └─ _execute_batch_agentic()                        │
@@ -38,7 +38,7 @@
 
 ### Proposed Architecture (Security by Isolation)
 
-```
+```text
 ┌─────────────────────────────────────────────────────┐
 │ Developer Node                                       │
 │  └─ _execute_batch_agentic()                        │
@@ -175,6 +175,8 @@ def test_execution_mode_type_removed():
 ## Batch 3 [MEDIUM RISK] - Create DeepAgentsDriver
 
 *Create a new driver that wraps DeepAgents with sandbox execution.*
+
+> **API Note:** The deepagents imports below are speculative based on current documentation. Verify actual API paths during implementation - particularly `create_deep_agent` signature, `BaseSandbox` location, and sandbox backend availability.
 
 ### Step 3.0: Write RED tests
 - **File:** `tests/unit/drivers/test_deepagents_driver.py` (NEW)
@@ -866,8 +868,16 @@ class ApiDriver(DriverInterface):
 ### Step 13.1: Backup database
 - **Command:** `cp ~/.amelia/checkpoint.db ~/.amelia/checkpoint.db.backup.$(date +%Y%m%d%H%M%S)`
 
-### Step 13.2: Clear checkpoints
+### Step 13.2: Verify backup
+- **Command:** `ls -la ~/.amelia/checkpoint.db.backup.* && sqlite3 ~/.amelia/checkpoint.db.backup.* "SELECT COUNT(*) FROM checkpoints;"`
+- **Expected:** File exists and query returns a count (confirms backup is valid)
+
+### Step 13.3: Clear checkpoints
 - **Command:** `sqlite3 ~/.amelia/checkpoint.db "DELETE FROM checkpoints"`
+
+### Step 13.4: Restore procedure (if needed)
+> **Warning:** Any running workflows will be disrupted. Stop the Amelia server before restoring.
+- **Command:** `cp ~/.amelia/checkpoint.db.backup.<timestamp> ~/.amelia/checkpoint.db`
 
 ---
 
