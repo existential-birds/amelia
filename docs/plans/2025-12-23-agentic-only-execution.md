@@ -17,6 +17,13 @@
 > - **SandboxBackend** (Modal/Runloop/Daytona) implements the full protocol INCLUDING the `execute` tool, but runs commands in isolated containers where damage is contained.
 >
 > This is "security by design" - FilesystemBackend simply cannot run shell commands, so no validation is needed. The plan removes ~1000 lines of security code because that code was protecting against threats that don't exist when using FilesystemBackend.
+>
+> **✅ VERIFIED (2025-12-23):** Source code review of `deepagents/backends/filesystem.py` confirms:
+> - FilesystemBackend implements `BackendProtocol` only (NOT `SandboxBackendProtocol`)
+> - Exposes only: `ls_info`, `read`, `write`, `edit`, `grep_raw`, `glob_info`, `upload_files`, `download_files`
+> - No `execute()` method exists in FilesystemBackend
+> - Middleware layer (`deepagents/middleware/filesystem.py`) explicitly checks `isinstance(backend, SandboxBackendProtocol)` before exposing execute tool
+> - Path traversal prevention built-in: blocks `..` sequences, `~` expansion, enforces root_dir containment
 
 **Tech Stack:** Python, Pydantic, LangGraph, DeepAgents, asyncio
 
@@ -195,11 +202,17 @@ def validate_working_dir(cls, v: str | None) -> str | None:
     """Validate working_dir is absolute and has no path traversal."""
     if v is None:
         return v
+
+    # Check raw string FIRST (before Path processing) to catch all traversal attempts
+    if ".." in v:
+        raise ValueError("working_dir cannot contain '..'")
+    if v != v.strip():
+        raise ValueError("working_dir cannot have leading/trailing whitespace")
+
     path = Path(v)
     if not path.is_absolute():
         raise ValueError("working_dir must be an absolute path")
-    if ".." in str(path):
-        raise ValueError("working_dir cannot contain '..'")
+
     return str(path.resolve())
 ```
 
@@ -454,6 +467,24 @@ class DeepAgentsDriver(DriverInterface):
         Compare to old ApiDriver which exposed Bash tool requiring complex
         SafeShellExecutor validation. FilesystemBackend lacks this tool entirely.
         """
+        # Validate cwd - must be absolute, no traversal, must exist
+        from pathlib import Path
+        cwd_path = Path(cwd)
+        if not cwd_path.is_absolute():
+            raise ValueError(f"cwd must be absolute path: {cwd}")
+        if ".." in str(cwd_path):
+            raise ValueError(f"cwd cannot contain '..': {cwd}")
+        if not cwd_path.exists() or not cwd_path.is_dir():
+            raise ValueError(f"cwd must be existing directory: {cwd}")
+
+        # Validate messages - must not be empty
+        if not messages:
+            raise ValueError("messages list cannot be empty")
+
+        # Validate instructions size - prevent memory exhaustion
+        if instructions and len(instructions) > 50_000:
+            raise ValueError("instructions exceed maximum size (50KB)")
+
         agent = await self._create_agent(cwd, instructions)
 
         # Convert messages to LangChain format
@@ -560,13 +591,50 @@ class DriverFactory:
 - **File:** `tests/unit/agents/test_architect.py`
 - **Action:** Add test verifying Architect generates PlanStep with only simplified fields
 ```python
-async def test_architect_generates_simplified_planstep():
-    """Architect should generate PlanStep with only id, description, action_type, depends_on, risk_level."""
-    # Test that generated plans don't include removed fields like file_path, command, etc.
-    pass  # Implementation depends on existing test patterns
+import pytest
+from amelia.core.state import PlanStep
+
+
+def test_planstep_has_only_simplified_fields():
+    """PlanStep should only have id, description, action_type, depends_on, risk_level."""
+    # Create a PlanStep with only the allowed fields
+    step = PlanStep(
+        id="step-1",
+        description="Implement the feature",
+        action_type="task",
+        depends_on=(),
+        risk_level="low",
+    )
+
+    # Verify required fields exist
+    assert step.id == "step-1"
+    assert step.description == "Implement the feature"
+    assert step.action_type == "task"
+    assert step.depends_on == ()
+    assert step.risk_level == "low"
+
+
+def test_planstep_rejects_removed_fields():
+    """PlanStep should not accept removed fields like file_path, command, etc."""
+    # These fields should no longer exist in PlanStep
+    with pytest.raises(TypeError, match="unexpected keyword argument"):
+        PlanStep(
+            id="step-1",
+            description="Test",
+            action_type="task",
+            file_path="/some/path",  # Removed field
+        )
+
+    with pytest.raises(TypeError, match="unexpected keyword argument"):
+        PlanStep(
+            id="step-1",
+            description="Test",
+            action_type="task",
+            command="echo hello",  # Removed field
+        )
 ```
 - **Command:** `uv run pytest tests/unit/agents/test_architect.py -v -k simplified`
-- **Expected:** FAIL (changes not yet implemented)
+- **Expected:** FAIL (changes not yet implemented - removed fields still exist)
 
 ### Step 4.1: Update ArchitectContextStrategy prompts
 - **File:** `amelia/agents/architect.py`
@@ -683,6 +751,25 @@ async def test_empty_batch_returns_complete(mock_state, mock_profile):
   - Remove path traversal checks
   - Remove command validation
   - Remove `SafeShellExecutor._validate_command` calls
+- **Action:** Update Developer `__init__` to add timeout parameter:
+```python
+def __init__(
+    self,
+    driver: DriverInterface,
+    stream_emitter: StreamEmitter | None = None,
+    timeout: int = 600,  # 10 minute default timeout
+):
+    """Initialize Developer agent.
+
+    Args:
+        driver: Driver interface for LLM execution.
+        stream_emitter: Optional callback for streaming events.
+        timeout: Execution timeout in seconds (default: 600).
+    """
+    self.driver = driver
+    self._stream_emitter = stream_emitter or (lambda e: None)
+    self.timeout = timeout
+```
 
 ### Step 5.2: Simplify _execute_batch
 - **File:** `amelia/agents/developer.py`
@@ -829,10 +916,40 @@ This driver is suitable for:
 - **File:** `tests/unit/core/test_orchestrator.py`
 - **Action:** Add test verifying Developer is instantiated without execution_mode
 ```python
-async def test_developer_created_without_execution_mode(mock_profile):
+import pytest
+from unittest.mock import patch, MagicMock, AsyncMock
+
+from amelia.core.orchestrator import Orchestrator
+from amelia.agents.developer import Developer
+
+
+async def test_developer_created_without_execution_mode(mock_profile_factory, mock_driver):
     """Orchestrator should create Developer without execution_mode parameter."""
-    # Verify Developer() call doesn't pass execution_mode
-    pass  # Implementation depends on existing test patterns
+    mock_profile = mock_profile_factory()
+
+    with patch.object(Orchestrator, '_get_driver', return_value=mock_driver):
+        with patch('amelia.core.orchestrator.Developer') as MockDeveloper:
+            mock_dev_instance = MagicMock()
+            mock_dev_instance.execute_batch = AsyncMock(return_value=MagicMock())
+            MockDeveloper.return_value = mock_dev_instance
+
+            orchestrator = Orchestrator()
+
+            # Trigger developer creation (implementation may vary)
+            # This tests that when Developer is instantiated, execution_mode is NOT passed
+            await orchestrator.call_developer_node(
+                {"execution_state": MagicMock()},
+                MagicMock(),
+            )
+
+            # Verify Developer was called
+            MockDeveloper.assert_called()
+
+            # Verify execution_mode was NOT in the call kwargs
+            call_kwargs = MockDeveloper.call_args.kwargs
+            assert "execution_mode" not in call_kwargs, (
+                f"execution_mode should not be passed to Developer, got: {call_kwargs}"
+            )
 ```
 - **Command:** `uv run pytest tests/unit/core/test_orchestrator.py -v -k execution_mode`
 - **Expected:** FAIL (execution_mode still passed)
