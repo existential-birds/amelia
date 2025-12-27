@@ -7,7 +7,6 @@ This module provides the Developer agent that executes code changes using
 autonomous tool-calling LLM execution rather than structured step-by-step plans.
 """
 from collections.abc import AsyncIterator
-from typing import Any
 
 from loguru import logger
 
@@ -125,7 +124,7 @@ class Developer:
         self,
         state: ExecutionState,
         profile: Profile,
-    ) -> list[Any]:
+    ) -> list[AgentMessage]:
         """Build conversation messages for the driver.
 
         Args:

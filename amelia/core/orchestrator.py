@@ -92,7 +92,7 @@ async def call_architect_node(
     output: PlanOutput = await architect.plan(
         state=state,
         profile=profile,
-        workflow_id=workflow_id or "unknown",
+        workflow_id=workflow_id,
     )
 
     # Log the architect plan generation
@@ -187,7 +187,7 @@ async def get_code_changes_for_review(state: ExecutionState) -> str:
             return stdout.decode()
         else:
             return f"Error getting git diff: {stderr.decode()}"
-    except Exception as e:
+    except (FileNotFoundError, OSError) as e:
         return f"Failed to execute git diff: {str(e)}"
 
 

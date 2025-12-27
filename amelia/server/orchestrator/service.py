@@ -1090,11 +1090,13 @@ class OrchestratorService:
             # Diagnostic: Log checkpoint state before resuming
             checkpoint_state = await graph.aget_state(config)
             if checkpoint_state and checkpoint_state.values:
-                has_plan = checkpoint_state.values.get("execution_plan") is not None
+                has_goal = checkpoint_state.values.get("goal") is not None
+                has_plan = checkpoint_state.values.get("plan_markdown") is not None
                 logger.debug(
                     "Checkpoint state before resume",
                     workflow_id=workflow_id,
-                    has_execution_plan=has_plan,
+                    has_goal=has_goal,
+                    has_plan=has_plan,
                     human_approved=checkpoint_state.values.get("human_approved"),
                     next_nodes=checkpoint_state.next if checkpoint_state.next else None,
                 )
