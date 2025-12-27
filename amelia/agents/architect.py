@@ -1,14 +1,13 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
-"""Architect agent for analyzing issues and generating goals/strategies.
+"""Architect agent for generating implementation plans.
 
 This module provides the Architect agent that analyzes issues and produces
-high-level goals and strategies for agentic execution, rather than detailed
-step-by-step execution plans.
+rich markdown implementation plans for agentic execution.
 """
 import os
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 from loguru import logger
@@ -20,8 +19,40 @@ from amelia.core.types import Design, Issue, Profile, StreamEmitter, StreamEvent
 from amelia.drivers.base import DriverInterface
 
 
+def _slugify(text: str) -> str:
+    """Convert text to URL-friendly slug.
+
+    Args:
+        text: Input text to convert to slug format.
+
+    Returns:
+        Lowercase, hyphenated string truncated to 50 characters.
+    """
+    return text.lower().replace(" ", "-").replace("_", "-")[:50]
+
+
+class PlanOutput(BaseModel):
+    """Output from Architect plan generation.
+
+    Attributes:
+        markdown_content: The full markdown plan content.
+        markdown_path: Path where the plan was saved.
+        goal: High-level goal extracted from the plan.
+        key_files: Files likely to be modified.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    markdown_content: str
+    markdown_path: Path
+    goal: str
+    key_files: list[str] = []
+
+
 class ArchitectOutput(BaseModel):
-    """Output from Architect analysis.
+    """Output from Architect analysis (simplified form).
+
+    Used when only analysis is needed, not full plan generation.
 
     Attributes:
         goal: Clear description of what needs to be done.
@@ -38,26 +69,107 @@ class ArchitectOutput(BaseModel):
     risks: list[str] = []
 
 
+class MarkdownPlanOutput(BaseModel):
+    """Structured output for markdown plan generation.
+
+    This is the schema the LLM uses to generate the plan content.
+
+    Attributes:
+        goal: High-level goal for the implementation.
+        plan_markdown: The full markdown plan with phases, tasks, and steps.
+        key_files: Files that will likely be modified.
+    """
+
+    goal: str
+    plan_markdown: str
+    key_files: list[str] = []
+
+
 class ArchitectContextStrategy(ContextStrategy):
     """Context compilation strategy for the Architect agent.
 
-    Compiles minimal context for analysis by including issue information
-    and optional design context. Focuses on understanding the task rather
-    than generating detailed plans.
+    Compiles context for plan generation by including issue information
+    and optional design context.
     """
 
-    SYSTEM_PROMPT = """You are a senior software architect analyzing development tasks.
-Your role is to understand issues and produce clear goals and strategies for implementation.
+    SYSTEM_PROMPT = """You are a senior software architect creating implementation plans.
+Your role is to analyze issues and produce detailed markdown implementation plans."""
 
-Focus on:
-- Understanding what needs to be accomplished
-- Identifying the high-level approach
-- Noting key files that will likely need changes
-- Highlighting potential risks or considerations
+    SYSTEM_PROMPT_PLAN = """You are a senior software architect creating implementation plans.
 
-Do NOT produce step-by-step plans - the Developer agent will determine specific actions."""
+Generate implementation plans in markdown format that follow this structure:
+
+# [Title] Implementation Plan
+
+> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+
+**Goal:** [Clear description of what needs to be accomplished]
+
+**Success Criteria:** [How we know when the task is complete]
+
+---
+
+## Phase 1: [Phase Name]
+
+### Task 1.1: [Task Name]
+
+**Step 1: [Step description]**
+
+```[language]
+[code block if applicable]
+```
+
+**Run:** `[command to run]`
+
+**Success criteria:** [How to verify this step worked]
+
+### Task 1.2: [Next Task]
+...
+
+---
+
+## Phase 2: [Next Phase]
+...
+
+---
+
+## Summary
+
+[Brief summary of what was accomplished]
+
+---
+
+Guidelines:
+- Each Phase groups related work with ## headers
+- Each Task is a discrete unit of work with ### headers
+- Each Step has code blocks, commands to run, and success criteria
+- Include TDD approach: write test first, run to verify it fails, implement, run to verify it passes
+- Be specific about file paths, commands, and expected outputs
+- Keep steps granular (2-5 minutes of work each)"""
 
     ALLOWED_SECTIONS = {"issue", "design", "codebase"}
+
+    def get_plan_generation_prompt(self) -> str:
+        """Get user prompt for markdown plan generation.
+
+        Returns:
+            User prompt string for plan generation.
+        """
+        return """Analyze the issue and generate a complete implementation plan in markdown format.
+
+The plan should:
+1. Include the Claude skill instruction at the top: > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans
+2. Break work into logical Phases (## headers)
+3. Each Phase contains Tasks (### headers)
+4. Each Task has Steps with code blocks, commands, and success criteria
+5. Follow TDD approach where applicable
+6. Be specific about file paths and commands
+7. Include success criteria for each step
+
+Return the plan as a MarkdownPlanOutput with:
+- goal: A clear 1-2 sentence goal statement
+- plan_markdown: The full markdown plan content
+- key_files: List of files that will be modified"""
 
     def _format_design_section(self, design: Design) -> str:
         """Format Design into structured markdown for context.
@@ -220,13 +332,13 @@ Do NOT produce step-by-step plans - the Developer agent will determine specific 
 
 
 class Architect:
-    """Agent responsible for analyzing issues and generating goals/strategies.
+    """Agent responsible for creating implementation plans from issues.
 
-    Replaces detailed execution plan generation with high-level goal and
-    strategy analysis for agentic execution.
+    Generates rich markdown plans that the Developer agent can follow
+    agentically, or provides simplified analysis when full plans aren't needed.
 
     Attributes:
-        driver: LLM driver interface for analysis.
+        driver: LLM driver interface for plan generation.
         context_strategy: Strategy for compiling context from ExecutionState.
     """
 
@@ -240,11 +352,133 @@ class Architect:
         """Initialize the Architect agent.
 
         Args:
-            driver: LLM driver interface for analysis.
+            driver: LLM driver interface for plan generation.
             stream_emitter: Optional callback for streaming events.
         """
         self.driver = driver
         self._stream_emitter = stream_emitter
+
+    async def plan(
+        self,
+        state: ExecutionState,
+        profile: Profile,
+        output_dir: str | None = None,
+        *,
+        workflow_id: str,
+    ) -> PlanOutput:
+        """Generate a markdown implementation plan from an issue.
+
+        Creates a rich markdown plan and saves it to docs/plans/. The plan
+        follows the superpowers:executing-plans format with phases, tasks,
+        and steps that the Developer agent can follow agentically.
+
+        Args:
+            state: The execution state containing the issue and optional design.
+            profile: The profile containing working directory settings.
+            output_dir: Directory path where the markdown plan will be saved.
+                If None, uses profile's plan_output_dir (defaults to docs/plans).
+            workflow_id: Workflow ID for stream events (required).
+
+        Returns:
+            PlanOutput containing the markdown plan content and path.
+
+        Raises:
+            ValueError: If no issue is present in the state.
+        """
+        if not state.issue:
+            raise ValueError("Cannot generate plan: no issue in ExecutionState")
+
+        # Use profile's output directory if not specified
+        if output_dir is None:
+            output_dir = profile.plan_output_dir
+
+        # Resolve relative paths to working_dir (not server CWD)
+        output_path = Path(output_dir)
+        if not output_path.is_absolute() and profile.working_dir:
+            output_dir = str(Path(profile.working_dir) / output_path)
+
+        # Compile context using strategy
+        strategy = self.context_strategy()
+        compiled_context = strategy.compile(state, profile)
+
+        # Build messages with plan generation system prompt
+        system_message = AgentMessage(role="system", content=strategy.SYSTEM_PROMPT_PLAN)
+        context_messages = strategy.to_messages(compiled_context)
+        user_message = AgentMessage(role="user", content=strategy.get_plan_generation_prompt())
+
+        messages = [system_message, *context_messages, user_message]
+
+        # Call driver with MarkdownPlanOutput schema
+        raw_response, _session_id = await self.driver.generate(
+            messages=messages,
+            schema=MarkdownPlanOutput,
+            cwd=profile.working_dir,
+            session_id=state.driver_session_id,
+        )
+        response = MarkdownPlanOutput.model_validate(raw_response)
+
+        # Save markdown to file
+        markdown_path = self._save_markdown(
+            response.plan_markdown,
+            state.issue,
+            state.design,
+            output_dir,
+        )
+
+        logger.info(
+            "Architect plan generated",
+            agent="architect",
+            goal=response.goal[:100] + "..." if len(response.goal) > 100 else response.goal,
+            key_files_count=len(response.key_files),
+            markdown_path=str(markdown_path),
+        )
+
+        # Emit completion event
+        if self._stream_emitter is not None:
+            event = StreamEvent(
+                type=StreamEventType.AGENT_OUTPUT,
+                content=f"Plan generated: {response.goal[:100]}...",
+                timestamp=datetime.now(UTC),
+                agent="architect",
+                workflow_id=workflow_id,
+            )
+            await self._stream_emitter(event)
+
+        return PlanOutput(
+            markdown_content=response.plan_markdown,
+            markdown_path=markdown_path,
+            goal=response.goal,
+            key_files=response.key_files,
+        )
+
+    def _save_markdown(
+        self,
+        markdown_content: str,
+        issue: Issue,
+        design: Design | None,
+        output_dir: str,
+    ) -> Path:
+        """Save plan as markdown file.
+
+        Args:
+            markdown_content: The markdown plan content to save.
+            issue: Original issue being planned.
+            design: Optional design context.
+            output_dir: Directory path for saving the markdown file.
+
+        Returns:
+            Path to the saved markdown file.
+        """
+        output_path = Path(output_dir)
+        output_path.mkdir(parents=True, exist_ok=True)
+
+        title = design.title if design else issue.title
+        filename = f"{date.today().isoformat()}-{_slugify(title)}.md"
+        file_path = output_path / filename
+
+        file_path.write_text(markdown_content)
+
+        return file_path
 
     async def analyze(
         self,
@@ -253,10 +487,10 @@ class Architect:
         *,
         workflow_id: str,
     ) -> ArchitectOutput:
-        """Analyze an issue and generate goal/strategy.
+        """Analyze an issue and generate goal/strategy (simplified form).
 
         Creates an ArchitectOutput with high-level goal and strategy
-        for the Developer agent to execute agentically.
+        for quick analysis without full plan generation.
 
         Args:
             state: The execution state containing the issue and optional design.

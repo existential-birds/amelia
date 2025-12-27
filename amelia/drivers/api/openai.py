@@ -20,7 +20,9 @@ from pydantic_ai.messages import (
     UserPromptPart,
 )
 from pydantic_ai.models import Model
+from pydantic_ai.models.openai import OpenAIModel
 from pydantic_ai.models.openrouter import OpenRouterModel
+from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.providers.openrouter import OpenRouterProvider
 
 from amelia.core.constants import ToolName
@@ -113,8 +115,6 @@ class ApiDriver(DriverInterface):
 
         if self._provider == "openai":
             # Use OpenAI directly via pydantic-ai
-            from pydantic_ai.models.openai import OpenAIModel
-            from pydantic_ai.providers.openai import OpenAIProvider
             api_key = os.environ.get("OPENAI_API_KEY", "")
             openai_provider = OpenAIProvider(api_key=api_key)
             return OpenAIModel(model_name, provider=openai_provider)

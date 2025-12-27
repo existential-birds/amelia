@@ -12,10 +12,14 @@ vi.mock('@/utils/workflow', () => ({
 vi.mock('@/utils/pipeline', () => ({
   buildPipeline: vi.fn(() => ({
     nodes: [
-      { id: 't1', label: 'developer', subtitle: 'Setup', status: 'completed' as const },
-      { id: 't2', label: 'developer', subtitle: 'Implement', status: 'active' as const },
+      { id: 'architect', label: 'Architect', status: 'completed' as const },
+      { id: 'developer', label: 'Developer', status: 'active' as const, subtitle: 'In progress...' },
+      { id: 'reviewer', label: 'Reviewer', status: 'pending' as const },
     ],
-    edges: [{ from: 't1', to: 't2', label: '', status: 'completed' as const }],
+    edges: [
+      { from: 'architect', to: 'developer', label: '', status: 'completed' as const },
+      { from: 'developer', to: 'reviewer', label: '', status: 'active' as const },
+    ],
   })),
 }));
 
@@ -61,12 +65,12 @@ describe('WorkflowDetailPage', () => {
     });
   });
 
-  it('should render workflow progress', async () => {
+  it('should render pipeline visualization', async () => {
     renderWithRouter({ workflow: mockWorkflow });
 
     await waitFor(() => {
-      // WorkflowProgress component shows task completion (0 stages when no execution_plan)
-      expect(screen.getByText(/of 0 stages/)).toBeInTheDocument();
+      // Pipeline section header
+      expect(screen.getByText('PIPELINE')).toBeInTheDocument();
     });
   });
 

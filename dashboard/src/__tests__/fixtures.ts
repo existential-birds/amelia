@@ -15,7 +15,6 @@ import {
   type WorkflowDetail,
   type WorkflowEvent,
   type StreamEvent,
-  type ExecutionPlan,
 } from '../types';
 
 // ============================================================================
@@ -59,13 +58,9 @@ export function createMockWorkflowDetail(
     failure_reason: null,
     token_usage: {},
     recent_events: [],
-    // Batch execution fields
-    execution_plan: null,
-    current_batch_index: 0,
-    batch_results: [],
-    developer_status: null,
-    current_blocker: null,
-    batch_approvals: [],
+    // Agentic execution fields
+    goal: 'Test goal for implementation',
+    plan_path: null,
     ...overrides,
   };
 }
@@ -172,47 +167,6 @@ export const mockWorkflowSummaries: WorkflowSummary[] = [
 ];
 
 // ============================================================================
-// Execution Plan Fixtures
-// ============================================================================
-
-/**
- * Mock execution plan representing a complete batched workflow.
- */
-export const mockExecutionPlan: ExecutionPlan = {
-  goal: 'Implement user authentication system',
-  batches: [
-    {
-      batch_number: 1,
-      description: 'Analysis and architecture',
-      risk_summary: 'low',
-      steps: [
-        { id: 'step-1', description: 'Analyze requirements and create high-level architecture', action_type: 'code' },
-      ],
-    },
-    {
-      batch_number: 2,
-      description: 'Authentication implementation',
-      risk_summary: 'medium',
-      steps: [
-        { id: 'step-2', description: 'Implement user authentication module', action_type: 'code', file_path: 'src/auth/auth.py' },
-        { id: 'step-3', description: 'Implement API endpoints for user management', action_type: 'code', file_path: 'src/auth/api.py' },
-      ],
-    },
-    {
-      batch_number: 3,
-      description: 'Review and testing',
-      risk_summary: 'low',
-      steps: [
-        { id: 'step-4', description: 'Review authentication implementation', action_type: 'validation' },
-        { id: 'step-5', description: 'Write integration tests for authentication flow', action_type: 'code', file_path: 'tests/test_auth.py' },
-      ],
-    },
-  ],
-  total_estimated_minutes: 60,
-  tdd_approach: true,
-};
-
-// ============================================================================
 // Workflow Event Fixtures
 // ============================================================================
 
@@ -247,8 +201,8 @@ export const mockWorkflowEvents: WorkflowEvent[] = [
     timestamp: '2025-12-06T10:02:30Z',
     agent: 'architect',
     event_type: 'stage_completed',
-    message: 'Architect completed execution plan with 5 tasks',
-    data: { task_count: 5 },
+    message: 'Architect completed planning',
+    data: { goal: 'Implement user authentication system' },
   },
   {
     id: 'evt-004',
@@ -257,7 +211,7 @@ export const mockWorkflowEvents: WorkflowEvent[] = [
     timestamp: '2025-12-06T10:02:35Z',
     agent: 'orchestrator',
     event_type: 'approval_required',
-    message: 'Waiting for human approval of execution plan',
+    message: 'Waiting for human approval of plan',
     data: { approval_type: 'plan' },
   },
   {
@@ -316,7 +270,7 @@ export const mockWorkflowEvents: WorkflowEvent[] = [
     agent: 'orchestrator',
     event_type: 'workflow_completed',
     message: 'Workflow completed successfully',
-    data: { total_tasks: 8, duration_seconds: 2705 },
+    data: { duration_seconds: 2705 },
   },
   {
     id: 'evt-011',
@@ -326,7 +280,7 @@ export const mockWorkflowEvents: WorkflowEvent[] = [
     agent: 'developer',
     event_type: 'system_error',
     message: 'Failed to execute task: syntax error in generated code',
-    data: { error: 'SyntaxError: unexpected token', task_id: 'task-3' },
+    data: { error: 'SyntaxError: unexpected token' },
   },
   {
     id: 'evt-012',
@@ -336,7 +290,7 @@ export const mockWorkflowEvents: WorkflowEvent[] = [
     agent: 'orchestrator',
     event_type: 'workflow_failed',
     message: 'Workflow failed due to unrecoverable error',
-    data: { reason: 'Task execution error' },
+    data: { reason: 'Execution error' },
   },
   {
     id: 'evt-013',
@@ -355,7 +309,7 @@ export const mockWorkflowEvents: WorkflowEvent[] = [
 // ============================================================================
 
 /**
- * Mock workflow detail with complete data including plan, events, and token usage.
+ * Mock workflow detail with complete data including goal, events, and token usage.
  * Represents a workflow in active development with approval pending.
  */
 export const mockWorkflowDetail: WorkflowDetail = {
@@ -385,13 +339,8 @@ export const mockWorkflowDetail: WorkflowDetail = {
   recent_events: mockWorkflowEvents.filter(
     (evt) => evt.workflow_id === 'wf-in-progress-002'
   ),
-  // Batch execution fields
-  execution_plan: mockExecutionPlan,
-  current_batch_index: 1,
-  batch_results: [],
-  developer_status: 'executing',
-  current_blocker: null,
-  batch_approvals: [],
+  goal: 'Implement user authentication system',
+  plan_path: 'docs/plans/2025-12-06-issue-002.md',
 };
 
 /**
@@ -424,13 +373,8 @@ export const mockCompletedWorkflowDetail: WorkflowDetail = {
   recent_events: mockWorkflowEvents.filter(
     (evt) => evt.workflow_id === 'wf-completed-004'
   ),
-  // Batch execution fields
-  execution_plan: mockExecutionPlan,
-  current_batch_index: 3,
-  batch_results: [],
-  developer_status: 'all_done',
-  current_blocker: null,
-  batch_approvals: [],
+  goal: 'Refactor payment processing module',
+  plan_path: 'docs/plans/2025-12-05-issue-004.md',
 };
 
 /**
@@ -444,7 +388,7 @@ export const mockFailedWorkflowDetail: WorkflowDetail = {
   status: 'failed',
   started_at: '2025-12-05T08:00:00Z',
   completed_at: '2025-12-05T08:15:05Z',
-  failure_reason: 'Task execution error: syntax error in generated code',
+  failure_reason: 'Execution error: syntax error in generated code',
   current_stage: 'developer',
   token_usage: {
     architect: {
@@ -463,13 +407,8 @@ export const mockFailedWorkflowDetail: WorkflowDetail = {
   recent_events: mockWorkflowEvents.filter(
     (evt) => evt.workflow_id === 'wf-failed-005'
   ),
-  // Batch execution fields
-  execution_plan: mockExecutionPlan,
-  current_batch_index: 1,
-  batch_results: [],
-  developer_status: 'blocked',
-  current_blocker: null,
-  batch_approvals: [],
+  goal: 'Add email verification to signup flow',
+  plan_path: 'docs/plans/2025-12-05-issue-005.md',
 };
 
 /**
@@ -487,11 +426,6 @@ export const mockPendingWorkflowDetail: WorkflowDetail = {
   current_stage: null,
   token_usage: {},
   recent_events: [],
-  // Batch execution fields
-  execution_plan: null,
-  current_batch_index: 0,
-  batch_results: [],
-  developer_status: null,
-  current_blocker: null,
-  batch_approvals: [],
-}
+  goal: null,
+  plan_path: null,
+};

@@ -18,11 +18,12 @@ class TestDriverFactory:
         [
             ("cli:claude", ClaudeCliDriver, None, None),
             ("cli", ClaudeCliDriver, None, None),
-            ("api:openrouter", ApiDriver, "anthropic/claude-3.5-sonnet", "anthropic/claude-3.5-sonnet"),
+            ("api:openrouter", ApiDriver, "openrouter:anthropic/claude-3.5-sonnet", "openrouter:anthropic/claude-3.5-sonnet"),
+            ("api:openai", ApiDriver, "openai:gpt-4o", "openai:gpt-4o"),
             ("api", ApiDriver, None, None),
         ],
     )
-    def test_get_driver(self, driver_key, expected_type, model, expected_model):
+    def test_get_driver(self, driver_key, expected_type, model, expected_model) -> None:
         """Factory should return correct driver type for various driver keys."""
         driver = DriverFactory.get_driver(driver_key, model=model)
         assert isinstance(driver, expected_type)
@@ -33,10 +34,9 @@ class TestDriverFactory:
         "driver_key,error_match",
         [
             ("invalid:driver", "Unknown driver key"),
-            ("api:openai", "Unknown driver key"),
         ],
     )
-    def test_invalid_driver_raises(self, driver_key, error_match):
-        """Factory should raise ValueError for unknown or unsupported drivers."""
+    def test_invalid_driver_raises(self, driver_key, error_match) -> None:
+        """Factory should raise ValueError for unknown drivers."""
         with pytest.raises(ValueError, match=error_match):
             DriverFactory.get_driver(driver_key)

@@ -56,6 +56,7 @@ class Profile(BaseModel):
         tracker: Issue tracker type (jira, github, none, noop).
         strategy: Review strategy (single or competitive).
         working_dir: Working directory for agentic execution.
+        plan_output_dir: Directory for saving implementation plans (default: docs/plans).
         retry: Retry configuration for transient failures.
         max_review_iterations: Maximum review-fix loop iterations before terminating.
     """
@@ -68,6 +69,7 @@ class Profile(BaseModel):
     tracker: TrackerType = "none"
     strategy: StrategyType = "single"
     working_dir: str | None = None
+    plan_output_dir: str = "docs/plans"
     retry: RetryConfig = Field(default_factory=RetryConfig)
     max_review_iterations: int = 3
 

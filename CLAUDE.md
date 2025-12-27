@@ -28,7 +28,6 @@ uv run pytest -k "test_name"           # By name pattern
 
 # CLI commands
 uv run amelia start ISSUE-123 --profile work     # Full orchestrator loop
-uv run amelia plan ISSUE-123                     # Generate plan only
 uv run amelia review --local                     # Review uncommitted changes
 ```
 
@@ -79,7 +78,7 @@ The orchestrator loops between Developer and Reviewer until changes are approved
 
 | Layer | Location | Purpose |
 |-------|----------|---------|
-| **Core** | `amelia/core/` | LangGraph orchestrator, state types (`ExecutionState`, `ExecutionPlan`), shared types (`Profile`, `Issue`) |
+| **Core** | `amelia/core/` | LangGraph orchestrator, state types (`AgenticState`), shared types (`Profile`, `Issue`) |
 | **Agents** | `amelia/agents/` | Architect (planning), Developer (execution), Reviewer (review) |
 | **Drivers** | `amelia/drivers/` | LLM abstraction - `api:openrouter` (pydantic-ai) or `cli:claude` (CLI wrapper) |
 | **Trackers** | `amelia/trackers/` | Issue source abstraction - `jira`, `github`, `noop` |
@@ -125,6 +124,30 @@ Tests use `pytest-asyncio` with `asyncio_mode = "auto"`.
 
 **Test Principles:**
 - **Don't Repeat Yourself (DRY)** - Extract common setup, assertions, and utilities into fixtures and helper functions. Avoid duplicating test logic across test files.
+
+**Integration Tests Must Be Real Integration Tests:**
+
+- Integration tests (`tests/integration/`) must test actual component interactions, not mocked components.
+- Only mock at the **external boundary** (e.g., HTTP calls to LLM APIs). Never mock internal classes like `Architect`, `Developer`, `Reviewer`, or `DriverFactory`.
+- If you find yourself patching internal components, you're writing a unit test - move it to `tests/unit/`.
+- The purpose of integration tests is to verify that real components work together correctly. Mocking them defeats this purpose entirely.
+
+**Example - WRONG (this is a unit test pretending to be an integration test):**
+
+```python
+with patch("amelia.core.orchestrator.Architect") as mock_architect:
+    mock_architect.return_value.plan = AsyncMock(return_value=mock_plan)
+    result = await call_architect_node(state, config)  # Testing nothing real
+```
+
+**Example - CORRECT (real integration test):**
+
+```python
+# Real Architect instance, only mock the LLM HTTP boundary
+with patch("httpx.AsyncClient.post") as mock_http:
+    mock_http.return_value = Response(200, json={"choices": [...]})
+    result = await call_architect_node(state, config)  # Real Architect runs
+```
 
 ## Manual Test Plans
 

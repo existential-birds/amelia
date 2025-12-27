@@ -1,12 +1,14 @@
 """Tests for agentic execution state model."""
 import pytest
+from pydantic import ValidationError
+
 from amelia.core.agentic_state import AgenticState, ToolCall, ToolResult
 
 
 class TestToolCall:
     """Test ToolCall model."""
 
-    def test_create_tool_call(self):
+    def test_create_tool_call(self) -> None:
         """Should create tool call with required fields."""
         call = ToolCall(
             id="call-1",
@@ -17,17 +19,17 @@ class TestToolCall:
         assert call.tool_name == "run_shell_command"
         assert call.tool_input == {"command": "ls -la"}
 
-    def test_tool_call_is_frozen(self):
+    def test_tool_call_is_frozen(self) -> None:
         """ToolCall should be immutable."""
         call = ToolCall(id="1", tool_name="test", tool_input={})
-        with pytest.raises(Exception):  # ValidationError for frozen
+        with pytest.raises(ValidationError):
             call.id = "2"
 
 
 class TestToolResult:
     """Test ToolResult model."""
 
-    def test_create_success_result(self):
+    def test_create_success_result(self) -> None:
         """Should create successful tool result."""
         result = ToolResult(
             call_id="call-1",
@@ -38,7 +40,7 @@ class TestToolResult:
         assert result.success is True
         assert result.error is None
 
-    def test_create_error_result(self):
+    def test_create_error_result(self) -> None:
         """Should create error tool result."""
         result = ToolResult(
             call_id="call-1",
@@ -54,7 +56,7 @@ class TestToolResult:
 class TestAgenticState:
     """Test AgenticState model."""
 
-    def test_create_initial_state(self):
+    def test_create_initial_state(self) -> None:
         """Should create state with conversation history."""
         state = AgenticState(
             workflow_id="wf-123",
@@ -66,7 +68,7 @@ class TestAgenticState:
         assert state.tool_results == ()
         assert state.status == "running"
 
-    def test_state_tracks_tool_history(self):
+    def test_state_tracks_tool_history(self) -> None:
         """Should track tool call and result history."""
         call = ToolCall(id="1", tool_name="shell", tool_input={"cmd": "ls"})
         result = ToolResult(call_id="1", tool_name="shell", output="ok", success=True)

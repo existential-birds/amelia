@@ -9,6 +9,7 @@ Developer (execute agentically) ↔ Reviewer (review) → Done. Provides node fu
 the state machine and the create_orchestrator_graph() factory.
 """
 import asyncio
+from datetime import UTC, datetime
 from typing import Any, Literal
 
 import typer
@@ -18,11 +19,11 @@ from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from loguru import logger
 
-from amelia.agents.architect import Architect, ArchitectOutput
+from amelia.agents.architect import Architect, PlanOutput
 from amelia.agents.developer import Developer
 from amelia.agents.reviewer import Reviewer
 from amelia.core.state import ExecutionState
-from amelia.core.types import Profile, StreamEmitter
+from amelia.core.types import Profile, StreamEmitter, StreamEvent, StreamEventType
 from amelia.drivers.factory import DriverFactory
 
 
@@ -60,17 +61,17 @@ async def call_architect_node(
     state: ExecutionState,
     config: RunnableConfig | None = None,
 ) -> dict[str, Any]:
-    """Orchestrator node for the Architect agent to analyze the issue.
+    """Orchestrator node for the Architect agent to generate an implementation plan.
 
-    Uses the new agentic model - generates a goal and strategy rather than
-    a detailed step-by-step execution plan.
+    Generates a rich markdown plan that the Developer agent can follow
+    agentically. The plan is saved to docs/plans/.
 
     Args:
         state: Current execution state containing the issue and profile.
         config: Optional RunnableConfig with stream_emitter in configurable.
 
     Returns:
-        Partial state dict with the goal from architect analysis.
+        Partial state dict with goal, plan_markdown, and plan_path.
 
     Raises:
         ValueError: If no issue is provided in the state.
@@ -87,28 +88,30 @@ async def call_architect_node(
     driver = DriverFactory.get_driver(profile.driver, model=profile.model)
     architect = Architect(driver, stream_emitter=stream_emitter)
 
-    # Analyze the issue and generate goal/strategy
-    output: ArchitectOutput = await architect.analyze(
+    # Generate implementation plan
+    output: PlanOutput = await architect.plan(
         state=state,
         profile=profile,
         workflow_id=workflow_id or "unknown",
     )
 
-    # Log the architect analysis
+    # Log the architect plan generation
     logger.info(
         "Agent action completed",
         agent="architect",
-        action="analyzed_issue",
+        action="generated_plan",
         details={
             "goal_length": len(output.goal),
             "key_files_count": len(output.key_files),
-            "risks_count": len(output.risks),
+            "plan_path": str(output.markdown_path),
         },
     )
 
-    # Return partial state update with goal from architect analysis
+    # Return partial state update with goal and plan from architect
     return {
         "goal": output.goal,
+        "plan_markdown": output.markdown_content,
+        "plan_path": output.markdown_path,
     }
 
 
@@ -123,7 +126,7 @@ async def human_approval_node(
     - Server mode: Returns empty dict (interrupt mechanism handles pause)
 
     Args:
-        state: Current execution state containing the goal to be reviewed.
+        state: Current execution state containing the goal and plan to be reviewed.
         config: Optional RunnableConfig with execution_mode in configurable.
 
     Returns:
@@ -140,11 +143,13 @@ async def human_approval_node(
 
     # CLI mode: blocking prompt
     typer.secho("\n--- HUMAN APPROVAL REQUIRED ---", fg=typer.colors.BRIGHT_YELLOW)
-    typer.echo("Review the proposed goal before proceeding.")
+    typer.echo("Review the generated plan before proceeding.")
     if state.goal:
         typer.echo(f"\nGoal: {state.goal}")
+    if state.plan_path:
+        typer.echo(f"\nPlan saved to: {state.plan_path}")
 
-    approved = typer.confirm("Do you approve this goal to proceed with development?", default=True)
+    approved = typer.confirm("Do you approve this plan to proceed with development?", default=True)
     comment = typer.prompt("Add an optional comment for the audit log (press Enter to skip)", default="")
 
     # Log the approval decision
@@ -219,9 +224,6 @@ async def call_developer_node(
         final_state = new_state
         # Stream events are handled by the stream_emitter if provided
         if stream_emitter:
-            from datetime import UTC, datetime
-            from amelia.core.types import StreamEvent, StreamEventType
-
             stream_event = StreamEvent(
                 type=StreamEventType.CLAUDE_THINKING if event.type == "thinking" else StreamEventType.CLAUDE_TOOL_RESULT,
                 content=event.content or event.tool_result,
@@ -295,13 +297,14 @@ async def call_reviewer_node(
 
 
 def route_approval(state: ExecutionState) -> Literal["approve", "reject"]:
-    """Route based on human approval status from state.
+    """Route based on human approval status.
 
     Args:
         state: Current execution state containing human_approved flag.
 
     Returns:
-        'approve' if human_approved is True, 'reject' otherwise.
+        'approve' if approved (continue to developer).
+        'reject' if not approved.
     """
     return "approve" if state.human_approved else "reject"
 
@@ -373,7 +376,9 @@ def create_orchestrator_graph(
     # Architect -> Human approval
     workflow.add_edge("architect_node", "human_approval_node")
 
-    # Conditional edge from human_approval_node: if approved, go to developer_node, else END
+    # Conditional edge from human_approval_node:
+    # - approve: continue to developer_node
+    # - reject: go to END
     workflow.add_conditional_edges(
         "human_approval_node",
         route_approval,

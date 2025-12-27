@@ -12,7 +12,7 @@ from typing import Any
 from loguru import logger
 
 from amelia.core.agentic_state import ToolCall, ToolResult
-from amelia.core.state import ExecutionState
+from amelia.core.state import AgentMessage, ExecutionState
 from amelia.core.types import Profile, StreamEmitter
 from amelia.drivers.api.events import ApiStreamEvent
 from amelia.drivers.base import DriverInterface
@@ -135,8 +135,6 @@ class Developer:
         Returns:
             List of AgentMessage objects for the driver.
         """
-        from amelia.core.state import AgentMessage
-
         messages = []
 
         # System message with context
@@ -182,12 +180,26 @@ Guidelines:
 - Commit your changes when complete with a descriptive message
 """
 
-        # Add design context if available
-        if state.design:
+        # Add plan context if available (from Architect)
+        if state.plan_markdown:
+            prompt += f"""
+
+You have a detailed implementation plan to follow. Execute it using your tools.
+Use your judgment to handle unexpected situations - the plan is a guide, not rigid steps.
+
+---
+IMPLEMENTATION PLAN:
+---
+
+{state.plan_markdown}
+"""
+
+        # Add design context if available (fallback if no plan)
+        elif state.design:
             prompt += f"\n\nDesign Context:\n{state.design.raw_content}"
 
-        # Add issue context if available
-        if state.issue:
+        # Add issue context if available (fallback if no plan)
+        if state.issue and not state.plan_markdown:
             prompt += f"\n\nIssue: {state.issue.title}\n{state.issue.description}"
 
         return prompt
