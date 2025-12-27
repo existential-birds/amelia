@@ -12,27 +12,29 @@ class TestArchitectContextStrategy:
     """Test ArchitectContextStrategy context compilation."""
 
     @pytest.fixture
-    def strategy(self):
+    def strategy(self) -> ArchitectContextStrategy:
         """Create an ArchitectContextStrategy instance for testing."""
         return ArchitectContextStrategy()
 
-    def test_compile_with_issue_only(
-        self, strategy, mock_execution_state_factory, mock_issue_factory
-    ):
-        """Test compile with issue only (current implementation)."""
+    def test_compile_with_issue_only_no_working_dir(
+        self, strategy, mock_execution_state_factory, mock_issue_factory, mock_profile_factory
+    ) -> None:
+        """Test compile with issue only when working_dir is None."""
         issue = mock_issue_factory(
             id="ARCH-100",
             title="Implement authentication system",
             description="Build a secure authentication system with JWT tokens",
         )
-        state, profile = mock_execution_state_factory(issue=issue)
+        # Create profile with no working_dir
+        profile = mock_profile_factory(working_dir=None)
+        state, profile = mock_execution_state_factory(issue=issue, profile=profile)
 
         context = strategy.compile(state, profile)
 
         # Should have system prompt
         assert context.system_prompt == ArchitectContextStrategy.SYSTEM_PROMPT
 
-        # Should have exactly one section: issue
+        # Should have exactly one section: issue (no codebase without working_dir)
         assert len(context.sections) == 1
         assert context.sections[0].name == "issue"
         assert "Implement authentication system" in context.sections[0].content
@@ -43,13 +45,14 @@ class TestArchitectContextStrategy:
         assert context.messages is None
 
     def test_to_messages_produces_valid_agent_message_list(
-        self, strategy, mock_execution_state_factory, mock_issue_factory
-    ):
+        self, strategy, mock_execution_state_factory, mock_issue_factory, mock_profile_factory
+    ) -> None:
         """Test to_messages produces valid AgentMessage list."""
         issue = mock_issue_factory(
             title="Implement feature X", description="Feature description"
         )
-        state, profile = mock_execution_state_factory(issue=issue)
+        profile = mock_profile_factory(working_dir=None)
+        state, profile = mock_execution_state_factory(issue=issue, profile=profile)
 
         context = strategy.compile(state, profile)
         messages = strategy.to_messages(context)
@@ -64,8 +67,8 @@ class TestArchitectContextStrategy:
         assert "Feature description" in messages[0].content
 
     def test_system_prompt_is_stable_and_constant(
-        self, strategy, mock_execution_state_factory, mock_issue_factory
-    ):
+        self, strategy, mock_execution_state_factory, mock_issue_factory, mock_profile_factory
+    ) -> None:
         """Test that SYSTEM_PROMPT is a stable class constant across instances and calls."""
         # Verify it's a class attribute
         assert hasattr(ArchitectContextStrategy, "SYSTEM_PROMPT")
@@ -74,8 +77,9 @@ class TestArchitectContextStrategy:
         # Test stability across different compiles
         issue1 = mock_issue_factory(title="Issue 1", description="Description 1")
         issue2 = mock_issue_factory(title="Issue 2", description="Description 2")
-        state1, profile1 = mock_execution_state_factory(issue=issue1)
-        state2, profile2 = mock_execution_state_factory(issue=issue2)
+        profile = mock_profile_factory(working_dir=None)
+        state1, profile1 = mock_execution_state_factory(issue=issue1, profile=profile)
+        state2, profile2 = mock_execution_state_factory(issue=issue2, profile=profile)
 
         context1 = strategy.compile(state1, profile1)
         context2 = strategy.compile(state2, profile2)
@@ -84,7 +88,7 @@ class TestArchitectContextStrategy:
         assert context1.system_prompt == context2.system_prompt
         assert context1.system_prompt == ArchitectContextStrategy.SYSTEM_PROMPT
 
-    def test_only_issue_design_and_codebase_sections_allowed(self, strategy):
+    def test_only_issue_design_and_codebase_sections_allowed(self, strategy) -> None:
         """Test that only 'issue', 'design', and 'codebase' sections are allowed."""
         # Verify ALLOWED_SECTIONS is defined correctly
         assert hasattr(ArchitectContextStrategy, "ALLOWED_SECTIONS")
@@ -96,7 +100,7 @@ class TestArchitectContextStrategy:
         ]
         strategy.validate_sections(valid_sections)  # Should not raise
 
-    def test_compile_raises_for_disallowed_sections(self, strategy):
+    def test_compile_raises_for_disallowed_sections(self, strategy) -> None:
         """Test compile raises ValueError when attempting to add disallowed section."""
         # Invalid section name should raise ValueError
         invalid_sections = [
@@ -111,14 +115,15 @@ class TestArchitectContextStrategy:
         assert "Allowed sections: ['codebase', 'design', 'issue']" in str(exc_info.value)
 
     def test_compile_formats_issue_with_title_and_description(
-        self, strategy, mock_execution_state_factory, mock_issue_factory
-    ):
+        self, strategy, mock_execution_state_factory, mock_issue_factory, mock_profile_factory
+    ) -> None:
         """Test compile formats issue section with title and description."""
         issue = mock_issue_factory(
             title="Refactor authentication module",
             description="The current auth module needs refactoring to support OAuth2",
         )
-        state, profile = mock_execution_state_factory(issue=issue)
+        profile = mock_profile_factory(working_dir=None)
+        state, profile = mock_execution_state_factory(issue=issue, profile=profile)
 
         context = strategy.compile(state, profile)
 
@@ -135,10 +140,12 @@ class TestArchitectContextStrategy:
         strategy,
         mock_execution_state_factory,
         mock_issue_factory,
-    ):
+        mock_profile_factory,
+    ) -> None:
         """Test that all sections have non-empty content."""
         issue = mock_issue_factory(title="Test Issue", description="Test description")
-        state, profile = mock_execution_state_factory(issue=issue)
+        profile = mock_profile_factory(working_dir=None)
+        state, profile = mock_execution_state_factory(issue=issue, profile=profile)
 
         context = strategy.compile(state, profile)
 
@@ -147,7 +154,7 @@ class TestArchitectContextStrategy:
 
     def test_compile_raises_when_issue_missing(
         self, strategy, mock_profile_factory
-    ):
+    ) -> None:
         """Test compile raises ValueError when issue is missing."""
         from amelia.core.state import ExecutionState
 
@@ -161,11 +168,12 @@ class TestArchitectContextStrategy:
         assert "Issue context is required for planning" in str(exc_info.value)
 
     def test_compile_raises_when_issue_has_no_title_or_description(
-        self, strategy, mock_execution_state_factory, mock_issue_factory
-    ):
+        self, strategy, mock_execution_state_factory, mock_issue_factory, mock_profile_factory
+    ) -> None:
         """Test compile raises ValueError when issue has no title or description."""
         issue = mock_issue_factory(title="", description="")
-        state, profile = mock_execution_state_factory(issue=issue)
+        profile = mock_profile_factory(working_dir=None)
+        state, profile = mock_execution_state_factory(issue=issue, profile=profile)
 
         with pytest.raises(ValueError) as exc_info:
             strategy.compile(state, profile)
@@ -181,11 +189,12 @@ class TestArchitectContextStrategy:
         ids=["only_title", "only_description"],
     )
     def test_compile_works_with_partial_issue(
-        self, strategy, mock_execution_state_factory, mock_issue_factory, title, description
-    ):
+        self, strategy, mock_execution_state_factory, mock_issue_factory, mock_profile_factory, title, description
+    ) -> None:
         """Test compile works when issue has only title or only description."""
         issue = mock_issue_factory(title=title, description=description)
-        state, profile = mock_execution_state_factory(issue=issue)
+        profile = mock_profile_factory(working_dir=None)
+        state, profile = mock_execution_state_factory(issue=issue, profile=profile)
 
         context = strategy.compile(state, profile)
 
@@ -195,7 +204,7 @@ class TestArchitectContextStrategy:
 
     def test_format_design_section_structures_design_fields(
         self, strategy, mock_design_factory
-    ):
+    ) -> None:
         """Test _format_design_section formats design as structured markdown."""
         design = mock_design_factory(
             title="Authentication System",
@@ -224,8 +233,8 @@ class TestArchitectContextStrategy:
         assert "Unit tests for services" in result
 
     def test_compile_includes_design_section_when_present(
-        self, strategy, mock_execution_state_factory, mock_issue_factory, mock_design_factory
-    ):
+        self, strategy, mock_execution_state_factory, mock_issue_factory, mock_design_factory, mock_profile_factory
+    ) -> None:
         """Test compile includes design section when state.design is set."""
         issue = mock_issue_factory(title="Build auth", description="Auth system")
         design = mock_design_factory(
@@ -233,7 +242,8 @@ class TestArchitectContextStrategy:
             goal="Secure authentication",
             architecture="JWT-based",
         )
-        state, profile = mock_execution_state_factory(issue=issue, design=design)
+        profile = mock_profile_factory(working_dir=None)
+        state, profile = mock_execution_state_factory(issue=issue, design=design, profile=profile)
 
         context = strategy.compile(state, profile)
 
@@ -250,11 +260,12 @@ class TestArchitectContextStrategy:
         assert design_section.source == "state.design"
 
     def test_compile_excludes_design_section_when_none(
-        self, strategy, mock_execution_state_factory, mock_issue_factory
-    ):
+        self, strategy, mock_execution_state_factory, mock_issue_factory, mock_profile_factory
+    ) -> None:
         """Test compile excludes design section when state.design is None."""
         issue = mock_issue_factory(title="Build feature", description="Feature desc")
-        state, profile = mock_execution_state_factory(issue=issue, design=None)
+        profile = mock_profile_factory(working_dir=None)
+        state, profile = mock_execution_state_factory(issue=issue, design=None, profile=profile)
 
         context = strategy.compile(state, profile)
 
@@ -264,7 +275,7 @@ class TestArchitectContextStrategy:
 
     def test_compile_includes_codebase_section_when_working_dir_set(
         self, strategy, mock_execution_state_factory, mock_issue_factory, mock_profile_factory, tmp_path
-    ):
+    ) -> None:
         """Test compile includes codebase section when profile.working_dir is set."""
         # Create a test directory structure
         (tmp_path / "src").mkdir()
@@ -292,7 +303,7 @@ class TestArchitectContextStrategy:
 
     def test_compile_excludes_codebase_section_when_working_dir_not_set(
         self, strategy, mock_execution_state_factory, mock_issue_factory, mock_profile_factory
-    ):
+    ) -> None:
         """Test compile excludes codebase section when profile.working_dir is None."""
         issue = mock_issue_factory(title="Add feature", description="Feature desc")
         # Create profile with working_dir=None explicitly
@@ -306,104 +317,9 @@ class TestArchitectContextStrategy:
         assert "issue" in section_names
         assert "codebase" not in section_names
 
-    def test_codebase_section_allowed_in_allowed_sections(self, strategy):
+    def test_codebase_section_allowed_in_allowed_sections(self, strategy) -> None:
         """Test that 'codebase' is in ALLOWED_SECTIONS."""
         assert "codebase" in ArchitectContextStrategy.ALLOWED_SECTIONS
-
-    def test_execution_plan_system_prompt_includes_risk_level_definitions(self, strategy):
-        """Test that execution plan system prompt includes risk level definitions."""
-        prompt = strategy.get_execution_plan_system_prompt()
-
-        # Should define all three risk levels with examples
-        assert "low" in prompt.lower()
-        assert "medium" in prompt.lower()
-        assert "high" in prompt.lower()
-
-        # Should mention characteristics of each risk level
-        assert "file writes" in prompt.lower() or "reversible" in prompt.lower()
-        assert "database" in prompt.lower() or "config" in prompt.lower()
-        assert "destructive" in prompt.lower() or "irreversible" in prompt.lower()
-
-    def test_execution_plan_system_prompt_includes_batch_size_limits(self, strategy):
-        """Test that execution plan system prompt mentions batch size limits."""
-        prompt = strategy.get_execution_plan_system_prompt()
-
-        # Should mention max batch sizes for different risk levels
-        # low=5, medium=3, high=1
-        assert "5" in prompt or "five" in prompt.lower()
-        assert "3" in prompt or "three" in prompt.lower()
-        # Should mention batching concept
-        assert "batch" in prompt.lower()
-
-    def test_execution_plan_system_prompt_includes_tdd_guidance(self, strategy):
-        """Test that execution plan system prompt includes TDD approach guidance."""
-        prompt = strategy.get_execution_plan_system_prompt()
-
-        # Should mention TDD concepts
-        assert "tdd" in prompt.lower() or "test-driven" in prompt.lower() or "test first" in prompt.lower()
-        # Should mention the typical TDD flow
-        assert "test" in prompt.lower()
-        assert "fail" in prompt.lower() or "failing" in prompt.lower()
-        assert "implement" in prompt.lower()
-        assert "pass" in prompt.lower()
-
-    def test_execution_plan_system_prompt_includes_step_granularity_guidance(self, strategy):
-        """Test that execution plan system prompt includes step granularity guidance."""
-        prompt = strategy.get_execution_plan_system_prompt()
-
-        # Should mention 2-5 minute step granularity
-        assert "2" in prompt
-        assert "5" in prompt
-        assert "minute" in prompt.lower() or "min" in prompt.lower()
-
-    def test_execution_plan_system_prompt_includes_fallback_command_guidance(self, strategy):
-        """Test that execution plan system prompt includes fallback command guidance."""
-        prompt = strategy.get_execution_plan_system_prompt()
-
-        # Should mention fallback commands or alternatives
-        assert "fallback" in prompt.lower() or "alternative" in prompt.lower()
-
-    def test_execution_plan_user_prompt_is_concise_instruction(self, strategy):
-        """Test that execution plan user prompt is a concise instruction."""
-        prompt = strategy.get_execution_plan_user_prompt()
-
-        # Should be a clear instruction to create an execution plan
-        assert len(prompt) > 0
-        assert "execution plan" in prompt.lower() or "plan" in prompt.lower()
-
-
-class TestArchitectSessionId:
-    """Tests for Architect session_id handling."""
-
-    async def test_architect_passes_session_id_to_driver(
-        self,
-        mock_execution_state_factory,
-        mock_async_driver_factory,
-        mock_execution_plan_factory,
-    ):
-        """Test that Architect passes session_id from state to driver."""
-        from amelia.agents.architect import Architect, ExecutionPlanOutput
-
-        # Create mock plan output
-        mock_plan = mock_execution_plan_factory()
-        mock_output = ExecutionPlanOutput(plan=mock_plan, reasoning="test")
-
-        # Driver returns (output, new_session_id)
-        mock_driver = mock_async_driver_factory(generate_return=(mock_output, "new-sess-456"))
-
-        state, profile = mock_execution_state_factory(driver_session_id="existing-sess-123")
-
-        architect = Architect(mock_driver)
-        result_plan, result_session_id = await architect.generate_execution_plan(state.issue, state, profile)
-
-        # Verify driver was called with session_id from state
-        mock_driver.generate.assert_called_once()
-        call_kwargs = mock_driver.generate.call_args.kwargs
-        assert call_kwargs.get("session_id") == "existing-sess-123"
-
-        # Verify return value includes session_id
-        assert result_session_id == "new-sess-456"
-        assert result_plan is not None
 
 
 class TestArchitectNodeProfileFromConfig:
@@ -415,10 +331,12 @@ class TestArchitectNodeProfileFromConfig:
         mock_issue_factory,
     ) -> None:
         """call_architect_node should get profile from config, not state."""
+        from pathlib import Path
         from unittest.mock import AsyncMock, MagicMock, patch
 
         from langchain_core.runnables.config import RunnableConfig
 
+        from amelia.agents.architect import PlanOutput
         from amelia.core.orchestrator import call_architect_node
         from amelia.core.state import ExecutionState
 
@@ -439,9 +357,13 @@ class TestArchitectNodeProfileFromConfig:
         # Mock the Architect to avoid actual LLM calls
         with patch("amelia.core.orchestrator.Architect") as mock_arch:
             mock_arch_instance = MagicMock()
-            mock_arch_instance.generate_execution_plan = AsyncMock(
-                return_value=(MagicMock(), "session-123")
+            mock_plan_output = PlanOutput(
+                markdown_content="# Test Plan",
+                markdown_path=Path("/tmp/test-plan.md"),
+                goal="Test goal",
+                key_files=[],
             )
+            mock_arch_instance.plan = AsyncMock(return_value=mock_plan_output)
             mock_arch.return_value = mock_arch_instance
 
             # Should not raise, should use profile from config
@@ -449,5 +371,5 @@ class TestArchitectNodeProfileFromConfig:
 
             # Verify Architect was created
             mock_arch.assert_called_once()
-            # Verify generate_execution_plan was called
-            mock_arch_instance.generate_execution_plan.assert_called_once()
+            # Verify plan was called
+            mock_arch_instance.plan.assert_called_once()

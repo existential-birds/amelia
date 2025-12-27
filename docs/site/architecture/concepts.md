@@ -15,33 +15,37 @@ Each agent has:
 
 ### Architect (`amelia/agents/architect.py`)
 
-**Role**: Analyzes issues, designs solutions, creates task plans.
+**Role**: Analyzes issues, designs solutions, creates implementation plans.
 
 | Property | Description |
 |----------|-------------|
-| Input | `Issue` (id, title, description) |
-| Output | `TaskDAG` (list of tasks with dependencies) |
-| Key Feature | Uses structured output (`TaskListResponse` schema) to ensure parseable JSON |
+| Input | `Issue` (id, title, description), optional `Design` |
+| Output | `PlanOutput` (markdown_content, markdown_path, goal, key_files) |
+| Key Feature | Generates rich markdown plans saved to `docs/plans/` |
 
-The Architect examines an issue and breaks it down into discrete, actionable tasks with clear dependencies. This plan forms the foundation for the Developer's work.
+The Architect examines an issue and generates a comprehensive Markdown implementation plan. This plan includes a clear goal statement that guides the Developer's agentic execution. The Markdown format is human-readable and compatible with external tools.
 
 **Note**: The Architect's `plan()` method accepts an optional `Design` parameter for incorporating design specifications from brainstorming sessions.
 
 ### Developer (`amelia/agents/developer.py`)
 
-**Role**: Executes tasks by writing code and running commands.
+**Role**: Executes coding tasks agentically using LLM-driven tool calls.
 
 | Capability | Description |
 |------------|-------------|
 | Shell commands | Execute terminal commands via `run_shell_command` tool |
 | File writes | Create/modify files via `write_file` tool |
-| LLM generation | Generate code or content for complex tasks |
+| Autonomous execution | LLM decides which tools to call and in what order |
+| Streaming | Real-time tool call and result events during execution |
 
-Tasks are executed based on their descriptions. The Developer can work in parallel on independent tasks, speeding up execution.
+The Developer receives a goal from the Architect and executes it autonomously using available tools. The LLM decides which actions to take, making it adaptive to unexpected situations.
 
-**Execution Modes**:
-- `structured` (default): Tasks executed as individual tool calls (shell commands, file writes)
-- `agentic`: Full Claude tool access with streaming, autonomous execution
+**Agentic Execution**:
+The Developer uses `execute_agentic()` which streams events as execution progresses:
+- `thinking`: LLM is analyzing and planning
+- `tool_call`: LLM is calling a tool (run_shell_command, write_file)
+- `tool_result`: Tool execution result
+- `result`: Final response when execution completes
 
 ### Reviewer (`amelia/agents/reviewer.py`)
 
@@ -89,15 +93,15 @@ flowchart TD
 ```
 
 **ExecutionState** tracks everything:
-- Current profile and issue
-- Generated plan (TaskDAG)
-- Messages exchanged
+- Profile ID and issue
+- Goal extracted from markdown plan
+- Markdown plan content and path
+- Tool calls and results (agentic execution history)
 - Approval status
 - Review results
-- `current_task_id`: Tracks currently executing task
-- `code_changes_for_review`: Staged code changes
-- `claude_session_id`: For CLI driver session continuity
+- `driver_session_id`: For driver session continuity
 - `workflow_status`: Workflow lifecycle status
+- `review_iteration`: Current iteration in review-fix loop
 
 ## Tool Use
 

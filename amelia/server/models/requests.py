@@ -5,7 +5,7 @@
 
 import os
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Annotated
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -108,14 +108,6 @@ class CreateWorkflowRequest(BaseModel):
             description="Optional driver override in type:name format (e.g., sdk:claude)",
         ),
     ] = None
-    plan_only: Annotated[
-        bool,
-        Field(
-            default=False,
-            description="If True, stop after planning and save markdown without executing",
-        ),
-    ] = False
-
     @field_validator("issue_id", mode="after")
     @classmethod
     def validate_issue_id(cls, v: str) -> str:
@@ -240,19 +232,3 @@ class RejectRequest(BaseModel):
     ]
 
 
-class BlockerResolutionRequest(BaseModel):
-    """Request to resolve a blocker.
-
-    Attributes:
-        action: Resolution action to take (skip, retry, abort, abort_revert, fix)
-        feedback: Optional feedback or fix instruction
-    """
-
-    action: Annotated[
-        Literal["skip", "retry", "abort", "abort_revert", "fix"],
-        Field(description="Resolution action to take"),
-    ]
-    feedback: Annotated[
-        str | None,
-        Field(default=None, description="Optional feedback or fix instruction"),
-    ] = None

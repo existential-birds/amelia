@@ -13,10 +13,9 @@ class TestDeveloperNodeProfileFromConfig:
         self,
         mock_profile_factory,
         mock_issue_factory,
-        mock_execution_plan_factory,
     ) -> None:
         """call_developer_node should get profile from config, not state."""
-        from unittest.mock import AsyncMock, MagicMock, patch
+        from unittest.mock import MagicMock, patch
 
         from langchain_core.runnables.config import RunnableConfig
 
@@ -25,13 +24,14 @@ class TestDeveloperNodeProfileFromConfig:
 
         profile = mock_profile_factory()
         issue = mock_issue_factory()
-        execution_plan = mock_execution_plan_factory()
 
         # State has profile_id, not profile object
+        # Uses goal and plan_markdown instead of execution_plan
         state = ExecutionState(
             profile_id=profile.name,
             issue=issue,
-            execution_plan=execution_plan,
+            goal="Test goal",
+            plan_markdown="# Test Plan\n\n## Phase 1\n\n### Task 1.1\n\nTest step",
         )
 
         # Profile is in config
@@ -45,7 +45,10 @@ class TestDeveloperNodeProfileFromConfig:
         # Mock the Developer to avoid actual execution
         with patch("amelia.core.orchestrator.Developer") as mock_dev:
             mock_dev_instance = MagicMock()
-            mock_dev_instance.run = AsyncMock(return_value={})
+            # Developer.run is now an async generator
+            async def mock_run(*args, **kwargs):
+                yield state, MagicMock(type="thinking", content="test")
+            mock_dev_instance.run = mock_run
             mock_dev.return_value = mock_dev_instance
 
             # Should not raise, should use profile from config
@@ -53,5 +56,3 @@ class TestDeveloperNodeProfileFromConfig:
 
             # Verify Developer was created with profile from config
             mock_dev.assert_called_once()
-            # Verify run was called
-            mock_dev_instance.run.assert_called_once()

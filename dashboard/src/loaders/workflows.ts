@@ -50,16 +50,17 @@ export async function workflowsLoader({ request, params }: LoaderFunctionArgs): 
   // 2. Otherwise, fetch the active workflow detail
   const targetId = params?.id ?? active?.id;
   let detail = null;
+  let detailError: string | null = null;
   if (targetId) {
     try {
       detail = await api.getWorkflow(targetId);
     } catch (error) {
       logger.warn('Failed to fetch workflow detail', { workflowId: targetId, error });
-      // Continue with null - page will show list without canvas
+      detailError = error instanceof Error ? error.message : 'Failed to load workflow details';
     }
   }
 
-  return { workflows, detail };
+  return { workflows, detail, detailError };
 }
 
 /**

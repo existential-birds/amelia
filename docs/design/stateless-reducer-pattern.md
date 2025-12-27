@@ -63,17 +63,21 @@ All state models become frozen with immutable updates via `.model_copy()`:
 
 ```python
 # Before (mutable)
-class Task(BaseModel):
-    status: Literal["pending", "in_progress", "completed", "failed"]
+class ExecutionState(BaseModel):
+    status: str
 
-state.plan.tasks[0].status = "completed"  # Mutation!
+state.status = "completed"  # Mutation!
 
 # After (immutable)
-class Task(BaseModel, frozen=True):
-    status: Literal["pending", "in_progress", "completed", "failed"]
+class ExecutionState(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    status: AgenticStatus
 
 # Raises FrozenInstanceError - caught at development time
-state.plan.tasks[0].status = "completed"
+state.status = "completed"  # Error!
+
+# Correct way to update
+new_state = state.model_copy(update={"status": "completed"})
 ```
 
 ### 3. Parallel-Safe State Definition
@@ -121,15 +125,26 @@ def token_merge(left: TokenMetrics, right: TokenMetrics) -> TokenMetrics:
     )
 
 
-class TaskResult(BaseModel):
-    """Result of executing a task. Stored in task_results dict."""
+class ToolCall(BaseModel):
+    """A tool call made by the LLM during agentic execution."""
     model_config = ConfigDict(frozen=True)
 
-    task_id: str
-    status: Literal["pending", "in_progress", "completed", "failed", "skipped"]
-    output: str | None = None
+    id: str
+    tool_name: str
+    tool_input: dict[str, Any]
+    timestamp: str | None = None
+
+
+class ToolResult(BaseModel):
+    """Result from a tool execution."""
+    model_config = ConfigDict(frozen=True)
+
+    call_id: str
+    tool_name: str
+    output: str
+    success: bool
     error: str | None = None
-    completed_at: datetime | None = None
+    duration_ms: int | None = None
 
 
 class DriverSession(BaseModel):
@@ -159,10 +174,10 @@ class ExecutionState(BaseModel):
     - All models frozen=True (immutable)
     - Multi-writer fields have reducers (Annotated)
     - Profile accessed via config["configurable"]["profile"]
-    - Task status derived from task_results, not mutated in plan
+    - Agentic execution tracked via tool_calls/tool_results
 
     Concurrency model:
-    - task_results keys are disjoint (each task_id written by one node)
+    - tool_calls/tool_results append-only via add reducer
     - driver_sessions scoped by agent name (no shared session)
     - history append-only (safe under parallel execution)
     """
@@ -174,16 +189,20 @@ class ExecutionState(BaseModel):
     # --- Domain data (single-writer, set during planning) ---
     issue: Issue | None = None
     design: Design | None = None
-    plan: TaskDAG | None = None  # Immutable after Architect creates it
+    goal: str | None = None  # Goal extracted from Architect plan
+    plan_markdown: str | None = None  # Markdown plan content
+    plan_path: Path | None = None  # Where plan was saved
 
-    # --- Task execution (parallel-safe via dict_merge, keys disjoint) ---
-    task_results: Annotated[dict[str, TaskResult], dict_merge] = Field(default_factory=dict)
+    # --- Agentic execution (parallel-safe via add reducer) ---
+    tool_calls: Annotated[list[ToolCall], add] = Field(default_factory=list)
+    tool_results: Annotated[list[ToolResult], add] = Field(default_factory=list)
 
     # --- Driver sessions (scoped by agent, parallel-safe) ---
     driver_sessions: Annotated[dict[str, DriverSession], dict_merge] = Field(default_factory=dict)
 
     # --- Append-only logs (parallel-safe via add reducer) ---
     history: Annotated[list[HistoryEntry], add] = Field(default_factory=list)
+    agent_history: Annotated[list[str], add] = Field(default_factory=list)
 
     # --- Idempotency (tracks completed steps for replay) ---
     completed_steps: Annotated[set[str], set_union] = Field(default_factory=set)
@@ -194,14 +213,12 @@ class ExecutionState(BaseModel):
     # --- Single-writer fields (no reducer needed) ---
     last_review: ReviewResult | None = None
     human_approved: bool | None = None
-    workflow_status: Literal["running", "completed", "failed"] = "running"
-
-    # --- Derived helper ---
-    def get_task_status(self, task_id: str) -> str:
-        """Get task status from task_results, defaulting to 'pending'."""
-        if task_id in self.task_results:
-            return self.task_results[task_id].status
-        return "pending"
+    human_feedback: str | None = None
+    workflow_status: Literal["running", "completed", "failed", "aborted"] = "running"
+    status: AgenticStatus = "running"
+    final_response: str | None = None
+    error: str | None = None
+    review_iteration: int = 0
 ```
 
 ### 4. Profile via Configurable (Not State)
@@ -239,36 +256,49 @@ Pure helper functions that calculate partial updates. These are simple utilities
 ```python
 # amelia/core/state_utils.py
 from datetime import datetime
-from amelia.core.state import TaskResult, HistoryEntry, DriverSession
+from amelia.core.agentic_state import ToolCall, ToolResult
+from amelia.core.state import HistoryEntry, DriverSession
 
 
-def task_started(task_id: str) -> dict:
-    """Return partial update for starting a task."""
+def tool_called(call: ToolCall) -> dict:
+    """Return partial update for a tool call."""
     return {
-        "task_results": {task_id: TaskResult(task_id=task_id, status="in_progress")},
-        "history": [HistoryEntry(actor="developer", event="task_started", detail={"task_id": task_id})],
+        "tool_calls": [call],
+        "history": [HistoryEntry(
+            actor="developer",
+            event="tool_called",
+            detail={"tool": call.tool_name, "call_id": call.id},
+        )],
     }
 
 
-def task_completed(task_id: str, output: str) -> dict:
-    """Return partial update for completing a task."""
+def tool_completed(result: ToolResult) -> dict:
+    """Return partial update for a tool result."""
     return {
-        "task_results": {task_id: TaskResult(
-            task_id=task_id,
-            status="completed",
-            output=output,
-            completed_at=datetime.utcnow(),
-        )},
-        "history": [HistoryEntry(actor="developer", event="task_completed", detail={"task_id": task_id})],
-        "completed_steps": {f"task:{task_id}"},
+        "tool_results": [result],
+        "history": [HistoryEntry(
+            actor="developer",
+            event="tool_completed",
+            detail={"tool": result.tool_name, "success": result.success},
+        )],
     }
 
 
-def task_failed(task_id: str, error: str) -> dict:
-    """Return partial update for a failed task."""
+def execution_completed(final_response: str) -> dict:
+    """Return partial update for completed agentic execution."""
     return {
-        "task_results": {task_id: TaskResult(task_id=task_id, status="failed", error=error)},
-        "history": [HistoryEntry(actor="developer", event="task_failed", detail={"task_id": task_id, "error": error})],
+        "status": "completed",
+        "final_response": final_response,
+        "history": [HistoryEntry(actor="developer", event="execution_completed", detail={})],
+    }
+
+
+def execution_failed(error: str) -> dict:
+    """Return partial update for failed agentic execution."""
+    return {
+        "status": "failed",
+        "error": error,
+        "history": [HistoryEntry(actor="developer", event="execution_failed", detail={"error": error})],
     }
 
 
@@ -376,28 +406,40 @@ from langchain_core.runnables import RunnableConfig
 
 async def developer_node(state: ExecutionState, config: RunnableConfig) -> dict:
     """Developer agent node. Returns partial update dict."""
-    from amelia.core.state_utils import task_started, task_completed, task_failed, set_driver_session
+    from amelia.core.state_utils import tool_called, tool_completed, execution_completed, set_driver_session
 
     profile: Profile = config["configurable"]["profile"]
-    task = state.get_ready_tasks()[0]  # Now a method on ExecutionState
 
     # Get scoped driver session
     session = state.driver_sessions.get("developer", DriverSession())
 
     driver = DriverFactory.get_driver(profile.driver)
-    response = await driver.generate(
-        messages=build_developer_messages(task),
-        session=session,
-        schema=DeveloperResponse,
-    )
 
-    result = DeveloperResponse.model_validate_json(response.content)
+    tool_calls = []
+    tool_results = []
 
-    # Return partial updates with scoped session
-    return {
-        **task_completed(task.id, result.output),
-        **set_driver_session("developer", response.session),
-    }
+    # Agentic execution with streaming
+    async for event in driver.execute_agentic(
+        goal=state.goal,
+        cwd=profile.working_dir,
+        session_id=session.conversation_id,
+    ):
+        if event.type == "tool_use":
+            call = ToolCall(id=f"call-{len(tool_calls)}", tool_name=event.tool_name, tool_input=event.tool_input)
+            tool_calls.append(call)
+        elif event.type == "tool_result":
+            result = ToolResult(call_id=f"call-{len(tool_results)}", tool_name=event.tool_name, output=event.tool_result or "", success=True)
+            tool_results.append(result)
+        elif event.type == "result":
+            return {
+                "tool_calls": tool_calls,
+                "tool_results": tool_results,
+                "status": "completed",
+                "final_response": event.content,
+                **set_driver_session("developer", DriverSession(conversation_id=event.session_id)),
+            }
+
+    return {"tool_calls": tool_calls, "tool_results": tool_results}
 ```
 
 ## Migration Strategy
@@ -432,12 +474,13 @@ async def developer_node(state: ExecutionState, config: RunnableConfig) -> dict:
 
 | File | Changes |
 |------|---------|
-| `amelia/core/state.py` | Add `TaskResult`, `HistoryEntry`, frozen models, reducers, remove `Task.status` |
-| `amelia/core/state_utils.py` | Update helpers to use `task_results` pattern |
-| `amelia/core/orchestrator.py` | Nodes use `state.get_ready_tasks()`, scoped sessions |
+| `amelia/core/state.py` | Add frozen models, reducers, agentic execution tracking |
+| `amelia/core/agentic_state.py` | ToolCall, ToolResult, AgenticStatus types |
+| `amelia/core/state_utils.py` | Update helpers for agentic execution pattern |
+| `amelia/core/orchestrator.py` | Nodes use agentic execution, scoped sessions |
 | `amelia/drivers/base.py` | Stateless driver interface with `DriverResponse` |
 | `amelia/drivers/cli_driver.py` | Implement stateless pattern |
-| `amelia/drivers/api_driver.py` | Implement stateless pattern |
+| `amelia/drivers/api_driver.py` | Implement stateless pattern with execute_agentic |
 | `amelia/tools/shell.py` | Accept explicit cwd parameter |
 
 ## Research Validation
@@ -458,7 +501,7 @@ The stateless reducer pattern is explicitly validated by LangGraph's design and 
 | Concept | Pattern |
 |---------|---------|
 | **Node Return** | `dict` (partial update) |
-| **Task Status** | Derived from `task_results` dict, not stored in Task |
+| **Agentic Execution** | `tool_calls`/`tool_results` lists with `add` reducer |
 | **Driver Sessions** | Scoped: `driver_sessions: dict[str, DriverSession]` |
 | **Parallelism** | `Annotated` with `add`, `dict_merge`, `set_union` reducers |
 | **Replay Safety** | `profile_id` + `completed_steps` set |
@@ -471,7 +514,7 @@ The stateless reducer pattern is explicitly validated by LangGraph's design and 
 - [ ] All Pydantic models have `frozen=True`
 - [ ] All nodes return `dict` partial updates
 - [ ] All nodes access Profile via `config["configurable"]["profile"]`
-- [ ] Task status derived from `task_results`, not stored in `Task.status`
+- [ ] Agentic execution tracked via `tool_calls`/`tool_results` with `add` reducer
 - [ ] Driver sessions scoped by agent in `driver_sessions` dict
 - [ ] `profile_id` stored in state for replay determinism
 - [ ] `completed_steps` set tracks idempotency

@@ -390,7 +390,7 @@ async def test_wait_for_approval(
     orchestrator: OrchestratorService,
     mock_repository: AsyncMock,
     mock_event_bus: EventBus,
-):
+) -> None:
     """Should block until approval is granted."""
     received_events = []
     mock_event_bus.subscribe(lambda e: received_events.append(e))
@@ -431,7 +431,7 @@ async def test_approve_workflow_success(
     mock_event_bus: EventBus,
     mock_settings: Settings,
     langgraph_mock_factory,
-):
+) -> None:
     """Should approve blocked workflow."""
     received_events = []
     mock_event_bus.subscribe(lambda e: received_events.append(e))
@@ -488,7 +488,7 @@ async def test_reject_workflow_success(
     mock_event_bus: EventBus,
     mock_settings: Settings,
     langgraph_mock_factory,
-):
+) -> None:
     """Should reject blocked workflow."""
     received_events = []
     mock_event_bus.subscribe(lambda e: received_events.append(e))
@@ -616,7 +616,7 @@ async def test_emit_event(
     orchestrator: OrchestratorService,
     mock_repository: AsyncMock,
     mock_event_bus: EventBus,
-):
+) -> None:
     """Should emit event with sequence number and persist to DB."""
     received = []
     mock_event_bus.subscribe(lambda e: received.append(e))
@@ -644,7 +644,7 @@ async def test_emit_event(
 async def test_emit_sequence_increment(
     orchestrator: OrchestratorService,
     mock_repository: AsyncMock,
-):
+) -> None:
     """Sequence numbers should increment per workflow."""
     await orchestrator._emit("wf-1", EventType.WORKFLOW_STARTED, "Event 1")
     await orchestrator._emit("wf-1", EventType.STAGE_STARTED, "Event 2")
@@ -660,7 +660,7 @@ async def test_emit_sequence_increment(
 async def test_emit_different_workflows(
     orchestrator: OrchestratorService,
     mock_repository: AsyncMock,
-):
+) -> None:
     """Different workflows should have independent sequence counters."""
     await orchestrator._emit("wf-1", EventType.WORKFLOW_STARTED, "WF1 Event 1")
     await orchestrator._emit("wf-2", EventType.WORKFLOW_STARTED, "WF2 Event 1")
@@ -680,7 +680,7 @@ async def test_emit_different_workflows(
 async def test_emit_concurrent_same_workflow(
     orchestrator: OrchestratorService,
     mock_repository: AsyncMock,
-):
+) -> None:
     """Concurrent emits for same workflow should have unique sequences."""
     # Simulate concurrent emits
     await asyncio.gather(
@@ -700,7 +700,7 @@ async def test_emit_concurrent_same_workflow(
 async def test_emit_resumes_from_db_max_sequence(
     orchestrator: OrchestratorService,
     mock_repository: AsyncMock,
-):
+) -> None:
     """First emit should query DB for max sequence."""
     mock_repository.get_max_event_sequence.return_value = 42
 
@@ -717,7 +717,7 @@ async def test_emit_resumes_from_db_max_sequence(
 async def test_emit_concurrent_lock_creation_race(
     orchestrator: OrchestratorService,
     mock_repository: AsyncMock,
-):
+) -> None:
     """Concurrent first emits for same workflow should not create duplicate locks."""
     # Slow down the lock acquisition to increase race window
     original_get_max = mock_repository.get_max_event_sequence
@@ -747,7 +747,7 @@ class TestStartWorkflowWithRetry:
 
     async def test_start_workflow_calls_retry_wrapper(
         self, orchestrator: OrchestratorService, mock_repository: AsyncMock, valid_worktree: str
-    ):
+    ) -> None:
         """start_workflow creates task with _run_workflow_with_retry."""
         orchestrator._run_workflow_with_retry = AsyncMock()
 
@@ -773,7 +773,7 @@ async def test_handle_stream_chunk_updates_current_stage(
     orchestrator: OrchestratorService,
     mock_repository: AsyncMock,
     mock_event_bus: EventBus,
-):
+) -> None:
     """_handle_stream_chunk should update current_stage when stage starts."""
     # Setup mock workflow state
     mock_state = ServerExecutionState(
@@ -803,7 +803,7 @@ async def test_handle_stream_chunk_updates_current_stage(
 async def test_handle_stream_chunk_updates_stage_for_each_stage_node(
     orchestrator: OrchestratorService,
     mock_repository: AsyncMock,
-):
+) -> None:
     """_handle_stream_chunk should update current_stage for all STAGE_NODES."""
     from amelia.server.orchestrator.service import STAGE_NODES
 
@@ -833,7 +833,7 @@ async def test_handle_stream_chunk_updates_stage_for_each_stage_node(
 async def test_handle_stream_chunk_ignores_non_stage_nodes(
     orchestrator: OrchestratorService,
     mock_repository: AsyncMock,
-):
+) -> None:
     """_handle_stream_chunk should not update current_stage for non-stage nodes."""
     # Process a non-stage node chunk
     chunk = {"some_other_node": {"output": "data"}}
@@ -847,7 +847,7 @@ async def test_handle_stream_chunk_ignores_non_stage_nodes(
 async def test_get_workflow_by_worktree_uses_cache(
     orchestrator: OrchestratorService,
     mock_repository: AsyncMock,
-):
+) -> None:
     """get_workflow_by_worktree should use cached workflow_id, not DB."""
     # Create workflow state
     mock_state = ServerExecutionState(
@@ -949,14 +949,10 @@ class TestSyncPlanFromCheckpoint:
         self,
         orchestrator: OrchestratorService,
         mock_repository: AsyncMock,
-        mock_execution_plan_factory,
         mock_profile_factory,
-    ):
-        """_sync_plan_from_checkpoint should update execution_state with plan from checkpoint."""
-        # Create execution plan
-        execution_plan = mock_execution_plan_factory(goal="Test goal", num_batches=2)
-
-        # Create mock workflow with execution_state (no plan yet)
+    ) -> None:
+        """_sync_plan_from_checkpoint should update execution_state with goal/plan from checkpoint."""
+        # Create mock workflow with execution_state (no goal yet)
         profile = mock_profile_factory()
         mock_state = ServerExecutionState(
             id="wf-sync",
@@ -969,9 +965,9 @@ class TestSyncPlanFromCheckpoint:
         )
         mock_repository.get.return_value = mock_state
 
-        # Create mock graph with checkpoint containing execution_plan
+        # Create mock graph with checkpoint containing goal and plan_markdown
         mock_graph = MagicMock()
-        checkpoint_values = {"execution_plan": execution_plan.model_dump()}
+        checkpoint_values = {"goal": "Test goal", "plan_markdown": "# Test Plan"}
         mock_graph.aget_state = AsyncMock(
             return_value=MagicMock(values=checkpoint_values)
         )
@@ -984,16 +980,16 @@ class TestSyncPlanFromCheckpoint:
         # Verify repository.update was called
         mock_repository.update.assert_called_once()
 
-        # Verify the updated state has the execution_plan
+        # Verify the updated state has the goal and plan_markdown
         updated_state = mock_repository.update.call_args[0][0]
-        assert updated_state.execution_state.execution_plan is not None
-        assert updated_state.execution_state.execution_plan.goal == "Test goal"
+        assert updated_state.execution_state.goal == "Test goal"
+        assert updated_state.execution_state.plan_markdown == "# Test Plan"
 
     async def test_sync_plan_no_checkpoint_state(
         self,
         orchestrator: OrchestratorService,
         mock_repository: AsyncMock,
-    ):
+    ) -> None:
         """_sync_plan_from_checkpoint should return early if no checkpoint state."""
         mock_graph = MagicMock()
         mock_graph.aget_state = AsyncMock(return_value=None)
@@ -1007,12 +1003,12 @@ class TestSyncPlanFromCheckpoint:
         mock_repository.get.assert_not_called()
         mock_repository.update.assert_not_called()
 
-    async def test_sync_plan_no_execution_plan_in_checkpoint(
+    async def test_sync_plan_no_goal_or_plan_in_checkpoint(
         self,
         orchestrator: OrchestratorService,
         mock_repository: AsyncMock,
-    ):
-        """_sync_plan_from_checkpoint should return early if no execution_plan in checkpoint."""
+    ) -> None:
+        """_sync_plan_from_checkpoint should return early if no goal/plan_markdown in checkpoint."""
         mock_graph = MagicMock()
         mock_graph.aget_state = AsyncMock(
             return_value=MagicMock(values={"some_other_key": "value"})
@@ -1030,13 +1026,11 @@ class TestSyncPlanFromCheckpoint:
         self,
         orchestrator: OrchestratorService,
         mock_repository: AsyncMock,
-        mock_execution_plan_factory,
-    ):
+    ) -> None:
         """_sync_plan_from_checkpoint should return early if workflow not found."""
-        execution_plan = mock_execution_plan_factory()
         mock_graph = MagicMock()
         mock_graph.aget_state = AsyncMock(
-            return_value=MagicMock(values={"execution_plan": execution_plan.model_dump()})
+            return_value=MagicMock(values={"goal": "Test goal"})
         )
 
         mock_repository.get.return_value = None  # Workflow not found
@@ -1062,7 +1056,7 @@ class TestLoadSettingsForWorktree:
         self,
         orchestrator: OrchestratorService,
         tmp_path: Path,
-    ):
+    ) -> None:
         """_load_settings_for_worktree loads settings from worktree directory."""
         # Create settings file in worktree
         settings_content = """
@@ -1088,7 +1082,7 @@ profiles:
         self,
         orchestrator: OrchestratorService,
         tmp_path: Path,
-    ):
+    ) -> None:
         """_load_settings_for_worktree returns None when file not found."""
         settings = orchestrator._load_settings_for_worktree(str(tmp_path))
         assert settings is None
@@ -1097,7 +1091,7 @@ profiles:
         self,
         orchestrator: OrchestratorService,
         tmp_path: Path,
-    ):
+    ) -> None:
         """_load_settings_for_worktree returns None for malformed YAML."""
         settings_file = tmp_path / "settings.amelia.yaml"
         settings_file.write_text("invalid: yaml: content: [")
@@ -1109,7 +1103,7 @@ profiles:
         self,
         orchestrator: OrchestratorService,
         tmp_path: Path,
-    ):
+    ) -> None:
         """_load_settings_for_worktree returns None for invalid config structure."""
         settings_file = tmp_path / "settings.amelia.yaml"
         # Missing required 'profiles' field
@@ -1123,7 +1117,7 @@ profiles:
         orchestrator: OrchestratorService,
         mock_repository: AsyncMock,
         tmp_path: Path,
-    ):
+    ) -> None:
         """start_workflow uses settings from worktree directory, not server settings."""
         # Create valid worktree with .git
         worktree = tmp_path / "worktree"
@@ -1160,7 +1154,7 @@ profiles:
         orchestrator: OrchestratorService,
         mock_repository: AsyncMock,
         tmp_path: Path,
-    ):
+    ) -> None:
         """start_workflow fails workflow gracefully when worktree settings are invalid."""
         # Create valid worktree with .git
         worktree = tmp_path / "worktree"
@@ -1185,7 +1179,7 @@ profiles:
         orchestrator: OrchestratorService,
         mock_repository: AsyncMock,
         tmp_path: Path,
-    ):
+    ) -> None:
         """start_workflow fails when worktree has no settings file (no fallback)."""
         # Create worktree without settings file
         worktree = tmp_path / "worktree_no_settings"
@@ -1207,7 +1201,7 @@ profiles:
         orchestrator: OrchestratorService,
         mock_repository: AsyncMock,
         tmp_path: Path,
-    ):
+    ) -> None:
         """start_review_workflow uses settings from worktree directory."""
         # Create valid worktree (review doesn't require .git)
         worktree = tmp_path / "worktree"

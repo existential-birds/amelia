@@ -20,7 +20,9 @@ from pydantic_ai.messages import (
     UserPromptPart,
 )
 from pydantic_ai.models import Model
+from pydantic_ai.models.openai import OpenAIModel
 from pydantic_ai.models.openrouter import OpenRouterModel
+from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.providers.openrouter import OpenRouterProvider
 
 from amelia.core.constants import ToolName
@@ -41,44 +43,88 @@ MAX_INSTRUCTIONS_SIZE = 10_000  # 10KB max instructions
 OPENROUTER_APP_URL = "https://github.com/existential-birds/amelia"
 OPENROUTER_APP_TITLE = "Amelia"
 
+# Supported provider prefixes
+SUPPORTED_PROVIDERS = ("openai:", "openrouter:")
+
 
 class ApiDriver(DriverInterface):
-    """OpenRouter API-based driver using pydantic-ai.
+    """Multi-provider API-based driver using pydantic-ai.
 
-    Provides LLM generation capabilities through OpenRouter's API,
-    which supports models from OpenAI, Anthropic, Google, and others.
+    Supports OpenAI (via openai: prefix) and OpenRouter (via openrouter: prefix).
+    Model names should be prefixed with the provider, e.g.:
+    - "openai:gpt-4o"
+    - "openrouter:anthropic/claude-3.5-sonnet"
 
     Attributes:
-        model_name: The model identifier (e.g., 'anthropic/claude-sonnet-4-20250514').
+        model_name: The full model identifier with provider prefix.
+        _provider: The provider name (openai or openrouter).
     """
 
-    DEFAULT_MODEL = "anthropic/claude-sonnet-4-20250514"
+    DEFAULT_MODEL = "openrouter:anthropic/claude-sonnet-4-20250514"
 
     def __init__(self, model: str | None = None):
         """Initialize the API driver.
 
         Args:
-            model: Model identifier for OpenRouter (e.g., 'anthropic/claude-sonnet-4-20250514').
-                   See https://openrouter.ai/models for available models.
+            model: Model identifier with provider prefix.
+                   Examples: 'openai:gpt-4o', 'openrouter:anthropic/claude-3.5-sonnet'.
+
+        Raises:
+            ValueError: If model prefix is not a supported provider.
         """
         self.model_name = model or self.DEFAULT_MODEL
 
-    def _build_model(self) -> Model:
-        """Build the OpenRouter model with app attribution.
+        # Validate and extract provider
+        if not any(self.model_name.startswith(prefix) for prefix in SUPPORTED_PROVIDERS):
+            raise ValueError(
+                f"Unsupported provider in model '{self.model_name}'. "
+                f"Supported: {', '.join(p.rstrip(':') for p in SUPPORTED_PROVIDERS)}"
+            )
+        self._provider = self.model_name.split(":")[0]
+
+    def _validate_api_key(self) -> None:
+        """Validate that the required API key for the provider is set.
+
+        Raises:
+            ValueError: If the required environment variable is not set.
+        """
+        key_map = {"openai": "OPENAI_API_KEY", "openrouter": "OPENROUTER_API_KEY"}
+        env_var = key_map.get(self._provider)
+        if env_var and not os.environ.get(env_var):
+            raise ValueError(f"{env_var} environment variable is not set.")
+
+    def _get_model_name_without_prefix(self) -> str:
+        """Get the model name with the provider prefix stripped.
 
         Returns:
-            OpenRouterModel configured with app attribution headers.
+            Model name without the provider prefix (e.g., 'gpt-4o' from 'openai:gpt-4o').
         """
-        api_key = os.environ.get("OPENROUTER_API_KEY", "")
-        if not api_key:
-            raise ValueError(
-                "OPENROUTER_API_KEY environment variable not set. "
-                "Set OPENROUTER_API_KEY env var or use a different provider."
-            )
-        # TODO: pydantic-ai OpenRouterProvider doesn't support app_url/app_title yet
-        # These headers are passed via http_client when support is added
-        provider = OpenRouterProvider(api_key=api_key)
-        return OpenRouterModel(self.model_name, provider=provider)
+        return self.model_name.split(":", 1)[1]
+
+    def _build_model(self) -> Model:
+        """Build the model for the configured provider.
+
+        Returns:
+            Model configured for the provider (OpenAI or OpenRouter).
+
+        Raises:
+            ValueError: If API key is not set for the provider.
+        """
+        self._validate_api_key()
+        model_name = self._get_model_name_without_prefix()
+
+        if self._provider == "openai":
+            # Use OpenAI directly via pydantic-ai
+            api_key = os.environ.get("OPENAI_API_KEY", "")
+            openai_provider = OpenAIProvider(api_key=api_key)
+            return OpenAIModel(model_name, provider=openai_provider)
+        else:
+            # Default to OpenRouter
+            api_key = os.environ.get("OPENROUTER_API_KEY", "")
+            # TODO: pydantic-ai OpenRouterProvider doesn't support app_url/app_title yet
+            # These headers are passed via http_client when support is added
+            openrouter_provider = OpenRouterProvider(api_key=api_key)
+            return OpenRouterModel(model_name, provider=openrouter_provider)
 
     def _validate_messages(self, messages: list[AgentMessage]) -> None:
         """Validate message list for security and sanity.
@@ -169,7 +215,7 @@ class ApiDriver(DriverInterface):
             )
 
     async def generate(self, messages: list[AgentMessage], schema: type[BaseModel] | None = None, **kwargs: Any) -> tuple[Any, str | None]:
-        """Generate a response from the OpenAI model.
+        """Generate a response from the configured LLM provider.
 
         Args:
             messages: List of conversation messages to send.
@@ -185,8 +231,7 @@ class ApiDriver(DriverInterface):
             ValueError: If message list is empty or does not end with a user message.
             RuntimeError: If API call fails.
         """
-        if not os.environ.get("OPENROUTER_API_KEY"):
-            raise ValueError("OPENROUTER_API_KEY environment variable is not set. Please configure it to use the ApiDriver.")
+        self._validate_api_key()
 
         # Extract system messages and combine them into a single system prompt
         system_messages = [msg for msg in messages if msg.role == 'system']

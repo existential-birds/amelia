@@ -27,7 +27,7 @@ class DriverFactory:
         """
         if driver_key in ("cli:claude", "cli"):
             return ClaudeCliDriver(**kwargs)
-        elif driver_key in ("api:openrouter", "api"):
+        elif driver_key in ("api:openai", "api:openrouter", "api"):
             return ApiDriver(**kwargs)
         else:
             raise ValueError(f"Unknown driver key: {driver_key}")

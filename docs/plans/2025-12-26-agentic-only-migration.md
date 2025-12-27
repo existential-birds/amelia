@@ -2,15 +2,63 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Remove all structured execution mode code and migrate to agentic-only execution. At completion, zero lines of code or documentation reference structured execution concepts (PlanStep, ExecutionBatch, batches, blockers, cascade skips, etc.).
+**Goal:** Remove all **structured execution** code (PlanStep, ExecutionBatch, batches, blockers, cascade skips) and migrate to agentic-only execution. The Architect still generates **rich markdown plans** that guide the Developer agent.
 
-**Success Criteria:** `grep -rE "PlanStep|ExecutionBatch|ExecutionPlan|BatchResult|StepResult|BlockerReport|BlockerType|cascade_skip|batch_approval" amelia/ tests/ dashboard/src/ docs/` returns zero results.
+**Success Criteria:** `grep -rE "PlanStep|ExecutionBatch|BatchResult|StepResult|BlockerReport|BlockerType|cascade_skip|batch_approval" amelia/ tests/ dashboard/src/ docs/` returns zero results.
 
 **Approach:** Define new model → Delete old → Build new → Update dashboard → Clean docs
 
 ---
 
-## Phase 1: Define New Agentic State Model
+## ⚠️ CRITICAL: What to DELETE vs KEEP
+
+This migration removes **structured execution machinery**, NOT planning capability.
+
+### DELETE (Structured Execution):
+- `PlanStep`, `ExecutionBatch`, `ExecutionPlan` models
+- `BatchResult`, `StepResult`, `BlockerReport` models
+- `BatchApproval`, `BlockerResolution` logic
+- `cascade_skip`, batch rollback, step-by-step execution
+- `ExecutionMode`, `TrustLevel`, `DeveloperStatus` enums
+- Batch/step nodes in orchestrator graph
+
+### KEEP (Markdown Planning):
+- **Architect.plan()** method that generates rich markdown plans
+- **PlanOutput** model with `markdown_content`, `markdown_path`, `goal`, `key_files`
+- **`amelia plan` CLI command** (calls Architect directly, not through LangGraph)
+- Markdown plan files saved to `docs/plans/`
+- `plan_markdown` and `plan_path` fields in ExecutionState
+- `plan_output_dir` setting in Profile
+
+### Why This Matters:
+The markdown plans are compatible with `superpowers:executing-plans` skill and provide human-readable context. The Developer agent uses the plan as context but executes agentically (autonomous tool calls) rather than following structured steps.
+
+---
+
+## 📊 Progress Tracking (Updated: 2025-12-26)
+
+### Phase Status:
+| Phase | Status | Notes |
+|-------|--------|-------|
+| Phase 1: Define New Agentic State Model | ✅ COMPLETE | Tasks 1.1-1.3 done |
+| Phase 2: Delete Structured Execution Code | ✅ COMPLETE | Tasks 2.1-2.8 done (with corrections) |
+| Phase 3: Build New Agentic Orchestrator | ✅ COMPLETE | Tasks 3.1-3.2 done |
+| Phase 3.5: Fix Incorrectly Removed Code | ✅ COMPLETE | Restored Architect.plan(), CLI plan command |
+| Phase 4: Update Dashboard | ⏳ PENDING | Tasks 4.1-4.3 not started |
+| Phase 5: Clean Documentation | ⏳ PENDING | Tasks 5.1-5.3 not started |
+| Phase 6: Final Verification | ⏳ PENDING | Tasks 6.1-6.2 not started |
+
+### Corrections Made (Phase 3.5):
+The original implementation incorrectly deleted planning capability. These were restored:
+- **Architect.plan()** - generates markdown plans via LLM
+- **PlanOutput model** - holds markdown content, path, goal, key_files
+- **`amelia plan` CLI command** - calls Architect directly (not through workflow API)
+- **ExecutionState fields** - `plan_markdown`, `plan_path`
+- **Profile field** - `plan_output_dir`
+
+---
+
+## Phase 1: Define New Agentic State Model ✅ COMPLETE
 
 ### Task 1.1: Create AgenticState Model
 
@@ -720,47 +768,51 @@ git commit -m "refactor(developer): rewrite for agentic execution"
 
 ---
 
-### Task 2.4: Delete Architect Plan Generation
+### Task 2.4: Remove STRUCTURED Plan Generation (Keep Markdown Plans)
+
+**⚠️ IMPORTANT:** This task removes `PlanStep`/`ExecutionBatch` structured models, NOT markdown plan generation. The Architect MUST still generate rich markdown plans.
 
 **Files:**
 - Modify: `amelia/agents/architect.py`
 
-**Step 1: Delete these from architect.py**
+**Step 1: Delete ONLY structured execution code from architect.py**
 
-- `ExecutionPlanOutput` class
-- `get_execution_plan_system_prompt()` method
-- `get_execution_plan_user_prompt()` method
+DELETE:
+- `ExecutionPlanOutput` class (the one with `PlanStep`/`ExecutionBatch`)
 - `generate_execution_plan()` method
 - `validate_and_split_batches()` function
-- `_render_markdown()` batch rendering logic
+- Batch rendering logic in `_render_markdown()`
 - All imports of `PlanStep`, `ExecutionBatch`, `ExecutionPlan`
 
-**Step 2: Simplify Architect to generate goal/strategy only**
+KEEP:
+- `PlanOutput` class with `markdown_content`, `markdown_path`, `goal`, `key_files`
+- `MarkdownPlanOutput` schema for LLM generation
+- `plan()` method that generates and saves markdown plans
+- Markdown plan file creation in `docs/plans/`
 
-The Architect should now:
+**Step 2: The Architect KEEPS generating markdown plans**
+
+The Architect should:
 - Analyze the issue
-- Generate a high-level goal/strategy string
-- NOT generate step-by-step plans
+- Generate a rich markdown implementation plan
+- Save it to `docs/plans/YYYY-MM-DD-issue-id.md`
+- Return `PlanOutput` with goal, markdown content, and path
 
 ```python
-# Simplified Architect output
-class ArchitectOutput(BaseModel):
-    """Output from Architect analysis."""
-    goal: str  # Clear description of what needs to be done
-    strategy: str  # High-level approach (not step-by-step)
-    key_files: list[str]  # Files likely to be modified
-    risks: list[str]  # Potential risks to watch for
+# KEEP this output model
+class PlanOutput(BaseModel):
+    """Output from Architect markdown plan generation."""
+    markdown_content: str  # Full markdown plan
+    markdown_path: Path    # Where plan was saved
+    goal: str              # Clear goal statement
+    key_files: list[str] = []  # Files to modify
 ```
 
-**Step 3: Update plan() method**
-
-Remove all batch/step generation logic. Return simplified output.
-
-**Step 4: Commit**
+**Step 3: Commit**
 
 ```bash
 git add amelia/agents/architect.py
-git commit -m "refactor(architect): remove plan generation, simplify to goal/strategy"
+git commit -m "refactor(architect): remove structured plan models, keep markdown generation"
 ```
 
 ---
@@ -851,22 +903,58 @@ git commit -m "refactor(server): remove batch/blocker models and routes"
 
 ---
 
-### Task 2.7: Delete CLI Plan Command
+### Task 2.7: Refactor CLI Plan Command (Call Architect Directly)
+
+**⚠️ IMPORTANT:** Do NOT delete the plan command. Refactor it to call Architect directly instead of going through the workflow API.
 
 **Files:**
-- Modify: `amelia/cli/commands.py` or wherever `amelia plan` is defined
+- Modify: `amelia/client/cli.py` (where `plan_command` is defined)
 
-**Step 1: Remove plan command**
+**Step 1: Refactor plan_command to call Architect directly**
 
-Delete the `plan` subcommand that generates execution plans.
+The plan command should:
+1. Load settings from worktree
+2. Get issue from tracker
+3. Create minimal ExecutionState
+4. Call `Architect.plan()` directly (NOT through LangGraph)
+5. Print success message with plan path
 
-**Step 2: Update CLI help**
+```python
+def plan_command(
+    issue_id: str,
+    profile_name: str | None = None,
+) -> None:
+    """Generate an implementation plan for an issue without executing it."""
+    from amelia.agents.architect import Architect, PlanOutput
+    from amelia.config import load_settings
+    from amelia.core.state import ExecutionState
+    from amelia.drivers.factory import DriverFactory
+    from amelia.trackers.factory import create_tracker
 
-**Step 3: Commit**
+    worktree_path, _ = _get_worktree_context()
+
+    async def _generate_plan() -> PlanOutput:
+        settings_path = Path(worktree_path) / "settings.amelia.yaml"
+        settings = load_settings(settings_path)
+        selected_profile = profile_name or settings.active_profile
+        profile = settings.profiles[selected_profile]
+        profile = profile.model_copy(update={"working_dir": worktree_path})
+        tracker = create_tracker(profile)
+        issue = tracker.get_issue(issue_id, cwd=worktree_path)
+        state = ExecutionState(profile_id=profile.name, issue=issue)
+        driver = DriverFactory.get_driver(profile.driver, model=profile.model)
+        architect = Architect(driver)
+        return await architect.plan(state=state, profile=profile, workflow_id=f"plan-{issue_id}")
+
+    plan_output = asyncio.run(_generate_plan())
+    console.print(f"[green]✓[/green] Plan generated: {plan_output.markdown_path}")
+```
+
+**Step 2: Commit**
 
 ```bash
-git add amelia/cli/
-git commit -m "refactor(cli): remove plan command"
+git add amelia/client/cli.py
+git commit -m "refactor(cli): plan command calls Architect directly"
 ```
 
 ---
@@ -1336,9 +1424,9 @@ git commit -m "chore: final cleanup - agentic-only migration complete"
 ## Summary
 
 **Files DELETED (~30):**
-- 4 integration test files
-- 12 dashboard component files
-- Old plan file
+- 4 integration test files (batch/blocker tests)
+- 12 dashboard component files (BatchNode, StepNode, BlockerDialog, etc.)
+- Old superseded plan files
 - Various obsolete docs
 
 **Files CREATED (~5):**
@@ -1348,19 +1436,36 @@ git commit -m "chore: final cleanup - agentic-only migration complete"
 - New test files
 
 **Files MODIFIED (~25):**
-- `amelia/core/state.py` - major reduction
-- `amelia/core/types.py` - simplified
-- `amelia/core/orchestrator.py` - rewritten
-- `amelia/agents/developer.py` - rewritten
-- `amelia/agents/architect.py` - simplified
-- `amelia/server/models/*` - cleaned
-- `amelia/server/routes/*` - cleaned
-- `dashboard/src/types/index.ts` - replaced
-- `dashboard/src/pages/*` - updated
+- `amelia/core/state.py` - removed structured fields, added `plan_markdown`, `plan_path`
+- `amelia/core/types.py` - removed structured types, added `plan_output_dir` to Profile
+- `amelia/core/orchestrator.py` - removed batch/blocker nodes, simplified graph
+- `amelia/agents/developer.py` - rewritten for agentic execution
+- `amelia/agents/architect.py` - removed structured plan models, KEPT markdown plan generation
+- `amelia/client/cli.py` - plan command calls Architect directly (not through API)
+- `amelia/server/models/*` - cleaned batch/blocker models
+- `amelia/server/routes/*` - cleaned batch/blocker routes
+- `dashboard/src/types/index.ts` - replaced structured types with agentic types
+- `dashboard/src/pages/*` - updated for agentic UI
 - Various docs
 
 **Success Criteria Met:**
-- Zero references to structured execution concepts
+- Zero references to structured execution concepts (PlanStep, ExecutionBatch, BatchResult, etc.)
+- Architect.plan() generates markdown plans
+- `amelia plan` CLI command works (calls Architect directly)
 - All tests pass
 - Type checking passes
 - Dashboard functional with agentic UI
+
+---
+
+## Anti-Pattern Warnings
+
+**DO NOT** make these mistakes again:
+
+1. **DO NOT delete Architect.plan()** - It generates markdown plans that guide the Developer agent
+2. **DO NOT delete the CLI plan command** - It's a useful standalone tool
+3. **DO NOT conflate "structured execution" with "markdown plans"**
+   - Structured = PlanStep, ExecutionBatch, BatchResult, blocker resolution → DELETE
+   - Markdown plans = human-readable implementation docs → KEEP
+4. **DO NOT route plan-only through LangGraph** - Direct function call is simpler
+5. **DO NOT add plan_only flags to workflow API** - Plan command bypasses the API entirely

@@ -15,14 +15,12 @@ class CreateWorkflowRequest(BaseModel):
         worktree_path: Absolute path to the git worktree directory.
         worktree_name: Optional human-readable name for the worktree.
         profile: Optional profile name from settings to use.
-        plan_only: If True, only generate plan without executing.
     """
 
     issue_id: str = Field(..., min_length=1, max_length=100)
     worktree_path: str = Field(..., min_length=1, max_length=4096)
     worktree_name: str | None = Field(default=None, max_length=255)
     profile: str | None = Field(default=None, max_length=64)
-    plan_only: bool = Field(default=False)
 
 
 class CreateReviewWorkflowRequest(BaseModel):

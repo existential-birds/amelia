@@ -971,12 +971,7 @@ export function getMockWorkflowDetail(id: string): WorkflowDetail | null {
     failure_reason: failureReason,
     token_usage: getTokenUsage(summary.issue_id),
     recent_events: events,
-    // Batch execution fields
+    // Agentic execution fields
     execution_plan: executionPlan,
-    current_batch_index: 0,
-    batch_results: [],
-    developer_status: null,
-    current_blocker: null,
-    batch_approvals: [],
   };
 }

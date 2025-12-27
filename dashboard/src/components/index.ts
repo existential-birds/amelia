@@ -27,11 +27,7 @@ export { ActivityLog } from './ActivityLog';
 // Workflow components
 export { AgentProgressBar } from './AgentProgressBar';
 export { ApprovalControls } from './ApprovalControls';
-export { BlockerResolutionDialog } from './BlockerResolutionDialog';
-export { CancelStepDialog } from './CancelStepDialog';
 export { WorkflowCanvas } from './WorkflowCanvas';
-export { BatchStepCanvas } from './BatchStepCanvas';
-// export { WorkflowHeader } from './WorkflowHeader';
 export { WorkflowProgress } from './WorkflowProgress';
 export { WorkflowEmptyState } from './WorkflowEmptyState';
 

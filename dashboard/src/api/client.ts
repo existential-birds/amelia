@@ -10,7 +10,6 @@ import type {
   WorkflowDetailResponse,
   WorkflowListResponse,
   ErrorResponse,
-  BlockerResolutionAction,
 } from '../types';
 
 /**
@@ -208,107 +207,6 @@ export const api = {
    */
   async cancelWorkflow(id: string): Promise<void> {
     const response = await fetch(`${API_BASE_URL}/workflows/${id}/cancel`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-    });
-    await handleResponse(response);
-  },
-
-  /**
-   * Approves a completed batch to proceed to the next batch.
-   *
-   * Used in the intelligent execution model where workflows pause between
-   * batches for human review.
-   *
-   * @param id - The unique identifier of the workflow.
-   * @param batchNumber - The batch number to approve.
-   * @param feedback - Optional feedback for the batch approval.
-   * @returns Promise that resolves when the approval is successful.
-   * @throws {ApiError} When the workflow is not found, not in a blocked state, or the API request fails.
-   *
-   * @example
-   * ```typescript
-   * await api.approveBatch('workflow-123', 1);
-   * console.log('Batch 1 approved, proceeding to batch 2');
-   * ```
-   */
-  async approveBatch(id: string, batchNumber: number, feedback?: string): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/workflows/${id}/batches/${batchNumber}/approve`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ approved: true, feedback }),
-    });
-    await handleResponse(response);
-  },
-
-  /**
-   * Rejects a completed batch with feedback.
-   *
-   * @param id - The unique identifier of the workflow.
-   * @param batchNumber - The batch number to reject.
-   * @param feedback - Feedback explaining why the batch was rejected.
-   * @returns Promise that resolves when the rejection is successful.
-   * @throws {ApiError} When the workflow is not found or the API request fails.
-   *
-   * @example
-   * ```typescript
-   * await api.rejectBatch('workflow-123', 1, 'Tests are failing');
-   * ```
-   */
-  async rejectBatch(id: string, batchNumber: number, feedback: string): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/workflows/${id}/batches/${batchNumber}/approve`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ approved: false, feedback }),
-    });
-    await handleResponse(response);
-  },
-
-  /**
-   * Resolves a blocker in a workflow.
-   *
-   * Blockers occur when execution cannot proceed due to errors, validation
-   * failures, or situations requiring human judgment.
-   *
-   * @param id - The unique identifier of the workflow.
-   * @param action - Resolution action: 'skip', 'retry', 'abort', 'abort_revert', or 'fix'.
-   * @param feedback - Optional feedback or fix instruction (required for 'fix' action).
-   * @returns Promise that resolves when the resolution is processed.
-   * @throws {ApiError} When the workflow is not found, not blocked, or the API request fails.
-   *
-   * @example
-   * ```typescript
-   * // Skip the blocked step and continue
-   * await api.resolveBlocker('workflow-123', 'skip');
-   *
-   * // Provide a fix instruction
-   * await api.resolveBlocker('workflow-123', 'fix', 'Try using npm instead of pnpm');
-   * ```
-   */
-  async resolveBlocker(id: string, action: BlockerResolutionAction, feedback?: string): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/workflows/${id}/blocker/resolve`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action, feedback }),
-    });
-    await handleResponse(response);
-  },
-
-  /**
-   * Cancels a running step in a workflow.
-   *
-   * @param id - The unique identifier of the workflow.
-   * @param stepId - The step ID to cancel.
-   * @returns Promise that resolves when the cancellation is processed.
-   * @throws {ApiError} When the workflow is not found or the API request fails.
-   *
-   * @example
-   * ```typescript
-   * await api.cancelStep('workflow-123', 'step-1');
-   * ```
-   */
-  async cancelStep(id: string, stepId: string): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/workflows/${id}/steps/${stepId}/cancel`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
     });

@@ -24,7 +24,6 @@ from amelia.server.exceptions import (
     WorkflowNotFoundError,
 )
 from amelia.server.models.requests import (
-    BlockerResolutionRequest,
     CreateReviewWorkflowRequest,
     CreateWorkflowRequest,
     RejectRequest,
@@ -70,7 +69,6 @@ async def create_workflow(
         worktree_name=request.worktree_name,
         profile=request.profile,
         driver=request.driver,
-        plan_only=request.plan_only,
     )
 
     logger.info("Created workflow", workflow_id=workflow_id, issue_id=request.issue_id)
@@ -263,28 +261,16 @@ async def get_workflow(
     events = await repository.get_recent_events(workflow_id, limit=50)
     recent_events = [event.model_dump(mode="json") for event in events]
 
-    # Extract batch execution fields from execution_state
-    execution_plan = None
-    if workflow.execution_state and workflow.execution_state.execution_plan:
-        execution_plan = workflow.execution_state.execution_plan.model_dump(mode="json")
+    # Extract agentic execution fields from execution_state
+    goal = workflow.execution_state.goal if workflow.execution_state else None
+    tool_calls = []
+    tool_results = []
+    final_response = None
 
-    current_batch_index = workflow.execution_state.current_batch_index if workflow.execution_state else 0
-
-    batch_results = []
-    if workflow.execution_state and workflow.execution_state.batch_results:
-        batch_results = [r.model_dump(mode="json") for r in workflow.execution_state.batch_results]
-
-    developer_status = None
     if workflow.execution_state:
-        developer_status = workflow.execution_state.developer_status.value
-
-    current_blocker = None
-    if workflow.execution_state and workflow.execution_state.current_blocker:
-        current_blocker = workflow.execution_state.current_blocker.model_dump(mode="json")
-
-    batch_approvals = []
-    if workflow.execution_state and workflow.execution_state.batch_approvals:
-        batch_approvals = [a.model_dump(mode="json") for a in workflow.execution_state.batch_approvals]
+        tool_calls = [tc.model_dump(mode="json") for tc in workflow.execution_state.tool_calls]
+        tool_results = [tr.model_dump(mode="json") for tr in workflow.execution_state.tool_results]
+        final_response = workflow.execution_state.final_response
 
     return WorkflowDetailResponse(
         id=workflow.id,
@@ -296,15 +282,12 @@ async def get_workflow(
         completed_at=workflow.completed_at,
         failure_reason=workflow.failure_reason,
         current_stage=workflow.current_stage,
-        plan=None,  # Legacy field - deprecated in favor of execution_plan
+        goal=goal,
         token_usage=token_usage,
         recent_events=recent_events,
-        execution_plan=execution_plan,
-        current_batch_index=current_batch_index,
-        batch_results=batch_results,
-        developer_status=developer_status,
-        current_blocker=current_blocker,
-        batch_approvals=batch_approvals,
+        tool_calls=tool_calls,
+        tool_results=tool_results,
+        final_response=final_response,
     )
 
 
@@ -377,86 +360,6 @@ async def reject_workflow(
     await orchestrator.reject_workflow(workflow_id, request.feedback)
     logger.info("Rejected workflow", workflow_id=workflow_id, feedback=request.feedback)
     return ActionResponse(status="rejected", workflow_id=workflow_id)
-
-
-@router.post("/{workflow_id}/batches/{batch_number}/approve", response_model=ActionResponse)
-async def approve_batch(
-    workflow_id: str,
-    batch_number: int,
-    orchestrator: OrchestratorService = Depends(get_orchestrator),
-) -> ActionResponse:
-    """Approve a completed batch to proceed to next batch.
-
-    Note:
-        Currently batch_number is accepted for API consistency but not validated.
-        This will be implemented with batch-specific approval in a future version.
-
-    Args:
-        workflow_id: Unique workflow identifier.
-        batch_number: Batch number to approve (placeholder for future batch-specific approval).
-        orchestrator: Orchestrator service dependency.
-
-    Returns:
-        ActionResponse with status and workflow_id.
-
-    Raises:
-        WorkflowNotFoundError: If workflow doesn't exist.
-        InvalidStateError: If workflow is not in correct state.
-    """
-    # TODO: Validate batch_number matches current batch index when batch-specific approval is implemented
-    await orchestrator.approve_workflow(workflow_id)
-    logger.info("Approved batch", batch_number=batch_number, workflow_id=workflow_id)
-    return ActionResponse(status="approved", workflow_id=workflow_id)
-
-
-@router.post("/{workflow_id}/blocker/resolve", response_model=ActionResponse)
-async def resolve_blocker(
-    workflow_id: str,
-    request: BlockerResolutionRequest,
-    orchestrator: OrchestratorService = Depends(get_orchestrator),
-) -> ActionResponse:
-    """Resolve a blocker by skipping, retrying, aborting, or providing fix instruction.
-
-    This endpoint properly sets the blocker_resolution in the LangGraph state
-    and resumes execution from the blocker_resolution_node.
-
-    Args:
-        workflow_id: Unique workflow identifier.
-        request: Blocker resolution request with action and optional feedback.
-        orchestrator: Orchestrator service dependency.
-
-    Returns:
-        ActionResponse with status and workflow_id.
-
-    Raises:
-        WorkflowNotFoundError: If workflow doesn't exist.
-        InvalidStateError: If workflow is not in blocked state.
-    """
-    # Use the new resolve_blocker service method that properly handles
-    # blocker_resolution state updates
-    await orchestrator.resolve_blocker(
-        workflow_id=workflow_id,
-        action=request.action,
-        feedback=request.feedback,
-    )
-
-    # Map action to response status
-    status_map = {
-        "skip": "skipped",
-        "retry": "retrying",
-        "abort": "aborted",
-        "abort_revert": "aborted",
-        "fix": "fix_provided",
-    }
-    response_status = status_map.get(request.action, "resolved")
-
-    logger.info(
-        "Blocker resolved for workflow",
-        workflow_id=workflow_id,
-        action=request.action,
-        feedback=request.feedback,
-    )
-    return ActionResponse(status=response_status, workflow_id=workflow_id)
 
 
 def configure_exception_handlers(app: FastAPI) -> None:

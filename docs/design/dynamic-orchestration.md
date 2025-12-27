@@ -36,9 +36,9 @@ Starting with four agents (extensible later):
 | Agent | Purpose | Inputs | Outputs |
 |-------|---------|--------|---------|
 | **Analyst** | Investigate before planning - debug, explore codebase, gather context | Issue | `AnalysisResult` with findings, recommendations |
-| **Architect** | Create implementation plan with task breakdown | Issue + Analysis (optional) | `TaskDAG` |
-| **Developer** | Execute tasks following TDD | TaskDAG + current task | `TaskResult` per task |
-| **Reviewer** | Review code changes | Code diff + task context | `ReviewResult` |
+| **Architect** | Create implementation plan with goal extraction | Issue + Analysis (optional) | `PlanOutput` with goal, markdown plan |
+| **Developer** | Execute goal agentically using tool calls | Goal + context | `ToolCall`/`ToolResult` stream |
+| **Reviewer** | Review code changes | Code diff + context | `ReviewResult` |
 
 ## State Model
 
@@ -135,7 +135,9 @@ class ExecutionState(BaseModel):
     # --- Domain data (single-writer) ---
     issue: Issue | None = None
     design: Design | None = None
-    plan: TaskDAG | None = None  # Architect output
+    goal: str | None = None  # Goal extracted from Architect plan
+    plan_markdown: str | None = None  # Markdown plan content
+    plan_path: Path | None = None  # Where plan was saved
 
     # --- Dynamic workflow ---
     workflow: WorkflowPlan | None = None
@@ -145,8 +147,9 @@ class ExecutionState(BaseModel):
     agent_outputs: Annotated[dict[str, Any], dict_merge] = Field(default_factory=dict)
     # Keys: "analyst_0", "architect_1", "developer_2", "reviewer_3", etc.
 
-    # --- Task execution (from stateless-reducer-pattern.md) ---
-    task_results: Annotated[dict[str, TaskResult], dict_merge] = Field(default_factory=dict)
+    # --- Agentic execution (tool call/result tracking) ---
+    tool_calls: Annotated[list[ToolCall], add] = Field(default_factory=list)
+    tool_results: Annotated[list[ToolResult], add] = Field(default_factory=list)
 
     # --- Driver sessions (scoped by agent) ---
     driver_sessions: Annotated[dict[str, DriverSession], dict_merge] = Field(default_factory=dict)
@@ -317,24 +320,23 @@ class PlannedStep(BaseModel):
 
 ## Plan Verification
 
-Before Developer executes, verify the TaskDAG symbolically:
+Before Developer executes, verify the goal and plan scope:
 
 ```python
 class PlanVerificationResult(BaseModel):
-    """Result of symbolic plan verification."""
+    """Result of plan verification."""
     model_config = ConfigDict(frozen=True)
 
     valid: bool
     violations: tuple[str, ...] = ()
     suggested_fixes: tuple[str, ...] = ()
 
-async def verify_plan(plan: TaskDAG, codebase: CodebaseContext) -> PlanVerificationResult:
+async def verify_plan(goal: str, plan_markdown: str, codebase: CodebaseContext) -> PlanVerificationResult:
     """Verify plan before execution.
 
     Checks:
-    - DAG is acyclic
+    - Goal is clear and actionable
     - Referenced files exist in codebase
-    - Task dependencies are satisfiable
     - Scope matches complexity estimate
     """
     ...
@@ -732,7 +734,8 @@ Planner replans: [architect, developer, security_reviewer, reviewer]
 
 | File | Changes |
 |------|---------|
-| `amelia/core/state.py` | Add workflow types, extend ExecutionState |
+| `amelia/core/state.py` | Add workflow types, extend ExecutionState with agentic fields |
+| `amelia/core/agentic_state.py` | ToolCall, ToolResult, AgenticStatus types |
 | `amelia/core/types.py` | Add `AgentType`, `StepStatus` literals |
 | `amelia/agents/planner.py` | New: Planner agent |
 | `amelia/agents/analyst.py` | New: Analyst agent |

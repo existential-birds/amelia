@@ -6,7 +6,7 @@ This document provides a technical deep dive into Amelia's architecture, compone
 
 **Phase 1 (Complete):** Multi-agent orchestration with the **Architect → Developer → Reviewer** loop. Issues flow through planning, execution, and review stages with human approval gates before any code ships. Supports both API-based (OpenAI via pydantic-ai) and CLI-based (Claude) LLM drivers, with Jira and GitHub issue tracker integrations.
 
-**Phase 2 (In Progress):** Observable orchestration through a local web dashboard. FastAPI server with SQLite persistence, REST API for workflow management, React dashboard with real-time WebSocket updates, and batch-based execution with checkpoint approvals.
+**Phase 2 (In Progress):** Observable orchestration through a local web dashboard. FastAPI server with SQLite persistence, REST API for workflow management, React dashboard with real-time WebSocket updates, and agentic execution with streaming tool calls.
 
 ## The Vision: Complete Workflow Autonomy
 
@@ -29,7 +29,7 @@ flowchart TB
         status[status]
         cancel[cancel]
         server[server]
-        plan[plan-only]
+        plan[plan]
         review[review]
     end
 
@@ -120,7 +120,7 @@ flowchart TB
 
 | Layer | Location | Purpose | Key Abstractions |
 |-------|----------|---------|------------------|
-| **Core** | `amelia/core/` | LangGraph orchestrator, state management, shared types | `ExecutionState`, `TaskDAG`, `Profile`, `Issue` |
+| **Core** | `amelia/core/` | LangGraph orchestrator, state management, shared types | `ExecutionState`, `AgenticState`, `ToolCall`, `ToolResult`, `Profile`, `Issue` |
 | **Agents** | `amelia/agents/` | Specialized AI agents for planning, execution, and review | `Architect`, `Developer`, `Reviewer` |
 | **Drivers** | `amelia/drivers/` | LLM abstraction supporting API and CLI backends | `DriverInterface`, `DriverFactory` |
 | **Trackers** | `amelia/trackers/` | Issue source abstraction for different platforms | `BaseTracker` (Jira, GitHub, NoOp) |
@@ -238,13 +238,17 @@ await orchestrator_service.approve_workflow(workflow_id)
 # Get driver for LLM communication
 driver = DriverFactory.get_driver(profile.driver)
 
-# Generate plan with structured output (TDD-focused)
+# Generate markdown plan with goal extraction
 architect = Architect(driver)
-plan_output = await architect.plan(issue, design=optional_design)
-# Returns: PlanOutput(task_dag=TaskDAG, markdown_path=Path)
+plan_output = await architect.plan(state=state, profile=profile, workflow_id=workflow_id)
+# Returns: PlanOutput(markdown_content=str, markdown_path=Path, goal=str, key_files=list)
 
-# Update state
-state.plan = plan_output.task_dag
+# Update state with goal for Developer
+state = state.model_copy(update={
+    "goal": plan_output.goal,
+    "plan_markdown": plan_output.markdown_content,
+    "plan_path": plan_output.markdown_path,
+})
 ```
 
 #### Node: `human_approval_node`
@@ -260,19 +264,28 @@ approved = typer.confirm("Approve this plan?")
 state.human_approved = approved
 ```
 
-#### Node: `developer_node` (may loop)
+#### Node: `developer_node` (agentic execution)
 
 ```python
-# Find tasks with met dependencies
-ready_tasks = state.plan.get_ready_tasks()
+# Execute goal agentically using tool calls
+developer = Developer(driver)
+async for event in developer.execute_agentic(
+    goal=state.goal,
+    cwd=worktree_path,
+    session_id=state.driver_session_id,
+):
+    # Handle streaming events: tool_call, tool_result, thinking, result
+    if event.type == "tool_call":
+        state = state.model_copy(update={
+            "tool_calls": state.tool_calls + [event.tool_call]
+        })
+    elif event.type == "result":
+        state = state.model_copy(update={
+            "status": "completed",
+            "final_response": event.content,
+        })
 
-# Execute tasks (structured or agentic mode)
-developer = Developer(driver, execution_mode=profile.execution_mode)
-for task in ready_tasks:
-    result = await developer.execute_task(task, cwd=worktree_path)
-    task.status = "completed" if result["status"] == "completed" else "failed"
-
-# Loop back if pending tasks remain, else proceed to reviewer
+# Proceed to reviewer when complete
 ```
 
 #### Node: `reviewer_node`
@@ -343,12 +356,14 @@ sequenceDiagram
     Server->>Service: approve_workflow()
     Service->>Orchestrator: resume with approval
 
-    loop Until all tasks complete
-        Orchestrator->>Agents: Developer.execute_task(task)
-        Agents->>Driver: execute_tool() or execute_agentic()
-        Driver-->>Agents: result
-        Agents-->>Orchestrator: task completed
-        Orchestrator->>Service: emit(STAGE_COMPLETED)
+    loop Agentic execution (streaming)
+        Orchestrator->>Agents: Developer.execute_agentic(goal)
+        Agents->>Driver: execute_agentic(messages, cwd)
+        Driver->>LLM: tool_use request
+        LLM-->>Driver: tool call (run_shell_command, write_file)
+        Driver-->>Agents: stream event
+        Agents-->>Orchestrator: tool_call/tool_result event
+        Orchestrator->>Service: emit(TOOL_CALL)
         Service->>WS: broadcast(event)
     end
 
@@ -379,12 +394,13 @@ sequenceDiagram
 class Profile(BaseModel):
     name: str
     driver: DriverType                             # "api:openrouter" | "cli:claude" | "cli" | "api"
+    model: str | None = None                       # Model identifier for API drivers
     tracker: TrackerType = "none"                  # "jira" | "github" | "none" | "noop"
     strategy: StrategyType = "single"              # "single" | "competitive"
-    execution_mode: ExecutionMode = "structured"   # "structured" | "agentic"
     plan_output_dir: str = "docs/plans"
     working_dir: str | None = None
     retry: RetryConfig = Field(default_factory=RetryConfig)
+    max_review_iterations: int = 3                 # Max review-fix loop iterations
 ```
 
 #### RetryConfig
@@ -441,53 +457,40 @@ class Design(BaseModel):
     raw_content: str
 ```
 
-### Task Types
+### Agentic Types
 
-#### TaskStep
+#### ToolCall
 
 ```python
-class TaskStep(BaseModel):
-    description: str
-    code: str | None = None          # Code to write
-    command: str | None = None       # Shell command to run
-    expected_output: str | None = None
+class ToolCall(BaseModel):
+    """A tool call made by the LLM during agentic execution."""
+    model_config = ConfigDict(frozen=True)
+
+    id: str                          # Unique identifier for this call
+    tool_name: str                   # Name of the tool (run_shell_command, write_file)
+    tool_input: dict[str, Any]       # Input parameters for the tool
+    timestamp: str | None = None     # When the call was made (ISO format)
 ```
 
-#### FileOperation
+#### ToolResult
 
 ```python
-class FileOperation(BaseModel):
-    operation: Literal["create", "modify", "test"]
-    path: str
-    line_range: str | None = None
+class ToolResult(BaseModel):
+    """Result from a tool execution."""
+    model_config = ConfigDict(frozen=True)
+
+    call_id: str                     # ID of the ToolCall this result is for
+    tool_name: str                   # Name of the tool that was called
+    output: str                      # Output from the tool (stdout, file content, etc.)
+    success: bool                    # Whether the tool executed successfully
+    error: str | None = None         # Error message if success is False
+    duration_ms: int | None = None   # Execution time in milliseconds
 ```
 
-#### Task
+#### AgenticStatus
 
 ```python
-class Task(BaseModel):
-    id: str
-    description: str
-    status: TaskStatus = "pending"   # "pending" | "in_progress" | "completed" | "failed"
-    dependencies: list[str] = Field(default_factory=list)
-    files: list[FileOperation] = Field(default_factory=list)
-    steps: list[TaskStep] = Field(default_factory=list)
-    commit_message: str | None = None
-```
-
-#### TaskDAG
-
-```python
-class TaskDAG(BaseModel):
-    tasks: list[Task]
-    original_issue: str
-
-    @field_validator("tasks")
-    def validate_task_graph(cls, tasks):
-        # Validates dependencies exist and detects cycles
-
-    def get_ready_tasks(self) -> list[Task]:
-        # Returns pending tasks with all dependencies completed
+AgenticStatus = Literal["running", "awaiting_approval", "completed", "failed", "cancelled"]
 ```
 
 ### State Types
@@ -496,16 +499,33 @@ class TaskDAG(BaseModel):
 
 ```python
 class ExecutionState(BaseModel):
-    profile_id: str  # Profile name for replay determinism
+    """State for the LangGraph orchestrator execution.
+
+    This model is frozen (immutable) to support the stateless reducer pattern.
+    """
+    model_config = ConfigDict(frozen=True)
+
+    profile_id: str                                # Profile name for replay determinism
     issue: Issue | None = None
-    plan: TaskDAG | None = None
-    current_task_id: str | None = None
+    design: Design | None = None                   # Optional design context
+    goal: str | None = None                        # High-level goal for agentic execution
+    plan_markdown: str | None = None               # Markdown plan content from Architect
+    plan_path: Path | None = None                  # Path where markdown plan was saved
     human_approved: bool | None = None
-    review_results: list[ReviewResult] = Field(default_factory=list)
-    messages: list[AgentMessage] = Field(default_factory=list)
+    human_feedback: str | None = None              # Optional feedback from human
+    last_review: ReviewResult | None = None        # Most recent review result
     code_changes_for_review: str | None = None
-    claude_session_id: str | None = None           # For CLI driver session resumption
-    workflow_status: Literal["running", "completed", "failed"] = "running"
+    driver_session_id: str | None = None           # For driver session continuity
+    workflow_status: Literal["running", "completed", "failed", "aborted"] = "running"
+    agent_history: Annotated[list[str], operator.add] = Field(default_factory=list)
+
+    # Agentic execution tracking
+    tool_calls: Annotated[list[ToolCall], operator.add] = Field(default_factory=list)
+    tool_results: Annotated[list[ToolResult], operator.add] = Field(default_factory=list)
+    status: AgenticStatus = "running"
+    final_response: str | None = None
+    error: str | None = None
+    review_iteration: int = 0                      # Current iteration in review-fix loop
 ```
 
 **Note**: The full `Profile` object is not stored in state for determinism. Instead, it's passed via LangGraph's RunnableConfig:
@@ -520,6 +540,8 @@ config = {
 ```
 
 This ensures that when replaying from checkpoints, the profile configuration at invocation time is used, preventing bugs from stale profile data in checkpointed state.
+
+**Agentic Execution**: The `tool_calls` and `tool_results` fields use the `operator.add` reducer, allowing parallel-safe appending of tool history during streaming execution.
 
 #### ReviewResult
 
@@ -602,10 +624,10 @@ The LangGraph state machine consists of these nodes:
 
 | Node | Function | Next |
 |------|----------|------|
-| `architect_node` | Calls `Architect.plan()` | `human_approval_node` |
-| `human_approval_node` | Prompts user via typer | Developer (approved) or END (rejected) |
-| `developer_node` | Calls `Developer.execute_task()` for ready tasks | Loop (pending tasks) or `reviewer_node` (all complete) |
-| `reviewer_node` | Calls `Reviewer.review()` | `developer_node` (not approved) or END (approved) |
+| `architect_node` | Calls `Architect.plan()` to generate goal and markdown plan | `human_approval_node` |
+| `human_approval_node` | Prompts user via typer or dashboard | Developer (approved) or END (rejected) |
+| `developer_node` | Executes agentically via `execute_agentic()` with streaming tool calls | `reviewer_node` |
+| `reviewer_node` | Calls `Reviewer.review()` | `developer_node` (changes requested) or END (approved) |
 
 ## Conditional Edges
 
@@ -616,16 +638,12 @@ def route_after_approval(state):
         return "developer_node"
     return END
 
-# From developer_node
-def route_after_developer(state):
-    if has_pending_tasks(state.plan):
-        return "developer_node"  # Loop
-    return "reviewer_node"
-
 # From reviewer_node
 def route_after_review(state):
-    if state.review_results[-1].approved:
+    if state.last_review and state.last_review.approved:
         return END
+    if state.review_iteration >= profile.max_review_iterations:
+        return END  # Stop after max iterations
     return "developer_node"  # Fix issues
 ```
 
@@ -814,8 +832,8 @@ Enterprise environments often prohibit direct API calls due to data retention po
 amelia/
 ├── agents/
 │   ├── __init__.py
-│   ├── architect.py          # TaskDAG generation with TDD focus
-│   ├── developer.py          # Task execution (structured/agentic modes)
+│   ├── architect.py          # Markdown plan generation with goal extraction
+│   ├── developer.py          # Agentic execution with streaming tool calls
 │   └── reviewer.py           # Code review (single/competitive strategies)
 ├── client/
 │   ├── __init__.py
@@ -824,10 +842,11 @@ amelia/
 │   └── git.py                # get_worktree_context() for git detection
 ├── core/
 │   ├── __init__.py
+│   ├── agentic_state.py      # ToolCall, ToolResult, AgenticStatus
 │   ├── constants.py          # Security constants: blocked commands, patterns
 │   ├── exceptions.py         # AmeliaError hierarchy
 │   ├── orchestrator.py       # LangGraph state machine
-│   ├── state.py              # ExecutionState, TaskDAG, Task, etc.
+│   ├── state.py              # ExecutionState with agentic execution tracking
 │   └── types.py              # Profile, Issue, Settings, Design, RetryConfig
 ├── drivers/
 │   ├── api/

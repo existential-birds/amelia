@@ -48,35 +48,22 @@ Analyze the provided code changes and provide a comprehensive review."""
         """
         self.persona = persona
 
-    def _get_current_batch_context(self, state: ExecutionState) -> str | None:
-        """Get context description for the current batch.
+    def _get_task_context(self, state: ExecutionState) -> str | None:
+        """Get context description for the current task.
+
+        For agentic execution, this returns the goal. Previously this
+        extracted batch context from step-by-step plans.
 
         Args:
             state: The current execution state.
 
         Returns:
-            Formatted batch context string, or None if no execution plan.
+            Formatted task context string, or None if no goal.
         """
-        if not state.execution_plan:
+        if not state.goal:
             return None
 
-        if state.current_batch_index >= len(state.execution_plan.batches):
-            return None
-
-        batch = state.execution_plan.batches[state.current_batch_index]
-
-        # Build context from batch description and steps
-        parts = [f"**Batch {batch.batch_number}**"]
-        if batch.description:
-            parts.append(batch.description)
-
-        # Add step descriptions for context
-        if batch.steps:
-            parts.append("\n**Steps:**")
-            for step in batch.steps:
-                parts.append(f"- {step.description}")
-
-        return "\n\n".join(parts)
+        return f"**Task Goal:**\n\n{state.goal}"
 
     def compile(self, state: ExecutionState, _profile: Profile) -> CompiledContext:
         """Compile ExecutionState into review context.
@@ -95,13 +82,13 @@ Analyze the provided code changes and provide a comprehensive review."""
         system_prompt = self.SYSTEM_PROMPT_TEMPLATE.format(persona=self.persona)
 
         # Get context for what was supposed to be done
-        # Priority: current batch (new model) > current task (legacy) > issue summary
-        batch_context = self._get_current_batch_context(state)
+        # Priority: task context (goal) > issue summary
+        task_context = self._get_task_context(state)
         current_task = self.get_current_task(state)
         issue_summary = self.get_issue_summary(state)
 
-        if not batch_context and not current_task and not issue_summary:
-            raise ValueError("No batch, task, or issue context found for review")
+        if not task_context and not current_task and not issue_summary:
+            raise ValueError("No task or issue context found for review")
 
         # Get code changes
         code_changes = state.code_changes_for_review
@@ -111,13 +98,13 @@ Analyze the provided code changes and provide a comprehensive review."""
         # Build sections
         sections: list[ContextSection] = []
 
-        # Batch/task/issue section - what was supposed to be done
-        if batch_context:
+        # Task/issue section - what was supposed to be done
+        if task_context:
             sections.append(
                 ContextSection(
                     name="task",
-                    content=batch_context,
-                    source="state.execution_plan.batches[current_batch_index]"
+                    content=task_context,
+                    source="state.goal"
                 )
             )
         elif current_task:
@@ -125,7 +112,7 @@ Analyze the provided code changes and provide a comprehensive review."""
                 ContextSection(
                     name="task",
                     content=current_task,
-                    source="state.execution_plan (current batch)"
+                    source="state.goal"
                 )
             )
         elif issue_summary:

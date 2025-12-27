@@ -44,7 +44,7 @@ import type { workflowsLoader } from '@/loaders/workflows';
  * @returns The workflows page UI
  */
 export default function WorkflowsPage() {
-  const { workflows, detail } = useLoaderData<typeof workflowsLoader>();
+  const { workflows, detail, detailError } = useLoaderData<typeof workflowsLoader>();
   const navigate = useNavigate();
   const params = useParams<{ id?: string }>();
 
@@ -115,7 +115,11 @@ export default function WorkflowsPage() {
           />
         </ScrollArea>
         <ScrollArea className="h-full overflow-hidden">
-          {detail ? (
+          {detailError ? (
+            <div className="p-4 text-destructive text-sm">
+              Failed to load workflow details: {detailError}
+            </div>
+          ) : detail ? (
             <ActivityLog workflowId={detail.id} initialEvents={detail.recent_events} />
           ) : null}
         </ScrollArea>
