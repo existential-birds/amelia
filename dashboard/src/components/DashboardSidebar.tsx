@@ -54,7 +54,7 @@ function SidebarNavLink({ to, icon: Icon, label, onClick, comingSoon }: SidebarN
   if (comingSoon) {
     return (
       <SidebarMenuItem>
-        <SidebarMenuButton tooltip={`${label} - Coming Soon`}>
+        <SidebarMenuButton tooltip={`${label} - Coming Soon`} aria-disabled="true">
           <div
             className={cn(
               'flex items-center gap-3 w-full cursor-not-allowed opacity-50',
@@ -277,22 +277,33 @@ export function DashboardSidebar() {
             )}
           >
             {isCollapsed ? (
-              <span
-                className={cn(
-                  'inline-block w-3 h-3 rounded-full',
-                  isConnected
-                    ? 'bg-[--status-running] animate-pulse-glow'
-                    : 'bg-[--status-failed]'
-                )}
-                title={isConnected ? 'Connected' : 'Disconnected'}
-              />
+              <div
+                role="status"
+                aria-label={isConnected ? 'System status: Connected' : 'System status: Disconnected'}
+                className="flex items-center justify-center"
+              >
+                <span
+                  className={cn(
+                    'inline-block w-3 h-3 rounded-full',
+                    isConnected
+                      ? 'bg-[--status-running] animate-pulse-glow'
+                      : 'bg-[--status-failed]'
+                  )}
+                  title={isConnected ? 'Connected' : 'Disconnected'}
+                  aria-hidden="true"
+                />
+              </div>
             ) : (
               <>
                 <span className="text-xs font-mono text-muted-foreground/50">
                   v{APP_VERSION}
                 </span>
-                <div className="text-xs font-mono text-muted-foreground">
-                  <div className="flex items-center gap-2">
+                <div
+                  className="text-xs font-mono text-muted-foreground"
+                  role="status"
+                  aria-label={isConnected ? 'System status: Connected' : 'System status: Disconnected'}
+                >
+                  <div className="flex items-center gap-2" aria-hidden="true">
                     <span
                       className={cn(
                         'inline-block w-2 h-2 rounded-full',
