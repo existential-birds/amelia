@@ -15,7 +15,6 @@ from amelia.client.api import (
 from amelia.client.cli import (
     approve_command,
     cancel_command,
-    plan_command,
     reject_command,
     start_command,
     status_command,
@@ -33,8 +32,7 @@ app = typer.Typer(help="Amelia Agentic Orchestrator CLI")
 app.add_typer(server_app, name="server")
 app.add_typer(dev_app, name="dev")
 app.command(name="start", help="Start a workflow for an issue.")(start_command)
-app.command(name="plan", help="Generate a plan for an issue without executing.")(plan_command)
-app.command(name="approve", help="Approve the workflow plan in the current worktree.")(approve_command)
+app.command(name="approve", help="Approve the workflow goal in the current worktree.")(approve_command)
 app.command(name="reject", help="Reject the workflow plan in the current worktree.")(reject_command)
 app.command(name="status", help="Show status of active workflows.")(status_command)
 app.command(name="cancel", help="Cancel the active workflow in the current worktree.")(cancel_command)
