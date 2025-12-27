@@ -75,11 +75,9 @@ class ApiDriver(DriverInterface):
                 "OPENROUTER_API_KEY environment variable not set. "
                 "Set OPENROUTER_API_KEY env var or use a different provider."
             )
-        provider = OpenRouterProvider(
-            api_key=api_key,
-            app_url=OPENROUTER_APP_URL,
-            app_title=OPENROUTER_APP_TITLE,
-        )
+        # TODO: pydantic-ai OpenRouterProvider doesn't support app_url/app_title yet
+        # These headers are passed via http_client when support is added
+        provider = OpenRouterProvider(api_key=api_key)
         return OpenRouterModel(self.model_name, provider=provider)
 
     def _validate_messages(self, messages: list[AgentMessage]) -> None:

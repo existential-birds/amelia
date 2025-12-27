@@ -5,7 +5,7 @@ from unittest.mock import patch
 import pytest
 from pydantic_ai.models.openrouter import OpenRouterModel
 
-from amelia.drivers.api.openai import OPENROUTER_APP_TITLE, OPENROUTER_APP_URL, ApiDriver
+from amelia.drivers.api.openai import ApiDriver
 
 
 class TestApiDriverInit:
@@ -41,18 +41,17 @@ class TestBuildModel:
         assert model.model_name == "google/gemini-pro"
 
     @requires_openrouter_key
-    def test_openrouter_model_has_app_attribution(self):
-        """Should configure OpenRouter provider with app URL and title."""
+    def test_openrouter_model_uses_api_key(self):
+        """Should configure OpenRouter provider with API key."""
         driver = ApiDriver(model="meta-llama/llama-3-70b")
 
         # Mock OpenRouterProvider to capture constructor args
         with patch("amelia.drivers.api.openai.OpenRouterProvider") as mock_provider_class:
             driver._build_model()
 
-            # Verify OpenRouterProvider was constructed with correct app attribution
+            # Verify OpenRouterProvider was constructed with API key
             mock_provider_class.assert_called_once()
             call_kwargs = mock_provider_class.call_args.kwargs
-            assert call_kwargs["app_url"] == OPENROUTER_APP_URL
-            assert call_kwargs["app_title"] == OPENROUTER_APP_TITLE
-            assert OPENROUTER_APP_URL == "https://github.com/existential-birds/amelia"
-            assert OPENROUTER_APP_TITLE == "Amelia"
+            assert "api_key" in call_kwargs
+            # TODO: pydantic-ai OpenRouterProvider doesn't yet support app_url/app_title
+            # Once supported, we should pass OPENROUTER_APP_URL and OPENROUTER_APP_TITLE

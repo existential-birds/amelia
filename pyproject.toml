@@ -84,5 +84,7 @@ strict = true
 module = [
     "langgraph.checkpoint.sqlite",
     "langgraph.checkpoint.sqlite.aio",
+    "psutil",
+    "pydantic_ai.models.openrouter",
 ]
 ignore_missing_imports = true
