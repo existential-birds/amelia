@@ -48,8 +48,6 @@ export * from './flow';
 // =============================================================================
 // ai-elements (re-exported for direct use when needed)
 // =============================================================================
-export * from './ai-elements/queue';
-export * from './ai-elements/confirmation';
 export * from './ai-elements/loader';
 export * from './ai-elements/shimmer';
 

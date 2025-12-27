@@ -6,8 +6,8 @@
 
 import { useLoaderData, useRevalidator } from 'react-router-dom';
 import { useWorkflowStore } from '../store/workflowStore';
-import { useEffect, useRef } from 'react';
 import type { WorkflowsLoaderData } from '../types/api';
+import { useAutoRevalidation } from './useAutoRevalidation';
 
 /**
  * Hook that combines route loader data with real-time WebSocket updates.
@@ -49,39 +49,11 @@ import type { WorkflowsLoaderData } from '../types/api';
  */
 export function useWorkflows() {
   const { workflows } = useLoaderData() as WorkflowsLoaderData;
-  const { eventsByWorkflow, isConnected } = useWorkflowStore();
+  const { isConnected } = useWorkflowStore();
   const revalidator = useRevalidator();
-  const lastProcessedTimestampRef = useRef<number>(0);
 
-  // Revalidate when we receive status-changing events
-  useEffect(() => {
-    const statusEvents = [
-      'workflow_completed',
-      'workflow_failed',
-      'workflow_started',
-      'approval_required',
-      'approval_granted',
-      'approval_rejected',
-    ];
-    const recentEvents = Object.values(eventsByWorkflow).flat();
-
-    // Find the latest status-changing event within the 5-second window
-    const latestStatusEvent = recentEvents
-      .filter((e) => statusEvents.includes(e.event_type))
-      .map((e) => new Date(e.timestamp).getTime())
-      .filter((timestamp) => Date.now() - timestamp < 5000)
-      .sort((a, b) => b - a)[0];
-
-    // Only revalidate if we have a new event we haven't processed yet
-    if (
-      latestStatusEvent &&
-      latestStatusEvent > lastProcessedTimestampRef.current &&
-      revalidator.state === 'idle'
-    ) {
-      lastProcessedTimestampRef.current = latestStatusEvent;
-      revalidator.revalidate();
-    }
-  }, [eventsByWorkflow, revalidator]);
+  // Revalidate when we receive status-changing events (all workflows)
+  useAutoRevalidation();
 
   return {
     workflows,

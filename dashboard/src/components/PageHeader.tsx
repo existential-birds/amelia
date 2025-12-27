@@ -185,9 +185,7 @@ function PageHeader({ children, className }: PageHeaderProps) {
   // Use 3-column grid with equal outer columns for true centering
   // Left and right get 1fr each, center is auto-sized but truly centered
   let gridCols = '';
-  if (hasCenter && hasRight) {
-    gridCols = 'grid-cols-[1fr_auto_1fr]';
-  } else if (hasCenter) {
+  if (hasCenter) {
     gridCols = 'grid-cols-[1fr_auto_1fr]';
   } else if (hasRight) {
     gridCols = 'grid-cols-[1fr_auto]';
