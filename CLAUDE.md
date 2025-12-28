@@ -28,7 +28,6 @@ uv run pytest -k "test_name"           # By name pattern
 
 # CLI commands
 uv run amelia start ISSUE-123 --profile work     # Full orchestrator loop
-uv run amelia plan ISSUE-123                     # Generate plan only
 uv run amelia review --local                     # Review uncommitted changes
 ```
 
@@ -154,6 +153,52 @@ Tests use `pytest-asyncio` with `asyncio_mode = "auto"`.
 
 **Test Principles:**
 - **Don't Repeat Yourself (DRY)** - Extract common setup, assertions, and utilities into fixtures and helper functions. Avoid duplicating test logic across test files.
+
+**Integration Tests Must Be Real Integration Tests:**
+
+- Integration tests (`tests/integration/`) must test actual component interactions, not mocked components.
+- Only mock at the **external boundary** (e.g., HTTP calls to LLM APIs). Never mock internal classes like `Architect`, `Developer`, `Reviewer`, or `DriverFactory`.
+- If you find yourself patching internal components, you're writing a unit test - move it to `tests/unit/`.
+- The purpose of integration tests is to verify that real components work together correctly. Mocking them defeats this purpose entirely.
+
+**Example - WRONG (this is a unit test pretending to be an integration test):**
+
+```python
+with patch("amelia.core.orchestrator.Architect") as mock_architect:
+    mock_architect.return_value.plan = AsyncMock(return_value=mock_plan)
+    result = await call_architect_node(state, config)  # Testing nothing real
+```
+
+**Example - CORRECT (real integration test):**
+
+```python
+# Real Architect instance, only mock the LLM HTTP boundary
+with patch("httpx.AsyncClient.post") as mock_http:
+    mock_http.return_value = Response(200, json={"choices": [...]})
+    result = await call_architect_node(state, config)  # Real Architect runs
+```
+
+**High-Fidelity Mocks:**
+
+Mock return values must match production types exactly. When mocking external boundaries, return the same type the real code returns—not a serialized or converted form that happens to work.
+
+**Example - WRONG (lower fidelity):**
+
+```python
+# pydantic-ai returns Pydantic instances, not dicts
+mock_llm_response = MarkdownPlanOutput(goal="X", plan_markdown="...")
+mock_result.output = mock_llm_response.model_dump()  # Returns dict, not instance
+```
+
+**Example - CORRECT (production fidelity):**
+
+```python
+# Match what pydantic-ai actually returns: a Pydantic model instance
+mock_llm_response = MarkdownPlanOutput(goal="X", plan_markdown="...")
+mock_result.output = mock_llm_response  # Same type as production
+```
+
+This matters because downstream code may rely on type-specific behavior. Even if both happen to work today, the lower-fidelity version could mask bugs or break when code evolves.
 
 ## Manual Test Plans
 

@@ -62,7 +62,7 @@ export interface WorkflowSummary {
 
 /**
  * Complete detailed information about a workflow.
- * Extends WorkflowSummary with additional metadata, execution plan, token usage, and event history.
+ * Extends WorkflowSummary with additional metadata, token usage, and event history.
  */
 export interface WorkflowDetail extends WorkflowSummary {
   /** Absolute filesystem path to the git worktree. */
@@ -80,24 +80,12 @@ export interface WorkflowDetail extends WorkflowSummary {
   /** Recent workflow events for this workflow, ordered by sequence number. */
   recent_events: WorkflowEvent[];
 
-  // Batch execution fields (intelligent execution model)
-  /** Batched execution plan, or null if not yet planned. */
-  execution_plan: ExecutionPlan | null;
+  // Agentic execution fields
+  /** High-level goal or task description for the developer. */
+  goal: string | null;
 
-  /** Index of the current batch being executed (0-based). */
-  current_batch_index: number;
-
-  /** Results from completed batches. */
-  batch_results: BatchResult[];
-
-  /** Current Developer agent status. */
-  developer_status: DeveloperStatus | null;
-
-  /** Active blocker report if execution is blocked. */
-  current_blocker: BlockerReport | null;
-
-  /** Records of human approvals for batches. */
-  batch_approvals: BatchApproval[];
+  /** Path to the markdown plan file, if generated. */
+  plan_path: string | null;
 }
 
 // ============================================================================
@@ -350,38 +338,6 @@ export interface RejectRequest {
   feedback: string;
 }
 
-/**
- * Resolution action for blockers.
- * - `skip`: Skip the blocked step and continue
- * - `retry`: Retry the blocked step
- * - `abort`: Abort the workflow without reverting
- * - `abort_revert`: Abort the workflow and revert changes
- * - `fix`: Provide a fix instruction for the agent
- */
-export type BlockerResolutionAction = 'skip' | 'retry' | 'abort' | 'abort_revert' | 'fix';
-
-/**
- * Request payload for resolving a blocker.
- * Used by POST /api/workflows/:id/resolve-blocker endpoint.
- */
-export interface BlockerResolutionRequest {
-  /** Resolution action to take. */
-  action: BlockerResolutionAction;
-  /** Optional feedback or fix instruction. */
-  feedback?: string | null;
-}
-
-/**
- * Request payload for batch approval.
- * Used by POST /api/workflows/:id/approve-batch endpoint.
- */
-export interface BatchApprovalRequest {
-  /** Whether to approve or reject the batch. */
-  approved: boolean;
-  /** Optional feedback for rejection. */
-  feedback?: string | null;
-}
-
 // ============================================================================
 // WebSocket Message Types
 // ============================================================================
@@ -544,246 +500,4 @@ export interface ConnectionState {
 
   /** Error message if connection failed, otherwise undefined. */
   error?: string;
-}
-
-// ============================================================================
-// Batch Execution Types (Intelligent Execution Model)
-// ============================================================================
-
-/**
- * Risk level for execution steps.
- * - `low`: Safe operations, minimal risk of side effects
- * - `medium`: Moderate risk, may have side effects
- * - `high`: High risk, requires careful review
- */
-export type RiskLevel = 'low' | 'medium' | 'high';
-
-/**
- * Type of action a step performs.
- * - `code`: Write or modify code in a file
- * - `command`: Execute a shell command
- * - `validation`: Run a validation check
- * - `manual`: Requires manual human action
- */
-export type ActionType = 'code' | 'command' | 'validation' | 'manual';
-
-/**
- * Status of a single step in a StepResult (returned from API).
- * Only includes statuses for steps that have been executed.
- * - `completed`: Finished successfully
- * - `skipped`: Skipped due to dependency failure or user request
- * - `failed`: Failed with an error
- * - `cancelled`: Cancelled by user
- */
-export type StepStatus = 'completed' | 'skipped' | 'failed' | 'cancelled';
-
-/**
- * UI-specific step status including states for steps not yet executed.
- * Used for visualization in React Flow nodes.
- * - `pending`: Not yet started
- * - `in_progress`: Currently executing
- * - Plus all StepStatus values
- */
-export type StepStatusUI = 'pending' | 'in_progress' | StepStatus;
-
-/**
- * Status of a batch execution (returned from API).
- * Only includes statuses for batches that have been executed.
- * - `complete`: All steps completed successfully
- * - `blocked`: Execution blocked, needs human help
- * - `partial`: Some steps completed before blocking/failure
- */
-export type BatchStatus = 'complete' | 'blocked' | 'partial';
-
-/**
- * UI-specific batch status including states for batches not yet executed.
- * Used for visualization in React Flow nodes.
- * - `pending`: Not yet started
- * - `in_progress`: Currently executing
- * - Plus all BatchStatus values
- */
-export type BatchStatusUI = 'pending' | 'in_progress' | BatchStatus;
-
-/**
- * Type of blocker encountered during execution.
- */
-export type BlockerType =
-  | 'command_failed'
-  | 'validation_failed'
-  | 'needs_judgment'
-  | 'unexpected_state'
-  | 'dependency_skipped'
-  | 'user_cancelled';
-
-/**
- * Developer agent execution status.
- * - `executing`: Developer is actively executing steps
- * - `batch_complete`: A batch finished, ready for checkpoint
- * - `blocked`: Execution blocked, needs human help
- * - `all_done`: All batches completed successfully
- */
-export type DeveloperStatus = 'executing' | 'batch_complete' | 'blocked' | 'all_done';
-
-/**
- * A single step in an execution plan.
- * Contains all information needed to execute and validate the step.
- */
-export interface PlanStep {
-  /** Unique identifier for tracking. */
-  id: string;
-  /** Human-readable description. */
-  description: string;
-  /** Type of action (code, command, validation, manual). */
-  action_type: ActionType;
-
-  // For code actions
-  /** File path for code actions. */
-  file_path?: string | null;
-  /** Exact code or diff for code actions. */
-  code_change?: string | null;
-
-  // For command actions
-  /** Shell command to execute. */
-  command?: string | null;
-  /** Working directory (relative to repo root). */
-  cwd?: string | null;
-  /** Alternative commands to try if primary fails. */
-  fallback_commands?: string[];
-
-  // Validation
-  /** Expected exit code (primary validation). */
-  expect_exit_code?: number;
-  /** Regex for stdout (secondary, stripped of ANSI). */
-  expected_output_pattern?: string | null;
-  /** Command to run for validation actions. */
-  validation_command?: string | null;
-  /** Description of what success looks like. */
-  success_criteria?: string | null;
-
-  // Execution hints
-  /** Risk level (low, medium, high). */
-  risk_level?: RiskLevel;
-  /** Estimated time to complete (2-5 min typically). */
-  estimated_minutes?: number;
-  /** Whether step needs human review. */
-  requires_human_judgment?: boolean;
-
-  // Dependencies
-  /** Step IDs this depends on. */
-  depends_on?: string[];
-
-  // TDD markers
-  /** Whether this is a test step. */
-  is_test_step?: boolean;
-  /** Step ID this validates. */
-  validates_step?: string | null;
-}
-
-/**
- * A batch of steps to execute before checkpoint.
- * Architect defines batches based on semantic grouping.
- */
-export interface ExecutionBatch {
-  /** Sequential batch number. */
-  batch_number: number;
-  /** Steps in this batch. */
-  steps: PlanStep[];
-  /** Overall risk level of the batch. */
-  risk_summary: RiskLevel;
-  /** Optional description of why these steps are grouped. */
-  description?: string;
-}
-
-/**
- * Complete execution plan with batched execution.
- * Created by Architect, consumed by Developer.
- */
-export interface ExecutionPlan {
-  /** Overall goal or objective. */
-  goal: string;
-  /** Sequence of execution batches. */
-  batches: ExecutionBatch[];
-  /** Total estimated time for all batches. */
-  total_estimated_minutes: number;
-  /** Whether to use TDD approach. */
-  tdd_approach?: boolean;
-}
-
-/**
- * Report when execution is blocked.
- * Contains information about the blocker and suggested resolutions.
- */
-export interface BlockerReport {
-  /** ID of the step that blocked. */
-  step_id: string;
-  /** Description of the blocked step. */
-  step_description: string;
-  /** Type of blocker encountered. */
-  blocker_type: BlockerType;
-  /** Error message describing the blocker. */
-  error_message: string;
-  /** Actions the agent already tried. */
-  attempted_actions: string[];
-  /** Agent's suggestions for human (labeled as AI suggestions in UI). */
-  suggested_resolutions: string[];
-}
-
-/**
- * Result of executing a single step.
- */
-export interface StepResult {
-  /** ID of the step. */
-  step_id: string;
-  /** Execution status. */
-  status: StepStatus;
-  /** Truncated command output. */
-  output?: string | null;
-  /** Error message if failed. */
-  error?: string | null;
-  /** Actual command run (may differ from plan if fallback). */
-  executed_command?: string | null;
-  /** Time taken to execute in seconds. */
-  duration_seconds?: number;
-  /** Whether user cancelled the step. */
-  cancelled_by_user?: boolean;
-}
-
-/**
- * Result of executing a batch.
- */
-export interface BatchResult {
-  /** The batch number. */
-  batch_number: number;
-  /** Batch execution status. */
-  status: BatchStatus;
-  /** Results for completed steps. */
-  completed_steps: StepResult[];
-  /** Blocker report if execution was blocked. */
-  blocker?: BlockerReport | null;
-}
-
-/**
- * Git snapshot for batch-level rollback.
- */
-export interface GitSnapshot {
-  /** HEAD commit hash before batch started. */
-  head_commit: string;
-  /** Files that were dirty before batch started. */
-  dirty_files: string[];
-  /** Git stash reference if changes were stashed. */
-  stash_ref?: string | null;
-}
-
-/**
- * Batch approval record.
- */
-export interface BatchApproval {
-  /** The batch number. */
-  batch_number: number;
-  /** Whether the batch was approved. */
-  approved: boolean;
-  /** Optional feedback from reviewer. */
-  feedback?: string | null;
-  /** ISO 8601 timestamp when approved. */
-  approved_at: string;
 }

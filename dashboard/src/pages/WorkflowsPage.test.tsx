@@ -37,13 +37,8 @@ const mockWorkflowDetail: WorkflowDetail = {
   recent_events: [
     { id: 'e1', workflow_id: '1', sequence: 1, timestamp: '2025-12-07T09:01:00Z', event_type: 'stage_started', agent: 'developer', message: 'Started coding' },
   ],
-  // Batch execution fields
+  // Agentic execution fields
   execution_plan: null,
-  current_batch_index: 0,
-  batch_results: [],
-  developer_status: null,
-  current_blocker: null,
-  batch_approvals: [],
 };
 
 const mockPipeline = {
@@ -73,13 +68,8 @@ const mockSecondWorkflowDetail: WorkflowDetail = {
   recent_events: [
     { id: 'e2', workflow_id: 'wf-002', sequence: 1, timestamp: '2025-12-07T08:01:00Z', event_type: 'stage_started', agent: 'reviewer', message: 'Started review' },
   ],
-  // Batch execution fields
+  // Agentic execution fields
   execution_plan: null,
-  current_batch_index: 0,
-  batch_results: [],
-  developer_status: null,
-  current_blocker: null,
-  batch_approvals: [],
 };
 
 /**

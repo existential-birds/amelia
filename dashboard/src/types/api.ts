@@ -36,6 +36,8 @@ export interface WorkflowsLoaderData {
   workflows: WorkflowSummary[];
   /** Pre-loaded detail for the selected or active workflow, or null if none/failed to load. */
   detail: WorkflowDetail | null;
+  /** Error message if detail failed to load, null otherwise. */
+  detailError?: string | null;
 }
 
 /**

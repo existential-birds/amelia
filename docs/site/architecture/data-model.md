@@ -6,11 +6,10 @@ This document describes the core data structures used throughout the Amelia orch
 
 | Type | Definition | Description |
 |------|------------|-------------|
-| `DriverType` | `"cli:claude" \| "api:openrouter" \| "cli" \| "api"` | LLM driver type. |
+| `DriverType` | `"cli:claude" \| "api:openai" \| "api:openrouter" \| "cli" \| "api"` | LLM driver type. |
 | `TrackerType` | `"jira" \| "github" \| "none" \| "noop"` | Issue tracker type. |
 | `StrategyType` | `"single" \| "competitive"` | Review strategy. |
-| `ExecutionMode` | `"structured" \| "agentic"` | Execution mode. |
-| `TaskStatus` | `"pending" \| "in_progress" \| "completed" \| "failed"` | Task lifecycle status. |
+| `AgenticStatus` | `"running" \| "awaiting_approval" \| "completed" \| "failed" \| "cancelled"` | Agentic execution status. |
 | `Severity` | `"low" \| "medium" \| "high" \| "critical"` | Review issue severity. |
 
 ## Configuration Entities
@@ -35,12 +34,13 @@ Defines the runtime environment and constraints.
 |-------|------|---------|-------------|
 | `name` | `str` | — | Profile name (e.g., "work", "personal"). |
 | `driver` | `DriverType` | — | LLM driver type (e.g., "api:openrouter", "cli:claude"). |
+| `model` | `str \| None` | `None` | LLM model identifier for API drivers. |
 | `tracker` | `TrackerType` | `"none"` | Issue tracker type. |
 | `strategy` | `StrategyType` | `"single"` | Review strategy (single or competitive). |
-| `execution_mode` | `ExecutionMode` | `"structured"` | Execution mode (structured or agentic). |
-| `plan_output_dir` | `str` | `"docs/plans"` | Directory for storing generated plans. |
-| `working_dir` | `str \| None` | `None` | Working directory for agentic execution. |
+| `plan_output_dir` | `str` | `"docs/plans"` | Directory for storing generated markdown plans. |
+| `working_dir` | `str \| None` | `None` | Working directory for execution. |
 | `retry` | `RetryConfig` | `RetryConfig()` | Retry configuration for transient failures. |
+| `max_review_iterations` | `int` | `3` | Maximum review-fix loop iterations before terminating. |
 
 **Location:** `amelia/core/types.py`
 
@@ -90,65 +90,35 @@ Structured design from brainstorming output.
 
 **Location:** `amelia/core/types.py`
 
-## Execution Entities
+## Agentic Execution Entities
 
-### TaskStep
+### ToolCall
 
-A single step within a task (2-5 minutes of work).
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `description` | `str` | — | Description of what this step accomplishes. |
-| `code` | `str \| None` | `None` | Code snippet to execute. |
-| `command` | `str \| None` | `None` | Command to run. |
-| `expected_output` | `str \| None` | `None` | Description of the expected output. |
-
-**Location:** `amelia/core/state.py`
-
-### FileOperation
-
-A file to be created, modified, or tested.
+A tool call made by the LLM during agentic execution.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `operation` | `"create" \| "modify" \| "test"` | — | Type of operation. |
-| `path` | `str` | — | File path relative to project root. |
-| `line_range` | `str \| None` | `None` | Line range for modifications (e.g., "10-20"). |
+| `id` | `str` | — | Unique identifier for this call. |
+| `tool_name` | `str` | — | Name of the tool being called (e.g., "run_shell_command", "write_file"). |
+| `tool_input` | `dict[str, Any]` | — | Input parameters for the tool. |
+| `timestamp` | `str \| None` | `None` | When the call was made (ISO format). |
 
-**Location:** `amelia/core/state.py`
+**Location:** `amelia/core/agentic_state.py`
 
-### Task
+### ToolResult
 
-A single unit of work with TDD structure.
+Result from a tool execution.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `id` | `str` | — | Unique task identifier. |
-| `description` | `str` | — | Human-readable task description. |
-| `status` | `TaskStatus` | `"pending"` | Current task status. |
-| `dependencies` | `list[str]` | `[]` | Task IDs that must complete before this task. |
-| `files` | `list[FileOperation]` | `[]` | File operations involved in this task. |
-| `steps` | `list[TaskStep]` | `[]` | Steps to execute for this task. |
-| `commit_message` | `str \| None` | `None` | Git commit message for this task. |
+| `call_id` | `str` | — | ID of the ToolCall this result is for. |
+| `tool_name` | `str` | — | Name of the tool that was called. |
+| `output` | `str` | — | Output from the tool (stdout, file content, etc.). |
+| `success` | `bool` | — | Whether the tool executed successfully. |
+| `error` | `str \| None` | `None` | Error message if success is False. |
+| `duration_ms` | `int \| None` | `None` | Execution time in milliseconds. |
 
-**Location:** `amelia/core/state.py`
-
-### TaskDAG
-
-Directed Acyclic Graph of tasks with dependency management.
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `tasks` | `list[Task]` | All tasks in the plan. |
-| `original_issue` | `str` | The original issue description that generated this plan. |
-
-**Methods:**
-- `get_ready_tasks() -> list[Task]`: Returns tasks that are pending and have all dependencies completed.
-
-**Validators:**
-- `validate_task_graph`: Ensures all dependencies exist and no cycles are present.
-
-**Location:** `amelia/core/state.py`
+**Location:** `amelia/core/agentic_state.py`
 
 ### ReviewResult
 
@@ -177,20 +147,29 @@ Message from an agent in the orchestrator conversation.
 
 ### ExecutionState
 
-The central state object for the LangGraph orchestrator.
+The central state object for the LangGraph orchestrator. This model is frozen (immutable) to support the stateless reducer pattern.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `profile` | `Profile` | — | Active profile configuration. |
+| `profile_id` | `str` | — | Profile name for replay determinism. |
 | `issue` | `Issue \| None` | `None` | The issue being worked on. |
-| `plan` | `TaskDAG \| None` | `None` | The task execution plan (DAG). |
-| `current_task_id` | `str \| None` | `None` | ID of the currently executing task. |
-| `human_approved` | `bool \| None` | `None` | Whether human approval was granted for the plan. |
-| `review_results` | `list[ReviewResult]` | `[]` | List of review results from code reviews. |
-| `messages` | `list[AgentMessage]` | `[]` | Conversation history between agents. |
+| `design` | `Design \| None` | `None` | Optional design context from brainstorming. |
+| `goal` | `str \| None` | `None` | High-level goal for agentic execution. |
+| `plan_markdown` | `str \| None` | `None` | Markdown plan content generated by Architect. |
+| `plan_path` | `Path \| None` | `None` | Path where the markdown plan was saved. |
+| `human_approved` | `bool \| None` | `None` | Whether human approval was granted. |
+| `human_feedback` | `str \| None` | `None` | Optional feedback from human during approval. |
+| `last_review` | `ReviewResult \| None` | `None` | Most recent review result. |
 | `code_changes_for_review` | `str \| None` | `None` | Staged code changes for review. |
-| `claude_session_id` | `str \| None` | `None` | Session ID for Claude CLI session continuity. |
-| `workflow_status` | `"running" \| "completed" \| "failed"` | `"running"` | Status of the workflow. |
+| `driver_session_id` | `str \| None` | `None` | Session ID for driver session continuity. |
+| `workflow_status` | `"running" \| "completed" \| "failed" \| "aborted"` | `"running"` | Status of the workflow. |
+| `agent_history` | `list[str]` | `[]` | History of agent actions/messages (uses operator.add reducer). |
+| `tool_calls` | `list[ToolCall]` | `[]` | Tool calls made during agentic execution (uses operator.add reducer). |
+| `tool_results` | `list[ToolResult]` | `[]` | Tool results from agentic execution (uses operator.add reducer). |
+| `status` | `AgenticStatus` | `"running"` | Current agentic execution status. |
+| `final_response` | `str \| None` | `None` | Final response from the agent when complete. |
+| `error` | `str \| None` | `None` | Error message if status is 'failed'. |
+| `review_iteration` | `int` | `0` | Current iteration in review-fix loop. |
 
 **Location:** `amelia/core/state.py`
 
@@ -288,15 +267,19 @@ Settings
 └── profiles: Dict[str, Profile]
     └── retry: RetryConfig
 
-ExecutionState
-├── profile: Profile
+ExecutionState (frozen, immutable)
+├── profile_id: str (references Profile.name)
 ├── issue: Issue
-├── plan: TaskDAG
-│   └── tasks: List[Task]
-│       ├── files: List[FileOperation]
-│       └── steps: List[TaskStep]
-├── review_results: List[ReviewResult]
-└── messages: List[AgentMessage]
+├── design: Design (optional)
+├── goal: str (from Architect)
+├── plan_markdown: str (markdown plan content)
+├── plan_path: Path (where plan is saved)
+├── tool_calls: List[ToolCall] (append-only via reducer)
+├── tool_results: List[ToolResult] (append-only via reducer)
+├── last_review: ReviewResult
+└── agent_history: List[str] (append-only via reducer)
+
+ToolCall → ToolResult (linked by call_id)
 
 ServerConfig (singleton)
 

@@ -58,13 +58,9 @@ export function createMockWorkflowDetail(
     failure_reason: null,
     token_usage: {},
     recent_events: [],
-    // Batch execution fields
-    execution_plan: null,
-    current_batch_index: 0,
-    batch_results: [],
-    developer_status: null,
-    current_blocker: null,
-    batch_approvals: [],
+    // Agentic execution fields
+    goal: 'Test goal for implementation',
+    plan_path: null,
     ...overrides,
   };
 }
