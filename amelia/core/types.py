@@ -17,24 +17,9 @@ from uuid import uuid4
 from pydantic import BaseModel, ConfigDict, Field
 
 
-DriverType = Literal["cli:claude", "api:openrouter", "cli", "api"]
+DriverType = Literal["cli:claude", "api:openai", "api:openrouter", "cli", "api"]
 TrackerType = Literal["jira", "github", "none", "noop"]
 StrategyType = Literal["single", "competitive"]
-ExecutionMode = Literal["structured", "agentic"]
-
-
-class TrustLevel(StrEnum):
-    """How much autonomy the Developer gets.
-
-    Attributes:
-        PARANOID: Approve every step.
-        STANDARD: Approve batches (default).
-        AUTONOMOUS: Auto-approve low/medium, stop only for high-risk or blockers.
-    """
-
-    PARANOID = "paranoid"
-    STANDARD = "standard"
-    AUTONOMOUS = "autonomous"
 
 
 class RetryConfig(BaseModel):
@@ -70,12 +55,9 @@ class Profile(BaseModel):
             Required for api:openrouter driver to specify which model to use.
         tracker: Issue tracker type (jira, github, none, noop).
         strategy: Review strategy (single or competitive).
-        execution_mode: Execution mode (structured or agentic).
-        plan_output_dir: Directory for storing generated plans.
         working_dir: Working directory for agentic execution.
+        plan_output_dir: Directory for saving implementation plans (default: docs/plans).
         retry: Retry configuration for transient failures.
-        trust_level: How much autonomy the Developer gets.
-        batch_checkpoint_enabled: Whether to pause for human approval between batches.
         max_review_iterations: Maximum review-fix loop iterations before terminating.
     """
 
@@ -86,12 +68,9 @@ class Profile(BaseModel):
     model: str | None = None
     tracker: TrackerType = "none"
     strategy: StrategyType = "single"
-    execution_mode: ExecutionMode = "structured"
-    plan_output_dir: str = "docs/plans"
     working_dir: str | None = None
+    plan_output_dir: str = "docs/plans"
     retry: RetryConfig = Field(default_factory=RetryConfig)
-    trust_level: TrustLevel = TrustLevel.STANDARD
-    batch_checkpoint_enabled: bool = True
     max_review_iterations: int = 3
 
 class Settings(BaseModel):
@@ -146,22 +125,6 @@ class Design(BaseModel):
     relevant_files: list[str] = Field(default_factory=list)
     conventions: str | None = None
     raw_content: str
-
-
-class DeveloperStatus(StrEnum):
-    """Developer agent execution status.
-
-    Attributes:
-        EXECUTING: Developer is actively executing steps.
-        BATCH_COMPLETE: A batch finished, ready for checkpoint.
-        BLOCKED: Execution blocked, needs human help.
-        ALL_DONE: All batches completed successfully.
-    """
-
-    EXECUTING = "executing"
-    BATCH_COMPLETE = "batch_complete"
-    BLOCKED = "blocked"
-    ALL_DONE = "all_done"
 
 
 class StreamEventType(StrEnum):

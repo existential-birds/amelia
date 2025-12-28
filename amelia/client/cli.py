@@ -3,12 +3,14 @@
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """Thin client CLI commands that delegate to the REST API."""
 import asyncio
+from pathlib import Path
 from typing import Annotated
 
 import typer
 from rich.console import Console
 from rich.table import Table
 
+from amelia.agents.architect import Architect, PlanOutput
 from amelia.client.api import (
     AmeliaClient,
     InvalidRequestError,
@@ -18,6 +20,10 @@ from amelia.client.api import (
 )
 from amelia.client.git import get_worktree_context
 from amelia.client.models import CreateWorkflowResponse
+from amelia.config import load_settings
+from amelia.core.state import ExecutionState
+from amelia.drivers.factory import DriverFactory
+from amelia.trackers.factory import create_tracker
 
 
 console = Console()
@@ -120,49 +126,6 @@ def start_command(
         console.print(f"  Worktree: {worktree_path}")
         console.print(f"  Status: {workflow.status}")
         console.print("\n[dim]View in dashboard: http://127.0.0.1:8420[/dim]")
-
-    except (ServerUnreachableError, WorkflowConflictError, RateLimitError, InvalidRequestError) as e:
-        _handle_workflow_api_error(e, worktree_path=worktree_path)
-
-
-def plan_command(
-    issue_id: Annotated[str, typer.Argument(help="Issue ID to work on (e.g., ISSUE-123)")],
-    profile: Annotated[
-        str | None,
-        typer.Option("--profile", "-p", help="Profile name for configuration"),
-    ] = None,
-) -> None:
-    """Generate an implementation plan for an issue without executing it.
-
-    Creates a plan-only workflow via the API server. The Architect agent
-    generates a detailed plan saved to docs/plans/ without executing code changes.
-
-    Args:
-        issue_id: Issue identifier to generate plan for (e.g., ISSUE-123).
-        profile: Optional profile name for LLM driver configuration.
-    """
-    worktree_path, worktree_name = _get_worktree_context()
-
-    client = AmeliaClient()
-
-    async def _create() -> CreateWorkflowResponse:
-        return await client.create_workflow(
-            issue_id=issue_id,
-            worktree_path=worktree_path,
-            worktree_name=worktree_name,
-            profile=profile,
-            plan_only=True,
-        )
-
-    try:
-        workflow = asyncio.run(_create())
-
-        console.print(f"[green]✓[/green] Plan generation started: [bold]{workflow.id}[/bold]")
-        console.print(f"  Issue: {issue_id}")
-        console.print(f"  Worktree: {worktree_path}")
-        console.print(f"  Status: {workflow.status}")
-        console.print("\n[dim]Plan will be saved to docs/plans/ when complete[/dim]")
-        console.print("[dim]View in dashboard: http://127.0.0.1:8420[/dim]")
 
     except (ServerUnreachableError, WorkflowConflictError, RateLimitError, InvalidRequestError) as e:
         _handle_workflow_api_error(e, worktree_path=worktree_path)
@@ -381,4 +344,76 @@ def cancel_command(
     except ServerUnreachableError as e:
         console.print(f"[red]Error:[/red] {e}")
         console.print("\n[yellow]Start the server:[/yellow] amelia server")
+        raise typer.Exit(1) from None
+
+
+def plan_command(
+    issue_id: Annotated[str, typer.Argument(help="Issue ID to generate a plan for (e.g., ISSUE-123)")],
+    profile_name: Annotated[
+        str | None,
+        typer.Option("--profile", "-p", help="Profile name for configuration"),
+    ] = None,
+) -> None:
+    """Generate an implementation plan for an issue without executing it.
+
+    Creates a markdown implementation plan in docs/plans/ that can be
+    reviewed before execution. Calls the Architect directly without
+    going through the full LangGraph orchestration.
+
+    Args:
+        issue_id: Issue identifier to generate a plan for (e.g., ISSUE-123).
+        profile_name: Optional profile name for driver and tracker configuration.
+    """
+    worktree_path, _worktree_name = _get_worktree_context()
+
+    async def _generate_plan() -> PlanOutput:
+        # Load settings from worktree
+        settings_path = Path(worktree_path) / "settings.amelia.yaml"
+        settings = load_settings(settings_path)
+
+        # Get profile (use specified or active profile)
+        selected_profile = profile_name or settings.active_profile
+        if selected_profile not in settings.profiles:
+            raise ValueError(f"Profile '{selected_profile}' not found in settings")
+        profile = settings.profiles[selected_profile]
+
+        # Update profile with worktree path
+        profile = profile.model_copy(update={"working_dir": worktree_path})
+
+        # Fetch issue using tracker
+        tracker = create_tracker(profile)
+        issue = tracker.get_issue(issue_id, cwd=worktree_path)
+
+        # Create minimal execution state
+        state = ExecutionState(
+            profile_id=profile.name,
+            issue=issue,
+        )
+
+        # Create driver and architect
+        driver = DriverFactory.get_driver(profile.driver, model=profile.model)
+        architect = Architect(driver)
+
+        # Generate plan directly
+        return await architect.plan(
+            state=state,
+            profile=profile,
+            workflow_id=f"plan-{issue_id}",
+        )
+
+    try:
+        console.print(f"[dim]Generating plan for {issue_id}...[/dim]")
+        plan_output = asyncio.run(_generate_plan())
+
+        console.print("\n[green]✓[/green] Plan generated successfully!")
+        console.print(f"  Goal: {plan_output.goal}")
+        console.print(f"  Saved to: [bold]{plan_output.markdown_path}[/bold]")
+        if plan_output.key_files:
+            console.print(f"  Key files: {', '.join(plan_output.key_files[:5])}")
+
+    except ValueError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(1) from None
+    except Exception as e:
+        console.print(f"[red]Error generating plan:[/red] {e}")
         raise typer.Exit(1) from None
