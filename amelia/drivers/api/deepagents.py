@@ -2,17 +2,70 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """DeepAgents-based API driver for LLM generation and agentic execution."""
+import os
 from collections.abc import AsyncIterator
 from typing import Any
 
 from deepagents import create_deep_agent
 from deepagents.backends import FilesystemBackend  # type: ignore[import-untyped]
 from langchain.chat_models import init_chat_model
+from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from loguru import logger
 from pydantic import BaseModel
 
 from amelia.drivers.base import DriverInterface, GenerateResult
+
+
+def _create_chat_model(model: str) -> BaseChatModel:
+    """Create a LangChain chat model, handling special provider prefixes.
+
+    Handles the 'openrouter:' prefix by configuring ChatOpenAI with OpenRouter's
+    base URL. OpenRouter provides an OpenAI-compatible API, so we use the openai
+    provider with a custom base_url.
+
+    Args:
+        model: Model identifier. Can be:
+            - 'openrouter:provider/model' - Routes through OpenRouter
+            - Any standard model string (e.g., 'gpt-4', 'claude-3-opus')
+
+    Returns:
+        Configured BaseChatModel instance.
+
+    Raises:
+        ValueError: If OpenRouter is requested but OPENROUTER_API_KEY is not set.
+    """
+    if model.startswith("openrouter:"):
+        # Extract the model name after 'openrouter:' prefix
+        openrouter_model = model[len("openrouter:") :]
+
+        api_key = os.environ.get("OPENROUTER_API_KEY")
+        if not api_key:
+            raise ValueError(
+                "OPENROUTER_API_KEY environment variable is required for OpenRouter models"
+            )
+
+        # App attribution headers for OpenRouter rankings/analytics
+        # See: https://openrouter.ai/docs/app-attribution
+        site_url = os.environ.get(
+            "OPENROUTER_SITE_URL", "https://github.com/existential-birds/amelia"
+        )
+        site_name = os.environ.get("OPENROUTER_SITE_NAME", "Amelia")
+
+        # OpenRouter provides an OpenAI-compatible API
+        return init_chat_model(
+            model=openrouter_model,
+            model_provider="openai",
+            base_url="https://openrouter.ai/api/v1",
+            api_key=api_key,
+            default_headers={
+                "HTTP-Referer": site_url,
+                "X-Title": site_name,
+            },
+        )
+
+    # Default: let init_chat_model infer the provider
+    return init_chat_model(model)
 
 
 class ApiDriver(DriverInterface):
@@ -66,7 +119,7 @@ class ApiDriver(DriverInterface):
             raise ValueError("Prompt cannot be empty")
 
         try:
-            chat_model = init_chat_model(self.model)
+            chat_model = _create_chat_model(self.model)
             backend = FilesystemBackend(root_dir=self.cwd or ".")
             agent = create_deep_agent(
                 model=chat_model,
@@ -148,7 +201,7 @@ class ApiDriver(DriverInterface):
             raise ValueError("Prompt cannot be empty")
 
         try:
-            chat_model = init_chat_model(self.model)
+            chat_model = _create_chat_model(self.model)
             backend = FilesystemBackend(root_dir=self.cwd)
             agent = create_deep_agent(
                 model=chat_model,

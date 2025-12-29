@@ -2,14 +2,15 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """Tests for DeepAgents-based ApiDriver."""
+import os
 from typing import Any
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 from pydantic import BaseModel
 
-from amelia.drivers.api.deepagents import ApiDriver
+from amelia.drivers.api.deepagents import ApiDriver, _create_chat_model
 
 
 class ResponseSchema(BaseModel):
@@ -182,3 +183,63 @@ class TestExecuteAgentic:
         assert collected[1].content == "thinking..."
         assert isinstance(collected[2], AIMessage)
         assert collected[2].content == "done"
+
+
+class TestCreateChatModel:
+    """Tests for _create_chat_model function."""
+
+    def test_openrouter_model_uses_openai_provider(self) -> None:
+        """Should configure OpenAI provider with OpenRouter base_url for openrouter: prefix."""
+        with (
+            patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-api-key"}),
+            patch("amelia.drivers.api.deepagents.init_chat_model") as mock_init,
+        ):
+            mock_init.return_value = MagicMock()
+
+            _create_chat_model("openrouter:anthropic/claude-sonnet-4-20250514")
+
+            mock_init.assert_called_once_with(
+                model="anthropic/claude-sonnet-4-20250514",
+                model_provider="openai",
+                base_url="https://openrouter.ai/api/v1",
+                api_key="test-api-key",
+                default_headers={
+                    "HTTP-Referer": "https://github.com/existential-birds/amelia",
+                    "X-Title": "Amelia",
+                },
+            )
+
+    def test_openrouter_model_uses_custom_attribution(self) -> None:
+        """Should use custom attribution headers from environment."""
+        with (
+            patch.dict(os.environ, {
+                "OPENROUTER_API_KEY": "test-api-key",
+                "OPENROUTER_SITE_URL": "https://example.com",
+                "OPENROUTER_SITE_NAME": "CustomApp",
+            }),
+            patch("amelia.drivers.api.deepagents.init_chat_model") as mock_init,
+        ):
+            mock_init.return_value = MagicMock()
+
+            _create_chat_model("openrouter:test/model")
+
+            call_kwargs = mock_init.call_args.kwargs
+            assert call_kwargs["default_headers"]["HTTP-Referer"] == "https://example.com"
+            assert call_kwargs["default_headers"]["X-Title"] == "CustomApp"
+
+    def test_openrouter_model_requires_api_key(self) -> None:
+        """Should raise ValueError if OPENROUTER_API_KEY is not set."""
+        # Clear the environment variable
+        with patch.dict(os.environ, {}, clear=True):
+            os.environ.pop("OPENROUTER_API_KEY", None)
+            with pytest.raises(ValueError, match="OPENROUTER_API_KEY"):
+                _create_chat_model("openrouter:test/model")
+
+    def test_non_openrouter_model_uses_default(self) -> None:
+        """Should use default init_chat_model for non-openrouter models."""
+        with patch("amelia.drivers.api.deepagents.init_chat_model") as mock_init:
+            mock_init.return_value = MagicMock()
+
+            _create_chat_model("gpt-4")
+
+            mock_init.assert_called_once_with("gpt-4")
