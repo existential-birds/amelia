@@ -283,11 +283,12 @@ class ClaudeCliDriver:
             permission_mode = "bypassPermissions"
 
         # Build output format for schema if provided
+        # Note: SDK expects "schema" key, not "json_schema"
         output_format = None
         if schema:
             output_format = {
                 "type": "json_schema",
-                "json_schema": schema.model_json_schema(),
+                "schema": schema.model_json_schema(),
             }
 
         return ClaudeAgentOptions(

@@ -687,7 +687,8 @@ class TestBuildOptions:
 
         assert options.output_format is not None
         assert options.output_format["type"] == "json_schema"
-        assert "json_schema" in options.output_format
+        # SDK expects "schema" key, not "json_schema"
+        assert "schema" in options.output_format
 
     def test_build_options_allowed_tools(self) -> None:
         """Test options include allowed_tools from driver."""
