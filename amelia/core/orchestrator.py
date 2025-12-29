@@ -111,7 +111,7 @@ async def call_architect_node(
     return {
         "goal": output.goal,
         "plan_markdown": output.markdown_content,
-        "plan_path": output.markdown_path,
+        "plan_path": str(output.markdown_path),
     }
 
 
