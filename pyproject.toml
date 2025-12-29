@@ -10,7 +10,8 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "langgraph>=1.0.3",
-    "pydantic-ai>=1.20.0",
+    "claude-agent-sdk>=0.1.0",
+    "deepagents>=0.3.1",
     "pydantic>=2.12.4",
     "rich>=14.1.0",
     "rich-click>=1.9.4",
@@ -85,6 +86,7 @@ module = [
     "langgraph.checkpoint.sqlite",
     "langgraph.checkpoint.sqlite.aio",
     "psutil",
-    "pydantic_ai.models.openrouter",
+    "claude_agent_sdk",
+    "deepagents",
 ]
 ignore_missing_imports = true
