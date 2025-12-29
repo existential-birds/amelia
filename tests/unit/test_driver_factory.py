@@ -5,7 +5,7 @@
 
 import pytest
 
-from amelia.drivers.api.openai import ApiDriver
+from amelia.drivers.api.deepagents import ApiDriver
 from amelia.drivers.cli.claude import ClaudeCliDriver
 from amelia.drivers.factory import DriverFactory
 
@@ -18,7 +18,7 @@ class TestDriverFactory:
         [
             ("cli:claude", ClaudeCliDriver, None, None),
             ("cli", ClaudeCliDriver, None, None),
-            ("api:openrouter", ApiDriver, "anthropic/claude-3.5-sonnet", "anthropic/claude-3.5-sonnet"),
+            ("api:openrouter", ApiDriver, "openrouter:anthropic/claude-sonnet-4-20250514", "openrouter:anthropic/claude-sonnet-4-20250514"),
             ("api", ApiDriver, None, None),
         ],
     )
@@ -27,7 +27,7 @@ class TestDriverFactory:
         driver = DriverFactory.get_driver(driver_key, model=model)
         assert isinstance(driver, expected_type)
         if expected_model is not None:
-            assert driver.model_name == expected_model
+            assert driver.model == expected_model
 
     @pytest.mark.parametrize(
         "driver_key,error_match",

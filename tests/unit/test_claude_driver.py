@@ -101,6 +101,18 @@ def create_mock_query(messages: list[Any]) -> AsyncMock:
     return mock_query
 
 
+def _patch_sdk_types():
+    """Create a context manager that patches SDK types for isinstance checks."""
+    return patch.multiple(
+        "amelia.drivers.cli.claude",
+        AssistantMessage=MockAssistantMessage,
+        ResultMessage=MockResultMessage,
+        TextBlock=MockTextBlock,
+        ToolUseBlock=MockToolUseBlock,
+        ToolResultBlock=MockToolResultBlock,
+    )
+
+
 class TestClaudeCliDriverGenerate:
     """Tests for ClaudeCliDriver.generate() method."""
 
@@ -111,7 +123,10 @@ class TestClaudeCliDriverGenerate:
             MockResultMessage(result="Hello, world!", session_id="sess_123"),
         ]
 
-        with patch("amelia.drivers.cli.claude.query", side_effect=create_mock_query(messages)):
+        with (
+            _patch_sdk_types(),
+            patch("amelia.drivers.cli.claude.query", side_effect=create_mock_query(messages)),
+        ):
             result, session_id = await driver.generate("Say hello")
 
             assert result == "Hello, world!"
@@ -124,7 +139,10 @@ class TestClaudeCliDriverGenerate:
             MockResultMessage(result=None, session_id="sess_456"),
         ]
 
-        with patch("amelia.drivers.cli.claude.query", side_effect=create_mock_query(messages)):
+        with (
+            _patch_sdk_types(),
+            patch("amelia.drivers.cli.claude.query", side_effect=create_mock_query(messages)),
+        ):
             result, session_id = await driver.generate("Test prompt")
 
             assert result == "Response from assistant"
@@ -141,7 +159,10 @@ class TestClaudeCliDriverGenerate:
             ),
         ]
 
-        with patch("amelia.drivers.cli.claude.query", side_effect=create_mock_query(messages)):
+        with (
+            _patch_sdk_types(),
+            patch("amelia.drivers.cli.claude.query", side_effect=create_mock_query(messages)),
+        ):
             result, session_id = await driver.generate("Answer", schema=_TestModel)
 
             assert isinstance(result, _TestModel)
@@ -159,7 +180,10 @@ class TestClaudeCliDriverGenerate:
             ),
         ]
 
-        with patch("amelia.drivers.cli.claude.query", side_effect=create_mock_query(messages)):
+        with (
+            _patch_sdk_types(),
+            patch("amelia.drivers.cli.claude.query", side_effect=create_mock_query(messages)),
+        ):
             result, session_id = await driver.generate("Answer", schema=_TestModel)
 
             assert isinstance(result, _TestModel)
@@ -177,7 +201,10 @@ class TestClaudeCliDriverGenerate:
             ),
         ]
 
-        with patch("amelia.drivers.cli.claude.query", side_effect=create_mock_query(messages)):
+        with (
+            _patch_sdk_types(),
+            patch("amelia.drivers.cli.claude.query", side_effect=create_mock_query(messages)),
+        ):
             result, session_id = await driver.generate("List tasks", schema=_TestListModel)
 
             assert isinstance(result, _TestListModel)
@@ -191,9 +218,12 @@ class TestClaudeCliDriverGenerate:
             # No ResultMessage
         ]
 
-        with patch("amelia.drivers.cli.claude.query", side_effect=create_mock_query(messages)):
-            with pytest.raises(RuntimeError, match="did not return a result message"):
-                await driver.generate("Test")
+        with (
+            _patch_sdk_types(),
+            patch("amelia.drivers.cli.claude.query", side_effect=create_mock_query(messages)),
+            pytest.raises(RuntimeError, match="did not return a result message"),
+        ):
+            await driver.generate("Test")
 
     async def test_generate_error_from_sdk(self, driver: ClaudeCliDriver) -> None:
         """Test error handling when SDK reports an error."""
@@ -204,9 +234,12 @@ class TestClaudeCliDriverGenerate:
             ),
         ]
 
-        with patch("amelia.drivers.cli.claude.query", side_effect=create_mock_query(messages)):
-            with pytest.raises(RuntimeError, match="SDK reported error"):
-                await driver.generate("Test")
+        with (
+            _patch_sdk_types(),
+            patch("amelia.drivers.cli.claude.query", side_effect=create_mock_query(messages)),
+            pytest.raises(RuntimeError, match="SDK reported error"),
+        ):
+            await driver.generate("Test")
 
     async def test_generate_json_text_instead_of_json_raises_error(self, driver: ClaudeCliDriver) -> None:
         """Test error when model returns plain text instead of JSON."""
@@ -218,9 +251,12 @@ class TestClaudeCliDriverGenerate:
             ),
         ]
 
-        with patch("amelia.drivers.cli.claude.query", side_effect=create_mock_query(messages)):
-            with pytest.raises(RuntimeError, match="text instead of structured JSON"):
-                await driver.generate("Answer", schema=_TestModel)
+        with (
+            _patch_sdk_types(),
+            patch("amelia.drivers.cli.claude.query", side_effect=create_mock_query(messages)),
+            pytest.raises(RuntimeError, match="text instead of structured JSON"),
+        ):
+            await driver.generate("Answer", schema=_TestModel)
 
     async def test_generate_clarification_request_raises_specific_error(self, driver: ClaudeCliDriver) -> None:
         """Test that clarification requests raise a specific, helpful error."""
@@ -232,9 +268,12 @@ class TestClaudeCliDriverGenerate:
             ),
         ]
 
-        with patch("amelia.drivers.cli.claude.query", side_effect=create_mock_query(messages)):
-            with pytest.raises(RuntimeError, match="clarification"):
-                await driver.generate("Answer", schema=_TestModel)
+        with (
+            _patch_sdk_types(),
+            patch("amelia.drivers.cli.claude.query", side_effect=create_mock_query(messages)),
+            pytest.raises(RuntimeError, match="clarification"),
+        ):
+            await driver.generate("Answer", schema=_TestModel)
 
     async def test_generate_no_output_for_schema_raises_error(self, driver: ClaudeCliDriver) -> None:
         """Test error when SDK returns no output for a schema request."""
@@ -245,9 +284,12 @@ class TestClaudeCliDriverGenerate:
             ),
         ]
 
-        with patch("amelia.drivers.cli.claude.query", side_effect=create_mock_query(messages)):
-            with pytest.raises(RuntimeError, match="no output for schema request"):
-                await driver.generate("Answer", schema=_TestModel)
+        with (
+            _patch_sdk_types(),
+            patch("amelia.drivers.cli.claude.query", side_effect=create_mock_query(messages)),
+            pytest.raises(RuntimeError, match="no output for schema request"),
+        ):
+            await driver.generate("Answer", schema=_TestModel)
 
     async def test_generate_with_system_prompt(self, driver: ClaudeCliDriver) -> None:
         """Test that system_prompt is passed to SDK options."""
@@ -255,7 +297,10 @@ class TestClaudeCliDriverGenerate:
             MockResultMessage(result="Response", session_id="sess_sys"),
         ]
 
-        with patch("amelia.drivers.cli.claude.query", side_effect=create_mock_query(messages)) as mock_q:
+        with (
+            _patch_sdk_types(),
+            patch("amelia.drivers.cli.claude.query", side_effect=create_mock_query(messages)) as mock_q,
+        ):
             await driver.generate("Test", system_prompt="You are helpful.")
 
             # Verify query was called with options containing system_prompt
@@ -268,7 +313,10 @@ class TestClaudeCliDriverGenerate:
             MockResultMessage(result="Resumed response", session_id="sess_new"),
         ]
 
-        with patch("amelia.drivers.cli.claude.query", side_effect=create_mock_query(messages)) as mock_q:
+        with (
+            _patch_sdk_types(),
+            patch("amelia.drivers.cli.claude.query", side_effect=create_mock_query(messages)) as mock_q,
+        ):
             await driver.generate("Continue", session_id="sess_old")
 
             call_kwargs = mock_q.call_args[1]
@@ -280,7 +328,10 @@ class TestClaudeCliDriverGenerate:
             MockResultMessage(result="Response", session_id="sess_cwd"),
         ]
 
-        with patch("amelia.drivers.cli.claude.query", side_effect=create_mock_query(messages)) as mock_q:
+        with (
+            _patch_sdk_types(),
+            patch("amelia.drivers.cli.claude.query", side_effect=create_mock_query(messages)) as mock_q,
+        ):
             await driver.generate("Test", cwd="/path/to/project")
 
             call_kwargs = mock_q.call_args[1]
@@ -323,7 +374,10 @@ class TestClaudeCliDriverConfiguration:
         driver = ClaudeCliDriver(skip_permissions=True)
         messages = [MockResultMessage(result="OK")]
 
-        with patch("amelia.drivers.cli.claude.query", side_effect=create_mock_query(messages)) as mock_q:
+        with (
+            _patch_sdk_types(),
+            patch("amelia.drivers.cli.claude.query", side_effect=create_mock_query(messages)) as mock_q,
+        ):
             await driver.generate("Test")
 
             call_kwargs = mock_q.call_args[1]
@@ -334,7 +388,10 @@ class TestClaudeCliDriverConfiguration:
         driver = ClaudeCliDriver(model="haiku")
         messages = [MockResultMessage(result="OK")]
 
-        with patch("amelia.drivers.cli.claude.query", side_effect=create_mock_query(messages)) as mock_q:
+        with (
+            _patch_sdk_types(),
+            patch("amelia.drivers.cli.claude.query", side_effect=create_mock_query(messages)) as mock_q,
+        ):
             await driver.generate("Test")
 
             call_kwargs = mock_q.call_args[1]
@@ -352,7 +409,10 @@ class TestClaudeCliDriverAgentic:
             MockResultMessage(result="Done", session_id="sess_agentic"),
         ]
 
-        with patch("amelia.drivers.cli.claude.query", side_effect=create_mock_query(messages)):
+        with (
+            _patch_sdk_types(),
+            patch("amelia.drivers.cli.claude.query", side_effect=create_mock_query(messages)),
+        ):
             collected: list[Any] = []
             async for msg in driver.execute_agentic("Do something", "/workspace"):
                 collected.append(msg)
@@ -369,22 +429,27 @@ class TestClaudeCliDriverAgentic:
 
         # Need to make the mock tool block pass isinstance checks
         # We'll patch the isinstance check indirectly by using the real types
-        with patch("amelia.drivers.cli.claude.query", side_effect=create_mock_query(messages)):
-            with patch("amelia.drivers.cli.claude.ToolUseBlock", MockToolUseBlock):
-                driver.clear_tool_history()
-                async for _ in driver.execute_agentic("Write file", "/workspace"):
-                    pass
+        with (
+            _patch_sdk_types(),
+            patch("amelia.drivers.cli.claude.query", side_effect=create_mock_query(messages)),
+        ):
+            driver.clear_tool_history()
+            async for _ in driver.execute_agentic("Write file", "/workspace"):
+                pass
 
-                # Tool should be tracked (mocking makes this tricky, verify the code path)
-                # In real usage, ToolUseBlock isinstance check would pass
-                assert driver.tool_call_history == [] or len(driver.tool_call_history) >= 0
+            # Tool should be tracked (mocking makes this tricky, verify the code path)
+            # In real usage, ToolUseBlock isinstance check would pass
+            assert driver.tool_call_history == [] or len(driver.tool_call_history) >= 0
 
     async def test_execute_agentic_bypasses_permissions(self) -> None:
         """Test that execute_agentic always bypasses permissions."""
         driver = ClaudeCliDriver(skip_permissions=False)  # Default is False
         messages = [MockResultMessage(result="Done")]
 
-        with patch("amelia.drivers.cli.claude.query", side_effect=create_mock_query(messages)) as mock_q:
+        with (
+            _patch_sdk_types(),
+            patch("amelia.drivers.cli.claude.query", side_effect=create_mock_query(messages)) as mock_q,
+        ):
             async for _ in driver.execute_agentic("Do something", "/workspace"):
                 pass
 
@@ -396,7 +461,10 @@ class TestClaudeCliDriverAgentic:
         driver = ClaudeCliDriver()
         messages = [MockResultMessage(result="Done")]
 
-        with patch("amelia.drivers.cli.claude.query", side_effect=create_mock_query(messages)) as mock_q:
+        with (
+            _patch_sdk_types(),
+            patch("amelia.drivers.cli.claude.query", side_effect=create_mock_query(messages)) as mock_q,
+        ):
             async for _ in driver.execute_agentic(
                 "Do something",
                 "/workspace",
@@ -412,7 +480,10 @@ class TestClaudeCliDriverAgentic:
         driver = ClaudeCliDriver()
         messages = [MockResultMessage(result="Continued")]
 
-        with patch("amelia.drivers.cli.claude.query", side_effect=create_mock_query(messages)) as mock_q:
+        with (
+            _patch_sdk_types(),
+            patch("amelia.drivers.cli.claude.query", side_effect=create_mock_query(messages)) as mock_q,
+        ):
             async for _ in driver.execute_agentic(
                 "Continue",
                 "/workspace",
@@ -441,7 +512,10 @@ class TestConvertToStreamEvent:
         # Use real SDK types for conversion tests
         from claude_agent_sdk.types import AssistantMessage, TextBlock
 
-        message = AssistantMessage(content=[TextBlock(type="text", text="Thinking...")])
+        message = AssistantMessage(
+            content=[TextBlock(text="Thinking...")],
+            model="claude-sonnet-4-20250514",
+        )
         event = convert_to_stream_event(message, agent="developer", workflow_id="wf-123")
 
         assert event is not None
@@ -454,7 +528,8 @@ class TestConvertToStreamEvent:
         from claude_agent_sdk.types import AssistantMessage, ToolUseBlock
 
         message = AssistantMessage(
-            content=[ToolUseBlock(type="tool_use", id="tu_1", name="Read", input={"path": "/x.py"})]
+            content=[ToolUseBlock(id="tu_1", name="Read", input={"path": "/x.py"})],
+            model="claude-sonnet-4-20250514",
         )
         event = convert_to_stream_event(message, agent="developer", workflow_id="wf-456")
 
@@ -467,12 +542,14 @@ class TestConvertToStreamEvent:
         from claude_agent_sdk.types import ResultMessage
 
         message = ResultMessage(
-            result="Final output",
-            session_id="sess_abc",
-            is_error=False,
+            subtype="result",
             duration_ms=1000,
+            duration_api_ms=800,
+            is_error=False,
             num_turns=5,
+            session_id="sess_abc",
             total_cost_usd=0.01,
+            result="Final output",
         )
         event = convert_to_stream_event(message, agent="reviewer", workflow_id="wf-789")
 

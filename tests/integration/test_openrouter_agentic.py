@@ -14,10 +14,9 @@ import os
 from pathlib import Path
 
 import pytest
+from langchain_core.messages import AIMessage, BaseMessage, ToolMessage
 
-from amelia.core.state import AgentMessage
-from amelia.drivers.api.events import ApiStreamEvent
-from amelia.drivers.api.openai import ApiDriver
+from amelia.drivers.api.deepagents import ApiDriver
 
 from .conftest import OPENROUTER_FREE_MODEL
 
@@ -28,30 +27,23 @@ MAX_RETRIES = 3
 
 async def _execute_with_retry(
     driver: ApiDriver,
-    messages: list[AgentMessage],
-    cwd: str,
-    instructions: str,
-) -> list[ApiStreamEvent]:
+    prompt: str,
+) -> list[BaseMessage]:
     """Execute agentic call with retry logic for flaky free models."""
     for attempt in range(MAX_RETRIES):
-        events = []
-        async for event in driver.execute_agentic(
-            messages=messages,
-            cwd=cwd,
-            instructions=instructions,
-        ):
-            events.append(event)
+        messages: list[BaseMessage] = []
+        async for message in driver.execute_agentic(prompt):
+            messages.append(message)
 
-        event_types = [e.type for e in events]
-        # Success if we got a tool_use event (model used tools as expected)
-        if "tool_use" in event_types:
-            return events
-        # If error or no tool use, retry
+        # Success if we got a ToolMessage (model used tools as expected)
+        if any(isinstance(m, ToolMessage) for m in messages):
+            return messages
+        # If no tool use, retry
         if attempt < MAX_RETRIES - 1:
             continue
 
-    # Return last attempt's events for assertion
-    return events
+    # Return last attempt's messages for assertion
+    return messages
 
 
 @pytest.mark.integration
@@ -68,34 +60,26 @@ class TestOpenRouterAgenticIntegration:
 
     async def test_simple_shell_command(self, tmp_path: Path) -> None:
         """Should execute a simple shell command via OpenRouter."""
-        driver = ApiDriver(model=OPENROUTER_FREE_MODEL)
+        driver = ApiDriver(model=OPENROUTER_FREE_MODEL, cwd=str(tmp_path))
 
-        events = await _execute_with_retry(
+        messages = await _execute_with_retry(
             driver=driver,
-            messages=[AgentMessage(role="user", content="Run 'echo hello' and tell me the output")],
-            cwd=str(tmp_path),
-            instructions="You are a helpful assistant. Use tools to complete tasks.",
+            prompt="Run 'echo hello' and tell me the output",
         )
 
-        # Should have tool_use and result events
-        event_types = [e.type for e in events]
-        assert "tool_use" in event_types, f"Expected tool_use event, got: {event_types}"
-        assert "result" in event_types
+        # Should have AIMessage and ToolMessage
+        has_ai_message = any(isinstance(m, AIMessage) for m in messages)
+        has_tool_message = any(isinstance(m, ToolMessage) for m in messages)
+        assert has_ai_message, f"Expected AIMessage, got: {[type(m).__name__ for m in messages]}"
+        assert has_tool_message, f"Expected ToolMessage, got: {[type(m).__name__ for m in messages]}"
 
     async def test_file_write(self, tmp_path: Path) -> None:
         """Should write a file via OpenRouter."""
-        driver = ApiDriver(model=OPENROUTER_FREE_MODEL)
+        driver = ApiDriver(model=OPENROUTER_FREE_MODEL, cwd=str(tmp_path))
 
-        events = await _execute_with_retry(
+        messages = await _execute_with_retry(
             driver=driver,
-            messages=[
-                AgentMessage(
-                    role="user",
-                    content="Create a file called 'hello.txt' with the content 'Hello from OpenRouter!'"
-                )
-            ],
-            cwd=str(tmp_path),
-            instructions="You are a helpful assistant. Use tools to complete tasks.",
+            prompt="Create a file called 'hello.txt' with the content 'Hello from OpenRouter!'",
         )
 
         # Verify file was created
@@ -103,7 +87,8 @@ class TestOpenRouterAgenticIntegration:
         assert hello_file.exists(), "File should have been created"
         assert "Hello" in hello_file.read_text()
 
-        # Should have tool_use and result events
-        event_types = [e.type for e in events]
-        assert "tool_use" in event_types
-        assert "result" in event_types
+        # Should have AIMessage and ToolMessage
+        has_ai_message = any(isinstance(m, AIMessage) for m in messages)
+        has_tool_message = any(isinstance(m, ToolMessage) for m in messages)
+        assert has_ai_message
+        assert has_tool_message

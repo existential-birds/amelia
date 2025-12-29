@@ -8,7 +8,7 @@ tracking conversation, tool calls, and workflow progress.
 """
 import operator
 from pathlib import Path
-from typing import Annotated, Any, Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 

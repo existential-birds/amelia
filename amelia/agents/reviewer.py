@@ -76,7 +76,7 @@ Analyze the provided code changes and provide a comprehensive review."""
             if state.issue.description:
                 issue_parts.append(state.issue.description)
             if issue_parts:
-                parts.append(f"## Issue\n\n" + "\n\n".join(issue_parts))
+                parts.append("## Issue\n\n" + "\n\n".join(issue_parts))
 
         if not parts:
             raise ValueError("No task or issue context found for review")

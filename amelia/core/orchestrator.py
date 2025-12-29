@@ -9,7 +9,6 @@ Developer (execute agentically) ↔ Reviewer (review) → Done. Provides node fu
 the state machine and the create_orchestrator_graph() factory.
 """
 import asyncio
-from datetime import UTC, datetime
 from typing import Any, Literal
 
 import typer
@@ -23,7 +22,7 @@ from amelia.agents.architect import Architect, PlanOutput
 from amelia.agents.developer import Developer
 from amelia.agents.reviewer import Reviewer
 from amelia.core.state import ExecutionState
-from amelia.core.types import Profile, StreamEmitter, StreamEvent, StreamEventType
+from amelia.core.types import Profile, StreamEmitter
 from amelia.drivers.factory import DriverFactory
 
 
@@ -224,35 +223,7 @@ async def call_developer_node(
         final_state = new_state
         # Stream events are handled by the stream_emitter if provided
         if stream_emitter:
-            # Map API event types to StreamEventType
-            event_type_map = {
-                "thinking": StreamEventType.CLAUDE_THINKING,
-                "tool_use": StreamEventType.CLAUDE_TOOL_CALL,
-                "tool_result": StreamEventType.CLAUDE_TOOL_RESULT,
-                "result": StreamEventType.AGENT_OUTPUT,
-            }
-            stream_type = event_type_map.get(event.type, StreamEventType.CLAUDE_TOOL_RESULT)
-
-            # Determine content based on event type
-            if event.type == "tool_use":
-                content = event.tool_name or ""
-            elif event.type == "tool_result":
-                content = event.tool_result or ""
-            elif event.type == "result":
-                content = event.result_text or ""
-            else:
-                content = event.content or ""
-
-            stream_event = StreamEvent(
-                type=stream_type,
-                content=content,
-                timestamp=datetime.now(UTC),
-                agent="developer",
-                workflow_id=workflow_id,
-                tool_name=event.tool_name,
-                tool_input=event.tool_input,
-            )
-            await stream_emitter(stream_event)
+            await stream_emitter(event)
 
     logger.info(
         "Agent action completed",

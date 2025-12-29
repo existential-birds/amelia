@@ -206,14 +206,18 @@ def mock_deepagents() -> Generator[MagicMock, None, None]:
 
         # Set up default agent result (can be modified by tests)
         agent_result: dict[str, Any] = {"messages": []}
-        stream_chunks: list[dict[str, Any]] = []
+
+        # Create container for all mocks first so closures can reference it
+        mocks = MagicMock()
+        mocks.stream_chunks = []  # Initialize default stream chunks
 
         # Create mock agent
         mock_agent = AsyncMock()
         mock_agent.ainvoke = AsyncMock(return_value=agent_result)
 
         async def mock_astream(*args: Any, **kwargs: Any) -> AsyncIterator[dict[str, Any]]:
-            for chunk in stream_chunks:
+            # Look up stream_chunks on mocks dynamically to allow test modification
+            for chunk in mocks.stream_chunks:
                 yield chunk
 
         mock_agent.astream = mock_astream
@@ -222,14 +226,12 @@ def mock_deepagents() -> Generator[MagicMock, None, None]:
         mock_init_model.return_value = MagicMock()
         mock_backend_class.return_value = MagicMock()
 
-        # Create container for all mocks
-        mocks = MagicMock()
+        # Set remaining attributes on mocks container
         mocks.create_deep_agent = mock_create_agent
         mocks.init_chat_model = mock_init_model
         mocks.backend_class = mock_backend_class
         mocks.agent = mock_agent
         mocks.agent_result = agent_result
-        mocks.stream_chunks = stream_chunks
 
         yield mocks
 
