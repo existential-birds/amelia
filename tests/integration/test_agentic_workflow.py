@@ -25,7 +25,7 @@ from amelia.core.orchestrator import (
     route_approval,
 )
 from amelia.core.state import ExecutionState, ReviewResult
-from amelia.drivers.api.openai import ApiDriver
+from amelia.drivers.api import ApiDriver
 from tests.integration.conftest import make_config, make_execution_state, make_issue, make_profile
 
 

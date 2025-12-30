@@ -52,6 +52,14 @@ class TestToolResult:
         assert result.success is False
         assert result.error == "Command not found"
 
+    def test_tool_result_is_frozen(self) -> None:
+        """ToolResult should be immutable."""
+        result = ToolResult(
+            call_id="1", tool_name="test", output="ok", success=True
+        )
+        with pytest.raises(ValidationError):
+            result.success = False
+
 
 class TestAgenticState:
     """Test AgenticState model."""
@@ -82,3 +90,11 @@ class TestAgenticState:
         )
         assert len(state.tool_calls) == 1
         assert len(state.tool_results) == 1
+
+    def test_agentic_state_is_frozen(self) -> None:
+        """AgenticState should be immutable."""
+        state = AgenticState(
+            workflow_id="wf-1", issue_key="ISSUE-1", goal="test"
+        )
+        with pytest.raises(ValidationError):
+            state.status = "completed"
