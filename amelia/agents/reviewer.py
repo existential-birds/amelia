@@ -3,13 +3,60 @@
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 import asyncio
 from datetime import UTC, datetime
+from typing import Literal
 
 from loguru import logger
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from amelia.core.state import ExecutionState, ReviewResult, Severity
 from amelia.core.types import Profile, StreamEmitter, StreamEvent, StreamEventType
 from amelia.drivers.base import DriverInterface
+
+
+class ReviewItem(BaseModel):
+    """Single review item with full context.
+
+    Follows beagle review skill format: [FILE:LINE] TITLE
+
+    Attributes:
+        number: Sequential issue number.
+        title: Brief issue title.
+        file_path: Path to the file containing the issue.
+        line: Line number where the issue occurs.
+        severity: Issue severity level.
+        issue: Description of what's wrong.
+        why: Explanation of why it matters.
+        fix: Recommended fix.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    number: int
+    title: str
+    file_path: str
+    line: int
+    severity: Literal["critical", "major", "minor"]
+    issue: str  # What's wrong
+    why: str  # Why it matters
+    fix: str  # Recommended fix
+
+
+class StructuredReviewResult(BaseModel):
+    """Structured review output matching beagle format.
+
+    Attributes:
+        summary: 1-2 sentence overview of the review.
+        items: List of all review items with full context.
+        good_patterns: Things done well that should be preserved.
+        verdict: Overall review verdict.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    summary: str
+    items: list[ReviewItem]
+    good_patterns: list[str] = Field(default_factory=list)
+    verdict: Literal["approved", "needs_fixes", "blocked"]
 
 
 class ReviewResponse(BaseModel):
@@ -35,6 +82,22 @@ class Reviewer:
 
     SYSTEM_PROMPT_TEMPLATE = """You are an expert code reviewer with a focus on {persona} aspects.
 Analyze the provided code changes and provide a comprehensive review."""
+
+    STRUCTURED_SYSTEM_PROMPT = """You are an expert code reviewer. Review the provided code changes and produce structured feedback.
+
+OUTPUT FORMAT:
+- Summary: 1-2 sentence overview
+- Items: Numbered list with format [FILE:LINE] TITLE
+  - For each item provide: Issue (what's wrong), Why (why it matters), Fix (recommended solution)
+- Good Patterns: List things done well to preserve
+- Verdict: "approved" | "needs_fixes" | "blocked"
+
+SEVERITY LEVELS:
+- critical: Blocking issues (security, data loss, crashes)
+- major: Should fix before merge (bugs, performance, maintainability)
+- minor: Nice to have (style, minor improvements)
+
+Be specific with file paths and line numbers. Provide actionable feedback."""
 
     def __init__(
         self,
@@ -251,3 +314,95 @@ Analyze the provided code changes and provide a comprehensive review."""
             severity=overall_severity
         )
         return aggregated_result, None
+
+    async def structured_review(
+        self,
+        state: ExecutionState,
+        code_changes: str,
+        profile: Profile,
+        *,
+        workflow_id: str,
+    ) -> tuple[StructuredReviewResult, str | None]:
+        """Perform structured code review with beagle format output.
+
+        Args:
+            state: Current execution state.
+            code_changes: Diff or description of changes to review.
+            profile: Active profile with driver settings.
+            workflow_id: Workflow identifier for streaming.
+
+        Returns:
+            Tuple of StructuredReviewResult and optional session ID.
+        """
+        # Handle empty code changes - return approved result with no items
+        if not code_changes or not code_changes.strip():
+            logger.warning(
+                "No code changes to review, auto-approving",
+                agent="reviewer",
+                method="structured_review",
+                workflow_id=workflow_id,
+            )
+            if self._stream_emitter is not None:
+                event = StreamEvent(
+                    type=StreamEventType.AGENT_OUTPUT,
+                    content="No code changes to review - auto-approved",
+                    timestamp=datetime.now(UTC),
+                    agent="reviewer",
+                    workflow_id=workflow_id,
+                )
+                await self._stream_emitter(event)
+
+            result = StructuredReviewResult(
+                summary="No code changes to review.",
+                items=[],
+                good_patterns=[],
+                verdict="approved",
+            )
+            return result, state.driver_session_id
+
+        # Build prompt using existing method
+        prompt = self._build_prompt(state, code_changes)
+
+        logger.debug(
+            "Built structured review prompt",
+            agent="reviewer",
+            method="structured_review",
+            prompt_length=len(prompt),
+            system_prompt_length=len(self.STRUCTURED_SYSTEM_PROMPT),
+        )
+
+        response, new_session_id = await self.driver.generate(
+            prompt=prompt,
+            system_prompt=self.STRUCTURED_SYSTEM_PROMPT,
+            schema=StructuredReviewResult,
+            cwd=profile.working_dir,
+            session_id=state.driver_session_id,
+        )
+
+        # Emit completion event before return
+        if self._stream_emitter is not None:
+            verdict_display = {
+                "approved": "Approved",
+                "needs_fixes": "Needs fixes",
+                "blocked": "Blocked",
+            }
+            event = StreamEvent(
+                type=StreamEventType.AGENT_OUTPUT,
+                content=f"Structured review completed: {verdict_display.get(response.verdict, response.verdict)} ({len(response.items)} items)",
+                timestamp=datetime.now(UTC),
+                agent="reviewer",
+                workflow_id=workflow_id,
+            )
+            await self._stream_emitter(event)
+
+        logger.info(
+            "Structured review completed",
+            agent="reviewer",
+            method="structured_review",
+            verdict=response.verdict,
+            item_count=len(response.items),
+            good_pattern_count=len(response.good_patterns),
+            workflow_id=workflow_id,
+        )
+
+        return response, new_session_id

@@ -18,7 +18,7 @@ from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langgraph.graph.state import CompiledStateGraph
 from loguru import logger
 
-from amelia.core.orchestrator import create_orchestrator_graph
+from amelia.core.orchestrator import create_orchestrator_graph, create_review_graph
 from amelia.core.state import ExecutionState
 from amelia.core.types import Issue, Profile, Settings, StreamEmitter, StreamEvent
 from amelia.ext import WorkflowEventType as ExtWorkflowEventType
@@ -888,10 +888,14 @@ class OrchestratorService:
         async with AsyncSqliteSaver.from_conn_string(
             str(self._checkpoint_path)
         ) as checkpointer:
-            # Create orchestrator graph (no interrupt_before - runs autonomously)
-            graph = create_orchestrator_graph(
+            # Determine interrupt settings based on auto_approve
+            auto_approve = state.execution_state.auto_approve or profile.auto_approve_reviews
+            interrupt_before: list[str] | None = [] if auto_approve else None  # None = use defaults
+
+            # Use dedicated review graph for review workflows
+            graph = create_review_graph(
                 checkpoint_saver=checkpointer,
-                interrupt_before=[],  # No interrupts for autonomous review workflow
+                interrupt_before=interrupt_before,
             )
 
             # Create stream emitter and pass it via config
@@ -917,6 +921,9 @@ class OrchestratorService:
 
                 # Convert Pydantic model to JSON-serializable dict for checkpointing
                 initial_state = state.execution_state.model_dump(mode="json")
+                # Ensure auto_approve is set from profile if not already in state
+                if profile.auto_approve_reviews and not initial_state.get("auto_approve"):
+                    initial_state["auto_approve"] = True
 
                 async for chunk in graph.astream(
                     initial_state,

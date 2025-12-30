@@ -16,6 +16,7 @@ from claude_agent_sdk.types import (
     AssistantMessage,
     Message,
     ResultMessage,
+    StreamEvent as SDKStreamEvent,
     TextBlock,
     ToolResultBlock,
     ToolUseBlock,
@@ -174,12 +175,22 @@ def convert_to_stream_event(
     return None
 
 
-def _log_sdk_message(message: Message) -> None:
+def _log_sdk_message(message: Message | SDKStreamEvent) -> None:
     """Log SDK message using the existing log_claude_result function.
 
     Args:
-        message: Message from claude-agent-sdk to log.
+        message: Message or StreamEvent from claude-agent-sdk to log.
     """
+    if isinstance(message, SDKStreamEvent):
+        # SDK StreamEvent contains progress updates, log at debug level
+        event_type = message.event.get("type", "unknown")
+        logger.debug(
+            "SDK StreamEvent received",
+            event_type=event_type,
+            session_id=message.session_id,
+        )
+        return
+
     if isinstance(message, AssistantMessage):
         for block in message.content:
             if isinstance(block, TextBlock):
@@ -451,6 +462,11 @@ class ClaudeCliDriver:
                 await client.query(prompt)
                 async for message in client.receive_response():
                     _log_sdk_message(message)
+
+                    # Skip SDK StreamEvent objects - they are progress updates
+                    # that don't need to be passed to the developer agent
+                    if isinstance(message, SDKStreamEvent):
+                        continue
 
                     # Track tool calls in history
                     if isinstance(message, AssistantMessage):

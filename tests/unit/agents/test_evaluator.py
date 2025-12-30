@@ -1,0 +1,419 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+"""Tests for the Evaluator agent."""
+from collections.abc import Callable
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+from pydantic import ValidationError
+
+from amelia.agents.evaluator import (
+    Disposition,
+    EvaluatedItem,
+    EvaluationOutput,
+    EvaluationResult,
+    Evaluator,
+)
+from amelia.core.state import ExecutionState, ReviewResult
+from amelia.core.types import Profile
+
+
+class TestEvaluatedItem:
+    """Tests for EvaluatedItem model."""
+
+    def test_evaluated_item_frozen(self) -> None:
+        """Test that EvaluatedItem is immutable."""
+        item = EvaluatedItem(
+            number=1,
+            title="Test Issue",
+            file_path="test.py",
+            line=10,
+            disposition=Disposition.IMPLEMENT,
+            reason="Valid issue",
+            original_issue="Found a bug",
+            suggested_fix="Fix the bug",
+        )
+        with pytest.raises(ValidationError):
+            item.number = 2
+
+    def test_evaluated_item_all_dispositions(self) -> None:
+        """Test that all disposition values are valid."""
+        for disp in Disposition:
+            item = EvaluatedItem(
+                number=1,
+                title="Test",
+                file_path="test.py",
+                line=1,
+                disposition=disp,
+                reason="Test reason",
+                original_issue="Test issue",
+                suggested_fix="Test fix",
+            )
+            assert item.disposition == disp
+
+
+class TestEvaluationResult:
+    """Tests for EvaluationResult model."""
+
+    def test_evaluation_result_frozen(self) -> None:
+        """Test that EvaluationResult is immutable."""
+        result = EvaluationResult(
+            items_to_implement=[],
+            items_rejected=[],
+            items_deferred=[],
+            items_needing_clarification=[],
+            summary="No issues found",
+        )
+        with pytest.raises(ValidationError):
+            result.summary = "Changed"
+
+    def test_evaluation_result_default_empty_lists(self) -> None:
+        """Test that EvaluationResult defaults to empty lists."""
+        result = EvaluationResult(summary="Test summary")
+        assert result.items_to_implement == []
+        assert result.items_rejected == []
+        assert result.items_deferred == []
+        assert result.items_needing_clarification == []
+
+
+class TestEvaluator:
+    """Tests for Evaluator agent."""
+
+    @pytest.fixture
+    def evaluator(self, mock_driver: MagicMock) -> Evaluator:
+        """Create an Evaluator instance with mocked driver."""
+        return Evaluator(driver=mock_driver)
+
+    @pytest.fixture
+    def evaluation_output_with_items(self) -> EvaluationOutput:
+        """Create evaluation output with mixed dispositions."""
+        return EvaluationOutput(
+            evaluated_items=[
+                EvaluatedItem(
+                    number=1,
+                    title="Bug fix needed",
+                    file_path="src/main.py",
+                    line=10,
+                    disposition=Disposition.IMPLEMENT,
+                    reason="Valid bug report",
+                    original_issue="Null pointer exception",
+                    suggested_fix="Add null check",
+                ),
+                EvaluatedItem(
+                    number=2,
+                    title="Style issue",
+                    file_path="src/utils.py",
+                    line=20,
+                    disposition=Disposition.REJECT,
+                    reason="Existing codebase pattern",
+                    original_issue="Wrong naming convention",
+                    suggested_fix="Rename variable",
+                ),
+                EvaluatedItem(
+                    number=3,
+                    title="Performance improvement",
+                    file_path="src/data.py",
+                    line=30,
+                    disposition=Disposition.DEFER,
+                    reason="Out of scope for this issue",
+                    original_issue="Slow database query",
+                    suggested_fix="Add index",
+                ),
+                EvaluatedItem(
+                    number=4,
+                    title="Unclear requirement",
+                    file_path="src/api.py",
+                    line=40,
+                    disposition=Disposition.CLARIFY,
+                    reason="Need clarification on expected behavior",
+                    original_issue="API response format",
+                    suggested_fix="Change format?",
+                ),
+            ],
+            summary="Mixed evaluation results",
+        )
+
+    async def test_evaluate_with_review_feedback(
+        self,
+        mock_driver: MagicMock,
+        mock_execution_state_factory: Callable[..., tuple[ExecutionState, Profile]],
+        evaluation_output_with_items: EvaluationOutput,
+    ) -> None:
+        """Test evaluation with review comments."""
+        # Setup state with review feedback
+        review_result = ReviewResult(
+            reviewer_persona="General",
+            approved=False,
+            comments=["Issue 1", "Issue 2", "Issue 3", "Issue 4"],
+            severity="medium",
+        )
+        state, profile = mock_execution_state_factory(
+            goal="Fix bugs",
+            last_review=review_result,
+            code_changes_for_review="diff content",
+        )
+
+        # Mock driver to return evaluation output
+        mock_driver.generate = AsyncMock(
+            return_value=(evaluation_output_with_items, "session-123")
+        )
+
+        evaluator = Evaluator(driver=mock_driver)
+        result, session_id = await evaluator.evaluate(
+            state, profile, workflow_id="wf-123"
+        )
+
+        assert session_id == "session-123"
+        assert len(result.items_to_implement) == 1
+        assert len(result.items_rejected) == 1
+        assert len(result.items_deferred) == 1
+        assert len(result.items_needing_clarification) == 1
+        assert result.summary == "Mixed evaluation results"
+
+        # Verify driver was called with correct schema
+        mock_driver.generate.assert_called_once()
+        call_kwargs = mock_driver.generate.call_args.kwargs
+        assert call_kwargs["schema"] == EvaluationOutput
+
+    async def test_evaluate_empty_comments(
+        self,
+        mock_driver: MagicMock,
+        mock_execution_state_factory: Callable[..., tuple[ExecutionState, Profile]],
+    ) -> None:
+        """Test evaluation with empty review comments returns empty result."""
+        # Setup state with empty review comments
+        review_result = ReviewResult(
+            reviewer_persona="General",
+            approved=True,
+            comments=[],
+            severity="low",
+        )
+        state, profile = mock_execution_state_factory(
+            goal="Fix bugs",
+            last_review=review_result,
+        )
+
+        evaluator = Evaluator(driver=mock_driver)
+        result, session_id = await evaluator.evaluate(
+            state, profile, workflow_id="wf-123"
+        )
+
+        # Should return empty result without calling driver
+        assert result.items_to_implement == []
+        assert result.items_rejected == []
+        assert result.items_deferred == []
+        assert result.items_needing_clarification == []
+        assert "No review comments" in result.summary
+
+        # Driver should NOT be called for empty comments
+        mock_driver.generate.assert_not_called()
+
+    async def test_evaluate_partitions_by_disposition(
+        self,
+        mock_driver: MagicMock,
+        mock_execution_state_factory: Callable[..., tuple[ExecutionState, Profile]],
+    ) -> None:
+        """Test that items are correctly partitioned by disposition."""
+        # Create output with multiple items of same disposition
+        evaluation_output = EvaluationOutput(
+            evaluated_items=[
+                EvaluatedItem(
+                    number=1,
+                    title="Bug 1",
+                    file_path="a.py",
+                    line=1,
+                    disposition=Disposition.IMPLEMENT,
+                    reason="Valid",
+                    original_issue="Bug",
+                    suggested_fix="Fix",
+                ),
+                EvaluatedItem(
+                    number=2,
+                    title="Bug 2",
+                    file_path="b.py",
+                    line=2,
+                    disposition=Disposition.IMPLEMENT,
+                    reason="Valid",
+                    original_issue="Bug",
+                    suggested_fix="Fix",
+                ),
+                EvaluatedItem(
+                    number=3,
+                    title="Reject 1",
+                    file_path="c.py",
+                    line=3,
+                    disposition=Disposition.REJECT,
+                    reason="Invalid",
+                    original_issue="Issue",
+                    suggested_fix="N/A",
+                ),
+            ],
+            summary="Partitioned results",
+        )
+
+        review_result = ReviewResult(
+            reviewer_persona="General",
+            approved=False,
+            comments=["Comment 1", "Comment 2", "Comment 3"],
+            severity="medium",
+        )
+        state, profile = mock_execution_state_factory(
+            goal="Fix bugs",
+            last_review=review_result,
+        )
+
+        mock_driver.generate = AsyncMock(return_value=(evaluation_output, None))
+
+        evaluator = Evaluator(driver=mock_driver)
+        result, _ = await evaluator.evaluate(state, profile, workflow_id="wf-123")
+
+        # Verify correct partitioning
+        assert len(result.items_to_implement) == 2
+        assert len(result.items_rejected) == 1
+        assert len(result.items_deferred) == 0
+        assert len(result.items_needing_clarification) == 0
+
+        # Verify item numbers are preserved
+        implement_numbers = [item.number for item in result.items_to_implement]
+        assert 1 in implement_numbers
+        assert 2 in implement_numbers
+
+    async def test_evaluate_requires_last_review(
+        self,
+        mock_driver: MagicMock,
+        mock_execution_state_factory: Callable[..., tuple[ExecutionState, Profile]],
+    ) -> None:
+        """Test that evaluation raises error when no last_review in state."""
+        state, profile = mock_execution_state_factory(
+            goal="Fix bugs",
+            last_review=None,
+        )
+
+        evaluator = Evaluator(driver=mock_driver)
+        with pytest.raises(ValueError, match="must have last_review"):
+            await evaluator.evaluate(state, profile, workflow_id="wf-123")
+
+    async def test_evaluate_with_stream_emitter(
+        self,
+        mock_driver: MagicMock,
+        mock_execution_state_factory: Callable[..., tuple[ExecutionState, Profile]],
+    ) -> None:
+        """Test that stream emitter is called during evaluation."""
+        stream_emitter = AsyncMock()
+
+        review_result = ReviewResult(
+            reviewer_persona="General",
+            approved=False,
+            comments=["Issue 1"],
+            severity="low",
+        )
+        state, profile = mock_execution_state_factory(
+            goal="Fix bugs",
+            last_review=review_result,
+        )
+
+        evaluation_output = EvaluationOutput(
+            evaluated_items=[
+                EvaluatedItem(
+                    number=1,
+                    title="Bug",
+                    file_path="a.py",
+                    line=1,
+                    disposition=Disposition.IMPLEMENT,
+                    reason="Valid",
+                    original_issue="Bug",
+                    suggested_fix="Fix",
+                ),
+            ],
+            summary="Evaluation done",
+        )
+        mock_driver.generate = AsyncMock(return_value=(evaluation_output, None))
+
+        evaluator = Evaluator(driver=mock_driver, stream_emitter=stream_emitter)
+        await evaluator.evaluate(state, profile, workflow_id="wf-123")
+
+        # Verify stream emitter was called
+        stream_emitter.assert_called_once()
+        call_args = stream_emitter.call_args[0][0]
+        assert call_args.agent == "evaluator"
+        assert call_args.workflow_id == "wf-123"
+
+    async def test_evaluate_builds_prompt_with_goal(
+        self,
+        mock_driver: MagicMock,
+        mock_execution_state_factory: Callable[..., tuple[ExecutionState, Profile]],
+    ) -> None:
+        """Test that prompt includes goal when available."""
+        review_result = ReviewResult(
+            reviewer_persona="General",
+            approved=False,
+            comments=["Check this"],
+            severity="low",
+        )
+        state, profile = mock_execution_state_factory(
+            goal="Implement feature X",
+            last_review=review_result,
+            code_changes_for_review="diff content",
+        )
+
+        evaluation_output = EvaluationOutput(
+            evaluated_items=[],
+            summary="Empty",
+        )
+        mock_driver.generate = AsyncMock(return_value=(evaluation_output, None))
+
+        evaluator = Evaluator(driver=mock_driver)
+        await evaluator.evaluate(state, profile, workflow_id="wf-123")
+
+        # Check that prompt contains the goal
+        call_args = mock_driver.generate.call_args
+        prompt = call_args.kwargs.get("prompt") or call_args.args[0]
+        assert "Implement feature X" in prompt
+
+    async def test_evaluate_builds_prompt_with_issue_fallback(
+        self,
+        mock_driver: MagicMock,
+        mock_execution_state_factory: Callable[..., tuple[ExecutionState, Profile]],
+    ) -> None:
+        """Test that prompt uses issue context when no goal available."""
+        review_result = ReviewResult(
+            reviewer_persona="General",
+            approved=False,
+            comments=["Check this"],
+            severity="low",
+        )
+        state, profile = mock_execution_state_factory(
+            goal=None,  # No goal
+            last_review=review_result,
+        )
+
+        evaluation_output = EvaluationOutput(
+            evaluated_items=[],
+            summary="Empty",
+        )
+        mock_driver.generate = AsyncMock(return_value=(evaluation_output, None))
+
+        evaluator = Evaluator(driver=mock_driver)
+        await evaluator.evaluate(state, profile, workflow_id="wf-123")
+
+        # Check that prompt contains issue context
+        call_args = mock_driver.generate.call_args
+        prompt = call_args.kwargs.get("prompt") or call_args.args[0]
+        assert "Issue Context" in prompt or "Test Issue" in prompt
+
+
+class TestDisposition:
+    """Tests for Disposition enum."""
+
+    def test_disposition_values(self) -> None:
+        """Test disposition enum has expected values."""
+        assert Disposition.IMPLEMENT.value == "implement"
+        assert Disposition.REJECT.value == "reject"
+        assert Disposition.DEFER.value == "defer"
+        assert Disposition.CLARIFY.value == "clarify"
+
+    def test_disposition_is_string_enum(self) -> None:
+        """Test that Disposition is a string enum."""
+        assert isinstance(Disposition.IMPLEMENT, str)
+        assert Disposition.IMPLEMENT.value == "implement"

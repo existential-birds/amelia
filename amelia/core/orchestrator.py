@@ -20,6 +20,7 @@ from loguru import logger
 
 from amelia.agents.architect import Architect, PlanOutput
 from amelia.agents.developer import Developer
+from amelia.agents.evaluator import Evaluator
 from amelia.agents.reviewer import Reviewer
 from amelia.core.state import ExecutionState
 from amelia.core.types import Profile, StreamEmitter
@@ -288,6 +289,83 @@ async def call_reviewer_node(
     }
 
 
+async def call_evaluation_node(
+    state: ExecutionState,
+    config: RunnableConfig | None = None,
+) -> dict[str, Any]:
+    """Node that evaluates review feedback.
+
+    Calls the Evaluator agent to process review results and
+    apply the decision matrix for each item.
+
+    Args:
+        state: Current execution state containing the review feedback.
+        config: Optional RunnableConfig with stream_emitter in configurable.
+
+    Returns:
+        Partial state dict with evaluation_result, approved_items, and driver_session_id.
+    """
+    stream_emitter, workflow_id, profile = _extract_config_params(config)
+
+    driver = DriverFactory.get_driver(profile.driver, model=profile.model)
+    evaluator = Evaluator(driver=driver, stream_emitter=stream_emitter)
+
+    evaluation_result, new_session_id = await evaluator.evaluate(
+        state, profile, workflow_id=workflow_id
+    )
+
+    # Auto-approve all items to implement if auto_approve is set
+    approved_items: list[int] = []
+    if state.auto_approve:
+        approved_items = [item.number for item in evaluation_result.items_to_implement]
+
+    logger.info(
+        "Agent action completed",
+        agent="evaluator",
+        action="evaluation_completed",
+        details={
+            "items_to_implement": len(evaluation_result.items_to_implement),
+            "items_rejected": len(evaluation_result.items_rejected),
+            "items_deferred": len(evaluation_result.items_deferred),
+            "auto_approved_count": len(approved_items),
+        },
+    )
+
+    return {
+        "evaluation_result": evaluation_result,
+        "approved_items": approved_items,
+        "driver_session_id": new_session_id,
+    }
+
+
+async def review_approval_node(
+    state: ExecutionState,
+    config: RunnableConfig | None = None,
+) -> dict[str, Any]:
+    """Node for human approval of which review items to fix.
+
+    In server mode, this interrupts for human input.
+    In CLI mode, this prompts interactively.
+
+    Args:
+        state: Current execution state containing the evaluation result.
+        config: Optional RunnableConfig with execution_mode in configurable.
+
+    Returns:
+        Partial state dict with approved_items (CLI mode) or empty dict (server mode).
+    """
+    config = config or {}
+    execution_mode = config.get("configurable", {}).get("execution_mode", "cli")
+
+    if execution_mode == "server":
+        # Server mode: interrupt for human input, approval comes from resumed state
+        return {}
+
+    # CLI mode: prompt user (this would use typer.confirm or similar)
+    # For now, auto-approve all items marked for implementation
+    return {}
+
+
 def route_approval(state: ExecutionState) -> Literal["approve", "reject"]:
     """Route based on human approval status.
 
@@ -330,6 +408,72 @@ def route_after_review(
         return "__end__"
 
     return "developer"
+
+
+def route_after_evaluation(state: ExecutionState) -> str:
+    """Route after evaluation node.
+
+    If auto_approve is set, skip to developer.
+    Otherwise, go to human approval.
+
+    Args:
+        state: Current execution state with auto_approve flag.
+
+    Returns:
+        "developer_node" if auto_approve is set, otherwise "review_approval_node".
+    """
+    if state.auto_approve:
+        return "developer_node"
+    return "review_approval_node"
+
+
+def route_after_fixes(state: ExecutionState) -> str:
+    """Route after developer fixes.
+
+    Check if there are still critical/major items to fix.
+    If auto_approve, loop back for another review pass.
+    Otherwise, go to end approval.
+
+    Args:
+        state: Current execution state with review_pass and evaluation_result.
+
+    Returns:
+        "reviewer_node" to loop back, "end_approval_node" for human approval, or END.
+    """
+    max_passes = state.max_review_passes
+
+    # Check if we've hit max passes
+    if state.review_pass >= max_passes:
+        logger.warning(
+            "Max review passes reached",
+            review_pass=state.review_pass,
+            max_passes=max_passes,
+        )
+        return END
+
+    if state.auto_approve:
+        # In auto mode, check if there are still items to fix
+        if state.evaluation_result and state.evaluation_result.items_to_implement:
+            return "reviewer_node"  # Loop back for another pass
+        return END
+
+    return "end_approval_node"
+
+
+def route_after_end_approval(state: ExecutionState) -> str:
+    """Route after end approval.
+
+    If human approves, end. Otherwise, loop back to reviewer.
+
+    Args:
+        state: Current execution state with human_approved flag.
+
+    Returns:
+        END if human approved, otherwise "reviewer_node".
+    """
+    if state.human_approved:
+        return END
+    return "reviewer_node"
 
 
 def create_orchestrator_graph(
@@ -396,6 +540,69 @@ def create_orchestrator_graph(
     # Set default interrupt_before only if checkpoint_saver is provided and interrupt_before is None
     if interrupt_before is None and checkpoint_saver is not None:
         interrupt_before = ["human_approval_node"]
+
+    return workflow.compile(
+        checkpointer=checkpoint_saver,
+        interrupt_before=interrupt_before,
+    )
+
+
+def create_review_graph(
+    checkpoint_saver: BaseCheckpointSaver[Any] | None = None,
+    interrupt_before: list[str] | None = None,
+) -> CompiledStateGraph[Any]:
+    """Creates review-fix workflow graph.
+
+    Flow: reviewer → evaluation → [approval] → developer → [end_approval] → END
+
+    The workflow loops between reviewer and developer until:
+    - No more critical/major items (auto mode), OR
+    - Human approves the fixes (manual mode), OR
+    - Max review passes reached
+
+    Args:
+        checkpoint_saver: Optional checkpoint saver for persistence.
+        interrupt_before: Optional list of nodes to interrupt before.
+            Defaults to ["review_approval_node", "end_approval_node"] when
+            checkpoint_saver is provided.
+
+    Returns:
+        Compiled LangGraph state graph ready for execution.
+    """
+    workflow = StateGraph(ExecutionState)
+
+    # Add nodes
+    workflow.add_node("reviewer_node", call_reviewer_node)
+    workflow.add_node("evaluation_node", call_evaluation_node)
+    workflow.add_node("review_approval_node", review_approval_node)
+    workflow.add_node("developer_node", call_developer_node)
+    workflow.add_node("end_approval_node", review_approval_node)  # Reuse approval node
+
+    # Set entry point
+    workflow.set_entry_point("reviewer_node")
+
+    # Add edges
+    workflow.add_edge("reviewer_node", "evaluation_node")
+    workflow.add_conditional_edges(
+        "evaluation_node",
+        route_after_evaluation,
+        {"developer_node": "developer_node", "review_approval_node": "review_approval_node"},
+    )
+    workflow.add_edge("review_approval_node", "developer_node")
+    workflow.add_conditional_edges(
+        "developer_node",
+        route_after_fixes,
+        {"reviewer_node": "reviewer_node", "end_approval_node": "end_approval_node", END: END},
+    )
+    workflow.add_conditional_edges(
+        "end_approval_node",
+        route_after_end_approval,
+        {"reviewer_node": "reviewer_node", END: END},
+    )
+
+    # Set default interrupt_before for server mode
+    if interrupt_before is None and checkpoint_saver is not None:
+        interrupt_before = ["review_approval_node", "end_approval_node"]
 
     return workflow.compile(
         checkpointer=checkpoint_saver,

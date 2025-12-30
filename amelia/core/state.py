@@ -6,9 +6,11 @@
 This module defines the execution state for agentic workflows,
 tracking conversation, tool calls, and workflow progress.
 """
+from __future__ import annotations
+
 import operator
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -66,6 +68,12 @@ class ExecutionState(BaseModel):
         final_response: Final response from the agent when complete.
         error: Error message if status is 'failed'.
         review_iteration: Current iteration in review-fix loop.
+        structured_review: Structured review output from reviewer agent.
+        evaluation_result: Output from the evaluator agent.
+        approved_items: Item numbers approved for fixing by human or auto-approve.
+        auto_approve: Whether to skip human approval steps.
+        review_pass: Current review iteration in auto mode.
+        max_review_passes: Maximum iterations allowed in auto mode.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -93,3 +101,12 @@ class ExecutionState(BaseModel):
 
     # Review iteration tracking (for review-fix loop)
     review_iteration: int = 0
+
+    # Review workflow fields (structured review-fix cycle)
+    # Note: Types use Any until StructuredReviewResult and EvaluationResult are defined
+    structured_review: Any | None = None  # StructuredReviewResult from reviewer agent
+    evaluation_result: Any | None = None  # EvaluationResult from evaluator agent
+    approved_items: list[int] = Field(default_factory=list)
+    auto_approve: bool = False
+    review_pass: int = 0
+    max_review_passes: int = 3

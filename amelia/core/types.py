@@ -59,6 +59,7 @@ class Profile(BaseModel):
         plan_output_dir: Directory for saving implementation plans (default: docs/plans).
         retry: Retry configuration for transient failures.
         max_review_iterations: Maximum review-fix loop iterations before terminating.
+        auto_approve_reviews: Skip human approval steps in review workflow.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -72,6 +73,7 @@ class Profile(BaseModel):
     plan_output_dir: str = "docs/plans"
     retry: RetryConfig = Field(default_factory=RetryConfig)
     max_review_iterations: int = 3
+    auto_approve_reviews: bool = False
 
 class Settings(BaseModel):
     """Global settings for Amelia.
