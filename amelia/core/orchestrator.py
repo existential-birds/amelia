@@ -162,13 +162,14 @@ async def human_approval_node(
     return {"human_approved": approved}
 
 
-async def get_code_changes_for_review(state: ExecutionState) -> str:
+async def get_code_changes_for_review(state: ExecutionState, profile: Profile) -> str:
     """Retrieve code changes for review from state or git diff.
 
     Prioritizes changes from state.code_changes_for_review, falls back to git diff HEAD.
 
     Args:
         state: Current execution state that may contain code changes.
+        profile: Profile containing the working directory for git operations.
 
     Returns:
         Code changes as a string, either from state or from git diff.
@@ -181,6 +182,7 @@ async def get_code_changes_for_review(state: ExecutionState) -> str:
             "git", "diff", "HEAD",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            cwd=profile.working_dir,
         )
         stdout, stderr = await proc.communicate()
         if proc.returncode == 0:
@@ -268,7 +270,7 @@ async def call_reviewer_node(
     driver = DriverFactory.get_driver(profile.driver, model=profile.model)
     reviewer = Reviewer(driver, stream_emitter=stream_emitter)
 
-    code_changes = await get_code_changes_for_review(state)
+    code_changes = await get_code_changes_for_review(state, profile)
     review_result, new_session_id = await reviewer.review(state, code_changes, profile, workflow_id=workflow_id)
 
     # Log the review completion
