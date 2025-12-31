@@ -1,5 +1,11 @@
 # Session Continuity Design
 
+::: warning ⚠️ Status: Partially Superseded
+The snapshot structure in this document references `TaskDAG` which no longer exists. The current architecture uses agentic execution with `PlanOutput` (markdown plans with extracted goals) instead of structured task DAGs. The core concepts of session continuity remain valid, but the specific data models need updating.
+
+See [GitHub Issue #60](https://github.com/existential-birds/amelia/issues/60) for context on why structured execution was deprioritized.
+:::
+
 > **Created by:** hey-amelia bot with Claude Opus 4.5
 
 ## Overview
