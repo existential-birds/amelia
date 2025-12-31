@@ -277,21 +277,29 @@ export function DashboardSidebar() {
             )}
           >
             {isCollapsed ? (
-              <span
-                className={cn(
-                  'inline-block w-3 h-3 rounded-full',
-                  isConnected
-                    ? 'bg-[--status-running] animate-pulse-glow'
-                    : 'bg-[--status-failed]'
-                )}
-                title={isConnected ? 'Connected' : 'Disconnected'}
-              />
+              <div
+                role="status"
+                aria-label={`Connection status: ${isConnected ? 'Connected' : 'Disconnected'}`}
+              >
+                <span
+                  className={cn(
+                    'inline-block w-3 h-3 rounded-full',
+                    isConnected
+                      ? 'bg-[--status-running] animate-pulse-glow'
+                      : 'bg-[--status-failed]'
+                  )}
+                  title={isConnected ? 'Connected' : 'Disconnected'}
+                />
+              </div>
             ) : (
               <>
                 <span className="text-xs font-mono text-muted-foreground/50">
                   v{APP_VERSION}
                 </span>
-                <div className="text-xs font-mono text-muted-foreground">
+                <div
+                  className="text-xs font-mono text-muted-foreground"
+                  role="status"
+                >
                   <div className="flex items-center gap-2">
                     <span
                       className={cn(
