@@ -6,6 +6,7 @@
 This module provides factory fixtures for creating test data and mocks
 used throughout the test suite for the agentic execution model.
 """
+import os
 from collections.abc import Callable, Generator
 from datetime import UTC, datetime
 from typing import Any, NamedTuple
@@ -200,7 +201,8 @@ def mock_deepagents() -> Generator[MagicMock, None, None]:
     """
     from collections.abc import AsyncIterator
 
-    with patch("amelia.drivers.api.deepagents.create_deep_agent") as mock_create_agent, \
+    with patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-api-key"}), \
+         patch("amelia.drivers.api.deepagents.create_deep_agent") as mock_create_agent, \
          patch("amelia.drivers.api.deepagents.init_chat_model") as mock_init_model, \
          patch("amelia.drivers.api.deepagents.FilesystemBackend") as mock_backend_class:
 
