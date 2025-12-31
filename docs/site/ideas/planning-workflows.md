@@ -8,6 +8,10 @@ Design exploration for different planning prompt injection strategies in the Arc
 
 ## Problem Statement
 
+::: info Architecture Update
+This document references `_generate_task_dag()` and `TaskDAG` which no longer exist. The current architecture uses `architect.plan()` returning `PlanOutput` with a markdown plan and extracted goals. The core concept of planning workflow variations remains valid.
+:::
+
 Currently, `Architect._generate_task_dag()` uses a hardcoded TDD-focused system prompt that replaces the generic `ArchitectContextStrategy.SYSTEM_PROMPT`. This raises the question: why maintain separation between the strategy's prompt and the method's detailed prompt?
 
 The answer lies in **workflow flexibility**—different planning scenarios require different methodologies, output formats, and quality focuses. By keeping prompt injection at the method level, we can support multiple planning workflows without proliferating context strategies.
