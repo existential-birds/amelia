@@ -60,12 +60,14 @@ jobs:
           echo "Found release notes for version $VERSION"
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.version.outputs.TAG }}
-          name: ${{ steps.version.outputs.TAG }}
-          body_path: release_notes.md
-          draft: false
-          prerelease: ${{ contains(steps.version.outputs.VERSION, '-') }}
+        run: |
+          PRERELEASE_FLAG=""
+          if [[ "${{ steps.version.outputs.VERSION }}" == *-* ]]; then
+            PRERELEASE_FLAG="--prerelease"
+          fi
+            gh release create "${{ steps.version.outputs.TAG }}" \
+              --title "${{ steps.version.outputs.TAG }}" \
+              --notes-file release_notes.md \
+              $PRERELEASE_FLAG
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
