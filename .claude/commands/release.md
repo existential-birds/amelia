@@ -112,11 +112,9 @@ After creating the PR, provide:
 Release PR created: <URL>
 
 After the PR is merged, run:
-  git checkout main && git pull
-  git tag -a vX.Y.Z -m "Release vX.Y.Z - <summary>"
-  git push origin vX.Y.Z
+  /release-tag ${VERSION}
 
-GitHub Action will create the release automatically.
+This will tag and push, triggering the GitHub Action to create the release.
 ```
 
 ## Error Handling
