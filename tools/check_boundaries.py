@@ -1,7 +1,4 @@
 #!/usr/bin/env python3
-# This Source Code Form is subject to the terms of the Mozilla Public
-# License, v. 2.0. If a copy of the MPL was not distributed with this
-# file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """Check import boundaries between Core and Enterprise packages.
 
 This script validates that Core code (amelia/*) does not import from

@@ -1,10 +1,4 @@
 <!--
-  This Source Code Form is subject to the terms of the Mozilla Public
-  License, v. 2.0. If a copy of the MPL was not distributed with this
-  file, You can obtain one at https://mozilla.org/MPL/2.0/.
--->
-
-<!--
   QUOTE LAYOUT
   Extends Slidev's statement layout for quotes and key insights.
   Centers a large statement or quote with optional attribution.

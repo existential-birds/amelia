@@ -133,7 +133,3 @@ All layouts automatically support both dark and light modes through:
 - System preference detection (`prefers-color-scheme`)
 - Manual override via `.light` class on root element
 - Design token inheritance from `../../tokens/colors.css`
-
-## License
-
-This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.

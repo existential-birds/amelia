@@ -1,6 +1,3 @@
-# This Source Code Form is subject to the terms of the Mozilla Public
-# License, v. 2.0. If a copy of the MPL was not distributed with this
-# file, You can obtain one at https://mozilla.org/MPL/2.0/.
 # tests/unit/server/events/test_connection_manager.py
 """Tests for WebSocket connection manager."""
 from datetime import UTC, datetime

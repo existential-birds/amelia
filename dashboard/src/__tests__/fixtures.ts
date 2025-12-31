@@ -1,9 +1,3 @@
-/*
- * This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at https://mozilla.org/MPL/2.0/.
- */
-
 /**
  * Test fixture factory functions for the Amelia Dashboard.
  * Provides factory functions for creating mock data with sensible defaults.

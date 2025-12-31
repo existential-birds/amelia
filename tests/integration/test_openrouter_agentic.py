@@ -1,6 +1,3 @@
-# This Source Code Form is subject to the terms of the Mozilla Public
-# License, v. 2.0. If a copy of the MPL was not distributed with this
-# file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """Integration tests for OpenRouter agentic execution.
 
 These tests require a valid OPENROUTER_API_KEY environment variable.

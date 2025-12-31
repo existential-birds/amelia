@@ -1,6 +1,3 @@
-# This Source Code Form is subject to the terms of the Mozilla Public
-# License, v. 2.0. If a copy of the MPL was not distributed with this
-# file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """Dev command implementation for running API server and dashboard together.
 
 This module provides the `amelia dev` command that starts both the Python API server
