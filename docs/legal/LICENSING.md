@@ -72,7 +72,7 @@ You do **NOT** need a Commercial License for:
 
 | Scenario | Why It Requires License |
 | --- | --- |
-| **Startup X** launches "https://www.google.com/search?q=BetterCodeReview.com" which wraps Amelia in a UI and charges $10/month. | **Managed Service.** They are selling access to Amelia's functionality as a service. |
+| **Startup X** launches "BetterCodeReview" which wraps Amelia in a UI and charges $10/month. | **Managed Service.** They are selling access to Amelia's functionality as a service. |
 | **Cloud Provider Y** adds "Amelia-as-a-Service" to their marketplace. | **Managed Service.** |
 | **Company Z** embeds Amelia into their paid IDE software and markets it as an "AI Feature." | **Embedding/Redistribution.** While ELv2 allows some distribution, embedding it as a core value driver in a closed product is best covered by a commercial agreement to ensure support and warranty. |
 
