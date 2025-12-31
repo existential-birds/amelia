@@ -1,6 +1,11 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
+"""Architect agent for generating implementation plans.
+
+This module provides the Architect agent that analyzes issues and produces
+rich markdown implementation plans for agentic execution.
+"""
 import os
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -9,41 +14,9 @@ from loguru import logger
 from pydantic import BaseModel, ConfigDict
 
 from amelia.core.context import CompiledContext, ContextSection, ContextStrategy
-from amelia.core.state import (
-    AgentMessage,
-    ExecutionBatch,
-    ExecutionPlan,
-    ExecutionState,
-    RiskLevel,
-)
+from amelia.core.state import AgentMessage, ExecutionState
 from amelia.core.types import Design, Issue, Profile, StreamEmitter, StreamEvent, StreamEventType
 from amelia.drivers.base import DriverInterface
-
-
-class PlanOutput(BaseModel):
-    """Output from architect planning.
-
-    Attributes:
-        execution_plan: The generated execution plan with batched steps.
-        markdown_path: Path to the saved markdown plan file.
-    """
-
-    model_config = ConfigDict(arbitrary_types_allowed=True)
-
-    execution_plan: ExecutionPlan
-    markdown_path: Path
-
-
-class ExecutionPlanOutput(BaseModel):
-    """Structured output for execution plan generation.
-
-    Attributes:
-        plan: The generated execution plan with batched steps.
-        reasoning: Explanation of batching decisions and approach.
-    """
-
-    plan: ExecutionPlan
-    reasoning: str
 
 
 def _slugify(text: str) -> str:
@@ -58,109 +31,145 @@ def _slugify(text: str) -> str:
     return text.lower().replace(" ", "-").replace("_", "-")[:50]
 
 
+class PlanOutput(BaseModel):
+    """Output from Architect plan generation.
+
+    Attributes:
+        markdown_content: The full markdown plan content.
+        markdown_path: Path where the plan was saved.
+        goal: High-level goal extracted from the plan.
+        key_files: Files likely to be modified.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    markdown_content: str
+    markdown_path: Path
+    goal: str
+    key_files: list[str] = []
+
+
+class ArchitectOutput(BaseModel):
+    """Output from Architect analysis (simplified form).
+
+    Used when only analysis is needed, not full plan generation.
+
+    Attributes:
+        goal: Clear description of what needs to be done.
+        strategy: High-level approach (not step-by-step).
+        key_files: Files likely to be modified.
+        risks: Potential risks to watch for.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    goal: str
+    strategy: str
+    key_files: list[str] = []
+    risks: list[str] = []
+
+
+class MarkdownPlanOutput(BaseModel):
+    """Structured output for markdown plan generation.
+
+    This is the schema the LLM uses to generate the plan content.
+
+    Attributes:
+        goal: High-level goal for the implementation.
+        plan_markdown: The full markdown plan with phases, tasks, and steps.
+        key_files: Files that will likely be modified.
+    """
+
+    goal: str
+    plan_markdown: str
+    key_files: list[str] = []
+
+
 class ArchitectContextStrategy(ContextStrategy):
     """Context compilation strategy for the Architect agent.
 
-    Compiles minimal context for planning by including issue information
-    and optional design context. Excludes developer history and review history
-    to keep the context focused on planning.
+    Compiles context for plan generation by including issue information
+    and optional design context.
     """
 
     SYSTEM_PROMPT = """You are a senior software architect creating implementation plans.
-You analyze issues and produce structured task DAGs with clear dependencies."""
+Your role is to analyze issues and produce detailed markdown implementation plans."""
+
+    SYSTEM_PROMPT_PLAN = """You are a senior software architect creating implementation plans.
+
+Generate implementation plans in markdown format that follow this structure:
+
+# [Title] Implementation Plan
+
+> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+
+**Goal:** [Clear description of what needs to be accomplished]
+
+**Success Criteria:** [How we know when the task is complete]
+
+---
+
+## Phase 1: [Phase Name]
+
+### Task 1.1: [Task Name]
+
+**Step 1: [Step description]**
+
+```[language]
+[code block if applicable]
+```
+
+**Run:** `[command to run]`
+
+**Success criteria:** [How to verify this step worked]
+
+### Task 1.2: [Next Task]
+...
+
+---
+
+## Phase 2: [Next Phase]
+...
+
+---
+
+## Summary
+
+[Brief summary of what was accomplished]
+
+---
+
+Guidelines:
+- Each Phase groups related work with ## headers
+- Each Task is a discrete unit of work with ### headers
+- Each Step has code blocks, commands to run, and success criteria
+- Include TDD approach: write test first, run to verify it fails, implement, run to verify it passes
+- Be specific about file paths, commands, and expected outputs
+- Keep steps granular (2-5 minutes of work each)"""
 
     ALLOWED_SECTIONS = {"issue", "design", "codebase"}
 
-    def get_execution_plan_system_prompt(self) -> str:
-        """Get system prompt for ExecutionPlan generation.
-
-        This prompt provides comprehensive guidance for generating ExecutionPlan objects
-        with batched execution, risk assessment, and TDD approach.
+    def get_plan_generation_prompt(self) -> str:
+        """Get user prompt for markdown plan generation.
 
         Returns:
-            Detailed system prompt string for ExecutionPlan generation.
+            User prompt string for plan generation.
         """
-        return """You are an expert software architect creating structured execution plans.
+        return """Analyze the issue and generate a complete implementation plan in markdown format.
 
-Your role is to break down development work into batched, executable steps with clear risk assessment.
+The plan should:
+1. Include the Claude skill instruction at the top: > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans
+2. Break work into logical Phases (## headers)
+3. Each Phase contains Tasks (### headers)
+4. Each Task has Steps with code blocks, commands, and success criteria
+5. Follow TDD approach where applicable
+6. Be specific about file paths and commands
+7. Include success criteria for each step
 
-# Step Granularity
-- Each PlanStep should be 2-5 minutes of work
-- Break larger operations into smaller, verifiable steps
-- Include explicit validation steps after risky operations
-
-# Risk Assessment
-Assign risk_level to each step based on these criteria:
-
-- **low**: File writes, read operations, simple commands, fully reversible actions
-  Examples: writing tests, running linters, reading files, creating backups
-
-- **medium**: Database operations, configuration changes, network calls, partially reversible
-  Examples: schema migrations, config updates, dependency installations
-
-- **high**: Destructive operations, production deploys, irreversible actions
-  Examples: deleting data, production pushes, dropping tables, force operations
-
-# Batching Rules
-Group semantically related steps into ExecutionBatch objects:
-
-- **Max batch sizes**:
-  - low risk: 5 steps maximum
-  - medium risk: 3 steps maximum
-  - high risk: 1 step only (immediate checkpoint)
-
-- Each batch should represent a meaningful checkpoint
-- Group by feature/component, not arbitrarily
-- Batches execute atomically - plan accordingly
-
-# TDD Approach
-When tdd_approach=True, follow this pattern for each feature:
-
-1. Write the failing test (action_type="code", is_test_step=True)
-2. Run test to verify it fails (action_type="command", validates_step=<test_step_id>)
-3. Write minimal implementation (action_type="code")
-4. Run test to verify it passes (action_type="command", validates_step=<impl_step_id>)
-5. Commit changes (action_type="command")
-
-Mark test steps with is_test_step=True and link validation steps using validates_step.
-
-# Fallback Commands
-For commands that commonly fail, provide alternatives in fallback_commands:
-
-- Package managers: try alternative registries or mirrors
-- Build tools: try with/without cache, different flags
-- Test runners: try with verbose output, specific test files
-
-Examples:
-- Primary: "npm install", Fallback: ("npm install --legacy-peer-deps", "yarn install")
-- Primary: "pytest", Fallback: ("pytest -v", "python -m pytest")
-
-# Command Validation
-- Set expect_exit_code (default 0)
-- Optionally set expected_output_pattern for stdout regex (ANSI codes stripped)
-- Use validation_command for complex success checks
-
-# Dependencies
-- Use depends_on to specify step IDs that must complete first
-- Dependencies must form a valid DAG (no cycles)
-- System will skip dependent steps if dependencies fail
-
-Generate complete ExecutionPlan objects with properly batched steps following these guidelines."""
-
-    def get_execution_plan_user_prompt(self) -> str:
-        """Get user prompt for ExecutionPlan generation.
-
-        This prompt instructs the LLM to generate an ExecutionPlan with the
-        proper structure and batching.
-
-        Returns:
-            User prompt string for ExecutionPlan generation.
-        """
-        return """Create a complete ExecutionPlan with batched steps.
-
-Follow TDD approach, assess risk levels accurately, batch steps appropriately (max 5/3/1 by risk), and provide fallback commands for failure-prone operations.
-
-Ensure each step is 2-5 minutes, includes proper dependencies, and validation steps are linked to what they validate."""
+Return the plan as a MarkdownPlanOutput with:
+- goal: A clear 1-2 sentence goal statement
+- plan_markdown: The full markdown plan content
+- key_files: List of files that will be modified"""
 
     def _format_design_section(self, design: Design) -> str:
         """Format Design into structured markdown for context.
@@ -264,7 +273,7 @@ Ensure each step is 2-5 minutes, includes proper dependencies, and validation st
         return header + file_list
 
     def compile(self, state: ExecutionState, profile: Profile) -> CompiledContext:
-        """Compile ExecutionState into context for planning.
+        """Compile ExecutionState into context for analysis.
 
         Args:
             state: The current execution state.
@@ -323,10 +332,13 @@ Ensure each step is 2-5 minutes, includes proper dependencies, and validation st
 
 
 class Architect:
-    """Agent responsible for creating implementation plans from issues and designs.
+    """Agent responsible for creating implementation plans from issues.
+
+    Generates rich markdown plans that the Developer agent can follow
+    agentically, or provides simplified analysis when full plans aren't needed.
 
     Attributes:
-        driver: LLM driver interface for generating plans.
+        driver: LLM driver interface for plan generation.
         context_strategy: Strategy for compiling context from ExecutionState.
     """
 
@@ -340,7 +352,7 @@ class Architect:
         """Initialize the Architect agent.
 
         Args:
-            driver: LLM driver interface for generating plans.
+            driver: LLM driver interface for plan generation.
             stream_emitter: Optional callback for streaming events.
         """
         self.driver = driver
@@ -354,20 +366,21 @@ class Architect:
         *,
         workflow_id: str,
     ) -> PlanOutput:
-        """Generate a development plan from an issue and optional design.
+        """Generate a markdown implementation plan from an issue.
 
-        Creates an ExecutionPlan and saves a markdown version for human review.
-        Design context is read from state.design if present.
+        Creates a rich markdown plan and saves it to docs/plans/. The plan
+        follows the superpowers:executing-plans format with phases, tasks,
+        and steps that the Developer agent can follow agentically.
 
         Args:
             state: The execution state containing the issue and optional design.
-            profile: The profile containing plan output directory and working directory settings.
+            profile: The profile containing working directory settings.
             output_dir: Directory path where the markdown plan will be saved.
-                If None, uses profile's plan_output_dir.
+                If None, uses profile's plan_output_dir (defaults to docs/plans).
             workflow_id: Workflow ID for stream events (required).
 
         Returns:
-            PlanOutput containing the execution plan and path to the saved markdown file.
+            PlanOutput containing the markdown plan content and path.
 
         Raises:
             ValueError: If no issue is present in the state.
@@ -384,101 +397,71 @@ class Architect:
         if not output_path.is_absolute() and profile.working_dir:
             output_dir = str(Path(profile.working_dir) / output_path)
 
-        # Generate execution plan using the new batched execution model
-        execution_plan, _session_id = await self.generate_execution_plan(state.issue, state, profile)
+        # Compile context using strategy
+        strategy = self.context_strategy()
+        compiled_context = strategy.compile(state, profile)
 
-        # Count total steps for logging
-        total_steps = sum(len(batch.steps) for batch in execution_plan.batches)
+        # Build messages with plan generation system prompt
+        system_message = AgentMessage(role="system", content=strategy.SYSTEM_PROMPT_PLAN)
+        context_messages = strategy.to_messages(compiled_context)
+        user_message = AgentMessage(role="user", content=strategy.get_plan_generation_prompt())
+
+        messages = [system_message, *context_messages, user_message]
+
+        # Call driver with MarkdownPlanOutput schema
+        raw_response, _session_id = await self.driver.generate(
+            messages=messages,
+            schema=MarkdownPlanOutput,
+            cwd=profile.working_dir,
+            session_id=state.driver_session_id,
+        )
+        response = MarkdownPlanOutput.model_validate(raw_response)
+
+        # Save markdown to file
+        markdown_path = self._save_markdown(
+            response.plan_markdown,
+            state.issue,
+            state.design,
+            output_dir,
+        )
+
+        logger.info(
+            "Architect plan generated",
+            agent="architect",
+            goal=response.goal[:100] + "..." if len(response.goal) > 100 else response.goal,
+            key_files_count=len(response.key_files),
+            markdown_path=str(markdown_path),
+        )
 
         # Emit completion event
         if self._stream_emitter is not None:
             event = StreamEvent(
                 type=StreamEventType.AGENT_OUTPUT,
-                content=f"Generated plan with {len(execution_plan.batches)} batches, {total_steps} steps",
+                content=f"Plan generated: {response.goal[:100]}...",
                 timestamp=datetime.now(UTC),
                 agent="architect",
                 workflow_id=workflow_id,
             )
             await self._stream_emitter(event)
 
-        # Save markdown
-        markdown_path = self._save_markdown(execution_plan, state.issue, state.design, output_dir)
-
-        return PlanOutput(execution_plan=execution_plan, markdown_path=markdown_path)
-
-    async def generate_execution_plan(
-        self,
-        issue: Issue,
-        state: ExecutionState,
-        profile: Profile,
-    ) -> tuple[ExecutionPlan, str | None]:
-        """Generate batched execution plan for an issue.
-
-        Uses the new ExecutionPlan format with batched steps, risk assessment,
-        and TDD approach. Validates and splits batches to enforce size limits.
-
-        Args:
-            issue: The issue to generate a plan for.
-            state: The current execution state containing context.
-            profile: The profile containing working directory settings.
-
-        Returns:
-            Tuple of (validated ExecutionPlan, session_id from driver).
-        """
-        # Compile context using strategy
-        strategy = self.context_strategy()
-        compiled_context = strategy.compile(state, profile)
-
-        # Get execution plan prompts from strategy
-        system_prompt = strategy.get_execution_plan_system_prompt()
-        user_prompt = strategy.get_execution_plan_user_prompt()
-
-        # Convert compiled context to messages
-        base_messages = strategy.to_messages(compiled_context)
-
-        # Prepend execution plan system prompt and append user prompt
-        messages = [
-            AgentMessage(role="system", content=system_prompt),
-            *base_messages,
-            AgentMessage(role="user", content=user_prompt),
-        ]
-
-        # Call driver with ExecutionPlanOutput schema
-        response, new_session_id = await self.driver.generate(
-            messages=messages,
-            schema=ExecutionPlanOutput,
-            cwd=profile.working_dir,
-            session_id=state.driver_session_id,
+        return PlanOutput(
+            markdown_content=response.plan_markdown,
+            markdown_path=markdown_path,
+            goal=response.goal,
+            key_files=response.key_files,
         )
-
-        # Log reasoning for audit trail
-        logger.info(
-            "Execution plan generated",
-            agent="architect",
-            reasoning=response.reasoning,
-            batch_count=len(response.plan.batches),
-        )
-
-        # Validate and split batches to enforce risk limits
-        validated_plan, warnings = validate_and_split_batches(response.plan)
-
-        # Log any warnings from batch validation
-        for warning in warnings:
-            logger.warning(warning, agent="architect")
-
-        return validated_plan, new_session_id
 
     def _save_markdown(
         self,
-        execution_plan: ExecutionPlan,
+        markdown_content: str,
         issue: Issue,
         design: Design | None,
-        output_dir: str
+        output_dir: str,
     ) -> Path:
         """Save plan as markdown file.
 
         Args:
-            execution_plan: Execution plan to render.
+            markdown_content: The markdown plan content to save.
             issue: Original issue being planned.
             design: Optional design context.
             output_dir: Directory path for saving the markdown file.
@@ -493,190 +476,83 @@ class Architect:
         filename = f"{date.today().isoformat()}-{_slugify(title)}.md"
         file_path = output_path / filename
 
-        md_content = self._render_markdown(execution_plan, issue, design)
-        file_path.write_text(md_content)
+        file_path.write_text(markdown_content)
 
         return file_path
 
-    def _render_markdown(
+    async def analyze(
         self,
-        execution_plan: ExecutionPlan,
-        issue: Issue,
-        design: Design | None
-    ) -> str:
-        """Render ExecutionPlan as markdown following writing-plans format.
+        state: ExecutionState,
+        profile: Profile,
+        *,
+        workflow_id: str,
+    ) -> ArchitectOutput:
+        """Analyze an issue and generate goal/strategy (simplified form).
+
+        Creates an ArchitectOutput with high-level goal and strategy
+        for quick analysis without full plan generation.
 
         Args:
-            execution_plan: Execution plan to render.
-            issue: Original issue being planned.
-            design: Optional design context.
+            state: The execution state containing the issue and optional design.
+            profile: The profile containing working directory settings.
+            workflow_id: Workflow ID for stream events (required).
 
         Returns:
-            Markdown-formatted string representation of the plan.
+            ArchitectOutput containing goal, strategy, key files, and risks.
+
+        Raises:
+            ValueError: If no issue is present in the state.
         """
-        title = design.title if design else issue.title
-        goal = design.goal if design else issue.description
-        architecture = design.architecture if design else "See batch descriptions below."
-        tech_stack = ", ".join(design.tech_stack) if design else "See implementation details."
+        if not state.issue:
+            raise ValueError("Cannot analyze: no issue in ExecutionState")
 
-        # Build the markdown header with Claude instructions
-        claude_instruction = (
-            "> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans "
-            "to implement this plan batch-by-batch."
-        )
+        # Compile context using strategy
+        strategy = self.context_strategy()
+        compiled_context = strategy.compile(state, profile)
 
-        lines = [
-            f"# {title} Implementation Plan",
-            "",
-            claude_instruction,
-            "",
-            f"**Goal:** {goal}",
-            "",
-            f"**Architecture:** {architecture}",
-            "",
-            f"**Tech Stack:** {tech_stack}",
-            "",
-            "---",
-            "",
+        # Convert compiled context to messages
+        base_messages = strategy.to_messages(compiled_context)
+
+        # Add user prompt requesting analysis
+        user_prompt = """Analyze this issue and provide:
+1. A clear goal statement describing what needs to be accomplished
+2. A high-level strategy for how to approach the implementation
+3. Key files that will likely need to be modified
+4. Any potential risks or considerations
+
+Respond with a structured ArchitectOutput."""
+
+        messages = [
+            *base_messages,
+            AgentMessage(role="user", content=user_prompt),
         ]
 
-        for batch in execution_plan.batches:
-            risk_badge = f"[{batch.risk_summary.upper()} RISK]"
-            lines.append(f"## Batch {batch.batch_number} {risk_badge}")
-            if batch.description:
-                lines.append(f"*{batch.description}*")
-            lines.append("")
+        # Call driver with ArchitectOutput schema
+        raw_response, new_session_id = await self.driver.generate(
+            messages=messages,
+            schema=ArchitectOutput,
+            cwd=profile.working_dir,
+            session_id=state.driver_session_id,
+        )
+        response = ArchitectOutput.model_validate(raw_response)
 
-            for step in batch.steps:
-                lines.append(f"### Step {step.id}: {step.description}")
-                lines.append("")
-                lines.append(f"- **Action:** {step.action_type}")
-                if step.file_path:
-                    lines.append(f"- **File:** `{step.file_path}`")
-                if step.is_test_step:
-                    lines.append("- **Type:** Test step")
-                if step.validates_step:
-                    lines.append(f"- **Validates:** Step {step.validates_step}")
-                if step.depends_on:
-                    lines.append(f"- **Depends on:** {', '.join(step.depends_on)}")
-                lines.append("")
-
-                if step.code_change:
-                    lines.append("```python")
-                    lines.append(step.code_change)
-                    lines.append("```")
-                    lines.append("")
-
-                if step.command:
-                    lines.append(f"**Run:** `{step.command}`")
-                    if step.cwd:
-                        lines.append(f"  (in directory: `{step.cwd}`)")
-                    lines.append("")
-
-                if step.fallback_commands:
-                    lines.append("**Fallbacks:**")
-                    for fallback in step.fallback_commands:
-                        lines.append(f"- `{fallback}`")
-                    lines.append("")
-
-                if step.expected_output_pattern:
-                    lines.append(f"**Expected output:** `{step.expected_output_pattern}`")
-                    lines.append("")
-
-                if step.success_criteria:
-                    lines.append(f"**Success criteria:** {step.success_criteria}")
-                    lines.append("")
-
-            lines.append("---")
-            lines.append("")
-
-        return "\n".join(lines)
-
-
-def validate_and_split_batches(plan: ExecutionPlan) -> tuple[ExecutionPlan, list[str]]:
-    """Validate Architect batches and split if needed to enforce size limits.
-
-    Enforces maximum batch sizes based on risk level:
-    - Low risk: max 5 steps
-    - Medium risk: max 3 steps
-    - High risk: max 1 step (always isolated)
-
-    Args:
-        plan: The execution plan to validate.
-
-    Returns:
-        Tuple of (validated_plan, warnings).
-        - validated_plan: Plan with batches split if needed, batch numbers renumbered.
-        - warnings: List of warning messages for batches that were split.
-    """
-    # Risk level limits
-    RISK_LIMITS: dict[RiskLevel, int] = {
-        "low": 5,
-        "medium": 3,
-        "high": 1,
-    }
-
-    warnings: list[str] = []
-    new_batches: list[ExecutionBatch] = []
-
-    for batch in plan.batches:
-        # Get the maximum allowed size for this batch's risk level
-        max_size = RISK_LIMITS[batch.risk_summary]
-
-        # If batch is within limits, keep it as-is
-        if len(batch.steps) <= max_size:
-            new_batches.append(batch)
-            continue
-
-        # Batch needs splitting
-        warnings.append(
-            f"Batch {batch.batch_number} exceeded size limit for {batch.risk_summary} risk "
-            f"({len(batch.steps)} steps > {max_size} max). Split into multiple batches."
+        logger.info(
+            "Architect analysis complete",
+            agent="architect",
+            goal=response.goal[:100] + "..." if len(response.goal) > 100 else response.goal,
+            key_files_count=len(response.key_files),
+            risks_count=len(response.risks),
         )
 
-        # Split the batch into chunks
-        steps_list = list(batch.steps)
-        for i in range(0, len(steps_list), max_size):
-            chunk = steps_list[i:i + max_size]
-
-            # Determine the risk summary for this chunk
-            # If any step is high-risk, the chunk is high-risk
-            # Otherwise, use the highest risk level in the chunk
-            chunk_risks = {step.risk_level for step in chunk}
-            chunk_risk: RiskLevel
-            if "high" in chunk_risks:
-                chunk_risk = "high"
-            elif "medium" in chunk_risks:
-                chunk_risk = "medium"
-            else:
-                chunk_risk = "low"
-
-            # Create a new batch for this chunk
-            new_batch = ExecutionBatch(
-                batch_number=0,  # Will be renumbered later
-                steps=tuple(chunk),
-                risk_summary=chunk_risk,
-                description=batch.description,
+        # Emit completion event
+        if self._stream_emitter is not None:
+            event = StreamEvent(
+                type=StreamEventType.AGENT_OUTPUT,
+                content=f"Analysis complete: {response.goal[:100]}...",
+                timestamp=datetime.now(UTC),
+                agent="architect",
+                workflow_id=workflow_id,
             )
-            new_batches.append(new_batch)
+            await self._stream_emitter(event)
 
-    # Renumber all batches sequentially
-    renumbered_batches = []
-    for i, batch in enumerate(new_batches, start=1):
-        renumbered_batch = ExecutionBatch(
-            batch_number=i,
-            steps=batch.steps,
-            risk_summary=batch.risk_summary,
-            description=batch.description,
-        )
-        renumbered_batches.append(renumbered_batch)
-
-    # Create the validated plan
-    validated_plan = ExecutionPlan(
-        goal=plan.goal,
-        batches=tuple(renumbered_batches),
-        total_estimated_minutes=plan.total_estimated_minutes,
-        tdd_approach=plan.tdd_approach,
-    )
-
-    return validated_plan, warnings
+        return response

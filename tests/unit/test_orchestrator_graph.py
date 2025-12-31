@@ -9,7 +9,7 @@ from amelia.core.orchestrator import create_orchestrator_graph
 class TestCreateOrchestratorGraph:
     """Tests for create_orchestrator_graph function."""
 
-    def test_graph_includes_all_required_nodes(self):
+    def test_graph_includes_all_required_nodes(self) -> None:
         """Graph should include all required nodes."""
         graph = create_orchestrator_graph()
 
@@ -17,14 +17,12 @@ class TestCreateOrchestratorGraph:
         nodes = graph.nodes
         node_names = set(nodes.keys())
 
-        # Verify all required nodes are present
+        # Verify all required nodes are present (agentic workflow)
         required_nodes = {
             "architect_node",
             "human_approval_node",
             "developer_node",
             "reviewer_node",
-            "batch_approval_node",
-            "blocker_resolution_node",
         }
 
         assert required_nodes.issubset(node_names), (
@@ -32,7 +30,7 @@ class TestCreateOrchestratorGraph:
             f"got {node_names}"
         )
 
-    def test_graph_with_checkpoint_saver(self):
+    def test_graph_with_checkpoint_saver(self) -> None:
         """Graph should accept checkpoint saver."""
         from unittest.mock import MagicMock
         mock_saver = MagicMock()

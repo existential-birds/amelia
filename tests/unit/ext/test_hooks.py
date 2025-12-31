@@ -75,6 +75,7 @@ def mock_profile() -> Profile:
     return Profile(
         name="test",
         driver="cli:claude",
+        model="sonnet",
         tracker="noop",
         strategy="single",
     )

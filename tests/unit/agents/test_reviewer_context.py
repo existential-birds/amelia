@@ -3,29 +3,26 @@
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """Unit tests for ReviewerContextStrategy.
 
-Tests cover context compilation for review with ExecutionPlan batches,
+Tests cover context compilation for review with goal and markdown plan,
 issue fallback, and persona system prompts.
 """
 import pytest
 
 from amelia.agents.reviewer import ReviewerContextStrategy
 from amelia.core.context import CompiledContext
-from amelia.core.state import (
-    ExecutionPlan,
-    ExecutionState,
-)
+from amelia.core.state import ExecutionState
 
 
 class TestReviewerContextStrategy:
     """Test ReviewerContextStrategy context compilation."""
 
     @pytest.fixture
-    def strategy(self):
+    def strategy(self) -> ReviewerContextStrategy:
         """Create a ReviewerContextStrategy instance with default persona."""
         return ReviewerContextStrategy(persona="General")
 
     @pytest.fixture
-    def code_diff(self):
+    def code_diff(self) -> str:
         """Sample code diff for testing."""
         return """diff --git a/auth.py b/auth.py
 index 1234567..abcdefg 100644
@@ -39,29 +36,22 @@ index 1234567..abcdefg 100644
          return None"""
 
     @pytest.fixture
-    def state_with_batch(
+    def state_with_goal(
         self,
         mock_execution_state_factory,
-        mock_execution_plan_factory,
         code_diff
-    ):
-        """Create execution state with a current batch and code changes."""
-        plan = mock_execution_plan_factory(
-            goal="Review authentication implementation for security vulnerabilities",
-            num_batches=1,
-            steps_per_batch=2,
-        )
+    ) -> ExecutionState:
+        """Create execution state with a goal and code changes."""
         state, _profile = mock_execution_state_factory(
-            execution_plan=plan,
-            current_batch_index=0,
+            goal="Review authentication implementation for security vulnerabilities",
             code_changes_for_review=code_diff
         )
         return state
 
-    def test_compile_with_code_diff(self, strategy, state_with_batch, code_diff, mock_profile_factory):
+    def test_compile_with_code_diff(self, strategy, state_with_goal, code_diff, mock_profile_factory) -> None:
         """Test compile produces context with code diff section."""
         profile = mock_profile_factory()
-        context = strategy.compile(state_with_batch, profile)
+        context = strategy.compile(state_with_goal, profile)
 
         assert isinstance(context, CompiledContext)
         # Should have diff section
@@ -70,34 +60,34 @@ index 1234567..abcdefg 100644
         assert code_diff in diff_sections[0].content
 
     @pytest.mark.parametrize("persona", ["Security", "Performance", "General"])
-    def test_compile_with_persona(self, state_with_batch, persona, mock_profile_factory):
+    def test_compile_with_persona(self, state_with_goal, persona, mock_profile_factory) -> None:
         """Test persona appears in system prompt and produces stable output."""
         profile = mock_profile_factory()
         strategy = ReviewerContextStrategy(persona=persona)
-        context = strategy.compile(state_with_batch, profile)
+        context = strategy.compile(state_with_goal, profile)
 
         assert context.system_prompt is not None
         assert persona in context.system_prompt
 
         # Test stability by compiling twice
-        context2 = strategy.compile(state_with_batch, profile)
+        context2 = strategy.compile(state_with_goal, profile)
         assert context.system_prompt == context2.system_prompt
 
-    def test_compile_batch_context_included(
+    def test_compile_goal_context_included(
         self,
         strategy,
-        state_with_batch,
+        state_with_goal,
         mock_profile_factory
-    ):
-        """Test batch context is included in sections."""
+    ) -> None:
+        """Test goal context is included in sections."""
         profile = mock_profile_factory()
-        context = strategy.compile(state_with_batch, profile)
+        context = strategy.compile(state_with_goal, profile)
 
-        # Should have task section from batch
+        # Should have task section from goal
         task_sections = [s for s in context.sections if s.name == "task"]
         assert len(task_sections) == 1
 
-        # Should NOT have issue section when batch is present
+        # Should NOT have issue section when goal is present
         issue_sections = [s for s in context.sections if s.name == "issue"]
         assert len(issue_sections) == 0
 
@@ -106,11 +96,11 @@ index 1234567..abcdefg 100644
         strategy,
         mock_execution_state_factory,
         code_diff
-    ):
-        """Test compile falls back to issue when no batch is present."""
-        # State with issue but no execution plan
+    ) -> None:
+        """Test compile falls back to issue when no goal is present."""
+        # State with issue but no goal
         state, profile = mock_execution_state_factory(
-            execution_plan=None,
+            goal=None,
             code_changes_for_review=code_diff
         )
 
@@ -124,57 +114,57 @@ index 1234567..abcdefg 100644
         task_sections = [s for s in context.sections if s.name == "task"]
         assert len(task_sections) == 0
 
-    def test_compile_raises_when_no_batch_or_issue(
+    def test_compile_raises_when_no_goal_or_issue(
         self,
         mock_profile_factory,
         code_diff
-    ):
-        """Test raises ValueError when state has no batch and no issue."""
-        # State with no execution_plan AND no issue
+    ) -> None:
+        """Test raises ValueError when state has no goal and no issue."""
+        # State with no goal AND no issue
         profile = mock_profile_factory()
         state = ExecutionState(
             profile_id=profile.name,
             issue=None,
-            execution_plan=None,
+            goal=None,
             code_changes_for_review=code_diff
         )
 
         strategy = ReviewerContextStrategy()
-        with pytest.raises(ValueError, match="No batch, task, or issue context found"):
+        with pytest.raises(ValueError, match="No task or issue context found"):
             strategy.compile(state, profile)
 
     def test_system_prompt_template_produces_stable_prefix_per_persona(
         self,
-        state_with_batch,
+        state_with_goal,
         mock_profile_factory
-    ):
+    ) -> None:
         """Test SYSTEM_PROMPT_TEMPLATE produces stable prefix per persona."""
         profile = mock_profile_factory()
         persona = "Security"
 
         # Compile multiple times with same persona
         strategy1 = ReviewerContextStrategy(persona=persona)
-        context1 = strategy1.compile(state_with_batch, profile)
+        context1 = strategy1.compile(state_with_goal, profile)
         strategy2 = ReviewerContextStrategy(persona=persona)
-        context2 = strategy2.compile(state_with_batch, profile)
+        context2 = strategy2.compile(state_with_goal, profile)
 
         # System prompts should be identical for same persona
         assert context1.system_prompt == context2.system_prompt
 
         # Should be different for different personas
         strategy3 = ReviewerContextStrategy(persona="Performance")
-        context3 = strategy3.compile(state_with_batch, profile)
+        context3 = strategy3.compile(state_with_goal, profile)
         assert context1.system_prompt != context3.system_prompt
 
     def test_compile_validates_allowed_sections(
         self,
         strategy,
-        state_with_batch,
+        state_with_goal,
         mock_profile_factory
-    ):
+    ) -> None:
         """Test compile only produces allowed sections."""
         profile = mock_profile_factory()
-        context = strategy.compile(state_with_batch, profile)
+        context = strategy.compile(state_with_goal, profile)
 
         # All sections should be in ALLOWED_SECTIONS
         for section in context.sections:
@@ -182,13 +172,13 @@ index 1234567..abcdefg 100644
 
     def test_to_messages_integration(
         self,
-        state_with_batch,
+        state_with_goal,
         mock_profile_factory
-    ):
+    ) -> None:
         """Test compiled context can be converted to messages."""
         profile = mock_profile_factory()
         strategy = ReviewerContextStrategy(persona="Security")
-        context = strategy.compile(state_with_batch, profile)
+        context = strategy.compile(state_with_goal, profile)
 
         messages = strategy.to_messages(context)
 
@@ -205,12 +195,10 @@ index 1234567..abcdefg 100644
     def test_compile_raises_when_no_code_changes(
         self,
         mock_execution_state_factory,
-        mock_execution_plan_factory
-    ):
+    ) -> None:
         """Test raises ValueError when state has no code changes."""
-        plan = mock_execution_plan_factory(num_batches=1)
         state, profile = mock_execution_state_factory(
-            execution_plan=plan,
+            goal="Test goal",
             code_changes_for_review=None
         )
 
@@ -221,12 +209,12 @@ index 1234567..abcdefg 100644
     def test_compile_section_sources_for_debugging(
         self,
         strategy,
-        state_with_batch,
+        state_with_goal,
         mock_profile_factory
-    ):
+    ) -> None:
         """Test sections have source metadata for debugging."""
         profile = mock_profile_factory()
-        context = strategy.compile(state_with_batch, profile)
+        context = strategy.compile(state_with_goal, profile)
 
         # All sections should have source metadata with meaningful values
         for section in context.sections:
@@ -235,14 +223,14 @@ index 1234567..abcdefg 100644
 
     def test_compile_default_persona(
         self,
-        state_with_batch,
+        state_with_goal,
         mock_profile_factory
-    ):
+    ) -> None:
         """Test compile with default persona when not specified."""
         profile = mock_profile_factory()
         # Create strategy without explicit persona (should use default)
         strategy = ReviewerContextStrategy()
-        context = strategy.compile(state_with_batch, profile)
+        context = strategy.compile(state_with_goal, profile)
 
         # Should have a system prompt even without explicit persona
         assert context.system_prompt is not None
@@ -256,7 +244,7 @@ class TestReviewerValidation:
     async def test_reviewer_auto_approves_empty_code_changes(
         self,
         mock_execution_state_factory,
-    ):
+    ) -> None:
         """Reviewer should auto-approve when code_changes is empty instead of raising.
 
         This prevents HTTP 500 errors when there are no changes to review.
@@ -292,7 +280,7 @@ class TestReviewerValidation:
     async def test_reviewer_auto_approves_whitespace_only_code_changes(
         self,
         mock_execution_state_factory,
-    ):
+    ) -> None:
         """Reviewer should auto-approve when code_changes is whitespace only."""
         from unittest.mock import AsyncMock, MagicMock
 
@@ -314,54 +302,24 @@ class TestReviewerValidation:
         assert "No code changes to review" in result.comments
         mock_driver.generate.assert_not_called()
 
-    async def test_reviewer_allows_no_execution_plan_with_issue(
+    async def test_reviewer_allows_no_goal_with_issue(
         self,
         mock_execution_state_factory,
         mock_async_driver_factory,
-        mock_review_response_factory,
-    ):
-        """Reviewer should work without execution_plan when issue is present.
+        mock_review_result_factory,
+    ) -> None:
+        """Reviewer should work without goal when issue is present.
 
         This allows reviewing with just issue context when no plan exists.
         """
         from amelia.agents.reviewer import Reviewer
 
         state, profile = mock_execution_state_factory(
-            execution_plan=None,
+            goal=None,
             code_changes_for_review="diff --git a/file.py"
         )
 
-        mock_response = mock_review_response_factory()
-        mock_driver = mock_async_driver_factory(generate_return=(mock_response, None))
-
-        reviewer = Reviewer(mock_driver)
-
-        # Should not raise - falls back to issue context
-        result, _ = await reviewer.review(state, code_changes="diff --git a/file.py", profile=profile, workflow_id="test-workflow")
-        assert result is not None
-
-    async def test_reviewer_works_with_empty_batches(
-        self,
-        mock_execution_state_factory,
-        mock_async_driver_factory,
-        mock_review_response_factory,
-    ):
-        """Reviewer should work when execution plan has no batches."""
-        from amelia.agents.reviewer import Reviewer
-
-        # Create empty plan (no batches)
-        empty_plan = ExecutionPlan(
-            goal="Empty plan",
-            batches=(),
-            total_estimated_minutes=0,
-            tdd_approach=False,
-        )
-        state, profile = mock_execution_state_factory(
-            execution_plan=empty_plan,
-            code_changes_for_review="diff --git a/file.py"
-        )
-
-        mock_response = mock_review_response_factory()
+        mock_response = mock_review_result_factory()
         mock_driver = mock_async_driver_factory(generate_return=(mock_response, None))
 
         reviewer = Reviewer(mock_driver)
@@ -378,12 +336,12 @@ class TestReviewerSessionId:
         self,
         mock_execution_state_factory,
         mock_async_driver_factory,
-        mock_review_response_factory,
-    ):
+        mock_review_result_factory,
+    ) -> None:
         """Test that Reviewer passes session_id from state to driver."""
         from amelia.agents.reviewer import Reviewer
 
-        mock_response = mock_review_response_factory(approved=True)
+        mock_response = mock_review_result_factory(approved=True)
         mock_driver = mock_async_driver_factory(generate_return=(mock_response, "new-sess"))
 
         state, profile = mock_execution_state_factory(

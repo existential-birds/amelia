@@ -101,15 +101,12 @@ class WorkflowDetailResponse(BaseModel):
         completed_at: When the workflow ended (optional)
         failure_reason: Error message when failed (optional)
         current_stage: Current agent stage (optional)
-        plan: Workflow plan/task DAG (optional)
+        goal: High-level goal for agentic execution (optional)
         token_usage: Token usage summary (optional)
         recent_events: Recent workflow events
-        execution_plan: Execution plan with batched steps (optional)
-        current_batch_index: Current batch index being executed
-        batch_results: Results from completed batches
-        developer_status: Current developer agent status (optional)
-        current_blocker: Active blocker report if execution is blocked (optional)
-        batch_approvals: Records of human batch approvals
+        tool_calls: History of tool calls made during agentic execution
+        tool_results: History of tool results from agentic execution
+        final_response: Final response from the agent when complete (optional)
     """
 
     id: Annotated[str, Field(description="Unique workflow identifier")]
@@ -133,9 +130,9 @@ class WorkflowDetailResponse(BaseModel):
         str | None,
         Field(default=None, description="Current agent stage"),
     ] = None
-    plan: Annotated[
-        dict[str, Any] | None,
-        Field(default=None, description="Workflow plan/task DAG"),
+    goal: Annotated[
+        str | None,
+        Field(default=None, description="High-level goal for agentic execution"),
     ] = None
     token_usage: Annotated[
         TokenSummary | None,
@@ -145,31 +142,19 @@ class WorkflowDetailResponse(BaseModel):
         list[dict[str, Any]],
         Field(description="Recent workflow events"),
     ]
-    # Batch execution fields (new intelligent execution model)
-    execution_plan: Annotated[
-        dict[str, Any] | None,
-        Field(description="Execution plan with batched steps"),
-    ] = None
-    current_batch_index: Annotated[
-        int,
-        Field(description="Current batch index being executed"),
-    ] = 0
-    batch_results: Annotated[
+    # Agentic execution fields
+    tool_calls: Annotated[
         list[dict[str, Any]],
-        Field(default_factory=list, description="Results from completed batches"),
+        Field(default_factory=list, description="History of tool calls"),
     ]
-    developer_status: Annotated[
+    tool_results: Annotated[
+        list[dict[str, Any]],
+        Field(default_factory=list, description="History of tool results"),
+    ]
+    final_response: Annotated[
         str | None,
-        Field(description="Current developer agent status"),
+        Field(default=None, description="Final response from the agent"),
     ] = None
-    current_blocker: Annotated[
-        dict[str, Any] | None,
-        Field(description="Active blocker report if execution is blocked"),
-    ] = None
-    batch_approvals: Annotated[
-        list[dict[str, Any]],
-        Field(default_factory=list, description="Records of human batch approvals"),
-    ]
 
 
 class ActionResponse(BaseModel):

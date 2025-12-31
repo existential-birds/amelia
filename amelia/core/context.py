@@ -135,24 +135,18 @@ class ContextStrategy(ABC):
         return messages
 
     def get_current_task(self, state: ExecutionState) -> str | None:
-        """Get the current task description from the execution state.
+        """Get the current task/goal description from the execution state.
 
-        This method extracts the current batch description from the ExecutionPlan.
-        Used as fallback context when batch_context is not available.
+        For agentic execution, this returns the goal. Previously this
+        extracted batch descriptions from step-by-step plans.
 
         Args:
             state: The current execution state.
 
         Returns:
-            The current task description if found, None otherwise.
+            The goal if found, None otherwise.
         """
-        if state.execution_plan and state.current_batch_index < len(state.execution_plan.batches):
-            batch = state.execution_plan.batches[state.current_batch_index]
-            description = batch.description if batch.description else batch.steps[0].description if batch.steps else ""
-            if description:
-                return description
-
-        return None
+        return state.goal
 
     def get_issue_summary(self, state: ExecutionState) -> str | None:
         """Format issue title and description into a summary.
