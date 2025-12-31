@@ -159,7 +159,3 @@ theme: ./design-system/themes/slidev
 ```
 
 Components are automatically available in all slides when using the Amelia theme.
-
-## License
-
-Mozilla Public License 2.0 - See component headers for details.
