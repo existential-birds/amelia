@@ -376,6 +376,10 @@ async def call_reviewer_node(
 ) -> dict[str, Any]:
     """Orchestrator node for the Reviewer agent to review code changes.
 
+    Uses agentic review when a base_commit is available, which allows the
+    reviewer agent to fetch the diff using git tools. This avoids the
+    "Argument list too long" error that can occur with large diffs.
+
     Args:
         state: Current execution state containing issue and goal information.
         config: Optional RunnableConfig with stream_emitter in configurable.
@@ -396,8 +400,23 @@ async def call_reviewer_node(
     driver = DriverFactory.get_driver(profile.driver, model=profile.model)
     reviewer = Reviewer(driver, stream_emitter=stream_emitter)
 
-    code_changes = await get_code_changes_for_review(state, profile)
-    review_result, new_session_id = await reviewer.review(state, code_changes, profile, workflow_id=workflow_id)
+    # Use agentic review when we have a base_commit - this avoids large diff issues
+    # The agent will fetch the diff using git tools and auto-detect technologies
+    if state.base_commit:
+        logger.info(
+            "Using agentic review with base_commit",
+            agent="reviewer",
+            base_commit=state.base_commit,
+        )
+        review_result, new_session_id = await reviewer.agentic_review(
+            state, state.base_commit, profile, workflow_id=workflow_id
+        )
+    else:
+        # Fallback to traditional review if no base_commit
+        code_changes = await get_code_changes_for_review(state, profile)
+        review_result, new_session_id = await reviewer.review(
+            state, code_changes, profile, workflow_id=workflow_id
+        )
 
     # Log the review completion
     logger.info(

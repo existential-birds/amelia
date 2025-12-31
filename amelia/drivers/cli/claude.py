@@ -430,6 +430,7 @@ class ClaudeCliDriver:
         cwd: str,
         session_id: str | None = None,
         instructions: str | None = None,
+        schema: type[BaseModel] | None = None,
     ) -> AsyncIterator[Message]:
         """Execute prompt with full autonomous tool access using ClaudeSDKClient.
 
@@ -441,6 +442,8 @@ class ClaudeCliDriver:
             cwd: Working directory for Claude Code context.
             session_id: Optional session ID to resume.
             instructions: Runtime instructions for the agent. Passed via system_prompt.
+            schema: Optional Pydantic model for structured output. When provided,
+                the agent's final response will be constrained to match this schema.
 
         Yields:
             claude_agent_sdk.types.Message objects including tool executions.
@@ -449,6 +452,7 @@ class ClaudeCliDriver:
             cwd=cwd,
             session_id=session_id,
             system_prompt=instructions,
+            schema=schema,
             bypass_permissions=True,  # Agentic execution always bypasses permissions
         )
 

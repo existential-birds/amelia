@@ -14,6 +14,8 @@ import {
   MessageSquare,
   Filter,
 } from 'lucide-react';
+import Markdown from 'react-markdown';
+import remarkBreaks from 'remark-breaks';
 import { PageHeader } from '@/components/PageHeader';
 import { Button } from '@/components/ui/button';
 import { useStreamStore } from '@/store/stream-store';
@@ -55,6 +57,21 @@ const eventTypeColors: Record<StreamEventType, string> = {
  * @param props.event - The stream event to display
  * @returns The rendered stream log item
  */
+/**
+ * Formats tool input for display, showing key parameters concisely.
+ */
+function formatToolInput(toolInput: Record<string, unknown>): string {
+  const parts: string[] = [];
+  for (const [key, value] of Object.entries(toolInput)) {
+    if (value === null || value === undefined) continue;
+    const strValue = typeof value === 'string' ? value : JSON.stringify(value);
+    // Truncate long values
+    const displayValue = strValue.length > 100 ? strValue.slice(0, 100) + '...' : strValue;
+    parts.push(`${key}: ${displayValue}`);
+  }
+  return parts.join(', ');
+}
+
 function StreamLogItem({ event }: { event: StreamEvent }) {
   return (
     <div
@@ -76,10 +93,15 @@ function StreamLogItem({ event }: { event: StreamEvent }) {
             <span className="text-blue-400">→ {event.tool_name}</span>
           )}
         </div>
+        {event.tool_input && Object.keys(event.tool_input).length > 0 && (
+          <div className="mt-1 text-xs text-muted-foreground/80 font-mono">
+            {formatToolInput(event.tool_input)}
+          </div>
+        )}
         {event.content && (
-          <p className="mt-1 text-sm text-foreground/80 break-words whitespace-pre-wrap">
-            {event.content}
-          </p>
+          <div className="mt-1 prose prose-sm prose-invert max-w-none prose-p:my-1 prose-p:first:mt-0 prose-p:last:mb-0 prose-headings:text-foreground prose-p:text-foreground/80 prose-strong:text-foreground prose-code:text-accent prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none prose-pre:bg-muted prose-pre:border prose-pre:border-border prose-li:text-foreground/80 [&_pre]:whitespace-pre-wrap [&_code]:break-all">
+            <Markdown remarkPlugins={[remarkBreaks]}>{event.content}</Markdown>
+          </div>
         )}
       </div>
     </div>

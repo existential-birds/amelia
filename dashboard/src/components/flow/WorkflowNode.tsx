@@ -6,6 +6,7 @@ import { Handle, Position, type NodeProps, type Node } from '@xyflow/react';
 import { MapPin } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Card, CardContent } from '@/components/ui/card';
+import { NODE_WIDTH, NODE_HEIGHT } from '@/utils/layout';
 
 /** Possible status values for workflow nodes. */
 type NodeStatus = 'completed' | 'active' | 'pending' | 'blocked';
@@ -105,6 +106,7 @@ function WorkflowNodeComponent({ data }: NodeProps<WorkflowNodeType>) {
       data-status={data.status}
       role="img"
       aria-label={ariaLabel}
+      style={{ width: NODE_WIDTH, height: NODE_HEIGHT }}
       className={cn(
         'relative rounded-md transition-all duration-200 overflow-hidden',
         styles.containerClass,
