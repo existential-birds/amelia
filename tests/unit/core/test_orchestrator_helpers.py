@@ -14,7 +14,7 @@ class TestExtractConfigParams:
 
     def test_extracts_profile_from_config(self) -> None:
         """Should extract profile from config.configurable.profile."""
-        profile = Profile(name="test", driver="cli:claude")
+        profile = Profile(name="test", driver="cli:claude", model="sonnet")
         config: RunnableConfig = {
             "configurable": {
                 "thread_id": "wf-123",

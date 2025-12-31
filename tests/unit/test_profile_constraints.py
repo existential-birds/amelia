@@ -21,6 +21,6 @@ def test_profile_allows_any_driver_combination(name, driver):
     Any profile name can use any driver type.
     Driver restrictions are not hard-coded; users configure via settings.
     """
-    profile = Profile(name=name, driver=driver, tracker="jira", strategy="single")
+    profile = Profile(name=name, driver=driver, model="sonnet", tracker="jira", strategy="single")
     assert profile.name == name
     assert profile.driver == driver

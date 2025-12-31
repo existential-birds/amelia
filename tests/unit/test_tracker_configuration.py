@@ -14,6 +14,7 @@ def test_tracker_factory_creates_noop_tracker():
     profile = Profile(
         name="test",
         driver="cli:claude",
+        model="sonnet",
         tracker="noop",
         strategy="single",
     )
@@ -33,6 +34,7 @@ def test_tracker_factory_creates_github_tracker():
         profile = Profile(
             name="test",
             driver="cli:claude",
+            model="sonnet",
             tracker="github",
             strategy="single",
         )
@@ -46,6 +48,7 @@ def test_tracker_factory_creates_none_tracker():
     profile = Profile(
         name="test",
         driver="cli:claude",
+        model="sonnet",
         tracker="none",
         strategy="single",
     )
