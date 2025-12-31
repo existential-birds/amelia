@@ -299,7 +299,6 @@ export function DashboardSidebar() {
                 <div
                   className="text-xs font-mono text-muted-foreground"
                   role="status"
-                  aria-label={`Connection status: ${isConnected ? 'Connected' : 'Disconnected'}`}
                 >
                   <div className="flex items-center gap-2">
                     <span
