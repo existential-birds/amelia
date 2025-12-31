@@ -1,9 +1,3 @@
-/*
- * This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at https://mozilla.org/MPL/2.0/.
- */
-
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { api } from '../client';
 import { createMockWorkflowSummary, createMockWorkflowDetail } from '@/__tests__/fixtures';
