@@ -29,7 +29,7 @@ profiles:
 EOF
 
 # Generate a plan for an issue
-amelia plan-only 123
+amelia plan 123
 
 # Or run the full workflow
 amelia start 123

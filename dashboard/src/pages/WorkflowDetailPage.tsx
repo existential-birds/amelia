@@ -81,13 +81,6 @@ export default function WorkflowDetailPage() {
         </PageHeader.Center>
 
         <PageHeader.Right>
-          {needsApproval && (
-            <ApprovalControls
-              workflowId={workflow.id}
-              planSummary={goalSummary}
-              status="pending"
-            />
-          )}
           <StatusBadge status={workflow.status} />
         </PageHeader.Right>
       </PageHeader>
@@ -102,11 +95,22 @@ export default function WorkflowDetailPage() {
         </div>
       )}
 
-      <div className="flex-1 overflow-hidden grid grid-cols-2 gap-4 p-6">
-        {/* Left column: Pipeline Canvas */}
-        <div className="flex flex-col gap-4 overflow-y-auto">
-          {/* Goal display */}
-          {workflow.goal && (
+      <div className="flex-1 overflow-hidden grid grid-cols-2 gap-4 p-6 min-h-0">
+        {/* Left column: Plan Review (when blocked) or Pipeline Canvas */}
+        <div className="flex flex-col gap-4 overflow-y-auto min-h-0">
+          {/* Plan Review - shown when workflow needs approval */}
+          {needsApproval && (
+            <ApprovalControls
+              workflowId={workflow.id}
+              planSummary={goalSummary}
+              planMarkdown={workflow.plan_markdown}
+              status="pending"
+              className="flex-1"
+            />
+          )}
+
+          {/* Goal display - shown when not blocked or as secondary info */}
+          {workflow.goal && !needsApproval && (
             <div className="p-4 border border-border rounded-lg bg-card/50">
               <h3 className="font-heading text-xs font-semibold tracking-widest text-muted-foreground mb-2">
                 GOAL

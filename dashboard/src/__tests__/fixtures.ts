@@ -54,6 +54,7 @@ export function createMockWorkflowDetail(
     recent_events: [],
     // Agentic execution fields
     goal: 'Test goal for implementation',
+    plan_markdown: null,
     plan_path: null,
     ...overrides,
   };

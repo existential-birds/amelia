@@ -99,6 +99,7 @@ class WorkflowDetailResponse(BaseModel):
         failure_reason: Error message when failed (optional)
         current_stage: Current agent stage (optional)
         goal: High-level goal for agentic execution (optional)
+        plan_markdown: Full plan markdown content from Architect (optional)
         token_usage: Token usage summary (optional)
         recent_events: Recent workflow events
         tool_calls: History of tool calls made during agentic execution
@@ -130,6 +131,10 @@ class WorkflowDetailResponse(BaseModel):
     goal: Annotated[
         str | None,
         Field(default=None, description="High-level goal for agentic execution"),
+    ] = None
+    plan_markdown: Annotated[
+        str | None,
+        Field(default=None, description="Full plan markdown content from Architect"),
     ] = None
     token_usage: Annotated[
         TokenSummary | None,

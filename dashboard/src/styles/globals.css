@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
 /*
  ---break---
  */
@@ -195,6 +196,30 @@
   /* Hide React Flow attribution watermark */
   .react-flow__attribution {
     display: none;
+  }
+
+  /* Style React Flow controls to match theme */
+  .react-flow__controls {
+    --xy-controls-button-background-color: var(--card);
+    --xy-controls-button-background-color-hover: var(--secondary);
+    --xy-controls-button-color: var(--muted-foreground);
+    --xy-controls-button-color-hover: var(--primary);
+    --xy-controls-button-border-color: var(--border);
+    --xy-controls-box-shadow: none;
+    border-radius: var(--radius-md);
+    overflow: hidden;
+  }
+
+  .react-flow__controls-button {
+    border-color: var(--border) !important;
+  }
+
+  .react-flow__controls-button:hover {
+    background-color: var(--secondary) !important;
+  }
+
+  .react-flow__controls-button svg {
+    fill: currentColor;
   }
 }
 

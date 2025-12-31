@@ -27,7 +27,7 @@ This guide gets you from zero to orchestrating AI agents in about three minutes.
 
 3. **Run your first workflow**:
    ```bash
-   amelia plan-only 123  # Generate plan for issue #123
+   amelia plan 123  # Generate plan for issue #123
    ```
    If this works, you now have AI agents arguing about your codebase. Congratulations.
 

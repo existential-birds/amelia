@@ -486,7 +486,7 @@ Strong compliance with this factor.
 #### Current Implementation: Partial
 
 **What we do:**
-- CLI: `amelia start`, `amelia plan-only`, `amelia review`
+- CLI: `amelia start`, `amelia plan`, `amelia review`
 - REST API: Full CRUD for workflows
 - WebSocket: Real-time event streaming
 

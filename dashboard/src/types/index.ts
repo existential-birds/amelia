@@ -78,6 +78,9 @@ export interface WorkflowDetail extends WorkflowSummary {
   /** High-level goal or task description for the developer. */
   goal: string | null;
 
+  /** Full plan markdown content from the Architect agent. */
+  plan_markdown: string | null;
+
   /** Path to the markdown plan file, if generated. */
   plan_path: string | null;
 }

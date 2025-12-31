@@ -80,7 +80,7 @@ export default function WorkflowsPage() {
   const pipeline = detail ? buildPipeline(detail) : null;
 
   return (
-    <div className="flex flex-col h-full w-full overflow-hidden">
+    <div className="flex flex-col h-full w-full overflow-y-auto">
       {/* Top: Header + Canvas (full width) */}
       <PageHeader>
         <PageHeader.Left>
@@ -116,13 +116,6 @@ export default function WorkflowsPage() {
         </PageHeader.Center>
         {detail && (
           <PageHeader.Right>
-            {detail.status === 'blocked' && (
-              <ApprovalControls
-                workflowId={detail.id}
-                planSummary={detail.execution_plan ? `Plan with ${detail.execution_plan.batches.reduce((s, b) => s + b.steps.length, 0)} steps` : 'No plan generated'}
-                status="pending"
-              />
-            )}
             <StatusBadge status={detail.status} />
           </PageHeader.Right>
         )}
@@ -130,8 +123,20 @@ export default function WorkflowsPage() {
       <Separator />
       <WorkflowCanvas pipeline={pipeline ?? undefined} />
 
+      {/* Plan Review - shown when workflow needs approval */}
+      {detail?.status === 'blocked' && (
+        <div className="px-4 pt-4">
+          <ApprovalControls
+            workflowId={detail.id}
+            planSummary={detail.goal || 'Awaiting plan generation'}
+            planMarkdown={detail.plan_markdown}
+            status="pending"
+          />
+        </div>
+      )}
+
       {/* Bottom: Queue + Activity (split) - ScrollArea provides overflow handling */}
-      <div className="flex-1 grid grid-cols-[320px_1fr] grid-rows-[1fr] gap-4 p-4 overflow-hidden relative z-10 min-h-0">
+      <div className="flex-1 grid grid-cols-[320px_1fr] grid-rows-[1fr] gap-4 p-4 overflow-hidden relative z-10 min-h-[300px]">
         <ScrollArea className="h-full overflow-hidden">
           <JobQueue
             workflows={workflows}
