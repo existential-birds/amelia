@@ -3,9 +3,10 @@
  */
 import { useFetcher } from 'react-router-dom';
 import { useState } from 'react';
+import Markdown from 'react-markdown';
 import { Button } from '@/components/ui/button';
 import { Loader } from '@/components/ai-elements/loader';
-import { Check, X } from 'lucide-react';
+import { Check, X, ChevronDown, ChevronUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 /**
@@ -28,12 +29,14 @@ type ApprovalStatus = 'pending' | 'approved' | 'rejected';
  * Props for the ApprovalControls component.
  * @property workflowId - Unique identifier for the workflow being approved
  * @property planSummary - Brief description of the plan to display
+ * @property planMarkdown - Full plan markdown content (optional)
  * @property status - Current approval status (defaults to 'pending')
  * @property className - Optional additional CSS classes
  */
 interface ApprovalControlsProps {
   workflowId: string;
   planSummary: string;
+  planMarkdown?: string | null;
   status?: ApprovalStatus;
   className?: string;
 }
@@ -52,6 +55,7 @@ interface ApprovalControlsProps {
  * <ApprovalControls
  *   workflowId="wf-123"
  *   planSummary="Implement user authentication"
+ *   planMarkdown="## Plan\n\n1. Add login form\n2. Create auth service"
  *   status="pending"
  * />
  * ```
@@ -59,6 +63,7 @@ interface ApprovalControlsProps {
 export function ApprovalControls({
   workflowId,
   planSummary,
+  planMarkdown,
   status = 'pending',
   className,
 }: ApprovalControlsProps) {
@@ -67,18 +72,59 @@ export function ApprovalControls({
   const isPending = approveFetcher.state !== 'idle' || rejectFetcher.state !== 'idle';
   const [showRejectForm, setShowRejectForm] = useState(false);
   const [rejectionFeedback, setRejectionFeedback] = useState('');
+  const [showPlanDetails, setShowPlanDetails] = useState(true);
 
   return (
     <div
       data-slot="approval-controls"
       className={cn(
-        'p-4 border border-border rounded-lg bg-card',
+        'p-4 border border-border rounded-lg bg-card flex flex-col min-w-0 overflow-hidden',
         className
       )}
     >
-      <h3 className="font-heading text-lg font-semibold mb-2">
-        {planSummary}
-      </h3>
+      <h4 className="font-heading text-xs font-semibold tracking-widest text-muted-foreground mb-2">
+        PLAN REVIEW
+      </h4>
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="font-heading text-lg font-semibold leading-tight">
+          {planSummary}
+        </h3>
+        {planMarkdown && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowPlanDetails(!showPlanDetails)}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            {showPlanDetails ? (
+              <>
+                <ChevronUp className="w-4 h-4 mr-1" />
+                Hide plan
+              </>
+            ) : (
+              <>
+                <ChevronDown className="w-4 h-4 mr-1" />
+                Show plan
+              </>
+            )}
+          </Button>
+        )}
+      </div>
+
+      {planMarkdown && showPlanDetails && (
+        <div className="min-h-48 max-h-[60vh] mb-4 border border-border rounded-md bg-muted/30 overflow-y-auto">
+          <div className="p-4 text-sm text-foreground/90 leading-relaxed prose prose-sm prose-invert max-w-none prose-headings:font-heading prose-headings:text-foreground prose-p:text-foreground/90 prose-strong:text-foreground prose-code:text-accent prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:before:content-none prose-code:after:content-none prose-pre:bg-muted prose-pre:border prose-pre:border-border prose-pre:overflow-x-auto prose-li:text-foreground/90 prose-blockquote:border-accent prose-blockquote:text-foreground/70 [&_pre]:max-w-full [&_pre]:whitespace-pre-wrap [&_code]:break-all">
+            <Markdown>{planMarkdown}</Markdown>
+          </div>
+        </div>
+      )}
+
+      {!planMarkdown && (
+        <p className="text-sm text-muted-foreground mb-4 italic">
+          No plan available. Awaiting plan generation.
+        </p>
+      )}
 
       <p className="text-sm text-muted-foreground mb-4">
         Review and approve this plan to proceed with implementation.

@@ -38,7 +38,9 @@ const mockWorkflowDetail: WorkflowDetail = {
     { id: 'e1', workflow_id: '1', sequence: 1, timestamp: '2025-12-07T09:01:00Z', event_type: 'stage_started', agent: 'developer', message: 'Started coding' },
   ],
   // Agentic execution fields
-  execution_plan: null,
+  goal: null,
+  plan_markdown: null,
+  plan_path: null,
 };
 
 const mockPipeline = {
@@ -69,7 +71,9 @@ const mockSecondWorkflowDetail: WorkflowDetail = {
     { id: 'e2', workflow_id: 'wf-002', sequence: 1, timestamp: '2025-12-07T08:01:00Z', event_type: 'stage_started', agent: 'reviewer', message: 'Started review' },
   ],
   // Agentic execution fields
-  execution_plan: null,
+  goal: 'Fix the login bug',
+  plan_markdown: '## Plan\n\n1. Identify the issue\n2. Fix the bug',
+  plan_path: null,
 };
 
 /**

@@ -117,7 +117,8 @@ export function buildPipeline(workflow: WorkflowDetail): Pipeline | null {
     // Add edge from previous stage
     // Edge status is based on the source node (previous stage), not the target
     if (index > 0) {
-      const prevStage = AGENT_STAGES[index - 1];
+      // Safe: index > 0 guarantees index - 1 is valid
+      const prevStage = AGENT_STAGES[index - 1]!;
       const prevStatus = getStageStatus(index - 1, currentStageIndex, workflow.status);
       edges.push({
         from: prevStage,

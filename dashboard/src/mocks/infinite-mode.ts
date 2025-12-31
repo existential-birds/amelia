@@ -10,9 +10,50 @@ import type {
   WorkflowSummary,
   WorkflowDetail,
   WorkflowEvent,
-  ExecutionPlan,
   TokenSummary,
 } from '@/types';
+
+/**
+ * Internal mock plan structure for generating plan_markdown.
+ * Not exported - used only within this file.
+ */
+interface MockPlanBatch {
+  batch_number: number;
+  description: string;
+  risk_summary: string;
+  steps: { id: string; description: string; action_type: string; file_path?: string }[];
+}
+
+interface MockPlan {
+  goal: string;
+  batches: MockPlanBatch[];
+  total_estimated_minutes: number;
+  tdd_approach: boolean;
+}
+
+/**
+ * Converts a MockPlan to a markdown string for plan_markdown field.
+ */
+function planToMarkdown(plan: MockPlan): string {
+  let md = `# Implementation Plan\n\n**Goal:** ${plan.goal}\n\n`;
+  md += `**Estimated time:** ${plan.total_estimated_minutes} minutes\n`;
+  md += `**TDD approach:** ${plan.tdd_approach ? 'Yes' : 'No'}\n\n`;
+
+  for (const batch of plan.batches) {
+    md += `## Batch ${batch.batch_number}: ${batch.description}\n\n`;
+    md += `**Risk:** ${batch.risk_summary}\n\n`;
+    for (const step of batch.steps) {
+      md += `- ${step.description}`;
+      if (step.file_path) {
+        md += ` (\`${step.file_path}\`)`;
+      }
+      md += '\n';
+    }
+    md += '\n';
+  }
+
+  return md;
+}
 
 // ============================================================================
 // Utility Functions
@@ -417,7 +458,7 @@ function getEscapeVelocityEvents(workflowId: string, startedAt: string): Workflo
 /**
  * Execution plan for INFRA-2847 (heat shields)
  */
-function getHeatShieldsExecutionPlan(): ExecutionPlan {
+function getHeatShieldsExecutionPlan(): MockPlan {
   return {
     goal: 'Implement thermal protection system for re-entry',
     batches: [
@@ -457,7 +498,7 @@ function getHeatShieldsExecutionPlan(): ExecutionPlan {
 /**
  * Execution plan for DEVOPS-∞ (orbital deployment)
  */
-function getOrbitalDeploymentExecutionPlan(): ExecutionPlan {
+function getOrbitalDeploymentExecutionPlan(): MockPlan {
   return {
     goal: 'Design and implement Kubernetes-in-space architecture',
     batches: [
@@ -497,7 +538,7 @@ function getOrbitalDeploymentExecutionPlan(): ExecutionPlan {
 /**
  * Execution plan for ARCH-42 (solar distributed)
  */
-function getSolarDistributedExecutionPlan(): ExecutionPlan {
+function getSolarDistributedExecutionPlan(): MockPlan {
   return {
     goal: 'Build inter-planetary distributed computing system',
     batches: [
@@ -538,7 +579,7 @@ function getSolarDistributedExecutionPlan(): ExecutionPlan {
 /**
  * Execution plan for SPEC-322 (microservices-thrust)
  */
-function getMicroservicesThrustExecutionPlan(): ExecutionPlan {
+function getMicroservicesThrustExecutionPlan(): MockPlan {
   return {
     goal: 'Implement thruster control microservices',
     batches: [
@@ -577,7 +618,7 @@ function getMicroservicesThrustExecutionPlan(): ExecutionPlan {
 /**
  * Execution plan for PERF-9000 (escape velocity)
  */
-function getEscapeVelocityExecutionPlan(): ExecutionPlan {
+function getEscapeVelocityExecutionPlan(): MockPlan {
   return {
     goal: 'Optimize velocity to achieve escape from Earth gravity',
     batches: [
@@ -669,7 +710,7 @@ export function getMockWorkflowDetail(id: string): WorkflowDetail | null {
   }
 
   // Generate detailed information based on issue_id
-  let executionPlan: ExecutionPlan | null = null;
+  let executionPlan: MockPlan | null = null;
   let events: WorkflowEvent[] = [];
   let completedAt: string | null = null;
   let failureReason: string | null = null;
@@ -972,6 +1013,8 @@ export function getMockWorkflowDetail(id: string): WorkflowDetail | null {
     token_usage: getTokenUsage(summary.issue_id),
     recent_events: events,
     // Agentic execution fields
-    execution_plan: executionPlan,
+    goal: executionPlan?.goal ?? null,
+    plan_markdown: executionPlan ? planToMarkdown(executionPlan) : null,
+    plan_path: executionPlan ? `/docs/plans/${summary.issue_id.toLowerCase()}-plan.md` : null,
   };
 }

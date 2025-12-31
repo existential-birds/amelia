@@ -20,6 +20,7 @@ function createWorkflowDetail(
     token_usage: {},
     recent_events: [],
     goal: 'Test goal',
+    plan_markdown: null,
     plan_path: null,
   };
 }

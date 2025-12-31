@@ -7,7 +7,6 @@ import {
   Background,
   BackgroundVariant,
   Controls,
-  MiniMap,
   type NodeTypes,
   type Edge,
 } from '@xyflow/react';
@@ -213,23 +212,6 @@ export function WorkflowCanvas({ pipeline, isLoading = false, className }: Workf
           showInteractive={false}
           position="bottom-right"
           aria-label="Workflow canvas zoom controls"
-        />
-        <MiniMap
-          nodeColor={(node) => {
-            const status = node.data?.status;
-            if (status === 'completed') return 'var(--status-completed)';
-            if (status === 'active') return 'var(--primary)';
-            if (status === 'blocked') return 'var(--destructive)';
-            return 'var(--muted-foreground)';
-          }}
-          maskColor="rgba(0, 0, 0, 0.1)"
-          style={{
-            backgroundColor: 'var(--background)',
-            border: '1px solid var(--border)',
-          }}
-          pannable
-          zoomable
-          aria-label="Workflow minimap for navigation"
         />
       </ReactFlow>
     </div>

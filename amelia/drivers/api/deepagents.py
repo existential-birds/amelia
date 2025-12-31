@@ -154,17 +154,17 @@ class ApiDriver(DriverInterface):
     Supports any model available through langchain's init_chat_model.
 
     Attributes:
-        model: The model identifier (e.g., 'openrouter:anthropic/claude-sonnet-4-20250514').
+        model: The model identifier (e.g., 'openrouter:minimax/minimax-m2').
         cwd: Working directory for agentic execution.
     """
 
-    DEFAULT_MODEL = "openrouter:anthropic/claude-sonnet-4-20250514"
+    DEFAULT_MODEL = "openrouter:minimax/minimax-m2"
 
     def __init__(self, model: str | None = None, cwd: str | None = None):
         """Initialize the API driver.
 
         Args:
-            model: Model identifier for langchain (e.g., 'openrouter:anthropic/claude-sonnet-4-20250514').
+            model: Model identifier for langchain (e.g., 'openrouter:minimax/minimax-m2').
             cwd: Working directory for agentic execution. Required for execute_agentic().
         """
         self.model = model or self.DEFAULT_MODEL
@@ -226,9 +226,19 @@ class ApiDriver(DriverInterface):
                         schema=schema.__name__,
                     )
                 else:
+                    # Log diagnostic info for debugging structured output failures
+                    messages = result.get("messages", [])
+                    last_msg_type = type(messages[-1]).__name__ if messages else "None"
+                    logger.warning(
+                        "ToolStrategy did not populate structured_response",
+                        schema=schema.__name__,
+                        message_count=len(messages),
+                        last_message_type=last_msg_type,
+                    )
                     raise RuntimeError(
-                        "Model did not return structured output. "
-                        "Ensure the model supports tool-based structured output."
+                        f"Model did not call the {schema.__name__} tool to return structured output. "
+                        f"Got {len(messages)} messages, last was {last_msg_type}. "
+                        "Ensure the model supports tool calling and the prompt instructs it to use the schema tool."
                     )
             else:
                 # No schema - extract text from messages

@@ -25,10 +25,11 @@ class TestApiDriverInit:
         driver = ApiDriver(model="openrouter:anthropic/claude-sonnet-4-20250514")
         assert driver.model == "openrouter:anthropic/claude-sonnet-4-20250514"
 
-    def test_defaults_to_claude_sonnet(self) -> None:
-        """Should default to Claude Sonnet when no model provided."""
+    def test_defaults_to_minimax_m2(self) -> None:
+        """Should default to MiniMax M2 when no model provided."""
         driver = ApiDriver()
         assert driver.model == ApiDriver.DEFAULT_MODEL
+        assert driver.model == "openrouter:minimax/minimax-m2"
 
     def test_stores_cwd(self) -> None:
         """Should store the cwd parameter."""
@@ -108,7 +109,7 @@ class TestGenerate:
         ]
 
         with pytest.raises(
-            RuntimeError, match="Model did not return structured output"
+            RuntimeError, match="Model did not call the ResponseSchema tool"
         ):
             await driver.generate(prompt="test", schema=ResponseSchema)
 

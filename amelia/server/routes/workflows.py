@@ -260,6 +260,7 @@ async def get_workflow(
 
     # Extract agentic execution fields from execution_state
     goal = workflow.execution_state.goal if workflow.execution_state else None
+    plan_markdown = workflow.execution_state.plan_markdown if workflow.execution_state else None
     tool_calls = []
     tool_results = []
     final_response = None
@@ -280,6 +281,7 @@ async def get_workflow(
         failure_reason=workflow.failure_reason,
         current_stage=workflow.current_stage,
         goal=goal,
+        plan_markdown=plan_markdown,
         token_usage=token_usage,
         recent_events=recent_events,
         tool_calls=tool_calls,
