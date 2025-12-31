@@ -67,23 +67,29 @@ Push the branch and create a pull request:
 git push -u origin "chore/release-${VERSION}"
 ```
 
+Get the previous tag for the PR description:
+
+```bash
+PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+```
+
 Create the PR with this structure (adapt summary based on actual changes):
 
 ```bash
-gh pr create --title "chore(release): ${VERSION}" --body "$(cat <<'EOF'
+gh pr create --title "chore(release): ${VERSION}" --body "$(cat <<EOF
 ## Summary
 
-- Bump version to X.Y.Z
-- Update CHANGELOG.md with changes since vPREV
+- Bump version to ${VERSION}
+- Update CHANGELOG.md with changes since ${PREV_TAG}
 
 ## Post-merge steps
 
 After merging:
-```bash
+\`\`\`bash
 git checkout main && git pull
-git tag -a vX.Y.Z -m "Release vX.Y.Z - Brief summary"
-git push origin vX.Y.Z
-```
+git tag -a v${VERSION} -m "Release v${VERSION}"
+git push origin v${VERSION}
+\`\`\`
 
 GitHub Action creates the release automatically from the tag.
 
@@ -92,12 +98,6 @@ GitHub Action creates the release automatically from the tag.
 Generated with [Claude Code](https://claude.com/claude-code)
 EOF
 )"
-```
-
-Add the `docs` label:
-
-```bash
-gh pr edit --add-label "docs"
 ```
 
 ## Step 5: Output Summary
