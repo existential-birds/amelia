@@ -66,7 +66,7 @@ uv run pytest -k "test_name"           # By name pattern
 
 # CLI commands
 uv run amelia start ISSUE-123 --profile work     # Full orchestrator loop
-uv run amelia plan-only ISSUE-123                # Generate plan only
+uv run amelia plan ISSUE-123                     # Generate plan only
 uv run amelia review --local                     # Review uncommitted changes
 ```
 
