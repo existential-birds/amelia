@@ -63,12 +63,13 @@ profiles:
   dev:
     name: dev
     driver: api:openrouter
+    model: "anthropic/claude-3.5-sonnet"
     tracker: github
     strategy: single
 EOF
 ```
 
-See **[Configuration](https://existential-birds.github.io/amelia/guide/configuration)** for all available parameters including retry settings, execution modes, and driver options.
+See **[Configuration](https://existential-birds.github.io/amelia/guide/configuration)** for all available parameters including retry settings and driver options.
 
 ### 3. Create or Select an Issue
 
@@ -159,6 +160,7 @@ profiles:
   home:
     name: home
     driver: api:openrouter
+    model: "anthropic/claude-3.5-sonnet"
     tracker: github
     strategy: single
 ```

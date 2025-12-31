@@ -22,6 +22,7 @@ profiles:
   dev:
     name: dev
     driver: api:openrouter
+    model: "anthropic/claude-3.5-sonnet"
     tracker: github
     strategy: single
 ```
@@ -36,11 +37,12 @@ Amelia uses profile-based configuration in `settings.amelia.yaml`. See [Configur
 |-----------|----------|---------|-------------|
 | `name` | Yes | - | Profile identifier (should match the key) |
 | `driver` | Yes | - | LLM driver: `api:openrouter`, `api`, `cli:claude`, or `cli` |
+| `model` | API only | - | LLM model identifier (required for API drivers) |
 | `tracker` | No | `none` | Issue source: `github`, `jira`, `none`, or `noop` |
 | `strategy` | No | `single` | Review strategy: `single` or `competitive` |
-| `execution_mode` | No | `structured` | Execution mode: `structured` or `agentic` |
 | `plan_output_dir` | No | `docs/plans` | Directory for generated plans |
 | `working_dir` | No | `null` | Working directory for agentic execution |
+| `max_review_iterations` | No | `3` | Maximum review-fix loop iterations |
 | `retry` | No | see below | Retry configuration for transient failures |
 
 ### Retry Configuration
@@ -57,7 +59,7 @@ The `retry` parameter accepts these sub-fields:
 
 | Driver | Description | Requirements |
 |--------|-------------|--------------|
-| `api:openrouter` | Direct OpenRouter API calls via pydantic-ai | `OPENROUTER_API_KEY` environment variable |
+| `api:openrouter` | Direct OpenRouter API calls | `OPENROUTER_API_KEY` env var, `model` field |
 | `api` | Alias for `api:openrouter` | Same as above |
 | `cli:claude` | Wraps Claude CLI tool | `claude` CLI installed and authenticated |
 | `cli` | Alias for `cli:claude` | Same as above |
@@ -80,10 +82,11 @@ profiles:
   dev:
     name: dev
     driver: api:openrouter
+    model: "anthropic/claude-3.5-sonnet"
     tracker: github
     strategy: single
-    execution_mode: structured
     plan_output_dir: "docs/plans"
+    max_review_iterations: 3
     retry:
       max_retries: 3
       base_delay: 1.0
@@ -94,6 +97,7 @@ profiles:
     driver: cli:claude
     tracker: jira
     strategy: competitive
+    max_review_iterations: 5
     retry:
       max_retries: 5
       base_delay: 2.0
@@ -222,26 +226,22 @@ Options:
 
 ### Local Commands (No Server Required)
 
-#### `amelia plan-only <ISSUE_ID>`
+#### `amelia plan <ISSUE_ID>`
 
-Generate a plan without executing it.
+Generate a plan without executing it. Calls the Architect directly without going through the server.
 
 ```bash
 # Generate plan for issue
-amelia plan-only 123
+amelia plan 123
 
 # With specific profile
-amelia plan-only 123 --profile home
-
-# With design document from brainstorming
-amelia plan-only 123 --design docs/designs/feature.md
+amelia plan 123 --profile home
 ```
 
 Options:
 - `--profile, -p` - Profile name from settings.amelia.yaml
-- `--design, -d` - Path to design markdown file
 
-Saves the plan to a markdown file for review before execution.
+Saves the plan to a markdown file in `docs/plans/` for review before execution.
 
 #### `amelia review --local`
 
@@ -612,7 +612,8 @@ amelia approve
 amelia reject "Please break task 3 into smaller steps"
 
 # 7. Monitor progress in the dashboard
-#    Developer will execute tasks, Reviewer will check changes
+#    Developer will execute code changes agentically
+#    Reviewer will check changes and provide feedback
 ```
 
 ### Review Local Changes
@@ -630,24 +631,14 @@ amelia review --local
 ### Generate Plan Only (Dry Run)
 
 ```bash
-# Generate plan without executing
-amelia plan-only ISSUE-123
+# Generate plan without executing (no server required)
+amelia plan ISSUE-123
 
 # Review the generated markdown file
 cat docs/plans/ISSUE-123-plan.md
 
 # If satisfied, start the full workflow
 amelia start ISSUE-123
-```
-
-### Using Design Documents
-
-```bash
-# First, brainstorm and create a design document
-# (e.g., using superpowers:brainstorming skill)
-
-# Then generate a plan using the design
-amelia plan-only ISSUE-123 --design docs/brainstorming/feature-design.md
 ```
 
 ### Multiple Worktrees
@@ -698,7 +689,6 @@ done
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `OPENROUTER_API_KEY` | - | OpenRouter API key (required for `api:openrouter` driver) |
-| `ANTHROPIC_API_KEY` | - | Anthropic API key (for future `api:claude` driver) |
 | `AMELIA_SETTINGS` | `./settings.amelia.yaml` | Path to settings file |
 | `AMELIA_PORT` | `8420` | Server port |
 | `AMELIA_HOST` | `127.0.0.1` | Server host |

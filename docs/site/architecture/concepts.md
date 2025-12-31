@@ -19,33 +19,37 @@ Each agent has:
 
 | Property | Description |
 |----------|-------------|
-| Input | `Issue` (id, title, description), optional `Design` |
-| Output | `PlanOutput` (markdown_content, markdown_path, goal, key_files) |
-| Key Feature | Generates rich markdown plans saved to `docs/plans/` |
+| Input | `Issue` (id, title, description) + optional `Design` |
+| Output | `PlanOutput` (markdown plan, goal, key files) |
+| Key Feature | Generates rich markdown plans for agentic execution |
 
-The Architect examines an issue and generates a comprehensive Markdown implementation plan. This plan includes a clear goal statement that guides the Developer's agentic execution. The Markdown format is human-readable and compatible with external tools.
+The Architect examines an issue and produces a detailed markdown implementation plan with phases, tasks, and steps. This plan is presented for human approval before execution.
 
-**Note**: The Architect's `plan()` method accepts an optional `Design` parameter for incorporating design specifications from brainstorming sessions.
+**Plan Structure**:
+- **Goal**: Clear description of what needs to be accomplished
+- **Phases**: Logical groupings of related work
+- **Tasks**: Discrete units of work within each phase
+- **Steps**: Specific actions with code blocks, commands, and success criteria
+
+The Architect follows TDD principles when applicable: write test first, verify it fails, implement, verify it passes.
 
 ### Developer (`amelia/agents/developer.py`)
 
-**Role**: Executes coding tasks agentically using LLM-driven tool calls.
+**Role**: Executes code changes through autonomous tool-calling.
 
 | Capability | Description |
 |------------|-------------|
-| Shell commands | Execute terminal commands via `run_shell_command` tool |
-| File writes | Create/modify files via `write_file` tool |
-| Autonomous execution | LLM decides which tools to call and in what order |
-| Streaming | Real-time tool call and result events during execution |
+| Agentic execution | Autonomous LLM decides which tools to call and when |
+| Streaming events | Real-time updates: tool_call, tool_result, thinking, result |
+| Session continuity | Maintains context across the execution session |
 
-The Developer receives a goal from the Architect and executes it autonomously using available tools. The LLM decides which actions to take, making it adaptive to unexpected situations.
+The Developer uses an agentic execution model where the LLM autonomously decides what actions to take based on the goal and context. It has access to tools for shell commands, file operations, and reading files.
 
-**Agentic Execution**:
-The Developer uses `execute_agentic()` which streams events as execution progresses:
-- `thinking`: LLM is analyzing and planning
-- `tool_call`: LLM is calling a tool (run_shell_command, write_file)
-- `tool_result`: Tool execution result
-- `result`: Final response when execution completes
+**Streaming Events**:
+- `thinking`: Agent is analyzing the situation
+- `tool_call`: Agent is invoking a tool (shell command, file write, etc.)
+- `tool_result`: Result from tool execution
+- `result`: Final output when execution completes
 
 ### Reviewer (`amelia/agents/reviewer.py`)
 
@@ -59,7 +63,9 @@ The Developer uses `execute_agentic()` which streams events as execution progres
 |--------|-------------|
 | `approved` | Boolean - whether changes are acceptable |
 | `comments` | Detailed feedback on the changes |
-| `severity` | Issue severity (info, warning, error) |
+| `severity` | Issue severity (low, medium, high, critical) |
+
+The Reviewer examines code changes and either approves them or provides feedback. If changes are not approved, the Developer receives the feedback and attempts fixes. This review-fix loop continues until approved or the maximum iterations (`max_review_iterations`) is reached.
 
 ### Tracker Factory (`amelia/trackers/factory.py`)
 
@@ -74,7 +80,7 @@ Orchestration coordinates multiple agents through a workflow. Rather than one mo
 Amelia uses **LangGraph's StateGraph** for orchestration:
 - **Nodes**: Individual agent calls (architect, developer, reviewer)
 - **Edges**: Transitions between nodes
-- **Conditional edges**: Decision points (approved? tasks remaining?)
+- **Conditional edges**: Decision points (approved? review passed?)
 
 ### State Machine
 
@@ -84,24 +90,22 @@ flowchart TD
     Architect --> Approval{Human Approval?}
     Approval -->|rejected| End1([Rejected])
     Approval -->|approved| Developer
-    Developer --> TaskCheck{Tasks remaining?}
-    TaskCheck -->|yes| Developer
-    TaskCheck -->|no| Reviewer
+    Developer --> Reviewer
     Reviewer --> ReviewCheck{Approved?}
-    ReviewCheck -->|no| Developer
+    ReviewCheck -->|no, iteration < max| Developer
+    ReviewCheck -->|no, max reached| End3([Max Iterations])
     ReviewCheck -->|yes| End2([Complete])
 ```
 
 **ExecutionState** tracks everything:
-- Profile ID and issue
-- Goal extracted from markdown plan
-- Markdown plan content and path
-- Tool calls and results (agentic execution history)
+- Current profile and issue
+- Generated plan (goal + markdown)
+- Tool calls and results (with reducers for streaming)
 - Approval status
 - Review results
-- `driver_session_id`: For driver session continuity
-- `workflow_status`: Workflow lifecycle status
+- `driver_session_id`: For session continuity
 - `review_iteration`: Current iteration in review-fix loop
+- `agentic_status`: Current execution status
 
 ## Tool Use
 
@@ -109,23 +113,34 @@ Agents don't just generate text - they call tools. This is what makes them "agen
 
 ### How Tool Calls Work
 
-1. Agent receives task/context
+1. Agent receives goal/context
 2. Agent decides which tool to call with what parameters
-3. Driver executes the tool
-4. Result returns to agent for next decision
+3. Tool executes and returns result
+4. Agent decides next action based on result
+5. Repeat until goal is achieved
 
 ### Example Flow
 
 ```
-Developer receives: "Create a new test file for user authentication"
+Developer receives goal: "Add user authentication tests"
+    ↓
+Developer calls: run_shell_command(command="ls tests/")
+    ↓
+Result: "test_api.py test_utils.py"
+    ↓
+Developer calls: read_file(path="tests/test_api.py")
+    ↓
+Result: [file contents]
     ↓
 Developer calls: write_file(path="tests/test_auth.py", content="...")
     ↓
-Driver executes the write
+Result: "File created successfully"
     ↓
-Developer receives: "File created successfully"
+Developer calls: run_shell_command(command="pytest tests/test_auth.py")
     ↓
-Developer marks task complete
+Result: "1 passed"
+    ↓
+Developer marks execution complete
 ```
 
 ### Available Tools
@@ -149,24 +164,26 @@ Drivers abstract how Amelia communicates with LLMs. This separation enables flex
 
 ### Driver Interface
 
-Both drivers implement `DriverInterface`:
+Both drivers implement a simple prompt-based interface:
 
 ```python
 class DriverInterface(Protocol):
-    async def generate(
+    async def prompt(
         self,
-        messages: list,
-        schema: type | None = None
-    ) -> str | BaseModel:
-        """Get LLM response, optionally with structured output."""
+        prompt: str,
+        system_prompt: str | None = None,
+        session_id: str | None = None,
+    ) -> str:
+        """Send prompt and get response."""
         ...
 
-    async def execute_tool(
+    async def prompt_agentic(
         self,
-        tool_name: str,
-        **kwargs
-    ) -> str:
-        """Execute a tool and return result."""
+        prompt: str,
+        system_prompt: str | None = None,
+        session_id: str | None = None,
+    ) -> AsyncIterator[ApiStreamEvent]:
+        """Stream agentic execution events."""
         ...
 ```
 
@@ -203,7 +220,9 @@ This abstraction means Amelia works with any issue source without changing the c
 ## Key Takeaways
 
 1. **Agents are specialized**: Each has a focused role, leading to better outputs
-2. **Orchestration provides structure**: State machine ensures consistent workflow
-3. **Tools enable action**: Agents execute real changes, not just generate text
-4. **Abstractions enable flexibility**: Drivers and trackers adapt to different environments
-5. **Human stays in control**: Approval gates ensure oversight at critical points
+2. **Agentic execution**: The Developer autonomously decides actions with streaming feedback
+3. **Orchestration provides structure**: State machine ensures consistent workflow
+4. **Tools enable action**: Agents execute real changes, not just generate text
+5. **Review-fix loop**: Iterative improvement with configurable iteration limits
+6. **Abstractions enable flexibility**: Drivers and trackers adapt to different environments
+7. **Human stays in control**: Approval gates ensure oversight at critical points

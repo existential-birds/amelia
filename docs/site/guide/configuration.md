@@ -19,8 +19,8 @@ profiles:
     driver: cli:claude        # LLM via claude CLI
     tracker: jira             # Issues from Jira
     strategy: competitive     # Multiple parallel reviewers
-    execution_mode: structured
     plan_output_dir: "docs/plans"
+    max_review_iterations: 5  # More iterations for complex reviews
     retry:
       max_retries: 5          # More retries for enterprise API limits
       base_delay: 2.0
@@ -30,15 +30,16 @@ profiles:
   home:
     name: home
     driver: api:openrouter    # LLM via OpenRouter API
+    model: "anthropic/claude-3.5-sonnet"  # Required for API drivers
     tracker: github           # Issues from GitHub
     strategy: single          # Single reviewer
-    execution_mode: structured
     plan_output_dir: "docs/plans"
 
   # Testing profile
   test:
     name: test
     driver: api:openrouter
+    model: "anthropic/claude-3.5-sonnet"
     tracker: noop             # No real tracker
     strategy: single
 ```
@@ -69,10 +70,25 @@ How Amelia communicates with LLMs.
 
 | Value | Description | Requirements | Notes |
 |-------|-------------|--------------|-------|
-| `api:openrouter` | Direct OpenRouter API calls | `OPENROUTER_API_KEY` env var | Full functionality, structured outputs |
+| `api:openrouter` | Direct OpenRouter API calls | `OPENROUTER_API_KEY` env var, `model` field | Full functionality, structured outputs |
 | `api` | Alias for `api:openrouter` | Same as above | Shorthand |
-| `cli:claude` | Wraps claude CLI tool | `claude` CLI installed & authenticated | LLM generation is stub, tool execution works |
+| `cli:claude` | Wraps claude CLI tool | `claude` CLI installed & authenticated | Agentic execution via CLI |
 | `cli` | Alias for `cli:claude` | Same as above | Shorthand |
+
+### `profiles.<name>.model` (required for API drivers)
+
+The LLM model identifier to use. Required when using `api:openrouter` or `api` drivers.
+
+```yaml
+model: "anthropic/claude-3.5-sonnet"
+```
+
+Common models:
+- `anthropic/claude-3.5-sonnet` - Claude 3.5 Sonnet
+- `anthropic/claude-3-opus` - Claude 3 Opus
+- `openai/gpt-4o` - GPT-4o
+
+Not required for CLI drivers (they use the CLI's configured model).
 
 ### `profiles.<name>.tracker` (optional)
 
@@ -98,17 +114,6 @@ Default: `"single"`
 | `single` | One reviewer pass | General review from single LLM call |
 | `competitive` | Multiple parallel reviews | Security, Performance, Usability reviews run concurrently, results aggregated |
 
-### `profiles.<name>.execution_mode` (optional)
-
-How the Developer agent executes tasks.
-
-Default: `"structured"`
-
-| Value | Description | Behavior |
-|-------|-------------|----------|
-| `structured` | Task-based execution | Developer executes tasks from the Architect's plan sequentially |
-| `agentic` | Autonomous execution | Developer has more freedom to determine how to accomplish goals |
-
 ### `profiles.<name>.plan_output_dir` (optional)
 
 Directory for storing generated plans.
@@ -127,6 +132,16 @@ Default: `null` (uses current working directory)
 
 ```yaml
 working_dir: "/path/to/project"
+```
+
+### `profiles.<name>.max_review_iterations` (optional)
+
+Maximum number of review-fix iterations before the workflow terminates. Prevents infinite loops when the Developer and Reviewer can't reach agreement.
+
+Default: `3`
+
+```yaml
+max_review_iterations: 5
 ```
 
 ### `profiles.<name>.retry` (optional)
@@ -213,7 +228,7 @@ Amelia validates profiles on startup:
 - Driver values must be one of: `api`, `api:openrouter`, `cli`, `cli:claude`
 - Tracker values must be one of: `jira`, `github`, `none`, `noop`
 - Strategy must be `single` or `competitive`
-- Execution mode must be `structured` or `agentic`
+- API drivers require the `model` field
 - Retry values must be within allowed ranges
 
 Invalid configuration results in exit code 1 with descriptive error message.
@@ -229,10 +244,21 @@ active_profile: dev
 profiles:
   dev:
     name: dev
-    driver: api:openrouter
+    driver: cli:claude  # CLI driver doesn't require model field
 ```
 
-This uses: `tracker: none`, `strategy: single`, `execution_mode: structured`, default retry settings.
+For API drivers, you must also specify the model:
+
+```yaml
+active_profile: dev
+profiles:
+  dev:
+    name: dev
+    driver: api:openrouter
+    model: "anthropic/claude-3.5-sonnet"
+```
+
+This uses: `tracker: none`, `strategy: single`, default retry settings.
 
 ### Enterprise (CLI + Jira)
 
@@ -246,6 +272,7 @@ profiles:
     driver: cli:claude
     tracker: jira
     strategy: competitive
+    max_review_iterations: 5
 ```
 
 ### Multi-Profile Setup
@@ -265,12 +292,14 @@ profiles:
   home:
     name: home
     driver: api:openrouter
+    model: "anthropic/claude-3.5-sonnet"
     tracker: github
     strategy: single
 
   test:
     name: test
     driver: api:openrouter
+    model: "anthropic/claude-3.5-sonnet"
     tracker: noop
     strategy: single
 ```
@@ -292,6 +321,15 @@ Ensure the profile name matches exactly (case-sensitive) in both `active_profile
 ### "Driver not recognized"
 
 Valid driver values are: `api`, `api:openrouter`, `cli`, `cli:claude`
+
+### "Missing model field"
+
+API drivers (`api:openrouter`, `api`) require the `model` field:
+
+```yaml
+driver: api:openrouter
+model: "anthropic/claude-3.5-sonnet"
+```
 
 ### "Missing OPENROUTER_API_KEY"
 

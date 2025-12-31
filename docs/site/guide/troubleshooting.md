@@ -155,10 +155,15 @@ InvalidStateError: Cannot approve workflow in status 'executing'
 - Trying to reject a completed workflow
 
 **Valid state transitions:**
-- `planning` → `pending_approval` (after plan generated)
+- `pending` → `planning` (workflow started)
+- `planning` → `pending_approval` (after Architect generates plan)
 - `pending_approval` → `executing` (after approval)
 - `pending_approval` → `planning` (after rejection with feedback)
+- `executing` → `reviewing` (after Developer completes changes)
+- `reviewing` → `executing` (after Reviewer requests fixes, if iteration < max)
+- `reviewing` → `completed` (after Reviewer approves)
 - Any state → `cancelled` (via cancel operation)
+- Any state → `failed` (on error)
 
 **Solution:**
 

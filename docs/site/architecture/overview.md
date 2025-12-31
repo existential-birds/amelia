@@ -4,7 +4,7 @@ This document provides a technical deep dive into Amelia's architecture, compone
 
 ## What Amelia Does Today
 
-**Phase 1 (Complete):** Multi-agent orchestration with the **Architect → Developer → Reviewer** loop. Issues flow through planning, execution, and review stages with human approval gates before any code ships. Supports both API-based (OpenAI via pydantic-ai) and CLI-based (Claude) LLM drivers, with Jira and GitHub issue tracker integrations.
+**Phase 1 (Complete):** Multi-agent orchestration with the **Architect → Developer → Reviewer** loop. Issues flow through planning, execution, and review stages with human approval gates before any code ships. Supports both API-based (OpenRouter) and CLI-based (Claude) LLM drivers, with Jira and GitHub issue tracker integrations.
 
 **Phase 2 (In Progress):** Observable orchestration through a local web dashboard. FastAPI server with SQLite persistence, REST API for workflow management, React dashboard with real-time WebSocket updates, and agentic execution with streaming tool calls.
 
@@ -72,7 +72,7 @@ flowchart TB
     end
 
     subgraph Drivers["Drivers"]
-        api[OpenAI API]
+        api[OpenRouter API]
         claude[Claude CLI]
     end
 
@@ -104,7 +104,7 @@ flowchart TB
     classDef trackerStyle fill:#fce4ec,stroke:#c2185b
     classDef toolStyle fill:#eceff1,stroke:#546e7a
 
-    class start,approve,reject,status,cancel,server,plan,review cliStyle
+    class start,approve,reject,status,cancel,server,review cliStyle
     class apiclient,gitctx clientStyle
     class fastapi,websocket,orchsvc serverStyle
     class sqlite,workflows,events,tokens dbStyle
@@ -281,7 +281,7 @@ async for event in developer.execute_agentic(
         })
     elif event.type == "result":
         state = state.model_copy(update={
-            "status": "completed",
+            "agentic_status": "completed",
             "final_response": event.content,
         })
 
@@ -299,9 +299,10 @@ reviewer = Reviewer(driver)
 review_result = await reviewer.review(state, code_changes)
 # Competitive: parallel Security/Performance/Usability reviews, aggregated
 
-state.review_results.append(review_result)
-# If not approved → back to developer_node for fixes
-# If approved → END
+state.last_review = review_result
+
+# If not approved and iteration < max → back to developer_node for fixes
+# If approved or max iterations reached → END
 ```
 
 ## Sequence Diagram
@@ -336,12 +337,12 @@ sequenceDiagram
     Note over Service,Orchestrator: Background execution begins
 
     Service->>Orchestrator: ainvoke(initial_state)
-    Orchestrator->>Agents: Architect.plan(issue)
-    Agents->>Driver: generate(messages, schema)
+    Orchestrator->>Agents: Architect.plan(state, profile)
+    Agents->>Driver: prompt(messages)
     Driver->>LLM: API call
-    LLM-->>Driver: TaskDAG JSON
-    Driver-->>Agents: parsed TaskDAG
-    Agents-->>Orchestrator: TaskDAG
+    LLM-->>Driver: Markdown plan
+    Driver-->>Agents: PlanOutput
+    Agents-->>Orchestrator: goal + plan
 
     Orchestrator->>Service: emit(APPROVAL_REQUIRED)
     Service->>DB: INSERT event
@@ -368,15 +369,15 @@ sequenceDiagram
     end
 
     Orchestrator->>Agents: Reviewer.review(state, changes)
-    Agents->>Driver: generate(messages, schema)
+    Agents->>Driver: prompt(messages)
     Driver->>LLM: API call
-    LLM-->>Driver: ReviewResponse JSON
+    LLM-->>Driver: ReviewResult
     Driver-->>Agents: ReviewResult
     Agents-->>Orchestrator: ReviewResult
 
-    alt Not Approved
+    alt Not Approved (iteration < max)
         Orchestrator->>Agents: Developer (loop back for fixes)
-    else Approved
+    else Approved or Max Iterations
         Orchestrator->>Service: emit(WORKFLOW_COMPLETED)
         Service->>DB: UPDATE workflow status
         Service->>WS: broadcast(event)
@@ -397,8 +398,8 @@ class Profile(BaseModel):
     model: str | None = None                       # Model identifier for API drivers
     tracker: TrackerType = "none"                  # "jira" | "github" | "none" | "noop"
     strategy: StrategyType = "single"              # "single" | "competitive"
-    plan_output_dir: str = "docs/plans"
     working_dir: str | None = None
+    plan_output_dir: str = "docs/plans"
     retry: RetryConfig = Field(default_factory=RetryConfig)
     max_review_iterations: int = 3                 # Max review-fix loop iterations
 ```
@@ -522,7 +523,7 @@ class ExecutionState(BaseModel):
     # Agentic execution tracking
     tool_calls: Annotated[list[ToolCall], operator.add] = Field(default_factory=list)
     tool_results: Annotated[list[ToolResult], operator.add] = Field(default_factory=list)
-    status: AgenticStatus = "running"
+    agentic_status: AgenticStatus = "running"
     final_response: str | None = None
     error: str | None = None
     review_iteration: int = 0                      # Current iteration in review-fix loop
@@ -639,7 +640,8 @@ def route_after_approval(state):
     return END
 
 # From reviewer_node
-def route_after_review(state):
+def route_after_review(state, config):
+    profile = config["configurable"]["profile"]
     if state.last_review and state.last_review.approved:
         return END
     if state.review_iteration >= profile.max_review_iterations:
@@ -803,16 +805,18 @@ Enterprise environments often prohibit direct API calls due to data retention po
 3. **Modularity**: Easy to swap implementations (e.g., different review strategies)
 4. **Debuggability**: Clear separation makes it easier to trace issues
 
-### Why pydantic-ai for the API Driver?
+### Why Agentic Execution?
 
-1. **Structured outputs**: Forces LLM to return valid JSON matching Pydantic schemas
-2. **Type safety**: Catches schema mismatches at runtime
-3. **Cleaner code**: No manual JSON parsing or validation
+The Developer agent uses autonomous tool-calling execution where the LLM decides what actions to take. This approach:
+1. **Leverages model capabilities**: Modern LLMs excel at autonomous decision-making
+2. **Reduces brittleness**: No rigid step-by-step plans that break on unexpected situations
+3. **Enables streaming**: Real-time visibility into agent reasoning and actions
+4. **Simplifies orchestration**: Fewer state transitions and edge cases to handle
 
 ### Why LangGraph for Orchestration?
 
 1. **Built for cycles**: Supports developer ↔ reviewer loop naturally
-2. **State management**: Built-in state tracking
+2. **State management**: Built-in state tracking with reducers for streaming data
 3. **Checkpointing**: Resumable workflows with SQLite persistence
 4. **Conditional edges**: Clean decision logic
 5. **Interrupts**: Supports human-in-the-loop approval gates
@@ -842,7 +846,7 @@ amelia/
 │   └── git.py                # get_worktree_context() for git detection
 ├── core/
 │   ├── __init__.py
-│   ├── agentic_state.py      # ToolCall, ToolResult, AgenticStatus
+│   ├── agentic_state.py      # ToolCall, ToolResult, AgenticState
 │   ├── constants.py          # Security constants: blocked commands, patterns
 │   ├── exceptions.py         # AmeliaError hierarchy
 │   ├── orchestrator.py       # LangGraph state machine
@@ -851,7 +855,7 @@ amelia/
 ├── drivers/
 │   ├── api/
 │   │   ├── __init__.py
-│   │   └── openai.py         # OpenAI via pydantic-ai
+│   │   └── openrouter.py     # OpenRouter API driver
 │   ├── cli/
 │   │   ├── __init__.py
 │   │   ├── base.py           # CliDriver base with retry logic
