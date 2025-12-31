@@ -51,6 +51,5 @@ Brief overview of changes and overall assessment.
 
 ## Learn More
 
-- See the [Design Example](./design-example) for what reviews validate against
 - See the [Plan Example](./plan-example) for execution context
 - Check the [Roadmap](/reference/roadmap) for automated review timeline

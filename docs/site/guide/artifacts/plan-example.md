@@ -46,5 +46,4 @@ batches:
 
 ## Learn More
 
-- See the [Design Example](./design-example) for how plans are derived from designs
 - Check the [Roadmap](/reference/roadmap) for automated plan generation timeline

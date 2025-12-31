@@ -104,8 +104,6 @@ Long-running agents fail across context windows because each session starts fres
 - [Gap 6: Session Memory Retrieval](/ideas/research/context-engineering-gaps#gap-6-session-memory-retrieval) - On-demand access to relevant history
 - [Gap 7: Artifact Handle System](/ideas/research/context-engineering-gaps#gap-7-artifact-handle-system) - Reference large objects by pointer
 
-See [Session Continuity Design](/ideas/session-continuity) for detailed specification.
-
 ---
 
 ## Phase 4: Verification Framework [Planned]
