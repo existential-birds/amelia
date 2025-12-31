@@ -209,3 +209,52 @@ For PRs with significant changes, create a manual test plan that the `amelia-qa`
 - The file is auto-detected when the PR is opened and posted as a comment
 - After the PR is merged, delete the test plan file (it's preserved in the PR comment)
 
+## Release Process
+
+Releases follow semantic versioning and use automated GitHub Release creation.
+
+### Creating a Release
+
+1. **Generate release notes** (from any branch):
+   ```bash
+   # Run the gen-release-notes command with the previous tag
+   /gen-release-notes v0.1.0
+   ```
+   This updates `CHANGELOG.md` and `pyproject.toml` with the new version.
+
+2. **Create release branch and PR**:
+   ```bash
+   git checkout -b chore/release-X.Y.Z
+   git add CHANGELOG.md pyproject.toml
+   git commit -m "chore(release): bump version to X.Y.Z"
+   git push -u origin chore/release-X.Y.Z
+   gh pr create --title "chore(release): X.Y.Z" --body "Release X.Y.Z"
+   ```
+
+3. **Merge the PR** (after CI passes and review)
+
+4. **Tag the release** (after PR is merged):
+   ```bash
+   git checkout main
+   git pull
+   git tag -a vX.Y.Z -m "Release vX.Y.Z - Brief summary"
+   git push origin vX.Y.Z
+   ```
+
+5. **GitHub Action creates the release** automatically from the tag, extracting notes from `CHANGELOG.md`.
+
+### Version Numbering
+
+- **MAJOR** (X.0.0): Breaking changes to CLI, API, or configuration
+- **MINOR** (x.Y.0): New features, commands, or backward-compatible changes
+- **PATCH** (x.y.Z): Bug fixes only
+
+### Files Involved
+
+| File | Purpose |
+|------|---------|
+| `pyproject.toml` | Source of truth for version (`version = "X.Y.Z"`) |
+| `CHANGELOG.md` | Release notes in Keep a Changelog format |
+| `.github/workflows/release.yml` | Automated GitHub Release creation on tag push |
+| `.claude/commands/gen-release-notes.md` | Command to generate release notes |
+
