@@ -103,7 +103,7 @@ class ExecutionState(BaseModel):
     # Agentic execution tracking
     tool_calls: Annotated[list[ToolCall], operator.add] = Field(default_factory=list)
     tool_results: Annotated[list[ToolResult], operator.add] = Field(default_factory=list)
-    status: AgenticStatus = "running"
+    agentic_status: AgenticStatus = "running"
     final_response: str | None = None
     error: str | None = None
 

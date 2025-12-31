@@ -116,7 +116,7 @@ class Developer:
                 "tool_calls": tool_calls.copy(),
                 "tool_results": tool_results.copy(),
                 "driver_session_id": event.session_id or state.driver_session_id,
-                "status": "completed" if event.type == "result" else state.status,
+                "agentic_status": "completed" if event.type == "result" else state.agentic_status,
                 "final_response": event.result_text if event.type == "result" else state.final_response,
                 "error": event.content if event.type == "error" else state.error,
             })

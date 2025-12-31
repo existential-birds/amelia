@@ -7,6 +7,7 @@ This module provides the Architect agent that analyzes issues and produces
 rich markdown implementation plans for agentic execution.
 """
 import os
+import re
 from datetime import UTC, date, datetime
 from pathlib import Path
 
@@ -20,15 +21,23 @@ from amelia.drivers.base import DriverInterface
 
 
 def _slugify(text: str) -> str:
-    """Convert text to URL-friendly slug.
+    """Convert text to filesystem-safe slug.
 
     Args:
         text: Input text to convert to slug format.
 
     Returns:
-        Lowercase, hyphenated string truncated to 50 characters.
+        Lowercase, hyphenated string with special chars removed, truncated to 50 characters.
     """
-    return text.lower().replace(" ", "-").replace("_", "-")[:50]
+    # Replace spaces and underscores with hyphens
+    slug = text.lower().replace(" ", "-").replace("_", "-")
+    # Remove filesystem-unsafe characters: / \ : * ? " < > |
+    slug = re.sub(r'[/\\:*?"<>|]', "", slug)
+    # Collapse multiple hyphens
+    slug = re.sub(r"-+", "-", slug)
+    # Strip leading/trailing hyphens
+    slug = slug.strip("-")
+    return slug[:50]
 
 
 class PlanOutput(BaseModel):
@@ -528,7 +537,7 @@ Respond with a structured ArchitectOutput."""
         ]
 
         # Call driver with ArchitectOutput schema
-        raw_response, new_session_id = await self.driver.generate(
+        raw_response, _ = await self.driver.generate(
             messages=messages,
             schema=ArchitectOutput,
             cwd=profile.working_dir,

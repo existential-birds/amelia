@@ -260,7 +260,7 @@ async def call_developer_node(
         action="agentic_execution",
         details={
             "tool_calls_count": len(final_state.tool_calls),
-            "status": final_state.status,
+            "agentic_status": final_state.agentic_status,
         },
     )
 
@@ -268,7 +268,7 @@ async def call_developer_node(
     return {
         "tool_calls": list(final_state.tool_calls),
         "tool_results": list(final_state.tool_results),
-        "status": final_state.status,
+        "agentic_status": final_state.agentic_status,
         "final_response": final_state.final_response,
         "error": final_state.error,
         "driver_session_id": final_state.driver_session_id,
