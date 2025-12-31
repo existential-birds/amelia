@@ -8,11 +8,9 @@ These documents are created using the [superpowers:brainstorming](https://github
 
 | Idea | Description | Status |
 |------|-------------|--------|
-| [Session Continuity](./session-continuity) | Structured handoff protocol for long-running workflows | Draft |
 | [Knowledge Library](./knowledge-library) | Co-learning system for developers and agents | Draft |
 | [Debate Mode](./debate-mode) | Multi-agent deliberation for design decisions | Draft |
 | [Spec Builder](./spec-builder) | Document-assisted technical design tool | Draft |
-| [Planning Workflows](./planning-workflows) | Variations on the planning workflow | Draft |
 
 ## Lifecycle
 
