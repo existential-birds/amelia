@@ -11,7 +11,6 @@ Amelia produces structured artifacts throughout the development lifecycle. These
 
 | Type | Description | Example |
 |------|-------------|---------|
-| **Design** | Technical specs defining how to build a feature | [View →](./design-example) |
 | **Plan** | Batched execution steps with risk assessment | [View →](./plan-example) |
 | **Review** | Feedback on correctness, security, maintainability | [View →](./review-example) |
 
