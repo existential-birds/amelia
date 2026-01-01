@@ -4,7 +4,9 @@ These tests verify that the server responses match the client model schemas,
 preventing regressions like the CreateWorkflowResponse/WorkflowResponse mismatch.
 """
 import asyncio
+from collections.abc import AsyncGenerator, Callable
 from datetime import UTC, datetime
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import httpx
@@ -23,14 +25,14 @@ class TestAPIResponseSchemas:
     """Integration tests verifying client/server schema compatibility."""
 
     @pytest.fixture
-    def mock_orchestrator(self):
+    def mock_orchestrator(self) -> MagicMock:
         """Create a mock orchestrator that returns predictable workflow IDs."""
         orchestrator = MagicMock()
         orchestrator.start_workflow = AsyncMock(return_value="test-workflow-id-123")
         return orchestrator
 
     @pytest.fixture
-    def mock_repository(self):
+    def mock_repository(self) -> MagicMock:
         """Create a mock repository with a test workflow."""
         repository = MagicMock(spec_set=WorkflowRepository)
 
@@ -51,7 +53,12 @@ class TestAPIResponseSchemas:
         return repository
 
     @pytest.fixture
-    async def server_with_mocks(self, mock_orchestrator, mock_repository, find_free_port):
+    async def server_with_mocks(
+        self,
+        mock_orchestrator: MagicMock,
+        mock_repository: MagicMock,
+        find_free_port: Callable[[], int],
+    ) -> AsyncGenerator[str, None]:
         """Start server with mocked dependencies for testing."""
         # Override dependencies
         app.dependency_overrides[get_orchestrator] = lambda: mock_orchestrator
@@ -83,7 +90,7 @@ class TestAPIResponseSchemas:
         await task
         app.dependency_overrides.clear()
 
-    async def test_create_workflow_returns_minimal_response(self, server_with_mocks):
+    async def test_create_workflow_returns_minimal_response(self, server_with_mocks: str) -> None:
         """REGRESSION: POST /api/workflows returns CreateWorkflowResponse schema.
 
         The server returns only {id, status, message} for workflow creation.
@@ -118,7 +125,7 @@ class TestAPIResponseSchemas:
         assert not hasattr(response, "started_at")
         assert not hasattr(response, "current_stage")
 
-    async def test_create_workflow_raw_response_schema(self, server_with_mocks):
+    async def test_create_workflow_raw_response_schema(self, server_with_mocks: str) -> None:
         """Verify raw HTTP response matches CreateWorkflowResponse schema exactly."""
         async with httpx.AsyncClient() as http_client:
             response = await http_client.post(
@@ -140,7 +147,7 @@ class TestAPIResponseSchemas:
         assert isinstance(data["status"], str)
         assert isinstance(data["message"], str)
 
-    async def test_get_workflow_returns_full_response(self, server_with_mocks):
+    async def test_get_workflow_returns_full_response(self, server_with_mocks: str) -> None:
         """GET /api/workflows/{id} returns WorkflowResponse with full details."""
         client = AmeliaClient(base_url=server_with_mocks)
 
@@ -155,7 +162,7 @@ class TestAPIResponseSchemas:
         assert response.worktree_name == "test-worktree"
         assert response.status == "pending"
 
-    async def test_get_workflow_raw_response_schema(self, server_with_mocks):
+    async def test_get_workflow_raw_response_schema(self, server_with_mocks: str) -> None:
         """Verify raw HTTP response from GET includes full workflow details."""
         async with httpx.AsyncClient() as http_client:
             response = await http_client.get(

@@ -9,12 +9,16 @@ The token usage extraction works by:
 3. Orchestrator extracts usage from agent after execution
 4. Repository saves token usage (if repository is in config)
 """
+from collections.abc import AsyncGenerator, Callable
+from pathlib import Path
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from langchain_core.runnables.config import RunnableConfig
 
 from amelia.core.state import ExecutionState
+from amelia.core.types import Issue, Profile
 from amelia.server.models.tokens import TokenUsage
 
 
@@ -56,7 +60,7 @@ class TestTokenUsageExtraction:
     @pytest.fixture
     def base_config(
         self,
-        mock_profile_factory,
+        mock_profile_factory: Callable[..., Profile],
     ) -> RunnableConfig:
         """Create base config with required configurable parameters."""
         profile = mock_profile_factory()
@@ -84,10 +88,10 @@ class TestDeveloperNodeTokenUsage(TestTokenUsageExtraction):
 
     async def test_developer_node_extracts_token_usage_from_driver(
         self,
-        mock_profile_factory,
-        mock_issue_factory,
-        mock_result_message_with_usage,
-        config_with_repository,
+        mock_profile_factory: Callable[..., Profile],
+        mock_issue_factory: Callable[..., Issue],
+        mock_result_message_with_usage: MagicMock,
+        config_with_repository: tuple[RunnableConfig, AsyncMock],
     ) -> None:
         """call_developer_node should extract usage from driver and save it."""
         from amelia.core.orchestrator import call_developer_node
@@ -104,7 +108,9 @@ class TestDeveloperNodeTokenUsage(TestTokenUsageExtraction):
         )
 
         # Mock Developer.run to yield events
-        async def mock_run(*args, **kwargs):
+        async def mock_run(
+            *args: Any, **kwargs: Any
+        ) -> AsyncGenerator[tuple[ExecutionState, MagicMock], None]:
             final_state = state.model_copy(update={
                 "agentic_status": "completed",
                 "final_response": "Done",
@@ -144,10 +150,10 @@ class TestDeveloperNodeTokenUsage(TestTokenUsageExtraction):
 
     async def test_developer_node_skips_save_when_no_usage(
         self,
-        mock_profile_factory,
-        mock_issue_factory,
-        mock_result_message_no_usage,
-        config_with_repository,
+        mock_profile_factory: Callable[..., Profile],
+        mock_issue_factory: Callable[..., Issue],
+        mock_result_message_no_usage: MagicMock,
+        config_with_repository: tuple[RunnableConfig, AsyncMock],
     ) -> None:
         """call_developer_node should not call save when no usage data."""
         from amelia.core.orchestrator import call_developer_node
@@ -163,7 +169,9 @@ class TestDeveloperNodeTokenUsage(TestTokenUsageExtraction):
             plan_markdown="# Test Plan",
         )
 
-        async def mock_run(*args, **kwargs):
+        async def mock_run(
+            *args: Any, **kwargs: Any
+        ) -> AsyncGenerator[tuple[ExecutionState, MagicMock], None]:
             final_state = state.model_copy(update={
                 "agentic_status": "completed",
             })
@@ -187,10 +195,10 @@ class TestDeveloperNodeTokenUsage(TestTokenUsageExtraction):
 
     async def test_developer_node_works_without_repository(
         self,
-        mock_profile_factory,
-        mock_issue_factory,
-        mock_result_message_with_usage,
-        base_config,
+        mock_profile_factory: Callable[..., Profile],
+        mock_issue_factory: Callable[..., Issue],
+        mock_result_message_with_usage: MagicMock,
+        base_config: RunnableConfig,
     ) -> None:
         """call_developer_node should work when repository is not in config."""
         from amelia.core.orchestrator import call_developer_node
@@ -205,7 +213,9 @@ class TestDeveloperNodeTokenUsage(TestTokenUsageExtraction):
             plan_markdown="# Plan",
         )
 
-        async def mock_run(*args, **kwargs):
+        async def mock_run(
+            *args: Any, **kwargs: Any
+        ) -> AsyncGenerator[tuple[ExecutionState, MagicMock], None]:
             final_state = state.model_copy(update={"agentic_status": "completed"})
             mock_event = MagicMock()
             yield final_state, mock_event
@@ -230,10 +240,10 @@ class TestReviewerNodeTokenUsage(TestTokenUsageExtraction):
 
     async def test_reviewer_node_extracts_token_usage(
         self,
-        mock_profile_factory,
-        mock_issue_factory,
-        mock_result_message_with_usage,
-        config_with_repository,
+        mock_profile_factory: Callable[..., Profile],
+        mock_issue_factory: Callable[..., Issue],
+        mock_result_message_with_usage: MagicMock,
+        config_with_repository: tuple[RunnableConfig, AsyncMock],
     ) -> None:
         """call_reviewer_node should extract usage from driver and save it."""
         from amelia.core.orchestrator import call_reviewer_node
@@ -285,10 +295,10 @@ class TestArchitectNodeTokenUsage(TestTokenUsageExtraction):
 
     async def test_architect_node_extracts_token_usage(
         self,
-        mock_profile_factory,
-        mock_issue_factory,
-        mock_result_message_with_usage,
-        config_with_repository,
+        mock_profile_factory: Callable[..., Profile],
+        mock_issue_factory: Callable[..., Issue],
+        mock_result_message_with_usage: MagicMock,
+        config_with_repository: tuple[RunnableConfig, AsyncMock],
     ) -> None:
         """call_architect_node should extract usage from driver and save it."""
         from amelia.agents.architect import PlanOutput
@@ -307,7 +317,7 @@ class TestArchitectNodeTokenUsage(TestTokenUsageExtraction):
             goal="Implement feature X",
             key_files=["/path/to/file.py"],
             markdown_content="# Plan\n\nStep 1...",
-            markdown_path="/docs/plans/test.md",
+            markdown_path=Path("/docs/plans/test.md"),
         )
 
         with patch("amelia.core.orchestrator.Architect") as mock_architect_class, \
@@ -335,9 +345,9 @@ class TestTokenUsageEdgeCases(TestTokenUsageExtraction):
 
     async def test_handles_partial_usage_data(
         self,
-        mock_profile_factory,
-        mock_issue_factory,
-        config_with_repository,
+        mock_profile_factory: Callable[..., Profile],
+        mock_issue_factory: Callable[..., Issue],
+        config_with_repository: tuple[RunnableConfig, AsyncMock],
     ) -> None:
         """Should handle ResultMessage with partial usage data."""
         from amelia.core.orchestrator import call_developer_node
@@ -366,7 +376,9 @@ class TestTokenUsageEdgeCases(TestTokenUsageExtraction):
             # Missing model, cache tokens
         }
 
-        async def mock_run(*args, **kwargs):
+        async def mock_run(
+            *args: Any, **kwargs: Any
+        ) -> AsyncGenerator[tuple[ExecutionState, MagicMock], None]:
             final_state = state.model_copy(update={"agentic_status": "completed"})
             mock_event = MagicMock()
             yield final_state, mock_event
@@ -396,9 +408,9 @@ class TestTokenUsageEdgeCases(TestTokenUsageExtraction):
 
     async def test_handles_missing_model_in_both_usage_and_driver(
         self,
-        mock_profile_factory,
-        mock_issue_factory,
-        config_with_repository,
+        mock_profile_factory: Callable[..., Profile],
+        mock_issue_factory: Callable[..., Issue],
+        config_with_repository: tuple[RunnableConfig, AsyncMock],
     ) -> None:
         """Should use 'unknown' when model is missing from both usage and driver."""
         from amelia.core.orchestrator import call_developer_node
@@ -427,7 +439,9 @@ class TestTokenUsageEdgeCases(TestTokenUsageExtraction):
             # Missing model
         }
 
-        async def mock_run(*args, **kwargs):
+        async def mock_run(
+            *args: Any, **kwargs: Any
+        ) -> AsyncGenerator[tuple[ExecutionState, MagicMock], None]:
             final_state = state.model_copy(update={"agentic_status": "completed"})
             mock_event = MagicMock()
             yield final_state, mock_event
@@ -453,10 +467,10 @@ class TestTokenUsageEdgeCases(TestTokenUsageExtraction):
 
     async def test_handles_repository_save_error_gracefully(
         self,
-        mock_profile_factory,
-        mock_issue_factory,
-        mock_result_message_with_usage,
-        config_with_repository,
+        mock_profile_factory: Callable[..., Profile],
+        mock_issue_factory: Callable[..., Issue],
+        mock_result_message_with_usage: MagicMock,
+        config_with_repository: tuple[RunnableConfig, AsyncMock],
     ) -> None:
         """Should log error but not fail workflow when repository save fails."""
         from amelia.core.orchestrator import call_developer_node
@@ -475,7 +489,9 @@ class TestTokenUsageEdgeCases(TestTokenUsageExtraction):
         # Make repository raise an error
         mock_repository.save_token_usage.side_effect = Exception("DB error")
 
-        async def mock_run(*args, **kwargs):
+        async def mock_run(
+            *args: Any, **kwargs: Any
+        ) -> AsyncGenerator[tuple[ExecutionState, MagicMock], None]:
             final_state = state.model_copy(update={"agentic_status": "completed"})
             mock_event = MagicMock()
             yield final_state, mock_event
@@ -496,9 +512,9 @@ class TestTokenUsageEdgeCases(TestTokenUsageExtraction):
 
     async def test_handles_driver_without_last_result_message(
         self,
-        mock_profile_factory,
-        mock_issue_factory,
-        config_with_repository,
+        mock_profile_factory: Callable[..., Profile],
+        mock_issue_factory: Callable[..., Issue],
+        config_with_repository: tuple[RunnableConfig, AsyncMock],
     ) -> None:
         """Should handle gracefully when driver has no last_result_message attr."""
         from amelia.core.orchestrator import call_developer_node
@@ -514,7 +530,9 @@ class TestTokenUsageEdgeCases(TestTokenUsageExtraction):
             plan_markdown="# Plan",
         )
 
-        async def mock_run(*args, **kwargs):
+        async def mock_run(
+            *args: Any, **kwargs: Any
+        ) -> AsyncGenerator[tuple[ExecutionState, MagicMock], None]:
             final_state = state.model_copy(update={"agentic_status": "completed"})
             mock_event = MagicMock()
             yield final_state, mock_event

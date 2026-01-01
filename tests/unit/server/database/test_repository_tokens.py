@@ -1,6 +1,7 @@
 """Tests for WorkflowRepository token usage methods."""
 
 from datetime import UTC, datetime
+from typing import Any
 
 import pytest
 
@@ -37,7 +38,7 @@ class TestTokenUsageRepository:
         self,
         workflow_id: str,
         agent: str = "architect",
-        **overrides,
+        **overrides: Any,
     ) -> TokenUsage:
         """Create a TokenUsage instance with sensible defaults.
 
@@ -49,7 +50,7 @@ class TestTokenUsageRepository:
         Returns:
             TokenUsage instance.
         """
-        defaults = {
+        defaults: dict[str, Any] = {
             "workflow_id": workflow_id,
             "agent": agent,
             "model": "claude-sonnet-4-20250514",
@@ -71,7 +72,7 @@ class TestTokenUsageRepository:
 
     async def test_save_token_usage(
         self, repository: WorkflowRepository, workflow: ServerExecutionState
-    ):
+    ) -> None:
         """Should persist token usage to database."""
         usage = self._make_token_usage(workflow.id)
 
@@ -84,7 +85,7 @@ class TestTokenUsageRepository:
 
     async def test_save_token_usage_multiple_agents(
         self, repository: WorkflowRepository, workflow: ServerExecutionState
-    ):
+    ) -> None:
         """Should save multiple token usage records for different agents."""
         architect_usage = self._make_token_usage(
             workflow.id,
@@ -119,7 +120,7 @@ class TestTokenUsageRepository:
 
     async def test_save_token_usage_preserves_all_fields(
         self, repository: WorkflowRepository, workflow: ServerExecutionState
-    ):
+    ) -> None:
         """Should preserve all token usage fields after save and retrieve."""
         timestamp = datetime.now(UTC)
         usage = TokenUsage(
@@ -162,21 +163,21 @@ class TestTokenUsageRepository:
 
     async def test_get_token_usage_empty_workflow(
         self, repository: WorkflowRepository, workflow: ServerExecutionState
-    ):
+    ) -> None:
         """Should return empty list for workflow with no token usage."""
         usages = await repository.get_token_usage(workflow.id)
         assert usages == []
 
     async def test_get_token_usage_nonexistent_workflow(
         self, repository: WorkflowRepository
-    ):
+    ) -> None:
         """Should return empty list for non-existent workflow."""
         usages = await repository.get_token_usage("nonexistent-workflow-id")
         assert usages == []
 
     async def test_get_token_usage_ordered_by_timestamp(
         self, repository: WorkflowRepository, workflow: ServerExecutionState
-    ):
+    ) -> None:
         """Should return token usage records ordered by timestamp ascending."""
         from datetime import timedelta
 
@@ -212,7 +213,7 @@ class TestTokenUsageRepository:
 
     async def test_get_token_usage_filters_by_workflow(
         self, repository: WorkflowRepository, workflow: ServerExecutionState
-    ):
+    ) -> None:
         """Should only return token usage for the specified workflow."""
         # Create another workflow
         other_wf = ServerExecutionState(
@@ -243,14 +244,14 @@ class TestTokenUsageRepository:
 
     async def test_get_token_summary_empty_workflow(
         self, repository: WorkflowRepository, workflow: ServerExecutionState
-    ):
+    ) -> None:
         """Should return None for workflow with no token usage."""
         summary = await repository.get_token_summary(workflow.id)
         assert summary is None
 
     async def test_get_token_summary_single_usage(
         self, repository: WorkflowRepository, workflow: ServerExecutionState
-    ):
+    ) -> None:
         """Should return summary for single token usage record."""
         usage = TokenUsage(
             workflow_id=workflow.id,
@@ -281,7 +282,7 @@ class TestTokenUsageRepository:
 
     async def test_get_token_summary_aggregates_multiple_usages(
         self, repository: WorkflowRepository, workflow: ServerExecutionState
-    ):
+    ) -> None:
         """Should correctly aggregate totals across multiple usage records."""
         usage1 = TokenUsage(
             workflow_id=workflow.id,
@@ -338,7 +339,7 @@ class TestTokenUsageRepository:
 
     async def test_get_token_summary_breakdown_in_order(
         self, repository: WorkflowRepository, workflow: ServerExecutionState
-    ):
+    ) -> None:
         """Summary breakdown should be ordered by timestamp."""
         from datetime import timedelta
 
@@ -376,7 +377,7 @@ class TestTokenUsageRepository:
 
     async def test_get_token_summary_nonexistent_workflow(
         self, repository: WorkflowRepository
-    ):
+    ) -> None:
         """Should return None for non-existent workflow."""
         summary = await repository.get_token_summary("nonexistent-workflow-id")
         assert summary is None
