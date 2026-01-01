@@ -2,7 +2,7 @@
 """Tests for hardcoded prompt defaults."""
 import pytest
 
-from amelia.agents.prompts.defaults import PROMPT_DEFAULTS, PromptDefault
+from amelia.agents.prompts.defaults import PROMPT_DEFAULTS
 
 
 def test_prompt_default_is_frozen():
