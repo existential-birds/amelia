@@ -195,7 +195,7 @@ class ResetResponse(BaseModel):
 # Routes
 
 
-@router.get("/", response_model=PromptListResponse)
+@router.get("", response_model=PromptListResponse)
 async def list_prompts(
     repository: "PromptRepository" = Depends(get_prompt_repository),
 ) -> PromptListResponse:
