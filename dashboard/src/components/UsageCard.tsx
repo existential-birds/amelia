@@ -62,6 +62,12 @@ export function UsageCard({ tokenUsage, className }: UsageCardProps) {
               </th>
               <th
                 scope="col"
+                className="text-left py-2 px-3 text-muted-foreground font-medium"
+              >
+                Model
+              </th>
+              <th
+                scope="col"
                 className="text-right py-2 px-3 text-muted-foreground font-medium"
               >
                 Input
@@ -96,6 +102,7 @@ export function UsageCard({ tokenUsage, className }: UsageCardProps) {
             {tokenUsage.breakdown.map((usage) => (
               <tr key={usage.id} className="border-b border-border/50 last:border-0">
                 <td className="py-2 pr-4 text-foreground">{usage.agent}</td>
+                <td className="py-2 px-3 text-muted-foreground">{usage.model}</td>
                 <td className="py-2 px-3 text-right text-muted-foreground tabular-nums">
                   {formatTokens(usage.input_tokens)}
                 </td>

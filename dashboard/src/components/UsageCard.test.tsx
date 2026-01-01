@@ -35,6 +35,7 @@ describe('UsageCard', () => {
 
       expect(screen.getByRole('table')).toBeInTheDocument();
       expect(screen.getByText('Agent')).toBeInTheDocument();
+      expect(screen.getByText('Model')).toBeInTheDocument();
       expect(screen.getByText('Input')).toBeInTheDocument();
       expect(screen.getByText('Output')).toBeInTheDocument();
       expect(screen.getByText('Cache')).toBeInTheDocument();
@@ -60,9 +61,12 @@ describe('UsageCard', () => {
       const tokenUsage = createMockTokenSummary();
       render(<UsageCard tokenUsage={tokenUsage} />);
 
-      // Architect row: 2.1K input, 500 output, 1.8K cache, $0.08, 15s
+      // Architect row: claude-sonnet-4-20250514, 2.1K input, 500 output, 1.8K cache, $0.08, 15s
       const architectRow = screen.getByText('architect').closest('tr');
       expect(architectRow).toBeInTheDocument();
+      expect(
+        within(architectRow!).getByText('claude-sonnet-4-20250514')
+      ).toBeInTheDocument();
       expect(within(architectRow!).getByText('2.1K')).toBeInTheDocument();
       expect(within(architectRow!).getByText('500')).toBeInTheDocument();
       expect(within(architectRow!).getByText('1.8K')).toBeInTheDocument();
@@ -141,7 +145,7 @@ describe('UsageCard', () => {
 
       // Check for columnheaders
       const columnHeaders = screen.getAllByRole('columnheader');
-      expect(columnHeaders).toHaveLength(6);
+      expect(columnHeaders).toHaveLength(7);
     });
 
     it('has proper heading hierarchy', () => {
