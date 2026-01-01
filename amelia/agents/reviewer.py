@@ -1,3 +1,5 @@
+"""Reviewer agent for code review in the Amelia orchestrator."""
+
 import asyncio
 import json
 import re
@@ -26,6 +28,7 @@ class ReviewItem(BaseModel):
         issue: Description of what's wrong.
         why: Explanation of why it matters.
         fix: Recommended fix.
+
     """
 
     model_config = ConfigDict(frozen=True)
@@ -48,6 +51,7 @@ class StructuredReviewResult(BaseModel):
         items: List of all review items with full context.
         good_patterns: Things done well that should be preserved.
         verdict: Overall review verdict.
+
     """
 
     model_config = ConfigDict(frozen=True)
@@ -65,6 +69,7 @@ class ReviewResponse(BaseModel):
         approved: Whether the code changes are acceptable and meet requirements.
         comments: List of specific feedback items and suggestions.
         severity: Overall severity of review findings (low, medium, high).
+
     """
 
     approved: bool = Field(description="Whether the changes are acceptable.")
@@ -77,6 +82,7 @@ class Reviewer:
 
     Attributes:
         driver: LLM driver interface for generating reviews.
+
     """
 
     SYSTEM_PROMPT_TEMPLATE = """You are an expert code reviewer with a focus on {persona} aspects.
@@ -150,6 +156,7 @@ Be specific with file paths and line numbers. Provide actionable feedback."""
             stream_emitter: Optional callback for streaming events.
             prompts: Optional dict mapping prompt IDs to custom content.
                 Supports keys: "reviewer.template", "reviewer.structured", "reviewer.agentic".
+
         """
         self.driver = driver
         self._stream_emitter = stream_emitter
@@ -201,6 +208,7 @@ Be specific with file paths and line numbers. Provide actionable feedback."""
 
         Raises:
             ValueError: If no task or issue context is found for review.
+
         """
         parts: list[str] = []
 
@@ -253,6 +261,7 @@ Be specific with file paths and line numbers. Provide actionable feedback."""
 
         Returns:
             Tuple of (ReviewResult, session_id from driver).
+
         """
         if profile.strategy == "competitive":
             return await self._competitive_review(state, code_changes, profile, workflow_id=workflow_id)
@@ -279,6 +288,7 @@ Be specific with file paths and line numbers. Provide actionable feedback."""
 
         Returns:
             Tuple of (ReviewResult, session_id from driver).
+
         """
         # Handle empty code changes - warn and auto-approve
         if not code_changes or not code_changes.strip():
@@ -371,6 +381,7 @@ Be specific with file paths and line numbers. Provide actionable feedback."""
             Tuple of (aggregated ReviewResult, None).
             Note: session_id is always None for competitive reviews since multiple
             parallel sessions are used and returning any single one would be misleading.
+
         """
         personas = ["Security", "Performance", "Usability"] # Example personas
 
@@ -423,6 +434,7 @@ Be specific with file paths and line numbers. Provide actionable feedback."""
 
         Returns:
             Tuple of StructuredReviewResult and optional session ID.
+
         """
         # Handle empty code changes - return approved result with no items
         if not code_changes or not code_changes.strip():
@@ -538,6 +550,7 @@ Be specific with file paths and line numbers. Provide actionable feedback."""
 
         Returns:
             Tuple of (ReviewResult, session_id from driver).
+
         """
         from amelia.drivers.cli.claude import ClaudeCliDriver  # noqa: PLC0415
 
@@ -695,6 +708,7 @@ The changes are in git - diff against commit: {base_commit}"""
 
         Returns:
             Parsed ReviewResult.
+
         """
         if not output:
             logger.warning(

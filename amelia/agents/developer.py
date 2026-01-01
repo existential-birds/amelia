@@ -29,6 +29,7 @@ class Developer:
 
     Attributes:
         driver: LLM driver interface for agentic execution.
+
     """
 
     def __init__(
@@ -41,6 +42,7 @@ class Developer:
         Args:
             driver: LLM driver interface for agentic execution.
             stream_emitter: Optional callback for streaming events.
+
         """
         self.driver = driver
         self._stream_emitter = stream_emitter
@@ -72,6 +74,7 @@ class Developer:
         Raises:
             ValueError: If ExecutionState has no goal set.
             TypeError: If driver type is not supported.
+
         """
         if not state.goal:
             raise ValueError("ExecutionState must have a goal set")
@@ -110,6 +113,7 @@ class Developer:
 
         Yields:
             Tuples of (updated_state, event) as execution progresses.
+
         """
         from claude_agent_sdk.types import (  # noqa: PLC0415
             AssistantMessage,
@@ -234,6 +238,7 @@ class Developer:
 
         Yields:
             Tuples of (updated_state, event) as execution progresses.
+
         """
         from langchain_core.messages import AIMessage, ToolMessage  # noqa: PLC0415
 
@@ -391,6 +396,7 @@ class Developer:
 
         Returns:
             Complete prompt string for the driver.
+
         """
         parts = []
 
@@ -435,5 +441,6 @@ IMPLEMENTATION PLAN:
 
         Returns:
             Instructions string or None.
+
         """
         return None  # Default to no extra instructions

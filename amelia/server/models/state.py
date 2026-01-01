@@ -31,9 +31,20 @@ VALID_TRANSITIONS: dict[WorkflowStatus, set[WorkflowStatus]] = {
 
 
 class InvalidStateTransitionError(ValueError):
-    """Raised when attempting an invalid workflow state transition."""
+    """Raised when attempting an invalid workflow state transition.
+
+    Attributes:
+        current: The current workflow status.
+        target: The attempted target status.
+    """
 
     def __init__(self, current: WorkflowStatus, target: WorkflowStatus):
+        """Initialize InvalidStateTransitionError.
+
+        Args:
+            current: The current workflow status.
+            target: The target status that is not allowed from current state.
+        """
         self.current = current
         self.target = target
         super().__init__(f"Cannot transition from '{current}' to '{target}'")

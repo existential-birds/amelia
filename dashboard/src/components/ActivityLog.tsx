@@ -24,6 +24,9 @@ interface ActivityLogProps {
 
 /**
  * Unified log entry type that can represent either a workflow event or a stream event.
+ *
+ * Used internally by ActivityLog to merge and sort events from different sources
+ * (loader data vs WebSocket streams) into a single chronological timeline.
  */
 type LogEntry =
   | { kind: 'workflow'; event: WorkflowEvent }
@@ -33,9 +36,9 @@ type LogEntry =
  * Component to render stream events in the activity log.
  * Displays stream events with a distinctive visual style to differentiate from workflow events.
  *
- * @param props - Component props
- * @param props.event - The stream event to display
- * @returns React element for the stream log entry with timestamp, agent, and content
+ * @param props - Component props.
+ * @param props.event - The stream event to display.
+ * @returns A div element containing the formatted stream log entry with timestamp, agent badge, and content.
  */
 function StreamLogEntry({ event }: { event: StreamEvent }) {
   const agentKey = event.agent.toUpperCase();

@@ -24,6 +24,7 @@ def _slugify(text: str) -> str:
 
     Returns:
         Lowercase, hyphenated string with special chars removed, truncated to 50 characters.
+
     """
     # Replace spaces and underscores with hyphens
     slug = text.lower().replace(" ", "-").replace("_", "-")
@@ -44,6 +45,7 @@ class PlanOutput(BaseModel):
         markdown_path: Path where the plan was saved.
         goal: High-level goal extracted from the plan.
         key_files: Files likely to be modified.
+
     """
 
     model_config = ConfigDict(frozen=True)
@@ -64,6 +66,7 @@ class ArchitectOutput(BaseModel):
         strategy: High-level approach (not step-by-step).
         key_files: Files likely to be modified.
         risks: Potential risks to watch for.
+
     """
 
     model_config = ConfigDict(frozen=True)
@@ -83,6 +86,7 @@ class MarkdownPlanOutput(BaseModel):
         goal: High-level goal for the implementation.
         plan_markdown: The full markdown plan with phases, tasks, and steps.
         key_files: Files that will likely be modified.
+
     """
 
     goal: str
@@ -98,6 +102,7 @@ class Architect:
 
     Attributes:
         driver: LLM driver interface for plan generation.
+
     """
 
     SYSTEM_PROMPT = """You are a senior software architect creating implementation plans.
@@ -168,6 +173,7 @@ Guidelines:
             stream_emitter: Optional callback for streaming events.
             prompts: Optional dict mapping prompt IDs to custom content.
                 Supports keys: "architect.system", "architect.plan".
+
         """
         self.driver = driver
         self._stream_emitter = stream_emitter
@@ -204,6 +210,7 @@ Guidelines:
 
         Raises:
             ValueError: If no issue is present in the state.
+
         """
         if not state.issue:
             raise ValueError("Issue context is required for planning")
@@ -239,6 +246,7 @@ Guidelines:
 
         Returns:
             Formatted markdown string with design fields.
+
         """
         parts = []
 
@@ -280,6 +288,7 @@ Guidelines:
 
         Returns:
             Formatted string with file tree structure.
+
         """
         # Common directories and files to ignore
         ignore_dirs = {
@@ -358,6 +367,7 @@ Guidelines:
 
         Raises:
             ValueError: If no issue is present in the state.
+
         """
         if not state.issue:
             raise ValueError("Cannot generate plan: no issue in ExecutionState")
@@ -455,6 +465,7 @@ Return the plan as a MarkdownPlanOutput with:
 
         Returns:
             Path to the saved markdown file.
+
         """
         output_path = Path(output_dir)
         output_path.mkdir(parents=True, exist_ok=True)
@@ -489,6 +500,7 @@ Return the plan as a MarkdownPlanOutput with:
 
         Raises:
             ValueError: If no issue is present in the state.
+
         """
         if not state.issue:
             raise ValueError("Cannot analyze: no issue in ExecutionState")

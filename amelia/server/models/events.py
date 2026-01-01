@@ -12,14 +12,32 @@ from amelia.core.types import StreamEventType
 class EventType(StrEnum):
     """Exhaustive list of workflow event types.
 
-    Events are categorized into:
-    - Lifecycle: Start, complete, fail, cancel workflows
-    - Stages: Track progress through workflow stages
-    - Approval: Human approval flow events
-    - Artifacts: File operations
-    - Review: Code review cycle
-    - Agent messages: Task-level messages and status updates
-    - System: Errors and warnings
+    Events are categorized into lifecycle, stage, approval, artifact,
+    review, agent message, and system event types.
+
+    Attributes:
+        WORKFLOW_STARTED: Workflow execution has begun.
+        WORKFLOW_COMPLETED: Workflow finished successfully.
+        WORKFLOW_FAILED: Workflow terminated due to error.
+        WORKFLOW_CANCELLED: Workflow was cancelled by user.
+        STAGE_STARTED: A workflow stage has begun.
+        STAGE_COMPLETED: A workflow stage has finished.
+        APPROVAL_REQUIRED: Human approval is needed to proceed.
+        APPROVAL_GRANTED: Human approved the pending action.
+        APPROVAL_REJECTED: Human rejected the pending action.
+        FILE_CREATED: A new file was created.
+        FILE_MODIFIED: An existing file was modified.
+        FILE_DELETED: A file was deleted.
+        REVIEW_REQUESTED: Code review has been requested.
+        REVIEW_COMPLETED: Code review has been completed.
+        REVISION_REQUESTED: Reviewer requested changes.
+        AGENT_MESSAGE: Message from an agent.
+        TASK_STARTED: An agent task has begun.
+        TASK_COMPLETED: An agent task has finished.
+        TASK_FAILED: An agent task has failed.
+        SYSTEM_ERROR: System-level error occurred.
+        SYSTEM_WARNING: System-level warning issued.
+        STREAM: Ephemeral streaming event (not persisted).
     """
 
     # Lifecycle

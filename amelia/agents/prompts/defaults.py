@@ -18,6 +18,7 @@ class PromptDefault:
         name: Human-readable prompt name.
         description: What this prompt controls.
         content: The actual prompt text.
+
     """
 
     agent: str

@@ -55,13 +55,13 @@ interface SidebarNavLinkProps {
  * Renders as a SidebarMenuItem with proper collapsed state handling and tooltips.
  * Supports a "coming soon" mode that renders as a non-clickable placeholder.
  *
- * @param props - Component props
- * @param props.to - The route path to navigate to
- * @param props.icon - Lucide icon component to display
- * @param props.label - Text label for the navigation item
- * @param props.onClick - Optional click handler
- * @param props.comingSoon - If true, renders as disabled placeholder with "Soon" badge
- * @returns React element for the sidebar navigation link
+ * @param props - Component props.
+ * @param props.to - The route path to navigate to.
+ * @param props.icon - Lucide icon component to display.
+ * @param props.label - Text label for the navigation item.
+ * @param props.onClick - Optional click handler.
+ * @param props.comingSoon - If true, renders as disabled placeholder with "Soon" badge.
+ * @returns A SidebarMenuItem element containing either a NavLink or disabled placeholder.
  */
 function SidebarNavLink({ to, icon: Icon, label, onClick, comingSoon }: SidebarNavLinkProps) {
   // Coming soon items render as non-clickable placeholders

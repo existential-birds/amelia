@@ -19,6 +19,11 @@ interface TypographyProps {
 
 /**
  * Small uppercase label text (e.g., "WORKFLOW", "ELAPSED").
+ *
+ * @param props - Component props.
+ * @param props.children - Text content to display.
+ * @param props.className - Optional additional CSS classes.
+ * @returns A span element with uppercase styling for labels.
  */
 function Label({ children, className }: TypographyProps) {
   return (
@@ -35,6 +40,11 @@ function Label({ children, className }: TypographyProps) {
 
 /**
  * Large display title (e.g., issue ID, page title).
+ *
+ * @param props - Component props.
+ * @param props.children - Title text content to display.
+ * @param props.className - Optional additional CSS classes.
+ * @returns An h2 element with display font styling.
  */
 function Title({ children, className }: TypographyProps) {
   return (
@@ -51,6 +61,11 @@ function Title({ children, className }: TypographyProps) {
 
 /**
  * Secondary text next to title (e.g., worktree name).
+ *
+ * @param props - Component props.
+ * @param props.children - Subtitle text content to display.
+ * @param props.className - Optional additional CSS classes.
+ * @returns A span element with monospace font styling.
  */
 function Subtitle({ children, className }: TypographyProps) {
   return (
@@ -67,6 +82,12 @@ interface ValueProps extends TypographyProps {
 
 /**
  * Large monospace value display (e.g., elapsed time, counts).
+ *
+ * @param props - Component props.
+ * @param props.children - Value content to display.
+ * @param props.glow - If true, adds a glowing text shadow effect.
+ * @param props.className - Optional additional CSS classes.
+ * @returns A div element with monospace font and optional glow effect.
  */
 function Value({ children, glow, className }: ValueProps) {
   return (
@@ -93,6 +114,11 @@ interface SlotProps {
 
 /**
  * Left slot - primary content area (title, subtitle).
+ *
+ * @param props - Component props.
+ * @param props.children - Content to render in the left slot.
+ * @param props.className - Optional additional CSS classes.
+ * @returns A div element positioned in the left grid column.
  */
 function Left({ children, className }: SlotProps) {
   return <div className={className}>{children}</div>;
@@ -101,6 +127,11 @@ Left.displayName = 'PageHeader.Left';
 
 /**
  * Center slot - centered content (elapsed time, stats).
+ *
+ * @param props - Component props.
+ * @param props.children - Content to render in the center slot.
+ * @param props.className - Optional additional CSS classes.
+ * @returns A div element centered in the grid.
  */
 function Center({ children, className }: SlotProps) {
   return (
@@ -113,6 +144,11 @@ Center.displayName = 'PageHeader.Center';
 
 /**
  * Right slot - status/actions area with container styling.
+ *
+ * @param props - Component props.
+ * @param props.children - Content to render in the right slot.
+ * @param props.className - Optional additional CSS classes.
+ * @returns A div element positioned in the right grid column with flex layout.
  */
 function Right({ children, className }: SlotProps) {
   return (

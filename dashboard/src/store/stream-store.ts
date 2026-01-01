@@ -82,6 +82,8 @@ interface StreamState {
  * Unlike WorkflowEvents (which track lifecycle and stage changes), StreamEvents
  * provide real-time insight into agent reasoning and tool usage.
  *
+ * @returns The StreamState object containing events array, liveMode flag, and action methods.
+ *
  * @example
  * ```typescript
  * const { addEvent, events, liveMode, setLiveMode } = useStreamStore();

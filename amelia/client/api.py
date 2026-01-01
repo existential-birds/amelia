@@ -26,19 +26,37 @@ class ServerUnreachableError(AmeliaClientError):
 
 
 class WorkflowConflictError(AmeliaClientError):
-    """Raised when workflow already exists for worktree (409 Conflict)."""
+    """Raised when workflow already exists for worktree (409 Conflict).
+
+    Attributes:
+        active_workflow: Details of the existing active workflow, if available.
+    """
 
     def __init__(self, message: str, active_workflow: dict[str, Any] | None = None):
-        """Initialize with message and optional active workflow info."""
+        """Initialize WorkflowConflictError.
+
+        Args:
+            message: Error message describing the conflict.
+            active_workflow: Optional dict with details of the existing workflow.
+        """
         super().__init__(message)
         self.active_workflow = active_workflow
 
 
 class RateLimitError(AmeliaClientError):
-    """Raised when rate limit is exceeded (429 Too Many Requests)."""
+    """Raised when rate limit is exceeded (429 Too Many Requests).
+
+    Attributes:
+        retry_after: Seconds to wait before retrying, if provided by server.
+    """
 
     def __init__(self, message: str, retry_after: int | None = None):
-        """Initialize with message and optional retry-after seconds."""
+        """Initialize RateLimitError.
+
+        Args:
+            message: Error message describing the rate limit.
+            retry_after: Optional seconds to wait before retrying.
+        """
         super().__init__(message)
         self.retry_after = retry_after
 

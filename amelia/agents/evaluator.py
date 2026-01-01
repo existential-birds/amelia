@@ -27,6 +27,7 @@ class Disposition(str, Enum):
         REJECT: Technically incorrect - won't fix.
         DEFER: Out of scope - backlog.
         CLARIFY: Ambiguous - needs clarification.
+
     """
 
     IMPLEMENT = "implement"
@@ -47,6 +48,7 @@ class EvaluatedItem(BaseModel):
         reason: Evidence supporting the disposition decision.
         original_issue: The issue description from review.
         suggested_fix: The suggested fix from review.
+
     """
 
     model_config = ConfigDict(frozen=True)
@@ -70,6 +72,7 @@ class EvaluationResult(BaseModel):
         items_deferred: Items deferred as out of scope.
         items_needing_clarification: Items requiring clarification.
         summary: Brief summary of evaluation decisions.
+
     """
 
     model_config = ConfigDict(frozen=True)
@@ -89,6 +92,7 @@ class EvaluationOutput(BaseModel):
     Attributes:
         evaluated_items: All evaluated items with their dispositions.
         summary: Brief summary of the evaluation decisions.
+
     """
 
     evaluated_items: list[EvaluatedItem]
@@ -106,6 +110,7 @@ class Evaluator:
 
     Attributes:
         driver: LLM driver interface for generating evaluations.
+
     """
 
     SYSTEM_PROMPT = """You are an expert code evaluation agent. Your task is to evaluate
@@ -142,6 +147,7 @@ Provide clear evidence for each disposition decision."""
             driver: LLM driver interface for generating evaluations.
             stream_emitter: Optional callback for streaming events.
             prompts: Optional dict of prompt_id -> content for customization.
+
         """
         self.driver = driver
         self._stream_emitter = stream_emitter
@@ -156,6 +162,7 @@ Provide clear evidence for each disposition decision."""
 
         Returns:
             The system prompt string.
+
         """
         return self._prompts.get("evaluator.system", self.SYSTEM_PROMPT)
 
@@ -170,6 +177,7 @@ Provide clear evidence for each disposition decision."""
 
         Raises:
             ValueError: If no review feedback is found in state.
+
         """
         parts: list[str] = []
 
@@ -232,6 +240,7 @@ Return your evaluation as an EvaluationOutput with all items and a summary.""")
 
         Raises:
             ValueError: If no last_review in state.
+
         """
         if not state.last_review:
             raise ValueError("ExecutionState must have last_review set for evaluation")

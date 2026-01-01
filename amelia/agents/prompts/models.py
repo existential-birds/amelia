@@ -18,6 +18,7 @@ class Prompt(BaseModel):
         name: Human-readable name.
         description: What this prompt controls.
         current_version_id: Active version ID, or None to use default.
+
     """
 
     id: str
@@ -37,6 +38,7 @@ class PromptVersion(BaseModel):
         content: The prompt text content.
         created_at: When this version was created.
         change_note: Optional note describing the change.
+
     """
 
     id: str
@@ -49,7 +51,18 @@ class PromptVersion(BaseModel):
     @field_validator("content")
     @classmethod
     def content_not_empty(cls, v: str) -> str:
-        """Validate that content is not empty."""
+        """Validate that content is not empty or whitespace-only.
+
+        Args:
+            v: The content string to validate.
+
+        Returns:
+            The validated content string, unchanged.
+
+        Raises:
+            ValueError: If content is empty or contains only whitespace.
+
+        """
         if not v.strip():
             raise ValueError("Prompt content cannot be empty")
         return v
@@ -64,6 +77,7 @@ class ResolvedPrompt(BaseModel):
         version_id: Version ID if using custom, None if default.
         version_number: Version number if using custom.
         is_default: True if using hardcoded default.
+
     """
 
     prompt_id: str
@@ -80,6 +94,7 @@ class WorkflowPromptVersion(BaseModel):
         workflow_id: The workflow ID.
         prompt_id: The prompt ID.
         version_id: The version ID used by this workflow.
+
     """
 
     workflow_id: str
@@ -102,6 +117,7 @@ class PromptRepositoryProtocol(Protocol):
 
         Returns:
             The prompt if found, None otherwise.
+
         """
         ...
 
@@ -113,6 +129,7 @@ class PromptRepositoryProtocol(Protocol):
 
         Returns:
             The version if found, None otherwise.
+
         """
         ...
 
@@ -128,5 +145,6 @@ class PromptRepositoryProtocol(Protocol):
             workflow_id: The workflow identifier.
             prompt_id: The prompt identifier.
             version_id: The version identifier.
+
         """
         ...

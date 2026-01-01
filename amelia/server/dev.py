@@ -194,7 +194,12 @@ async def stream_output(
 
 
 class ProcessManager:
-    """Manages the lifecycle of server and dashboard processes."""
+    """Manage the lifecycle of server and dashboard processes.
+
+    Attributes:
+        server_process: The uvicorn server subprocess, or None if not started.
+        dashboard_process: The Vite dashboard subprocess, or None if not started.
+    """
 
     def __init__(self) -> None:
         self.server_process: asyncio.subprocess.Process | None = None
@@ -341,7 +346,11 @@ class ProcessManager:
 
     @property
     def exit_code(self) -> int:
-        """Get the exit code for the dev command."""
+        """Get the exit code for the dev command.
+
+        Returns:
+            Exit code: 0 for success, non-zero if any process failed.
+        """
         return self._exit_code
 
     def request_shutdown(self) -> None:

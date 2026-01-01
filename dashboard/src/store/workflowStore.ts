@@ -122,6 +122,8 @@ interface WorkflowState {
  * State is persisted to sessionStorage, but only lastEventId is saved.
  * Real-time events are ephemeral and not persisted.
  *
+ * @returns The WorkflowState object containing events, connection status, and action methods.
+ *
  * @example
  * ```typescript
  * const { addEvent, isConnected } = useWorkflowStore();

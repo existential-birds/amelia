@@ -91,6 +91,9 @@ export const DEFAULT_ACCENT_STYLE: AgentAccentStyle = {
 /**
  * Get accent style for an agent, with fallback to default.
  * Always returns a defined style.
+ *
+ * @param agent - The agent type identifier (e.g., "architect", "developer", "reviewer").
+ * @returns The AgentAccentStyle object for the specified agent, or DEFAULT_ACCENT_STYLE if not found.
  */
 export function getAgentAccentStyle(agent: string): AgentAccentStyle {
   return AGENT_ACCENT_STYLES_MAP[agent] ?? DEFAULT_ACCENT_STYLE;

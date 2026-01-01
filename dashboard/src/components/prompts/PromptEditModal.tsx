@@ -29,7 +29,18 @@ const CHAR_THRESHOLDS = {
   warning: 10000,
 } as const;
 
-/** Get color classes based on character count. */
+/**
+ * Get color classes based on character count.
+ *
+ * Returns progressively warmer colors as character count increases:
+ * - Green (healthy): 0-5000 characters
+ * - Amber (long): 5001-8000 characters
+ * - Orange (warning): 8001-10000 characters
+ * - Red (danger): 10001+ characters
+ *
+ * @param count - The current character count.
+ * @returns Object containing Tailwind CSS classes for text, background, and border colors.
+ */
 function getCharCountColors(count: number): {
   text: string;
   bg: string;

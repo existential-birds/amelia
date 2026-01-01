@@ -6,7 +6,13 @@ from enum import StrEnum
 
 
 class ToolName(StrEnum):
-    """Standard tool names used across drivers."""
+    """Standard tool names used across drivers.
+
+    Attributes:
+        RUN_SHELL_COMMAND: Execute a shell command in the worktree.
+        WRITE_FILE: Write content to a file.
+        READ_FILE: Read content from a file.
+    """
 
     RUN_SHELL_COMMAND = "run_shell_command"
     WRITE_FILE = "write_file"

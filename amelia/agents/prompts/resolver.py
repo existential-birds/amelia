@@ -18,6 +18,7 @@ class PromptResolver:
 
     Attributes:
         repository: Database repository for prompt data.
+
     """
 
     def __init__(self, repository: PromptRepositoryProtocol) -> None:
@@ -25,6 +26,7 @@ class PromptResolver:
 
         Args:
             repository: Database repository for prompts.
+
         """
         self.repository = repository
 
@@ -42,6 +44,7 @@ class PromptResolver:
 
         Raises:
             ValueError: If prompt_id is unknown (not in defaults).
+
         """
         try:
             prompt = await self.repository.get_prompt(prompt_id)
@@ -80,6 +83,7 @@ class PromptResolver:
 
         Returns:
             Dictionary mapping prompt_id to resolved prompt.
+
         """
         result = {}
         for prompt_id in PROMPT_DEFAULTS:
@@ -94,6 +98,7 @@ class PromptResolver:
 
         Args:
             workflow_id: The workflow identifier.
+
         """
         prompts = await self.get_all_active()
         for prompt_id, resolved in prompts.items():

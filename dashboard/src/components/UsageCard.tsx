@@ -6,6 +6,9 @@ import { AGENT_STYLES } from '@/lib/constants';
 import { formatTokens, formatCost, formatDuration } from '@/utils/workflow';
 import type { TokenSummary } from '@/types';
 
+/**
+ * Props for the UsageCard component.
+ */
 interface UsageCardProps {
   /** Token usage summary with breakdown by agent. Null/undefined hides the card. */
   tokenUsage: TokenSummary | null | undefined;
