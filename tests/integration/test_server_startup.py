@@ -45,7 +45,7 @@ class TestServerStartup:
         server.should_exit = True
         await task
 
-    async def test_server_starts_and_responds(self, server):
+    async def test_server_starts_and_responds(self, server) -> None:
         """Server starts and responds to health checks."""
         async with httpx.AsyncClient() as client:
             response = await client.get(f"{server}/api/health/live")
@@ -53,7 +53,7 @@ class TestServerStartup:
             assert response.status_code == 200
             assert response.json()["status"] == "alive"
 
-    async def test_health_endpoint_returns_metrics(self, server):
+    async def test_health_endpoint_returns_metrics(self, server) -> None:
         """Health endpoint returns system metrics."""
         async with httpx.AsyncClient() as client:
             response = await client.get(f"{server}/api/health")
@@ -64,7 +64,7 @@ class TestServerStartup:
             assert "memory_mb" in data
             assert "uptime_seconds" in data
 
-    async def test_docs_endpoint_available(self, server):
+    async def test_docs_endpoint_available(self, server) -> None:
         """Swagger docs are accessible."""
         async with httpx.AsyncClient() as client:
             response = await client.get(f"{server}/api/docs")
@@ -72,7 +72,7 @@ class TestServerStartup:
             assert response.status_code == 200
             assert "swagger" in response.text.lower() or "openapi" in response.text.lower()
 
-    async def test_openapi_schema_available(self, server):
+    async def test_openapi_schema_available(self, server) -> None:
         """OpenAPI schema is accessible."""
         async with httpx.AsyncClient() as client:
             response = await client.get(f"{server}/api/openapi.json")
@@ -85,7 +85,7 @@ class TestServerStartup:
 class TestLifespanStartup:
     """Tests for lifespan startup behavior."""
 
-    async def test_lifespan_creates_database_directory(self):
+    async def test_lifespan_creates_database_directory(self) -> None:
         """Lifespan creates database parent directory if missing."""
         with tempfile.TemporaryDirectory() as tmpdir:
             # Set up a database path in a non-existent subdirectory
@@ -102,7 +102,7 @@ class TestLifespanStartup:
                     assert db_path.parent.exists()
                     assert db_path.parent.is_dir()
 
-    async def test_lifespan_initializes_config(self):
+    async def test_lifespan_initializes_config(self) -> None:
         """Lifespan initializes config so get_config works."""
         # Ensure config is None before test
         main_module._config = None

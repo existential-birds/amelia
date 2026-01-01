@@ -172,7 +172,7 @@ class TestAutoInstall:
         (0, True),
         (1, False),
     ], ids=["success", "failure"])
-    async def test_run_pnpm_install(self, return_code, expected):
+    async def test_run_pnpm_install(self, return_code, expected) -> None:
         """Test pnpm install handles exit codes correctly."""
         from amelia.server.dev import run_pnpm_install
 
@@ -202,7 +202,7 @@ class TestProcessManager:
         process.kill = MagicMock()
         return process
 
-    async def test_process_manager_shutdown_terminates_processes(self, mock_process: AsyncMock):
+    async def test_process_manager_shutdown_terminates_processes(self, mock_process: AsyncMock) -> None:
         """Shutdown terminates running processes."""
         from amelia.server.dev import ProcessManager
 

@@ -22,7 +22,7 @@ def mock_driver_for_parser():
     return mock
 
 
-async def test_parse_design_extracts_fields(mock_driver_for_parser, tmp_path):
+async def test_parse_design_extracts_fields(mock_driver_for_parser, tmp_path) -> None:
     # Create a mock design markdown file
     design_file = tmp_path / "design.md"
     design_file.write_text("# Test Feature\n\nSome design content here.")
@@ -34,6 +34,6 @@ async def test_parse_design_extracts_fields(mock_driver_for_parser, tmp_path):
     mock_driver_for_parser.generate.assert_called_once()
 
 
-async def test_parse_design_file_not_found(mock_driver_for_parser):
+async def test_parse_design_file_not_found(mock_driver_for_parser) -> None:
     with pytest.raises(FileNotFoundError):
         await parse_design("/nonexistent/path.md", mock_driver_for_parser)

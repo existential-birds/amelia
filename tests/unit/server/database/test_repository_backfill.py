@@ -20,7 +20,7 @@ class TestEventBackfill:
     )
     async def test_event_exists(
         self, repository, workflow, event_id, should_exist, setup_event, make_event
-    ):
+    ) -> None:
         """event_exists() returns correct boolean based on existence."""
         if setup_event:
             event = make_event(
@@ -33,7 +33,7 @@ class TestEventBackfill:
 
         assert await repository.event_exists(event_id) == should_exist
 
-    async def test_get_events_after_returns_newer_events(self, repository, workflow, make_event):
+    async def test_get_events_after_returns_newer_events(self, repository, workflow, make_event) -> None:
         """get_events_after() returns events with sequence > since_event sequence."""
         # Create sequence of events
         for i in range(1, 6):
@@ -55,7 +55,7 @@ class TestEventBackfill:
         assert newer_events[1].id == "evt-4"
         assert newer_events[2].id == "evt-5"
 
-    async def test_get_events_after_filters_by_workflow(self, repository, make_event):
+    async def test_get_events_after_filters_by_workflow(self, repository, make_event) -> None:
         """get_events_after() only returns events from same workflow."""
         # Create two workflows
         wf1 = ServerExecutionState(
@@ -117,7 +117,7 @@ class TestEventBackfill:
         assert newer_events[0].id == "wf1-evt-2"
         assert newer_events[0].workflow_id == "wf-1"
 
-    async def test_get_events_after_raises_when_event_not_found(self, repository):
+    async def test_get_events_after_raises_when_event_not_found(self, repository) -> None:
         """get_events_after() raises ValueError when event doesn't exist."""
         with pytest.raises(ValueError, match="Event .* not found"):
             await repository.get_events_after("evt-nonexistent")

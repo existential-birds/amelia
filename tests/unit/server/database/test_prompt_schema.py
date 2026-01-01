@@ -17,7 +17,7 @@ async def db(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_prompts_table_exists(db: Database):
+async def test_prompts_table_exists(db: Database) -> None:
     """Prompts table should exist after schema creation."""
     result = await db.fetch_one(
         "SELECT name FROM sqlite_master WHERE type='table' AND name='prompts'"
@@ -27,7 +27,7 @@ async def test_prompts_table_exists(db: Database):
 
 
 @pytest.mark.asyncio
-async def test_prompt_versions_table_exists(db: Database):
+async def test_prompt_versions_table_exists(db: Database) -> None:
     """Prompt versions table should exist after schema creation."""
     result = await db.fetch_one(
         "SELECT name FROM sqlite_master WHERE type='table' AND name='prompt_versions'"
@@ -37,7 +37,7 @@ async def test_prompt_versions_table_exists(db: Database):
 
 
 @pytest.mark.asyncio
-async def test_workflow_prompt_versions_table_exists(db: Database):
+async def test_workflow_prompt_versions_table_exists(db: Database) -> None:
     """Workflow prompt versions table should exist after schema creation."""
     result = await db.fetch_one(
         "SELECT name FROM sqlite_master WHERE type='table' AND name='workflow_prompt_versions'"
@@ -46,7 +46,7 @@ async def test_workflow_prompt_versions_table_exists(db: Database):
 
 
 @pytest.mark.asyncio
-async def test_can_insert_prompt(db: Database):
+async def test_can_insert_prompt(db: Database) -> None:
     """Should be able to insert a prompt."""
     await db.execute(
         """INSERT INTO prompts (id, agent, name, description, current_version_id)
@@ -59,7 +59,7 @@ async def test_can_insert_prompt(db: Database):
 
 
 @pytest.mark.asyncio
-async def test_can_insert_prompt_version(db: Database):
+async def test_can_insert_prompt_version(db: Database) -> None:
     """Should be able to insert a prompt version with foreign key."""
     # First insert the prompt
     await db.execute(
@@ -79,7 +79,7 @@ async def test_can_insert_prompt_version(db: Database):
 
 
 @pytest.mark.asyncio
-async def test_version_unique_constraint(db: Database):
+async def test_version_unique_constraint(db: Database) -> None:
     """Same prompt+version_number should fail unique constraint."""
     await db.execute(
         "INSERT INTO prompts (id, agent, name) VALUES (?, ?, ?)",
@@ -97,7 +97,7 @@ async def test_version_unique_constraint(db: Database):
 
 
 @pytest.mark.asyncio
-async def test_workflow_prompt_version_foreign_keys(db: Database):
+async def test_workflow_prompt_version_foreign_keys(db: Database) -> None:
     """Workflow prompt versions should enforce foreign keys."""
     # Create a workflow first
     await db.execute(

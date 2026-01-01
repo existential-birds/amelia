@@ -23,7 +23,7 @@ class TestGetPrompt:
     """Tests for get_prompt method."""
 
     @pytest.mark.asyncio
-    async def test_returns_default_when_no_custom_version(self, mock_repository):
+    async def test_returns_default_when_no_custom_version(self, mock_repository) -> None:
         """Should return default when no custom version set."""
         mock_repository.get_prompt.return_value = Prompt(
             id="architect.system",
@@ -39,7 +39,7 @@ class TestGetPrompt:
         assert result.content == PROMPT_DEFAULTS["architect.system"].content
 
     @pytest.mark.asyncio
-    async def test_returns_custom_version_when_set(self, mock_repository):
+    async def test_returns_custom_version_when_set(self, mock_repository) -> None:
         """Should return custom version content when active."""
         custom_content = "Custom architect prompt..."
         mock_repository.get_prompt.return_value = Prompt(
@@ -63,7 +63,7 @@ class TestGetPrompt:
         assert result.content == custom_content
 
     @pytest.mark.asyncio
-    async def test_falls_back_to_default_on_db_error(self, mock_repository):
+    async def test_falls_back_to_default_on_db_error(self, mock_repository) -> None:
         """Should return default when database fails."""
         mock_repository.get_prompt.side_effect = Exception("DB error")
         resolver = PromptResolver(mock_repository)
@@ -73,7 +73,7 @@ class TestGetPrompt:
         assert result.content == PROMPT_DEFAULTS["architect.system"].content
 
     @pytest.mark.asyncio
-    async def test_raises_for_unknown_prompt(self, mock_repository):
+    async def test_raises_for_unknown_prompt(self, mock_repository) -> None:
         """Should raise ValueError for unknown prompt ID."""
         mock_repository.get_prompt.return_value = None
         resolver = PromptResolver(mock_repository)
@@ -86,7 +86,7 @@ class TestGetAllActive:
     """Tests for get_all_active method."""
 
     @pytest.mark.asyncio
-    async def test_returns_all_prompts(self, mock_repository):
+    async def test_returns_all_prompts(self, mock_repository) -> None:
         """Should return all prompt defaults."""
         mock_repository.get_prompt.return_value = None  # All use defaults
         resolver = PromptResolver(mock_repository)
@@ -102,7 +102,7 @@ class TestRecordForWorkflow:
     """Tests for record_for_workflow method."""
 
     @pytest.mark.asyncio
-    async def test_records_custom_versions_only(self, mock_repository):
+    async def test_records_custom_versions_only(self, mock_repository) -> None:
         """Should only record custom versions, not defaults."""
         mock_repository.get_prompt.return_value = Prompt(
             id="architect.system",
@@ -123,7 +123,7 @@ class TestRecordForWorkflow:
         assert mock_repository.record_workflow_prompt.called
 
     @pytest.mark.asyncio
-    async def test_does_not_record_defaults(self, mock_repository):
+    async def test_does_not_record_defaults(self, mock_repository) -> None:
         """Should not record anything when all use defaults."""
         mock_repository.get_prompt.return_value = None  # All defaults
         resolver = PromptResolver(mock_repository)

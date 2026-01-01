@@ -18,7 +18,7 @@ class TestWorkflowRepository:
         """WorkflowRepository instance."""
         return WorkflowRepository(db_with_schema)
 
-    async def test_create_workflow(self, repository):
+    async def test_create_workflow(self, repository) -> None:
         """Can create a workflow."""
         state = ServerExecutionState(
             id=str(uuid4()),
@@ -34,7 +34,7 @@ class TestWorkflowRepository:
         assert retrieved is not None
         assert retrieved.issue_id == "ISSUE-123"
 
-    async def test_get_by_worktree(self, repository):
+    async def test_get_by_worktree(self, repository) -> None:
         """Can get active workflow by worktree path."""
         state = ServerExecutionState(
             id=str(uuid4()),
@@ -49,7 +49,7 @@ class TestWorkflowRepository:
         assert retrieved is not None
         assert retrieved.id == state.id
 
-    async def test_get_by_worktree_only_active(self, repository):
+    async def test_get_by_worktree_only_active(self, repository) -> None:
         """get_by_worktree only returns active workflows."""
         # Create completed workflow
         completed = ServerExecutionState(
@@ -65,7 +65,7 @@ class TestWorkflowRepository:
         result = await repository.get_by_worktree("/path/to/repo")
         assert result is None
 
-    async def test_update_workflow(self, repository):
+    async def test_update_workflow(self, repository) -> None:
         """Can update workflow state."""
         state = ServerExecutionState(
             id=str(uuid4()),
@@ -84,7 +84,7 @@ class TestWorkflowRepository:
         assert retrieved.workflow_status == "in_progress"
         assert retrieved.started_at is not None
 
-    async def test_set_status_validates_transition(self, repository):
+    async def test_set_status_validates_transition(self, repository) -> None:
         """set_status validates state machine transitions."""
         state = ServerExecutionState(
             id=str(uuid4()),
@@ -99,7 +99,7 @@ class TestWorkflowRepository:
         with pytest.raises(InvalidStateTransitionError):
             await repository.set_status(state.id, "completed")
 
-    async def test_set_status_with_failure_reason(self, repository):
+    async def test_set_status_with_failure_reason(self, repository) -> None:
         """set_status can set failure reason."""
         state = ServerExecutionState(
             id=str(uuid4()),
@@ -116,7 +116,7 @@ class TestWorkflowRepository:
         assert retrieved.workflow_status == "failed"
         assert retrieved.failure_reason == "Something went wrong"
 
-    async def test_list_active_workflows(self, repository):
+    async def test_list_active_workflows(self, repository) -> None:
         """Can list all active workflows."""
         # Create various workflows
         active1 = ServerExecutionState(
@@ -155,7 +155,7 @@ class TestWorkflowRepository:
     # Event Persistence Tests
     # =========================================================================
 
-    async def test_save_event(self, repository, make_event):
+    async def test_save_event(self, repository, make_event) -> None:
         """Should persist event to database."""
         # First create a workflow (required for foreign key)
         state = ServerExecutionState(
@@ -183,7 +183,7 @@ class TestWorkflowRepository:
         max_seq = await repository.get_max_event_sequence("wf-1")
         assert max_seq == 1
 
-    async def test_get_max_event_sequence_with_events(self, repository, make_event):
+    async def test_get_max_event_sequence_with_events(self, repository, make_event) -> None:
         """Should return max sequence number."""
         # First create a workflow
         state = ServerExecutionState(
@@ -210,7 +210,7 @@ class TestWorkflowRepository:
         max_seq = await repository.get_max_event_sequence("wf-1")
         assert max_seq == 3
 
-    async def test_save_event_with_pydantic_model_in_data(self, repository, make_event):
+    async def test_save_event_with_pydantic_model_in_data(self, repository, make_event) -> None:
         """Should serialize Pydantic models in event data.
 
         Regression test for: TypeError: Object of type Profile is not JSON serializable
@@ -253,7 +253,7 @@ class TestWorkflowRepository:
         max_seq = await repository.get_max_event_sequence("wf-pydantic")
         assert max_seq == 1
 
-    async def test_get_recent_events(self, repository, make_event):
+    async def test_get_recent_events(self, repository, make_event) -> None:
         """Should return recent events for a workflow in chronological order."""
         # Create a workflow
         state = ServerExecutionState(
@@ -286,7 +286,7 @@ class TestWorkflowRepository:
         assert events[1].id == "evt-recent-2"
         assert events[2].id == "evt-recent-3"
 
-    async def test_get_recent_events_with_limit(self, repository, make_event):
+    async def test_get_recent_events_with_limit(self, repository, make_event) -> None:
         """Should respect limit parameter."""
         # Create a workflow
         state = ServerExecutionState(
@@ -318,7 +318,7 @@ class TestWorkflowRepository:
         assert events[0].id == "evt-lim-4"
         assert events[1].id == "evt-lim-5"
 
-    async def test_get_recent_events_empty(self, repository):
+    async def test_get_recent_events_empty(self, repository) -> None:
         """Should return empty list for workflow with no events."""
         # Create a workflow
         state = ServerExecutionState(
@@ -337,7 +337,7 @@ class TestWorkflowRepository:
         assert len(events) == 0
 
     @pytest.mark.parametrize("limit", [0, -1, -100])
-    async def test_get_recent_events_non_positive_limit(self, repository, limit):
+    async def test_get_recent_events_non_positive_limit(self, repository, limit) -> None:
         """Should return empty list for non-positive limit values."""
         # No need to create workflow - should return early before DB query
         events = await repository.get_recent_events("any-workflow", limit=limit)

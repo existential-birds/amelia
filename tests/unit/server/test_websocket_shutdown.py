@@ -7,7 +7,7 @@ from amelia.server.events.connection_manager import ConnectionManager
 class TestWebSocketShutdown:
     """Tests for WebSocket shutdown during server lifecycle."""
 
-    async def test_lifespan_closes_websocket_connections_on_shutdown(self):
+    async def test_lifespan_closes_websocket_connections_on_shutdown(self) -> None:
         """Lifespan shutdown closes all WebSocket connections."""
         # Create a connection manager instance for testing
         connection_manager = ConnectionManager()

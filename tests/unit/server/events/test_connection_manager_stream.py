@@ -32,7 +32,7 @@ class TestConnectionManagerStream:
 
     async def test_broadcast_stream_sends_to_all_connections(
         self, manager, websocket_factory, sample_stream_event
-    ):
+    ) -> None:
         """broadcast_stream() should send to all connections regardless of subscription."""
         ws1 = websocket_factory()
         ws2 = websocket_factory()
@@ -60,7 +60,7 @@ class TestConnectionManagerStream:
 
     async def test_broadcast_stream_payload_structure(
         self, manager, websocket_factory, sample_stream_event
-    ):
+    ) -> None:
         """broadcast_stream() should send correct payload structure with subtype."""
         mock_websocket = websocket_factory()
         await manager.connect(mock_websocket)
@@ -85,7 +85,7 @@ class TestConnectionManagerStream:
 
     async def test_broadcast_stream_handles_disconnected_socket(
         self, manager, websocket_factory, sample_stream_event
-    ):
+    ) -> None:
         """broadcast_stream() should remove disconnected sockets gracefully."""
         mock_websocket = websocket_factory()
         await manager.connect(mock_websocket)
@@ -98,7 +98,7 @@ class TestConnectionManagerStream:
 
     async def test_broadcast_stream_timeout_handling(
         self, manager, websocket_factory, sample_stream_event
-    ):
+    ) -> None:
         """broadcast_stream() should timeout slow clients and remove them."""
         mock_websocket = websocket_factory()
         await manager.connect(mock_websocket)
@@ -115,7 +115,7 @@ class TestConnectionManagerStream:
         # Connection should be removed after timeout
         assert manager.active_connections == 0
 
-    async def test_broadcast_stream_with_no_connections(self, manager, sample_stream_event):
+    async def test_broadcast_stream_with_no_connections(self, manager, sample_stream_event) -> None:
         """broadcast_stream() should handle no connections gracefully."""
         assert manager.active_connections == 0
 
@@ -124,7 +124,7 @@ class TestConnectionManagerStream:
 
     async def test_broadcast_stream_concurrent_sends(
         self, manager, websocket_factory, sample_stream_event
-    ):
+    ) -> None:
         """broadcast_stream() should send to multiple clients concurrently."""
         # Create multiple websockets
         websockets = [websocket_factory() for _ in range(5)]
@@ -140,7 +140,7 @@ class TestConnectionManagerStream:
 
     async def test_broadcast_stream_serializes_datetime(
         self, manager, websocket_factory
-    ):
+    ) -> None:
         """broadcast_stream() should serialize datetime to ISO string."""
         mock_websocket = websocket_factory()
         timestamp = datetime(2025, 1, 15, 10, 30, 0, tzinfo=UTC)
@@ -166,7 +166,7 @@ class TestConnectionManagerStream:
 
     async def test_broadcast_stream_with_tool_data(
         self, manager, websocket_factory
-    ):
+    ) -> None:
         """broadcast_stream() should include tool data when present."""
         mock_websocket = websocket_factory()
         event = StreamEvent(
@@ -192,7 +192,7 @@ class TestConnectionManagerStream:
 
     async def test_broadcast_stream_partial_failure(
         self, manager, websocket_factory, sample_stream_event
-    ):
+    ) -> None:
         """broadcast_stream() should continue if some clients fail."""
         # Create three websockets
         ws1 = websocket_factory()

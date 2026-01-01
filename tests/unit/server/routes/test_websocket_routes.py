@@ -43,7 +43,7 @@ class TestWebSocketEndpoint:
     )
     async def test_websocket_handles_client_messages(
         self, mock_connection_manager, mock_repository, mock_websocket, message, expected_method, expected_arg
-    ):
+    ) -> None:
         """WebSocket routes client messages to connection manager."""
         mock_websocket.receive_json.side_effect = [message, WebSocketDisconnect()]
 
@@ -56,7 +56,7 @@ class TestWebSocketEndpoint:
         else:
             method.assert_awaited_once_with(mock_websocket)
 
-    async def test_websocket_backfill_when_since_provided(self, mock_connection_manager, mock_repository, mock_websocket):
+    async def test_websocket_backfill_when_since_provided(self, mock_connection_manager, mock_repository, mock_websocket) -> None:
         """WebSocket performs backfill when ?since= parameter provided."""
         # Mock backfill events
         backfill_events = [
@@ -100,7 +100,7 @@ class TestWebSocketEndpoint:
         )
         assert backfill_complete_sent
 
-    async def test_websocket_sends_backfill_expired_when_event_missing(self, mock_connection_manager, mock_repository, mock_websocket):
+    async def test_websocket_sends_backfill_expired_when_event_missing(self, mock_connection_manager, mock_repository, mock_websocket) -> None:
         """WebSocket sends backfill_expired when requested event doesn't exist."""
         # Simulate event not found - get_events_after raises ValueError
         mock_repository.get_events_after.side_effect = ValueError("Event evt-nonexistent not found")

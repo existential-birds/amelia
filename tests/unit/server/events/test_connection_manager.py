@@ -26,14 +26,14 @@ class TestConnectionManager:
         ws.close = AsyncMock()
         return ws
 
-    async def test_disconnect_removes_connection(self, manager, mock_websocket):
+    async def test_disconnect_removes_connection(self, manager, mock_websocket) -> None:
         """disconnect() removes connection from tracking."""
         await manager.connect(mock_websocket)
         await manager.disconnect(mock_websocket)
 
         assert manager.active_connections == 0
 
-    async def test_subscribe_multiple_workflows(self, manager, mock_websocket):
+    async def test_subscribe_multiple_workflows(self, manager, mock_websocket) -> None:
         """Can subscribe to multiple workflows."""
         await manager.connect(mock_websocket)
         await manager.subscribe(mock_websocket, "wf-123")
@@ -42,7 +42,7 @@ class TestConnectionManager:
         assert "wf-123" in manager._connections[mock_websocket]
         assert "wf-456" in manager._connections[mock_websocket]
 
-    async def test_subscribe_all_clears_subscription_set(self, manager, mock_websocket):
+    async def test_subscribe_all_clears_subscription_set(self, manager, mock_websocket) -> None:
         """subscribe_all() clears subscription set (empty = all)."""
         await manager.connect(mock_websocket)
         await manager.subscribe(mock_websocket, "wf-123")
@@ -61,7 +61,7 @@ class TestConnectionManager:
     )
     async def test_broadcast_filtering(
         self, manager, mock_websocket, subscription_workflow, event_workflow, should_send, make_event
-    ):
+    ) -> None:
         """broadcast() respects subscription filters."""
         await manager.connect(mock_websocket)
         if subscription_workflow:
@@ -81,7 +81,7 @@ class TestConnectionManager:
         else:
             mock_websocket.send_json.assert_not_awaited()
 
-    async def test_broadcast_handles_disconnected_socket(self, manager, mock_websocket, make_event):
+    async def test_broadcast_handles_disconnected_socket(self, manager, mock_websocket, make_event) -> None:
         """broadcast() removes disconnected sockets gracefully."""
         await manager.connect(mock_websocket)
         mock_websocket.send_json.side_effect = WebSocketDisconnect()
@@ -98,7 +98,7 @@ class TestConnectionManager:
         # Connection should be removed after disconnect
         assert manager.active_connections == 0
 
-    async def test_close_all_handles_errors(self, manager, mock_websocket):
+    async def test_close_all_handles_errors(self, manager, mock_websocket) -> None:
         """close_all() handles errors gracefully."""
         mock_websocket.close.side_effect = Exception("Close failed")
 
@@ -108,7 +108,7 @@ class TestConnectionManager:
         # Should not raise, just clear connections
         assert manager.active_connections == 0
 
-    async def test_active_connections_count(self, manager):
+    async def test_active_connections_count(self, manager) -> None:
         """active_connections property returns correct count."""
         ws1 = AsyncMock()
         ws1.accept = AsyncMock()

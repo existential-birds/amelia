@@ -97,7 +97,7 @@ def test_emit_subscriber_exception(event_bus: EventBus, sample_event: WorkflowEv
     assert received[0] == sample_event
 
 
-async def test_broadcast_task_tracking(event_bus: EventBus, sample_event: WorkflowEvent):
+async def test_broadcast_task_tracking(event_bus: EventBus, sample_event: WorkflowEvent) -> None:
     """Broadcast tasks should be tracked and cleaned up."""
     broadcast_called = asyncio.Event()
 
@@ -119,7 +119,7 @@ async def test_broadcast_task_tracking(event_bus: EventBus, sample_event: Workfl
     # If we get here, broadcast was called with the event
 
 
-async def test_cleanup_waits_for_broadcast_tasks(event_bus: EventBus, sample_event: WorkflowEvent):
+async def test_cleanup_waits_for_broadcast_tasks(event_bus: EventBus, sample_event: WorkflowEvent) -> None:
     """cleanup() should wait for all broadcast tasks to complete."""
     # Create mock connection manager with slow broadcast
     mock_manager = AsyncMock()
@@ -146,7 +146,7 @@ async def test_cleanup_waits_for_broadcast_tasks(event_bus: EventBus, sample_eve
     assert len(event_bus._broadcast_tasks) == 0
 
 
-async def test_cleanup_handles_task_exceptions(event_bus: EventBus, sample_event: WorkflowEvent):
+async def test_cleanup_handles_task_exceptions(event_bus: EventBus, sample_event: WorkflowEvent) -> None:
     """cleanup() should handle exceptions in broadcast tasks gracefully."""
     # Create mock connection manager that raises
     mock_manager = AsyncMock()

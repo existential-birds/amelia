@@ -24,14 +24,14 @@ class TestHumanApprovalNodeServerMode:
 
     async def test_server_mode_returns_state_unchanged_when_not_approved(
         self, base_state
-    ):
+    ) -> None:
         """In server mode, node returns empty dict (interrupt handles pause)."""
         config = {"configurable": {"execution_mode": "server"}}
         result = await human_approval_node(base_state, config)
         # Should return empty dict - interrupt mechanism handles the pause
         assert result == {}
 
-    async def test_server_mode_preserves_approval_from_resume(self, base_state):
+    async def test_server_mode_preserves_approval_from_resume(self, base_state) -> None:
         """In server mode, node returns empty dict (approval preserved by state)."""
         state = base_state.model_copy(update={"human_approved": True})
         config = {"configurable": {"execution_mode": "server"}}
@@ -49,7 +49,7 @@ class TestHumanApprovalNodeCLIMode:
     @patch("amelia.core.orchestrator.typer.echo")
     async def test_cli_mode_prompts_user(
         self, mock_echo, mock_secho, mock_prompt, mock_confirm, base_state
-    ):
+    ) -> None:
         """In CLI mode, node prompts user for approval."""
         mock_confirm.return_value = True
         mock_prompt.return_value = ""
@@ -66,7 +66,7 @@ class TestHumanApprovalNodeCLIMode:
     @patch("amelia.core.orchestrator.typer.echo")
     async def test_cli_mode_default_when_no_config(
         self, mock_echo, mock_secho, mock_prompt, mock_confirm, base_state
-    ):
+    ) -> None:
         """CLI mode is default when no execution_mode in config."""
         mock_confirm.return_value = False
         mock_prompt.return_value = "rejected"
