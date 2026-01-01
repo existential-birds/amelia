@@ -2,18 +2,9 @@
  * @fileoverview Token usage card component for workflow detail page.
  */
 import { cn } from '@/lib/utils';
+import { AGENT_STYLES } from '@/lib/constants';
 import { formatTokens, formatCost, formatDuration } from '@/utils/workflow';
 import type { TokenSummary } from '@/types';
-
-/** Style mapping for agent names in the usage table. */
-const agentStyles: Record<string, string> = {
-  PM: 'text-agent-pm',
-  ORCHESTRATOR: 'text-muted-foreground',
-  ARCHITECT: 'text-agent-architect',
-  DEVELOPER: 'text-agent-developer',
-  REVIEWER: 'text-agent-reviewer',
-  SYSTEM: 'text-muted-foreground',
-};
 
 interface UsageCardProps {
   /** Token usage summary with breakdown by agent. Null/undefined hides the card. */
@@ -111,7 +102,7 @@ export function UsageCard({ tokenUsage, className }: UsageCardProps) {
           <tbody>
             {tokenUsage.breakdown.map((usage) => (
               <tr key={usage.id} className="border-b border-border/50 last:border-0">
-                <td className={cn('py-2 pr-4', agentStyles[usage.agent.toUpperCase()] || 'text-foreground')}>{usage.agent}</td>
+                <td className={cn('py-2 pr-4', AGENT_STYLES[usage.agent.toUpperCase()]?.text || 'text-foreground')}>{usage.agent}</td>
                 <td className="py-2 px-3 text-muted-foreground">{usage.model}</td>
                 <td className="py-2 px-3 text-right text-muted-foreground tabular-nums">
                   {formatTokens(usage.input_tokens)}

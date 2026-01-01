@@ -2,7 +2,7 @@
  * @fileoverview Real-time activity log for workflow events.
  */
 import { useEffect, useRef, useMemo } from 'react';
-import { Radio, Zap } from 'lucide-react';
+import { Radio, RadioTower, Zap } from 'lucide-react';
 import { ActivityLogItem } from '@/components/ActivityLogItem';
 import { useWorkflowStore } from '@/store/workflowStore';
 import { useStreamStore } from '@/store/stream-store';
@@ -141,7 +141,7 @@ export function ActivityLog({ workflowId, initialEvents = [], className }: Activ
           ACTIVITY LOG
         </h3>
         <div className="flex items-center gap-3">
-          {/* Live mode toggle */}
+          {/* Live mode toggle - uses different icons for a11y (color-blind users) */}
           <button
             type="button"
             onClick={() => setLiveMode(!liveMode)}
@@ -154,8 +154,12 @@ export function ActivityLog({ workflowId, initialEvents = [], className }: Activ
             aria-pressed={liveMode}
             title={liveMode ? 'Hide live stream events' : 'Show live stream events'}
           >
-            <Radio className={cn('w-3 h-3', liveMode && 'animate-pulse')} />
-            Live
+            {liveMode ? (
+              <RadioTower className="w-3 h-3 animate-pulse" aria-hidden="true" />
+            ) : (
+              <Radio className="w-3 h-3" aria-hidden="true" />
+            )}
+            {liveMode ? 'Live' : 'Paused'}
           </button>
 
           <span className="font-mono text-xs text-muted-foreground">

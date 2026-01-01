@@ -131,7 +131,8 @@ describe('ActivityLog', () => {
   describe('Live Mode Toggle', () => {
     it('renders live mode toggle button', () => {
       render(<ActivityLog workflowId="wf-001" initialEvents={mockEvents} />);
-      const toggle = screen.getByRole('button', { name: /live/i });
+      // When live mode is off, button shows "Paused"
+      const toggle = screen.getByRole('button', { name: /paused/i });
       expect(toggle).toBeInTheDocument();
       expect(toggle).toHaveAttribute('aria-pressed', 'false');
     });
@@ -150,7 +151,8 @@ describe('ActivityLog', () => {
       });
 
       render(<ActivityLog workflowId="wf-001" initialEvents={mockEvents} />);
-      const toggle = screen.getByRole('button', { name: /live/i });
+      // When live mode is off, button shows "Paused"
+      const toggle = screen.getByRole('button', { name: /paused/i });
 
       await user.click(toggle);
 

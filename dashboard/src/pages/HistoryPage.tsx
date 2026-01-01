@@ -9,6 +9,24 @@ import { cn } from '@/lib/utils';
 import { historyLoader } from '@/loaders/workflows';
 import { formatDuration, formatTokens, formatCost } from '@/utils/workflow';
 
+/** Cached date formatter for history timestamps. */
+const dateFormatter = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+});
+
+/**
+ * Formats an ISO date string for display.
+ * @param dateString - ISO date string or null
+ * @returns Formatted date string (e.g., "Dec 7, 10:30 AM")
+ */
+function formatDate(dateString: string | null): string {
+  if (!dateString) return 'N/A';
+  return dateFormatter.format(new Date(dateString));
+}
+
 /**
  * Displays a list of past workflows with status and timestamps.
  *
@@ -23,22 +41,6 @@ export default function HistoryPage() {
   if (workflows.length === 0) {
     return <WorkflowEmptyState variant="no-activity" />;
   }
-
-  /**
-   * Formats an ISO date string for display.
-   * @param dateString - ISO date string or null
-   * @returns Formatted date string (e.g., "Dec 7, 10:30 AM")
-   */
-  const formatDate = (dateString: string | null): string => {
-    if (!dateString) return 'N/A';
-    const date = new Date(dateString);
-    return new Intl.DateTimeFormat('en-US', {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    }).format(date);
-  };
 
   return (
     <div className="flex flex-col w-full">
