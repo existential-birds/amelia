@@ -260,7 +260,7 @@ export function PromptEditModal({
                   value={content}
                   onChange={(e) => setContent(e.target.value)}
                   className={cn(
-                    'flex-1 w-full min-h-0 resize-none rounded-lg border-2 px-4 py-3 text-sm font-mono leading-relaxed',
+                    'flex-1 w-full min-h-0 resize-none rounded-lg border-2 px-4 py-3 text-xs font-mono leading-snug',
                     'bg-muted',
                     'placeholder:text-muted-foreground/60',
                     'focus-visible:outline-none focus-visible:ring-4',
@@ -307,7 +307,7 @@ export function PromptEditModal({
           )}
         </div>
 
-        <DialogFooter className="px-6 py-4 border-t border-border/50 bg-muted gap-2 sm:gap-0">
+        <DialogFooter className="px-6 py-4 border-t border-border/50 bg-muted gap-2">
           <Button
             variant="ghost"
             onClick={handleResetToDefault}
