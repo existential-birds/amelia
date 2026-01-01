@@ -141,15 +141,45 @@ Be specific with file paths and line numbers. Provide actionable feedback."""
         self,
         driver: DriverInterface,
         stream_emitter: StreamEmitter | None = None,
+        prompts: dict[str, str] | None = None,
     ):
         """Initialize the Reviewer agent.
 
         Args:
             driver: LLM driver interface for generating reviews.
             stream_emitter: Optional callback for streaming events.
+            prompts: Optional dict mapping prompt IDs to custom content.
+                Supports keys: "reviewer.template", "reviewer.structured", "reviewer.agentic".
         """
         self.driver = driver
         self._stream_emitter = stream_emitter
+        self._prompts = prompts or {}
+
+    @property
+    def template_prompt(self) -> str:
+        """Get the template prompt for single review.
+
+        Returns custom prompt if injected, otherwise class default.
+        Template should contain {persona} placeholder.
+        """
+        return self._prompts.get("reviewer.template", self.SYSTEM_PROMPT_TEMPLATE)
+
+    @property
+    def structured_prompt(self) -> str:
+        """Get the system prompt for structured review.
+
+        Returns custom prompt if injected, otherwise class default.
+        """
+        return self._prompts.get("reviewer.structured", self.STRUCTURED_SYSTEM_PROMPT)
+
+    @property
+    def agentic_prompt(self) -> str:
+        """Get the system prompt for agentic review.
+
+        Returns custom prompt if injected, otherwise class default.
+        Template should contain {base_commit} placeholder.
+        """
+        return self._prompts.get("reviewer.agentic", self.AGENTIC_REVIEW_PROMPT)
 
     def _build_prompt(
         self,
@@ -278,7 +308,7 @@ Be specific with file paths and line numbers. Provide actionable feedback."""
 
         # Build prompt and system prompt
         prompt = self._build_prompt(state, code_changes=code_changes)
-        system_prompt = self.SYSTEM_PROMPT_TEMPLATE.format(persona=persona)
+        system_prompt = self.template_prompt.format(persona=persona)
 
         logger.debug(
             "Built review prompt",
@@ -428,12 +458,12 @@ Be specific with file paths and line numbers. Provide actionable feedback."""
             agent="reviewer",
             method="structured_review",
             prompt_length=len(prompt),
-            system_prompt_length=len(self.STRUCTURED_SYSTEM_PROMPT),
+            system_prompt_length=len(self.structured_prompt),
         )
 
         response, new_session_id = await self.driver.generate(
             prompt=prompt,
-            system_prompt=self.STRUCTURED_SYSTEM_PROMPT,
+            system_prompt=self.structured_prompt,
             schema=StructuredReviewResult,
             cwd=profile.working_dir,
             session_id=state.driver_session_id,
@@ -558,7 +588,7 @@ Be specific with file paths and line numbers. Provide actionable feedback."""
 The changes are in git - diff against commit: {base_commit}"""
 
         # Build system prompt with base_commit
-        system_prompt = self.AGENTIC_REVIEW_PROMPT.format(base_commit=base_commit)
+        system_prompt = self.agentic_prompt.format(base_commit=base_commit)
 
         cwd = profile.working_dir or "."
         session_id = state.driver_session_id

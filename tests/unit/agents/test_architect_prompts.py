@@ -1,0 +1,155 @@
+"""Tests for Architect agent prompt injection."""
+from collections.abc import Callable
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+
+from amelia.agents.architect import Architect, MarkdownPlanOutput
+from amelia.core.state import ExecutionState
+from amelia.core.types import Profile
+
+
+class TestArchitectPromptInjection:
+    """Tests for Architect agent prompt injection."""
+
+    @pytest.fixture
+    def plan_output(self) -> MarkdownPlanOutput:
+        """Sample plan output from driver."""
+        return MarkdownPlanOutput(
+            goal="Test goal",
+            plan_markdown="# Test Plan",
+            key_files=["test.py"],
+        )
+
+    async def test_uses_injected_system_prompt_for_analyze(
+        self,
+        mock_driver: MagicMock,
+        mock_execution_state_factory: Callable[..., tuple[ExecutionState, Profile]],
+    ) -> None:
+        """Should use injected system prompt instead of default for analyze."""
+        custom_prompt = "You are a custom architect..."
+        prompts = {"architect.system": custom_prompt}
+
+        state, profile = mock_execution_state_factory()
+        mock_driver.generate = AsyncMock(return_value=(
+            {"goal": "Test goal", "strategy": "Test strategy", "key_files": [], "risks": []},
+            "session-1",
+        ))
+
+        architect = Architect(mock_driver, prompts=prompts)
+        await architect.analyze(state, profile, workflow_id="wf-1")
+
+        # Verify the custom prompt was used
+        call_args = mock_driver.generate.call_args
+        assert call_args.kwargs["system_prompt"] == custom_prompt
+
+    async def test_uses_injected_plan_prompt(
+        self,
+        mock_driver: MagicMock,
+        mock_execution_state_factory: Callable[..., tuple[ExecutionState, Profile]],
+        plan_output: MarkdownPlanOutput,
+    ) -> None:
+        """Should use injected plan prompt for plan method."""
+        custom_plan_prompt = "Custom plan format..."
+        prompts = {"architect.plan": custom_plan_prompt}
+
+        state, profile = mock_execution_state_factory()
+        mock_driver.generate = AsyncMock(return_value=(
+            plan_output.model_dump(),
+            "session-1",
+        ))
+
+        architect = Architect(mock_driver, prompts=prompts)
+        await architect.plan(state, profile, workflow_id="wf-1")
+
+        call_args = mock_driver.generate.call_args
+        assert call_args.kwargs["system_prompt"] == custom_plan_prompt
+
+    async def test_falls_back_to_class_default_for_analyze(
+        self,
+        mock_driver: MagicMock,
+        mock_execution_state_factory: Callable[..., tuple[ExecutionState, Profile]],
+    ) -> None:
+        """Should use class default when system prompt not injected."""
+        state, profile = mock_execution_state_factory()
+        mock_driver.generate = AsyncMock(return_value=(
+            {"goal": "Test goal", "strategy": "Test strategy", "key_files": [], "risks": []},
+            "session-1",
+        ))
+
+        architect = Architect(mock_driver)  # No prompts injected
+        await architect.analyze(state, profile, workflow_id="wf-1")
+
+        call_args = mock_driver.generate.call_args
+        # Verify default system prompt is used (contains architect-specific text)
+        assert "senior software architect" in call_args.kwargs["system_prompt"]
+
+    async def test_falls_back_to_class_default_for_plan(
+        self,
+        mock_driver: MagicMock,
+        mock_execution_state_factory: Callable[..., tuple[ExecutionState, Profile]],
+        plan_output: MarkdownPlanOutput,
+    ) -> None:
+        """Should use class default when plan prompt not injected."""
+        state, profile = mock_execution_state_factory()
+        mock_driver.generate = AsyncMock(return_value=(
+            plan_output.model_dump(),
+            "session-1",
+        ))
+
+        architect = Architect(mock_driver)  # No prompts injected
+        await architect.plan(state, profile, workflow_id="wf-1")
+
+        call_args = mock_driver.generate.call_args
+        # Verify default plan system prompt is used
+        system_prompt = call_args.kwargs["system_prompt"]
+        assert "senior software architect" in system_prompt
+        assert "Phase" in system_prompt or "phase" in system_prompt.lower()
+
+    async def test_system_prompt_property(
+        self,
+        mock_driver: MagicMock,
+    ) -> None:
+        """Test system_prompt property returns correct value."""
+        custom_prompt = "Custom system prompt"
+
+        # With custom prompt
+        architect_custom = Architect(mock_driver, prompts={"architect.system": custom_prompt})
+        assert architect_custom.system_prompt == custom_prompt
+
+        # Without custom prompt (default)
+        architect_default = Architect(mock_driver)
+        assert "senior software architect" in architect_default.system_prompt
+
+    async def test_plan_prompt_property(
+        self,
+        mock_driver: MagicMock,
+    ) -> None:
+        """Test plan_prompt property returns correct value."""
+        custom_prompt = "Custom plan prompt"
+
+        # With custom prompt
+        architect_custom = Architect(mock_driver, prompts={"architect.plan": custom_prompt})
+        assert architect_custom.plan_prompt == custom_prompt
+
+        # Without custom prompt (default)
+        architect_default = Architect(mock_driver)
+        assert "Phase" in architect_default.plan_prompt or "phase" in architect_default.plan_prompt.lower()
+
+    async def test_empty_prompts_dict_uses_defaults(
+        self,
+        mock_driver: MagicMock,
+        mock_execution_state_factory: Callable[..., tuple[ExecutionState, Profile]],
+    ) -> None:
+        """Empty prompts dict should fall back to defaults."""
+        state, profile = mock_execution_state_factory()
+        mock_driver.generate = AsyncMock(return_value=(
+            {"goal": "Test goal", "strategy": "Test strategy", "key_files": [], "risks": []},
+            "session-1",
+        ))
+
+        architect = Architect(mock_driver, prompts={})  # Empty dict
+        await architect.analyze(state, profile, workflow_id="wf-1")
+
+        call_args = mock_driver.generate.call_args
+        assert "senior software architect" in call_args.kwargs["system_prompt"]
