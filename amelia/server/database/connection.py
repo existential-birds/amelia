@@ -8,6 +8,8 @@ from typing import Any
 import aiosqlite
 from loguru import logger
 
+from amelia.agents.prompts.defaults import PROMPT_DEFAULTS
+
 
 # Type alias for SQLite-compatible values
 SqliteValue = None | int | float | str | bytes | datetime
@@ -381,8 +383,6 @@ class Database:
         Creates prompt entries for each default if they don't exist.
         Call this after ensure_schema().
         """
-        from amelia.agents.prompts.defaults import PROMPT_DEFAULTS  # noqa: PLC0415
-
         for prompt_id, default in PROMPT_DEFAULTS.items():
             existing = await self.fetch_one(
                 "SELECT 1 FROM prompts WHERE id = ?", (prompt_id,)
