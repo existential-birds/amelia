@@ -4,6 +4,11 @@ import type {
   WorkflowDetailResponse,
   WorkflowListResponse,
   ErrorResponse,
+  PromptSummary,
+  PromptDetail,
+  VersionSummary,
+  VersionDetail,
+  DefaultContent,
 } from '../types';
 
 /**
@@ -241,6 +246,136 @@ export const api = {
         const bTime = b.started_at ? new Date(b.started_at).getTime() : 0;
         return bTime - aTime;
       });
+  },
+
+  // ==========================================================================
+  // Prompts API
+  // ==========================================================================
+
+  /**
+   * Get all prompts with current version info.
+   *
+   * @returns Array of prompt summaries.
+   * @throws {ApiError} When the API request fails.
+   *
+   * @example
+   * ```typescript
+   * const prompts = await api.getPrompts();
+   * console.log(`Found ${prompts.length} prompts`);
+   * ```
+   */
+  async getPrompts(): Promise<PromptSummary[]> {
+    const response = await fetch(`${API_BASE_URL}/prompts`);
+    const data = await handleResponse<{ prompts: PromptSummary[] }>(response);
+    return data.prompts;
+  },
+
+  /**
+   * Get prompt detail with version history.
+   *
+   * @param id - The unique identifier of the prompt.
+   * @returns Detailed prompt information including version history.
+   * @throws {ApiError} When the prompt is not found or the API request fails.
+   *
+   * @example
+   * ```typescript
+   * const prompt = await api.getPrompt('architect.system');
+   * console.log(`Prompt has ${prompt.versions.length} versions`);
+   * ```
+   */
+  async getPrompt(id: string): Promise<PromptDetail> {
+    const response = await fetch(`${API_BASE_URL}/prompts/${id}`);
+    return handleResponse<PromptDetail>(response);
+  },
+
+  /**
+   * Get all versions for a prompt.
+   *
+   * @param promptId - The unique identifier of the prompt.
+   * @returns Array of version summaries.
+   * @throws {ApiError} When the prompt is not found or the API request fails.
+   *
+   * @example
+   * ```typescript
+   * const versions = await api.getPromptVersions('architect.system');
+   * versions.forEach(v => console.log(`v${v.version_number}: ${v.change_note}`));
+   * ```
+   */
+  async getPromptVersions(promptId: string): Promise<VersionSummary[]> {
+    const response = await fetch(`${API_BASE_URL}/prompts/${promptId}/versions`);
+    const data = await handleResponse<{ versions: VersionSummary[] }>(response);
+    return data.versions;
+  },
+
+  /**
+   * Create a new version (becomes active immediately).
+   *
+   * @param promptId - The unique identifier of the prompt.
+   * @param content - The new prompt content.
+   * @param changeNote - Optional note describing the changes.
+   * @returns The created version details.
+   * @throws {ApiError} When the prompt is not found or the API request fails.
+   *
+   * @example
+   * ```typescript
+   * const version = await api.createPromptVersion(
+   *   'architect.system',
+   *   'New prompt content...',
+   *   'Updated to include security considerations'
+   * );
+   * console.log(`Created version ${version.version_number}`);
+   * ```
+   */
+  async createPromptVersion(
+    promptId: string,
+    content: string,
+    changeNote: string | null
+  ): Promise<VersionDetail> {
+    const response = await fetch(`${API_BASE_URL}/prompts/${promptId}/versions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content, change_note: changeNote }),
+    });
+    return handleResponse<VersionDetail>(response);
+  },
+
+  /**
+   * Reset prompt to hardcoded default.
+   *
+   * @param promptId - The unique identifier of the prompt.
+   * @returns Promise that resolves when the reset is successful.
+   * @throws {ApiError} When the prompt is not found or the API request fails.
+   *
+   * @example
+   * ```typescript
+   * await api.resetPromptToDefault('architect.system');
+   * console.log('Prompt reset to default');
+   * ```
+   */
+  async resetPromptToDefault(promptId: string): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/prompts/${promptId}/reset`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    await handleResponse(response);
+  },
+
+  /**
+   * Get the hardcoded default content for a prompt.
+   *
+   * @param promptId - The unique identifier of the prompt.
+   * @returns The default content for the prompt.
+   * @throws {ApiError} When the prompt is not found or the API request fails.
+   *
+   * @example
+   * ```typescript
+   * const defaultContent = await api.getPromptDefault('architect.system');
+   * console.log(`Default content: ${defaultContent.content}`);
+   * ```
+   */
+  async getPromptDefault(promptId: string): Promise<DefaultContent> {
+    const response = await fetch(`${API_BASE_URL}/prompts/${promptId}/default`);
+    return handleResponse<DefaultContent>(response);
   },
 };
 

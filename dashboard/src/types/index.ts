@@ -531,3 +531,63 @@ export interface ConnectionState {
   /** Error message if connection failed, otherwise undefined. */
   error?: string;
 }
+
+// ============================================================================
+// Prompt Types
+// ============================================================================
+
+/**
+ * Summary of a prompt for list views.
+ */
+export interface PromptSummary {
+  id: string;
+  agent: string;
+  name: string;
+  description: string | null;
+  current_version_id: string | null;
+  current_version_number: number | null;
+}
+
+/**
+ * Summary of a prompt version.
+ */
+export interface VersionSummary {
+  id: string;
+  version_number: number;
+  created_at: string;
+  change_note: string | null;
+}
+
+/**
+ * Detailed prompt with version history.
+ */
+export interface PromptDetail {
+  id: string;
+  agent: string;
+  name: string;
+  description: string | null;
+  current_version_id: string | null;
+  versions: VersionSummary[];
+}
+
+/**
+ * Full version details including content.
+ */
+export interface VersionDetail {
+  id: string;
+  prompt_id: string;
+  version_number: number;
+  content: string;
+  created_at: string;
+  change_note: string | null;
+}
+
+/**
+ * Default content for a prompt.
+ */
+export interface DefaultContent {
+  prompt_id: string;
+  content: string;
+  name: string;
+  description: string;
+}
