@@ -1,6 +1,7 @@
 """Tests for LangGraph to WorkflowEvent mapping."""
 
-from unittest.mock import AsyncMock, MagicMock
+from typing import Any
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -36,54 +37,58 @@ class TestHandleGraphEvent:
         self, service: OrchestratorService
     ) -> None:
         """on_chain_start for stage node emits STAGE_STARTED event."""
-        service._emit = AsyncMock()
-        event = {"event": "on_chain_start", "name": "architect_node"}
+        event: dict[str, Any] = {"event": "on_chain_start", "name": "architect_node"}
 
-        await service._handle_graph_event("wf-123", event)
+        with patch.object(service, "_emit", new_callable=AsyncMock) as mock_emit:
+            await service._handle_graph_event("wf-123", event)
 
-        service._emit.assert_called_once()
-        call_args = service._emit.call_args
-        assert call_args[0][1] == EventType.STAGE_STARTED
-        assert "architect_node" in call_args[0][2]
+            mock_emit.assert_called_once()
+            call_args = mock_emit.call_args
+            assert call_args[0][1] == EventType.STAGE_STARTED
+            assert "architect_node" in call_args[0][2]
 
     async def test_on_chain_end_emits_stage_completed(
         self, service: OrchestratorService
     ) -> None:
         """on_chain_end for stage node emits STAGE_COMPLETED event."""
-        service._emit = AsyncMock()
-        event = {"event": "on_chain_end", "name": "developer_node", "data": {"result": "ok"}}
+        event: dict[str, Any] = {
+            "event": "on_chain_end",
+            "name": "developer_node",
+            "data": {"result": "ok"},
+        }
 
-        await service._handle_graph_event("wf-123", event)
+        with patch.object(service, "_emit", new_callable=AsyncMock) as mock_emit:
+            await service._handle_graph_event("wf-123", event)
 
-        service._emit.assert_called_once()
-        call_args = service._emit.call_args
-        assert call_args[0][1] == EventType.STAGE_COMPLETED
+            mock_emit.assert_called_once()
+            call_args = mock_emit.call_args
+            assert call_args[0][1] == EventType.STAGE_COMPLETED
 
     async def test_on_chain_error_emits_system_error(
         self, service: OrchestratorService
     ) -> None:
         """on_chain_error emits SYSTEM_ERROR event."""
-        service._emit = AsyncMock()
-        event = {
+        event: dict[str, Any] = {
             "event": "on_chain_error",
             "name": "reviewer_node",
             "data": {"error": "Connection timeout"},
         }
 
-        await service._handle_graph_event("wf-123", event)
+        with patch.object(service, "_emit", new_callable=AsyncMock) as mock_emit:
+            await service._handle_graph_event("wf-123", event)
 
-        service._emit.assert_called_once()
-        call_args = service._emit.call_args
-        assert call_args[0][1] == EventType.SYSTEM_ERROR
-        assert "Connection timeout" in call_args[0][2]
+            mock_emit.assert_called_once()
+            call_args = mock_emit.call_args
+            assert call_args[0][1] == EventType.SYSTEM_ERROR
+            assert "Connection timeout" in call_args[0][2]
 
     async def test_non_stage_node_not_emitted(
         self, service: OrchestratorService
     ) -> None:
         """Events from non-stage nodes are not emitted."""
-        service._emit = AsyncMock()
-        event = {"event": "on_chain_start", "name": "some_internal_node"}
+        event: dict[str, Any] = {"event": "on_chain_start", "name": "some_internal_node"}
 
-        await service._handle_graph_event("wf-123", event)
+        with patch.object(service, "_emit", new_callable=AsyncMock) as mock_emit:
+            await service._handle_graph_event("wf-123", event)
 
-        service._emit.assert_not_called()
+            mock_emit.assert_not_called()
