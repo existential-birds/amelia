@@ -174,8 +174,11 @@ async def list_workflows(
 
     total = await repository.count_workflows(status=status, worktree_path=resolved_worktree)
 
-    return WorkflowListResponse(
-        workflows=[
+    # Build workflow summaries with token data
+    workflow_summaries = []
+    for w in workflows:
+        token_summary = await repository.get_token_summary(w.id)
+        workflow_summaries.append(
             WorkflowSummary(
                 id=w.id,
                 issue_id=w.issue_id,
@@ -183,9 +186,18 @@ async def list_workflows(
                 status=w.workflow_status,
                 started_at=w.started_at,
                 current_stage=w.current_stage,
+                total_cost_usd=token_summary.total_cost_usd if token_summary else None,
+                total_tokens=(
+                    token_summary.total_input_tokens + token_summary.total_output_tokens
+                    if token_summary
+                    else None
+                ),
+                total_duration_ms=token_summary.total_duration_ms if token_summary else None,
             )
-            for w in workflows
-        ],
+        )
+
+    return WorkflowListResponse(
+        workflows=workflow_summaries,
         total=total,
         cursor=next_cursor,
         has_more=has_more,
@@ -213,8 +225,11 @@ async def list_active_workflows(
 
     workflows = await repository.list_active(worktree_path=resolved_worktree)
 
-    return WorkflowListResponse(
-        workflows=[
+    # Build workflow summaries with token data
+    workflow_summaries = []
+    for w in workflows:
+        token_summary = await repository.get_token_summary(w.id)
+        workflow_summaries.append(
             WorkflowSummary(
                 id=w.id,
                 issue_id=w.issue_id,
@@ -222,9 +237,18 @@ async def list_active_workflows(
                 status=w.workflow_status,
                 started_at=w.started_at,
                 current_stage=w.current_stage,
+                total_cost_usd=token_summary.total_cost_usd if token_summary else None,
+                total_tokens=(
+                    token_summary.total_input_tokens + token_summary.total_output_tokens
+                    if token_summary
+                    else None
+                ),
+                total_duration_ms=token_summary.total_duration_ms if token_summary else None,
             )
-            for w in workflows
-        ],
+        )
+
+    return WorkflowListResponse(
+        workflows=workflow_summaries,
         total=len(workflows),
         has_more=False,
     )
@@ -251,8 +275,8 @@ async def get_workflow(
     if workflow is None:
         raise WorkflowNotFoundError(workflow_id=workflow_id)
 
-    # TODO: Fetch token usage
-    token_usage = None
+    # Fetch token usage summary
+    token_usage = await repository.get_token_summary(workflow_id)
 
     # Fetch recent events from database
     events = await repository.get_recent_events(workflow_id, limit=50)

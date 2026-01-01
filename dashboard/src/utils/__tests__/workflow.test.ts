@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getActiveWorkflow } from '../workflow';
+import { getActiveWorkflow, formatTokens, formatCost, formatDuration } from '../workflow';
 import type { WorkflowSummary } from '@/types';
 
 // Helper to create workflow summaries
@@ -11,6 +11,9 @@ function createWorkflow(overrides: Partial<WorkflowSummary> = {}): WorkflowSumma
     status: 'completed',
     current_stage: 'done',
     started_at: '2025-01-01T00:00:00Z',
+    total_cost_usd: null,
+    total_tokens: null,
+    total_duration_ms: null,
     ...overrides,
   };
 }
@@ -119,5 +122,78 @@ describe('getActiveWorkflow', () => {
     ];
     // Should select the most recent running workflow (running-oldest), not the first in array
     expect(getActiveWorkflow(workflows)?.id).toBe('running-oldest');
+  });
+});
+
+// ============================================================================
+// Formatting Functions
+// ============================================================================
+
+describe('formatTokens', () => {
+  it('returns raw number for values under 1000', () => {
+    expect(formatTokens(0)).toBe('0');
+    expect(formatTokens(500)).toBe('500');
+    expect(formatTokens(999)).toBe('999');
+  });
+
+  it('formats thousands with K suffix', () => {
+    expect(formatTokens(1000)).toBe('1K');
+    expect(formatTokens(1500)).toBe('1.5K');
+    expect(formatTokens(2100)).toBe('2.1K');
+  });
+
+  it('formats larger values correctly', () => {
+    expect(formatTokens(15200)).toBe('15.2K');
+    expect(formatTokens(13700)).toBe('13.7K');
+    expect(formatTokens(100000)).toBe('100K');
+  });
+
+  it('removes trailing zeros after decimal', () => {
+    expect(formatTokens(1000)).toBe('1K');
+    expect(formatTokens(2000)).toBe('2K');
+    expect(formatTokens(10000)).toBe('10K');
+  });
+});
+
+describe('formatCost', () => {
+  it('formats cost with dollar sign and 2 decimal places', () => {
+    expect(formatCost(0)).toBe('$0.00');
+    expect(formatCost(0.08)).toBe('$0.08');
+    expect(formatCost(0.42)).toBe('$0.42');
+    expect(formatCost(1.5)).toBe('$1.50');
+    expect(formatCost(10)).toBe('$10.00');
+  });
+
+  it('rounds to 2 decimal places', () => {
+    // JavaScript uses "round half away from zero" (0.125 rounds to 0.13)
+    expect(formatCost(0.125)).toBe('$0.13');
+    expect(formatCost(0.126)).toBe('$0.13');
+    expect(formatCost(0.124)).toBe('$0.12');
+    expect(formatCost(0.999)).toBe('$1.00');
+  });
+});
+
+describe('formatDuration', () => {
+  it('formats durations under a minute as seconds', () => {
+    expect(formatDuration(0)).toBe('0s');
+    expect(formatDuration(15000)).toBe('15s');
+    expect(formatDuration(59000)).toBe('59s');
+  });
+
+  it('formats durations with minutes and seconds', () => {
+    expect(formatDuration(60000)).toBe('1m');
+    expect(formatDuration(97000)).toBe('1m 37s');
+    expect(formatDuration(154000)).toBe('2m 34s');
+  });
+
+  it('omits seconds when exactly on the minute', () => {
+    expect(formatDuration(60000)).toBe('1m');
+    expect(formatDuration(120000)).toBe('2m');
+    expect(formatDuration(300000)).toBe('5m');
+  });
+
+  it('handles larger durations', () => {
+    expect(formatDuration(3600000)).toBe('60m');
+    expect(formatDuration(3661000)).toBe('61m 1s');
   });
 });

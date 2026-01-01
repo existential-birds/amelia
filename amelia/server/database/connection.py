@@ -294,7 +294,9 @@ class Database:
                 output_tokens INTEGER NOT NULL,
                 cache_read_tokens INTEGER DEFAULT 0,
                 cache_creation_tokens INTEGER DEFAULT 0,
-                cost_usd REAL,
+                cost_usd REAL NOT NULL,
+                duration_ms INTEGER NOT NULL DEFAULT 0,
+                num_turns INTEGER NOT NULL DEFAULT 1,
                 timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
         """)

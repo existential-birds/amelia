@@ -7,6 +7,7 @@ import { StatusBadge } from '@/components/StatusBadge';
 import { WorkflowEmptyState } from '@/components/WorkflowEmptyState';
 import { cn } from '@/lib/utils';
 import { historyLoader } from '@/loaders/workflows';
+import { formatDuration, formatTokens, formatCost } from '@/utils/workflow';
 
 /**
  * Displays a list of past workflows with status and timestamps.
@@ -77,6 +78,24 @@ export default function HistoryPage() {
               <p className="text-xs text-muted-foreground mt-0.5">
                 Started: {formatDate(workflow.started_at)}
               </p>
+            </div>
+
+            <div className="flex items-center gap-6 text-sm text-muted-foreground">
+              <span className="w-16 text-right" title="Duration">
+                {workflow.total_duration_ms != null
+                  ? formatDuration(workflow.total_duration_ms)
+                  : '-'}
+              </span>
+              <span className="w-14 text-right" title="Tokens">
+                {workflow.total_tokens != null
+                  ? formatTokens(workflow.total_tokens)
+                  : '-'}
+              </span>
+              <span className="w-14 text-right" title="Cost">
+                {workflow.total_cost_usd != null
+                  ? formatCost(workflow.total_cost_usd)
+                  : '-'}
+              </span>
             </div>
           </Link>
         ))}

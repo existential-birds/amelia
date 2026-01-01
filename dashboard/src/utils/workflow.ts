@@ -3,6 +3,61 @@
  */
 import type { WorkflowSummary, WorkflowDetail } from '@/types';
 
+// ============================================================================
+// Token & Cost Formatting
+// ============================================================================
+
+/**
+ * Formats a token count in a compact format with K suffix for thousands.
+ * Examples: 500 -> "500", 1500 -> "1.5K", 15200 -> "15.2K"
+ *
+ * @param tokens - The number of tokens to format
+ * @returns Formatted string with K suffix for values >= 1000
+ */
+export function formatTokens(tokens: number): string {
+  if (tokens < 1000) {
+    return tokens.toString();
+  }
+  const value = tokens / 1000;
+  // Use at most 1 decimal place, remove trailing zeros
+  return `${parseFloat(value.toFixed(1))}K`;
+}
+
+/**
+ * Formats a USD cost value with dollar sign and 2 decimal places.
+ * Example: 0.42 -> "$0.42"
+ *
+ * @param cost - The cost in USD
+ * @returns Formatted string with dollar sign
+ */
+export function formatCost(cost: number): string {
+  return `$${cost.toFixed(2)}`;
+}
+
+/**
+ * Formats a duration in milliseconds to a human-readable format.
+ * Examples: 15000 -> "15s", 97000 -> "1m 37s", 154000 -> "2m 34s"
+ *
+ * @param durationMs - Duration in milliseconds
+ * @returns Formatted string in "Xm Ys" or "Xs" format
+ */
+export function formatDuration(durationMs: number): string {
+  const totalSeconds = Math.floor(durationMs / 1000);
+
+  if (totalSeconds < 60) {
+    return `${totalSeconds}s`;
+  }
+
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+
+  if (seconds === 0) {
+    return `${minutes}m`;
+  }
+
+  return `${minutes}m ${seconds}s`;
+}
+
 /**
  * Sorts workflows by start time in descending order (most recent first).
  * @param a - First workflow to compare

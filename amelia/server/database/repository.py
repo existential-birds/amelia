@@ -15,6 +15,7 @@ from amelia.server.models.state import (
     WorkflowStatus,
     validate_transition,
 )
+from amelia.server.models.tokens import TokenSummary, TokenUsage
 
 
 def _pydantic_encoder(obj: Any) -> Any:
@@ -501,3 +502,108 @@ class WorkflowRepository:
         events = [self._row_to_event(row) for row in rows]
         events.reverse()
         return events
+
+    # =========================================================================
+    # Token Usage Persistence
+    # =========================================================================
+
+    async def save_token_usage(self, usage: TokenUsage) -> None:
+        """Persist token usage record to database.
+
+        Args:
+            usage: The token usage record to persist.
+        """
+        await self._db.execute(
+            """
+            INSERT INTO token_usage (
+                id, workflow_id, agent, model, input_tokens, output_tokens,
+                cache_read_tokens, cache_creation_tokens, cost_usd,
+                duration_ms, num_turns, timestamp
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                usage.id,
+                usage.workflow_id,
+                usage.agent,
+                usage.model,
+                usage.input_tokens,
+                usage.output_tokens,
+                usage.cache_read_tokens,
+                usage.cache_creation_tokens,
+                usage.cost_usd,
+                usage.duration_ms,
+                usage.num_turns,
+                usage.timestamp.isoformat(),
+            ),
+        )
+
+    async def get_token_usage(self, workflow_id: str) -> list[TokenUsage]:
+        """Get all token usage records for a workflow.
+
+        Args:
+            workflow_id: The workflow ID to get token usage for.
+
+        Returns:
+            List of token usage records ordered by timestamp ascending.
+        """
+        rows = await self._db.fetch_all(
+            """
+            SELECT id, workflow_id, agent, model, input_tokens, output_tokens,
+                   cache_read_tokens, cache_creation_tokens, cost_usd,
+                   duration_ms, num_turns, timestamp
+            FROM token_usage
+            WHERE workflow_id = ?
+            ORDER BY timestamp ASC
+            """,
+            (workflow_id,),
+        )
+
+        return [self._row_to_token_usage(row) for row in rows]
+
+    async def get_token_summary(self, workflow_id: str) -> TokenSummary | None:
+        """Get aggregated token usage summary for a workflow.
+
+        Args:
+            workflow_id: The workflow ID to get summary for.
+
+        Returns:
+            Token summary with totals and breakdown, or None if no usage exists.
+        """
+        usages = await self.get_token_usage(workflow_id)
+
+        if not usages:
+            return None
+
+        return TokenSummary(
+            total_input_tokens=sum(u.input_tokens for u in usages),
+            total_output_tokens=sum(u.output_tokens for u in usages),
+            total_cache_read_tokens=sum(u.cache_read_tokens for u in usages),
+            total_cost_usd=sum(u.cost_usd for u in usages),
+            total_duration_ms=sum(u.duration_ms for u in usages),
+            total_turns=sum(u.num_turns for u in usages),
+            breakdown=usages,
+        )
+
+    def _row_to_token_usage(self, row: aiosqlite.Row) -> TokenUsage:
+        """Convert database row to TokenUsage model.
+
+        Args:
+            row: Database row from token_usage table.
+
+        Returns:
+            Validated TokenUsage model instance.
+        """
+        return TokenUsage(
+            id=row["id"],
+            workflow_id=row["workflow_id"],
+            agent=row["agent"],
+            model=row["model"],
+            input_tokens=row["input_tokens"],
+            output_tokens=row["output_tokens"],
+            cache_read_tokens=row["cache_read_tokens"],
+            cache_creation_tokens=row["cache_creation_tokens"],
+            cost_usd=row["cost_usd"],
+            duration_ms=row["duration_ms"],
+            num_turns=row["num_turns"],
+            timestamp=datetime.fromisoformat(row["timestamp"]),
+        )

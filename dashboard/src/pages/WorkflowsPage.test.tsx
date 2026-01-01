@@ -26,6 +26,9 @@ const mockWorkflowSummary: WorkflowSummary = {
   status: 'in_progress',
   started_at: '2025-12-07T09:00:00Z',
   current_stage: 'developer',
+  total_cost_usd: null,
+  total_tokens: null,
+  total_duration_ms: null,
 };
 
 const mockWorkflowDetail: WorkflowDetail = {
@@ -33,7 +36,7 @@ const mockWorkflowDetail: WorkflowDetail = {
   worktree_path: '/path/to/worktree',
   completed_at: null,
   failure_reason: null,
-  token_usage: {},
+  token_usage: null,
   recent_events: [
     { id: 'e1', workflow_id: '1', sequence: 1, timestamp: '2025-12-07T09:01:00Z', event_type: 'stage_started', agent: 'developer', message: 'Started coding' },
   ],
@@ -59,6 +62,9 @@ const mockSecondWorkflowSummary: WorkflowSummary = {
   status: 'blocked',
   started_at: '2025-12-07T08:00:00Z',
   current_stage: 'reviewer',
+  total_cost_usd: null,
+  total_tokens: null,
+  total_duration_ms: null,
 };
 
 const mockSecondWorkflowDetail: WorkflowDetail = {
@@ -66,7 +72,7 @@ const mockSecondWorkflowDetail: WorkflowDetail = {
   worktree_path: '/path/to/second/worktree',
   completed_at: null,
   failure_reason: null,
-  token_usage: {},
+  token_usage: null,
   recent_events: [
     { id: 'e2', workflow_id: 'wf-002', sequence: 1, timestamp: '2025-12-07T08:01:00Z', event_type: 'stage_started', agent: 'reviewer', message: 'Started review' },
   ],

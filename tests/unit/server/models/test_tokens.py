@@ -13,6 +13,7 @@ def make_usage(**overrides: Any) -> TokenUsage:
         "agent": "architect",
         "input_tokens": 1_000_000,
         "output_tokens": 0,
+        "cost_usd": 0.0,
         "timestamp": datetime(2025, 1, 1, 12, 0, 0),
     }
     return TokenUsage(**{**defaults, **overrides})

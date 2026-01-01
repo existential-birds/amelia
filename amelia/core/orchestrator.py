@@ -5,7 +5,8 @@ Developer (execute agentically) ↔ Reviewer (review) → Done. Provides node fu
 the state machine and the create_orchestrator_graph() factory.
 """
 import asyncio
-from typing import Any, Literal
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any, Literal
 
 import typer
 from langchain_core.runnables.config import RunnableConfig
@@ -21,6 +22,11 @@ from amelia.agents.reviewer import Reviewer
 from amelia.core.state import ExecutionState
 from amelia.core.types import Profile, StreamEmitter
 from amelia.drivers.factory import DriverFactory
+from amelia.server.models.tokens import TokenUsage
+
+
+if TYPE_CHECKING:
+    from amelia.server.database.repository import WorkflowRepository
 
 
 def _extract_config_params(
@@ -53,6 +59,69 @@ def _extract_config_params(
     return stream_emitter, workflow_id, profile
 
 
+async def _save_token_usage(
+    driver: Any,
+    workflow_id: str,
+    agent: str,
+    repository: "WorkflowRepository | None",
+) -> None:
+    """Extract token usage from driver and save to repository.
+
+    This is a best-effort operation - failures are logged but don't fail the workflow.
+    Gracefully handles drivers without last_result_message attribute (e.g., API drivers).
+
+    Args:
+        driver: The driver that was used for execution (may have last_result_message).
+        workflow_id: Current workflow ID.
+        agent: Agent name (architect, developer, reviewer).
+        repository: Repository to save usage to (may be None in CLI mode).
+    """
+    if repository is None:
+        return
+
+    # Check if driver has last_result_message (CLI driver feature)
+    result_message = getattr(driver, "last_result_message", None)
+    if result_message is None:
+        return
+
+    # Check if usage data is available
+    usage_data = getattr(result_message, "usage", None)
+    if usage_data is None:
+        return
+
+    try:
+        usage = TokenUsage(
+            workflow_id=workflow_id,
+            agent=agent,
+            model=usage_data.get("model", "unknown"),
+            input_tokens=usage_data["input_tokens"],
+            output_tokens=usage_data["output_tokens"],
+            cache_read_tokens=usage_data.get("cache_read_input_tokens", 0),
+            cache_creation_tokens=usage_data.get("cache_creation_input_tokens", 0),
+            cost_usd=getattr(result_message, "total_cost_usd", None) or 0.0,
+            duration_ms=getattr(result_message, "duration_ms", 0) or 0,
+            num_turns=getattr(result_message, "num_turns", 1) or 1,
+            timestamp=datetime.now(UTC),
+        )
+        await repository.save_token_usage(usage)
+        logger.debug(
+            "Token usage saved",
+            agent=agent,
+            workflow_id=workflow_id,
+            input_tokens=usage.input_tokens,
+            output_tokens=usage.output_tokens,
+            cost_usd=usage.cost_usd,
+        )
+    except Exception as e:
+        # Best-effort - don't fail workflow on token tracking errors
+        logger.warning(
+            "Failed to save token usage",
+            agent=agent,
+            workflow_id=workflow_id,
+            error=str(e),
+        )
+
+
 async def call_architect_node(
     state: ExecutionState,
     config: RunnableConfig | None = None,
@@ -81,6 +150,10 @@ async def call_architect_node(
     # Extract stream_emitter, workflow_id, and profile from config
     stream_emitter, workflow_id, profile = _extract_config_params(config)
 
+    # Get optional repository for token usage tracking
+    config = config or {}
+    repository = config.get("configurable", {}).get("repository")
+
     driver = DriverFactory.get_driver(profile.driver, model=profile.model)
     architect = Architect(driver, stream_emitter=stream_emitter)
 
@@ -90,6 +163,9 @@ async def call_architect_node(
         profile=profile,
         workflow_id=workflow_id,
     )
+
+    # Save token usage from driver (best-effort)
+    await _save_token_usage(driver, workflow_id, "architect", repository)
 
     # Log the architect plan generation
     logger.info(
@@ -338,6 +414,10 @@ async def call_developer_node(
     # Extract stream_emitter, workflow_id, and profile from config
     stream_emitter, workflow_id, profile = _extract_config_params(config)
 
+    # Get optional repository for token usage tracking
+    config = config or {}
+    repository = config.get("configurable", {}).get("repository")
+
     driver = DriverFactory.get_driver(profile.driver, model=profile.model)
     developer = Developer(driver, stream_emitter=stream_emitter)
 
@@ -348,6 +428,9 @@ async def call_developer_node(
         # Stream events are handled by the stream_emitter if provided
         if stream_emitter:
             await stream_emitter(event)
+
+    # Save token usage from driver (best-effort)
+    await _save_token_usage(driver, workflow_id, "developer", repository)
 
     logger.info(
         "Agent action completed",
@@ -397,6 +480,10 @@ async def call_reviewer_node(
     # Extract stream_emitter, workflow_id, and profile from config
     stream_emitter, workflow_id, profile = _extract_config_params(config)
 
+    # Get optional repository for token usage tracking
+    config = config or {}
+    repository = config.get("configurable", {}).get("repository")
+
     driver = DriverFactory.get_driver(profile.driver, model=profile.model)
     reviewer = Reviewer(driver, stream_emitter=stream_emitter)
 
@@ -417,6 +504,9 @@ async def call_reviewer_node(
         review_result, new_session_id = await reviewer.review(
             state, code_changes, profile, workflow_id=workflow_id
         )
+
+    # Save token usage from driver (best-effort)
+    await _save_token_usage(driver, workflow_id, "reviewer", repository)
 
     # Log the review completion
     logger.info(

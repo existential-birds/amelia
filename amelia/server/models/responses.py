@@ -6,6 +6,7 @@ from typing import Annotated, Any
 from pydantic import BaseModel, Field
 
 from amelia.server.models.state import WorkflowStatus
+from amelia.server.models.tokens import TokenSummary
 
 
 class CreateWorkflowResponse(BaseModel):
@@ -32,6 +33,9 @@ class WorkflowSummary(BaseModel):
         status: Current workflow status
         started_at: When the workflow was started (optional)
         current_stage: Current agent stage (optional)
+        total_cost_usd: Total cost in USD (optional)
+        total_tokens: Total tokens consumed (optional)
+        total_duration_ms: Total execution duration in milliseconds (optional)
     """
 
     id: Annotated[str, Field(description="Unique workflow identifier")]
@@ -45,6 +49,18 @@ class WorkflowSummary(BaseModel):
     current_stage: Annotated[
         str | None,
         Field(default=None, description="Current agent stage"),
+    ] = None
+    total_cost_usd: Annotated[
+        float | None,
+        Field(default=None, description="Total cost in USD"),
+    ] = None
+    total_tokens: Annotated[
+        int | None,
+        Field(default=None, description="Total tokens (input + output)"),
+    ] = None
+    total_duration_ms: Annotated[
+        int | None,
+        Field(default=None, description="Total execution duration in milliseconds"),
     ] = None
 
 
@@ -71,18 +87,6 @@ class WorkflowListResponse(BaseModel):
         bool,
         Field(default=False, description="Whether more results are available"),
     ] = False
-
-
-class TokenSummary(BaseModel):
-    """Summary of token usage and costs.
-
-    Attributes:
-        total_tokens: Total tokens consumed
-        total_cost_usd: Total cost in USD
-    """
-
-    total_tokens: Annotated[int, Field(description="Total tokens consumed")]
-    total_cost_usd: Annotated[float, Field(description="Total cost in USD")]
 
 
 class WorkflowDetailResponse(BaseModel):

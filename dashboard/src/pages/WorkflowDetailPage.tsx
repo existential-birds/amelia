@@ -8,6 +8,7 @@ import { ActivityLog } from '@/components/ActivityLog';
 import { ApprovalControls } from '@/components/ApprovalControls';
 import { WorkflowCanvas } from '@/components/WorkflowCanvas';
 import { AgentProgressBar, type AgentStage } from '@/components/AgentProgressBar';
+import { UsageCard } from '@/components/UsageCard';
 import { buildPipeline } from '@/utils/pipeline';
 import { useElapsedTime, useAutoRevalidation } from '@/hooks';
 import { workflowDetailLoader } from '@/loaders';
@@ -118,6 +119,9 @@ export default function WorkflowDetailPage() {
               <p className="text-sm text-foreground">{workflow.goal}</p>
             </div>
           )}
+
+          {/* Usage card - shows token usage breakdown by agent */}
+          <UsageCard tokenUsage={workflow.token_usage} />
 
           {/* Workflow Canvas (pipeline visualization) */}
           <div className="p-4 border border-border rounded-lg bg-card/50">

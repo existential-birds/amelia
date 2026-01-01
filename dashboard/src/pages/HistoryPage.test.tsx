@@ -12,6 +12,9 @@ const mockWorkflows: WorkflowSummary[] = [
     status: 'completed',
     started_at: '2025-12-07T09:00:00Z',
     current_stage: null,
+    total_duration_ms: 154000, // 2m 34s
+    total_tokens: 15200, // 15.2K
+    total_cost_usd: 0.42, // $0.42
   },
   {
     id: 'wf-002',
@@ -20,6 +23,9 @@ const mockWorkflows: WorkflowSummary[] = [
     status: 'failed',
     started_at: '2025-12-07T08:00:00Z',
     current_stage: null,
+    total_duration_ms: null,
+    total_tokens: null,
+    total_cost_usd: null,
   },
 ];
 
@@ -76,5 +82,34 @@ describe('HistoryPage', () => {
 
     expect(screen.getByText('DONE')).toBeInTheDocument();
     expect(screen.getByText('FAILED')).toBeInTheDocument();
+  });
+
+  it('should display duration, tokens, and cost when available', () => {
+    vi.mocked(useLoaderData).mockReturnValue({ workflows: mockWorkflows });
+
+    render(
+      <MemoryRouter>
+        <HistoryPage />
+      </MemoryRouter>
+    );
+
+    // First workflow has all values
+    expect(screen.getByText('2m 34s')).toBeInTheDocument();
+    expect(screen.getByText('15.2K')).toBeInTheDocument();
+    expect(screen.getByText('$0.42')).toBeInTheDocument();
+  });
+
+  it('should display "-" when duration, tokens, or cost are null', () => {
+    vi.mocked(useLoaderData).mockReturnValue({ workflows: mockWorkflows });
+
+    render(
+      <MemoryRouter>
+        <HistoryPage />
+      </MemoryRouter>
+    );
+
+    // Second workflow has null values - should show "-" for each
+    const dashElements = screen.getAllByText('-');
+    expect(dashElements.length).toBeGreaterThanOrEqual(3);
   });
 });

@@ -1,285 +1,241 @@
-# Claude Agent SDK Migration Manual Testing Plan
+# Token Usage Tracking Manual Testing Plan
 
-**Branch:** `ka/sdk-migration`
-**Feature:** Migration from pydantic-ai to Claude Agent SDK and DeepAgents for driver layer
+**Branch:** `feat/token-usage-tracking`
+**Feature:** Persist and display token usage, cost, and duration data from CLI driver executions
 
 ## Overview
 
-This PR migrates the driver layer to use official SDKs:
-- **CLI Driver** (`cli:claude`): Now uses `claude-agent-sdk` package
-- **API Driver** (`api:openrouter`): Now uses `deepagents` (LangGraph-based)
-- **New Evaluator Agent**: Evaluates review feedback with decision matrix
-- **Dashboard Simplification**: Removed batch execution UI
+This PR implements token usage tracking for Amelia workflows. The changes include:
+1. **Backend**: TokenUsage model with `duration_ms` and `num_turns`, database schema updates, repository methods for save/get/summarize
+2. **API**: Updated response models to include token summaries in workflow detail and list endpoints
+3. **Frontend**: UsageCard component on workflow detail page, and Duration/Tokens/Cost columns on history page
+
+Manual testing is needed to verify the complete data flow from CLI driver execution through database persistence to dashboard display.
 
 ---
 
 ## Test Environment
 
 **Test Repository:** `/Users/ka/github/anderskev-dot-com`
-**Test Issue:** Issue #2
+**Test Issue:** GitHub Issue #4
 **Profile:** `dev` (cli:claude driver with github tracker)
+
+---
+
+## Prerequisites
+
+### Environment Setup
+
+```bash
+# 1. Install Python dependencies
+cd /Users/ka/github/existential-birds/amelia-feature
+uv sync
+
+# 2. Delete existing database (schema changed)
+rm -f ~/.amelia/amelia.db
+
+# 3. Start the backend server
+uv run amelia server --reload
+# Server runs on http://localhost:8420 by default
+
+# 4. Build and verify dashboard (served by backend)
+cd dashboard
+pnpm install
+pnpm build
+cd ..
+
+# 5. Verify setup - server should be accessible
+curl http://localhost:8420/api/health
+
+# 6. Navigate to test repository
+cd /Users/ka/github/anderskev-dot-com
+```
+
+### Testing Tools
+
+- `curl` or a REST client (Postman, HTTPie) for API testing
+- Web browser for dashboard testing
+- SQLite CLI (`sqlite3`) for direct database verification
 
 ---
 
 ## Test Scenarios
 
-### TC-01: Plan Generation
+### TC-01: Run Full Workflow and Verify Token Capture
 
-**Objective:** Verify the SDK-based CLI driver generates implementation plans
+**Objective:** Verify token usage is captured from CLI driver during a complete workflow execution
 
 **Steps:**
-```bash
-cd /Users/ka/github/anderskev-dot-com
-uv run amelia plan 2
-```
+1. Navigate to the test repository
+2. Start a workflow using the CLI with the `cli:claude` driver for GitHub issue #4
+3. Wait for the workflow to complete (approve the plan when prompted)
+4. Check the database for token usage records
 
 **Expected Result:**
-- Plan markdown created in `docs/plans/`
-- Goal extracted and displayed
-- Key files identified
-- No errors or JSON parsing issues
+- Token usage records exist in `token_usage` table for each agent (architect, developer, reviewer)
+- Each record contains non-zero values for `input_tokens`, `output_tokens`, `cost_usd`, `duration_ms`
+- `num_turns` reflects the actual conversation turns
 
-**Verify:**
+**Verification Commands:**
 ```bash
-ls docs/plans/
-cat docs/plans/*.md | head -50
-```
-
----
-
-### TC-02: Full Workflow - Start to Approval
-
-**Objective:** Verify complete workflow from start through plan approval
-
-**Steps:**
-```bash
-# 1. Start the server (in separate terminal)
-cd /Users/ka/github/existential-birds/amelia
-uv run amelia server
-
-# 2. Start workflow
-cd /Users/ka/github/anderskev-dot-com
-uv run amelia start 2
-
-# 3. Check status
-uv run amelia status
-
-# 4. Open dashboard
-open http://localhost:8420
-```
-
-**Expected Result:**
-- Workflow appears in dashboard with "Planning" status
-- Architect generates plan
-- Status changes to "Awaiting Approval"
-- Plan is visible in dashboard
-
----
-
-### TC-03: Plan Approval via CLI
-
-**Objective:** Verify CLI approval triggers developer execution
-
-**Steps:**
-```bash
+# Navigate to test repository
 cd /Users/ka/github/anderskev-dot-com
 
-# Wait for workflow to reach approval state, then:
-uv run amelia approve
+# Start a workflow for GitHub issue #4
+uv run amelia start 4
+
+# After completion, verify database records
+sqlite3 ~/.amelia/amelia.db "SELECT agent, input_tokens, output_tokens, cost_usd, duration_ms, num_turns FROM token_usage ORDER BY timestamp"
 ```
 
-**Expected Result:**
-- Approval message displayed
-- Developer agent starts executing
-- Tool calls visible in dashboard activity log
-- Status shows "Executing"
-
 ---
 
-### TC-04: Plan Approval via Dashboard
+### TC-02: Verify API Returns Token Summary in Workflow Detail
 
-**Objective:** Verify dashboard approval works
+**Objective:** Verify `/workflows/{id}` endpoint includes `token_usage` field with correct aggregated data
 
 **Steps:**
-1. Start a new workflow: `uv run amelia start 2`
-2. Open dashboard: `open http://localhost:8420`
-3. Navigate to workflow detail page
-4. Click "Approve" button when plan is ready
+1. Complete a workflow (use result from TC-01 or create new one)
+2. Get the workflow ID from the database
+3. Call the workflow detail endpoint
+4. Verify response includes `token_usage` with correct totals and breakdown
 
 **Expected Result:**
-- Approval controls visible when blocked
-- Click triggers workflow resume
-- Real-time status update in dashboard
+- Response contains `token_usage` object with:
+  - `total_input_tokens`, `total_output_tokens`, `total_cache_read_tokens`
+  - `total_cost_usd`, `total_duration_ms`, `total_turns`
+  - `breakdown` array with per-agent TokenUsage records
 
----
-
-### TC-05: Plan Rejection
-
-**Objective:** Verify plan rejection with feedback
-
-**Steps:**
+**Verification Commands:**
 ```bash
-cd /Users/ka/github/anderskev-dot-com
+# Get workflow ID
+WORKFLOW_ID=$(sqlite3 ~/.amelia/amelia.db "SELECT id FROM workflows ORDER BY started_at DESC LIMIT 1")
 
-# Start workflow and wait for approval state
-uv run amelia start 2
-
-# Reject with feedback
-uv run amelia reject "Focus on performance optimization instead of adding new features"
+# Fetch workflow detail
+curl -s "http://localhost:8420/api/workflows/$WORKFLOW_ID" | jq '.token_usage'
 ```
-
-**Expected Result:**
-- Rejection message displayed
-- Feedback sent to architect
-- (If re-planning supported) New plan generated incorporating feedback
 
 ---
 
-### TC-06: Developer Agentic Execution
+### TC-03: Verify API Returns Token Data in Workflow List
 
-**Objective:** Verify developer agent executes autonomously with tool use
+**Objective:** Verify `/workflows` endpoint includes token summary fields for each workflow
 
 **Steps:**
-1. Complete TC-03 (approve a plan)
-2. Watch dashboard activity log
-3. Monitor tool calls in real-time
+1. Ensure at least one workflow exists with token data
+2. Call the workflow list endpoint
+3. Verify each workflow includes `total_cost_usd`, `total_tokens`, `total_duration_ms`
 
 **Expected Result:**
-- Developer makes autonomous decisions
-- Tool calls captured (Read, Edit, Bash, Glob, Grep)
-- Tool results displayed
-- Final response summarizes changes
-- Files actually modified in repository
+- Response workflows array includes for each workflow:
+  - `total_cost_usd`: number (sum of all agent costs)
+  - `total_tokens`: number (sum of input + output tokens)
+  - `total_duration_ms`: number (sum of agent durations)
+- All values are non-null for workflows with token data
 
-**Verify:**
+**Verification Commands:**
 ```bash
-cd /Users/ka/github/anderskev-dot-com
-git status
-git diff
+curl -s "http://localhost:8420/api/workflows" | jq '.workflows[] | {issue_id, total_cost_usd, total_tokens, total_duration_ms}'
 ```
 
 ---
 
-### TC-07: Review Loop
+### TC-04: Verify History Page Displays Token Columns
 
-**Objective:** Verify reviewer analyzes changes and loops if needed
+**Objective:** Verify the History page shows Duration, Tokens, and Cost columns
 
 **Steps:**
-1. Let developer complete execution
-2. Watch for reviewer activation
-3. Check review results in dashboard
+1. Open the dashboard in a browser (http://localhost:8420)
+2. Navigate to the History page
+3. Verify the table displays three new columns: Duration, Tokens, Cost
+4. Verify data formatting:
+   - Duration: `Xm Ys` format (e.g., "2m 34s")
+   - Tokens: `X.XK` format for thousands (e.g., "15.2K")
+   - Cost: `$X.XX` format (e.g., "$0.42")
 
 **Expected Result:**
-- Reviewer analyzes code changes
-- Issues categorized by severity
-- If issues found, loops back to developer
-- If approved, workflow completes
+- History page displays workflow list with Duration, Tokens, Cost columns
+- Completed workflows show formatted values
+- Pending/in-progress workflows show "-" for columns without data
 
----
-
-### TC-08: Local Review Command
-
-**Objective:** Verify review of uncommitted local changes
-
-**Steps:**
+**Verification Commands:**
 ```bash
-cd /Users/ka/github/anderskev-dot-com
-
-# Make a test change
-echo "// TODO: fix this" >> src/pages/index.js
-
-# Run local review
-uv run amelia review --local
-
-# Clean up
-git checkout src/pages/index.js
+# Open in browser
+open http://localhost:8420/history
 ```
 
-**Expected Result:**
-- Review workflow created
-- Stream events display in terminal
-- Reviewer analyzes the diff
-- Issues reported with severity
-
 ---
 
-### TC-09: Dashboard Real-Time Updates
+### TC-05: Verify Workflow Detail Page Shows Usage Card
 
-**Objective:** Verify WebSocket streaming works
+**Objective:** Verify the Usage card appears on workflow detail page with breakdown table
 
 **Steps:**
-1. Open dashboard: `open http://localhost:8420`
-2. Start a workflow in terminal
-3. Watch dashboard for real-time updates
+1. Open the dashboard in a browser
+2. Navigate to a completed workflow's detail page
+3. Verify the USAGE card displays:
+   - Summary line: Cost | Tokens | Duration | Turns
+   - Table with columns: Agent, Input, Output, Cache, Cost, Time
+   - Rows for each agent (architect, developer, reviewer)
 
 **Expected Result:**
-- Activity log updates in real-time
-- Agent progress bar advances through stages
-- No page refresh needed
-- Events include agent_start, tool_use, tool_result, agent_end
+- USAGE card visible below GOAL section
+- Summary line shows aggregated totals
+- Table shows breakdown by agent with correct values
 
----
-
-### TC-10: Workflow Cancellation
-
-**Objective:** Verify workflow can be cancelled
-
-**Steps:**
+**Verification Commands:**
 ```bash
-cd /Users/ka/github/anderskev-dot-com
+# Get a workflow ID
+WORKFLOW_ID=$(sqlite3 ~/.amelia/amelia.db "SELECT id FROM workflows ORDER BY started_at DESC LIMIT 1")
 
-# Start a workflow
-uv run amelia start 2
-
-# Cancel it
-uv run amelia cancel
+# Open in browser
+open "http://localhost:8420/workflows/$WORKFLOW_ID"
 ```
-
-**Expected Result:**
-- Cancellation confirmed
-- Workflow status shows cancelled
-- No orphaned processes
 
 ---
 
-### TC-11: Error Recovery
+### TC-06: Verify Usage Card Hidden When No Token Data
 
-**Objective:** Verify graceful handling of errors
+**Objective:** Verify the Usage card is hidden for workflows without token data
 
 **Steps:**
-```bash
-# Test without server running
-pkill -f "amelia server" || true
-cd /Users/ka/github/anderskev-dot-com
-uv run amelia start 2
-```
+1. Create a workflow that fails before any agent runs (e.g., invalid issue)
+2. Navigate to that workflow's detail page
+3. Verify no USAGE card is displayed
 
 **Expected Result:**
-- Clear error message: "Server not reachable"
-- Helpful guidance: "Start the server: amelia server"
-- Clean exit (no stack traces)
+- Workflow detail page loads without errors
+- No USAGE card section is visible
+- Other sections (GOAL, PIPELINE) display normally
 
 ---
 
-### TC-12: Status Command
+### TC-07: Verify Formatting Edge Cases
 
-**Objective:** Verify status display
+**Objective:** Verify correct formatting for various numeric values
 
 **Steps:**
-```bash
-cd /Users/ka/github/anderskev-dot-com
-
-# Check current worktree status
-uv run amelia status
-
-# Check all worktrees
-uv run amelia status --all
-```
+1. Check formatting for various token counts:
+   - Small values (<1000): should show exact number (e.g., "500")
+   - Exactly 1000: should show "1K"
+   - Thousands with decimals: should show 1 decimal (e.g., "1.5K")
+   - Round thousands: should omit decimal (e.g., "2K" not "2.0K")
+2. Check duration formatting:
+   - <60 seconds: "Xs" format
+   - >=60 seconds: "Xm Ys" format
+   - Round minutes: "Xm" (no "0s")
+3. Check cost formatting:
+   - Always 2 decimal places: "$0.42", "$1.00"
 
 **Expected Result:**
-- Table shows workflow ID, issue, status, elapsed time
-- Current worktree filter works
-- --all flag shows all workflows
+- All numeric displays follow the specified formatting rules
+
+**Verification Commands:**
+```bash
+# Run unit tests for formatting functions
+cd dashboard
+pnpm test:run src/utils/__tests__/workflow.test.ts
+```
 
 ---
 
@@ -287,16 +243,15 @@ uv run amelia status --all
 
 After testing:
 ```bash
-# Stop server
-pkill -f "amelia server"
+# Stop the server (Ctrl+C in terminal running server)
 
-# Reset test repo changes
+# Reset test repository changes
 cd /Users/ka/github/anderskev-dot-com
 git checkout -- .
 rm -rf docs/plans/
 
-# Clean up any test branches
-git branch -D test-* 2>/dev/null || true
+# Optionally reset database for fresh testing
+rm -f ~/.amelia/amelia.db
 ```
 
 ---
@@ -305,25 +260,68 @@ git branch -D test-* 2>/dev/null || true
 
 | Test ID | Description | Status | Notes |
 |---------|-------------|--------|-------|
-| TC-01 | Plan Generation | [ ] Pass / [ ] Fail | |
-| TC-02 | Full Workflow - Start to Approval | [ ] Pass / [ ] Fail | |
-| TC-03 | Plan Approval via CLI | [ ] Pass / [ ] Fail | |
-| TC-04 | Plan Approval via Dashboard | [ ] Pass / [ ] Fail | |
-| TC-05 | Plan Rejection | [ ] Pass / [ ] Fail | |
-| TC-06 | Developer Agentic Execution | [ ] Pass / [ ] Fail | |
-| TC-07 | Review Loop | [ ] Pass / [ ] Fail | |
-| TC-08 | Local Review Command | [ ] Pass / [ ] Fail | |
-| TC-09 | Dashboard Real-Time Updates | [ ] Pass / [ ] Fail | |
-| TC-10 | Workflow Cancellation | [ ] Pass / [ ] Fail | |
-| TC-11 | Error Recovery | [ ] Pass / [ ] Fail | |
-| TC-12 | Status Command | [ ] Pass / [ ] Fail | |
+| TC-01 | Run workflow, verify token capture | [ ] Pass / [ ] Fail | |
+| TC-02 | API workflow detail includes token_usage | [ ] Pass / [ ] Fail | |
+| TC-03 | API workflow list includes token fields | [ ] Pass / [ ] Fail | |
+| TC-04 | History page displays token columns | [ ] Pass / [ ] Fail | |
+| TC-05 | Workflow detail shows Usage card | [ ] Pass / [ ] Fail | |
+| TC-06 | Usage card hidden when no data | [ ] Pass / [ ] Fail | |
+| TC-07 | Formatting edge cases correct | [ ] Pass / [ ] Fail | |
 
 ---
 
-## Key Changes Being Tested
+## Agent Execution Notes
 
-1. **CLI Driver** (`amelia/drivers/cli/claude.py`): Uses `claude-agent-sdk` with `ClaudeSDKClient`
-2. **API Driver** (`amelia/drivers/api/deepagents.py`): Uses `deepagents` with LangChain
-3. **Evaluator Agent** (`amelia/agents/evaluator.py`): New decision matrix evaluation
-4. **Orchestrator** (`amelia/core/orchestrator.py`): Simplified graph flow
-5. **Dashboard**: Removed batch execution components, simplified UI
+### For LLM Agent Executing This Plan:
+
+1. **Database reset required** - Delete `~/.amelia/amelia.db` before testing (schema changed)
+2. **Execute tests sequentially** - TC-01 creates data needed for TC-02 through TC-05
+3. **Capture output** - Log API responses and database queries for verification
+4. **Mark results** - Update the result template after each test
+5. **Report issues** - Note any failures with exact error messages
+
+### Programmatic Verification:
+
+```python
+# Verify token usage in database
+import sqlite3
+conn = sqlite3.connect(os.path.expanduser("~/.amelia/amelia.db"))
+cursor = conn.execute("""
+    SELECT agent, input_tokens, output_tokens, cost_usd, duration_ms, num_turns
+    FROM token_usage
+    ORDER BY timestamp
+""")
+for row in cursor:
+    print(f"Agent: {row[0]}, In: {row[1]}, Out: {row[2]}, Cost: ${row[3]:.2f}, Duration: {row[4]}ms, Turns: {row[5]}")
+```
+
+---
+
+## Key Changes in This Branch
+
+The following changes should be verified through testing:
+
+1. **Backend - TokenUsage model** (`amelia/server/models/tokens.py`):
+   - Added `duration_ms` and `num_turns` fields
+   - Made `cost_usd` required
+
+2. **Backend - Orchestrator** (`amelia/core/orchestrator.py`):
+   - `_save_token_usage()` helper extracts usage from driver and persists
+
+3. **Backend - Repository** (`amelia/server/database/repository.py`):
+   - `save_token_usage()` - insert token usage record
+   - `get_token_usage()` - fetch per-workflow usage
+   - `get_token_summary()` - aggregate usage into summary
+
+4. **Backend - API Routes** (`amelia/server/routes/workflows.py`):
+   - `/workflows/{id}` includes `token_usage` field
+   - `/workflows` includes summary fields in each workflow
+
+5. **Frontend - History Page** (`dashboard/src/pages/HistoryPage.tsx`):
+   - Added Duration, Tokens, Cost columns with formatting
+
+6. **Frontend - Workflow Detail** (`dashboard/src/pages/WorkflowDetailPage.tsx`):
+   - Added UsageCard component
+
+7. **Frontend - UsageCard** (`dashboard/src/components/UsageCard.tsx`):
+   - New component showing summary + breakdown table

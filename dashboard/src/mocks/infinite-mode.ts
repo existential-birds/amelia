@@ -11,6 +11,7 @@ import type {
   WorkflowDetail,
   WorkflowEvent,
   TokenSummary,
+  TokenUsage,
 } from '@/types';
 
 /**
@@ -110,6 +111,9 @@ export function getMockActiveWorkflows(): WorkflowSummary[] {
       status: 'completed',
       started_at: getTimestamp(24),
       current_stage: null,
+      total_cost_usd: 17.50,
+      total_tokens: 350000,
+      total_duration_ms: 138000,
     },
     {
       id: generateUUID('FUEL-404'),
@@ -118,6 +122,9 @@ export function getMockActiveWorkflows(): WorkflowSummary[] {
       status: 'completed',
       started_at: getTimestamp(48),
       current_stage: null,
+      total_cost_usd: 25.00,
+      total_tokens: 500000,
+      total_duration_ms: 252000,
     },
     {
       id: generateUUID('COMM-1984'),
@@ -126,6 +133,9 @@ export function getMockActiveWorkflows(): WorkflowSummary[] {
       status: 'completed',
       started_at: getTimestamp(72),
       current_stage: null,
+      total_cost_usd: 12.00,
+      total_tokens: 240000,
+      total_duration_ms: 90000,
     },
     // Running workflows
     {
@@ -135,6 +145,9 @@ export function getMockActiveWorkflows(): WorkflowSummary[] {
       status: 'in_progress',
       started_at: getTimestamp(3),
       current_stage: 'developer',
+      total_cost_usd: 48.52,
+      total_tokens: 970456,
+      total_duration_ms: 180000,
     },
     {
       id: generateUUID('ARCH-42'),
@@ -143,6 +156,9 @@ export function getMockActiveWorkflows(): WorkflowSummary[] {
       status: 'completed',
       started_at: getTimestamp(5),
       current_stage: 'done',
+      total_cost_usd: 71.00,
+      total_tokens: 1420042,
+      total_duration_ms: 300000,
     },
     {
       id: generateUUID('SPEC-322'),
@@ -151,6 +167,9 @@ export function getMockActiveWorkflows(): WorkflowSummary[] {
       status: 'in_progress',
       started_at: getTimestamp(1),
       current_stage: 'developer',
+      total_cost_usd: 41.10,
+      total_tokens: 822000,
+      total_duration_ms: 154000,
     },
     // Blocked workflows at bottom
     {
@@ -160,6 +179,9 @@ export function getMockActiveWorkflows(): WorkflowSummary[] {
       status: 'blocked',
       started_at: getTimestamp(2),
       current_stage: 'architect',
+      total_cost_usd: 47.00,
+      total_tokens: 999999,
+      total_duration_ms: 120000,
     },
     {
       id: generateUUID('PERF-9000'),
@@ -168,6 +190,9 @@ export function getMockActiveWorkflows(): WorkflowSummary[] {
       status: 'blocked',
       started_at: getTimestamp(8),
       current_stage: 'architect',
+      total_cost_usd: 45.00,
+      total_tokens: 900000,
+      total_duration_ms: 210000,
     },
   ];
 }
@@ -185,6 +210,9 @@ export function getMockHistoryWorkflows(): WorkflowSummary[] {
       status: 'completed',
       started_at: getPastTimestamp(1),
       current_stage: null,
+      total_cost_usd: 5.00,
+      total_tokens: 100000,
+      total_duration_ms: 120000,
     },
     {
       id: generateUUID('RETRO-847000'),
@@ -193,6 +221,9 @@ export function getMockHistoryWorkflows(): WorkflowSummary[] {
       status: 'completed',
       started_at: getPastTimestamp(1.5),
       current_stage: null,
+      total_cost_usd: 42.35,
+      total_tokens: 847000,
+      total_duration_ms: 360000,
     },
     {
       id: generateUUID('DOCS-9001'),
@@ -201,6 +232,9 @@ export function getMockHistoryWorkflows(): WorkflowSummary[] {
       status: 'completed',
       started_at: getPastTimestamp(2),
       current_stage: null,
+      total_cost_usd: 90.01,
+      total_tokens: 1800200,
+      total_duration_ms: 480000,
     },
     {
       id: generateUUID('PHIL-200'),
@@ -209,6 +243,9 @@ export function getMockHistoryWorkflows(): WorkflowSummary[] {
       status: 'completed',
       started_at: getPastTimestamp(3),
       current_stage: null,
+      total_cost_usd: 10.00,
+      total_tokens: 200000,
+      total_duration_ms: 150000,
     },
     {
       id: generateUUID('REVIEW-∞'),
@@ -217,6 +254,9 @@ export function getMockHistoryWorkflows(): WorkflowSummary[] {
       status: 'completed',
       started_at: getPastTimestamp(3.5),
       current_stage: null,
+      total_cost_usd: 0.42,
+      total_tokens: 8400,
+      total_duration_ms: 5000,
     },
     {
       id: generateUUID('TABS-1978'),
@@ -225,6 +265,9 @@ export function getMockHistoryWorkflows(): WorkflowSummary[] {
       status: 'failed',
       started_at: getPastTimestamp(4),
       current_stage: null,
+      total_cost_usd: 99.99,
+      total_tokens: 1999800,
+      total_duration_ms: 1800000,
     },
     {
       id: generateUUID('QUICK-7847284919'),
@@ -233,6 +276,9 @@ export function getMockHistoryWorkflows(): WorkflowSummary[] {
       status: 'cancelled',
       started_at: getPastTimestamp(5),
       current_stage: null,
+      total_cost_usd: 0.01,
+      total_tokens: 200,
+      total_duration_ms: 1000,
     },
     {
       id: generateUUID('AI-INIT'),
@@ -241,6 +287,9 @@ export function getMockHistoryWorkflows(): WorkflowSummary[] {
       status: 'completed',
       started_at: getPastTimestamp(5.5),
       current_stage: null,
+      total_cost_usd: 42.00,
+      total_tokens: 840000,
+      total_duration_ms: 420000,
     },
     {
       id: generateUUID('USER-SIMPLE'),
@@ -249,6 +298,9 @@ export function getMockHistoryWorkflows(): WorkflowSummary[] {
       status: 'failed',
       started_at: getPastTimestamp(6),
       current_stage: null,
+      total_cost_usd: 150.00,
+      total_tokens: 3000000,
+      total_duration_ms: 18000000,
     },
     {
       id: generateUUID('LAUNCH-T10'),
@@ -257,6 +309,9 @@ export function getMockHistoryWorkflows(): WorkflowSummary[] {
       status: 'completed',
       started_at: getPastTimestamp(7),
       current_stage: null,
+      total_cost_usd: 84.70,
+      total_tokens: 1694000,
+      total_duration_ms: 180000,
     },
   ];
 }
@@ -660,39 +715,87 @@ function getEscapeVelocityExecutionPlan(): MockPlan {
 // ============================================================================
 
 /**
- * Humorous token usage data
+ * Creates a TokenUsage entry for a specific agent.
  */
-function getTokenUsage(issueId: string): Record<string, TokenSummary> {
-  const usage: Record<string, TokenSummary> = {};
+function createTokenUsage(
+  workflowId: string,
+  agent: 'architect' | 'developer' | 'reviewer',
+  inputTokens: number,
+  outputTokens: number,
+  costUsd: number,
+  durationMs: number,
+  numTurns: number
+): TokenUsage {
+  return {
+    id: generateUUID(`${workflowId}-${agent}-usage`),
+    workflow_id: workflowId,
+    agent,
+    model: 'claude-sonnet-4-20250514',
+    input_tokens: inputTokens,
+    output_tokens: outputTokens,
+    cache_read_tokens: Math.floor(inputTokens * 0.8),
+    cache_creation_tokens: 0,
+    cost_usd: costUsd,
+    duration_ms: durationMs,
+    num_turns: numTurns,
+    timestamp: new Date().toISOString(),
+  };
+}
+
+/**
+ * Humorous token usage data - returns a proper TokenSummary
+ */
+function getTokenUsage(workflowId: string, issueId: string): TokenSummary | null {
+  const breakdown: TokenUsage[] = [];
 
   // Different token counts based on the workflow theme
   switch (issueId) {
     case 'INFRA-2847':
-      usage.architect = { total_tokens: 123456, total_cost_usd: 6.17 };
-      usage.developer = { total_tokens: 847000, total_cost_usd: 42.35 };
+      breakdown.push(createTokenUsage(workflowId, 'architect', 100000, 23456, 6.17, 45000, 4));
+      breakdown.push(createTokenUsage(workflowId, 'developer', 700000, 147000, 42.35, 135000, 12));
       break;
     case 'DEVOPS-∞':
-      usage.architect = { total_tokens: 999999, total_cost_usd: 47.00 };
+      breakdown.push(createTokenUsage(workflowId, 'architect', 800000, 199999, 47.00, 120000, 8));
       break;
     case 'ARCH-42':
-      usage.architect = { total_tokens: 420000, total_cost_usd: 21.00 };
-      usage.developer = { total_tokens: 1000000, total_cost_usd: 50.00 };
-      usage.reviewer = { total_tokens: 42, total_cost_usd: 0.00 }; // LGTM
+      breakdown.push(createTokenUsage(workflowId, 'architect', 350000, 70000, 21.00, 90000, 6));
+      breakdown.push(createTokenUsage(workflowId, 'developer', 850000, 150000, 50.00, 180000, 15));
+      breakdown.push(createTokenUsage(workflowId, 'reviewer', 40, 2, 0.00, 30000, 1)); // LGTM
       break;
     case 'SPEC-322':
-      usage.architect = { total_tokens: 322000, total_cost_usd: 16.10 };
-      usage.developer = { total_tokens: 500000, total_cost_usd: 25.00 };
+      breakdown.push(createTokenUsage(workflowId, 'architect', 260000, 62000, 16.10, 60000, 5));
+      breakdown.push(createTokenUsage(workflowId, 'developer', 400000, 100000, 25.00, 94000, 8));
       break;
     case 'PERF-9000':
-      usage.architect = { total_tokens: 900000, total_cost_usd: 45.00 };
+      breakdown.push(createTokenUsage(workflowId, 'architect', 720000, 180000, 45.00, 210000, 10));
       break;
     default:
-      usage.architect = { total_tokens: 100000, total_cost_usd: 5.00 };
-      usage.developer = { total_tokens: 200000, total_cost_usd: 10.00 };
-      usage.reviewer = { total_tokens: 50000, total_cost_usd: 2.50 };
+      breakdown.push(createTokenUsage(workflowId, 'architect', 80000, 20000, 5.00, 30000, 3));
+      breakdown.push(createTokenUsage(workflowId, 'developer', 160000, 40000, 10.00, 60000, 6));
+      breakdown.push(createTokenUsage(workflowId, 'reviewer', 40000, 10000, 2.50, 20000, 2));
   }
 
-  return usage;
+  if (breakdown.length === 0) {
+    return null;
+  }
+
+  // Calculate totals from breakdown
+  const totalInputTokens = breakdown.reduce((sum, u) => sum + u.input_tokens, 0);
+  const totalOutputTokens = breakdown.reduce((sum, u) => sum + u.output_tokens, 0);
+  const totalCacheReadTokens = breakdown.reduce((sum, u) => sum + u.cache_read_tokens, 0);
+  const totalCostUsd = breakdown.reduce((sum, u) => sum + u.cost_usd, 0);
+  const totalDurationMs = breakdown.reduce((sum, u) => sum + u.duration_ms, 0);
+  const totalTurns = breakdown.reduce((sum, u) => sum + u.num_turns, 0);
+
+  return {
+    total_input_tokens: totalInputTokens,
+    total_output_tokens: totalOutputTokens,
+    total_cache_read_tokens: totalCacheReadTokens,
+    total_cost_usd: totalCostUsd,
+    total_duration_ms: totalDurationMs,
+    total_turns: totalTurns,
+    breakdown,
+  };
 }
 
 // ============================================================================
@@ -1010,7 +1113,7 @@ export function getMockWorkflowDetail(id: string): WorkflowDetail | null {
     worktree_path: `/Users/amelia/worktrees/${summary.worktree_name}`,
     completed_at: completedAt,
     failure_reason: failureReason,
-    token_usage: getTokenUsage(summary.issue_id),
+    token_usage: getTokenUsage(id, summary.issue_id),
     recent_events: events,
     // Agentic execution fields
     goal: executionPlan?.goal ?? null,

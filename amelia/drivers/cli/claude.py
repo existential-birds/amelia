@@ -264,6 +264,7 @@ class ClaudeCliDriver:
         self.allowed_tools = allowed_tools or []
         self.disallowed_tools = disallowed_tools or []
         self.tool_call_history: list[ToolUseBlock] = []
+        self.last_result_message: ResultMessage | None = None
 
     def _build_options(
         self,
@@ -362,6 +363,8 @@ class ClaudeCliDriver:
                 elif isinstance(message, ResultMessage):
                     result_message = message
                     session_id_result = message.session_id
+                    # Store for token usage extraction
+                    self.last_result_message = message
 
             if result_message is None:
                 raise RuntimeError("Claude SDK did not return a result message")
@@ -474,6 +477,10 @@ class ClaudeCliDriver:
                         for block in message.content:
                             if isinstance(block, ToolUseBlock):
                                 self.tool_call_history.append(block)
+
+                    # Store ResultMessage for token usage extraction
+                    if isinstance(message, ResultMessage):
+                        self.last_result_message = message
 
                     yield message
 

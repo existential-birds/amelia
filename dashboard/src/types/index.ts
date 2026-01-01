@@ -52,6 +52,15 @@ export interface WorkflowSummary {
 
   /** Name of the current execution stage (e.g., 'architect', 'developer', 'reviewer'). */
   current_stage: string | null;
+
+  /** Total cost in USD for all token usage, or null if not available. */
+  total_cost_usd: number | null;
+
+  /** Total number of tokens used (input + output), or null if not available. */
+  total_tokens: number | null;
+
+  /** Total duration in milliseconds, or null if not available. */
+  total_duration_ms: number | null;
 }
 
 /**
@@ -68,8 +77,8 @@ export interface WorkflowDetail extends WorkflowSummary {
   /** Human-readable error message if the workflow failed, otherwise null. */
   failure_reason: string | null;
 
-  /** Token usage statistics grouped by agent name. */
-  token_usage: Record<string, TokenSummary>;
+  /** Token usage summary with breakdown by agent, or null if not available. */
+  token_usage: TokenSummary | null;
 
   /** Recent workflow events for this workflow, ordered by sequence number. */
   recent_events: WorkflowEvent[];
@@ -196,27 +205,18 @@ export interface WorkflowEvent {
 // ============================================================================
 
 /**
- * Aggregated token usage and cost for an agent or workflow.
- * Provides a high-level summary without per-request details.
- */
-export interface TokenSummary {
-  /** Total number of tokens used (input + output + cache). */
-  total_tokens: number;
-
-  /** Total cost in USD for all token usage. */
-  total_cost_usd: number;
-}
-
-/**
  * Detailed token usage information for a single LLM request.
  * Tracks input, output, and cache tokens separately for cost analysis.
  */
 export interface TokenUsage {
+  /** Unique identifier for this token usage record. */
+  id: string;
+
   /** ID of the workflow this usage belongs to. */
   workflow_id: string;
 
-  /** Name of the agent that made this request (e.g., 'architect', 'developer'). */
-  agent: string;
+  /** Name of the agent that made this request. */
+  agent: 'architect' | 'developer' | 'reviewer';
 
   /** Name of the LLM model used (e.g., 'claude-sonnet-4-5', 'gpt-4'). */
   model: string;
@@ -233,11 +233,44 @@ export interface TokenUsage {
   /** Number of tokens written to the prompt cache. */
   cache_creation_tokens: number;
 
-  /** Calculated cost in USD for this request, or null if pricing unavailable. */
-  cost_usd: number | null;
+  /** Calculated cost in USD for this request. */
+  cost_usd: number;
+
+  /** Duration of the request in milliseconds. */
+  duration_ms: number;
+
+  /** Number of turns (conversation exchanges) in this request. */
+  num_turns: number;
 
   /** ISO 8601 timestamp when this request was made. */
   timestamp: string;
+}
+
+/**
+ * Aggregated token usage and cost for a workflow.
+ * Provides a high-level summary with per-agent breakdown.
+ */
+export interface TokenSummary {
+  /** Total number of input tokens across all requests. */
+  total_input_tokens: number;
+
+  /** Total number of output tokens across all requests. */
+  total_output_tokens: number;
+
+  /** Total number of cache read tokens across all requests. */
+  total_cache_read_tokens: number;
+
+  /** Total cost in USD for all token usage. */
+  total_cost_usd: number;
+
+  /** Total duration in milliseconds across all requests. */
+  total_duration_ms: number;
+
+  /** Total number of turns across all requests. */
+  total_turns: number;
+
+  /** Detailed breakdown of token usage by agent. */
+  breakdown: TokenUsage[];
 }
 
 // ============================================================================
