@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-01-01
+
+### Added
+
+- **prompts:** Add agent prompt configuration system with dashboard UI for customizing agent behavior ([#184](https://github.com/existential-birds/amelia/pull/184))
+  - Configure system prompts for Architect, Reviewer, and Evaluator agents
+  - Default prompt templates with placeholder support (`{issue_description}`, `{plan}`, etc.)
+  - Prompt resolver merges defaults with custom configurations per agent
+  - SQLite persistence layer with version history tracking
+  - New Prompt Configuration page in dashboard with inline editing
+  - Reset prompts to defaults with one click
+
 ## [0.3.0] - 2026-01-01
 
 ### Added
@@ -129,7 +141,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - FastAPI server with WebSocket support
 - React dashboard for workflow visualization
 
-[Unreleased]: https://github.com/existential-birds/amelia/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/existential-birds/amelia/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/existential-birds/amelia/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/existential-birds/amelia/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/existential-birds/amelia/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/existential-birds/amelia/compare/v0.2.0...v0.2.1

@@ -1,6 +1,6 @@
 {
   "name": "@amelia/design-system-docs",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Amelia Design System documentation site built with VitePress by hey-amelia bot",
   "private": true,
   "type": "module",
