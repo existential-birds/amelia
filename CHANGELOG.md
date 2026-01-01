@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-01-01
+
+### Fixed
+
+- **server:** Fix 404 error on `/api/prompts` endpoint when accessed without trailing slash ([#189](https://github.com/existential-birds/amelia/pull/189))
+
 ## [0.4.0] - 2026-01-01
 
 ### Added
