@@ -209,7 +209,7 @@ export function PromptEditModal({
           accentStyle.border,
           'shadow-2xl',
           accentStyle.shadow,
-          'bg-gradient-to-b from-background to-background/95'
+          'bg-background'
         )}
       >
         {/* Header with agent-specific accent gradient */}
@@ -261,7 +261,7 @@ export function PromptEditModal({
                   onChange={(e) => setContent(e.target.value)}
                   className={cn(
                     'flex-1 w-full min-h-0 resize-none rounded-lg border-2 px-4 py-3 text-sm font-mono leading-relaxed',
-                    'bg-muted/30 dark:bg-muted/20',
+                    'bg-muted',
                     'placeholder:text-muted-foreground/60',
                     'focus-visible:outline-none focus-visible:ring-4',
                     accentStyle.focusRing,
@@ -307,7 +307,7 @@ export function PromptEditModal({
           )}
         </div>
 
-        <DialogFooter className="px-6 py-4 border-t border-border/50 bg-muted/30 gap-2 sm:gap-0">
+        <DialogFooter className="px-6 py-4 border-t border-border/50 bg-muted gap-2 sm:gap-0">
           <Button
             variant="ghost"
             onClick={handleResetToDefault}
