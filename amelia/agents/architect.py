@@ -159,15 +159,35 @@ Guidelines:
         self,
         driver: DriverInterface,
         stream_emitter: StreamEmitter | None = None,
+        prompts: dict[str, str] | None = None,
     ):
         """Initialize the Architect agent.
 
         Args:
             driver: LLM driver interface for plan generation.
             stream_emitter: Optional callback for streaming events.
+            prompts: Optional dict mapping prompt IDs to custom content.
+                Supports keys: "architect.system", "architect.plan".
         """
         self.driver = driver
         self._stream_emitter = stream_emitter
+        self._prompts = prompts or {}
+
+    @property
+    def system_prompt(self) -> str:
+        """Get the system prompt for analysis.
+
+        Returns custom prompt if injected, otherwise class default.
+        """
+        return self._prompts.get("architect.system", self.SYSTEM_PROMPT)
+
+    @property
+    def plan_prompt(self) -> str:
+        """Get the system prompt for plan generation.
+
+        Returns custom prompt if injected, otherwise class default.
+        """
+        return self._prompts.get("architect.plan", self.SYSTEM_PROMPT_PLAN)
 
     def _build_prompt(self, state: ExecutionState, profile: Profile) -> str:
         """Build user prompt from execution state and profile.
@@ -378,7 +398,7 @@ Return the plan as a MarkdownPlanOutput with:
         # Call driver with MarkdownPlanOutput schema
         raw_response, _session_id = await self.driver.generate(
             prompt=user_prompt,
-            system_prompt=self.SYSTEM_PROMPT_PLAN,
+            system_prompt=self.plan_prompt,
             schema=MarkdownPlanOutput,
             cwd=profile.working_dir,
         )
@@ -492,7 +512,7 @@ Respond with a structured ArchitectOutput."""
         # Call driver with ArchitectOutput schema
         raw_response, _ = await self.driver.generate(
             prompt=user_prompt,
-            system_prompt=self.SYSTEM_PROMPT,
+            system_prompt=self.system_prompt,
             schema=ArchitectOutput,
             cwd=profile.working_dir,
         )

@@ -134,15 +134,30 @@ Provide clear evidence for each disposition decision."""
         self,
         driver: DriverInterface,
         stream_emitter: StreamEmitter | None = None,
+        prompts: dict[str, str] | None = None,
     ):
         """Initialize the Evaluator agent.
 
         Args:
             driver: LLM driver interface for generating evaluations.
             stream_emitter: Optional callback for streaming events.
+            prompts: Optional dict of prompt_id -> content for customization.
         """
         self.driver = driver
         self._stream_emitter = stream_emitter
+        self._prompts = prompts or {}
+
+    @property
+    def system_prompt(self) -> str:
+        """Get the system prompt for evaluation.
+
+        Returns the custom prompt if configured, otherwise falls back
+        to the hardcoded default.
+
+        Returns:
+            The system prompt string.
+        """
+        return self._prompts.get("evaluator.system", self.SYSTEM_PROMPT)
 
     def _build_prompt(self, state: "ExecutionState") -> str:
         """Build the user prompt for evaluation from state.
@@ -259,7 +274,7 @@ Return your evaluation as an EvaluationOutput with all items and a summary.""")
 
         response, new_session_id = await self.driver.generate(
             prompt=prompt,
-            system_prompt=self.SYSTEM_PROMPT,
+            system_prompt=self.system_prompt,
             schema=EvaluationOutput,
             cwd=profile.working_dir,
             session_id=state.driver_session_id,

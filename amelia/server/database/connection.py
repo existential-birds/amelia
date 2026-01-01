@@ -8,6 +8,8 @@ from typing import Any
 import aiosqlite
 from loguru import logger
 
+from amelia.agents.prompts.defaults import PROMPT_DEFAULTS
+
 
 # Type alias for SQLite-compatible values
 SqliteValue = None | int | float | str | bytes | datetime
@@ -301,6 +303,38 @@ class Database:
             )
         """)
 
+        # Prompt configuration tables
+        await self.execute("""
+            CREATE TABLE IF NOT EXISTS prompts (
+                id TEXT PRIMARY KEY,
+                agent TEXT NOT NULL,
+                name TEXT NOT NULL,
+                description TEXT,
+                current_version_id TEXT
+            )
+        """)
+
+        await self.execute("""
+            CREATE TABLE IF NOT EXISTS prompt_versions (
+                id TEXT PRIMARY KEY,
+                prompt_id TEXT NOT NULL REFERENCES prompts(id),
+                version_number INTEGER NOT NULL,
+                content TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                change_note TEXT,
+                UNIQUE(prompt_id, version_number)
+            )
+        """)
+
+        await self.execute("""
+            CREATE TABLE IF NOT EXISTS workflow_prompt_versions (
+                workflow_id TEXT NOT NULL REFERENCES workflows(id) ON DELETE CASCADE,
+                prompt_id TEXT NOT NULL REFERENCES prompts(id),
+                version_id TEXT NOT NULL REFERENCES prompt_versions(id),
+                PRIMARY KEY (workflow_id, prompt_id)
+            )
+        """)
+
         # Indexes
         await self.execute(
             "CREATE INDEX IF NOT EXISTS idx_workflows_issue_id ON workflows(issue_id)"
@@ -336,3 +370,26 @@ class Database:
         await self.execute(
             "CREATE INDEX IF NOT EXISTS idx_tokens_agent ON token_usage(agent)"
         )
+        await self.execute(
+            "CREATE INDEX IF NOT EXISTS idx_prompt_versions_prompt ON prompt_versions(prompt_id)"
+        )
+        await self.execute(
+            "CREATE INDEX IF NOT EXISTS idx_workflow_prompts_workflow ON workflow_prompt_versions(workflow_id)"
+        )
+
+    async def initialize_prompts(self) -> None:
+        """Seed prompts table from defaults. Idempotent.
+
+        Creates prompt entries for each default if they don't exist.
+        Call this after ensure_schema().
+        """
+        for prompt_id, default in PROMPT_DEFAULTS.items():
+            existing = await self.fetch_one(
+                "SELECT 1 FROM prompts WHERE id = ?", (prompt_id,)
+            )
+            if not existing:
+                await self.execute(
+                    """INSERT INTO prompts (id, agent, name, description, current_version_id)
+                       VALUES (?, ?, ?, ?, NULL)""",
+                    (prompt_id, default.agent, default.name, default.description),
+                )

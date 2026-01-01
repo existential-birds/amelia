@@ -152,6 +152,41 @@ class OrchestratorService:
 
         return emit
 
+    async def _resolve_prompts(self, workflow_id: str) -> dict[str, str]:
+        """Resolve all prompts for a workflow.
+
+        Uses PromptResolver to get current active prompts, falling back to
+        defaults when no custom version exists. Records which versions are
+        used by the workflow for audit purposes.
+
+        Args:
+            workflow_id: The workflow identifier for recording prompt usage.
+
+        Returns:
+            Dictionary mapping prompt_id to prompt content.
+        """
+        from amelia.agents.prompts.resolver import PromptResolver  # noqa: PLC0415
+        from amelia.server.database.prompt_repository import PromptRepository  # noqa: PLC0415
+
+        try:
+            prompt_repo = PromptRepository(self._repository.db)
+            resolver = PromptResolver(prompt_repo)
+            resolved_prompts = await resolver.get_all_active()
+            prompts = {pid: rp.content for pid, rp in resolved_prompts.items()}
+
+            # Record which versions the workflow uses (best-effort)
+            await resolver.record_for_workflow(workflow_id)
+
+            return prompts
+        except Exception as e:
+            # Log but don't fail workflow - prompts will fall back to defaults
+            logger.warning(
+                "Failed to resolve prompts, using defaults",
+                workflow_id=workflow_id,
+                error=str(e),
+            )
+            return {}
+
     async def _get_profile_or_fail(
         self,
         workflow_id: str,
@@ -706,6 +741,9 @@ class OrchestratorService:
         if profile is None:
             return
 
+        # Resolve prompts before starting workflow
+        prompts = await self._resolve_prompts(workflow_id)
+
         async with AsyncSqliteSaver.from_conn_string(
             str(self._checkpoint_path)
         ) as checkpointer:
@@ -721,6 +759,7 @@ class OrchestratorService:
                     "stream_emitter": stream_emitter,
                     "profile": profile,
                     "repository": self._repository,
+                    "prompts": prompts,
                 }
             }
 
@@ -947,6 +986,9 @@ class OrchestratorService:
         if profile is None:
             return
 
+        # Resolve prompts before starting workflow
+        prompts = await self._resolve_prompts(workflow_id)
+
         async with AsyncSqliteSaver.from_conn_string(
             str(self._checkpoint_path)
         ) as checkpointer:
@@ -969,6 +1011,7 @@ class OrchestratorService:
                     "stream_emitter": stream_emitter,
                     "profile": profile,
                     "repository": self._repository,
+                    "prompts": prompts,
                 }
             }
 
@@ -1137,6 +1180,9 @@ class OrchestratorService:
         if profile is None:
             return
 
+        # Resolve prompts for workflow resume
+        prompts = await self._resolve_prompts(workflow_id)
+
         # Resume LangGraph execution with updated state
         async with AsyncSqliteSaver.from_conn_string(
             str(self._checkpoint_path)
@@ -1152,6 +1198,7 @@ class OrchestratorService:
                     "stream_emitter": stream_emitter,
                     "profile": profile,
                     "repository": self._repository,
+                    "prompts": prompts,
                 }
             }
 

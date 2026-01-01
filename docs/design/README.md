@@ -8,7 +8,6 @@ This folder contains visual design mockups and prototypes for the Amelia dashboa
 |------|-------------|
 | [amelia-dashboard-dark.html](amelia-dashboard-dark.html) | Interactive HTML prototype of the dashboard |
 | [amelia-dashboard-dark.jsx](amelia-dashboard-dark.jsx) | React JSX version of the design mockup |
-| [desktop_screen.jpg](desktop_screen.jpg) | Static screenshot of the dashboard design |
 
 ## Design Principles
 

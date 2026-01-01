@@ -152,10 +152,14 @@ async def call_architect_node(
 
     # Get optional repository for token usage tracking
     config = config or {}
-    repository = config.get("configurable", {}).get("repository")
+    configurable = config.get("configurable", {})
+    repository = configurable.get("repository")
+
+    # Extract prompts from config for agent injection
+    prompts = configurable.get("prompts", {})
 
     driver = DriverFactory.get_driver(profile.driver, model=profile.model)
-    architect = Architect(driver, stream_emitter=stream_emitter)
+    architect = Architect(driver, stream_emitter=stream_emitter, prompts=prompts)
 
     # Generate implementation plan
     output: PlanOutput = await architect.plan(
@@ -482,10 +486,14 @@ async def call_reviewer_node(
 
     # Get optional repository for token usage tracking
     config = config or {}
-    repository = config.get("configurable", {}).get("repository")
+    configurable = config.get("configurable", {})
+    repository = configurable.get("repository")
+
+    # Extract prompts from config for agent injection
+    prompts = configurable.get("prompts", {})
 
     driver = DriverFactory.get_driver(profile.driver, model=profile.model)
-    reviewer = Reviewer(driver, stream_emitter=stream_emitter)
+    reviewer = Reviewer(driver, stream_emitter=stream_emitter, prompts=prompts)
 
     # Use agentic review when we have a base_commit - this avoids large diff issues
     # The agent will fetch the diff using git tools and auto-detect technologies
@@ -544,8 +552,13 @@ async def call_evaluation_node(
     """
     stream_emitter, workflow_id, profile = _extract_config_params(config)
 
+    # Extract prompts from config for agent injection
+    config = config or {}
+    configurable = config.get("configurable", {})
+    prompts = configurable.get("prompts", {})
+
     driver = DriverFactory.get_driver(profile.driver, model=profile.model)
-    evaluator = Evaluator(driver=driver, stream_emitter=stream_emitter)
+    evaluator = Evaluator(driver=driver, stream_emitter=stream_emitter, prompts=prompts)
 
     evaluation_result, new_session_id = await evaluator.evaluate(
         state, profile, workflow_id=workflow_id

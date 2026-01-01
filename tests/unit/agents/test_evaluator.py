@@ -82,6 +82,38 @@ class TestEvaluator:
         """Create an Evaluator instance with mocked driver."""
         return Evaluator(driver=mock_driver)
 
+    def test_system_prompt_returns_default_when_no_custom_prompt(
+        self, mock_driver: MagicMock
+    ) -> None:
+        """Test that system_prompt returns default SYSTEM_PROMPT when no custom prompt."""
+        evaluator = Evaluator(driver=mock_driver)
+        assert evaluator.system_prompt == Evaluator.SYSTEM_PROMPT
+        assert "expert code evaluation agent" in evaluator.system_prompt
+
+    def test_system_prompt_returns_default_when_empty_prompts_dict(
+        self, mock_driver: MagicMock
+    ) -> None:
+        """Test that system_prompt returns default when prompts dict is empty."""
+        evaluator = Evaluator(driver=mock_driver, prompts={})
+        assert evaluator.system_prompt == Evaluator.SYSTEM_PROMPT
+
+    def test_system_prompt_returns_default_when_key_not_present(
+        self, mock_driver: MagicMock
+    ) -> None:
+        """Test that system_prompt returns default when evaluator.system key is absent."""
+        evaluator = Evaluator(driver=mock_driver, prompts={"other.key": "other value"})
+        assert evaluator.system_prompt == Evaluator.SYSTEM_PROMPT
+
+    def test_system_prompt_returns_custom_prompt_when_configured(
+        self, mock_driver: MagicMock
+    ) -> None:
+        """Test that system_prompt returns custom prompt when evaluator.system is set."""
+        custom_prompt = "You are a custom code evaluator..."
+        prompts = {"evaluator.system": custom_prompt}
+        evaluator = Evaluator(driver=mock_driver, prompts=prompts)
+        assert evaluator.system_prompt == custom_prompt
+        assert evaluator.system_prompt != Evaluator.SYSTEM_PROMPT
+
     @pytest.fixture
     def evaluation_output_with_items(self) -> EvaluationOutput:
         """Create evaluation output with mixed dispositions."""

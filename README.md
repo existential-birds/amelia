@@ -27,6 +27,12 @@ Review and approve generated implementation plans before execution.
 
 ![Plan View](docs/design/hugo_plan.png)
 
+### Prompt Editor
+
+Customize agent prompts directly in the dashboard to tune behavior for your workflow.
+
+![Prompt Editor](docs/design/amelia_prompt_editor.png)
+
 ### Streaming Tool Calls and Thinking Tokens
 
 Watch agents work in real-time with streaming tool execution and visible reasoning.

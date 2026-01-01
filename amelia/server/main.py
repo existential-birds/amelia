@@ -51,6 +51,7 @@ from amelia.logging import log_server_startup
 from amelia.server.config import ServerConfig
 from amelia.server.database import WorkflowRepository
 from amelia.server.database.connection import Database
+from amelia.server.database.prompt_repository import PromptRepository
 from amelia.server.dependencies import (
     clear_database,
     clear_orchestrator,
@@ -63,6 +64,7 @@ from amelia.server.lifecycle.retention import LogRetentionService
 from amelia.server.lifecycle.server import ServerLifecycle
 from amelia.server.orchestrator.service import OrchestratorService
 from amelia.server.routes import health_router, websocket_router, workflows_router
+from amelia.server.routes.prompts import get_prompt_repository, router as prompts_router
 from amelia.server.routes.websocket import connection_manager
 from amelia.server.routes.workflows import configure_exception_handlers
 
@@ -101,6 +103,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     database = Database(_config.database_path)
     await database.connect()
     await database.ensure_schema()
+    await database.initialize_prompts()
 
     # Set the database in dependencies module for DI
     set_database(database)
@@ -182,6 +185,14 @@ def create_app() -> FastAPI:
     application.include_router(health_router, prefix="/api")
     application.include_router(workflows_router, prefix="/api")
     application.include_router(websocket_router)  # No prefix - route is /ws/events
+    application.include_router(prompts_router)  # Already has /api/prompts prefix
+
+    # Set up prompt repository dependency
+    def get_prompt_repo() -> PromptRepository:
+        from amelia.server.dependencies import get_database
+        return PromptRepository(get_database())
+
+    application.dependency_overrides[get_prompt_repository] = get_prompt_repo
 
     # Serve dashboard static files
     # Priority: bundled static files (installed package) > dev build (dashboard/dist)

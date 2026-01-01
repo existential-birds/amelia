@@ -18,3 +18,80 @@ export const AGENT_STYLES: Record<string, { text: string; bg: string }> = {
   REVIEWER: { text: 'text-agent-reviewer', bg: 'bg-agent-reviewer-bg' },
   SYSTEM: { text: 'text-muted-foreground', bg: '' },
 };
+
+/** Agent accent style definition. */
+export interface AgentAccentStyle {
+  border: string;
+  shadow: string;
+  headerGradient: string;
+  iconBg: string;
+  iconText: string;
+  focusRing: string;
+  button: string;
+  buttonShadow: string;
+}
+
+/** Extended style mapping for agent modal accents (borders, shadows, buttons). */
+const AGENT_ACCENT_STYLES_MAP: Record<string, AgentAccentStyle> = {
+  architect: {
+    border: 'border-agent-architect/20',
+    shadow: 'shadow-agent-architect/10 dark:shadow-agent-architect/5',
+    headerGradient: 'from-agent-architect/5 via-transparent to-agent-architect/5',
+    iconBg: 'bg-agent-architect/10',
+    iconText: 'text-agent-architect',
+    focusRing: 'focus-visible:border-agent-architect/50 focus-visible:ring-agent-architect/20',
+    button: 'bg-agent-architect hover:bg-agent-architect/90',
+    buttonShadow: 'shadow-agent-architect/25',
+  },
+  developer: {
+    border: 'border-agent-developer/20',
+    shadow: 'shadow-agent-developer/10 dark:shadow-agent-developer/5',
+    headerGradient: 'from-agent-developer/5 via-transparent to-agent-developer/5',
+    iconBg: 'bg-agent-developer/10',
+    iconText: 'text-agent-developer',
+    focusRing: 'focus-visible:border-agent-developer/50 focus-visible:ring-agent-developer/20',
+    button: 'bg-agent-developer hover:bg-agent-developer/90 text-background',
+    buttonShadow: 'shadow-agent-developer/25',
+  },
+  reviewer: {
+    border: 'border-agent-reviewer/20',
+    shadow: 'shadow-agent-reviewer/10 dark:shadow-agent-reviewer/5',
+    headerGradient: 'from-agent-reviewer/5 via-transparent to-agent-reviewer/5',
+    iconBg: 'bg-agent-reviewer/10',
+    iconText: 'text-agent-reviewer',
+    focusRing: 'focus-visible:border-agent-reviewer/50 focus-visible:ring-agent-reviewer/20',
+    button: 'bg-agent-reviewer hover:bg-agent-reviewer/90 text-white',
+    buttonShadow: 'shadow-agent-reviewer/25',
+  },
+  evaluator: {
+    border: 'border-agent-pm/20',
+    shadow: 'shadow-agent-pm/10 dark:shadow-agent-pm/5',
+    headerGradient: 'from-agent-pm/5 via-transparent to-agent-pm/5',
+    iconBg: 'bg-agent-pm/10',
+    iconText: 'text-agent-pm',
+    focusRing: 'focus-visible:border-agent-pm/50 focus-visible:ring-agent-pm/20',
+    button: 'bg-agent-pm hover:bg-agent-pm/90 text-white',
+    buttonShadow: 'shadow-agent-pm/25',
+  },
+};
+
+/** Default accent style for unknown agents (architect/blue). */
+export const DEFAULT_ACCENT_STYLE: AgentAccentStyle = {
+  border: 'border-agent-architect/20',
+  shadow: 'shadow-agent-architect/10 dark:shadow-agent-architect/5',
+  headerGradient: 'from-agent-architect/5 via-transparent to-agent-architect/5',
+  iconBg: 'bg-agent-architect/10',
+  iconText: 'text-agent-architect',
+  focusRing:
+    'focus-visible:border-agent-architect/50 focus-visible:ring-agent-architect/20',
+  button: 'bg-agent-architect hover:bg-agent-architect/90',
+  buttonShadow: 'shadow-agent-architect/25',
+};
+
+/**
+ * Get accent style for an agent, with fallback to default.
+ * Always returns a defined style.
+ */
+export function getAgentAccentStyle(agent: string): AgentAccentStyle {
+  return AGENT_ACCENT_STYLES_MAP[agent] ?? DEFAULT_ACCENT_STYLE;
+}

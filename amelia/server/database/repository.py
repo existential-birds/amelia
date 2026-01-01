@@ -53,6 +53,15 @@ class WorkflowRepository:
         """
         self._db = db
 
+    @property
+    def db(self) -> Database:
+        """Expose database connection for shared access.
+
+        Returns:
+            The underlying Database instance.
+        """
+        return self._db
+
     async def create(self, state: ServerExecutionState) -> None:
         """Create a new workflow.
 
