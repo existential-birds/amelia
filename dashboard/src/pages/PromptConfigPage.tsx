@@ -9,6 +9,12 @@ import { PageHeader } from '@/components/PageHeader';
 import { PromptCard, PromptEditModal } from '@/components/prompts';
 import { Separator } from '@/components/ui/separator';
 import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from '@/components/ui/card';
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -31,8 +37,19 @@ const AGENT_LABELS: Record<string, string> = {
   evaluator: 'Evaluator',
 };
 
-/** Agent display order. */
-const AGENT_ORDER = ['architect', 'developer', 'reviewer', 'evaluator'];
+/** Agent display order (developer last since not editable). */
+const AGENT_ORDER = ['architect', 'reviewer', 'evaluator', 'developer'];
+
+/** Agents that should always show, even if they have no configurable prompts. */
+const ALWAYS_SHOW_AGENTS = ['developer'];
+
+/** Agent header text color classes. */
+const AGENT_HEADER_COLORS: Record<string, string> = {
+  architect: 'text-agent-architect',
+  developer: 'text-agent-developer',
+  reviewer: 'text-agent-reviewer',
+  evaluator: 'text-agent-pm',
+};
 
 /**
  * Settings page for managing agent prompts.
@@ -62,16 +79,14 @@ export default function SettingsPage() {
   // Group prompts by agent
   const groupedPrompts = useMemo(() => groupPromptsByAgent(prompts), [prompts]);
 
-  // Get ordered agents that exist in our data
+  // Get ordered agents that exist in our data (plus always-show agents)
   const orderedAgents = useMemo(() => {
     const existingAgents = Object.keys(groupedPrompts);
+    // Combine existing agents with always-show agents
+    const allAgents = [...new Set([...existingAgents, ...ALWAYS_SHOW_AGENTS])];
     // First include agents in defined order, then any remaining agents
-    const ordered = AGENT_ORDER.filter((agent) =>
-      existingAgents.includes(agent)
-    );
-    const remaining = existingAgents.filter(
-      (agent) => !AGENT_ORDER.includes(agent)
-    );
+    const ordered = AGENT_ORDER.filter((agent) => allAgents.includes(agent));
+    const remaining = allAgents.filter((agent) => !AGENT_ORDER.includes(agent));
     return [...ordered, ...remaining];
   }, [groupedPrompts]);
 
@@ -151,18 +166,36 @@ export default function SettingsPage() {
       <div className="flex-1 p-6 space-y-8">
         {orderedAgents.map((agent) => (
           <section key={agent}>
-            <h2 className="text-lg font-heading font-semibold tracking-wide text-foreground mb-4">
+            <h2
+              className={`text-lg font-heading font-semibold tracking-wide mb-4 ${AGENT_HEADER_COLORS[agent] ?? 'text-foreground'}`}
+            >
               {AGENT_LABELS[agent] || agent}
             </h2>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {groupedPrompts[agent]?.map((prompt) => (
-                <PromptCard
-                  key={prompt.id}
-                  prompt={prompt}
-                  onEdit={handleEdit}
-                  onReset={handleResetClick}
-                />
-              ))}
+              {groupedPrompts[agent]?.length ? (
+                groupedPrompts[agent].map((prompt) => (
+                  <PromptCard
+                    key={prompt.id}
+                    prompt={prompt}
+                    onEdit={handleEdit}
+                    onReset={handleResetClick}
+                  />
+                ))
+              ) : (
+                <Card className="border-dashed bg-muted/30">
+                  <CardHeader>
+                    <CardTitle className="text-base text-muted-foreground">
+                      Dynamic Prompts
+                    </CardTitle>
+                    <CardDescription>
+                      Developer prompts are built dynamically from your
+                      implementation plan and review feedback. Unlike other
+                      agents, they adapt to each execution context rather than
+                      using fixed templates.
+                    </CardDescription>
+                  </CardHeader>
+                </Card>
+              )}
             </div>
           </section>
         ))}
