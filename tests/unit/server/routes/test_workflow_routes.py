@@ -21,82 +21,99 @@ from amelia.server.models.state import ServerExecutionState
 from amelia.server.models.tokens import TokenSummary, TokenUsage
 
 
+# =============================================================================
+# Module-level fixtures and helpers
+# =============================================================================
+
+
+@pytest.fixture
+def mock_repository() -> MagicMock:
+    """Create a mock WorkflowRepository with common methods stubbed."""
+    repo = MagicMock(spec=WorkflowRepository)
+    repo.get = AsyncMock()
+    repo.get_token_summary = AsyncMock()
+    repo.get_recent_events = AsyncMock(return_value=[])
+    repo.list_workflows = AsyncMock()
+    repo.count_workflows = AsyncMock()
+    repo.get_token_summaries_batch = AsyncMock()
+    repo.list_active = AsyncMock()
+    return repo
+
+
+@pytest.fixture
+def mock_orchestrator() -> MagicMock:
+    """Create a mock OrchestratorService."""
+    return MagicMock()
+
+
+@pytest.fixture
+def test_client(
+    mock_repository: MagicMock,
+    mock_orchestrator: MagicMock,
+) -> TestClient:
+    """Create test client with mocked dependencies."""
+    app = create_app()
+
+    @asynccontextmanager
+    async def noop_lifespan(_app: Any) -> AsyncGenerator[None, None]:
+        yield
+
+    app.router.lifespan_context = noop_lifespan
+    app.dependency_overrides[get_repository] = lambda: mock_repository
+    app.dependency_overrides[get_orchestrator] = lambda: mock_orchestrator
+
+    return TestClient(app)
+
+
+def make_workflow(
+    workflow_id: str,
+    issue_id: str = "TEST-001",
+    status: str = "in_progress",
+    worktree_path: str | None = None,
+) -> ServerExecutionState:
+    """Create a test workflow with sensible defaults."""
+    return ServerExecutionState(
+        id=workflow_id,
+        issue_id=issue_id,
+        worktree_path=worktree_path or f"/tmp/{workflow_id}",
+        worktree_name=workflow_id,
+        workflow_status=status,
+        started_at=datetime.now(UTC),
+        execution_state=ExecutionState(profile_id="test"),
+    )
+
+
+def make_token_usage(
+    workflow_id: str,
+    agent: str = "architect",
+    input_tokens: int = 1000,
+    output_tokens: int = 500,
+    cost_usd: float = 0.01,
+    duration_ms: int = 5000,
+) -> TokenUsage:
+    """Create a test TokenUsage record."""
+    return TokenUsage(
+        workflow_id=workflow_id,
+        agent=agent,
+        model="claude-sonnet-4-20250514",
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        cache_read_tokens=200,
+        cache_creation_tokens=0,
+        cost_usd=cost_usd,
+        duration_ms=duration_ms,
+        num_turns=3,
+        timestamp=datetime.now(UTC),
+    )
+
+
+# =============================================================================
+# Test Classes
+# =============================================================================
+
+
 class TestGetWorkflowTokenUsage:
     """Tests for GET /workflows/{workflow_id} token usage data."""
-
-    @pytest.fixture
-    def mock_repository(self) -> MagicMock:
-        """Create a mock WorkflowRepository."""
-        repo = MagicMock(spec=WorkflowRepository)
-        repo.get = AsyncMock()
-        repo.get_token_summary = AsyncMock()
-        repo.get_recent_events = AsyncMock(return_value=[])
-        return repo
-
-    @pytest.fixture
-    def mock_orchestrator(self) -> MagicMock:
-        """Create a mock OrchestratorService."""
-        return MagicMock()
-
-    @pytest.fixture
-    def test_client(
-        self,
-        mock_repository: MagicMock,
-        mock_orchestrator: MagicMock,
-    ) -> TestClient:
-        """Create test client with mocked dependencies."""
-        app = create_app()
-
-        # Create a no-op lifespan
-        @asynccontextmanager
-        async def noop_lifespan(_app: Any) -> AsyncGenerator[None, None]:
-            yield
-
-        app.router.lifespan_context = noop_lifespan
-        app.dependency_overrides[get_repository] = lambda: mock_repository
-        app.dependency_overrides[get_orchestrator] = lambda: mock_orchestrator
-
-        return TestClient(app)
-
-    def _make_workflow(
-        self,
-        workflow_id: str = "wf-test",
-        issue_id: str = "TEST-001",
-    ) -> ServerExecutionState:
-        """Create a test workflow."""
-        return ServerExecutionState(
-            id=workflow_id,
-            issue_id=issue_id,
-            worktree_path="/tmp/test",
-            worktree_name="test",
-            workflow_status="in_progress",
-            started_at=datetime.now(UTC),
-            execution_state=ExecutionState(profile_id="test"),
-        )
-
-    def _make_token_usage(
-        self,
-        workflow_id: str,
-        agent: str = "architect",
-        input_tokens: int = 1000,
-        output_tokens: int = 500,
-        cost_usd: float = 0.01,
-        duration_ms: int = 5000,
-    ) -> TokenUsage:
-        """Create a test TokenUsage record."""
-        return TokenUsage(
-            workflow_id=workflow_id,
-            agent=agent,
-            model="claude-sonnet-4-20250514",
-            input_tokens=input_tokens,
-            output_tokens=output_tokens,
-            cache_read_tokens=200,
-            cache_creation_tokens=0,
-            cost_usd=cost_usd,
-            duration_ms=duration_ms,
-            num_turns=3,
-            timestamp=datetime.now(UTC),
-        )
 
     async def test_get_workflow_includes_token_summary(
         self,
@@ -104,13 +121,13 @@ class TestGetWorkflowTokenUsage:
         mock_repository: MagicMock,
     ) -> None:
         """GET /workflows/{id} should include token_usage when data exists."""
-        workflow = self._make_workflow("wf-with-tokens")
+        workflow = make_workflow("wf-with-tokens")
         mock_repository.get.return_value = workflow
 
         # Create token summary
         token_usages = [
-            self._make_token_usage("wf-with-tokens", "architect", 500, 200, 0.005, 3000),
-            self._make_token_usage("wf-with-tokens", "developer", 2000, 1000, 0.025, 10000),
+            make_token_usage("wf-with-tokens", "architect", 500, 200, 0.005, 3000),
+            make_token_usage("wf-with-tokens", "developer", 2000, 1000, 0.025, 10000),
         ]
         token_summary = TokenSummary(
             total_input_tokens=2500,
@@ -154,7 +171,7 @@ class TestGetWorkflowTokenUsage:
         mock_repository: MagicMock,
     ) -> None:
         """GET /workflows/{id} should return null token_usage when no data exists."""
-        workflow = self._make_workflow("wf-no-tokens")
+        workflow = make_workflow("wf-no-tokens")
         mock_repository.get.return_value = workflow
         mock_repository.get_token_summary.return_value = None
 
@@ -185,55 +202,6 @@ class TestGetWorkflowTokenUsage:
 class TestListWorkflowsTokenData:
     """Tests for GET /workflows endpoint token data in summaries."""
 
-    @pytest.fixture
-    def mock_repository(self) -> MagicMock:
-        """Create a mock WorkflowRepository."""
-        repo = MagicMock(spec=WorkflowRepository)
-        repo.list_workflows = AsyncMock()
-        repo.count_workflows = AsyncMock()
-        repo.get_token_summaries_batch = AsyncMock()
-        return repo
-
-    @pytest.fixture
-    def mock_orchestrator(self) -> MagicMock:
-        """Create a mock OrchestratorService."""
-        return MagicMock()
-
-    @pytest.fixture
-    def test_client(
-        self,
-        mock_repository: MagicMock,
-        mock_orchestrator: MagicMock,
-    ) -> TestClient:
-        """Create test client with mocked dependencies."""
-        app = create_app()
-
-        @asynccontextmanager
-        async def noop_lifespan(_app: Any) -> AsyncGenerator[None, None]:
-            yield
-
-        app.router.lifespan_context = noop_lifespan
-        app.dependency_overrides[get_repository] = lambda: mock_repository
-        app.dependency_overrides[get_orchestrator] = lambda: mock_orchestrator
-
-        return TestClient(app)
-
-    def _make_workflow(
-        self,
-        workflow_id: str,
-        issue_id: str = "TEST-001",
-    ) -> ServerExecutionState:
-        """Create a test workflow."""
-        return ServerExecutionState(
-            id=workflow_id,
-            issue_id=issue_id,
-            worktree_path=f"/tmp/{workflow_id}",
-            worktree_name=workflow_id,
-            workflow_status="completed",
-            started_at=datetime.now(UTC),
-            execution_state=ExecutionState(profile_id="test"),
-        )
-
     async def test_list_workflows_includes_token_data(
         self,
         test_client: TestClient,
@@ -242,8 +210,8 @@ class TestListWorkflowsTokenData:
         """GET /workflows should include token data in workflow summaries."""
         # Setup workflows
         workflows = [
-            self._make_workflow("wf-001", "TEST-001"),
-            self._make_workflow("wf-002", "TEST-002"),
+            make_workflow("wf-001", "TEST-001", "completed"),
+            make_workflow("wf-002", "TEST-002", "completed"),
         ]
         mock_repository.list_workflows.return_value = workflows
         mock_repository.count_workflows.return_value = 2
@@ -300,8 +268,8 @@ class TestListWorkflowsTokenData:
     ) -> None:
         """GET /workflows should handle workflows without token data."""
         workflows = [
-            self._make_workflow("wf-with-data"),
-            self._make_workflow("wf-no-data"),
+            make_workflow("wf-with-data", status="completed"),
+            make_workflow("wf-no-data", status="completed"),
         ]
         mock_repository.list_workflows.return_value = workflows
         mock_repository.count_workflows.return_value = 2
@@ -358,54 +326,6 @@ class TestListWorkflowsTokenData:
 class TestListActiveWorkflowsTokenData:
     """Tests for GET /workflows/active endpoint token data."""
 
-    @pytest.fixture
-    def mock_repository(self) -> MagicMock:
-        """Create a mock WorkflowRepository."""
-        repo = MagicMock(spec=WorkflowRepository)
-        repo.list_active = AsyncMock()
-        repo.get_token_summaries_batch = AsyncMock()
-        return repo
-
-    @pytest.fixture
-    def mock_orchestrator(self) -> MagicMock:
-        """Create a mock OrchestratorService."""
-        return MagicMock()
-
-    @pytest.fixture
-    def test_client(
-        self,
-        mock_repository: MagicMock,
-        mock_orchestrator: MagicMock,
-    ) -> TestClient:
-        """Create test client with mocked dependencies."""
-        app = create_app()
-
-        @asynccontextmanager
-        async def noop_lifespan(_app: Any) -> AsyncGenerator[None, None]:
-            yield
-
-        app.router.lifespan_context = noop_lifespan
-        app.dependency_overrides[get_repository] = lambda: mock_repository
-        app.dependency_overrides[get_orchestrator] = lambda: mock_orchestrator
-
-        return TestClient(app)
-
-    def _make_workflow(
-        self,
-        workflow_id: str,
-        status: str = "in_progress",
-    ) -> ServerExecutionState:
-        """Create a test workflow."""
-        return ServerExecutionState(
-            id=workflow_id,
-            issue_id=f"TEST-{workflow_id}",
-            worktree_path=f"/tmp/{workflow_id}",
-            worktree_name=workflow_id,
-            workflow_status=status,  # type: ignore
-            started_at=datetime.now(UTC),
-            execution_state=ExecutionState(profile_id="test"),
-        )
-
     async def test_list_active_includes_token_data(
         self,
         test_client: TestClient,
@@ -413,7 +333,7 @@ class TestListActiveWorkflowsTokenData:
     ) -> None:
         """GET /workflows/active should include token data in summaries."""
         workflows = [
-            self._make_workflow("wf-active-001", "in_progress"),
+            make_workflow("wf-active-001", status="in_progress"),
         ]
         mock_repository.list_active.return_value = workflows
 

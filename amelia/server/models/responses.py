@@ -56,7 +56,10 @@ class WorkflowSummary(BaseModel):
     ] = None
     total_tokens: Annotated[
         int | None,
-        Field(default=None, description="Total tokens (input + output)"),
+        Field(
+            default=None,
+            description="Total combined tokens (sum of input_tokens + output_tokens)",
+        ),
     ] = None
     total_duration_ms: Annotated[
         int | None,
