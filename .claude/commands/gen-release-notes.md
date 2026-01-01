@@ -176,17 +176,17 @@ Update the version in all package files to keep them in sync:
 Update the version field in `pyproject.toml`:
 
 ```bash
-# pyproject.toml - line 3
-sed -i '' 's/^version = ".*"/version = "X.Y.Z"/' pyproject.toml
+# pyproject.toml - line 3 (perl is cross-platform, unlike sed -i)
+perl -i -pe 's/^version = ".*"/version = "X.Y.Z"/' pyproject.toml
 ```
 
-### 6b. Python module (amelia/__init__.py)
+### 6b. Python module (`amelia/__init__.py`)
 
 Update the `__version__` variable:
 
 ```bash
 # amelia/__init__.py
-sed -i '' 's/__version__ = ".*"/__version__ = "X.Y.Z"/' amelia/__init__.py
+perl -i -pe 's/__version__ = ".*"/__version__ = "X.Y.Z"/' amelia/__init__.py
 ```
 
 ### 6c. Dashboard (dashboard/package.json)
