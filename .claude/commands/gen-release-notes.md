@@ -167,9 +167,56 @@ Generate a `CHANGELOG.md` entry using this exact format:
 2. Insert new version after the `## [Unreleased]` section
 3. Add version comparison link at the bottom of the file
 
-## Step 6: Update pyproject.toml
+## Step 6: Update Version Files
 
-Update the version field in `pyproject.toml` to match the new version number.
+Update the version in all package files to keep them in sync:
+
+### 6a. Python package (pyproject.toml)
+
+Update the version field in `pyproject.toml`:
+
+```bash
+# pyproject.toml - line 3
+sed -i '' 's/^version = ".*"/version = "X.Y.Z"/' pyproject.toml
+```
+
+### 6b. Python module (amelia/__init__.py)
+
+Update the `__version__` variable:
+
+```bash
+# amelia/__init__.py
+sed -i '' 's/__version__ = ".*"/__version__ = "X.Y.Z"/' amelia/__init__.py
+```
+
+### 6c. Dashboard (dashboard/package.json)
+
+Update the version field in the dashboard package:
+
+```bash
+# dashboard/package.json - use jq or sed
+cd dashboard && npm version X.Y.Z --no-git-tag-version && cd ..
+# Or manually edit: "version": "X.Y.Z"
+```
+
+### 6d. VitePress docs site (docs/site/package.json)
+
+Update the version field in the docs site package:
+
+```bash
+# docs/site/package.json
+cd docs/site && npm version X.Y.Z --no-git-tag-version && cd ..
+# Or manually edit: "version": "X.Y.Z"
+```
+
+**Verify all versions match** after updating:
+
+```bash
+echo "pyproject.toml: $(grep '^version = ' pyproject.toml)"
+echo "amelia/__init__.py: $(grep '__version__' amelia/__init__.py)"
+echo "dashboard/package.json: $(grep '\"version\"' dashboard/package.json)"
+echo "docs/site/package.json: $(grep '\"version\"' docs/site/package.json)"
+```
 
 ## Step 7: Output Summary
 
@@ -177,7 +224,12 @@ After updating the files, provide:
 1. The suggested version number with rationale
 2. Summary of categorized changes
 3. Any breaking changes that need special attention
-4. Confirmation that CHANGELOG.md and pyproject.toml were updated
+4. Confirmation that all version files were updated:
+   - `CHANGELOG.md`
+   - `pyproject.toml`
+   - `amelia/__init__.py`
+   - `dashboard/package.json`
+   - `docs/site/package.json`
 5. Next steps for the release:
 
 ```text

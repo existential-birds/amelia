@@ -220,12 +220,12 @@ Releases follow semantic versioning and use automated GitHub Release creation.
    # Run the gen-release-notes command with the previous tag
    /gen-release-notes v0.1.0
    ```
-   This updates `CHANGELOG.md` and `pyproject.toml` with the new version.
+   This updates `CHANGELOG.md` and all version files (see Files Involved below).
 
 2. **Create release branch and PR**:
    ```bash
    git checkout -b chore/release-X.Y.Z
-   git add CHANGELOG.md pyproject.toml
+   git add CHANGELOG.md pyproject.toml amelia/__init__.py dashboard/package.json docs/site/package.json
    git commit -m "chore(release): bump version to X.Y.Z"
    git push -u origin chore/release-X.Y.Z
    gh pr create --title "chore(release): X.Y.Z" --body "Release X.Y.Z"
@@ -253,8 +253,13 @@ Releases follow semantic versioning and use automated GitHub Release creation.
 
 | File | Purpose |
 |------|---------|
-| `pyproject.toml` | Source of truth for version (`version = "X.Y.Z"`) |
+| `pyproject.toml` | Python package version (source of truth) |
+| `amelia/__init__.py` | Python module `__version__` export |
+| `dashboard/package.json` | Dashboard frontend version |
+| `docs/site/package.json` | VitePress documentation site version |
 | `CHANGELOG.md` | Release notes in Keep a Changelog format |
 | `.github/workflows/release.yml` | Automated GitHub Release creation on tag push |
 | `.claude/commands/gen-release-notes.md` | Command to generate release notes |
+
+**Important:** All version files must stay in sync. The `/gen-release-notes` command updates all of them.
 
