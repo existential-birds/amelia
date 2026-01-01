@@ -719,6 +719,7 @@ class OrchestratorService:
                     "execution_mode": "server",
                     "stream_emitter": stream_emitter,
                     "profile": profile,
+                    "repository": self._repository,
                 }
             }
 
@@ -966,6 +967,7 @@ class OrchestratorService:
                     "execution_mode": "server",
                     "stream_emitter": stream_emitter,
                     "profile": profile,
+                    "repository": self._repository,
                 }
             }
 
@@ -1148,6 +1150,7 @@ class OrchestratorService:
                     "execution_mode": "server",
                     "stream_emitter": stream_emitter,
                     "profile": profile,
+                    "repository": self._repository,
                 }
             }
 
@@ -1311,6 +1314,7 @@ class OrchestratorService:
                     "thread_id": workflow_id,
                     "execution_mode": "server",
                     "profile": profile,
+                    "repository": self._repository,
                 }
             }
 
