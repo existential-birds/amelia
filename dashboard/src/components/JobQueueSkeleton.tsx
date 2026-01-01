@@ -11,6 +11,10 @@ interface JobQueueSkeletonProps {
 /**
  * JobQueueSkeleton provides loading placeholder for JobQueue.
  * Matches the structure of JobQueueItem for smooth transition.
+ *
+ * @param props - Component props
+ * @param props.count - Number of skeleton items to display (default: 3)
+ * @returns React element with skeleton loading placeholders
  */
 export function JobQueueSkeleton({ count = 3 }: JobQueueSkeletonProps) {
   return (

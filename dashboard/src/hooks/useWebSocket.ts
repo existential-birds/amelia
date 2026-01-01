@@ -6,6 +6,8 @@ import type { WebSocketMessage, WorkflowEvent } from '../types';
 /**
  * Derive WebSocket URL from window.location.
  * Converts HTTP protocol to WS, HTTPS to WSS. Uses current host with /ws/events path.
+ * Falls back to localhost:8420 in SSR/test environments where window is undefined.
+ *
  * @returns WebSocket URL (ws://host/ws/events or wss://host/ws/events)
  */
 function deriveWebSocketUrl(): string {

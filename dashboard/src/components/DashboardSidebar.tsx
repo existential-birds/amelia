@@ -49,6 +49,19 @@ interface SidebarNavLinkProps {
   comingSoon?: boolean;
 }
 
+/**
+ * Navigation link component using React Router's NavLink for active state.
+ * Renders as a SidebarMenuItem with proper collapsed state handling and tooltips.
+ * Supports a "coming soon" mode that renders as a non-clickable placeholder.
+ *
+ * @param props - Component props
+ * @param props.to - The route path to navigate to
+ * @param props.icon - Lucide icon component to display
+ * @param props.label - Text label for the navigation item
+ * @param props.onClick - Optional click handler
+ * @param props.comingSoon - If true, renders as disabled placeholder with "Soon" badge
+ * @returns React element for the sidebar navigation link
+ */
 function SidebarNavLink({ to, icon: Icon, label, onClick, comingSoon }: SidebarNavLinkProps) {
   // Coming soon items render as non-clickable placeholders
   if (comingSoon) {
@@ -113,6 +126,8 @@ function SidebarNavLink({ to, icon: Icon, label, onClick, comingSoon }: SidebarN
  * - Mobile responsive with sheet drawer
  * - Keyboard navigation with focus-visible states
  * - Server connection status indicator
+ *
+ * @returns React element for the dashboard sidebar navigation
  */
 export function DashboardSidebar() {
   // Get connection status from store

@@ -23,6 +23,12 @@ interface WorkflowProgressProps {
  * Uses OKLCH status colors:
  * - In progress: --status-running (amber)
  * - Complete: --status-completed (teal/green)
+ *
+ * @param props - Component props
+ * @param props.completed - Number of completed workflow stages
+ * @param props.total - Total number of workflow stages
+ * @param props.className - Optional additional CSS classes
+ * @returns React element displaying the workflow progress bar with stage count
  */
 export function WorkflowProgress({ completed, total, className }: WorkflowProgressProps) {
   const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;

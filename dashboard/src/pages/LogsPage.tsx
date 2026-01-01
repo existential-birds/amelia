@@ -51,14 +51,11 @@ const eventTypeColors: Record<StreamEventType, string> = {
 };
 
 /**
- * Individual stream log event item component.
- *
- * @param props - Component props
- * @param props.event - The stream event to display
- * @returns The rendered stream log item
- */
-/**
  * Formats tool input for display, showing key parameters concisely.
+ * Truncates long values to 100 characters for readability.
+ *
+ * @param toolInput - The tool input object containing key-value pairs
+ * @returns Formatted string of key-value pairs separated by commas
  */
 function formatToolInput(toolInput: Record<string, unknown>): string {
   const parts: string[] = [];
@@ -72,6 +69,15 @@ function formatToolInput(toolInput: Record<string, unknown>): string {
   return parts.join(', ');
 }
 
+/**
+ * Individual stream log event item component.
+ * Displays a stream event with icon, timestamp, agent name, and content.
+ * Uses color-coded backgrounds based on event type.
+ *
+ * @param props - Component props
+ * @param props.event - The stream event to display
+ * @returns React element for the stream log item
+ */
 function StreamLogItem({ event }: { event: StreamEvent }) {
   return (
     <div

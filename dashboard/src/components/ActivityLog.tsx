@@ -35,6 +35,7 @@ type LogEntry =
  *
  * @param props - Component props
  * @param props.event - The stream event to display
+ * @returns React element for the stream log entry with timestamp, agent, and content
  */
 function StreamLogEntry({ event }: { event: StreamEvent }) {
   const agentKey = event.agent.toUpperCase();

@@ -1,3 +1,10 @@
+"""Factory module for creating issue tracker instances.
+
+Provide a factory function that instantiates the appropriate tracker
+implementation based on profile configuration. Supports Jira, GitHub,
+and no-op trackers for different workflow integrations.
+"""
+
 from amelia.core.types import Profile
 from amelia.trackers.base import BaseTracker
 from amelia.trackers.github import GithubTracker

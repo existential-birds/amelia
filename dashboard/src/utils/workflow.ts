@@ -105,7 +105,7 @@ export function getActiveWorkflow(workflows: WorkflowSummary[]): WorkflowSummary
  * Determines the end time for elapsed time calculation.
  * Uses completed_at if available, otherwise uses current time for in-progress workflows,
  * or the last event timestamp for blocked/failed/canceled workflows.
- * @param workflow - The workflow detail
+ * @param workflow - The workflow detail object containing timing and event information
  * @returns End time in milliseconds since epoch
  */
 function getEndTime(workflow: WorkflowDetail): number {

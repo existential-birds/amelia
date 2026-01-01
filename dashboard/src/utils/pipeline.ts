@@ -53,6 +53,8 @@ const AGENT_STAGES = ['architect', 'developer', 'reviewer'] as const;
 
 /**
  * Maps current_stage to a stage index for comparison.
+ * @param stage - The current stage name (e.g., 'architect_node', 'developer_node') or null
+ * @returns The numeric index of the stage in AGENT_STAGES, or -1 if stage is null or unknown
  */
 function getStageIndex(stage: string | null): number {
   if (!stage) return -1;
@@ -69,6 +71,10 @@ function getStageIndex(stage: string | null): number {
 
 /**
  * Determines the status of a stage based on current execution position.
+ * @param stageIndex - The index of the stage being evaluated
+ * @param currentStageIndex - The index of the currently executing stage
+ * @param workflowStatus - The overall workflow status
+ * @returns The visual status of the stage: 'completed', 'active', 'blocked', or 'pending'
  */
 function getStageStatus(
   stageIndex: number,

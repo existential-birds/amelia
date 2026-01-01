@@ -11,6 +11,10 @@ interface ActivityLogSkeletonProps {
 /**
  * ActivityLogSkeleton provides loading placeholder for ActivityLog.
  * Matches terminal-style log entry structure.
+ *
+ * @param props - Component props
+ * @param props.lines - Number of skeleton lines to display (default: 5)
+ * @returns React element with skeleton loading placeholders mimicking log entries
  */
 export function ActivityLogSkeleton({ lines = 5 }: ActivityLogSkeletonProps) {
   return (

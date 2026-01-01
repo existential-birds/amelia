@@ -93,7 +93,8 @@ const statusStyles: Record<NodeStatus, StatusStyle> = {
  * Includes React Flow handles for connecting edges.
  *
  * @param props - React Flow node props containing WorkflowNodeData
- * @returns The workflow node UI
+ * @param props.data - Node data including label, subtitle, status, and optional tokens
+ * @returns React element for the workflow node with status-based styling and connection handles
  */
 function WorkflowNodeComponent({ data }: NodeProps<WorkflowNodeType>) {
   const styles = statusStyles[data.status];

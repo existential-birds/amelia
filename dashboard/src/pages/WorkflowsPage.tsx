@@ -39,7 +39,7 @@ import type { workflowsLoader } from '@/loaders/workflows';
  * - /workflows - shows active workflow
  * - /workflows/:id - shows specific workflow
  *
- * @returns The workflows page UI
+ * @returns React element for the workflows page with canvas visualization and job queue
  */
 export default function WorkflowsPage() {
   const { workflows, detail, detailError } = useLoaderData<typeof workflowsLoader>();
