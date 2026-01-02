@@ -9,6 +9,17 @@ vi.mock('@/utils/workflow', () => ({
   formatElapsedTime: vi.fn(() => '1h 30m'),
 }));
 
+// Mock ResponsiveContainer to avoid dimension warnings in JSDOM
+vi.mock('recharts', async () => {
+  const actual = await vi.importActual('recharts');
+  return {
+    ...actual,
+    ResponsiveContainer: ({ children }: { children: React.ReactNode }) => (
+      <div style={{ width: 400, height: 200 }}>{children}</div>
+    ),
+  };
+});
+
 const mockWorkflow = createMockWorkflowDetail({
   id: 'wf-001',
   issue_id: 'PROJ-123',

@@ -97,12 +97,12 @@ function transformToChartData(toolCalls: ToolCall[]): ChartDataPoint[] {
   const dataPoints: ChartDataPoint[] = validCalls.map((call) => {
     const callTime = new Date(call.timestamp).getTime();
     const relativeMs = callTime - startTime;
-    const agent = (call.agent || 'developer') as AgentKey;
+    // Validate agent is a known key, default to developer for unknown values
+    const rawAgent = call.agent || 'developer';
+    const agent: AgentKey = rawAgent in cumulativeCounts ? (rawAgent as AgentKey) : 'developer';
 
     // Increment the count for this agent
-    if (agent in cumulativeCounts) {
-      cumulativeCounts[agent]++;
-    }
+    cumulativeCounts[agent]++;
 
     return {
       timestamp: relativeMs,
