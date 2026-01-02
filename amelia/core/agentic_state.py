@@ -19,6 +19,7 @@ class ToolCall(BaseModel):
         tool_name: Name of the tool being called.
         tool_input: Input parameters for the tool.
         timestamp: When the call was made (ISO format).
+        agent: Name of the agent that made this call.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -27,6 +28,7 @@ class ToolCall(BaseModel):
     tool_name: str
     tool_input: dict[str, Any]
     timestamp: str | None = None
+    agent: str | None = None
 
 
 class ToolResult(BaseModel):

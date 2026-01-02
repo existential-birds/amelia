@@ -137,6 +137,8 @@ export function createMockWorkflowDetail(
     goal: 'Test goal for implementation',
     plan_markdown: null,
     plan_path: null,
+    tool_calls: [],
+    tool_results: [],
     ...overrides,
   };
 }

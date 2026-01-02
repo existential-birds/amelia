@@ -9,20 +9,6 @@ vi.mock('@/utils/workflow', () => ({
   formatElapsedTime: vi.fn(() => '1h 30m'),
 }));
 
-vi.mock('@/utils/pipeline', () => ({
-  buildPipeline: vi.fn(() => ({
-    nodes: [
-      { id: 'architect', label: 'Architect', status: 'completed' as const },
-      { id: 'developer', label: 'Developer', status: 'active' as const, subtitle: 'In progress...' },
-      { id: 'reviewer', label: 'Reviewer', status: 'pending' as const },
-    ],
-    edges: [
-      { from: 'architect', to: 'developer', label: '', status: 'completed' as const },
-      { from: 'developer', to: 'reviewer', label: '', status: 'active' as const },
-    ],
-  })),
-}));
-
 const mockWorkflow = createMockWorkflowDetail({
   id: 'wf-001',
   issue_id: 'PROJ-123',
@@ -65,13 +51,33 @@ describe('WorkflowDetailPage', () => {
     });
   });
 
-  it('should render pipeline visualization', async () => {
+  it('should render tool calls chart for completed workflows', async () => {
+    const completedWorkflow = createMockWorkflowDetail({
+      ...mockWorkflow,
+      status: 'completed',
+      tool_calls: [
+        { id: 'call-1', tool_name: 'read_file', tool_input: {}, timestamp: '2025-12-07T09:00:00Z', agent: 'developer' },
+        { id: 'call-2', tool_name: 'write_file', tool_input: {}, timestamp: '2025-12-07T09:01:00Z', agent: 'developer' },
+      ],
+    });
+    renderWithRouter({ workflow: completedWorkflow });
+
+    await waitFor(() => {
+      // Tool calls section header
+      expect(screen.getByText('TOOL CALLS')).toBeInTheDocument();
+    });
+  });
+
+  it('should not render tool calls chart for in-progress workflows', async () => {
     renderWithRouter({ workflow: mockWorkflow });
 
     await waitFor(() => {
-      // Pipeline section header
-      expect(screen.getByText('PIPELINE')).toBeInTheDocument();
+      // The header should be rendered
+      expect(screen.getByText('PROJ-123')).toBeInTheDocument();
     });
+
+    // Tool calls section should NOT be present
+    expect(screen.queryByText('TOOL CALLS')).not.toBeInTheDocument();
   });
 
   it('should render activity log', async () => {

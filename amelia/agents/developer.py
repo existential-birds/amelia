@@ -154,6 +154,8 @@ class Developer:
                             id=f"call-{len(tool_calls)}",
                             tool_name=block.name,
                             tool_input=block.input if isinstance(block.input, dict) else {},
+                            timestamp=datetime.now(UTC).isoformat(),
+                            agent="developer",
                         )
                         tool_calls.append(call)
                         logger.debug(
@@ -288,6 +290,8 @@ class Developer:
                                     id=f"call-{len(tool_calls)}",
                                     tool_name=tool_name,
                                     tool_input=tool_input if isinstance(tool_input, dict) else {},
+                                    timestamp=datetime.now(UTC).isoformat(),
+                                    agent="developer",
                                 )
                                 tool_calls.append(call)
                                 logger.debug(
@@ -312,6 +316,8 @@ class Developer:
                             id=tc.get("id") or f"call-{len(tool_calls)}",
                             tool_name=tc.get("name") or "unknown",
                             tool_input=tc.get("args") or {},
+                            timestamp=datetime.now(UTC).isoformat(),
+                            agent="developer",
                         )
                         tool_calls.append(call)
                         logger.debug(

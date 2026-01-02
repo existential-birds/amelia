@@ -6,13 +6,13 @@ import { PageHeader } from '@/components/PageHeader';
 import { StatusBadge } from '@/components/StatusBadge';
 import { ActivityLog } from '@/components/ActivityLog';
 import { ApprovalControls } from '@/components/ApprovalControls';
-import { WorkflowCanvas } from '@/components/WorkflowCanvas';
 import { AgentProgressBar, type AgentStage } from '@/components/AgentProgressBar';
 import { UsageCard } from '@/components/UsageCard';
-import { buildPipeline } from '@/utils/pipeline';
+import { ToolCallRateChart } from '@/components/ToolCallRateChart';
 import { useElapsedTime, useAutoRevalidation } from '@/hooks';
 import { workflowDetailLoader } from '@/loaders';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import type { ToolCall } from '@/types';
 
 /**
  * Determines completed stages based on current stage.
@@ -58,8 +58,9 @@ export default function WorkflowDetailPage() {
   const needsApproval = workflow.status === 'blocked';
   const goalSummary = workflow.goal || 'Awaiting plan generation';
 
-  // Build pipeline for visualization
-  const pipeline = buildPipeline(workflow);
+  // Check if workflow is completed (show tool call chart only for completed workflows)
+  const isCompleted = workflow.status === 'completed';
+  const toolCalls = (workflow.tool_calls ?? []) as ToolCall[];
 
   // Determine agent progress
   const currentStage = workflow.current_stage as AgentStage | null;
@@ -123,13 +124,15 @@ export default function WorkflowDetailPage() {
           {/* Usage card - shows token usage breakdown by agent */}
           <UsageCard tokenUsage={workflow.token_usage} className="border-l-2 border-l-primary" />
 
-          {/* Workflow Canvas (pipeline visualization) */}
-          <div className="p-4 border border-border rounded-lg bg-card/50 border-l-2 border-l-status-completed">
-            <h3 className="font-heading text-xs font-semibold tracking-widest text-muted-foreground mb-3">
-              PIPELINE
-            </h3>
-            <WorkflowCanvas pipeline={pipeline || undefined} />
-          </div>
+          {/* Tool Call Rate Chart - shown only for completed workflows */}
+          {isCompleted && toolCalls.length > 0 && (
+            <div className="p-4 border border-border rounded-lg bg-card/50 border-l-2 border-l-status-completed">
+              <h3 className="font-heading text-xs font-semibold tracking-widest text-muted-foreground mb-3">
+                TOOL CALLS
+              </h3>
+              <ToolCallRateChart toolCalls={toolCalls} className="h-[200px]" />
+            </div>
+          )}
         </div>
 
         {/* Right column: Activity Log */}

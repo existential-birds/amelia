@@ -92,6 +92,12 @@ export interface WorkflowDetail extends WorkflowSummary {
 
   /** Path to the markdown plan file, if generated. */
   plan_path: string | null;
+
+  /** History of tool calls made during agentic execution. */
+  tool_calls: ToolCall[];
+
+  /** History of tool results from agentic execution. */
+  tool_results: ToolResult[];
 }
 
 // ============================================================================
@@ -616,4 +622,42 @@ export interface DefaultContent {
   name: string;
   /** Description explaining the prompt's purpose. */
   description: string;
+}
+
+// ============================================================================
+// Tool Call Types
+// ============================================================================
+
+/**
+ * A tool call made by an agent during workflow execution.
+ */
+export interface ToolCall {
+  /** Unique identifier for this tool call. */
+  id: string;
+  /** Name of the tool that was called. */
+  tool_name: string;
+  /** Input parameters passed to the tool. */
+  tool_input: Record<string, unknown>;
+  /** ISO 8601 timestamp when the call was made. */
+  timestamp: string | null;
+  /** Name of the agent that made this call. */
+  agent: string | null;
+}
+
+/**
+ * Result from a tool execution.
+ */
+export interface ToolResult {
+  /** ID of the ToolCall this result corresponds to. */
+  call_id: string;
+  /** Name of the tool that was called. */
+  tool_name: string;
+  /** Output from the tool (stdout, file content, etc.). */
+  output: string;
+  /** Whether the tool executed successfully. */
+  success: boolean;
+  /** Error message if success is false. */
+  error: string | null;
+  /** Execution time in milliseconds. */
+  duration_ms: number | null;
 }
