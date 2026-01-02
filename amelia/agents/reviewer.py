@@ -9,6 +9,7 @@ from typing import Literal
 from loguru import logger
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from amelia.core.agentic_state import ToolCall
 from amelia.core.state import ExecutionState, ReviewResult, Severity
 from amelia.core.types import Profile, StreamEmitter, StreamEvent, StreamEventType
 from amelia.drivers.base import DriverInterface
@@ -530,7 +531,7 @@ Be specific with file paths and line numbers. Provide actionable feedback."""
         profile: Profile,
         *,
         workflow_id: str,
-    ) -> tuple[ReviewResult, str | None]:
+    ) -> tuple[ReviewResult, str | None, list["ToolCall"]]:
         """Perform agentic code review that fetches diff using git tools.
 
         This method uses agentic execution to:
@@ -549,7 +550,7 @@ Be specific with file paths and line numbers. Provide actionable feedback."""
             workflow_id: Workflow ID for stream events (required).
 
         Returns:
-            Tuple of (ReviewResult, session_id from driver).
+            Tuple of (ReviewResult, session_id from driver, tool_calls list).
 
         """
         from amelia.drivers.cli.claude import ClaudeCliDriver  # noqa: PLC0415
@@ -578,9 +579,11 @@ Be specific with file paths and line numbers. Provide actionable feedback."""
                     returncode=proc.returncode,
                 )
             code_changes = stdout.decode() if proc.returncode == 0 else ""
-            return await self._single_review(
+            result, session_id = await self._single_review(
                 state, code_changes, profile, persona="General", workflow_id=workflow_id
             )
+            # Return empty tool_calls for non-agentic fallback
+            return result, session_id, []
 
         # Build the task prompt
         task_parts = []
@@ -607,6 +610,7 @@ The changes are in git - diff against commit: {base_commit}"""
         session_id = state.driver_session_id
         new_session_id: str | None = None
         final_result: str | None = None
+        tool_calls: list[ToolCall] = []
 
         logger.info(
             "Starting agentic review",
@@ -630,29 +634,48 @@ The changes are in git - diff against commit: {base_commit}"""
             session_id=session_id,
             instructions=system_prompt,
         ):
-            # Emit stream events for visibility
-            if self._stream_emitter is not None and isinstance(message, AssistantMessage):
+            # Process AssistantMessage - record tool calls and emit stream events
+            if isinstance(message, AssistantMessage):
                 for block in message.content:
                     if isinstance(block, TextBlock):
-                        event = StreamEvent(
-                            type=StreamEventType.CLAUDE_THINKING,
-                            content=block.text,
-                            timestamp=datetime.now(UTC),
-                            agent="reviewer",
-                            workflow_id=workflow_id,
-                        )
-                        await self._stream_emitter(event)
+                        if self._stream_emitter is not None:
+                            event = StreamEvent(
+                                type=StreamEventType.CLAUDE_THINKING,
+                                content=block.text,
+                                timestamp=datetime.now(UTC),
+                                agent="reviewer",
+                                workflow_id=workflow_id,
+                            )
+                            await self._stream_emitter(event)
                     elif isinstance(block, ToolUseBlock):
-                        event = StreamEvent(
-                            type=StreamEventType.CLAUDE_TOOL_CALL,
-                            content=None,
-                            timestamp=datetime.now(UTC),
-                            agent="reviewer",
-                            workflow_id=workflow_id,
+                        # Record tool call for state tracking
+                        call = ToolCall(
+                            id=f"call-{len(tool_calls)}",
                             tool_name=block.name,
-                            tool_input=block.input if isinstance(block.input, dict) else None,
+                            tool_input=block.input if isinstance(block.input, dict) else {},
+                            timestamp=datetime.now(UTC).isoformat(),
+                            agent="reviewer",
                         )
-                        await self._stream_emitter(event)
+                        tool_calls.append(call)
+                        logger.debug(
+                            "Tool call recorded",
+                            tool_name=block.name,
+                            call_id=call.id,
+                            agent="reviewer",
+                        )
+
+                        # Emit stream event for visibility
+                        if self._stream_emitter is not None:
+                            event = StreamEvent(
+                                type=StreamEventType.CLAUDE_TOOL_CALL,
+                                content=None,
+                                timestamp=datetime.now(UTC),
+                                agent="reviewer",
+                                workflow_id=workflow_id,
+                                tool_name=block.name,
+                                tool_input=block.input if isinstance(block.input, dict) else None,
+                            )
+                            await self._stream_emitter(event)
 
             # Capture final result
             if isinstance(message, ResultMessage):
@@ -691,10 +714,11 @@ The changes are in git - diff against commit: {base_commit}"""
             agent="reviewer",
             approved=result.approved,
             comment_count=len(result.comments),
+            tool_call_count=len(tool_calls),
             workflow_id=workflow_id,
         )
 
-        return result, new_session_id
+        return result, new_session_id, tool_calls
 
     def _parse_review_result(self, output: str | None, workflow_id: str) -> ReviewResult:
         """Parse the agent's output to extract ReviewResult.

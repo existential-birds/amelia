@@ -271,7 +271,7 @@ class TestReviewerNodeTokenUsage(TestTokenUsageExtraction):
              patch("amelia.core.orchestrator.DriverFactory") as mock_factory:
             mock_reviewer_instance = MagicMock()
             mock_reviewer_instance.agentic_review = AsyncMock(
-                return_value=(mock_review_result, "session-abc")
+                return_value=(mock_review_result, "session-abc", [])  # 3rd arg: tool_calls
             )
             mock_reviewer_class.return_value = mock_reviewer_instance
 

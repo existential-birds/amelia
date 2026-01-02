@@ -11,7 +11,7 @@ from langchain_core.runnables.config import RunnableConfig
 from pydantic import ValidationError
 
 from amelia.core.state import ExecutionState
-from amelia.core.types import Profile, Settings
+from amelia.core.types import Settings
 from amelia.server.database.repository import WorkflowRepository
 from amelia.server.events.bus import EventBus
 from amelia.server.exceptions import (

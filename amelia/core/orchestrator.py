@@ -497,13 +497,14 @@ async def call_reviewer_node(
 
     # Use agentic review when we have a base_commit - this avoids large diff issues
     # The agent will fetch the diff using git tools and auto-detect technologies
+    tool_calls: list[Any] = []
     if state.base_commit:
         logger.info(
             "Using agentic review with base_commit",
             agent="reviewer",
             base_commit=state.base_commit,
         )
-        review_result, new_session_id = await reviewer.agentic_review(
+        review_result, new_session_id, tool_calls = await reviewer.agentic_review(
             state, state.base_commit, profile, workflow_id=workflow_id
         )
     else:
@@ -528,10 +529,14 @@ async def call_reviewer_node(
         },
     )
 
-    return {
+    result: dict[str, Any] = {
         "last_review": review_result,
         "driver_session_id": new_session_id,
     }
+    # Include tool_calls if any were recorded (agentic review)
+    if tool_calls:
+        result["tool_calls"] = tool_calls
+    return result
 
 
 async def call_evaluation_node(
