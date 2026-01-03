@@ -370,7 +370,7 @@ class ApiDriver(DriverInterface):
                         tool_name=message.name,
                         tool_output=str(message.content),
                         tool_call_id=message.tool_call_id,
-                        is_error=False,  # LangChain doesn't have error flag
+                        is_error=message.status == "error",
                     )
 
             # Final result from last AI message
