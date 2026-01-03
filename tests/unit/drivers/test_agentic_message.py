@@ -1,7 +1,7 @@
 """Tests for AgenticMessage unified driver message type."""
 
-import pytest
 
+from amelia.core.types import StreamEventType
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
 
 
@@ -81,9 +81,6 @@ class TestAgenticMessage:
     def test_is_error_defaults_to_false(self) -> None:
         msg = AgenticMessage(type=AgenticMessageType.THINKING, content="test")
         assert msg.is_error is False
-
-
-from amelia.core.types import StreamEvent, StreamEventType
 
 
 class TestAgenticMessageToStreamEvent:

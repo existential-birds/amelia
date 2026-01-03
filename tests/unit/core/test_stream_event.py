@@ -1,7 +1,7 @@
 # tests/unit/core/test_stream_event.py
 """Tests for StreamEvent with is_error field."""
 
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 
 from amelia.core.types import StreamEvent, StreamEventType
 

@@ -4,20 +4,13 @@ This module provides the Developer agent that executes code changes using
 autonomous tool-calling LLM execution rather than structured step-by-step plans.
 """
 from collections.abc import AsyncIterator
-from datetime import UTC, datetime
-from typing import TYPE_CHECKING
 
 from loguru import logger
 
 from amelia.core.agentic_state import ToolCall, ToolResult
 from amelia.core.state import ExecutionState
-from amelia.core.types import Profile, StreamEmitter, StreamEvent, StreamEventType
-from amelia.drivers.base import DriverInterface
-
-
-if TYPE_CHECKING:
-    from amelia.drivers.api.deepagents import ApiDriver
-    from amelia.drivers.cli.claude import ClaudeCliDriver
+from amelia.core.types import Profile, StreamEmitter, StreamEvent
+from amelia.drivers.base import AgenticMessageType, DriverInterface
 
 
 class Developer:
@@ -59,9 +52,8 @@ class Developer:
         decide what tools to use and when, rather than following a predefined
         step-by-step plan.
 
-        The method dispatches to driver-specific handlers based on the driver type:
-        - ClaudeCliDriver: Yields claude_agent_sdk.types.Message
-        - ApiDriver: Yields langchain_core.messages.BaseMessage
+        All drivers now yield the unified AgenticMessage type, so this method
+        handles all driver types uniformly.
 
         Args:
             state: Current execution state with goal.
@@ -73,55 +65,10 @@ class Developer:
 
         Raises:
             ValueError: If ExecutionState has no goal set.
-            TypeError: If driver type is not supported.
 
         """
         if not state.goal:
             raise ValueError("ExecutionState must have a goal set")
-
-        # Import drivers for isinstance checks (runtime imports to avoid circular deps)
-        from amelia.drivers.api.deepagents import ApiDriver  # noqa: PLC0415
-        from amelia.drivers.cli.claude import ClaudeCliDriver  # noqa: PLC0415
-
-        if isinstance(self.driver, ClaudeCliDriver):
-            async for result in self._run_with_cli_driver(
-                state, profile, workflow_id, self.driver
-            ):
-                yield result
-        elif isinstance(self.driver, ApiDriver):
-            async for result in self._run_with_api_driver(
-                state, profile, workflow_id, self.driver
-            ):
-                yield result
-        else:
-            raise TypeError(f"Unsupported driver type: {type(self.driver).__name__}")
-
-    async def _run_with_cli_driver(
-        self,
-        state: ExecutionState,
-        profile: Profile,
-        workflow_id: str,
-        driver: "ClaudeCliDriver",
-    ) -> AsyncIterator[tuple[ExecutionState, StreamEvent]]:
-        """Execute development task using the CLI driver.
-
-        Args:
-            state: Current execution state.
-            profile: Execution profile.
-            workflow_id: Workflow identifier for events.
-            driver: The ClaudeCliDriver instance.
-
-        Yields:
-            Tuples of (updated_state, event) as execution progresses.
-
-        """
-        from claude_agent_sdk.types import (  # noqa: PLC0415
-            AssistantMessage,
-            ResultMessage,
-            TextBlock,
-            ToolResultBlock,
-            ToolUseBlock,
-        )
 
         cwd = profile.working_dir or "."
         prompt = self._build_prompt(state, profile)
@@ -131,7 +78,7 @@ class Developer:
         current_state = state
         session_id = state.driver_session_id
 
-        async for message in driver.execute_agentic(
+        async for message in self.driver.execute_agentic(
             prompt=prompt,
             cwd=cwd,
             session_id=session_id,
@@ -139,250 +86,63 @@ class Developer:
         ):
             event: StreamEvent | None = None
 
-            if isinstance(message, AssistantMessage):
-                for block in message.content:
-                    if isinstance(block, TextBlock):
-                        event = StreamEvent(
-                            type=StreamEventType.CLAUDE_THINKING,
-                            content=block.text,
-                            timestamp=datetime.now(UTC),
-                            agent="developer",
-                            workflow_id=workflow_id,
-                        )
-                    elif isinstance(block, ToolUseBlock):
-                        call = ToolCall(
-                            id=f"call-{len(tool_calls)}",
-                            tool_name=block.name,
-                            tool_input=block.input if isinstance(block.input, dict) else {},
-                        )
-                        tool_calls.append(call)
-                        logger.debug(
-                            "Tool call recorded",
-                            tool_name=block.name,
-                            call_id=call.id,
-                        )
-                        event = StreamEvent(
-                            type=StreamEventType.CLAUDE_TOOL_CALL,
-                            content=None,
-                            timestamp=datetime.now(UTC),
-                            agent="developer",
-                            workflow_id=workflow_id,
-                            tool_name=block.name,
-                            tool_input=block.input if isinstance(block.input, dict) else None,
-                        )
-                    elif isinstance(block, ToolResultBlock):
-                        content = block.content if isinstance(block.content, str) else str(block.content)
-                        result = ToolResult(
-                            call_id=f"call-{len(tool_results)}",
-                            tool_name="unknown",  # ToolResultBlock doesn't have name
-                            output=content,
-                            success=not block.is_error,
-                        )
-                        tool_results.append(result)
-                        logger.debug(
-                            "Tool result recorded",
-                            call_id=result.call_id,
-                        )
-                        event = StreamEvent(
-                            type=StreamEventType.CLAUDE_TOOL_RESULT,
-                            content=content,
-                            timestamp=datetime.now(UTC),
-                            agent="developer",
-                            workflow_id=workflow_id,
-                        )
+            if message.type == AgenticMessageType.THINKING:
+                event = message.to_stream_event(agent="developer", workflow_id=workflow_id)
 
-                    if event:
-                        current_state = state.model_copy(update={
-                            "tool_calls": tool_calls.copy(),
-                            "tool_results": tool_results.copy(),
-                            "driver_session_id": session_id,
-                        })
-                        yield current_state, event
-
-            elif isinstance(message, ResultMessage):
-                session_id = message.session_id
-                is_complete = not message.is_error
-
-                event = StreamEvent(
-                    type=StreamEventType.AGENT_OUTPUT,
-                    content=message.result,
-                    timestamp=datetime.now(UTC),
-                    agent="developer",
-                    workflow_id=workflow_id,
+            elif message.type == AgenticMessageType.TOOL_CALL:
+                call = ToolCall(
+                    id=message.tool_call_id or f"call-{len(tool_calls)}",
+                    tool_name=message.tool_name or "unknown",
+                    tool_input=message.tool_input or {},
                 )
+                tool_calls.append(call)
+                logger.debug(
+                    "Tool call recorded",
+                    tool_name=message.tool_name,
+                    call_id=call.id,
+                )
+                event = message.to_stream_event(agent="developer", workflow_id=workflow_id)
+
+            elif message.type == AgenticMessageType.TOOL_RESULT:
+                result = ToolResult(
+                    call_id=message.tool_call_id or f"call-{len(tool_results)}",
+                    tool_name=message.tool_name or "unknown",
+                    output=message.tool_output or "",
+                    success=not message.is_error,
+                )
+                tool_results.append(result)
+                logger.debug(
+                    "Tool result recorded",
+                    call_id=result.call_id,
+                )
+                event = message.to_stream_event(agent="developer", workflow_id=workflow_id)
+
+            elif message.type == AgenticMessageType.RESULT:
+                # Update session_id from result message
+                if message.session_id:
+                    session_id = message.session_id
+
+                is_complete = not message.is_error
+                event = message.to_stream_event(agent="developer", workflow_id=workflow_id)
 
                 current_state = state.model_copy(update={
                     "tool_calls": tool_calls.copy(),
                     "tool_results": tool_results.copy(),
                     "driver_session_id": session_id,
                     "agentic_status": "completed" if is_complete else "failed",
-                    "final_response": message.result if is_complete else None,
-                    "error": message.result if message.is_error else None,
+                    "final_response": message.content if is_complete else None,
+                    "error": message.content if message.is_error else None,
                 })
                 yield current_state, event
-
-    async def _run_with_api_driver(
-        self,
-        state: ExecutionState,
-        profile: Profile,
-        workflow_id: str,
-        driver: "ApiDriver",
-    ) -> AsyncIterator[tuple[ExecutionState, StreamEvent]]:
-        """Execute development task using the API driver.
-
-        Args:
-            state: Current execution state.
-            profile: Execution profile.
-            workflow_id: Workflow identifier for events.
-            driver: The ApiDriver instance.
-
-        Yields:
-            Tuples of (updated_state, event) as execution progresses.
-
-        """
-        from langchain_core.messages import AIMessage, ToolMessage  # noqa: PLC0415
-
-        cwd = profile.working_dir or "."
-        prompt = self._build_prompt(state, profile)
-
-        # Set the cwd on the driver for agentic execution
-        driver.cwd = cwd
-
-        tool_calls: list[ToolCall] = list(state.tool_calls)
-        tool_results: list[ToolResult] = list(state.tool_results)
-        current_state = state
-        last_message: AIMessage | None = None
-
-        async for message in driver.execute_agentic(prompt=prompt):
-            event: StreamEvent | None = None
-
-            if isinstance(message, AIMessage):
-                last_message = message
-                content = message.content
-
-                # Handle text content
-                if isinstance(content, str) and content:
-                    event = StreamEvent(
-                        type=StreamEventType.CLAUDE_THINKING,
-                        content=content,
-                        timestamp=datetime.now(UTC),
-                        agent="developer",
-                        workflow_id=workflow_id,
-                    )
-                elif isinstance(content, list):
-                    # Handle list of content blocks
-                    for block in content:
-                        if isinstance(block, dict):
-                            if block.get("type") == "text":
-                                event = StreamEvent(
-                                    type=StreamEventType.CLAUDE_THINKING,
-                                    content=block.get("text", ""),
-                                    timestamp=datetime.now(UTC),
-                                    agent="developer",
-                                    workflow_id=workflow_id,
-                                )
-                            elif block.get("type") == "tool_use":
-                                tool_name = block.get("name", "unknown")
-                                tool_input = block.get("input", {})
-                                call = ToolCall(
-                                    id=f"call-{len(tool_calls)}",
-                                    tool_name=tool_name,
-                                    tool_input=tool_input if isinstance(tool_input, dict) else {},
-                                )
-                                tool_calls.append(call)
-                                logger.debug(
-                                    "Tool call recorded",
-                                    tool_name=tool_name,
-                                    call_id=call.id,
-                                )
-                                event = StreamEvent(
-                                    type=StreamEventType.CLAUDE_TOOL_CALL,
-                                    content=None,
-                                    timestamp=datetime.now(UTC),
-                                    agent="developer",
-                                    workflow_id=workflow_id,
-                                    tool_name=tool_name,
-                                    tool_input=tool_input if isinstance(tool_input, dict) else None,
-                                )
-
-                # Handle tool_calls from AIMessage
-                if message.tool_calls:
-                    for tc in message.tool_calls:
-                        call = ToolCall(
-                            id=tc.get("id") or f"call-{len(tool_calls)}",
-                            tool_name=tc.get("name") or "unknown",
-                            tool_input=tc.get("args") or {},
-                        )
-                        tool_calls.append(call)
-                        logger.debug(
-                            "Tool call recorded",
-                            tool_name=call.tool_name,
-                            call_id=call.id,
-                        )
-                        event = StreamEvent(
-                            type=StreamEventType.CLAUDE_TOOL_CALL,
-                            content=None,
-                            timestamp=datetime.now(UTC),
-                            agent="developer",
-                            workflow_id=workflow_id,
-                            tool_name=call.tool_name,
-                            tool_input=call.tool_input,
-                        )
-
-            elif isinstance(message, ToolMessage):
-                content = message.content if isinstance(message.content, str) else str(message.content)
-                result = ToolResult(
-                    call_id=message.tool_call_id or f"call-{len(tool_results)}",
-                    tool_name=message.name or "unknown",
-                    output=content,
-                    success=True,
-                )
-                tool_results.append(result)
-                logger.debug(
-                    "Tool result recorded",
-                    tool_name=result.tool_name,
-                    call_id=result.call_id,
-                )
-                event = StreamEvent(
-                    type=StreamEventType.CLAUDE_TOOL_RESULT,
-                    content=content,
-                    timestamp=datetime.now(UTC),
-                    agent="developer",
-                    workflow_id=workflow_id,
-                )
+                continue  # Result is the final message
 
             if event:
                 current_state = state.model_copy(update={
                     "tool_calls": tool_calls.copy(),
                     "tool_results": tool_results.copy(),
+                    "driver_session_id": session_id,
                 })
                 yield current_state, event
-
-        # Mark as completed after all messages are processed
-        if last_message:
-            final_content = last_message.content
-            if isinstance(final_content, list):
-                final_content = "".join(
-                    b.get("text", "") if isinstance(b, dict) else str(b)
-                    for b in final_content
-                )
-            elif not isinstance(final_content, str):
-                final_content = str(final_content)
-
-            final_event = StreamEvent(
-                type=StreamEventType.AGENT_OUTPUT,
-                content=final_content,
-                timestamp=datetime.now(UTC),
-                agent="developer",
-                workflow_id=workflow_id,
-            )
-            current_state = state.model_copy(update={
-                "tool_calls": tool_calls.copy(),
-                "tool_results": tool_results.copy(),
-                "agentic_status": "completed",
-                "final_response": final_content,
-            })
-            yield current_state, final_event
 
     def _build_prompt(self, state: ExecutionState, profile: Profile) -> str:
         """Build the prompt for agentic execution.
