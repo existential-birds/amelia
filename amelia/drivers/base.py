@@ -23,6 +23,16 @@ class AgenticMessage(BaseModel):
     This provides a common abstraction over driver-specific message types:
     - ClaudeCliDriver: claude_agent_sdk.types.Message
     - ApiDriver: langchain_core.messages.BaseMessage
+
+    Attributes:
+        type: Type of agentic message (thinking, tool_call, tool_result, result).
+        content: Text content for thinking or result messages.
+        tool_name: Name of the tool being called or returning.
+        tool_input: Input parameters for tool calls.
+        tool_output: Output from tool execution.
+        tool_call_id: Unique identifier for the tool call.
+        session_id: Session identifier for conversation continuity.
+        is_error: Whether this message represents an error.
     """
 
     type: AgenticMessageType

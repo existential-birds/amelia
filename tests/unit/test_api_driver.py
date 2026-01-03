@@ -1,6 +1,6 @@
 """Tests for DeepAgents-based ApiDriver."""
 import os
-from typing import Any
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -8,7 +8,7 @@ from langchain.agents.structured_output import ToolStrategy
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from pydantic import BaseModel
 
-from amelia.drivers.api.deepagents import ApiDriver, _create_chat_model
+from amelia.drivers.api.deepagents import ApiDriver, LocalSandbox, _create_chat_model
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
 
 
@@ -152,20 +152,12 @@ class TestGenerate:
 class TestExecuteAgentic:
     """Test execute_agentic() method."""
 
-    async def test_rejects_missing_cwd(self) -> None:
-        """Should reject when cwd is not set."""
-        driver = ApiDriver(model="test", cwd=None)
-
-        with pytest.raises(ValueError, match="cwd must be set"):
-            async for _ in driver.execute_agentic(prompt="test"):
-                pass
-
     async def test_rejects_empty_prompt(self) -> None:
         """Should reject empty prompts."""
         driver = ApiDriver(model="test", cwd="/some/path")
 
         with pytest.raises(ValueError, match="Prompt cannot be empty"):
-            async for _ in driver.execute_agentic(prompt=""):
+            async for _ in driver.execute_agentic(prompt="", cwd="/some/path"):
                 pass
 
     async def test_yields_agentic_messages_from_stream(
@@ -181,8 +173,8 @@ class TestExecuteAgentic:
         ]
         mock_deepagents.stream_chunks = messages_stream
 
-        collected: list[Any] = []
-        async for msg in driver.execute_agentic(prompt="test"):
+        collected: list[AgenticMessage] = []
+        async for msg in driver.execute_agentic(prompt="test", cwd="/test/path"):
             collected.append(msg)
 
         # Should yield THINKING for each AIMessage + final RESULT
@@ -261,13 +253,11 @@ class TestLocalSandbox:
     """Tests for LocalSandbox class."""
 
     @pytest.fixture
-    def sandbox(self, tmp_path: Any) -> Any:
+    def sandbox(self, tmp_path: Path) -> LocalSandbox:
         """Create LocalSandbox instance for tests."""
-        from amelia.drivers.api.deepagents import LocalSandbox
-
         return LocalSandbox(root_dir=str(tmp_path))
 
-    def test_implements_sandbox_backend_protocol(self, sandbox: Any) -> None:
+    def test_implements_sandbox_backend_protocol(self, sandbox: LocalSandbox) -> None:
         """Should pass isinstance check for SandboxBackendProtocol.
 
         This is critical because deepagents uses isinstance() to decide
@@ -280,41 +270,41 @@ class TestLocalSandbox:
 
         assert isinstance(sandbox, SandboxBackendProtocol)
 
-    def test_id_includes_cwd(self, sandbox: Any) -> None:
+    def test_id_includes_cwd(self, sandbox: LocalSandbox) -> None:
         """Should return unique id based on cwd."""
         assert sandbox.id.startswith("local-")
         assert str(sandbox.cwd) in sandbox.id
 
-    def test_execute_returns_stdout(self, sandbox: Any) -> None:
+    def test_execute_returns_stdout(self, sandbox: LocalSandbox) -> None:
         """Should capture stdout from command."""
         result = sandbox.execute("echo hello")
         assert "hello" in result.output
         assert result.exit_code == 0
         assert result.truncated is False
 
-    def test_execute_returns_stderr(self, sandbox: Any) -> None:
+    def test_execute_returns_stderr(self, sandbox: LocalSandbox) -> None:
         """Should capture stderr from command."""
         result = sandbox.execute("echo error >&2")
         assert "error" in result.output
 
-    def test_execute_returns_exit_code(self, sandbox: Any) -> None:
+    def test_execute_returns_exit_code(self, sandbox: LocalSandbox) -> None:
         """Should capture non-zero exit codes."""
         result = sandbox.execute("exit 42")
         assert result.exit_code == 42
 
-    def test_execute_runs_in_cwd(self, sandbox: Any, tmp_path: Any) -> None:
+    def test_execute_runs_in_cwd(self, sandbox: LocalSandbox, tmp_path: Path) -> None:
         """Should execute commands in the sandbox cwd."""
         result = sandbox.execute("pwd")
         assert str(tmp_path) in result.output
 
-    def test_default_timeout_is_configured(self, sandbox: Any) -> None:
+    def test_default_timeout_is_configured(self, sandbox: LocalSandbox) -> None:
         """Should have a reasonable default timeout configured."""
         from amelia.drivers.api.deepagents import _DEFAULT_TIMEOUT
 
         assert _DEFAULT_TIMEOUT == 300
 
     def test_execute_returns_timeout_error_on_slow_command(
-        self, tmp_path: Any
+        self, tmp_path: Path
     ) -> None:
         """Should return error response when command times out."""
         from amelia.drivers.api.deepagents import LocalSandbox
@@ -326,7 +316,7 @@ class TestLocalSandbox:
             assert result.exit_code == 124
             assert "timed out" in result.output
 
-    async def test_aexecute_returns_same_as_execute(self, sandbox: Any) -> None:
+    async def test_aexecute_returns_same_as_execute(self, sandbox: LocalSandbox) -> None:
         """Async execute should return same result as sync."""
         sync_result = sandbox.execute("echo test")
         async_result = await sandbox.aexecute("echo test")
@@ -351,7 +341,7 @@ class TestExecuteAgenticYieldsAgenticMessage:
             {"messages": [AIMessage(content="Analyzing the code...")]},
         ]
 
-        results = [msg async for msg in driver_with_cwd.execute_agentic("test prompt")]
+        results = [msg async for msg in driver_with_cwd.execute_agentic("test prompt", cwd="/test/path")]
 
         thinking_msgs = [m for m in results if m.type == AgenticMessageType.THINKING]
         assert len(thinking_msgs) >= 1
@@ -366,7 +356,7 @@ class TestExecuteAgenticYieldsAgenticMessage:
             {"messages": [AIMessage(content=[{"type": "text", "text": "Thinking hard..."}])]},
         ]
 
-        results = [msg async for msg in driver_with_cwd.execute_agentic("test prompt")]
+        results = [msg async for msg in driver_with_cwd.execute_agentic("test prompt", cwd="/test/path")]
 
         thinking_msgs = [m for m in results if m.type == AgenticMessageType.THINKING]
         assert len(thinking_msgs) >= 1
@@ -381,7 +371,7 @@ class TestExecuteAgenticYieldsAgenticMessage:
         ])
         mock_deepagents.stream_chunks = [{"messages": [ai_msg]}]
 
-        results = [msg async for msg in driver_with_cwd.execute_agentic("test prompt")]
+        results = [msg async for msg in driver_with_cwd.execute_agentic("test prompt", cwd="/test/path")]
 
         tool_calls = [m for m in results if m.type == AgenticMessageType.TOOL_CALL]
         assert len(tool_calls) == 1
@@ -396,7 +386,7 @@ class TestExecuteAgenticYieldsAgenticMessage:
         tool_msg = ToolMessage(content="file contents", tool_call_id="call_123", name="read_file")
         mock_deepagents.stream_chunks = [{"messages": [tool_msg]}]
 
-        results = [msg async for msg in driver_with_cwd.execute_agentic("test prompt")]
+        results = [msg async for msg in driver_with_cwd.execute_agentic("test prompt", cwd="/test/path")]
 
         tool_results = [m for m in results if m.type == AgenticMessageType.TOOL_RESULT]
         assert len(tool_results) == 1
@@ -412,7 +402,7 @@ class TestExecuteAgenticYieldsAgenticMessage:
             {"messages": [AIMessage(content="Task completed successfully")]},
         ]
 
-        results = [msg async for msg in driver_with_cwd.execute_agentic("test prompt")]
+        results = [msg async for msg in driver_with_cwd.execute_agentic("test prompt", cwd="/test/path")]
 
         result_msgs = [m for m in results if m.type == AgenticMessageType.RESULT]
         assert len(result_msgs) == 1
@@ -428,7 +418,7 @@ class TestExecuteAgenticYieldsAgenticMessage:
             {"messages": [AIMessage(content=[{"type": "text", "text": "Done!"}])]},
         ]
 
-        results = [msg async for msg in driver_with_cwd.execute_agentic("test prompt")]
+        results = [msg async for msg in driver_with_cwd.execute_agentic("test prompt", cwd="/test/path")]
 
         result_msgs = [m for m in results if m.type == AgenticMessageType.RESULT]
         assert len(result_msgs) == 1
@@ -447,7 +437,7 @@ class TestExecuteAgenticYieldsAgenticMessage:
             {"messages": [AIMessage(content="The file contains a test function.")]},
         ]
 
-        results = [msg async for msg in driver_with_cwd.execute_agentic("test prompt")]
+        results = [msg async for msg in driver_with_cwd.execute_agentic("test prompt", cwd="/test/path")]
 
         # Should have all types
         types = [m.type for m in results]

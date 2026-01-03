@@ -283,7 +283,7 @@ class ApiDriver(DriverInterface):
     async def execute_agentic(
         self,
         prompt: str,
-        cwd: str | None = None,
+        cwd: str,
         session_id: str | None = None,
         instructions: str | None = None,
         schema: type[BaseModel] | None = None,
@@ -295,7 +295,7 @@ class ApiDriver(DriverInterface):
 
         Args:
             prompt: The prompt to execute.
-            cwd: Working directory for tool execution. If None, uses self.cwd.
+            cwd: Working directory for tool execution.
             session_id: Unused (API driver has no session support).
             instructions: Unused (system prompt set at agent creation).
             schema: Unused (structured output not supported in agentic mode).
@@ -304,20 +304,16 @@ class ApiDriver(DriverInterface):
             AgenticMessage for each event (thinking, tool_call, tool_result, result).
 
         Raises:
-            ValueError: If cwd is not set (neither as param nor on instance) or prompt is empty.
+            ValueError: If prompt is empty.
             RuntimeError: If execution fails.
         """
-        # Use parameter cwd if provided, otherwise fall back to instance cwd
-        working_dir = cwd or self.cwd
-        if not working_dir:
-            raise ValueError("cwd must be set for agentic execution")
 
         if not prompt or not prompt.strip():
             raise ValueError("Prompt cannot be empty")
 
         try:
             chat_model = _create_chat_model(self.model)
-            backend = LocalSandbox(root_dir=working_dir)
+            backend = LocalSandbox(root_dir=cwd)
             agent = create_deep_agent(
                 model=chat_model,
                 system_prompt="",
@@ -327,7 +323,7 @@ class ApiDriver(DriverInterface):
             logger.debug(
                 "Starting agentic execution",
                 model=self.model,
-                cwd=working_dir,
+                cwd=cwd,
                 prompt_length=len(prompt),
             )
 
