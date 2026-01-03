@@ -152,6 +152,7 @@ class StreamEvent(BaseModel, frozen=True):
         workflow_id: Unique workflow identifier.
         tool_name: Name of tool being called/returning (optional).
         tool_input: Input parameters for tool call (optional).
+        is_error: Whether this event represents an error result.
     """
     id: str = Field(default_factory=lambda: str(uuid4()))
     type: StreamEventType
@@ -161,6 +162,7 @@ class StreamEvent(BaseModel, frozen=True):
     workflow_id: str
     tool_name: str | None = None
     tool_input: dict[str, Any] | None = None
+    is_error: bool = False
 
 
 StreamEmitter = Callable[[StreamEvent], Awaitable[None]]
