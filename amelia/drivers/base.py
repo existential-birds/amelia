@@ -1,7 +1,10 @@
+from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any, Protocol
 
 from pydantic import BaseModel
+
+from amelia.core.types import StreamEvent, StreamEventType
 
 
 class AgenticMessageType(StrEnum):
@@ -29,6 +32,33 @@ class AgenticMessage(BaseModel):
     tool_call_id: str | None = None
     session_id: str | None = None
     is_error: bool = False
+
+    def to_stream_event(self, agent: str, workflow_id: str) -> StreamEvent:
+        """Convert to StreamEvent for dashboard consumption.
+
+        Args:
+            agent: Agent name (e.g., "developer", "reviewer").
+            workflow_id: Unique workflow identifier.
+
+        Returns:
+            StreamEvent for dashboard streaming.
+        """
+        type_mapping = {
+            AgenticMessageType.THINKING: StreamEventType.CLAUDE_THINKING,
+            AgenticMessageType.TOOL_CALL: StreamEventType.CLAUDE_TOOL_CALL,
+            AgenticMessageType.TOOL_RESULT: StreamEventType.CLAUDE_TOOL_RESULT,
+            AgenticMessageType.RESULT: StreamEventType.AGENT_OUTPUT,
+        }
+        return StreamEvent(
+            type=type_mapping[self.type],
+            content=self.content or self.tool_output,
+            timestamp=datetime.now(UTC),
+            agent=agent,
+            workflow_id=workflow_id,
+            tool_name=self.tool_name,
+            tool_input=self.tool_input,
+            is_error=self.is_error,
+        )
 
 
 # Type alias for generate return value: (output, session_id)
