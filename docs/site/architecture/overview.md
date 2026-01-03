@@ -12,11 +12,7 @@ This document provides a technical deep dive into Amelia's architecture, compone
 
 The [roadmap](/reference/roadmap) charts a path toward **complete end-to-end workflow control**—where developers never need to open GitHub, Jira, or any tracker web UI. Built on the assumption that LLMs will continually improve, Amelia automatically gets better as models advance.
 
-**Design Principles** (informed by [Anthropic's research on effective agent harnesses](https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents)):
-- **Model Improvement as Tailwind** — Prefer prompts over code, delegation over hardcoding
-- **Structured Handoffs** — Explicit state transfer mechanisms for cross-session work
-- **Verify Before Declaring Done** — Agents test as humans would, not just claim completion
-- **Environment as Truth** — Git history and artifacts are the source of truth, not agent memory
+See [Design Principles](/reference/roadmap#design-principles) for the guiding philosophy.
 
 ## System Architecture
 

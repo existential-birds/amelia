@@ -2,6 +2,17 @@
 
 Complete API reference for all Amelia Design System tokens. These tokens are available in CSS custom properties and can be used across all design system themes (VitePress, Slidev, D2, Mermaid).
 
+## Color System
+
+The Amelia color system is built on two complementary themes that adapt to user preferences. All colors use the OKLCH color space for perceptual uniformity and better color interpolation.
+
+### Design Philosophy
+
+The Amelia Design System features dual themes designed for professional environments:
+
+- **Dark Mode (Primary)**: Deep forest green backgrounds with gold accents
+- **Light Mode (Secondary)**: Daytime professional theme with warm cream backgrounds and blue accents
+
 ## Color Tokens
 
 ### Core Colors
@@ -118,6 +129,30 @@ a:hover {
 .error-message {
   background-color: var(--destructive);
   color: var(--destructive-foreground);
+}
+```
+
+### Heading Colors
+
+Coral/Terracotta headings add visual excitement while complementing the forest green palette.
+
+| Token | Dark Mode | Light Mode | Description |
+|-------|-----------|------------|-------------|
+| `--vp-c-heading-1` | #E8846E (oklch 72% 0.14 35) | #A85035 (oklch 50% 0.15 30) | H1, H2 headings |
+| `--vp-c-heading-2` | #D9846E (oklch 68% 0.12 40) | #B8634A (oklch 55% 0.13 35) | H3-H6 headings |
+
+**Usage:**
+```css
+.vp-doc h1,
+.vp-doc h2 {
+  color: var(--vp-c-heading-1);
+}
+
+.vp-doc h3,
+.vp-doc h4,
+.vp-doc h5,
+.vp-doc h6 {
+  color: var(--vp-c-heading-2);
 }
 ```
 
@@ -532,6 +567,100 @@ if (window.matchMedia('(prefers-color-scheme: light)').matches) {
 }
 ```
 
+## Usage Guidelines
+
+### Accessibility
+
+All color combinations meet WCAG AA contrast requirements:
+
+- Text colors on backgrounds: Minimum 4.5:1 ratio
+- Large text (18px+): Minimum 3:1 ratio
+- Interactive elements: Clear focus states with `--ring` color
+
+### Color Modes
+
+Colors automatically adapt based on user preferences:
+
+```css
+/* System preference detection (automatic) */
+@media (prefers-color-scheme: light) {
+  :root {
+    /* Light mode colors applied */
+  }
+}
+
+/* Manual override with class */
+.light {
+  /* Force light mode */
+}
+```
+
+### Semantic Usage
+
+Use semantic tokens instead of raw colors:
+
+::: tip Good Practice
+```css
+.error-message {
+  color: var(--destructive);
+  background-color: var(--destructive-soft);
+}
+```
+:::
+
+::: danger Avoid
+```css
+.error-message {
+  color: #A33D2E;  /* Don't use raw hex values */
+  background-color: rgba(163, 61, 46, 0.16);
+}
+```
+:::
+
+### Alpha Transparency
+
+For overlays and borders, use tokens with built-in alpha:
+
+```css
+.overlay {
+  background-color: var(--border);  /* Pre-defined alpha */
+}
+
+.input {
+  border: 1px solid var(--input);  /* Pre-defined alpha */
+}
+
+.focus-ring {
+  box-shadow: 0 0 0 3px var(--ring);  /* Pre-defined alpha */
+}
+```
+
+## Color Theory
+
+### OKLCH Color Space
+
+All colors are defined in OKLCH (Oklab Lightness Chroma Hue) for:
+
+- **Perceptual uniformity**: Equal numerical changes = equal perceived changes
+- **Predictable lightness**: Easier to create accessible color scales
+- **Better interpolation**: Smooth gradients and animations
+- **Wide gamut support**: Future-proof for modern displays
+
+```css
+/* OKLCH format: oklch(L% C H / alpha) */
+--primary: oklch(82% 0.16 85);
+/* L = 82% lightness, C = 0.16 chroma, H = 85 hue */
+```
+
+### Color Relationships
+
+The color system maintains these relationships across themes:
+
+1. **Primary**: Most prominent accent (gold/blue)
+2. **Accent**: Interactive elements (blue/gold)
+3. **Muted**: Reduced emphasis, backgrounds
+4. **Destructive**: Errors and warnings (consistent red)
+
 ## Browser Compatibility
 
 ### OKLCH Color Space
@@ -552,7 +681,6 @@ Supported in all modern browsers:
 
 ## Related Resources
 
-- [Color System Guide](/design-system/color-system)
 - [Typography Guide](/design-system/typography)
 - [Getting Started](/design-system/)
 - [Diagrams](/design-system/diagrams)

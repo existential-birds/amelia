@@ -1,29 +1,29 @@
 ---
-title: Example Artifacts
-description: Real examples of design documents, plans, and reviews produced by Amelia
+title: Artifacts
+description: Overview of artifacts produced by Amelia during workflow execution
 ---
 
-# Example Artifacts
+# Artifacts
 
-Amelia produces structured artifacts throughout the development lifecycle. These examples showcase the format and depth of each artifact type.
+Amelia produces structured artifacts throughout the development lifecycle.
 
 ## Artifact Types
 
-| Type | Description | Example |
-|------|-------------|---------|
-| **Plan** | Batched execution steps with risk assessment | [View →](./plan-example) |
-| **Review** | Feedback on correctness, security, maintainability | [View →](./review-example) |
+| Type | Description |
+|------|-------------|
+| **Plan** | Markdown implementation plan with goal and strategy |
+| **Review** | Feedback on correctness, security, maintainability |
 
-## How Artifacts Are Used
+## Workflow
 
 ```
-Issue → Architect (design) → Plan Approval → Developer (plan) → Reviewer (review) → Done
+Issue → Architect (plan) → Human Approval → Developer (execute) ↔ Reviewer (review) → Done
 ```
 
-1. **Design**: The Architect agent analyzes requirements and produces a design document
-2. **Plan**: The design is translated into an executable plan with batched steps
-3. **Review**: The Reviewer evaluates changes against the design and coding standards
+1. **Plan**: The Architect agent analyzes the issue and produces a markdown implementation plan with a clear goal
+2. **Execute**: After human approval, the Developer agent executes the plan using agentic tool calls
+3. **Review**: The Reviewer evaluates changes and may request fixes, looping back to Developer if needed
 
-## Current Status
+## Learn More
 
-These artifacts are currently produced manually using hey-amelia. Automated artifact generation is on the [roadmap](/reference/roadmap).
+See the [Architecture Overview](/architecture/overview) for detailed information on plan structure, review output, and the orchestrator flow.

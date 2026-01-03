@@ -137,12 +137,6 @@ RateLimitError: Concurrency limit exceeded: 5/5 workflows active
    amelia cancel <workflow-id>   # Cancel if needed
    ```
 
-2. Increase the limit in server configuration (if self-hosting):
-   ```python
-   # amelia/server/config.py
-   max_concurrent_workflows: int = 10
-   ```
-
 ### Invalid workflow state (422)
 
 **Error:**
@@ -480,77 +474,6 @@ await file_writer.write("../../../etc/passwd", content)
 await file_writer.write("docs/file.md", content)
 await file_writer.write("/absolute/path/in/project/file.md", content)
 ```
-
----
-
-## Development Setup
-
-### Pre-push hook failing
-
-**Error:**
-```
-Running pre-push hook...
-ERROR: Linting failed
-```
-
-**Cause:** Code doesn't pass linting, type checking, or tests.
-
-**Solution:**
-
-Run checks manually to see detailed errors:
-```bash
-uv run ruff check amelia tests         # Linting
-uv run ruff check --fix amelia tests   # Auto-fix
-uv run mypy amelia                     # Type checking
-uv run pytest                          # Tests
-```
-
-Fix the reported issues, then retry push:
-```bash
-git push
-```
-
-### Missing langgraph-checkpoint-sqlite
-
-**Error:**
-```
-[ERROR] Missing required dependencies: langgraph-checkpoint-sqlite
-```
-
-**Causes:**
-1. Multiple amelia installations (old `pip install` conflicting with new `uv tool install`)
-2. Outdated `uv tool` installation
-3. Running `amelia server` without `uv run`
-
-**Solutions:**
-
-1. Check for multiple installations:
-   ```bash
-   which amelia
-   type amelia
-   ```
-
-2. If pyenv shim is used (`/Users/.../.pyenv/shims/amelia`), uninstall old version:
-   ```bash
-   pip uninstall amelia
-   pyenv rehash
-   ```
-
-3. Reinstall with uv:
-   ```bash
-   uv tool install --reinstall git+https://github.com/existential-birds/amelia.git
-   ```
-
-4. Or run from source with uv:
-   ```bash
-   uv run amelia server
-   ```
-
-5. Verify correct version:
-   ```bash
-   which amelia  # Should show ~/.local/bin/amelia
-   amelia --version
-   ```
 
 ---
 

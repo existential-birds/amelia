@@ -2,15 +2,7 @@
 
 Complete reference for using Amelia in your projects.
 
-## Installation
-
-```bash
-# Install amelia as a global tool
-uv tool install git+https://github.com/existential-birds/amelia.git
-
-# Set your API key
-export OPENROUTER_API_KEY="sk-..."
-```
+For installation, see the [Getting Started guide](/guide/).
 
 ## Project Setup
 
@@ -72,6 +64,8 @@ The `retry` parameter accepts these sub-fields:
 | `jira` | Jira issues | `JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN` |
 | `none` | No tracker (manual input) | None |
 | `noop` | Alias for `none` | None |
+
+See [Driver Abstraction](/architecture/concepts#the-driver-abstraction) and [Tracker Abstraction](/architecture/concepts#the-tracker-abstraction) for architectural details.
 
 ### Full Configuration Example
 

@@ -151,6 +151,43 @@ Developer marks execution complete
 | `write_file` | Create or modify files |
 | `read_file` | Read file contents |
 
+### Unified Streaming with StreamEvent
+
+Amelia uses a unified `StreamEvent` type for real-time streaming across all drivers. Regardless of whether you use the API driver or CLI driver, tool execution progress is communicated through the same event format.
+
+**StreamEventType** (the event categories):
+
+| Type | Description |
+|------|-------------|
+| `CLAUDE_THINKING` | Agent is analyzing the situation and planning |
+| `CLAUDE_TOOL_CALL` | Agent is invoking a tool with specific parameters |
+| `CLAUDE_TOOL_RESULT` | Result returned from tool execution |
+| `AGENT_OUTPUT` | Final output when agent completes execution |
+
+**StreamEvent** contains:
+- `id`: Unique event identifier
+- `type`: One of the `StreamEventType` values
+- `content`: Event payload (text content, result, etc.)
+- `timestamp`: When the event occurred
+- `agent`: Which agent produced the event (developer, reviewer, etc.)
+- `workflow_id`: Links the event to its workflow
+- `tool_name`: Name of tool being called (for tool events)
+- `tool_input`: Input parameters for tool calls
+
+**Driver Conversion**
+
+Each driver converts its native message types to `StreamEvent`:
+
+```python
+# CLI driver converts SDK messages via convert_to_stream_event()
+stream_event = convert_to_stream_event(sdk_message, agent="developer", workflow_id="...")
+
+# The UI and logging systems consume StreamEvent uniformly
+await emit_event(stream_event)
+```
+
+This abstraction allows the dashboard and logging systems to display real-time progress identically regardless of which driver is executing the work.
+
 ## The Driver Abstraction
 
 Drivers abstract how Amelia communicates with LLMs. This separation enables flexibility across different environments.
