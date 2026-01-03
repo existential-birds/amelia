@@ -1,6 +1,34 @@
+from enum import StrEnum
 from typing import Any, Protocol
 
 from pydantic import BaseModel
+
+
+class AgenticMessageType(StrEnum):
+    """Types of messages yielded during agentic execution."""
+
+    THINKING = "thinking"
+    TOOL_CALL = "tool_call"
+    TOOL_RESULT = "tool_result"
+    RESULT = "result"
+
+
+class AgenticMessage(BaseModel):
+    """Unified message type for agentic execution across all drivers.
+
+    This provides a common abstraction over driver-specific message types:
+    - ClaudeCliDriver: claude_agent_sdk.types.Message
+    - ApiDriver: langchain_core.messages.BaseMessage
+    """
+
+    type: AgenticMessageType
+    content: str | None = None
+    tool_name: str | None = None
+    tool_input: dict[str, Any] | None = None
+    tool_output: str | None = None
+    tool_call_id: str | None = None
+    session_id: str | None = None
+    is_error: bool = False
 
 
 # Type alias for generate return value: (output, session_id)
