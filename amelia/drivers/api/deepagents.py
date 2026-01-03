@@ -14,11 +14,16 @@ from deepagents.backends.protocol import (  # type: ignore[import-untyped]
 from langchain.agents.structured_output import ToolStrategy
 from langchain.chat_models import init_chat_model
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from loguru import logger
 from pydantic import BaseModel
 
-from amelia.drivers.base import DriverInterface, GenerateResult
+from amelia.drivers.base import (
+    AgenticMessage,
+    AgenticMessageType,
+    DriverInterface,
+    GenerateResult,
+)
 
 
 # Maximum output size before truncation (100KB)
@@ -275,7 +280,14 @@ class ApiDriver(DriverInterface):
         except Exception as e:
             raise RuntimeError(f"ApiDriver generation failed: {e}") from e
 
-    async def execute_agentic(self, prompt: str) -> AsyncIterator[BaseMessage]:
+    async def execute_agentic(
+        self,
+        prompt: str,
+        cwd: str | None = None,
+        session_id: str | None = None,
+        instructions: str | None = None,
+        schema: type[BaseModel] | None = None,
+    ) -> AsyncIterator[AgenticMessage]:
         """Execute prompt with autonomous tool access using DeepAgents.
 
         Uses the DeepAgents library to create an autonomous agent that can
@@ -283,15 +295,21 @@ class ApiDriver(DriverInterface):
 
         Args:
             prompt: The prompt to execute.
+            cwd: Working directory for tool execution. If None, uses self.cwd.
+            session_id: Unused (API driver has no session support).
+            instructions: Unused (system prompt set at agent creation).
+            schema: Unused (structured output not supported in agentic mode).
 
         Yields:
-            BaseMessage objects as the agent executes.
+            AgenticMessage for each event (thinking, tool_call, tool_result, result).
 
         Raises:
-            ValueError: If cwd is not set or prompt is empty.
+            ValueError: If cwd is not set (neither as param nor on instance) or prompt is empty.
             RuntimeError: If execution fails.
         """
-        if not self.cwd:
+        # Use parameter cwd if provided, otherwise fall back to instance cwd
+        working_dir = cwd or self.cwd
+        if not working_dir:
             raise ValueError("cwd must be set for agentic execution")
 
         if not prompt or not prompt.strip():
@@ -299,7 +317,7 @@ class ApiDriver(DriverInterface):
 
         try:
             chat_model = _create_chat_model(self.model)
-            backend = LocalSandbox(root_dir=self.cwd)
+            backend = LocalSandbox(root_dir=working_dir)
             agent = create_deep_agent(
                 model=chat_model,
                 system_prompt="",
@@ -309,17 +327,72 @@ class ApiDriver(DriverInterface):
             logger.debug(
                 "Starting agentic execution",
                 model=self.model,
-                cwd=self.cwd,
+                cwd=working_dir,
                 prompt_length=len(prompt),
             )
+
+            last_message: AIMessage | None = None
 
             async for chunk in agent.astream(
                 {"messages": [HumanMessage(content=prompt)]},
                 stream_mode="values",
             ):
                 messages = chunk.get("messages", [])
-                if messages:
-                    yield messages[-1]
+                if not messages:
+                    continue
+
+                message = messages[-1]
+
+                if isinstance(message, AIMessage):
+                    last_message = message
+
+                    # Text content -> THINKING
+                    if isinstance(message.content, str) and message.content:
+                        yield AgenticMessage(
+                            type=AgenticMessageType.THINKING,
+                            content=message.content,
+                        )
+                    elif isinstance(message.content, list):
+                        for block in message.content:
+                            if isinstance(block, dict) and block.get("type") == "text":
+                                yield AgenticMessage(
+                                    type=AgenticMessageType.THINKING,
+                                    content=block.get("text", ""),
+                                )
+
+                    # Tool calls
+                    for tool_call in message.tool_calls or []:
+                        yield AgenticMessage(
+                            type=AgenticMessageType.TOOL_CALL,
+                            tool_name=tool_call["name"],
+                            tool_input=tool_call.get("args", {}),
+                            tool_call_id=tool_call.get("id"),
+                        )
+
+                elif isinstance(message, ToolMessage):
+                    yield AgenticMessage(
+                        type=AgenticMessageType.TOOL_RESULT,
+                        tool_name=message.name,
+                        tool_output=str(message.content),
+                        tool_call_id=message.tool_call_id,
+                        is_error=False,  # LangChain doesn't have error flag
+                    )
+
+            # Final result from last AI message
+            if last_message:
+                final_content = ""
+                if isinstance(last_message.content, str):
+                    final_content = last_message.content
+                elif isinstance(last_message.content, list):
+                    for block in last_message.content:
+                        if isinstance(block, dict) and block.get("type") == "text":
+                            final_content += block.get("text", "")
+
+                yield AgenticMessage(
+                    type=AgenticMessageType.RESULT,
+                    content=final_content,
+                    session_id=None,  # API driver has no session support
+                )
 
         except ValueError:
             raise
