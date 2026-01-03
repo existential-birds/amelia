@@ -137,5 +137,12 @@ class TestAgenticMessageUsage:
 
         imports = get_imports_from_file(file_path)
 
-        # Verify the file parses and has expected imports
-        assert len(imports) > 0, f"Expected {agent_file} to have imports"
+        # Check for AgenticMessage imports from amelia.drivers.base
+        agentic_imports = [
+            imp for imp, _ in imports if imp == "amelia.drivers.base"
+        ]
+
+        assert len(agentic_imports) > 0, (
+            f"{agent_file} should import AgenticMessage and/or AgenticMessageType "
+            f"from amelia.drivers.base"
+        )

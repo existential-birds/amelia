@@ -388,6 +388,14 @@ class ApiDriver(DriverInterface):
                     content=final_content,
                     session_id=None,  # API driver has no session support
                 )
+            else:
+                # Always yield RESULT per interface contract
+                yield AgenticMessage(
+                    type=AgenticMessageType.RESULT,
+                    content="Agent produced no output",
+                    session_id=None,
+                    is_error=True,
+                )
 
         except ValueError:
             raise
