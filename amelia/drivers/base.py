@@ -1,3 +1,4 @@
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any, Protocol
@@ -69,19 +70,10 @@ GenerateResult = tuple[Any, str | None]
 
 
 class DriverInterface(Protocol):
-    """Abstract interface for interaction with LLMs.
+    """Protocol defining the LLM driver interface.
 
-    Must be implemented by both CliDriver and ApiDriver.
-    Defines the contract for single-turn LLM generation.
-
-    Note: execute_agentic() is intentionally NOT part of this protocol.
-    Each driver implementation (CLI, API) has its own typed execute_agentic()
-    method that yields driver-specific message types:
-    - ClaudeCliDriver.execute_agentic() yields claude_agent_sdk.types.Message
-    - ApiDriver.execute_agentic() yields langchain_core.messages.BaseMessage
-
-    This design allows agents to use isinstance() checks on the driver
-    and handle the appropriate message types without type erasure.
+    All drivers must implement both generate() for single-turn generation
+    and execute_agentic() for autonomous tool-using execution.
     """
 
     async def generate(
@@ -103,5 +95,27 @@ class DriverInterface(Protocol):
             GenerateResult tuple of (output, session_id):
             - output: str (if no schema) or instance of schema
             - session_id: str if driver supports sessions, None otherwise
+        """
+        ...
+
+    def execute_agentic(
+        self,
+        prompt: str,
+        cwd: str,
+        session_id: str | None = None,
+        instructions: str | None = None,
+        schema: type[BaseModel] | None = None,
+    ) -> AsyncIterator["AgenticMessage"]:
+        """Execute prompt with autonomous tool use, yielding messages.
+
+        Args:
+            prompt: The prompt to send.
+            cwd: Working directory for tool execution.
+            session_id: Optional session ID for conversation continuity.
+            instructions: Optional system instructions.
+            schema: Optional schema for structured output.
+
+        Yields:
+            AgenticMessage for each event during execution.
         """
         ...
