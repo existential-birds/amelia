@@ -649,7 +649,7 @@ The changes are in git - diff against commit: {base_commit}"""
                 reviewer_persona=result.reviewer_persona,
                 approved=False,
                 comments=result.comments,
-                severity="high" if result.severity == "low" else result.severity,
+                severity="high" if result.severity in ("low", "medium") else result.severity,
             )
 
         # Emit completion event
