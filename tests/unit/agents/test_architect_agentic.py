@@ -156,3 +156,39 @@ class TestArchitectToolCallAccumulation:
         assert final_state.tool_calls[0].tool_name == "read_file"
         assert final_state.tool_calls[1].tool_name == "list_dir"
         assert len(final_state.tool_results) == 1
+
+
+class TestArchitectAgenticPromptBuilding:
+    """Tests for _build_agentic_prompt method."""
+
+    def test_agentic_prompt_does_not_include_file_structure(
+        self,
+        mock_driver,
+        mock_issue_factory,
+    ) -> None:
+        """Agentic prompt should not include pre-scanned file structure."""
+        issue = mock_issue_factory(title="Test", description="Test description")
+        state = ExecutionState(profile_id="test", issue=issue)
+
+        architect = Architect(mock_driver)
+        prompt = architect._build_agentic_prompt(state)
+
+        # Should NOT contain file structure section
+        assert "### File Structure" not in prompt
+        assert "files)" not in prompt  # From "(N files)" in _scan_codebase
+
+    def test_agentic_prompt_includes_issue(
+        self,
+        mock_driver,
+        mock_issue_factory,
+    ) -> None:
+        """Agentic prompt should include issue details."""
+        issue = mock_issue_factory(title="Add feature X", description="Detailed description")
+        state = ExecutionState(profile_id="test", issue=issue)
+
+        architect = Architect(mock_driver)
+        prompt = architect._build_agentic_prompt(state)
+
+        assert "Add feature X" in prompt
+        assert "Detailed description" in prompt
+        assert "## Issue" in prompt

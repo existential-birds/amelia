@@ -3,7 +3,6 @@
 This module provides the Architect agent that analyzes issues and produces
 rich markdown implementation plans for agentic execution.
 """
-import os
 import re
 from collections.abc import AsyncIterator
 from datetime import UTC, date, datetime
@@ -14,7 +13,7 @@ from pydantic import BaseModel, ConfigDict
 
 from amelia.core.agentic_state import ToolCall, ToolResult
 from amelia.core.state import ExecutionState
-from amelia.core.types import Design, Issue, Profile, StreamEmitter, StreamEvent
+from amelia.core.types import Design, Issue, Profile, StreamEmitter, StreamEvent, StreamEventType
 from amelia.drivers.base import AgenticMessageType, DriverInterface
 
 
@@ -208,8 +207,9 @@ Before planning, discover:
     def _build_prompt(self, state: ExecutionState, profile: Profile) -> str:
         """Build user prompt from execution state and profile.
 
-        Combines issue information, optional design context, and codebase
-        structure into a single prompt string.
+        Combines issue information and optional design context into a single
+        prompt string. Codebase structure is not included; the agent explores
+        via tools instead.
 
         Args:
             state: The current execution state.
@@ -240,11 +240,6 @@ Before planning, discover:
         if state.design:
             design_content = self._format_design_section(state.design)
             parts.append(f"## Design\n\n{design_content}")
-
-        # Codebase section (optional)
-        if profile.working_dir:
-            codebase_content = self._scan_codebase(profile.working_dir)
-            parts.append(f"## Codebase\n\n{codebase_content}")
 
         return "\n\n".join(parts)
 
@@ -288,68 +283,6 @@ Before planning, discover:
             parts.append(f"### Relevant Files\n\n{files_list}")
 
         return "\n\n".join(parts)
-
-    def _scan_codebase(self, working_dir: str, max_files: int = 500) -> str:
-        """Scan the codebase directory and return a file tree structure.
-
-        Args:
-            working_dir: Path to the working directory to scan.
-            max_files: Maximum number of files to include (default 500).
-
-        Returns:
-            Formatted string with file tree structure.
-
-        """
-        # Common directories and files to ignore
-        ignore_dirs = {
-            ".git", ".svn", ".hg",
-            "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache",
-            "node_modules", ".venv", "venv", "env",
-            "dist", "build", ".next", ".nuxt",
-            "coverage", ".coverage", "htmlcov",
-            ".idea", ".vscode",
-            "eggs", "*.egg-info",
-        }
-        ignore_files = {".DS_Store", "Thumbs.db", ".gitignore"}
-
-        files: list[str] = []
-        root_path = Path(working_dir)
-
-        try:
-            for dirpath, dirnames, filenames in os.walk(root_path):
-                # Filter out ignored directories (modifies dirnames in-place)
-                dirnames[:] = [d for d in dirnames if d not in ignore_dirs and not d.endswith(".egg-info")]
-
-                rel_dir = Path(dirpath).relative_to(root_path)
-
-                for filename in filenames:
-                    if filename in ignore_files:
-                        continue
-                    if len(files) >= max_files:
-                        break
-
-                    rel_path = rel_dir / filename if str(rel_dir) != "." else Path(filename)
-                    files.append(str(rel_path))
-
-                if len(files) >= max_files:
-                    break
-        except OSError as e:
-            logger.warning(f"Error scanning codebase: {e}")
-
-        # Sort files for consistent output
-        files.sort()
-
-        if not files:
-            return "No files found in working directory."
-
-        # Format as a simple file list
-        file_list = "\n".join(f"- {f}" for f in files)
-        header = f"### File Structure ({len(files)} files)\n\n"
-
-        if len(files) >= max_files:
-            header += f"(Truncated to first {max_files} files)\n\n"
-
-        return header + file_list
 
     async def plan(
         self,
