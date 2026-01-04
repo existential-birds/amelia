@@ -24,6 +24,7 @@ from amelia.core.constants import ToolName
 from amelia.drivers.base import AgenticMessage, AgenticMessageType, GenerateResult
 from amelia.logging import log_claude_result
 
+
 # Mapping from Claude CLI tool names to standard ToolName values
 CLAUDE_TOOL_NAME_MAP: dict[str, str] = {
     "Write": ToolName.WRITE_FILE,
@@ -427,10 +428,12 @@ class ClaudeCliDriver:
                             elif isinstance(block, ToolResultBlock):
                                 content = block.content if isinstance(block.content, str) else str(block.content)
                                 # Normalize tool name to standard format
-                                normalized_name = CLAUDE_TOOL_NAME_MAP.get(last_tool_name, last_tool_name) if last_tool_name else None
+                                result_tool_name: str | None = None
+                                if last_tool_name:
+                                    result_tool_name = CLAUDE_TOOL_NAME_MAP.get(last_tool_name, last_tool_name)
                                 yield AgenticMessage(
                                     type=AgenticMessageType.TOOL_RESULT,
-                                    tool_name=normalized_name,
+                                    tool_name=result_tool_name,
                                     tool_output=content,
                                     is_error=block.is_error or False,
                                 )

@@ -1,6 +1,4 @@
 """Tests for orchestrator helper functions."""
-from collections.abc import Callable
-from unittest.mock import AsyncMock, patch
 
 import pytest
 from langchain_core.runnables.config import RunnableConfig
@@ -8,8 +6,7 @@ from langchain_core.runnables.config import RunnableConfig
 from amelia.core.agentic_state import ToolCall
 from amelia.core.constants import ToolName
 from amelia.core.orchestrator import _extract_config_params, _extract_goal_from_markdown
-from amelia.core.state import ExecutionState
-from amelia.core.types import Issue, Profile
+from amelia.core.types import Profile
 
 
 class TestExtractConfigParams:

@@ -94,13 +94,13 @@ async def test_tool_name_enum_equality_with_string() -> None:
     """
     # StrEnum comparison works bidirectionally
     assert ToolName.WRITE_FILE == "write_file"
-    assert "write_file" == ToolName.WRITE_FILE
+    assert ToolName.WRITE_FILE == "write_file"
 
     assert ToolName.READ_FILE == "read_file"
-    assert "read_file" == ToolName.READ_FILE
+    assert ToolName.READ_FILE == "read_file"
 
     assert ToolName.RUN_SHELL_COMMAND == "run_shell_command"
-    assert "run_shell_command" == ToolName.RUN_SHELL_COMMAND
+    assert ToolName.RUN_SHELL_COMMAND == "run_shell_command"
 
     # But different values don't match
     assert ToolName.WRITE_FILE != "Write"
