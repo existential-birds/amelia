@@ -571,6 +571,118 @@ class TestClaudeCliDriverAgentic:
         assert driver.tool_call_history == []
 
 
+class TestToolNameNormalization:
+    """Tests for tool name normalization in execute_agentic."""
+
+    async def test_execute_agentic_normalizes_write_tool_name(
+        self, driver: ClaudeCliDriver
+    ) -> None:
+        """Tool names should be normalized to standard snake_case format."""
+        from amelia.core.constants import ToolName
+
+        # Mock a Write tool call (Claude's native name)
+        messages = [
+            MockAssistantMessage([MockToolUseBlock("Write", {"file_path": "/test.md", "content": "test"})]),
+            MockResultMessage(result="Done", session_id="sess_norm"),
+        ]
+
+        with (
+            _patch_sdk_types(),
+            patch("amelia.drivers.cli.claude.ClaudeSDKClient", create_mock_sdk_client(messages)),
+        ):
+            results = [msg async for msg in driver.execute_agentic("test", "/tmp")]
+
+        # Find the tool call message
+        tool_calls = [m for m in results if m.type == AgenticMessageType.TOOL_CALL]
+        assert len(tool_calls) == 1
+        assert tool_calls[0].tool_name == ToolName.WRITE_FILE  # Normalized name
+
+    async def test_execute_agentic_normalizes_read_tool_name(
+        self, driver: ClaudeCliDriver
+    ) -> None:
+        """Read tool name should be normalized to read_file."""
+        from amelia.core.constants import ToolName
+
+        messages = [
+            MockAssistantMessage([MockToolUseBlock("Read", {"file_path": "/test.py"})]),
+            MockResultMessage(result="Done", session_id="sess_read"),
+        ]
+
+        with (
+            _patch_sdk_types(),
+            patch("amelia.drivers.cli.claude.ClaudeSDKClient", create_mock_sdk_client(messages)),
+        ):
+            results = [msg async for msg in driver.execute_agentic("test", "/tmp")]
+
+        tool_calls = [m for m in results if m.type == AgenticMessageType.TOOL_CALL]
+        assert len(tool_calls) == 1
+        assert tool_calls[0].tool_name == ToolName.READ_FILE
+
+    async def test_execute_agentic_normalizes_bash_tool_name(
+        self, driver: ClaudeCliDriver
+    ) -> None:
+        """Bash tool name should be normalized to run_shell_command."""
+        from amelia.core.constants import ToolName
+
+        messages = [
+            MockAssistantMessage([MockToolUseBlock("Bash", {"command": "ls -la"})]),
+            MockResultMessage(result="Done", session_id="sess_bash"),
+        ]
+
+        with (
+            _patch_sdk_types(),
+            patch("amelia.drivers.cli.claude.ClaudeSDKClient", create_mock_sdk_client(messages)),
+        ):
+            results = [msg async for msg in driver.execute_agentic("test", "/tmp")]
+
+        tool_calls = [m for m in results if m.type == AgenticMessageType.TOOL_CALL]
+        assert len(tool_calls) == 1
+        assert tool_calls[0].tool_name == ToolName.RUN_SHELL_COMMAND
+
+    async def test_execute_agentic_preserves_unknown_tool_names(
+        self, driver: ClaudeCliDriver
+    ) -> None:
+        """Unknown tool names should pass through unchanged."""
+        messages = [
+            MockAssistantMessage([MockToolUseBlock("CustomTool", {"data": "value"})]),
+            MockResultMessage(result="Done", session_id="sess_custom"),
+        ]
+
+        with (
+            _patch_sdk_types(),
+            patch("amelia.drivers.cli.claude.ClaudeSDKClient", create_mock_sdk_client(messages)),
+        ):
+            results = [msg async for msg in driver.execute_agentic("test", "/tmp")]
+
+        tool_calls = [m for m in results if m.type == AgenticMessageType.TOOL_CALL]
+        assert len(tool_calls) == 1
+        assert tool_calls[0].tool_name == "CustomTool"  # Unchanged
+
+    async def test_execute_agentic_normalizes_tool_result_name(
+        self, driver: ClaudeCliDriver
+    ) -> None:
+        """Tool result messages should also have normalized tool names."""
+        from amelia.core.constants import ToolName
+
+        messages = [
+            MockAssistantMessage([
+                MockToolUseBlock("Write", {"file_path": "/test.md", "content": "test"}),
+                MockToolResultBlock("File written"),
+            ]),
+            MockResultMessage(result="Done", session_id="sess_result"),
+        ]
+
+        with (
+            _patch_sdk_types(),
+            patch("amelia.drivers.cli.claude.ClaudeSDKClient", create_mock_sdk_client(messages)),
+        ):
+            results = [msg async for msg in driver.execute_agentic("test", "/tmp")]
+
+        tool_results = [m for m in results if m.type == AgenticMessageType.TOOL_RESULT]
+        assert len(tool_results) == 1
+        assert tool_results[0].tool_name == ToolName.WRITE_FILE  # Normalized
+
+
 class TestClarificationDetection:
     """Tests for clarification request detection."""
 
