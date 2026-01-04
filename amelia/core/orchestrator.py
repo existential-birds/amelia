@@ -21,7 +21,7 @@ from amelia.agents.architect import Architect, MarkdownPlanOutput
 from amelia.agents.developer import Developer
 from amelia.agents.evaluator import Evaluator
 from amelia.agents.reviewer import Reviewer
-from amelia.core.constants import ToolName, resolve_plan_path
+from amelia.core.constants import resolve_plan_path
 from amelia.core.state import ExecutionState
 from amelia.core.types import Profile, StreamEmitter
 from amelia.drivers.factory import DriverFactory
@@ -282,15 +282,15 @@ async def call_architect_node(
     """Orchestrator node for the Architect agent to generate an implementation plan.
 
     Consumes the Architect's async generator, streaming events and collecting
-    the final state with the generated plan.
+    the final state. The plan_validator_node handles extracting structured
+    fields (goal, plan_markdown, key_files) from the written plan file.
 
     Args:
         state: Current execution state containing the issue and profile.
         config: Optional RunnableConfig with stream_emitter in configurable.
 
     Returns:
-        Partial state dict with goal, plan_markdown, plan_path, raw_architect_output,
-        tool_calls, and tool_results.
+        Partial state dict with raw_architect_output, tool_calls, and tool_results.
 
     Raises:
         ValueError: If no issue is provided in the state.
@@ -336,90 +336,20 @@ async def call_architect_node(
     # Save token usage from driver (best-effort)
     await _save_token_usage(driver, workflow_id, "architect", repository)
 
-    # Read plan from predictable path (reusing plan_path computed above)
-    plan_content: str | None = None
-    plan_file_path: Path | None = None
-
-    if plan_path.exists():
-        try:
-            plan_content = plan_path.read_text()
-            plan_file_path = plan_path
-            logger.debug(
-                "Read plan from predictable path",
-                plan_path=str(plan_path),
-                plan_length=len(plan_content),
-            )
-        except Exception as e:
-            logger.warning(
-                "Failed to read plan file",
-                plan_path=str(plan_path),
-                error=str(e),
-            )
-    else:
-        logger.debug(
-            "Plan file not found at expected path, falling back to tool call parsing",
-            plan_path=str(plan_path),
-        )
-        # Fallback: Search tool calls for write_file commands that created markdown files
-        for tool_call in final_state.tool_calls:
-            if tool_call.tool_name == ToolName.WRITE_FILE and isinstance(tool_call.tool_input, dict):
-                file_path = tool_call.tool_input.get("file_path", "")
-                content = tool_call.tool_input.get("content", "")
-                # Check if this looks like a plan file (has **Goal:** marker)
-                if file_path.endswith(".md") and "**Goal:**" in content:
-                    plan_content = content
-                    plan_file_path = Path(file_path)
-                    logger.debug(
-                        "Found plan in Write tool call",
-                        file_path=file_path,
-                        content_length=len(content),
-                    )
-                    break
-
-    # Extract goal: try plan content first (agentic mode), then raw output (legacy)
-    goal = _extract_goal_from_markdown(plan_content) if plan_content else None
-    if goal is None:
-        goal = _extract_goal_from_markdown(final_state.raw_architect_output)
-
-    # Use plan file content if available, otherwise fall back to raw output
-    plan_markdown = plan_content or final_state.raw_architect_output
-
-    # Log the architect plan generation with diagnostic details
-    raw_output_preview = (
-        final_state.raw_architect_output[:500]
-        if final_state.raw_architect_output
-        else None
-    )
+    # Log the architect plan generation
     logger.info(
         "Agent action completed",
         agent="architect",
         action="generated_plan",
         details={
-            "goal": goal,
-            "goal_length": len(goal) if goal else 0,
-            "plan_markdown_length": len(plan_markdown) if plan_markdown else 0,
             "raw_output_length": len(final_state.raw_architect_output) if final_state.raw_architect_output else 0,
-            "raw_output_preview": raw_output_preview,
             "tool_calls_count": len(final_state.tool_calls),
-            "plan_file_path": str(plan_file_path) if plan_file_path else None,
-            "plan_from_tool_call": plan_file_path is not None and plan_content is not None,
         },
     )
 
-    # Warn if goal extraction failed from all sources
-    if goal is None and (plan_content or final_state.raw_architect_output):
-        logger.warning(
-            "Goal extraction failed - no '**Goal:**' line found",
-            plan_file_path=str(plan_file_path) if plan_file_path else None,
-            raw_output_first_lines="\n".join(final_state.raw_architect_output.split("\n")[:10]) if final_state.raw_architect_output else None,
-        )
-
-    # Return partial state update
+    # Return partial state update - plan_validator_node handles plan extraction
     return {
-        "goal": goal,
         "raw_architect_output": final_state.raw_architect_output,
-        "plan_markdown": plan_markdown,
-        "plan_path": str(final_state.plan_path) if final_state.plan_path else None,
         "tool_calls": list(final_state.tool_calls),
         "tool_results": list(final_state.tool_results),
     }
