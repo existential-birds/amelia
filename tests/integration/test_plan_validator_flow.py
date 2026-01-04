@@ -9,7 +9,6 @@ import pytest
 
 from amelia.agents.architect import MarkdownPlanOutput
 from amelia.core.orchestrator import (
-    call_architect_node,
     plan_validator_node,
 )
 from amelia.core.state import ExecutionState
