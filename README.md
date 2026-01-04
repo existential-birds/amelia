@@ -211,7 +211,7 @@ For full documentation, visit **[existential-birds.github.io/amelia](https://exi
 
 ## License
 
-Amelia Core is licensed under the [Mozilla Public License 2.0](LICENSE).
+Amelia Core is licensed under the [Elastic License 2.0](LICENSE).
 
 ### Commercial Licensing
 

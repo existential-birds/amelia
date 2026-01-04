@@ -99,7 +99,7 @@ export default defineConfig({
 
     // Footer
     footer: {
-      message: 'Built by hey-amelia bot. Released under the <a href="https://github.com/existential-birds/amelia/blob/main/LICENSE">MPL-2.0 License</a>.',
+      message: 'Built by hey-amelia bot. Released under the <a href="https://github.com/existential-birds/amelia/blob/main/LICENSE">Elastic License 2.0</a>.',
       copyright: 'Copyright © 2024-2025 <a href="https://github.com/existential-birds">@existential-birds</a>'
     },
 

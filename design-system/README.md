@@ -124,4 +124,4 @@ If you need to update tokens:
 
 ## License
 
-MPL-2.0 License - See LICENSE file for details.
+Elastic License 2.0 - See LICENSE file for details.

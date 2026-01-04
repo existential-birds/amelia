@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Slidev theme for Amelia presentations",
   "keywords": ["slidev-theme", "slidev", "amelia", "dark-theme"],
-  "license": "MPL-2.0",
+  "license": "Elastic-2.0",
   "engines": {
     "node": ">=18.0.0",
     "slidev": ">=0.47.0"
