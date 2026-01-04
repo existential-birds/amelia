@@ -13,12 +13,17 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from pydantic import BaseModel
 
+from amelia.drivers.base import AgenticMessage, AgenticMessageType
 from amelia.drivers.cli.claude import (
     ClaudeCliDriver,
     _is_clarification_request,
     _strip_markdown_fences,
-    convert_to_stream_event,
 )
+
+
+# =============================================================================
+# Test Models
+# =============================================================================
 
 
 class _TestModel(BaseModel):
@@ -30,9 +35,14 @@ class _TestListModel(BaseModel):
     tasks: list[str]
 
 
-@pytest.fixture
-def driver() -> ClaudeCliDriver:
-    return ClaudeCliDriver()
+# =============================================================================
+# Mock SDK Types
+#
+# These classes mock claude-agent-sdk types for testing without requiring
+# the actual SDK. They mirror the structure of:
+# - TextBlock, ToolUseBlock, ToolResultBlock (content blocks)
+# - AssistantMessage, ResultMessage (message types)
+# =============================================================================
 
 
 class MockTextBlock:
@@ -91,6 +101,28 @@ class MockResultMessage:
         self.total_cost_usd = total_cost_usd
 
 
+def _patch_sdk_types():
+    """Create a context manager that patches SDK types for isinstance checks."""
+    return patch.multiple(
+        "amelia.drivers.cli.claude",
+        AssistantMessage=MockAssistantMessage,
+        ResultMessage=MockResultMessage,
+        TextBlock=MockTextBlock,
+        ToolUseBlock=MockToolUseBlock,
+        ToolResultBlock=MockToolResultBlock,
+    )
+
+
+# =============================================================================
+# Test Fixtures and Helpers
+# =============================================================================
+
+
+@pytest.fixture
+def driver() -> ClaudeCliDriver:
+    return ClaudeCliDriver()
+
+
 def create_mock_query(messages: list[Any]) -> AsyncMock:
     """Create a mock query function that yields the given messages."""
     async def mock_query(*args: Any, **kwargs: Any) -> AsyncIterator[Any]:
@@ -124,16 +156,9 @@ def create_mock_sdk_client(messages: list[Any]) -> MagicMock:
     return mock_class
 
 
-def _patch_sdk_types():
-    """Create a context manager that patches SDK types for isinstance checks."""
-    return patch.multiple(
-        "amelia.drivers.cli.claude",
-        AssistantMessage=MockAssistantMessage,
-        ResultMessage=MockResultMessage,
-        TextBlock=MockTextBlock,
-        ToolUseBlock=MockToolUseBlock,
-        ToolResultBlock=MockToolResultBlock,
-    )
+# =============================================================================
+# Test Classes
+# =============================================================================
 
 
 class TestClaudeCliDriverGenerate:
@@ -546,59 +571,6 @@ class TestClaudeCliDriverAgentic:
         assert driver.tool_call_history == []
 
 
-class TestConvertToStreamEvent:
-    """Tests for convert_to_stream_event function."""
-
-    def test_convert_text_block(self) -> None:
-        """Test converting AssistantMessage with TextBlock."""
-        # Use real SDK types for conversion tests
-        from claude_agent_sdk.types import AssistantMessage, TextBlock
-
-        message = AssistantMessage(
-            content=[TextBlock(text="Thinking...")],
-            model="claude-sonnet-4-20250514",
-        )
-        event = convert_to_stream_event(message, agent="developer", workflow_id="wf-123")
-
-        assert event is not None
-        assert event.content == "Thinking..."
-        assert event.agent == "developer"
-        assert event.workflow_id == "wf-123"
-
-    def test_convert_tool_use_block(self) -> None:
-        """Test converting AssistantMessage with ToolUseBlock."""
-        from claude_agent_sdk.types import AssistantMessage, ToolUseBlock
-
-        message = AssistantMessage(
-            content=[ToolUseBlock(id="tu_1", name="Read", input={"path": "/x.py"})],
-            model="claude-sonnet-4-20250514",
-        )
-        event = convert_to_stream_event(message, agent="developer", workflow_id="wf-456")
-
-        assert event is not None
-        assert event.tool_name == "Read"
-        assert event.tool_input == {"path": "/x.py"}
-
-    def test_convert_result_message(self) -> None:
-        """Test converting ResultMessage."""
-        from claude_agent_sdk.types import ResultMessage
-
-        message = ResultMessage(
-            subtype="result",
-            duration_ms=1000,
-            duration_api_ms=800,
-            is_error=False,
-            num_turns=5,
-            session_id="sess_abc",
-            total_cost_usd=0.01,
-            result="Final output",
-        )
-        event = convert_to_stream_event(message, agent="reviewer", workflow_id="wf-789")
-
-        assert event is not None
-        assert event.content == "Final output"
-
-
 class TestClarificationDetection:
     """Tests for clarification request detection."""
 
@@ -744,3 +716,113 @@ class TestBuildOptions:
         options = driver._build_options()
 
         assert options.disallowed_tools == ["Bash"]
+
+
+class TestExecuteAgenticYieldsAgenticMessage:
+    """Test execute_agentic() yields AgenticMessage types."""
+
+    async def test_yields_thinking_for_text_block(self, driver: ClaudeCliDriver) -> None:
+        """TextBlock in AssistantMessage should yield THINKING AgenticMessage."""
+        messages = [
+            MockAssistantMessage([MockTextBlock("Let me analyze this...")]),
+            MockResultMessage(result="Done", session_id="sess_123"),
+        ]
+
+        with (
+            _patch_sdk_types(),
+            patch("amelia.drivers.cli.claude.ClaudeSDKClient", create_mock_sdk_client(messages)),
+        ):
+            results = [msg async for msg in driver.execute_agentic("test", "/tmp")]
+
+        # Find the thinking message
+        thinking_msgs = [m for m in results if m.type == AgenticMessageType.THINKING]
+        assert len(thinking_msgs) == 1
+        assert thinking_msgs[0].content == "Let me analyze this..."
+        assert isinstance(thinking_msgs[0], AgenticMessage)
+
+    async def test_yields_tool_call_for_tool_use_block(self, driver: ClaudeCliDriver) -> None:
+        """ToolUseBlock should yield TOOL_CALL AgenticMessage."""
+        messages = [
+            MockAssistantMessage([MockToolUseBlock("read_file", {"path": "/test.py"})]),
+            MockResultMessage(result="Done", session_id="sess_123"),
+        ]
+
+        with (
+            _patch_sdk_types(),
+            patch("amelia.drivers.cli.claude.ClaudeSDKClient", create_mock_sdk_client(messages)),
+        ):
+            results = [msg async for msg in driver.execute_agentic("test", "/tmp")]
+
+        tool_calls = [m for m in results if m.type == AgenticMessageType.TOOL_CALL]
+        assert len(tool_calls) == 1
+        assert tool_calls[0].tool_name == "read_file"
+        assert tool_calls[0].tool_input == {"path": "/test.py"}
+        assert tool_calls[0].tool_call_id == "tool_use_123"
+
+    async def test_yields_tool_result_for_tool_result_block(self, driver: ClaudeCliDriver) -> None:
+        """ToolResultBlock should yield TOOL_RESULT AgenticMessage."""
+        messages = [
+            MockAssistantMessage([MockToolResultBlock("file contents here")]),
+            MockResultMessage(result="Done", session_id="sess_123"),
+        ]
+
+        with (
+            _patch_sdk_types(),
+            patch("amelia.drivers.cli.claude.ClaudeSDKClient", create_mock_sdk_client(messages)),
+        ):
+            results = [msg async for msg in driver.execute_agentic("test", "/tmp")]
+
+        tool_results = [m for m in results if m.type == AgenticMessageType.TOOL_RESULT]
+        assert len(tool_results) == 1
+        assert tool_results[0].tool_output == "file contents here"
+        assert tool_results[0].is_error is False
+
+    async def test_yields_error_tool_result(self, driver: ClaudeCliDriver) -> None:
+        """ToolResultBlock with is_error=True should set is_error on AgenticMessage."""
+        messages = [
+            MockAssistantMessage([MockToolResultBlock("Error: not found", is_error=True)]),
+            MockResultMessage(result="Failed", session_id="sess_123"),
+        ]
+
+        with (
+            _patch_sdk_types(),
+            patch("amelia.drivers.cli.claude.ClaudeSDKClient", create_mock_sdk_client(messages)),
+        ):
+            results = [msg async for msg in driver.execute_agentic("test", "/tmp")]
+
+        tool_results = [m for m in results if m.type == AgenticMessageType.TOOL_RESULT]
+        assert len(tool_results) == 1
+        assert tool_results[0].is_error is True
+
+    async def test_yields_result_for_result_message(self, driver: ClaudeCliDriver) -> None:
+        """ResultMessage should yield RESULT AgenticMessage with session_id."""
+        messages = [
+            MockResultMessage(result="Task completed", session_id="sess_abc123"),
+        ]
+
+        with (
+            _patch_sdk_types(),
+            patch("amelia.drivers.cli.claude.ClaudeSDKClient", create_mock_sdk_client(messages)),
+        ):
+            results = [msg async for msg in driver.execute_agentic("test", "/tmp")]
+
+        result_msgs = [m for m in results if m.type == AgenticMessageType.RESULT]
+        assert len(result_msgs) == 1
+        assert result_msgs[0].content == "Task completed"
+        assert result_msgs[0].session_id == "sess_abc123"
+
+    async def test_yields_error_result(self, driver: ClaudeCliDriver) -> None:
+        """ResultMessage with is_error=True should set is_error on AgenticMessage."""
+        messages = [
+            MockResultMessage(result="Execution failed", session_id="sess_123", is_error=True),
+        ]
+
+        with (
+            _patch_sdk_types(),
+            patch("amelia.drivers.cli.claude.ClaudeSDKClient", create_mock_sdk_client(messages)),
+        ):
+            results = [msg async for msg in driver.execute_agentic("test", "/tmp")]
+
+        result_msgs = [m for m in results if m.type == AgenticMessageType.RESULT]
+        assert len(result_msgs) == 1
+        assert result_msgs[0].is_error is True

@@ -5,7 +5,7 @@ and workflow invocation with real components (mocking only at HTTP/LLM boundary)
 """
 from pathlib import Path
 from typing import Any, cast
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from langchain_core.runnables.config import RunnableConfig
@@ -58,13 +58,13 @@ class TestAgenticOrchestrator:
 
 @pytest.mark.integration
 class TestArchitectNodeIntegration:
-    """Test architect node with real Architect, mock at pydantic-ai Agent level."""
+    """Test architect node with real Architect, mock at driver.generate() level."""
 
     async def test_architect_node_sets_goal_and_plan(self, tmp_path: Path) -> None:
         """Architect node should populate goal and plan_markdown.
 
         Real components: DriverFactory, ApiDriver, Architect
-        Mock boundary: pydantic_ai.Agent.run (HTTP/LLM call)
+        Mock boundary: ApiDriver.generate (LLM call)
         """
         plans_dir = tmp_path / "plans"
         plans_dir.mkdir(parents=True, exist_ok=True)
@@ -77,19 +77,16 @@ class TestArchitectNodeIntegration:
         state = make_execution_state(issue=issue, profile=profile)
         config = make_config(thread_id="test-wf-1", profile=profile)
 
-        # Mock at pydantic-ai Agent.run level - this is the HTTP boundary
+        # Mock at driver.generate level - this is the HTTP boundary
         mock_llm_response = MarkdownPlanOutput(
             goal="Implement feature X by modifying component Y",
             plan_markdown="# Plan\n\n1. Do thing A\n2. Do thing B",
             key_files=["src/component.py"],
         )
 
-        # pydantic-ai returns the schema instance directly in result.output
-        mock_result = MagicMock()
-        mock_result.output = mock_llm_response  # Return instance, not dict
-
-        with patch("pydantic_ai.Agent.run", new_callable=AsyncMock) as mock_agent_run:
-            mock_agent_run.return_value = mock_result
+        # driver.generate returns (output, session_id) tuple
+        with patch.object(ApiDriver, "generate", new_callable=AsyncMock) as mock_generate:
+            mock_generate.return_value = (mock_llm_response, "session-123")
 
             result = await call_architect_node(state, cast(RunnableConfig, config))
 
@@ -98,7 +95,7 @@ class TestArchitectNodeIntegration:
         assert "Do thing A" in result["plan_markdown"]
         # Verify plan file was created
         assert result["plan_path"] is not None
-        assert result["plan_path"].exists()
+        assert Path(result["plan_path"]).exists()
 
     async def test_architect_node_requires_issue(self) -> None:
         """Architect node should raise error if no issue provided."""
@@ -120,7 +117,7 @@ class TestDeveloperNodeIntegration:
         Real components: DriverFactory, ApiDriver, Developer
         Mock boundary: ApiDriver.execute_agentic (HTTP/LLM call)
         """
-        from amelia.drivers.api.events import ApiStreamEvent
+        from amelia.drivers.base import AgenticMessage, AgenticMessageType
 
         profile = make_profile(working_dir=str(tmp_path))
         state = make_execution_state(
@@ -129,36 +126,37 @@ class TestDeveloperNodeIntegration:
         )
         config = make_config(thread_id="test-wf-2", profile=profile)
 
-        # Mock stream events from the driver's execute_agentic
-        mock_events = [
-            ApiStreamEvent(
-                type="tool_use",
+        # Mock AgenticMessage stream from the driver's execute_agentic
+        mock_messages = [
+            AgenticMessage(
+                type=AgenticMessageType.TOOL_CALL,
                 tool_name="write_file",
                 tool_input={"file_path": "hello.txt", "content": "Hello World"},
+                tool_call_id="call-1",
             ),
-            ApiStreamEvent(
-                type="tool_result",
+            AgenticMessage(
+                type=AgenticMessageType.TOOL_RESULT,
                 tool_name="write_file",
-                tool_result="File created successfully",
+                tool_output="File created successfully",
             ),
-            ApiStreamEvent(
-                type="result",
-                result_text="I created hello.txt with the content 'Hello World'",
+            AgenticMessage(
+                type=AgenticMessageType.RESULT,
+                content="I created hello.txt with the content 'Hello World'",
                 session_id="session-123",
             ),
         ]
 
         async def mock_execute_agentic(*_args: Any, **_kwargs: Any) -> Any:
-            """Mock async generator that yields stream events."""
-            for event in mock_events:
-                yield event
+            """Mock async generator that yields AgenticMessage objects."""
+            for msg in mock_messages:
+                yield msg
 
         with patch.object(ApiDriver, "execute_agentic", mock_execute_agentic):
             result = await call_developer_node(state, cast(RunnableConfig, config))
 
         assert len(result["tool_calls"]) >= 1
         assert result["tool_calls"][0].tool_name == "write_file"
-        assert result["status"] == "completed"
+        assert result["agentic_status"] == "completed"
         assert "hello.txt" in result["final_response"]
 
     async def test_developer_node_requires_goal(self, tmp_path: Path) -> None:
@@ -173,13 +171,13 @@ class TestDeveloperNodeIntegration:
 
 @pytest.mark.integration
 class TestReviewerNodeIntegration:
-    """Test reviewer node with real Reviewer, mock at pydantic-ai Agent level."""
+    """Test reviewer node with real Reviewer, mock at driver.generate() level."""
 
     async def test_reviewer_node_returns_review_result(self, tmp_path: Path) -> None:
         """Reviewer node should return ReviewResult from driver.
 
         Real components: DriverFactory, ApiDriver, Reviewer
-        Mock boundary: pydantic_ai.Agent.run (HTTP/LLM call)
+        Mock boundary: ApiDriver.generate (LLM call)
         """
         profile = make_profile(working_dir=str(tmp_path))
         state = make_execution_state(
@@ -189,19 +187,16 @@ class TestReviewerNodeIntegration:
         )
         config = make_config(thread_id="test-wf-4", profile=profile)
 
-        # Mock LLM response at pydantic-ai level
+        # Mock response at driver.generate level
         mock_llm_response = ReviewResponse(
             approved=True,
             comments=["LGTM! Good use of standard logging module."],
             severity="low",
         )
 
-        # pydantic-ai returns the schema instance directly in result.output
-        mock_result = MagicMock()
-        mock_result.output = mock_llm_response  # Return instance, not dict
-
-        with patch("pydantic_ai.Agent.run", new_callable=AsyncMock) as mock_agent_run:
-            mock_agent_run.return_value = mock_result
+        # driver.generate returns (output, session_id) tuple
+        with patch.object(ApiDriver, "generate", new_callable=AsyncMock) as mock_generate:
+            mock_generate.return_value = (mock_llm_response, "session-123")
 
             result = await call_reviewer_node(state, cast(RunnableConfig, config))
 
@@ -213,7 +208,7 @@ class TestReviewerNodeIntegration:
         """Reviewer node should return rejection with feedback.
 
         Real components: DriverFactory, ApiDriver, Reviewer
-        Mock boundary: pydantic_ai.Agent.run (HTTP/LLM call)
+        Mock boundary: ApiDriver.generate (LLM call)
         """
         profile = make_profile(working_dir=str(tmp_path))
         state = make_execution_state(
@@ -223,19 +218,16 @@ class TestReviewerNodeIntegration:
         )
         config = make_config(thread_id="test-wf-5", profile=profile)
 
-        # Mock LLM rejection response
+        # Mock rejection response at driver.generate level
         mock_llm_response = ReviewResponse(
             approved=False,
             comments=["Critical: Hardcoded password found. Use environment variables or secure vault."],
             severity="critical",
         )
 
-        # pydantic-ai returns the schema instance directly in result.output
-        mock_result = MagicMock()
-        mock_result.output = mock_llm_response  # Return instance, not dict
-
-        with patch("pydantic_ai.Agent.run", new_callable=AsyncMock) as mock_agent_run:
-            mock_agent_run.return_value = mock_result
+        # driver.generate returns (output, session_id) tuple
+        with patch.object(ApiDriver, "generate", new_callable=AsyncMock) as mock_generate:
+            mock_generate.return_value = (mock_llm_response, "session-456")
 
             result = await call_reviewer_node(state, cast(RunnableConfig, config))
 

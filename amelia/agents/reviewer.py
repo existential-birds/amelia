@@ -14,17 +14,45 @@ from amelia.core.types import Profile, StreamEmitter, StreamEvent, StreamEventTy
 from amelia.drivers.base import DriverInterface
 
 
+# Valid severity values from the Severity literal type
+VALID_SEVERITIES: set[Severity] = {"low", "medium", "high", "critical"}
+
+
+def normalize_severity(value: str | None, default: Severity = "medium") -> Severity:
+    """Normalize a severity value to a valid Severity literal.
+
+    LLMs may return invalid severity values like "none" or other hallucinated
+    values. This function ensures we always get a valid Severity.
+
+    Args:
+        value: The severity value to normalize.
+        default: The default severity to use if value is invalid.
+
+    Returns:
+        A valid Severity literal.
+
+    """
+    if value in VALID_SEVERITIES:
+        return value  # type: ignore[return-value]
+    return default
+
+
 class ReviewItem(BaseModel):
     """Single review item with full context.
 
     Follows beagle review skill format: [FILE:LINE] TITLE
+
+    Note on Severity:
+        Uses 'critical/major/minor' to match the beagle review skill format for
+        individual items. This differs from ReviewResult.severity which uses
+        'low/medium/high/critical' (Severity enum) for orchestrator integration.
 
     Attributes:
         number: Sequential issue number.
         title: Brief issue title.
         file_path: Path to the file containing the issue.
         line: Line number where the issue occurs.
-        severity: Issue severity level.
+        severity: Issue severity level (critical/major/minor).
         issue: Description of what's wrong.
         why: Explanation of why it matters.
         fix: Recommended fix.
@@ -79,6 +107,14 @@ class ReviewResponse(BaseModel):
 
 class Reviewer:
     """Agent responsible for reviewing code changes against requirements.
+
+    Review Methods:
+        review(): Entry point - dispatches to single or competitive based on profile.strategy.
+        _single_review(): Single reviewer with specified persona. Returns ReviewResult.
+        _competitive_review(): Multiple reviewers in parallel with aggregated verdict.
+        structured_review(): Detailed beagle format with file:line references. Returns StructuredReviewResult.
+        agentic_review(): Auto-detects technologies, loads review skills, fetches diff via git.
+            Best for large diffs that exceed CLI argument limits.
 
     Attributes:
         driver: LLM driver interface for generating reviews.
@@ -143,6 +179,8 @@ Be specific with file paths and line numbers. Provide actionable feedback."""
 - Only flag real issues - check linters first before flagging style issues
 - Approved means the code is ready to merge as-is"""
 
+    DEFAULT_PERSONAS: list[str] = ["Security", "Performance", "Usability"]
+
     def __init__(
         self,
         driver: DriverInterface,
@@ -164,29 +202,118 @@ Be specific with file paths and line numbers. Provide actionable feedback."""
 
     @property
     def template_prompt(self) -> str:
-        """Get the template prompt for single review.
-
-        Returns custom prompt if injected, otherwise class default.
-        Template should contain {persona} placeholder.
-        """
         return self._prompts.get("reviewer.template", self.SYSTEM_PROMPT_TEMPLATE)
 
     @property
     def structured_prompt(self) -> str:
-        """Get the system prompt for structured review.
-
-        Returns custom prompt if injected, otherwise class default.
-        """
         return self._prompts.get("reviewer.structured", self.STRUCTURED_SYSTEM_PROMPT)
 
     @property
     def agentic_prompt(self) -> str:
-        """Get the system prompt for agentic review.
-
-        Returns custom prompt if injected, otherwise class default.
-        Template should contain {base_commit} placeholder.
-        """
         return self._prompts.get("reviewer.agentic", self.AGENTIC_REVIEW_PROMPT)
+
+    def _extract_task_context(self, state: ExecutionState) -> str | None:
+        """Extract task context from execution state.
+
+        Prioritizes goal over issue for context extraction.
+
+        Args:
+            state: Current execution state containing goal or issue context.
+
+        Returns:
+            Formatted task context string, or None if no context found.
+
+        """
+        if state.goal:
+            return f"**Task Goal:**\n\n{state.goal}"
+
+        if state.issue:
+            issue_parts = []
+            if state.issue.title:
+                issue_parts.append(f"**{state.issue.title}**")
+            if state.issue.description:
+                issue_parts.append(state.issue.description)
+            if issue_parts:
+                return "\n\n".join(issue_parts)
+
+        return None
+
+    async def _handle_empty_changes(
+        self,
+        workflow_id: str,
+        method: str,
+        persona: str | None = None,
+    ) -> None:
+        """Log and emit event for empty code changes.
+
+        Args:
+            workflow_id: Workflow ID for stream events.
+            method: The review method name for logging context.
+            persona: Optional persona name (for single review).
+
+        """
+        log_kwargs: dict[str, str] = {
+            "agent": "reviewer",
+            "workflow_id": workflow_id,
+        }
+        if persona:
+            log_kwargs["persona"] = persona
+        else:
+            log_kwargs["method"] = method
+
+        logger.warning("No code changes to review, auto-approving", **log_kwargs)
+
+        if self._stream_emitter is not None:
+            event = StreamEvent(
+                type=StreamEventType.AGENT_OUTPUT,
+                content="No code changes to review - auto-approved",
+                timestamp=datetime.now(UTC),
+                agent="reviewer",
+                workflow_id=workflow_id,
+            )
+            await self._stream_emitter(event)
+
+    async def _emit_review_completion(
+        self,
+        workflow_id: str,
+        approved: bool,
+        severity: Severity,
+        comments: list[str],
+        *,
+        use_emoji: bool = True,
+    ) -> None:
+        """Emit stream event for review completion.
+
+        Args:
+            workflow_id: Workflow ID for stream events.
+            approved: Whether the review approved the changes.
+            severity: The severity level of the review findings.
+            comments: List of review comments.
+            use_emoji: Whether to include emoji in status display.
+
+        """
+        if self._stream_emitter is None:
+            return
+
+        if use_emoji:
+            status = "✅ Approved" if approved else "⚠️ Changes requested"
+        else:
+            status = "Approved" if approved else "Changes requested"
+
+        content_parts = [f"**Review completed:** {status} (severity: {severity})"]
+        if comments:
+            content_parts.append("\n**Comments:**")
+            for comment in comments:
+                content_parts.append(f"- {comment}")
+
+        event = StreamEvent(
+            type=StreamEventType.AGENT_OUTPUT,
+            content="\n".join(content_parts),
+            timestamp=datetime.now(UTC),
+            agent="reviewer",
+            workflow_id=workflow_id,
+        )
+        await self._stream_emitter(event)
 
     def _build_prompt(
         self,
@@ -213,17 +340,11 @@ Be specific with file paths and line numbers. Provide actionable feedback."""
         parts: list[str] = []
 
         # Get context for what was supposed to be done
-        # Priority: goal > issue
-        if state.goal:
-            parts.append(f"## Task\n\n**Task Goal:**\n\n{state.goal}")
-        elif state.issue:
-            issue_parts = []
-            if state.issue.title:
-                issue_parts.append(f"**{state.issue.title}**")
-            if state.issue.description:
-                issue_parts.append(state.issue.description)
-            if issue_parts:
-                parts.append("## Issue\n\n" + "\n\n".join(issue_parts))
+        task_context = self._extract_task_context(state)
+        if task_context:
+            # Determine header based on source (goal vs issue)
+            header = "## Task" if state.goal else "## Issue"
+            parts.append(f"{header}\n\n{task_context}")
 
         if not parts:
             raise ValueError("No task or issue context found for review")
@@ -265,7 +386,8 @@ Be specific with file paths and line numbers. Provide actionable feedback."""
         """
         if profile.strategy == "competitive":
             return await self._competitive_review(state, code_changes, profile, workflow_id=workflow_id)
-        else: # Default to single review
+        else:
+            # Default to single review
             return await self._single_review(state, code_changes, profile, persona="General", workflow_id=workflow_id)
 
     async def _single_review(
@@ -292,22 +414,7 @@ Be specific with file paths and line numbers. Provide actionable feedback."""
         """
         # Handle empty code changes - warn and auto-approve
         if not code_changes or not code_changes.strip():
-            logger.warning(
-                "No code changes to review, auto-approving",
-                agent="reviewer",
-                persona=persona,
-                workflow_id=workflow_id,
-            )
-            if self._stream_emitter is not None:
-                event = StreamEvent(
-                    type=StreamEventType.AGENT_OUTPUT,
-                    content="No code changes to review - auto-approved",
-                    timestamp=datetime.now(UTC),
-                    agent="reviewer",
-                    workflow_id=workflow_id,
-                )
-                await self._stream_emitter(event)
-
+            await self._handle_empty_changes(workflow_id, "_single_review", persona=persona)
             result = ReviewResult(
                 reviewer_persona=persona,
                 approved=True,
@@ -337,21 +444,12 @@ Be specific with file paths and line numbers. Provide actionable feedback."""
         )
 
         # Emit completion event before return
-        if self._stream_emitter is not None:
-            status = "✅ Approved" if response.approved else "⚠️ Changes requested"
-            content_parts = [f"**Review completed:** {status} (severity: {response.severity})"]
-            if response.comments:
-                content_parts.append("\n**Comments:**")
-                for comment in response.comments:
-                    content_parts.append(f"- {comment}")
-            event = StreamEvent(
-                type=StreamEventType.AGENT_OUTPUT,
-                content="\n".join(content_parts),
-                timestamp=datetime.now(UTC),
-                agent="reviewer",
-                workflow_id=workflow_id,
-            )
-            await self._stream_emitter(event)
+        await self._emit_review_completion(
+            workflow_id,
+            response.approved,
+            response.severity,
+            response.comments,
+        )
 
         result = ReviewResult(
             reviewer_persona=persona,
@@ -383,7 +481,7 @@ Be specific with file paths and line numbers. Provide actionable feedback."""
             parallel sessions are used and returning any single one would be misleading.
 
         """
-        personas = ["Security", "Performance", "Usability"] # Example personas
+        personas = self.DEFAULT_PERSONAS
 
         # Run reviews in parallel
         review_tasks = [self._single_review(state, code_changes, profile, persona, workflow_id=workflow_id) for persona in personas]
@@ -438,22 +536,7 @@ Be specific with file paths and line numbers. Provide actionable feedback."""
         """
         # Handle empty code changes - return approved result with no items
         if not code_changes or not code_changes.strip():
-            logger.warning(
-                "No code changes to review, auto-approving",
-                agent="reviewer",
-                method="structured_review",
-                workflow_id=workflow_id,
-            )
-            if self._stream_emitter is not None:
-                event = StreamEvent(
-                    type=StreamEventType.AGENT_OUTPUT,
-                    content="No code changes to review - auto-approved",
-                    timestamp=datetime.now(UTC),
-                    agent="reviewer",
-                    workflow_id=workflow_id,
-                )
-                await self._stream_emitter(event)
-
+            await self._handle_empty_changes(workflow_id, "structured_review")
             result = StructuredReviewResult(
                 summary="No code changes to review.",
                 items=[],
@@ -542,6 +625,9 @@ Be specific with file paths and line numbers. Provide actionable feedback."""
         This approach avoids passing large diffs via command line arguments,
         which can fail with "Argument list too long" errors.
 
+        Uses the unified AgenticMessage stream from the driver, independent
+        of the specific driver implementation (CLI or API).
+
         Args:
             state: Current execution state containing issue context.
             base_commit: Git commit hash to diff against.
@@ -552,47 +638,10 @@ Be specific with file paths and line numbers. Provide actionable feedback."""
             Tuple of (ReviewResult, session_id from driver).
 
         """
-        from amelia.drivers.cli.claude import ClaudeCliDriver  # noqa: PLC0415
+        from amelia.drivers.base import AgenticMessageType  # noqa: PLC0415
 
-        # Agentic review requires CLI driver
-        if not isinstance(self.driver, ClaudeCliDriver):
-            # Fallback to traditional review for non-CLI drivers
-            logger.warning(
-                "Agentic review requires CLI driver, falling back to git diff",
-                agent="reviewer",
-                driver_type=type(self.driver).__name__,
-            )
-            # Get diff the traditional way and use _single_review
-            proc = await asyncio.create_subprocess_exec(
-                "git", "diff", base_commit,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                cwd=profile.working_dir,
-            )
-            stdout, stderr = await proc.communicate()
-            if proc.returncode != 0:
-                logger.debug(
-                    "git diff failed",
-                    agent="reviewer",
-                    stderr=stderr.decode(),
-                    returncode=proc.returncode,
-                )
-            code_changes = stdout.decode() if proc.returncode == 0 else ""
-            return await self._single_review(
-                state, code_changes, profile, persona="General", workflow_id=workflow_id
-            )
-
-        # Build the task prompt
-        task_parts = []
-        if state.goal:
-            task_parts.append(f"**Task Goal:**\n{state.goal}")
-        elif state.issue:
-            if state.issue.title:
-                task_parts.append(f"**Issue:** {state.issue.title}")
-            if state.issue.description:
-                task_parts.append(state.issue.description)
-
-        task_context = "\n\n".join(task_parts) if task_parts else "Review the code changes."
+        # Build the task prompt using shared helper
+        task_context = self._extract_task_context(state) or "Review the code changes."
 
         prompt = f"""Review the code changes for this task:
 
@@ -603,10 +652,17 @@ The changes are in git - diff against commit: {base_commit}"""
         # Build system prompt with base_commit
         system_prompt = self.agentic_prompt.format(base_commit=base_commit)
 
+        if profile.working_dir is None:
+            logger.warning(
+                "profile.working_dir is None, falling back to current directory",
+                agent="reviewer",
+                workflow_id=workflow_id,
+            )
         cwd = profile.working_dir or "."
         session_id = state.driver_session_id
         new_session_id: str | None = None
         final_result: str | None = None
+        has_error: bool = False
 
         logger.info(
             "Starting agentic review",
@@ -615,76 +671,51 @@ The changes are in git - diff against commit: {base_commit}"""
             workflow_id=workflow_id,
         )
 
-        # Import message types
-        from claude_agent_sdk.types import (  # noqa: PLC0415
-            AssistantMessage,
-            ResultMessage,
-            TextBlock,
-            ToolUseBlock,
-        )
-
-        # Execute agentic review
-        async for message in self.driver.execute_agentic(
+        # Execute agentic review using unified AgenticMessage stream
+        async for msg in self.driver.execute_agentic(
             prompt=prompt,
             cwd=cwd,
             session_id=session_id,
             instructions=system_prompt,
         ):
-            # Emit stream events for visibility
-            if self._stream_emitter is not None and isinstance(message, AssistantMessage):
-                for block in message.content:
-                    if isinstance(block, TextBlock):
-                        event = StreamEvent(
-                            type=StreamEventType.CLAUDE_THINKING,
-                            content=block.text,
-                            timestamp=datetime.now(UTC),
-                            agent="reviewer",
-                            workflow_id=workflow_id,
-                        )
-                        await self._stream_emitter(event)
-                    elif isinstance(block, ToolUseBlock):
-                        event = StreamEvent(
-                            type=StreamEventType.CLAUDE_TOOL_CALL,
-                            content=None,
-                            timestamp=datetime.now(UTC),
-                            agent="reviewer",
-                            workflow_id=workflow_id,
-                            tool_name=block.name,
-                            tool_input=block.input if isinstance(block.input, dict) else None,
-                        )
-                        await self._stream_emitter(event)
+            # Emit stream events for visibility using to_stream_event()
+            if self._stream_emitter is not None and msg.type != AgenticMessageType.RESULT:
+                event = msg.to_stream_event(agent="reviewer", workflow_id=workflow_id)
+                await self._stream_emitter(event)
 
-            # Capture final result
-            if isinstance(message, ResultMessage):
-                new_session_id = message.session_id
-                final_result = message.result
-                if message.is_error:
+            # Capture final result from RESULT message
+            if msg.type == AgenticMessageType.RESULT:
+                new_session_id = msg.session_id
+                final_result = msg.content
+                has_error = msg.is_error
+                if msg.is_error:
                     logger.error(
                         "Agentic review failed",
                         agent="reviewer",
-                        error=message.result,
+                        error=msg.content,
                         workflow_id=workflow_id,
                     )
 
         # Parse the result to extract review
         result = self._parse_review_result(final_result, workflow_id)
 
-        # Emit completion event
-        if self._stream_emitter is not None:
-            status = "✅ Approved" if result.approved else "⚠️ Changes requested"
-            content_parts = [f"**Review completed:** {status} (severity: {result.severity})"]
-            if result.comments:
-                content_parts.append("\n**Comments:**")
-                for comment in result.comments:
-                    content_parts.append(f"- {comment}")
-            event = StreamEvent(
-                type=StreamEventType.AGENT_OUTPUT,
-                content="\n".join(content_parts),
-                timestamp=datetime.now(UTC),
-                agent="reviewer",
-                workflow_id=workflow_id,
+        # If there was an error, ensure result is not approved
+        if has_error and result.approved:
+            result = ReviewResult(
+                reviewer_persona=result.reviewer_persona,
+                approved=False,
+                comments=result.comments,
+                severity="high" if result.severity in ("low", "medium") else result.severity,
             )
-            await self._stream_emitter(event)
+
+        # Emit completion event
+        await self._emit_review_completion(
+            workflow_id,
+            result.approved,
+            result.severity,
+            result.comments,
+            use_emoji=False,
+        )
 
         logger.info(
             "Agentic review completed",
@@ -734,7 +765,7 @@ The changes are in git - diff against commit: {base_commit}"""
                     reviewer_persona="Agentic",
                     approved=data.get("approved", False),
                     comments=data.get("comments", []),
-                    severity=data.get("severity", "medium"),
+                    severity=normalize_severity(data.get("severity")),
                 )
             except (json.JSONDecodeError, ValidationError) as e:
                 logger.warning(
@@ -744,19 +775,23 @@ The changes are in git - diff against commit: {base_commit}"""
                     workflow_id=workflow_id,
                 )
 
-        # Try to find raw JSON object
-        json_match = re.search(r'\{[^{}]*"approved"[^{}]*\}', output, re.DOTALL)
-        if json_match:
-            try:
-                data = json.loads(json_match.group(0))
-                return ReviewResult(
-                    reviewer_persona="Agentic",
-                    approved=data.get("approved", False),
-                    comments=data.get("comments", []),
-                    severity=data.get("severity", "medium"),
-                )
-            except (json.JSONDecodeError, ValidationError):
-                pass
+        # Try to find raw JSON object by attempting to parse from each { position
+        # This handles nested structures like arrays in the comments field
+        for i, char in enumerate(output):
+            if char == "{":
+                for j in range(len(output), i, -1):
+                    if output[j - 1] == "}":
+                        try:
+                            data = json.loads(output[i:j])
+                            if "approved" in data:
+                                return ReviewResult(
+                                    reviewer_persona="Agentic",
+                                    approved=data.get("approved", False),
+                                    comments=data.get("comments", []),
+                                    severity=normalize_severity(data.get("severity")),
+                                )
+                        except json.JSONDecodeError:
+                            continue
 
         # Fallback: analyze text for approval keywords
         output_lower = output.lower()

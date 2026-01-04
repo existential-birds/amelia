@@ -5,7 +5,6 @@ providing both single-turn generation and agentic execution capabilities.
 """
 import json
 from collections.abc import AsyncIterator
-from datetime import UTC, datetime
 from typing import Any, Literal
 
 from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient, query
@@ -21,8 +20,7 @@ from claude_agent_sdk.types import (
 from loguru import logger
 from pydantic import BaseModel, ValidationError
 
-from amelia.core.types import StreamEvent, StreamEventType
-from amelia.drivers.base import GenerateResult
+from amelia.drivers.base import AgenticMessage, AgenticMessageType, GenerateResult
 from amelia.logging import log_claude_result
 
 
@@ -105,73 +103,6 @@ def _is_clarification_request(text: str) -> bool:
     return text.count("?") >= 2
 
 
-def convert_to_stream_event(
-    message: Message,
-    agent: str,
-    workflow_id: str,
-) -> StreamEvent | None:
-    """Convert SDK Message to unified StreamEvent format.
-
-    Maps SDK message types to the unified StreamEvent types used throughout Amelia.
-
-    Args:
-        message: Message from claude-agent-sdk.
-        agent: Agent name (e.g., "developer", "architect", "reviewer").
-        workflow_id: Current workflow identifier.
-
-    Returns:
-        Converted StreamEvent with mapped type, or None for unsupported message types.
-    """
-    if isinstance(message, AssistantMessage):
-        # Extract text content from the message
-        text_content = None
-        tool_name = None
-        tool_input = None
-
-        for block in message.content:
-            if isinstance(block, TextBlock):
-                text_content = block.text
-                return StreamEvent(
-                    type=StreamEventType.CLAUDE_THINKING,
-                    content=text_content,
-                    timestamp=datetime.now(UTC),
-                    agent=agent,
-                    workflow_id=workflow_id,
-                )
-            elif isinstance(block, ToolUseBlock):
-                tool_name = block.name
-                tool_input = block.input
-                return StreamEvent(
-                    type=StreamEventType.CLAUDE_TOOL_CALL,
-                    content=None,
-                    timestamp=datetime.now(UTC),
-                    agent=agent,
-                    workflow_id=workflow_id,
-                    tool_name=tool_name,
-                    tool_input=tool_input,
-                )
-            elif isinstance(block, ToolResultBlock):
-                content = block.content if isinstance(block.content, str) else str(block.content)
-                return StreamEvent(
-                    type=StreamEventType.CLAUDE_TOOL_RESULT,
-                    content=content,
-                    timestamp=datetime.now(UTC),
-                    agent=agent,
-                    workflow_id=workflow_id,
-                )
-
-    elif isinstance(message, ResultMessage):
-        return StreamEvent(
-            type=StreamEventType.CLAUDE_TOOL_RESULT,
-            content=message.result,
-            timestamp=datetime.now(UTC),
-            agent=agent,
-            workflow_id=workflow_id,
-        )
-
-    return None
-
-
 def _log_sdk_message(message: Message | SDKStreamEvent) -> None:
     """Log SDK message using the existing log_claude_result function.
 
@@ -239,8 +170,6 @@ class ClaudeCliDriver:
     def __init__(
         self,
         model: str = "sonnet",
-        timeout: int = 30,
-        max_retries: int = 0,
         skip_permissions: bool = False,
         allowed_tools: list[str] | None = None,
         disallowed_tools: list[str] | None = None,
@@ -249,17 +178,11 @@ class ClaudeCliDriver:
 
         Args:
             model: Claude model to use. Defaults to "sonnet".
-            timeout: Maximum execution time in seconds. Defaults to 30.
-                Note: Currently not enforced by SDK, kept for interface compatibility.
-            max_retries: Number of retry attempts. Defaults to 0.
-                Note: Currently not enforced by SDK, kept for interface compatibility.
             skip_permissions: Skip permission prompts. Defaults to False.
             allowed_tools: List of allowed tool names. Defaults to None.
             disallowed_tools: List of disallowed tool names. Defaults to None.
         """
         self.model = model
-        self.timeout = timeout
-        self.max_retries = max_retries
         self.skip_permissions = skip_permissions
         self.allowed_tools = allowed_tools or []
         self.disallowed_tools = disallowed_tools or []
@@ -434,7 +357,7 @@ class ClaudeCliDriver:
         session_id: str | None = None,
         instructions: str | None = None,
         schema: type[BaseModel] | None = None,
-    ) -> AsyncIterator[Message]:
+    ) -> AsyncIterator[AgenticMessage]:
         """Execute prompt with full autonomous tool access using ClaudeSDKClient.
 
         Uses the claude-agent-sdk ClaudeSDKClient for agentic execution, which
@@ -449,7 +372,7 @@ class ClaudeCliDriver:
                 the agent's final response will be constrained to match this schema.
 
         Yields:
-            claude_agent_sdk.types.Message objects including tool executions.
+            AgenticMessage for each event (thinking, tool_call, tool_result, result).
         """
         options = self._build_options(
             cwd=cwd,
@@ -460,6 +383,8 @@ class ClaudeCliDriver:
         )
 
         logger.info(f"Starting agentic execution in {cwd}")
+
+        last_tool_name: str | None = None  # Track for tool_result messages
 
         try:
             async with ClaudeSDKClient(options=options) as client:
@@ -472,22 +397,45 @@ class ClaudeCliDriver:
                     if isinstance(message, SDKStreamEvent):
                         continue
 
-                    # Track tool calls in history
                     if isinstance(message, AssistantMessage):
                         for block in message.content:
-                            if isinstance(block, ToolUseBlock):
+                            if isinstance(block, TextBlock):
+                                yield AgenticMessage(
+                                    type=AgenticMessageType.THINKING,
+                                    content=block.text,
+                                )
+                            elif isinstance(block, ToolUseBlock):
+                                # Track tool calls in history
                                 self.tool_call_history.append(block)
+                                last_tool_name = block.name
+                                yield AgenticMessage(
+                                    type=AgenticMessageType.TOOL_CALL,
+                                    tool_name=block.name,
+                                    tool_input=block.input,
+                                    tool_call_id=block.id,
+                                )
+                            elif isinstance(block, ToolResultBlock):
+                                content = block.content if isinstance(block.content, str) else str(block.content)
+                                yield AgenticMessage(
+                                    type=AgenticMessageType.TOOL_RESULT,
+                                    tool_name=last_tool_name,
+                                    tool_output=content,
+                                    is_error=block.is_error or False,
+                                )
 
-                    # Store ResultMessage for token usage extraction
-                    if isinstance(message, ResultMessage):
+                    elif isinstance(message, ResultMessage):
+                        # Store ResultMessage for token usage extraction
                         self.last_result_message = message
-
-                    yield message
+                        yield AgenticMessage(
+                            type=AgenticMessageType.RESULT,
+                            content=message.result,
+                            session_id=message.session_id,
+                            is_error=message.is_error,
+                        )
 
         except Exception as e:
             logger.error(f"Error in agentic execution: {e}")
             raise
 
     def clear_tool_history(self) -> None:
-        """Clear the tool call history."""
         self.tool_call_history = []
