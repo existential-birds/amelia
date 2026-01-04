@@ -11,7 +11,6 @@ import pytest
 from langchain_core.runnables.config import RunnableConfig
 from langgraph.checkpoint.memory import MemorySaver
 
-from amelia.agents.architect import MarkdownPlanOutput
 from amelia.agents.reviewer import ReviewResponse
 from amelia.core.orchestrator import (
     call_architect_node,
@@ -23,6 +22,7 @@ from amelia.core.orchestrator import (
 )
 from amelia.core.state import ExecutionState, ReviewResult
 from amelia.drivers.api import ApiDriver
+from amelia.drivers.base import AgenticMessage, AgenticMessageType
 from tests.integration.conftest import make_config, make_execution_state, make_issue, make_profile
 
 
@@ -64,7 +64,7 @@ class TestArchitectNodeIntegration:
         """Architect node should populate goal and plan_markdown.
 
         Real components: DriverFactory, ApiDriver, Architect
-        Mock boundary: ApiDriver.generate (LLM call)
+        Mock boundary: ApiDriver.execute_agentic (LLM call)
         """
         plans_dir = tmp_path / "plans"
         plans_dir.mkdir(parents=True, exist_ok=True)
@@ -77,17 +77,27 @@ class TestArchitectNodeIntegration:
         state = make_execution_state(issue=issue, profile=profile)
         config = make_config(thread_id="test-wf-1", profile=profile)
 
-        # Mock at driver.generate level - this is the HTTP boundary
-        mock_llm_response = MarkdownPlanOutput(
-            goal="Implement feature X by modifying component Y",
-            plan_markdown="# Plan\n\n1. Do thing A\n2. Do thing B",
-            key_files=["src/component.py"],
-        )
+        # Mock at driver.execute_agentic level - this is the HTTP boundary
+        # The architect now uses agentic execution and yields AgenticMessage events
+        plan_markdown = "# Plan\n\n**Goal:** Implement feature X by modifying component Y\n\n1. Do thing A\n2. Do thing B"
+        mock_messages = [
+            AgenticMessage(
+                type=AgenticMessageType.THINKING,
+                content="Analyzing the issue...",
+            ),
+            AgenticMessage(
+                type=AgenticMessageType.RESULT,
+                content=plan_markdown,
+                session_id="session-123",
+            ),
+        ]
 
-        # driver.generate returns (output, session_id) tuple
-        with patch.object(ApiDriver, "generate", new_callable=AsyncMock) as mock_generate:
-            mock_generate.return_value = (mock_llm_response, "session-123")
+        async def mock_execute_agentic(*_args: Any, **_kwargs: Any) -> Any:
+            """Mock async generator that yields AgenticMessage objects."""
+            for msg in mock_messages:
+                yield msg
 
+        with patch.object(ApiDriver, "execute_agentic", mock_execute_agentic):
             result = await call_architect_node(state, cast(RunnableConfig, config))
 
         assert result["goal"] == "Implement feature X by modifying component Y"

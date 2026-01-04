@@ -7,7 +7,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from amelia.agents.architect import Architect, PlanOutput
+from amelia.agents.architect import Architect
 from amelia.client.api import (
     AmeliaClient,
     InvalidRequestError,
@@ -18,6 +18,7 @@ from amelia.client.api import (
 from amelia.client.git import get_worktree_context
 from amelia.client.models import CreateWorkflowResponse, WorkflowSummary
 from amelia.config import load_settings
+from amelia.core.orchestrator import _extract_goal_from_markdown
 from amelia.core.state import ExecutionState
 from amelia.drivers.factory import DriverFactory
 from amelia.trackers.factory import create_tracker
@@ -373,7 +374,7 @@ def plan_command(
     """
     worktree_path, _worktree_name = _get_worktree_context()
 
-    async def _generate_plan() -> PlanOutput:
+    async def _generate_plan() -> ExecutionState:
         # Load settings from worktree
         settings_path = Path(worktree_path) / "settings.amelia.yaml"
         settings = load_settings(settings_path)
@@ -401,22 +402,28 @@ def plan_command(
         driver = DriverFactory.get_driver(profile.driver, model=profile.model)
         architect = Architect(driver)
 
-        # Generate plan directly
-        return await architect.plan(
+        # Generate plan by consuming the async generator
+        final_state = state
+        async for new_state, _event in architect.plan(
             state=state,
             profile=profile,
             workflow_id=f"plan-{issue_id}",
-        )
+        ):
+            final_state = new_state
+
+        return final_state
 
     try:
         console.print(f"[dim]Generating plan for {issue_id}...[/dim]")
-        plan_output = asyncio.run(_generate_plan())
+        final_state = asyncio.run(_generate_plan())
+
+        # Extract goal from raw_architect_output (reusing orchestrator helper)
+        goal = _extract_goal_from_markdown(final_state.raw_architect_output)
 
         console.print("\n[green]✓[/green] Plan generated successfully!")
-        console.print(f"  Goal: {plan_output.goal}")
-        console.print(f"  Saved to: [bold]{plan_output.markdown_path}[/bold]")
-        if plan_output.key_files:
-            console.print(f"  Key files: {', '.join(plan_output.key_files[:5])}")
+        if goal:
+            console.print(f"  Goal: {goal}")
+        console.print(f"  Saved to: [bold]{final_state.plan_path}[/bold]")
 
     except ValueError as e:
         console.print(f"[red]Error:[/red] {e}")

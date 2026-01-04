@@ -3,38 +3,17 @@
 This module provides the Architect agent that analyzes issues and produces
 rich markdown implementation plans for agentic execution.
 """
-import os
-import re
-from datetime import UTC, date, datetime
+from collections.abc import AsyncIterator
+from datetime import UTC, datetime
 from pathlib import Path
 
 from loguru import logger
 from pydantic import BaseModel, ConfigDict
 
+from amelia.core.agentic_state import ToolCall, ToolResult
 from amelia.core.state import ExecutionState
-from amelia.core.types import Design, Issue, Profile, StreamEmitter, StreamEvent, StreamEventType
-from amelia.drivers.base import DriverInterface
-
-
-def _slugify(text: str) -> str:
-    """Convert text to filesystem-safe slug.
-
-    Args:
-        text: Input text to convert to slug format.
-
-    Returns:
-        Lowercase, hyphenated string with special chars removed, truncated to 50 characters.
-
-    """
-    # Replace spaces and underscores with hyphens
-    slug = text.lower().replace(" ", "-").replace("_", "-")
-    # Remove filesystem-unsafe characters: / \ : * ? " < > |
-    slug = re.sub(r'[/\\:*?"<>|]', "", slug)
-    # Collapse multiple hyphens
-    slug = re.sub(r"-+", "-", slug)
-    # Strip leading/trailing hyphens
-    slug = slug.strip("-")
-    return slug[:50]
+from amelia.core.types import Design, Profile, StreamEmitter, StreamEvent, StreamEventType
+from amelia.drivers.base import AgenticMessageType, DriverInterface
 
 
 class PlanOutput(BaseModel):
@@ -110,55 +89,63 @@ Your role is to analyze issues and produce detailed markdown implementation plan
 
     SYSTEM_PROMPT_PLAN = """You are a senior software architect creating implementation plans.
 
-Generate implementation plans in markdown format that follow this structure:
+## Your Role
+Create implementation plans optimized for Claude Code execution. The executor:
+- Has full codebase access and can read any file
+- Generates code dynamically from understanding
+- Doesn't copy-paste from plans
 
-# [Title] Implementation Plan
+You have read-only access to explore the codebase before planning.
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+## Exploration Goals
+Before planning, discover:
+- Existing patterns for similar features
+- File structure and naming conventions
+- Test patterns and coverage approach
+- Dependencies and integration points
 
-**Goal:** [Clear description of what needs to be accomplished]
+## Plan Structure
 
-**Success Criteria:** [How we know when the task is complete]
+# [Feature] Implementation Plan
 
----
+**Goal:** [One sentence]
+**Architecture:** [2-3 sentences on approach]
+**Key Files:** [Files to create/modify with brief description]
 
-## Phase 1: [Phase Name]
+### Task N: [Component Name]
 
-### Task 1.1: [Task Name]
+**Files:**
+- Create: `exact/path/to/file.py`
+- Modify: `exact/path/to/existing.py` (the `function_name` function)
+- Test: `tests/path/to/test.py`
 
-**Step 1: [Step description]**
+**Intent:** [What this accomplishes]
 
-```[language]
-[code block if applicable]
-```
+**Approach:**
+- Follow pattern in `src/similar/feature.py:45-60`
+- Interface: `async def function(arg: Type) -> ReturnType`
+- Must handle: [edge cases]
+- Must NOT: [constraints]
 
-**Run:** `[command to run]`
+**Test Criteria:**
+- Verify [behavior]
 
-**Success criteria:** [How to verify this step worked]
+## What to Include
+- Intent and constraints (what to build, what to avoid)
+- File references: "Follow pattern in `file.py:L45-60`"
+- Interface signatures (types, function signatures)
+- Test criteria and edge cases
+- Task dependencies and ordering
 
-### Task 1.2: [Next Task]
-...
+## What NOT to Include
+- Full code implementations (executor generates these)
+- Duplicated file contents (use references)
+- Code examples the executor will regenerate anyway
 
----
-
-## Phase 2: [Next Phase]
-...
-
----
-
-## Summary
-
-[Brief summary of what was accomplished]
-
----
-
-Guidelines:
-- Each Phase groups related work with ## headers
-- Each Task is a discrete unit of work with ### headers
-- Each Step has code blocks, commands to run, and success criteria
-- Include TDD approach: write test first, run to verify it fails, implement, run to verify it passes
-- Be specific about file paths, commands, and expected outputs
-- Keep steps granular (2-5 minutes of work each)"""
+## Constraints
+- DO NOT modify any files - exploration only
+- DO NOT run tests, builds, or commands
+- Focus on understanding before planning"""
 
     def __init__(
         self,
@@ -198,8 +185,9 @@ Guidelines:
     def _build_prompt(self, state: ExecutionState, profile: Profile) -> str:
         """Build user prompt from execution state and profile.
 
-        Combines issue information, optional design context, and codebase
-        structure into a single prompt string.
+        Combines issue information and optional design context into a single
+        prompt string. Codebase structure is not included; the agent explores
+        via tools instead.
 
         Args:
             state: The current execution state.
@@ -230,11 +218,6 @@ Guidelines:
         if state.design:
             design_content = self._format_design_section(state.design)
             parts.append(f"## Design\n\n{design_content}")
-
-        # Codebase section (optional)
-        if profile.working_dir:
-            codebase_content = self._scan_codebase(profile.working_dir)
-            parts.append(f"## Codebase\n\n{codebase_content}")
 
         return "\n\n".join(parts)
 
@@ -279,91 +262,27 @@ Guidelines:
 
         return "\n\n".join(parts)
 
-    def _scan_codebase(self, working_dir: str, max_files: int = 500) -> str:
-        """Scan the codebase directory and return a file tree structure.
-
-        Args:
-            working_dir: Path to the working directory to scan.
-            max_files: Maximum number of files to include (default 500).
-
-        Returns:
-            Formatted string with file tree structure.
-
-        """
-        # Common directories and files to ignore
-        ignore_dirs = {
-            ".git", ".svn", ".hg",
-            "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache",
-            "node_modules", ".venv", "venv", "env",
-            "dist", "build", ".next", ".nuxt",
-            "coverage", ".coverage", "htmlcov",
-            ".idea", ".vscode",
-            "eggs", "*.egg-info",
-        }
-        ignore_files = {".DS_Store", "Thumbs.db", ".gitignore"}
-
-        files: list[str] = []
-        root_path = Path(working_dir)
-
-        try:
-            for dirpath, dirnames, filenames in os.walk(root_path):
-                # Filter out ignored directories (modifies dirnames in-place)
-                dirnames[:] = [d for d in dirnames if d not in ignore_dirs and not d.endswith(".egg-info")]
-
-                rel_dir = Path(dirpath).relative_to(root_path)
-
-                for filename in filenames:
-                    if filename in ignore_files:
-                        continue
-                    if len(files) >= max_files:
-                        break
-
-                    rel_path = rel_dir / filename if str(rel_dir) != "." else Path(filename)
-                    files.append(str(rel_path))
-
-                if len(files) >= max_files:
-                    break
-        except OSError as e:
-            logger.warning(f"Error scanning codebase: {e}")
-
-        # Sort files for consistent output
-        files.sort()
-
-        if not files:
-            return "No files found in working directory."
-
-        # Format as a simple file list
-        file_list = "\n".join(f"- {f}" for f in files)
-        header = f"### File Structure ({len(files)} files)\n\n"
-
-        if len(files) >= max_files:
-            header += f"(Truncated to first {max_files} files)\n\n"
-
-        return header + file_list
-
     async def plan(
         self,
         state: ExecutionState,
         profile: Profile,
-        output_dir: str | None = None,
         *,
         workflow_id: str,
-    ) -> PlanOutput:
-        """Generate a markdown implementation plan from an issue.
+    ) -> AsyncIterator[tuple[ExecutionState, StreamEvent]]:
+        """Generate a markdown implementation plan from an issue using agentic execution.
 
-        Creates a rich markdown plan and saves it to docs/plans/. The plan
-        follows the superpowers:executing-plans format with phases, tasks,
-        and steps that the Developer agent can follow agentically.
+        Creates a rich markdown plan by exploring the codebase with read-only tools,
+        then producing a reference-based plan. Claude writes the plan to a file via
+        the Write tool. Yields state/event tuples as execution progresses.
 
         Args:
             state: The execution state containing the issue and optional design.
             profile: The profile containing working directory settings.
-            output_dir: Directory path where the markdown plan will be saved.
-                If None, uses profile's plan_output_dir (defaults to docs/plans).
             workflow_id: Workflow ID for stream events (required).
 
-        Returns:
-            PlanOutput containing the markdown plan content and path.
+        Yields:
+            Tuples of (updated ExecutionState, StreamEvent) as exploration and
+            planning progresses.
 
         Raises:
             ValueError: If no issue is present in the state.
@@ -372,111 +291,127 @@ Guidelines:
         if not state.issue:
             raise ValueError("Cannot generate plan: no issue in ExecutionState")
 
-        # Use profile's output directory if not specified
-        if output_dir is None:
-            output_dir = profile.plan_output_dir
+        # Build user prompt from state (simplified - no codebase scan)
+        user_prompt = self._build_agentic_prompt(state)
 
-        # Resolve relative paths to working_dir (not server CWD)
-        output_path = Path(output_dir)
-        if not output_path.is_absolute() and profile.working_dir:
-            output_dir = str(Path(profile.working_dir) / output_path)
-
-        # Build prompt from state
-        context_prompt = self._build_prompt(state, profile)
-
-        # Build user prompt for plan generation
-        user_prompt = f"""{context_prompt}
-
----
-
-Analyze the issue and generate a complete implementation plan in markdown format.
-
-The plan should:
-1. Include the Claude skill instruction at the top: > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans
-2. Break work into logical Phases (## headers)
-3. Each Phase contains Tasks (### headers)
-4. Each Task has Steps with code blocks, commands, and success criteria
-5. Follow TDD approach where applicable
-6. Be specific about file paths and commands
-7. Include success criteria for each step
-
-Return the plan as a MarkdownPlanOutput with:
-- goal: A clear 1-2 sentence goal statement
-- plan_markdown: The full markdown plan content
-- key_files: List of files that will be modified"""
-
-        # Call driver with MarkdownPlanOutput schema
-        raw_response, _session_id = await self.driver.generate(
-            prompt=user_prompt,
-            system_prompt=self.plan_prompt,
-            schema=MarkdownPlanOutput,
-            cwd=profile.working_dir,
-        )
-        response = MarkdownPlanOutput.model_validate(raw_response)
-
-        # Save markdown to file
-        markdown_path = self._save_markdown(
-            response.plan_markdown,
-            state.issue,
-            state.design,
-            output_dir,
-        )
+        cwd = profile.working_dir or "."
+        tool_calls: list[ToolCall] = list(state.tool_calls)
+        tool_results: list[ToolResult] = list(state.tool_results)
+        raw_output = ""
+        current_state = state
 
         logger.info(
-            "Architect plan generated",
-            agent="architect",
-            goal=response.goal[:100] + "..." if len(response.goal) > 100 else response.goal,
-            key_files_count=len(response.key_files),
-            markdown_path=str(markdown_path),
+            "Architect starting agentic execution",
+            cwd=cwd,
         )
 
-        # Emit completion event
-        if self._stream_emitter is not None:
-            event = StreamEvent(
-                type=StreamEventType.AGENT_OUTPUT,
-                content=f"Plan generated: {response.goal[:100]}...",
-                timestamp=datetime.now(UTC),
-                agent="architect",
-                workflow_id=workflow_id,
-            )
-            await self._stream_emitter(event)
+        async for message in self.driver.execute_agentic(
+            prompt=user_prompt,
+            cwd=cwd,
+            instructions=self.plan_prompt,
+        ):
+            event: StreamEvent | None = None
 
-        return PlanOutput(
-            markdown_content=response.plan_markdown,
-            markdown_path=markdown_path,
-            goal=response.goal,
-            key_files=response.key_files,
-        )
+            if message.type == AgenticMessageType.THINKING:
+                event = message.to_stream_event(agent="architect", workflow_id=workflow_id)
 
-    def _save_markdown(
-        self,
-        markdown_content: str,
-        issue: Issue,
-        design: Design | None,
-        output_dir: str,
-    ) -> Path:
-        """Save plan as markdown file.
+            elif message.type == AgenticMessageType.TOOL_CALL:
+                call = ToolCall(
+                    id=message.tool_call_id or f"call-{len(tool_calls)}",
+                    tool_name=message.tool_name or "unknown",
+                    tool_input=message.tool_input or {},
+                )
+                tool_calls.append(call)
+                logger.debug(
+                    "Architect tool call recorded",
+                    tool_name=message.tool_name,
+                    call_id=call.id,
+                )
+                event = message.to_stream_event(agent="architect", workflow_id=workflow_id)
+
+            elif message.type == AgenticMessageType.TOOL_RESULT:
+                result = ToolResult(
+                    call_id=message.tool_call_id or f"call-{len(tool_results)}",
+                    tool_name=message.tool_name or "unknown",
+                    output=message.tool_output or "",
+                    success=not message.is_error,
+                )
+                tool_results.append(result)
+                logger.debug(
+                    "Architect tool result recorded",
+                    call_id=result.call_id,
+                )
+                event = message.to_stream_event(agent="architect", workflow_id=workflow_id)
+
+            elif message.type == AgenticMessageType.RESULT:
+                raw_output = message.content or ""
+                event = message.to_stream_event(agent="architect", workflow_id=workflow_id)
+
+                # In agentic mode, Claude writes the plan via Write tool.
+                # The orchestrator extracts the plan from tool_calls.
+                # No need to save the summary response to a file.
+
+                logger.info(
+                    "Architect plan generated",
+                    agent="architect",
+                    raw_output_length=len(raw_output),
+                    tool_calls_count=len(tool_calls),
+                )
+
+                # Yield final state with all updates
+                # plan_path is None - orchestrator extracts plan from tool_calls
+                current_state = state.model_copy(update={
+                    "tool_calls": tool_calls,
+                    "tool_results": tool_results,
+                    "raw_architect_output": raw_output,
+                    "plan_markdown": raw_output,  # Backward compat until #199
+                    "plan_path": None,
+                })
+                yield current_state, event
+                return  # Result is the final message - stop generator
+
+            if event:
+                current_state = state.model_copy(update={
+                    "tool_calls": tool_calls,
+                    "tool_results": tool_results,
+                })
+                yield current_state, event
+
+    def _build_agentic_prompt(self, state: ExecutionState) -> str:
+        """Build user prompt for agentic plan generation.
+
+        Simplified prompt that doesn't include codebase scan - the agent
+        will explore using tools.
 
         Args:
-            markdown_content: The markdown plan content to save.
-            issue: Original issue being planned.
-            design: Optional design context.
-            output_dir: Directory path for saving the markdown file.
+            state: The current execution state.
 
         Returns:
-            Path to the saved markdown file.
+            Formatted prompt string with issue and design context.
+
+        Raises:
+            ValueError: If no issue is present in the state.
 
         """
-        output_path = Path(output_dir)
-        output_path.mkdir(parents=True, exist_ok=True)
+        if state.issue is None:
+            raise ValueError("ExecutionState must have an issue")
 
-        title = design.title if design else issue.title
-        filename = f"{date.today().isoformat()}-{_slugify(title)}.md"
-        file_path = output_path / filename
+        parts = []
+        parts.append("## Issue")
+        parts.append(f"**Title:** {state.issue.title}")
+        parts.append(f"**Description:**\n{state.issue.description}")
 
-        file_path.write_text(markdown_content)
+        if state.design:
+            parts.append("\n## Design Context")
+            parts.append(state.design.raw_content)
 
-        return file_path
+        parts.append("\n## Your Task")
+        parts.append(
+            "Explore the codebase to understand relevant patterns and architecture, "
+            "then create a detailed implementation plan for this issue."
+        )
+
+        return "\n".join(parts)
 
     async def analyze(
         self,

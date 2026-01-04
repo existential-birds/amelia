@@ -239,10 +239,10 @@ class OrchestratorService:
 
         profile = settings.profiles[profile_id]
 
-        # Ensure working_dir is set to worktree_path for git operations
+        # ALWAYS set working_dir to worktree_path for agent execution
+        # This ensures agents run in the correct directory regardless of settings
         # Create a copy to avoid mutating the shared settings profile
-        if profile.working_dir is None:
-            profile = profile.model_copy(update={"working_dir": worktree_path})
+        profile = profile.model_copy(update={"working_dir": worktree_path})
 
         return profile
 
@@ -431,12 +431,12 @@ class OrchestratorService:
                     hook_name=hook_name,
                 )
 
-            # Ensure working_dir is set to worktree_path for git operations
+            # ALWAYS set working_dir to worktree_path for agent execution
+            # This ensures agents run in the correct directory regardless of settings
             # Create a copy to avoid mutating the shared settings profile
-            if loaded_profile.working_dir is None:
-                loaded_profile = loaded_profile.model_copy(
-                    update={"working_dir": worktree_path}
-                )
+            loaded_profile = loaded_profile.model_copy(
+                update={"working_dir": worktree_path}
+            )
 
             # Fetch issue from tracker (pass worktree_path so gh CLI uses correct repo)
             tracker = create_tracker(loaded_profile)
@@ -556,8 +556,8 @@ class OrchestratorService:
             if profile_name not in settings.profiles:
                 raise ValueError(f"Profile '{profile_name}' not found in settings")
             loaded_profile = settings.profiles[profile_name]
-            if loaded_profile.working_dir is None:
-                loaded_profile = loaded_profile.model_copy(update={"working_dir": worktree_path})
+            # ALWAYS set working_dir to worktree_path for agent execution
+            loaded_profile = loaded_profile.model_copy(update={"working_dir": worktree_path})
 
             # Create dummy issue for review context
             dummy_issue = Issue(
@@ -1675,8 +1675,25 @@ class OrchestratorService:
             # Check for goal and plan_markdown from agentic execution
             goal = checkpoint_state.values.get("goal")
             plan_markdown = checkpoint_state.values.get("plan_markdown")
+            raw_architect_output = checkpoint_state.values.get("raw_architect_output")
+
+            # Log checkpoint values for debugging
+            logger.info(
+                "Syncing plan from checkpoint",
+                workflow_id=workflow_id,
+                has_goal=goal is not None,
+                goal_preview=goal[:100] if goal else None,
+                has_plan_markdown=plan_markdown is not None,
+                plan_markdown_length=len(plan_markdown) if plan_markdown else 0,
+                has_raw_output=raw_architect_output is not None,
+            )
+
             if goal is None and plan_markdown is None:
-                logger.debug("No goal or plan_markdown in checkpoint yet", workflow_id=workflow_id)
+                logger.warning(
+                    "No goal or plan_markdown in checkpoint - architect may not have completed",
+                    workflow_id=workflow_id,
+                    checkpoint_keys=list(checkpoint_state.values.keys()) if checkpoint_state.values else [],
+                )
                 return
 
             # Fetch ServerExecutionState
@@ -1704,6 +1721,23 @@ class OrchestratorService:
 
             # Save back to repository
             await self._repository.update(state)
+
+            # DEBUG: Verify the save worked by reading back
+            verify_state = await self._repository.get(workflow_id)
+            if verify_state and verify_state.execution_state:
+                logger.info(
+                    "VERIFY after sync save",
+                    workflow_id=workflow_id,
+                    saved_goal=verify_state.execution_state.goal[:100] if verify_state.execution_state.goal else None,
+                    saved_plan=verify_state.execution_state.plan_markdown is not None,
+                    saved_plan_len=len(verify_state.execution_state.plan_markdown) if verify_state.execution_state.plan_markdown else 0,
+                )
+            else:
+                logger.warning(
+                    "VERIFY after sync: no execution_state found!",
+                    workflow_id=workflow_id,
+                )
+
             logger.debug("Synced plan to ServerExecutionState", workflow_id=workflow_id)
 
         except Exception as e:

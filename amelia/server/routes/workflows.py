@@ -293,6 +293,16 @@ async def get_workflow(
     # Extract agentic execution fields from execution_state
     goal = workflow.execution_state.goal if workflow.execution_state else None
     plan_markdown = workflow.execution_state.plan_markdown if workflow.execution_state else None
+
+    # DEBUG: Log what API sees from database
+    logger.info(
+        "API returning workflow detail",
+        workflow_id=workflow_id,
+        has_execution_state=workflow.execution_state is not None,
+        goal=goal[:100] if goal else None,
+        has_plan=plan_markdown is not None,
+        plan_len=len(plan_markdown) if plan_markdown else 0,
+    )
     tool_calls = []
     tool_results = []
     final_response = None
