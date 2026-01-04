@@ -985,6 +985,7 @@ def create_orchestrator_graph(
 
     # Add nodes
     workflow.add_node("architect_node", call_architect_node)
+    workflow.add_node("plan_validator_node", plan_validator_node)
     workflow.add_node("human_approval_node", human_approval_node)
     workflow.add_node("developer_node", call_developer_node)
     workflow.add_node("reviewer_node", call_reviewer_node)
@@ -993,8 +994,9 @@ def create_orchestrator_graph(
     workflow.set_entry_point("architect_node")
 
     # Define edges
-    # Architect -> Human approval
-    workflow.add_edge("architect_node", "human_approval_node")
+    # Architect -> Plan Validator -> Human approval
+    workflow.add_edge("architect_node", "plan_validator_node")
+    workflow.add_edge("plan_validator_node", "human_approval_node")
 
     # Conditional edge from human_approval_node:
     # - approve: continue to developer_node
