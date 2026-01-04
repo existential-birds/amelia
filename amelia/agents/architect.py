@@ -5,15 +5,17 @@ rich markdown implementation plans for agentic execution.
 """
 import os
 import re
+from collections.abc import AsyncIterator
 from datetime import UTC, date, datetime
 from pathlib import Path
 
 from loguru import logger
 from pydantic import BaseModel, ConfigDict
 
+from amelia.core.agentic_state import ToolCall, ToolResult
 from amelia.core.state import ExecutionState
-from amelia.core.types import Design, Issue, Profile, StreamEmitter, StreamEvent, StreamEventType
-from amelia.drivers.base import DriverInterface
+from amelia.core.types import Design, Issue, Profile, StreamEmitter, StreamEvent
+from amelia.drivers.base import AgenticMessageType, DriverInterface
 
 
 def _slugify(text: str) -> str:
@@ -356,12 +358,12 @@ Before planning, discover:
         output_dir: str | None = None,
         *,
         workflow_id: str,
-    ) -> PlanOutput:
-        """Generate a markdown implementation plan from an issue.
+    ) -> AsyncIterator[tuple[ExecutionState, StreamEvent]]:
+        """Generate a markdown implementation plan from an issue using agentic execution.
 
-        Creates a rich markdown plan and saves it to docs/plans/. The plan
-        follows the superpowers:executing-plans format with phases, tasks,
-        and steps that the Developer agent can follow agentically.
+        Creates a rich markdown plan by exploring the codebase with read-only tools,
+        then producing a reference-based plan. Yields state/event tuples as execution
+        progresses for real-time streaming.
 
         Args:
             state: The execution state containing the issue and optional design.
@@ -370,8 +372,9 @@ Before planning, discover:
                 If None, uses profile's plan_output_dir (defaults to docs/plans).
             workflow_id: Workflow ID for stream events (required).
 
-        Returns:
-            PlanOutput containing the markdown plan content and path.
+        Yields:
+            Tuples of (updated ExecutionState, StreamEvent) as exploration and
+            planning progresses.
 
         Raises:
             ValueError: If no issue is present in the state.
@@ -389,72 +392,125 @@ Before planning, discover:
         if not output_path.is_absolute() and profile.working_dir:
             output_dir = str(Path(profile.working_dir) / output_path)
 
-        # Build prompt from state
-        context_prompt = self._build_prompt(state, profile)
+        # Build user prompt from state (simplified - no codebase scan)
+        user_prompt = self._build_agentic_prompt(state)
 
-        # Build user prompt for plan generation
-        user_prompt = f"""{context_prompt}
+        cwd = profile.working_dir or "."
+        tool_calls: list[ToolCall] = list(state.tool_calls)
+        tool_results: list[ToolResult] = list(state.tool_results)
+        raw_output = ""
+        current_state = state
 
----
-
-Analyze the issue and generate a complete implementation plan in markdown format.
-
-The plan should:
-1. Include the Claude skill instruction at the top: > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans
-2. Break work into logical Phases (## headers)
-3. Each Phase contains Tasks (### headers)
-4. Each Task has Steps with code blocks, commands, and success criteria
-5. Follow TDD approach where applicable
-6. Be specific about file paths and commands
-7. Include success criteria for each step
-
-Return the plan as a MarkdownPlanOutput with:
-- goal: A clear 1-2 sentence goal statement
-- plan_markdown: The full markdown plan content
-- key_files: List of files that will be modified"""
-
-        # Call driver with MarkdownPlanOutput schema
-        raw_response, _session_id = await self.driver.generate(
+        async for message in self.driver.execute_agentic(
             prompt=user_prompt,
-            system_prompt=self.plan_prompt,
-            schema=MarkdownPlanOutput,
-            cwd=profile.working_dir,
-        )
-        response = MarkdownPlanOutput.model_validate(raw_response)
+            cwd=cwd,
+            instructions=self.plan_prompt,
+        ):
+            event: StreamEvent | None = None
 
-        # Save markdown to file
-        markdown_path = self._save_markdown(
-            response.plan_markdown,
-            state.issue,
-            state.design,
-            output_dir,
+            if message.type == AgenticMessageType.THINKING:
+                event = message.to_stream_event(agent="architect", workflow_id=workflow_id)
+
+            elif message.type == AgenticMessageType.TOOL_CALL:
+                call = ToolCall(
+                    id=message.tool_call_id or f"call-{len(tool_calls)}",
+                    tool_name=message.tool_name or "unknown",
+                    tool_input=message.tool_input or {},
+                )
+                tool_calls.append(call)
+                logger.debug(
+                    "Architect tool call recorded",
+                    tool_name=message.tool_name,
+                    call_id=call.id,
+                )
+                event = message.to_stream_event(agent="architect", workflow_id=workflow_id)
+
+            elif message.type == AgenticMessageType.TOOL_RESULT:
+                result = ToolResult(
+                    call_id=message.tool_call_id or f"call-{len(tool_results)}",
+                    tool_name=message.tool_name or "unknown",
+                    output=message.tool_output or "",
+                    success=not message.is_error,
+                )
+                tool_results.append(result)
+                logger.debug(
+                    "Architect tool result recorded",
+                    call_id=result.call_id,
+                )
+                event = message.to_stream_event(agent="architect", workflow_id=workflow_id)
+
+            elif message.type == AgenticMessageType.RESULT:
+                raw_output = message.content or ""
+                event = message.to_stream_event(agent="architect", workflow_id=workflow_id)
+
+                # Save markdown to file
+                markdown_path = self._save_markdown(
+                    raw_output,
+                    state.issue,
+                    state.design,
+                    output_dir,
+                )
+
+                logger.info(
+                    "Architect plan generated",
+                    agent="architect",
+                    markdown_path=str(markdown_path),
+                    raw_output_length=len(raw_output),
+                )
+
+                # Yield final state with all updates
+                current_state = state.model_copy(update={
+                    "tool_calls": tool_calls,
+                    "tool_results": tool_results,
+                    "raw_architect_output": raw_output,
+                    "plan_markdown": raw_output,  # Backward compat until #199
+                    "plan_path": markdown_path,
+                })
+                yield current_state, event
+                continue  # Result is the final message
+
+            if event:
+                current_state = state.model_copy(update={
+                    "tool_calls": tool_calls,
+                    "tool_results": tool_results,
+                })
+                yield current_state, event
+
+    def _build_agentic_prompt(self, state: ExecutionState) -> str:
+        """Build user prompt for agentic plan generation.
+
+        Simplified prompt that doesn't include codebase scan - the agent
+        will explore using tools.
+
+        Args:
+            state: The current execution state.
+
+        Returns:
+            Formatted prompt string with issue and design context.
+
+        Raises:
+            ValueError: If no issue is present in the state.
+
+        """
+        if state.issue is None:
+            raise ValueError("ExecutionState must have an issue")
+
+        parts = []
+        parts.append("## Issue")
+        parts.append(f"**Title:** {state.issue.title}")
+        parts.append(f"**Description:**\n{state.issue.description}")
+
+        if state.design:
+            parts.append("\n## Design Context")
+            parts.append(state.design.raw_content)
+
+        parts.append("\n## Your Task")
+        parts.append(
+            "Explore the codebase to understand relevant patterns and architecture, "
+            "then create a detailed implementation plan for this issue."
         )
 
-        logger.info(
-            "Architect plan generated",
-            agent="architect",
-            goal=response.goal[:100] + "..." if len(response.goal) > 100 else response.goal,
-            key_files_count=len(response.key_files),
-            markdown_path=str(markdown_path),
-        )
-
-        # Emit completion event
-        if self._stream_emitter is not None:
-            event = StreamEvent(
-                type=StreamEventType.AGENT_OUTPUT,
-                content=f"Plan generated: {response.goal[:100]}...",
-                timestamp=datetime.now(UTC),
-                agent="architect",
-                workflow_id=workflow_id,
-            )
-            await self._stream_emitter(event)
-
-        return PlanOutput(
-            markdown_content=response.plan_markdown,
-            markdown_path=markdown_path,
-            goal=response.goal,
-            key_files=response.key_files,
-        )
+        return "\n".join(parts)
 
     def _save_markdown(
         self,
