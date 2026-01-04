@@ -11,6 +11,7 @@ from loguru import logger
 from pydantic import BaseModel, ConfigDict
 
 from amelia.core.agentic_state import ToolCall, ToolResult
+from amelia.core.constants import resolve_plan_path
 from amelia.core.state import ExecutionState
 from amelia.core.types import Design, Profile, StreamEmitter, StreamEvent, StreamEventType
 from amelia.drivers.base import AgenticMessageType, DriverInterface
@@ -292,7 +293,7 @@ Before planning, discover:
             raise ValueError("Cannot generate plan: no issue in ExecutionState")
 
         # Build user prompt from state (simplified - no codebase scan)
-        user_prompt = self._build_agentic_prompt(state)
+        user_prompt = self._build_agentic_prompt(state, profile)
 
         cwd = profile.working_dir or "."
         tool_calls: list[ToolCall] = list(state.tool_calls)
@@ -377,7 +378,7 @@ Before planning, discover:
                 })
                 yield current_state, event
 
-    def _build_agentic_prompt(self, state: ExecutionState) -> str:
+    def _build_agentic_prompt(self, state: ExecutionState, profile: Profile) -> str:
         """Build user prompt for agentic plan generation.
 
         Simplified prompt that doesn't include codebase scan - the agent
@@ -385,6 +386,7 @@ Before planning, discover:
 
         Args:
             state: The current execution state.
+            profile: The profile containing plan path pattern.
 
         Returns:
             Formatted prompt string with issue and design context.
@@ -410,6 +412,11 @@ Before planning, discover:
             "Explore the codebase to understand relevant patterns and architecture, "
             "then create a detailed implementation plan for this issue."
         )
+
+        # Add output instruction with resolved plan path
+        plan_path = resolve_plan_path(profile.plan_path_pattern, state.issue.id)
+        parts.append("\n## Output")
+        parts.append(f"Write your plan to `{plan_path}` using the Write tool.")
 
         return "\n".join(parts)
 
