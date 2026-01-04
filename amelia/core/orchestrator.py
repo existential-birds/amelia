@@ -17,7 +17,7 @@ from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from loguru import logger
 
-from amelia.agents.architect import Architect
+from amelia.agents.architect import Architect, MarkdownPlanOutput
 from amelia.agents.developer import Developer
 from amelia.agents.evaluator import Evaluator
 from amelia.agents.reviewer import Reviewer
@@ -201,6 +201,78 @@ def _extract_goal_from_markdown(markdown: str | None) -> str | None:
 
     logger.debug("Goal extraction failed - no patterns matched")
     return None
+
+
+async def plan_validator_node(
+    state: ExecutionState,
+    config: RunnableConfig | None = None,
+) -> dict[str, Any]:
+    """Validate and extract structure from architect's plan file.
+
+    Reads the plan file written by the architect and uses an LLM to extract
+    structured fields (goal, plan_markdown, key_files) using the MarkdownPlanOutput schema.
+
+    Args:
+        state: Current execution state with raw_architect_output.
+        config: RunnableConfig with profile in configurable.
+
+    Returns:
+        Partial state dict with goal, plan_markdown, plan_path, key_files.
+
+    Raises:
+        ValueError: If plan file not found or empty.
+    """
+    stream_emitter, workflow_id, profile = _extract_config_params(config)
+
+    if not state.issue:
+        raise ValueError("Issue is required in state for plan validation")
+
+    # Resolve plan path
+    plan_rel_path = resolve_plan_path(profile.plan_path_pattern, state.issue.id)
+    plan_path = Path(profile.plan_output_dir) / plan_rel_path
+
+    # Read plan file
+    if not plan_path.exists():
+        raise ValueError(f"Plan file not found at {plan_path}")
+
+    plan_content = plan_path.read_text()
+    if not plan_content.strip():
+        raise ValueError(f"Plan file is empty at {plan_path}")
+
+    # Get validator driver
+    model = profile.validator_model or profile.model
+    driver = DriverFactory.get_driver(profile.driver, model=model)
+
+    # Extract structured fields using LLM
+    prompt = f"""Extract the implementation plan structure from the following markdown plan.
+
+<plan>
+{plan_content}
+</plan>
+
+Return:
+- goal: 1-2 sentence summary of what this plan accomplishes
+- plan_markdown: The full plan content (preserve as-is)
+- key_files: List of files that will be created or modified"""
+
+    output, _session_id = await driver.generate(
+        prompt=prompt,
+        schema=MarkdownPlanOutput,
+    )
+
+    logger.info(
+        "Plan validated",
+        goal=output.goal,
+        key_files_count=len(output.key_files),
+        workflow_id=workflow_id,
+    )
+
+    return {
+        "goal": output.goal,
+        "plan_markdown": output.plan_markdown,
+        "plan_path": plan_path,
+        "key_files": output.key_files,
+    }
 
 
 async def call_architect_node(

@@ -84,7 +84,7 @@ def make_config(profile: Profile) -> dict[str, Any]:
     return {
         "configurable": {
             "profile": profile,
-            "workflow_id": "test-workflow-123",
+            "thread_id": "test-workflow-123",  # _extract_config_params expects thread_id
             "stream_emitter": AsyncMock(),
         }
     }
