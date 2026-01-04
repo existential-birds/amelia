@@ -62,7 +62,6 @@ export default defineConfig({
     nav: [
       { text: 'Guide', link: '/guide/usage' },
       { text: 'Architecture', link: '/architecture/overview' },
-      { text: 'Ideas', link: '/ideas/' },
       { text: 'Roadmap', link: '/reference/roadmap' }
     ],
 
@@ -75,15 +74,6 @@ export default defineConfig({
             { text: 'Usage', link: '/guide/usage' },
             { text: 'Configuration', link: '/guide/configuration' },
             { text: 'Troubleshooting', link: '/guide/troubleshooting' }
-          ]
-        },
-        {
-          text: 'Example Artifacts',
-          items: [
-            { text: 'Overview', link: '/guide/artifacts/' },
-            { text: 'Design Example', link: '/guide/artifacts/design-example' },
-            { text: 'Plan Example', link: '/guide/artifacts/plan-example' },
-            { text: 'Review Example', link: '/guide/artifacts/review-example' }
           ]
         }
       ],
