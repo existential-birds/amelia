@@ -43,6 +43,7 @@ def test_normalize_tool_name_handles_all_driver_variants() -> None:
     # DeepAgents API driver uses lowercase
     assert normalize_tool_name("write") == ToolName.WRITE_FILE
     assert normalize_tool_name("read") == ToolName.READ_FILE
+    # Note: DeepAgents uses execute() backend, not a "bash" tool name
 
     # Unknown names pass through unchanged
     assert normalize_tool_name("unknown_tool") == "unknown_tool"
