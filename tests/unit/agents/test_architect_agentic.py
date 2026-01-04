@@ -104,3 +104,55 @@ class TestArchitectPlanAsyncGenerator:
         for new_state, event in results:
             assert isinstance(new_state, ExecutionState)
             assert isinstance(event, StreamEvent)
+
+
+class TestArchitectToolCallAccumulation:
+    """Tests for tool call/result accumulation during plan()."""
+
+    async def test_accumulates_tool_calls_in_state(
+        self,
+        mock_driver,
+        mock_issue_factory,
+        mock_profile_factory,
+    ) -> None:
+        """Should accumulate tool calls in yielded state."""
+        issue = mock_issue_factory()
+        profile = mock_profile_factory()
+        state = ExecutionState(profile_id="test", issue=issue)
+
+        async def mock_stream(*args, **kwargs):
+            yield AgenticMessage(
+                type=AgenticMessageType.TOOL_CALL,
+                tool_name="read_file",
+                tool_input={"path": "a.py"},
+                tool_call_id="call-1",
+            )
+            yield AgenticMessage(
+                type=AgenticMessageType.TOOL_RESULT,
+                tool_name="read_file",
+                tool_output="content",
+                tool_call_id="call-1",
+            )
+            yield AgenticMessage(
+                type=AgenticMessageType.TOOL_CALL,
+                tool_name="list_dir",
+                tool_input={"path": "."},
+                tool_call_id="call-2",
+            )
+            yield AgenticMessage(
+                type=AgenticMessageType.RESULT,
+                content="**Goal:** Done",
+            )
+
+        mock_driver.execute_agentic = mock_stream
+        architect = Architect(mock_driver)
+
+        final_state = None
+        async for new_state, _ in architect.plan(state, profile, workflow_id="wf-1"):
+            final_state = new_state
+
+        assert final_state is not None
+        assert len(final_state.tool_calls) == 2
+        assert final_state.tool_calls[0].tool_name == "read_file"
+        assert final_state.tool_calls[1].tool_name == "list_dir"
+        assert len(final_state.tool_results) == 1
