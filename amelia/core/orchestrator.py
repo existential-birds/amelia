@@ -138,7 +138,8 @@ def _extract_goal_from_markdown(markdown: str | None) -> str | None:
         return None
     for line in markdown.split("\n"):
         if line.strip().startswith("**Goal:**"):
-            return line.replace("**Goal:**", "").strip()
+            goal = line.replace("**Goal:**", "").strip()
+            return goal if goal else None
     return None
 
 

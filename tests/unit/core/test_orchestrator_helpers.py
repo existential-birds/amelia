@@ -71,3 +71,11 @@ Content
 """
         result = _extract_goal_from_markdown(markdown)
         assert result == "The actual goal here"
+
+    def test_returns_none_for_empty_goal_line(self) -> None:
+        """Should return None when Goal line has no content."""
+        markdown = "# Plan\n\n**Goal:**\n\n## Tasks"
+        assert _extract_goal_from_markdown(markdown) is None
+        # Also test with whitespace only
+        markdown_whitespace = "# Plan\n\n**Goal:**   \n\n## Tasks"
+        assert _extract_goal_from_markdown(markdown_whitespace) is None

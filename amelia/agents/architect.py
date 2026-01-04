@@ -368,7 +368,7 @@ Before planning, discover:
                     "plan_path": None,
                 })
                 yield current_state, event
-                continue  # Result is the final message
+                return  # Result is the final message - stop generator
 
             if event:
                 current_state = state.model_copy(update={
