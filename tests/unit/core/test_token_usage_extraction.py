@@ -301,8 +301,10 @@ class TestArchitectNodeTokenUsage(TestTokenUsageExtraction):
         config_with_repository: tuple[RunnableConfig, AsyncMock],
     ) -> None:
         """call_architect_node should extract usage from driver and save it."""
-        from amelia.agents.architect import PlanOutput
+        from datetime import UTC, datetime
+
         from amelia.core.orchestrator import call_architect_node
+        from amelia.core.types import StreamEvent, StreamEventType
 
         profile = config_with_repository[0]["configurable"]["profile"]
         mock_repository = config_with_repository[1]
@@ -313,17 +315,29 @@ class TestArchitectNodeTokenUsage(TestTokenUsageExtraction):
             issue=issue,
         )
 
-        mock_plan_output = PlanOutput(
-            goal="Implement feature X",
-            key_files=["/path/to/file.py"],
-            markdown_content="# Plan\n\nStep 1...",
-            markdown_path=Path("/docs/plans/test.md"),
+        # The architect.plan() now yields (ExecutionState, StreamEvent) tuples
+        mock_final_state = state.model_copy(update={
+            "raw_architect_output": "**Goal:** Implement feature X\n\n# Plan\n\nStep 1...",
+            "plan_path": Path("/docs/plans/test.md"),
+            "tool_calls": [],
+            "tool_results": [],
+        })
+        mock_event = StreamEvent(
+            type=StreamEventType.AGENT_OUTPUT,
+            content="Plan generated",
+            timestamp=datetime.now(UTC),
+            agent="architect",
+            workflow_id="wf-test-123",
         )
+
+        async def mock_plan_generator(*args, **kwargs):
+            """Mock async generator that yields (state, event) tuples."""
+            yield (mock_final_state, mock_event)
 
         with patch("amelia.core.orchestrator.Architect") as mock_architect_class, \
              patch("amelia.core.orchestrator.DriverFactory") as mock_factory:
             mock_architect_instance = MagicMock()
-            mock_architect_instance.plan = AsyncMock(return_value=mock_plan_output)
+            mock_architect_instance.plan = mock_plan_generator
             mock_architect_class.return_value = mock_architect_instance
 
             mock_driver = MagicMock()

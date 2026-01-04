@@ -3,17 +3,17 @@
 Tests that prompts flow from orchestrator config through to agents.
 """
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 from unittest.mock import AsyncMock, patch
 
 import pytest
 from langchain_core.runnables.config import RunnableConfig
 
-from amelia.agents.architect import MarkdownPlanOutput
 from amelia.agents.evaluator import Disposition, EvaluatedItem, EvaluationOutput
 from amelia.agents.reviewer import ReviewResponse
 from amelia.core.orchestrator import call_architect_node, call_evaluation_node, call_reviewer_node
 from amelia.core.state import ReviewResult
+from amelia.drivers.base import AgenticMessage, AgenticMessageType
 from tests.integration.conftest import make_config, make_execution_state, make_issue, make_profile
 
 
@@ -31,6 +31,7 @@ class TestOrchestratorPromptInjection:
         """Verify Architect uses injected prompt when calling driver.
 
         This test patches at the driver level to verify the prompt flows through.
+        The architect now uses execute_agentic which takes instructions parameter.
         """
         plans_dir = tmp_path / "plans"
         plans_dir.mkdir(parents=True, exist_ok=True)
@@ -46,22 +47,30 @@ class TestOrchestratorPromptInjection:
         state = make_execution_state(issue=issue, profile=profile)
         config = make_config(thread_id="test-wf-1", profile=profile, prompts=prompts)
 
-        mock_llm_response = MarkdownPlanOutput(
-            goal="Test goal",
-            plan_markdown="# Test Plan",
-            key_files=["test.py"],
-        )
+        # The architect now uses execute_agentic which yields AgenticMessage events
+        plan_content = "**Goal:** Test goal\n\n# Test Plan"
+        mock_messages = [
+            AgenticMessage(
+                type=AgenticMessageType.RESULT,
+                content=plan_content,
+                session_id="session-1",
+            ),
+        ]
+        captured_instructions: list[str | None] = []
 
-        # Patch at driver.generate level to check system_prompt
-        with patch("amelia.drivers.api.deepagents.ApiDriver.generate", new_callable=AsyncMock) as mock_generate:
-            mock_generate.return_value = (mock_llm_response.model_dump(), "session-1")
+        async def mock_execute_agentic(*args: Any, **kwargs: Any) -> Any:
+            """Mock async generator that captures instructions."""
+            captured_instructions.append(kwargs.get("instructions"))
+            for msg in mock_messages:
+                yield msg
 
+        # Patch at driver.execute_agentic level to check instructions
+        with patch("amelia.drivers.api.deepagents.ApiDriver.execute_agentic", mock_execute_agentic):
             await call_architect_node(state, cast(RunnableConfig, config))
 
-            # Verify the custom prompt was used
-            mock_generate.assert_called_once()
-            call_kwargs = mock_generate.call_args.kwargs
-            assert call_kwargs["system_prompt"] == custom_plan_prompt
+            # Verify the custom prompt was used via instructions param
+            assert len(captured_instructions) == 1
+            assert captured_instructions[0] == custom_plan_prompt
 
     async def test_reviewer_uses_injected_prompt_via_driver(self, tmp_path: Path) -> None:
         """Verify Reviewer uses injected prompt when calling driver.
@@ -116,22 +125,32 @@ class TestOrchestratorPromptInjection:
         # No prompts in config
         config = make_config(thread_id="test-wf-3", profile=profile)
 
-        mock_llm_response = MarkdownPlanOutput(
-            goal="Test goal",
-            plan_markdown="# Test Plan",
-            key_files=["test.py"],
-        )
+        # The architect uses execute_agentic which takes instructions parameter
+        plan_content = "**Goal:** Test goal\n\n# Test Plan"
+        mock_messages = [
+            AgenticMessage(
+                type=AgenticMessageType.RESULT,
+                content=plan_content,
+                session_id="session-1",
+            ),
+        ]
+        captured_instructions: list[str | None] = []
 
-        with patch("amelia.drivers.api.deepagents.ApiDriver.generate", new_callable=AsyncMock) as mock_generate:
-            mock_generate.return_value = (mock_llm_response.model_dump(), "session-1")
+        async def mock_execute_agentic(*args: Any, **kwargs: Any) -> Any:
+            """Mock async generator that captures instructions."""
+            captured_instructions.append(kwargs.get("instructions"))
+            for msg in mock_messages:
+                yield msg
 
+        with patch("amelia.drivers.api.deepagents.ApiDriver.execute_agentic", mock_execute_agentic):
             await call_architect_node(state, cast(RunnableConfig, config))
 
-            # Verify default prompt was used (contains expected text)
-            call_kwargs = mock_generate.call_args.kwargs
-            system_prompt = call_kwargs["system_prompt"]
-            assert "senior software architect" in system_prompt
-            assert "Phase" in system_prompt or "phase" in system_prompt.lower()
+            # Verify default prompt was used (contains expected text from Architect.SYSTEM_PROMPT_PLAN)
+            assert len(captured_instructions) == 1
+            instructions = captured_instructions[0]
+            assert instructions is not None
+            assert "senior software architect" in instructions
+            assert "Task" in instructions or "task" in instructions.lower()
 
     async def test_empty_prompts_dict_uses_defaults(self, tmp_path: Path) -> None:
         """Empty prompts dict in config should use agent defaults."""
@@ -147,21 +166,31 @@ class TestOrchestratorPromptInjection:
         # Empty prompts dict
         config = make_config(thread_id="test-wf-4", profile=profile, prompts={})
 
-        mock_llm_response = MarkdownPlanOutput(
-            goal="Test goal",
-            plan_markdown="# Test Plan",
-            key_files=["test.py"],
-        )
+        # The architect uses execute_agentic which takes instructions parameter
+        plan_content = "**Goal:** Test goal\n\n# Test Plan"
+        mock_messages = [
+            AgenticMessage(
+                type=AgenticMessageType.RESULT,
+                content=plan_content,
+                session_id="session-1",
+            ),
+        ]
+        captured_instructions: list[str | None] = []
 
-        with patch("amelia.drivers.api.deepagents.ApiDriver.generate", new_callable=AsyncMock) as mock_generate:
-            mock_generate.return_value = (mock_llm_response.model_dump(), "session-1")
+        async def mock_execute_agentic(*args: Any, **kwargs: Any) -> Any:
+            """Mock async generator that captures instructions."""
+            captured_instructions.append(kwargs.get("instructions"))
+            for msg in mock_messages:
+                yield msg
 
+        with patch("amelia.drivers.api.deepagents.ApiDriver.execute_agentic", mock_execute_agentic):
             await call_architect_node(state, cast(RunnableConfig, config))
 
             # Verify default prompt was used
-            call_kwargs = mock_generate.call_args.kwargs
-            system_prompt = call_kwargs["system_prompt"]
-            assert "senior software architect" in system_prompt
+            assert len(captured_instructions) == 1
+            instructions = captured_instructions[0]
+            assert instructions is not None
+            assert "senior software architect" in instructions
 
     async def test_evaluator_uses_injected_prompt_via_driver(self, tmp_path: Path) -> None:
         """Verify Evaluator uses injected prompt when calling driver.

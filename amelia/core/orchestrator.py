@@ -15,7 +15,7 @@ from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from loguru import logger
 
-from amelia.agents.architect import Architect, PlanOutput
+from amelia.agents.architect import Architect
 from amelia.agents.developer import Developer
 from amelia.agents.evaluator import Evaluator
 from amelia.agents.reviewer import Reviewer
@@ -122,21 +122,41 @@ async def _save_token_usage(
         )
 
 
+def _extract_goal_from_markdown(markdown: str | None) -> str | None:
+    """Temporary: Extract goal from plan markdown. Remove in #199.
+
+    Looks for **Goal:** line in markdown and extracts the goal text.
+
+    Args:
+        markdown: Raw markdown plan content.
+
+    Returns:
+        Extracted goal string or None if not found.
+    """
+    if not markdown:
+        return None
+    for line in markdown.split("\n"):
+        if line.strip().startswith("**Goal:**"):
+            return line.replace("**Goal:**", "").strip()
+    return None
+
+
 async def call_architect_node(
     state: ExecutionState,
     config: RunnableConfig | None = None,
 ) -> dict[str, Any]:
     """Orchestrator node for the Architect agent to generate an implementation plan.
 
-    Generates a rich markdown plan that the Developer agent can follow
-    agentically. The plan is saved to docs/plans/.
+    Consumes the Architect's async generator, streaming events and collecting
+    the final state with the generated plan.
 
     Args:
         state: Current execution state containing the issue and profile.
         config: Optional RunnableConfig with stream_emitter in configurable.
 
     Returns:
-        Partial state dict with goal, plan_markdown, and plan_path.
+        Partial state dict with goal, plan_markdown, plan_path, raw_architect_output,
+        tool_calls, and tool_results.
 
     Raises:
         ValueError: If no issue is provided in the state.
@@ -161,15 +181,22 @@ async def call_architect_node(
     driver = DriverFactory.get_driver(profile.driver, model=profile.model)
     architect = Architect(driver, stream_emitter=stream_emitter, prompts=prompts)
 
-    # Generate implementation plan
-    output: PlanOutput = await architect.plan(
+    # Consume async generator, emitting events and collecting final state
+    final_state = state
+    async for new_state, event in architect.plan(
         state=state,
         profile=profile,
         workflow_id=workflow_id,
-    )
+    ):
+        final_state = new_state
+        if stream_emitter:
+            await stream_emitter(event)
 
     # Save token usage from driver (best-effort)
     await _save_token_usage(driver, workflow_id, "architect", repository)
+
+    # Temporary goal extraction until #199 validator
+    goal = _extract_goal_from_markdown(final_state.raw_architect_output)
 
     # Log the architect plan generation
     logger.info(
@@ -177,17 +204,20 @@ async def call_architect_node(
         agent="architect",
         action="generated_plan",
         details={
-            "goal_length": len(output.goal),
-            "key_files_count": len(output.key_files),
-            "plan_path": str(output.markdown_path),
+            "goal_length": len(goal) if goal else 0,
+            "tool_calls_count": len(final_state.tool_calls),
+            "plan_path": str(final_state.plan_path) if final_state.plan_path else None,
         },
     )
 
-    # Return partial state update with goal and plan from architect
+    # Return partial state update
     return {
-        "goal": output.goal,
-        "plan_markdown": output.markdown_content,
-        "plan_path": str(output.markdown_path),
+        "goal": goal,
+        "raw_architect_output": final_state.raw_architect_output,
+        "plan_markdown": final_state.raw_architect_output,  # Backward compat
+        "plan_path": str(final_state.plan_path) if final_state.plan_path else None,
+        "tool_calls": list(final_state.tool_calls),
+        "tool_results": list(final_state.tool_results),
     }
 
 
