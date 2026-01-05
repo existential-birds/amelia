@@ -38,13 +38,13 @@ This plan implements JWT-based authentication.
 
 @pytest.fixture
 def mock_profile(tmp_path: Path) -> Profile:
-    """Create a test profile with tmp_path for plan output."""
+    """Create a test profile with tmp_path as working_dir."""
     return Profile(
         name="test",
         driver="api:openrouter",
         model="gpt-4",
         tracker="github",
-        plan_output_dir=str(tmp_path / "plans"),
+        working_dir=str(tmp_path),
         plan_path_pattern="{date}-{issue_key}.md",
     )
 
@@ -58,7 +58,7 @@ def mock_profile_with_validator_model(tmp_path: Path) -> Profile:
         model="gpt-4",
         tracker="github",
         validator_model="gpt-4o-mini",
-        plan_output_dir=str(tmp_path / "plans"),
+        working_dir=str(tmp_path),
         plan_path_pattern="{date}-{issue_key}.md",
     )
 
@@ -102,14 +102,12 @@ class TestPlanValidatorNode:
         tmp_path: Path,
     ) -> None:
         """Happy path - validator extracts goal, markdown, and key_files from plan."""
-        from amelia.core.orchestrator import plan_validator_node
-
-        # Setup: Create plan file at expected location
-        plan_dir = tmp_path / "plans"
-        plan_dir.mkdir(parents=True)
+        # Setup: Create plan file at expected location (working_dir / pattern)
         from datetime import date
+
+        from amelia.core.orchestrator import plan_validator_node
         today = date.today().isoformat()
-        plan_path = plan_dir / f"{today}-test-123.md"
+        plan_path = tmp_path / f"{today}-test-123.md"
         plan_path.write_text(plan_content)
 
         # Mock the driver to return structured output
@@ -161,14 +159,12 @@ class TestPlanValidatorNode:
         tmp_path: Path,
     ) -> None:
         """Validator raises ValueError when plan file is empty."""
-        from amelia.core.orchestrator import plan_validator_node
-
-        # Create empty plan file
-        plan_dir = tmp_path / "plans"
-        plan_dir.mkdir(parents=True)
+        # Create empty plan file at working_dir / pattern
         from datetime import date
+
+        from amelia.core.orchestrator import plan_validator_node
         today = date.today().isoformat()
-        plan_path = plan_dir / f"{today}-test-123.md"
+        plan_path = tmp_path / f"{today}-test-123.md"
         plan_path.write_text("")
 
         config = make_config(mock_profile)
@@ -185,14 +181,12 @@ class TestPlanValidatorNode:
         tmp_path: Path,
     ) -> None:
         """Validator uses profile.validator_model when it's set."""
-        from amelia.core.orchestrator import plan_validator_node
-
-        # Setup: Create plan file
-        plan_dir = tmp_path / "plans"
-        plan_dir.mkdir(parents=True)
+        # Setup: Create plan file at working_dir / pattern
         from datetime import date
+
+        from amelia.core.orchestrator import plan_validator_node
         today = date.today().isoformat()
-        plan_path = plan_dir / f"{today}-test-123.md"
+        plan_path = tmp_path / f"{today}-test-123.md"
         plan_path.write_text(plan_content)
 
         mock_output = MarkdownPlanOutput(
@@ -225,14 +219,12 @@ class TestPlanValidatorNode:
         tmp_path: Path,
     ) -> None:
         """Validator falls back to profile.model when validator_model is None."""
-        from amelia.core.orchestrator import plan_validator_node
-
-        # Setup: Create plan file
-        plan_dir = tmp_path / "plans"
-        plan_dir.mkdir(parents=True)
+        # Setup: Create plan file at working_dir / pattern
         from datetime import date
+
+        from amelia.core.orchestrator import plan_validator_node
         today = date.today().isoformat()
-        plan_path = plan_dir / f"{today}-test-123.md"
+        plan_path = tmp_path / f"{today}-test-123.md"
         plan_path.write_text(plan_content)
 
         mock_output = MarkdownPlanOutput(

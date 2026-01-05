@@ -148,9 +148,10 @@ async def plan_validator_node(
     if not state.issue:
         raise ValueError("Issue is required in state for plan validation")
 
-    # Resolve plan path
+    # Resolve plan path - use working_dir to match call_architect_node
     plan_rel_path = resolve_plan_path(profile.plan_path_pattern, state.issue.id)
-    plan_path = Path(profile.plan_output_dir) / plan_rel_path
+    working_dir = Path(profile.working_dir) if profile.working_dir else Path(".")
+    plan_path = working_dir / plan_rel_path
 
     # Read plan file
     if not plan_path.exists():

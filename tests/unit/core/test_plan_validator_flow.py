@@ -1,4 +1,4 @@
-"""Integration tests for architect → plan_validator flow."""
+"""Unit tests for plan_validator_node function."""
 
 from datetime import date
 from pathlib import Path
@@ -16,45 +16,48 @@ from amelia.core.types import Issue, Profile
 
 
 @pytest.fixture
-def integration_profile(tmp_path: Path) -> Profile:
-    """Profile for integration testing."""
+def validator_profile(tmp_path: Path) -> Profile:
+    """Profile configured for plan validator testing.
+
+    Uses working_dir to match how plan_validator_node resolves paths.
+    """
     return Profile(
-        name="integration-test",
+        name="validator-test",
         driver="api:openrouter",
         model="gpt-4",
         validator_model="gpt-4o-mini",
         tracker="github",
-        plan_output_dir=str(tmp_path / "plans"),
+        working_dir=str(tmp_path),
         plan_path_pattern="{date}-{issue_key}.md",
     )
 
 
 @pytest.fixture
-def integration_issue() -> Issue:
-    """Issue for integration testing."""
+def validator_issue() -> Issue:
+    """Issue for validator testing."""
     return Issue(
-        id="INT-456",
-        title="Integration Test Issue",
-        description="Test the full flow",
+        id="VAL-456",
+        title="Validator Test Issue",
+        description="Test plan validation",
     )
 
 
-class TestArchitectToValidatorFlow:
-    """Integration tests for architect → validator flow."""
+class TestPlanValidatorNode:
+    """Unit tests for plan_validator_node."""
 
     @pytest.mark.asyncio
-    async def test_architect_to_validator_flow(
+    async def test_validator_extracts_structured_output(
         self,
-        integration_profile: Profile,
-        integration_issue: Issue,
+        validator_profile: Profile,
+        validator_issue: Issue,
         tmp_path: Path,
     ) -> None:
-        """Full flow: architect writes plan → validator extracts structure."""
+        """Validator reads plan file and extracts structured fields via LLM."""
         state = ExecutionState(
-            issue=integration_issue,
-            profile_id=integration_profile.name,
+            issue=validator_issue,
+            profile_id=validator_profile.name,
         )
-        plan_content = """# Implementation Plan for INT-456
+        plan_content = """# Implementation Plan for VAL-456
 
 **Goal:** Implement feature X with Y integration
 
@@ -63,14 +66,12 @@ class TestArchitectToValidatorFlow:
 - `src/feature.py` - Main implementation
 - `tests/test_feature.py` - Tests
 """
-        # Setup: Create plan file (simulating architect output)
-        plan_dir = tmp_path / "plans"
-        plan_dir.mkdir(parents=True)
+        # Setup: Create plan file in working_dir (simulating architect output)
         today = date.today().isoformat()
-        plan_path = plan_dir / f"{today}-int-456.md"
+        plan_path = tmp_path / f"{today}-val-456.md"
         plan_path.write_text(plan_content)
 
-        # Mock validator driver
+        # Mock validator driver response
         mock_validator_output = MarkdownPlanOutput(
             goal="Implement feature X with Y integration",
             plan_markdown=plan_content,
@@ -81,8 +82,8 @@ class TestArchitectToValidatorFlow:
 
         config: RunnableConfig = {
             "configurable": {
-                "profile": integration_profile,
-                "thread_id": "int-test-789",
+                "profile": validator_profile,
+                "thread_id": "val-test-789",
                 "stream_emitter": AsyncMock(),
             }
         }
@@ -90,7 +91,6 @@ class TestArchitectToValidatorFlow:
         with patch("amelia.core.orchestrator.DriverFactory") as mock_factory:
             mock_factory.get_driver.return_value = mock_driver
 
-            # Run validator node
             result = await plan_validator_node(state, config)
 
         # Verify extracted structure

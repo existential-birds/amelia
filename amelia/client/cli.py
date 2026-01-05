@@ -417,8 +417,16 @@ def plan_command(
         final_state = asyncio.run(_generate_plan())
 
         console.print("\n[green]✓[/green] Plan generated successfully!")
-        if final_state.goal:
-            console.print(f"  Goal: {final_state.goal}")
+        # CLI bypasses plan_validator_node, so extract goal from plan file
+        goal = None
+        if final_state.plan_path and Path(final_state.plan_path).exists():
+            plan_content = Path(final_state.plan_path).read_text()
+            for line in plan_content.split("\n"):
+                if line.strip().startswith("**Goal:**"):
+                    goal = line.strip().replace("**Goal:**", "").strip()
+                    break
+        if goal:
+            console.print(f"  Goal: {goal}")
         console.print(f"  Saved to: [bold]{final_state.plan_path}[/bold]")
 
     except ValueError as e:
