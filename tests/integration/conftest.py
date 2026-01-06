@@ -189,7 +189,11 @@ def connection_manager() -> ConnectionManager:
 
 @pytest.fixture
 def event_bus(connection_manager: ConnectionManager) -> EventBus:
-    """Create an EventBus with ConnectionManager attached."""
+    """Create an EventBus with ConnectionManager attached.
+
+    Note: This overrides the root conftest event_bus fixture to provide
+    the connection_manager integration required by stream propagation tests.
+    """
     bus = EventBus()
     bus.set_connection_manager(connection_manager)
     return bus

@@ -11,12 +11,6 @@ from amelia.server.events.bus import EventBus
 from amelia.server.models.events import WorkflowEvent
 
 
-@pytest.fixture
-def event_bus() -> EventBus:
-    """Create EventBus instance."""
-    return EventBus()
-
-
 async def test_emit_stream_broadcasts_to_connection_manager(
     event_bus: EventBus, sample_stream_event: StreamEvent
 ):

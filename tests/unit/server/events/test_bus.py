@@ -11,12 +11,6 @@ from amelia.server.models import WorkflowEvent
 
 
 @pytest.fixture
-def event_bus() -> EventBus:
-    """Create EventBus instance."""
-    return EventBus()
-
-
-@pytest.fixture
 def sample_event(make_event) -> WorkflowEvent:
     """Create sample event."""
     return make_event(
