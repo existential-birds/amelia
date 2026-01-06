@@ -3,7 +3,6 @@ from collections.abc import Callable
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from pydantic import ValidationError
 
 from amelia.agents.evaluator import (
     Disposition,

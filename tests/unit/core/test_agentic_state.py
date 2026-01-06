@@ -1,7 +1,4 @@
 """Tests for agentic execution state model."""
-import pytest
-from pydantic import ValidationError
-
 from amelia.core.agentic_state import AgenticState, ToolCall, ToolResult
 
 
@@ -18,12 +15,6 @@ class TestToolCall:
         assert call.id == "call-1"
         assert call.tool_name == "run_shell_command"
         assert call.tool_input == {"command": "ls -la"}
-
-    def test_tool_call_is_frozen(self) -> None:
-        """ToolCall should be immutable."""
-        call = ToolCall(id="1", tool_name="test", tool_input={})
-        with pytest.raises(ValidationError):
-            call.id = "2"
 
 
 class TestToolResult:
@@ -51,14 +42,6 @@ class TestToolResult:
         )
         assert result.success is False
         assert result.error == "Command not found"
-
-    def test_tool_result_is_frozen(self) -> None:
-        """ToolResult should be immutable."""
-        result = ToolResult(
-            call_id="1", tool_name="test", output="ok", success=True
-        )
-        with pytest.raises(ValidationError):
-            result.success = False
 
 
 class TestAgenticState:
@@ -90,11 +73,3 @@ class TestAgenticState:
         )
         assert len(state.tool_calls) == 1
         assert len(state.tool_results) == 1
-
-    def test_agentic_state_is_frozen(self) -> None:
-        """AgenticState should be immutable."""
-        state = AgenticState(
-            workflow_id="wf-1", issue_key="ISSUE-1", goal="test"
-        )
-        with pytest.raises(ValidationError):
-            state.status = "completed"

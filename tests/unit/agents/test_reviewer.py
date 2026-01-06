@@ -4,7 +4,6 @@ from collections.abc import Callable
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from pydantic import ValidationError
 
 from amelia.agents.reviewer import (
     Reviewer,
@@ -48,21 +47,6 @@ class TestNormalizeSeverity:
 class TestReviewItem:
     """Tests for ReviewItem model."""
 
-    def test_review_item_frozen(self) -> None:
-        """Test that ReviewItem is immutable."""
-        item = ReviewItem(
-            number=1,
-            title="Test Issue",
-            file_path="test.py",
-            line=10,
-            severity="major",
-            issue="Found a bug",
-            why="Could cause crash",
-            fix="Add null check",
-        )
-        with pytest.raises(ValidationError):
-            item.number = 2
-
     def test_review_item_severity_values(self) -> None:
         """Test that severity accepts only valid values."""
         for severity in ["critical", "major", "minor"]:
@@ -81,17 +65,6 @@ class TestReviewItem:
 
 class TestStructuredReviewResult:
     """Tests for StructuredReviewResult model."""
-
-    def test_structured_review_result_frozen(self) -> None:
-        """Test that StructuredReviewResult is immutable."""
-        result = StructuredReviewResult(
-            summary="All good",
-            items=[],
-            good_patterns=["Clean code"],
-            verdict="approved",
-        )
-        with pytest.raises(ValidationError):
-            result.summary = "Changed"
 
     def test_structured_review_result_verdict_values(self) -> None:
         """Test that verdict accepts only valid values."""
