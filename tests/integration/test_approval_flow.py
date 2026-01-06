@@ -11,12 +11,11 @@ These tests verify the interrupt/resume cycle works end-to-end:
 import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import pytest
 
 from amelia.core.state import ExecutionState
-from amelia.server.database.repository import WorkflowRepository
 from amelia.server.models.events import EventType, WorkflowEvent
 from amelia.server.models.state import ServerExecutionState
 from amelia.server.orchestrator.service import OrchestratorService
@@ -45,43 +44,6 @@ def event_tracker():
             return [e for e in self.events if e.event_type == event_type]
 
     return EventTracker()
-
-
-@pytest.fixture
-def mock_repository():
-    """Create in-memory repository mock."""
-    repo = AsyncMock(spec=WorkflowRepository)
-    repo.workflows: dict[str, ServerExecutionState] = {}
-    repo.events: list[WorkflowEvent] = []
-    repo.event_sequence: dict[str, int] = {}
-
-    async def create(state: ServerExecutionState) -> None:
-        repo.workflows[state.id] = state
-
-    async def get(workflow_id: str) -> ServerExecutionState | None:
-        return repo.workflows.get(workflow_id)
-
-    async def set_status(
-        workflow_id: str, status: str, failure_reason: str | None = None
-    ) -> None:
-        if workflow_id in repo.workflows:
-            repo.workflows[workflow_id] = repo.workflows[workflow_id].model_copy(
-                update={"workflow_status": status, "failure_reason": failure_reason}
-            )
-
-    async def save_event(event: WorkflowEvent) -> None:
-        repo.events.append(event)
-
-    async def get_max_event_sequence(workflow_id: str) -> int:
-        return repo.event_sequence.get(workflow_id, 0)
-
-    repo.create = create
-    repo.get = get
-    repo.set_status = set_status
-    repo.save_event = save_event
-    repo.get_max_event_sequence = get_max_event_sequence
-
-    return repo
 
 
 class TestMissingExecutionState:
