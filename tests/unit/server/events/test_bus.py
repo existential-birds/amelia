@@ -170,6 +170,7 @@ async def test_cleanup_handles_task_exceptions(event_bus: EventBus, sample_event
 async def test_emit_stream_filters_tool_results_by_default(event_bus: EventBus) -> None:
     """emit_stream should filter tool results when stream_tool_results=False (default)."""
     from unittest.mock import patch
+
     from amelia.core.types import StreamEvent, StreamEventType
 
     mock_manager = AsyncMock()
@@ -197,6 +198,7 @@ async def test_emit_stream_filters_tool_results_by_default(event_bus: EventBus) 
 async def test_emit_stream_allows_tool_results_when_enabled(event_bus: EventBus) -> None:
     """emit_stream should broadcast tool results when stream_tool_results=True."""
     from unittest.mock import patch
+
     from amelia.core.types import StreamEvent, StreamEventType
 
     broadcast_called = asyncio.Event()
@@ -230,6 +232,7 @@ async def test_emit_stream_allows_tool_results_when_enabled(event_bus: EventBus)
 async def test_emit_stream_allows_other_event_types(event_bus: EventBus) -> None:
     """emit_stream should broadcast non-tool-result events regardless of setting."""
     from unittest.mock import patch
+
     from amelia.core.types import StreamEvent, StreamEventType
 
     broadcast_called = asyncio.Event()

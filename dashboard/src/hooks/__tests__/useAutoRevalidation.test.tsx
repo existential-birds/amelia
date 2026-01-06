@@ -57,6 +57,8 @@ describe('useAutoRevalidation', () => {
     'workflow_completed',
     'workflow_failed',
     'workflow_started',
+    'stage_started',
+    'stage_completed',
   ] as const)('should auto-revalidate on recent %s event', (event_type) => {
     vi.mocked(useWorkflowStore).mockReturnValue({
       eventsByWorkflow: {

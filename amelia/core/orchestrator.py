@@ -22,7 +22,7 @@ from amelia.agents.evaluator import Evaluator
 from amelia.agents.reviewer import Reviewer
 from amelia.core.constants import resolve_plan_path
 from amelia.core.state import ExecutionState
-from amelia.core.types import Profile, StreamEmitter
+from amelia.core.types import Profile, StreamEmitter, StreamEvent, StreamEventType
 from amelia.drivers.factory import DriverFactory
 from amelia.server.models.tokens import TokenUsage
 
@@ -152,6 +152,24 @@ async def plan_validator_node(
     plan_rel_path = resolve_plan_path(profile.plan_path_pattern, state.issue.id)
     working_dir = Path(profile.working_dir) if profile.working_dir else Path(".")
     plan_path = working_dir / plan_rel_path
+
+    logger.info(
+        "Orchestrator: Validating plan structure",
+        plan_path=str(plan_path),
+        workflow_id=workflow_id,
+    )
+
+    # Emit start event to UI
+    if stream_emitter:
+        await stream_emitter(
+            StreamEvent(
+                type=StreamEventType.AGENT_OUTPUT,
+                content=f"Validating plan: {plan_path}",
+                timestamp=datetime.now(UTC),
+                agent="validator",
+                workflow_id=workflow_id,
+            )
+        )
 
     # Read plan file - fail fast if not found
     if not plan_path.exists():

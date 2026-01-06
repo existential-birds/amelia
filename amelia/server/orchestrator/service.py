@@ -43,6 +43,7 @@ from amelia.trackers.factory import create_tracker
 # Nodes that emit stage events
 STAGE_NODES: frozenset[str] = frozenset({
     "architect_node",
+    "plan_validator_node",
     "human_approval_node",
     "developer_node",
     "reviewer_node",
@@ -853,16 +854,20 @@ class OrchestratorService:
                     # Note: A separate COMPLETED emission exists in approve_workflow() for
                     # workflows that resume after human approval. These are mutually exclusive
                     # code paths - only one COMPLETED event is ever emitted per workflow.
+                    # Fetch fresh state from DB to get accurate current_stage
+                    # (the local state variable is stale - _handle_stream_chunk updates DB)
+                    fresh_state = await self._repository.get(workflow_id)
+                    final_stage = fresh_state.current_stage if fresh_state else None
                     await self._emit(
                         workflow_id,
                         EventType.WORKFLOW_COMPLETED,
                         "Workflow completed successfully",
-                        data={"final_stage": state.current_stage},
+                        data={"final_stage": final_stage},
                     )
                     await emit_workflow_event(
                         ExtWorkflowEventType.COMPLETED,
                         workflow_id=workflow_id,
-                        stage=state.current_stage,
+                        stage=final_stage,
                     )
                     await self._repository.set_status(workflow_id, "completed")
 
@@ -1061,11 +1066,15 @@ class OrchestratorService:
                     # Emit stage events for each node that completes
                     await self._handle_stream_chunk(workflow_id, chunk)
 
+                # Fetch fresh state from DB to get accurate current_stage
+                # (the local state variable is stale - _handle_stream_chunk updates DB)
+                fresh_state = await self._repository.get(workflow_id)
+                final_stage = fresh_state.current_stage if fresh_state else None
                 await self._emit(
                     workflow_id,
                     EventType.WORKFLOW_COMPLETED,
                     "Review workflow completed",
-                    data={"final_stage": state.current_stage},
+                    data={"final_stage": final_stage},
                 )
                 await self._repository.set_status(workflow_id, "completed")
 
@@ -1523,6 +1532,8 @@ class OrchestratorService:
         """
         if node_name == "architect_node":
             await self._emit_architect_messages(workflow_id, output)
+        elif node_name == "plan_validator_node":
+            await self._emit_validator_messages(workflow_id, output)
         elif node_name == "developer_node":
             await self._emit_developer_messages(workflow_id, output)
         elif node_name == "reviewer_node":
@@ -1552,6 +1563,29 @@ class OrchestratorService:
                 f"Goal: {goal}",
                 agent="architect",
                 data={"goal": goal, "has_plan": plan_markdown is not None},
+            )
+
+    async def _emit_validator_messages(
+        self,
+        workflow_id: str,
+        output: dict[str, Any],
+    ) -> None:
+        """Emit messages for plan validator node output.
+
+        Args:
+            workflow_id: The workflow ID.
+            output: State updates from the validator node.
+        """
+        goal = output.get("goal")
+        key_files = output.get("key_files", [])
+
+        if goal:
+            await self._emit(
+                workflow_id,
+                EventType.AGENT_MESSAGE,
+                f"Plan validated: {goal}",
+                agent="validator",
+                data={"goal": goal, "key_files_count": len(key_files)},
             )
 
     async def _emit_developer_messages(
