@@ -4,7 +4,8 @@
  * In the agentic execution model, the pipeline shows agent stages rather
  * than individual batch/steps.
  */
-import type { WorkflowDetail } from '@/types';
+import type { Node, Edge } from '@xyflow/react';
+import type { WorkflowDetail, WorkflowEvent } from '@/types';
 
 /**
  * Node in the pipeline visualization.
@@ -160,6 +161,146 @@ export function buildPipeline(workflow: WorkflowDetail): Pipeline | null {
       });
     }
   });
+
+  return { nodes, edges };
+}
+
+// ============================================================================
+// Event-Driven Pipeline Builder
+// ============================================================================
+
+/** Options for buildPipelineFromEvents. */
+export interface BuildPipelineOptions {
+  /** Show default 3-node pipeline even with no events. Default: false. */
+  showDefaultPipeline?: boolean;
+}
+
+/** Pipeline structure with nodes and edges for React Flow. */
+export interface EventDrivenPipeline {
+  nodes: Node<AgentNodeData>[];
+  edges: Edge<{ status: 'completed' | 'active' | 'pending' }>[];
+}
+
+const DEFAULT_AGENTS = ['architect', 'developer', 'reviewer'];
+
+/**
+ * Build pipeline visualization from workflow events.
+ *
+ * This function derives node status directly from events rather than
+ * relying on stale `current_stage` data, enabling real-time updates.
+ */
+export function buildPipelineFromEvents(
+  events: WorkflowEvent[],
+  options: BuildPipelineOptions = {}
+): EventDrivenPipeline {
+  const { showDefaultPipeline = false } = options;
+
+  // Track agents and their iterations
+  const agentMap = new Map<string, AgentIteration[]>();
+  const agentOrder: string[] = [];
+  let workflowFailed = false;
+
+  // Process events in sequence order
+  const sortedEvents = [...events].sort((a, b) => a.sequence - b.sequence);
+
+  for (const event of sortedEvents) {
+    const { agent, event_type, timestamp, id } = event;
+
+    if (event_type === 'stage_started') {
+      if (!agentMap.has(agent)) {
+        agentMap.set(agent, []);
+        agentOrder.push(agent);
+      }
+      agentMap.get(agent)!.push({
+        id: `${agent}-${id}`,
+        startedAt: timestamp,
+        status: 'running',
+      });
+    } else if (event_type === 'stage_completed') {
+      const iterations = agentMap.get(agent);
+      if (iterations && iterations.length > 0) {
+        const lastIteration = iterations[iterations.length - 1];
+        if (lastIteration.status === 'running') {
+          lastIteration.completedAt = timestamp;
+          lastIteration.status = 'completed';
+        }
+      }
+    } else if (event_type === 'workflow_failed') {
+      workflowFailed = true;
+      // Mark any running iterations as failed
+      for (const iterations of agentMap.values()) {
+        for (const iter of iterations) {
+          if (iter.status === 'running') {
+            iter.status = 'failed';
+          }
+        }
+      }
+    }
+  }
+
+  // If no events and showDefaultPipeline, create pending nodes
+  if (agentOrder.length === 0 && showDefaultPipeline) {
+    for (const agent of DEFAULT_AGENTS) {
+      agentMap.set(agent, []);
+      agentOrder.push(agent);
+    }
+  }
+
+  // Build nodes
+  const nodes: Node<AgentNodeData>[] = agentOrder.map((agentType) => {
+    const iterations = agentMap.get(agentType) || [];
+    const hasRunningIteration = iterations.some(i => i.status === 'running');
+    const hasFailedIteration = iterations.some(i => i.status === 'failed');
+    const allCompleted = iterations.length > 0 && iterations.every(i => i.status === 'completed');
+
+    let status: AgentNodeData['status'];
+    if (hasFailedIteration || (workflowFailed && hasRunningIteration)) {
+      status = 'blocked';
+    } else if (hasRunningIteration) {
+      status = 'active';
+    } else if (allCompleted) {
+      status = 'completed';
+    } else {
+      status = 'pending';
+    }
+
+    return {
+      id: agentType,
+      type: 'agent',
+      position: { x: 0, y: 0 },  // Will be set by layout
+      data: {
+        agentType,
+        status,
+        iterations,
+        isExpanded: false,
+      },
+    };
+  });
+
+  // Build edges between adjacent nodes
+  const edges: Edge<{ status: 'completed' | 'active' | 'pending' }>[] = [];
+  for (let i = 0; i < agentOrder.length - 1; i++) {
+    const sourceAgent = agentOrder[i];
+    const targetAgent = agentOrder[i + 1];
+    const sourceNode = nodes.find(n => n.id === sourceAgent);
+    const targetNode = nodes.find(n => n.id === targetAgent);
+
+    let edgeStatus: 'completed' | 'active' | 'pending';
+    if (sourceNode?.data.status === 'completed') {
+      edgeStatus = targetNode?.data.status === 'active' ? 'active' : 'completed';
+    } else if (sourceNode?.data.status === 'active') {
+      edgeStatus = 'active';
+    } else {
+      edgeStatus = 'pending';
+    }
+
+    edges.push({
+      id: `${sourceAgent}-${targetAgent}`,
+      source: sourceAgent,
+      target: targetAgent,
+      data: { status: edgeStatus },
+    });
+  }
 
   return { nodes, edges };
 }

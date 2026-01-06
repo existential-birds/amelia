@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { buildPipeline } from '../pipeline';
+import { buildPipeline, buildPipelineFromEvents } from '../pipeline';
 import type { AgentIteration, AgentNodeData } from '../pipeline';
-import type { WorkflowDetail } from '@/types';
+import type { WorkflowDetail, WorkflowEvent } from '@/types';
 
 // Helper to create a minimal workflow detail
 function createWorkflowDetail(
@@ -259,5 +259,121 @@ describe('AgentNodeData type', () => {
     };
     expect(nodeData.agentType).toBe('architect');
     expect(nodeData.status).toBe('active');
+  });
+});
+
+describe('buildPipelineFromEvents', () => {
+  const makeEvent = (
+    agent: string,
+    event_type: string,
+    sequence: number,
+    timestamp: string = '2026-01-06T10:00:00Z'
+  ): WorkflowEvent => ({
+    id: `evt-${sequence}`,
+    workflow_id: 'wf-1',
+    sequence,
+    timestamp,
+    agent,
+    event_type: event_type as WorkflowEvent['event_type'],
+    message: `${agent} ${event_type}`,
+  });
+
+  it('should return empty pipeline for empty events', () => {
+    const result = buildPipelineFromEvents([]);
+    expect(result.nodes).toEqual([]);
+    expect(result.edges).toEqual([]);
+  });
+
+  it('should create node with active status for stage_started without completion', () => {
+    const events = [
+      makeEvent('architect', 'stage_started', 1),
+    ];
+    const result = buildPipelineFromEvents(events);
+
+    expect(result.nodes).toHaveLength(1);
+    expect(result.nodes[0].id).toBe('architect');
+    expect(result.nodes[0].data.status).toBe('active');
+    expect(result.nodes[0].data.iterations).toHaveLength(1);
+    expect(result.nodes[0].data.iterations[0].status).toBe('running');
+  });
+
+  it('should create node with completed status when stage completes', () => {
+    const events = [
+      makeEvent('architect', 'stage_started', 1, '2026-01-06T10:00:00Z'),
+      makeEvent('architect', 'stage_completed', 2, '2026-01-06T10:05:00Z'),
+    ];
+    const result = buildPipelineFromEvents(events);
+
+    expect(result.nodes).toHaveLength(1);
+    expect(result.nodes[0].data.status).toBe('completed');
+    expect(result.nodes[0].data.iterations[0].status).toBe('completed');
+    expect(result.nodes[0].data.iterations[0].completedAt).toBe('2026-01-06T10:05:00Z');
+  });
+
+  it('should track multiple iterations for same agent', () => {
+    const events = [
+      makeEvent('developer', 'stage_started', 1, '2026-01-06T10:00:00Z'),
+      makeEvent('developer', 'stage_completed', 2, '2026-01-06T10:05:00Z'),
+      makeEvent('reviewer', 'stage_started', 3, '2026-01-06T10:05:00Z'),
+      makeEvent('reviewer', 'stage_completed', 4, '2026-01-06T10:10:00Z'),
+      makeEvent('developer', 'stage_started', 5, '2026-01-06T10:10:00Z'),  // Second iteration
+    ];
+    const result = buildPipelineFromEvents(events);
+
+    const devNode = result.nodes.find(n => n.id === 'developer');
+    expect(devNode?.data.iterations).toHaveLength(2);
+    expect(devNode?.data.iterations[0].status).toBe('completed');
+    expect(devNode?.data.iterations[1].status).toBe('running');
+    expect(devNode?.data.status).toBe('active');  // Currently running
+  });
+
+  it('should create edges between adjacent agents in order of first appearance', () => {
+    const events = [
+      makeEvent('architect', 'stage_started', 1),
+      makeEvent('architect', 'stage_completed', 2),
+      makeEvent('developer', 'stage_started', 3),
+    ];
+    const result = buildPipelineFromEvents(events);
+
+    expect(result.edges).toHaveLength(1);
+    expect(result.edges[0].source).toBe('architect');
+    expect(result.edges[0].target).toBe('developer');
+  });
+
+  it('should set edge status based on source node completion', () => {
+    const events = [
+      makeEvent('architect', 'stage_started', 1),
+      makeEvent('architect', 'stage_completed', 2),
+      makeEvent('developer', 'stage_started', 3),
+      makeEvent('developer', 'stage_completed', 4),
+      makeEvent('reviewer', 'stage_started', 5),
+    ];
+    const result = buildPipelineFromEvents(events);
+
+    const archToDevEdge = result.edges.find(e => e.source === 'architect');
+    const devToRevEdge = result.edges.find(e => e.source === 'developer');
+
+    expect(archToDevEdge?.data?.status).toBe('completed');
+    expect(devToRevEdge?.data?.status).toBe('active');
+  });
+
+  it('should handle workflow_failed by marking current agent as blocked', () => {
+    const events = [
+      makeEvent('developer', 'stage_started', 1),
+      makeEvent('system', 'workflow_failed', 2),
+    ];
+    const result = buildPipelineFromEvents(events);
+
+    expect(result.nodes[0].data.status).toBe('blocked');
+    expect(result.nodes[0].data.iterations[0].status).toBe('failed');
+  });
+
+  it('should create pending nodes for standard pipeline when no events', () => {
+    // When called with empty events, should still show the expected pipeline structure
+    const result = buildPipelineFromEvents([], { showDefaultPipeline: true });
+
+    expect(result.nodes).toHaveLength(3);
+    expect(result.nodes.map(n => n.id)).toEqual(['architect', 'developer', 'reviewer']);
+    expect(result.nodes.every(n => n.data.status === 'pending')).toBe(true);
   });
 });
