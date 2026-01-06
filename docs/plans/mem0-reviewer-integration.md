@@ -1,7 +1,5 @@
 # Mem0 Integration for Amelia Reviewer Agent
 
-> **For Claude:** Use superpowers:executing-plans to implement this plan task-by-task.
-
 ---
 
 ## Overview

@@ -45,8 +45,6 @@ Generate implementation plans in markdown format that follow this structure:
 
 # [Title] Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** [Clear description of what needs to be accomplished]
 
 **Success Criteria:** [How we know when the task is complete]

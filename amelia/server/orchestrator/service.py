@@ -43,6 +43,7 @@ from amelia.trackers.factory import create_tracker
 # Nodes that emit stage events
 STAGE_NODES: frozenset[str] = frozenset({
     "architect_node",
+    "plan_validator_node",
     "human_approval_node",
     "developer_node",
     "reviewer_node",
@@ -783,13 +784,34 @@ class OrchestratorService:
                 was_interrupted = False
                 # Use astream with stream_mode="updates" to detect interrupts
                 # astream_events does NOT surface __interrupt__ events
-                # Convert Pydantic model to JSON-serializable dict for checkpointing.
-                # LangGraph's AsyncSqliteSaver uses json.dumps() internally,
-                # which fails on Pydantic BaseModel objects.
-                initial_state = state.execution_state.model_dump(mode="json")
+
+                # BUG FIX (#199): Check if checkpoint exists before starting.
+                # If we have an existing checkpoint, pass None to resume from it.
+                # If no checkpoint, pass initial_state to start fresh.
+                # This prevents the infinite loop bug where retries would restart
+                # the workflow from review_iteration=0 instead of resuming.
+                checkpoint_state = await graph.aget_state(config)
+                if checkpoint_state is not None and checkpoint_state.values:
+                    # Checkpoint exists - resume from it
+                    logger.debug(
+                        "Resuming workflow from existing checkpoint",
+                        workflow_id=workflow_id,
+                        checkpoint_keys=list(checkpoint_state.values.keys())[:5],
+                    )
+                    input_state = None
+                else:
+                    # No checkpoint - start fresh with initial state
+                    # Convert Pydantic model to JSON-serializable dict for checkpointing.
+                    # LangGraph's AsyncSqliteSaver uses json.dumps() internally,
+                    # which fails on Pydantic BaseModel objects.
+                    input_state = state.execution_state.model_dump(mode="json")
+                    logger.debug(
+                        "Starting workflow fresh (no checkpoint)",
+                        workflow_id=workflow_id,
+                    )
 
                 async for chunk in graph.astream(
-                    initial_state,
+                    input_state,
                     config=config,
                     stream_mode="updates",
                 ):
@@ -832,16 +854,20 @@ class OrchestratorService:
                     # Note: A separate COMPLETED emission exists in approve_workflow() for
                     # workflows that resume after human approval. These are mutually exclusive
                     # code paths - only one COMPLETED event is ever emitted per workflow.
+                    # Fetch fresh state from DB to get accurate current_stage
+                    # (the local state variable is stale - _handle_stream_chunk updates DB)
+                    fresh_state = await self._repository.get(workflow_id)
+                    final_stage = fresh_state.current_stage if fresh_state else None
                     await self._emit(
                         workflow_id,
                         EventType.WORKFLOW_COMPLETED,
                         "Workflow completed successfully",
-                        data={"final_stage": state.current_stage},
+                        data={"final_stage": final_stage},
                     )
                     await emit_workflow_event(
                         ExtWorkflowEventType.COMPLETED,
                         workflow_id=workflow_id,
-                        stage=state.current_stage,
+                        stage=final_stage,
                     )
                     await self._repository.set_status(workflow_id, "completed")
 
@@ -1040,11 +1066,15 @@ class OrchestratorService:
                     # Emit stage events for each node that completes
                     await self._handle_stream_chunk(workflow_id, chunk)
 
+                # Fetch fresh state from DB to get accurate current_stage
+                # (the local state variable is stale - _handle_stream_chunk updates DB)
+                fresh_state = await self._repository.get(workflow_id)
+                final_stage = fresh_state.current_stage if fresh_state else None
                 await self._emit(
                     workflow_id,
                     EventType.WORKFLOW_COMPLETED,
                     "Review workflow completed",
-                    data={"final_stage": state.current_stage},
+                    data={"final_stage": final_stage},
                 )
                 await self._repository.set_status(workflow_id, "completed")
 
@@ -1502,6 +1532,8 @@ class OrchestratorService:
         """
         if node_name == "architect_node":
             await self._emit_architect_messages(workflow_id, output)
+        elif node_name == "plan_validator_node":
+            await self._emit_validator_messages(workflow_id, output)
         elif node_name == "developer_node":
             await self._emit_developer_messages(workflow_id, output)
         elif node_name == "reviewer_node":
@@ -1531,6 +1563,29 @@ class OrchestratorService:
                 f"Goal: {goal}",
                 agent="architect",
                 data={"goal": goal, "has_plan": plan_markdown is not None},
+            )
+
+    async def _emit_validator_messages(
+        self,
+        workflow_id: str,
+        output: dict[str, Any],
+    ) -> None:
+        """Emit messages for plan validator node output.
+
+        Args:
+            workflow_id: The workflow ID.
+            output: State updates from the validator node.
+        """
+        goal = output.get("goal")
+        key_files = output.get("key_files", [])
+
+        if goal:
+            await self._emit(
+                workflow_id,
+                EventType.AGENT_MESSAGE,
+                f"Plan validated: {goal}",
+                agent="validator",
+                data={"goal": goal, "key_files_count": len(key_files)},
             )
 
     async def _emit_developer_messages(

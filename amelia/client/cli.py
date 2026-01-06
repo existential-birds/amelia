@@ -18,7 +18,6 @@ from amelia.client.api import (
 from amelia.client.git import get_worktree_context
 from amelia.client.models import CreateWorkflowResponse, WorkflowSummary
 from amelia.config import load_settings
-from amelia.core.orchestrator import _extract_goal_from_markdown
 from amelia.core.state import ExecutionState
 from amelia.drivers.factory import DriverFactory
 from amelia.trackers.factory import create_tracker
@@ -417,13 +416,15 @@ def plan_command(
         console.print(f"[dim]Generating plan for {issue_id}...[/dim]")
         final_state = asyncio.run(_generate_plan())
 
-        # Extract goal from raw_architect_output (reusing orchestrator helper)
-        goal = _extract_goal_from_markdown(final_state.raw_architect_output)
-
         console.print("\n[green]✓[/green] Plan generated successfully!")
-        if goal:
-            console.print(f"  Goal: {goal}")
-        console.print(f"  Saved to: [bold]{final_state.plan_path}[/bold]")
+        console.print(f"  Saved to: [bold]{final_state.plan_path}[/bold]\n")
+
+        # Show preview of the plan
+        if final_state.plan_path and Path(final_state.plan_path).exists():
+            plan_lines = Path(final_state.plan_path).read_text().splitlines()[:30]
+            console.print("\n".join(plan_lines))
+            if len(plan_lines) == 30:
+                console.print("[dim]...[/dim]")
 
     except ValueError as e:
         console.print(f"[red]Error:[/red] {e}")

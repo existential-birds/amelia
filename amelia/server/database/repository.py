@@ -2,10 +2,8 @@
 
 import json
 from datetime import UTC, datetime
-from typing import Any
 
 import aiosqlite
-from pydantic import BaseModel
 
 from amelia.server.database.connection import Database, SqliteValue
 from amelia.server.exceptions import WorkflowNotFoundError
@@ -16,26 +14,6 @@ from amelia.server.models.state import (
     validate_transition,
 )
 from amelia.server.models.tokens import TokenSummary, TokenUsage
-
-
-def _pydantic_encoder(obj: Any) -> Any:
-    """Encode Pydantic models to JSON-serializable dictionaries.
-
-    Custom JSON encoder for use with json.dumps() that converts Pydantic
-    BaseModel instances to dictionaries using model_dump().
-
-    Args:
-        obj: Object to encode, typically a Pydantic model.
-
-    Returns:
-        JSON-serializable dictionary representation of the object.
-
-    Raises:
-        TypeError: If object is not a Pydantic model or JSON serializable.
-    """
-    if isinstance(obj, BaseModel):
-        return obj.model_dump(mode="json")
-    raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
 
 
 class WorkflowRepository:
@@ -370,6 +348,10 @@ class WorkflowRepository:
         Args:
             event: The event to persist.
         """
+        # Use Pydantic's serialization which handles nested types (Path, models, etc.)
+        serialized = event.model_dump(mode="json")
+        data_json = json.dumps(serialized["data"]) if serialized["data"] else None
+
         await self._db.execute(
             """
             INSERT INTO events (
@@ -385,9 +367,7 @@ class WorkflowRepository:
                 event.agent,
                 event.event_type.value,
                 event.message,
-                json.dumps(event.data, default=_pydantic_encoder)
-                if event.data
-                else None,
+                data_json,
                 event.correlation_id,
             ),
         )

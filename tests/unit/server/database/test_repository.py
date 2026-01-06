@@ -253,6 +253,48 @@ class TestWorkflowRepository:
         max_seq = await repository.get_max_event_sequence("wf-pydantic")
         assert max_seq == 1
 
+    async def test_save_event_with_path_in_data(self, repository, make_event) -> None:
+        """Should serialize Path objects in event data.
+
+        Regression test for: TypeError: Object of type PosixPath is not JSON serializable
+        """
+        from pathlib import Path
+
+        # First create a workflow
+        state = ServerExecutionState(
+            id="wf-path",
+            issue_id="ISSUE-789",
+            worktree_path="/path/to/worktree",
+            worktree_name="feat-789",
+            workflow_status="in_progress",
+            started_at=datetime.now(UTC),
+        )
+        await repository.create(state)
+
+        # Create event with Path object in data
+        event = make_event(
+            id="evt-path",
+            workflow_id="wf-path",
+            timestamp=datetime.now(UTC),
+            agent="developer",
+            event_type=EventType.STAGE_COMPLETED,
+            message="Stage completed",
+            data={
+                "stage": "developer_node",
+                "output": {
+                    "worktree_path": Path("/foo/bar"),  # PosixPath, should be serialized
+                    "nested": {"another_path": Path("/baz/qux")},
+                },
+            },
+        )
+
+        # Should not raise TypeError
+        await repository.save_event(event)
+
+        # Verify event was saved
+        max_seq = await repository.get_max_event_sequence("wf-path")
+        assert max_seq == 1
+
     async def test_get_recent_events(self, repository, make_event) -> None:
         """Should return recent events for a workflow in chronological order."""
         # Create a workflow

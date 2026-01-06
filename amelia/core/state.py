@@ -86,6 +86,8 @@ class ExecutionState(BaseModel):
     plan_markdown: str | None = None
     raw_architect_output: str | None = None  # Raw output from agentic architect
     plan_path: Path | None = None
+    key_files: list[str] = Field(default_factory=list)
+    """List of key files identified in the plan."""
     human_approved: bool | None = None
     human_feedback: str | None = None
     last_review: ReviewResult | None = None

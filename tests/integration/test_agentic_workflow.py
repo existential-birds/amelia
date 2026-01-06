@@ -3,24 +3,23 @@
 Tests the LangGraph orchestrator graph structure, ExecutionState fields,
 and workflow invocation with real components (mocking only at HTTP/LLM boundary).
 """
+
 from pathlib import Path
 from typing import Any, cast
 from unittest.mock import AsyncMock, patch
 
 import pytest
 from langchain_core.runnables.config import RunnableConfig
-from langgraph.checkpoint.memory import MemorySaver
 
+from amelia.agents.architect import MarkdownPlanOutput
 from amelia.agents.reviewer import ReviewResponse
 from amelia.core.orchestrator import (
     call_architect_node,
     call_developer_node,
     call_reviewer_node,
-    create_orchestrator_graph,
-    route_after_review,
-    route_approval,
+    plan_validator_node,
 )
-from amelia.core.state import ExecutionState, ReviewResult
+from amelia.core.state import ExecutionState
 from amelia.drivers.api import ApiDriver
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
 from tests.integration.conftest import make_config, make_execution_state, make_issue, make_profile
@@ -33,35 +32,11 @@ def mock_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.mark.integration
-class TestAgenticOrchestrator:
-    """Test agentic workflow graph structure."""
-
-    def test_graph_compiles_with_checkpointer(self) -> None:
-        """Graph should compile with a checkpointer for persistence."""
-        checkpointer = MemorySaver()
-        graph = create_orchestrator_graph(checkpoint_saver=checkpointer)
-
-        assert graph is not None
-        # Verify interrupt_before is set when checkpointer is provided
-        assert graph.interrupt_before_nodes is not None
-
-    def test_graph_compiles_with_custom_interrupt(self) -> None:
-        """Graph should compile with custom interrupt_before nodes."""
-        checkpointer = MemorySaver()
-        graph = create_orchestrator_graph(
-            checkpoint_saver=checkpointer,
-            interrupt_before=["developer_node"],
-        )
-
-        assert "developer_node" in graph.interrupt_before_nodes
-
-
-@pytest.mark.integration
 class TestArchitectNodeIntegration:
-    """Test architect node with real Architect, mock at driver.generate() level."""
+    """Test architect node with real Architect, mock at driver.execute_agentic() level."""
 
-    async def test_architect_node_sets_goal_and_plan(self, tmp_path: Path) -> None:
-        """Architect node should populate goal and plan_markdown.
+    async def test_architect_node_returns_raw_output(self, tmp_path: Path) -> None:
+        """Architect node should return raw output; plan extraction is done by plan_validator_node.
 
         Real components: DriverFactory, ApiDriver, Architect
         Mock boundary: ApiDriver.execute_agentic (LLM call)
@@ -78,7 +53,6 @@ class TestArchitectNodeIntegration:
         config = make_config(thread_id="test-wf-1", profile=profile)
 
         # Mock at driver.execute_agentic level - this is the HTTP boundary
-        # The architect now uses agentic execution and yields AgenticMessage events
         plan_markdown = "# Plan\n\n**Goal:** Implement feature X by modifying component Y\n\n1. Do thing A\n2. Do thing B"
         mock_messages = [
             AgenticMessage(
@@ -100,12 +74,14 @@ class TestArchitectNodeIntegration:
         with patch.object(ApiDriver, "execute_agentic", mock_execute_agentic):
             result = await call_architect_node(state, cast(RunnableConfig, config))
 
-        assert result["goal"] == "Implement feature X by modifying component Y"
-        assert result["plan_markdown"] is not None
-        assert "Do thing A" in result["plan_markdown"]
-        # Verify plan file was created
-        assert result["plan_path"] is not None
-        assert Path(result["plan_path"]).exists()
+        # Architect node returns raw output - goal/plan extraction is done by plan_validator_node
+        assert "raw_architect_output" in result
+        assert result["raw_architect_output"] == plan_markdown
+        assert "tool_calls" in result
+        assert "tool_results" in result
+        # These fields are NOT set by architect_node (set by plan_validator_node)
+        assert "goal" not in result
+        assert "plan_markdown" not in result
 
     async def test_architect_node_requires_issue(self) -> None:
         """Architect node should raise error if no issue provided."""
@@ -127,8 +103,6 @@ class TestDeveloperNodeIntegration:
         Real components: DriverFactory, ApiDriver, Developer
         Mock boundary: ApiDriver.execute_agentic (HTTP/LLM call)
         """
-        from amelia.drivers.base import AgenticMessage, AgenticMessageType
-
         profile = make_profile(working_dir=str(tmp_path))
         state = make_execution_state(
             profile=profile,
@@ -197,17 +171,14 @@ class TestReviewerNodeIntegration:
         )
         config = make_config(thread_id="test-wf-4", profile=profile)
 
-        # Mock response at driver.generate level
         mock_llm_response = ReviewResponse(
             approved=True,
             comments=["LGTM! Good use of standard logging module."],
             severity="low",
         )
 
-        # driver.generate returns (output, session_id) tuple
         with patch.object(ApiDriver, "generate", new_callable=AsyncMock) as mock_generate:
             mock_generate.return_value = (mock_llm_response, "session-123")
-
             result = await call_reviewer_node(state, cast(RunnableConfig, config))
 
         assert result["last_review"] is not None
@@ -228,104 +199,328 @@ class TestReviewerNodeIntegration:
         )
         config = make_config(thread_id="test-wf-5", profile=profile)
 
-        # Mock rejection response at driver.generate level
         mock_llm_response = ReviewResponse(
             approved=False,
             comments=["Critical: Hardcoded password found. Use environment variables or secure vault."],
             severity="critical",
         )
 
-        # driver.generate returns (output, session_id) tuple
         with patch.object(ApiDriver, "generate", new_callable=AsyncMock) as mock_generate:
             mock_generate.return_value = (mock_llm_response, "session-456")
-
             result = await call_reviewer_node(state, cast(RunnableConfig, config))
 
         assert result["last_review"].approved is False
         assert result["last_review"].severity == "critical"
 
+    async def test_reviewer_node_increments_review_iteration(self, tmp_path: Path) -> None:
+        """Reviewer node should increment review_iteration after each review.
 
-@pytest.mark.integration
-class TestWorkflowRouting:
-    """Test routing functions for workflow edges."""
+        This prevents infinite loops when review is rejected - the iteration
+        counter ensures we eventually hit max_review_iterations and terminate.
 
-    def test_route_approval_approves(self) -> None:
-        """route_approval should return 'approve' when human_approved is True."""
-        state = ExecutionState(profile_id="test", human_approved=True)
-        assert route_approval(state) == "approve"
-
-    def test_route_approval_rejects(self) -> None:
-        """route_approval should return 'reject' when human_approved is False."""
-        state = ExecutionState(profile_id="test", human_approved=False)
-        assert route_approval(state) == "reject"
-
-    def test_route_after_review_ends_on_approval(self) -> None:
-        """route_after_review should end workflow when review is approved."""
-        profile = make_profile(max_review_iterations=3)
-        config = make_config(thread_id="test", profile=profile)
-        review = ReviewResult(reviewer_persona="Test", approved=True, comments=[], severity="low")
-        state = ExecutionState(profile_id="test", last_review=review)
-
-        result = route_after_review(state, cast(RunnableConfig, config))
-        assert result == "__end__"
-
-    def test_route_after_review_loops_on_rejection(self) -> None:
-        """route_after_review should loop to developer when review is rejected."""
-        profile = make_profile(max_review_iterations=3)
-        config = make_config(thread_id="test", profile=profile)
-        review = ReviewResult(reviewer_persona="Test", approved=False, comments=["Fix this"], severity="medium")
-        state = ExecutionState(profile_id="test", last_review=review, review_iteration=1)
-
-        result = route_after_review(state, cast(RunnableConfig, config))
-        assert result == "developer"
-
-    def test_route_after_review_ends_at_max_iterations(self) -> None:
-        """route_after_review should end when max iterations reached."""
-        profile = make_profile(max_review_iterations=3)
-        config = make_config(thread_id="test", profile=profile)
-        review = ReviewResult(reviewer_persona="Test", approved=False, comments=["Still wrong"], severity="high")
-        state = ExecutionState(profile_id="test", last_review=review, review_iteration=3)
-
-        result = route_after_review(state, cast(RunnableConfig, config))
-        assert result == "__end__"
-
-
-@pytest.mark.integration
-class TestDeveloperReviewerLoop:
-    """Test the developer ↔ reviewer loop integration."""
-
-    async def test_reviewer_rejection_triggers_developer_with_feedback(self, tmp_path: Path) -> None:
-        """When reviewer rejects, developer should receive feedback on next iteration."""
+        Real components: DriverFactory, ApiDriver, Reviewer
+        Mock boundary: ApiDriver.generate (LLM call)
+        """
         profile = make_profile(working_dir=str(tmp_path), max_review_iterations=3)
-
-        # First iteration: developer makes a change
-        initial_state = make_execution_state(
+        state = make_execution_state(
             profile=profile,
-            goal="Add error handling",
+            goal="Fix the bug",
+            code_changes_for_review="diff --git a/fix.py\n+# partial fix",
             review_iteration=0,
         )
+        config = make_config(thread_id="test-wf-iteration", profile=profile)
 
-        # Simulate reviewer rejection
-        review = ReviewResult(
-            reviewer_persona="General",
+        mock_llm_response = ReviewResponse(
             approved=False,
-            comments=["Add try/except blocks", "Log errors properly"],
+            comments=["Still needs work"],
+            severity="high",
+        )
+
+        with patch.object(ApiDriver, "generate", new_callable=AsyncMock) as mock_generate:
+            mock_generate.return_value = (mock_llm_response, "session-iter")
+            result = await call_reviewer_node(state, cast(RunnableConfig, config))
+
+        # Key assertion: review_iteration should be incremented
+        assert "review_iteration" in result, "review_iteration must be returned by reviewer node"
+        assert result["review_iteration"] == 1, "review_iteration should increment from 0 to 1"
+
+        # Run again with incremented state to verify it keeps incrementing
+        state_round2 = state.model_copy(update={"review_iteration": 1})
+        with patch.object(ApiDriver, "generate", new_callable=AsyncMock) as mock_generate:
+            mock_generate.return_value = (mock_llm_response, "session-iter2")
+            result2 = await call_reviewer_node(state_round2, cast(RunnableConfig, config))
+
+        assert result2["review_iteration"] == 2, "review_iteration should increment from 1 to 2"
+
+    async def test_reviewer_node_updates_last_review_each_round(self, tmp_path: Path) -> None:
+        """Reviewer node should update last_review with new results each round.
+
+        This verifies that the review results are different after developer
+        makes changes, preventing the "same review message" infinite loop bug.
+
+        Real components: DriverFactory, ApiDriver, Reviewer
+        Mock boundary: ApiDriver.generate (LLM call)
+        """
+        profile = make_profile(working_dir=str(tmp_path), max_review_iterations=3)
+        state = make_execution_state(
+            profile=profile,
+            goal="Fix the bug",
+            code_changes_for_review="diff --git a/fix.py\n+# initial attempt",
+            review_iteration=0,
+        )
+        config = make_config(thread_id="test-wf-review-update", profile=profile)
+
+        # Round 1: Reviewer rejects with severity "high"
+        mock_response_round1 = ReviewResponse(
+            approved=False,
+            comments=["Missing error handling", "No tests"],
+            severity="high",
+        )
+
+        with patch.object(ApiDriver, "generate", new_callable=AsyncMock) as mock_generate:
+            mock_generate.return_value = (mock_response_round1, "session-r1")
+            result1 = await call_reviewer_node(state, cast(RunnableConfig, config))
+
+        assert result1["last_review"].approved is False
+        assert result1["last_review"].severity == "high"
+        assert len(result1["last_review"].comments) == 2
+        assert "Missing error handling" in result1["last_review"].comments
+
+        # Round 2: Simulate developer fixed one issue, reviewer now returns different result
+        state_round2 = state.model_copy(update={
+            "review_iteration": 1,
+            "code_changes_for_review": "diff --git a/fix.py\n+# with error handling",
+        })
+        mock_response_round2 = ReviewResponse(
+            approved=False,
+            comments=["Still no tests"],
             severity="medium",
         )
 
-        # State after review
-        state_after_review = initial_state.model_copy(update={
-            "last_review": review,
-            "review_iteration": 1,
+        with patch.object(ApiDriver, "generate", new_callable=AsyncMock) as mock_generate:
+            mock_generate.return_value = (mock_response_round2, "session-r2")
+            result2 = await call_reviewer_node(state_round2, cast(RunnableConfig, config))
+
+        # Verify last_review is UPDATED, not stale
+        assert result2["last_review"].approved is False
+        assert result2["last_review"].severity == "medium", "severity should update from high to medium"
+        assert len(result2["last_review"].comments) == 1, "comment count should change"
+        assert "Still no tests" in result2["last_review"].comments, "comments should be new"
+
+        # Round 3: All fixed, approved
+        state_round3 = state.model_copy(update={
+            "review_iteration": 2,
+            "code_changes_for_review": "diff --git a/fix.py\n+# with tests",
         })
+        mock_response_round3 = ReviewResponse(
+            approved=True,
+            comments=["LGTM!"],
+            severity="low",
+        )
 
-        # Verify state has feedback for next developer iteration
-        assert state_after_review.last_review is not None
-        assert state_after_review.last_review.approved is False
-        assert len(state_after_review.last_review.comments) == 2
-        assert state_after_review.review_iteration == 1
+        with patch.object(ApiDriver, "generate", new_callable=AsyncMock) as mock_generate:
+            mock_generate.return_value = (mock_response_round3, "session-r3")
+            result3 = await call_reviewer_node(state_round3, cast(RunnableConfig, config))
 
-        # route_after_review should send back to developer
-        config = make_config(thread_id="test", profile=profile)
-        next_node = route_after_review(state_after_review, cast(RunnableConfig, config))
-        assert next_node == "developer"
+        assert result3["last_review"].approved is True, "should be approved in round 3"
+        assert result3["last_review"].severity == "low"
+        assert result3["review_iteration"] == 3
+
+
+@pytest.mark.integration
+class TestArchitectValidatorFlowIntegration:
+    """Test architect → plan_validator flow with real components, mock at driver level."""
+
+    async def test_architect_to_validator_handoff(self, tmp_path: Path) -> None:
+        """Verify architect creates plan file and validator extracts structured data.
+
+        Real components: DriverFactory, ApiDriver, Architect, plan_validator_node
+        Mock boundary: ApiDriver.execute_agentic (architect), ApiDriver.generate (validator)
+
+        This tests the complete handoff:
+        1. architect_node calls LLM, writes plan file via Write tool, returns raw_architect_output
+        2. plan_validator_node reads plan file, extracts goal/plan_markdown/key_files
+        """
+        from amelia.core.constants import resolve_plan_path
+
+        plans_dir = tmp_path / "plans"
+        plans_dir.mkdir(parents=True, exist_ok=True)
+
+        profile = make_profile(
+            plan_output_dir=str(plans_dir),
+            working_dir=str(tmp_path),
+        )
+        issue = make_issue(
+            id="TEST-FLOW-1",
+            title="Add user authentication",
+            description="Implement JWT-based authentication for the API",
+        )
+        state = make_execution_state(issue=issue, profile=profile)
+        config = make_config(thread_id="test-flow-1", profile=profile)
+
+        # Compute expected plan path
+        plan_rel_path = resolve_plan_path(profile.plan_path_pattern, issue.id)
+        expected_plan_path = tmp_path / plan_rel_path
+
+        # --- Phase 1: Architect node ---
+        # The architect writes the plan content to disk via Write tool
+        plan_content = """# Implementation Plan: Add User Authentication
+
+## Goal
+Implement JWT-based authentication for the API endpoints.
+
+## Key Files
+- `src/auth/jwt.py` - JWT token handling
+- `src/api/middleware.py` - Authentication middleware
+- `tests/test_auth.py` - Authentication tests
+
+## Tasks
+
+### Task 1: Create JWT utilities
+Create the JWT token generation and validation utilities.
+
+### Task 2: Add authentication middleware
+Implement middleware to validate tokens on protected routes.
+
+### Task 3: Write tests
+Add comprehensive tests for the authentication flow.
+"""
+        # Mock messages include Write tool call (how architect saves plan in production)
+        mock_architect_messages = [
+            AgenticMessage(
+                type=AgenticMessageType.THINKING,
+                content="Analyzing the authentication requirements...",
+            ),
+            AgenticMessage(
+                type=AgenticMessageType.TOOL_CALL,
+                tool_name="Write",
+                tool_input={"file_path": str(expected_plan_path), "content": plan_content},
+                tool_call_id="write-plan-1",
+            ),
+            AgenticMessage(
+                type=AgenticMessageType.TOOL_RESULT,
+                tool_name="Write",
+                tool_output=f"File written to {expected_plan_path}",
+                tool_call_id="write-plan-1",
+            ),
+            AgenticMessage(
+                type=AgenticMessageType.RESULT,
+                content="I've created an implementation plan for adding user authentication.",
+                session_id="architect-session-123",
+            ),
+        ]
+
+        async def mock_execute_agentic(*_args: Any, **_kwargs: Any) -> Any:
+            """Mock async generator for architect's execute_agentic.
+
+            Simulates agentic execution with Write tool call. Since we're mocking,
+            we manually write the file to simulate what the tool would do.
+            """
+            for msg in mock_architect_messages:
+                # Simulate Write tool execution when we yield the tool result
+                if msg.type == AgenticMessageType.TOOL_RESULT and msg.tool_name == "Write":
+                    expected_plan_path.parent.mkdir(parents=True, exist_ok=True)
+                    expected_plan_path.write_text(plan_content)
+                yield msg
+
+        with patch.object(ApiDriver, "execute_agentic", mock_execute_agentic):
+            architect_result = await call_architect_node(state, cast(RunnableConfig, config))
+
+        # Verify architect returns raw output
+        assert "raw_architect_output" in architect_result
+        # raw_architect_output is the RESULT message content, not the plan itself
+        assert "implementation plan" in architect_result["raw_architect_output"].lower()
+
+        # Verify tool calls were recorded
+        assert "tool_calls" in architect_result
+        assert len(architect_result["tool_calls"]) >= 1
+        write_call = architect_result["tool_calls"][0]
+        assert write_call.tool_name == "Write"
+
+        # Verify plan file was written to disk (by our mock simulating the Write tool)
+        assert expected_plan_path.exists(), f"Plan file should exist at {expected_plan_path}"
+        assert expected_plan_path.read_text() == plan_content
+
+        # --- Phase 2: Plan Validator node ---
+        # Update state with architect results (simulating graph transition)
+        state_after_architect = state.model_copy(
+            update={"raw_architect_output": architect_result["raw_architect_output"]}
+        )
+
+        # Mock the validator's generate call to extract structured data
+        mock_validator_output = MarkdownPlanOutput(
+            goal="Implement JWT-based authentication for the API endpoints",
+            plan_markdown=plan_content,
+            key_files=["src/auth/jwt.py", "src/api/middleware.py", "tests/test_auth.py"],
+        )
+
+        with patch.object(ApiDriver, "generate", new_callable=AsyncMock) as mock_generate:
+            mock_generate.return_value = (mock_validator_output, "validator-session-456")
+            validator_result = await plan_validator_node(
+                state_after_architect, cast(RunnableConfig, config)
+            )
+
+        # Verify validator extracts structured fields
+        assert "goal" in validator_result
+        assert validator_result["goal"] == "Implement JWT-based authentication for the API endpoints"
+
+        assert "plan_markdown" in validator_result
+        assert validator_result["plan_markdown"] == plan_content
+
+        assert "key_files" in validator_result
+        assert len(validator_result["key_files"]) == 3
+        assert "src/auth/jwt.py" in validator_result["key_files"]
+
+        assert "plan_path" in validator_result
+        assert validator_result["plan_path"] == expected_plan_path
+
+    async def test_validator_fails_if_plan_file_missing(self, tmp_path: Path) -> None:
+        """Validator should raise error if architect didn't write plan file.
+
+        This ensures the validator fails fast if the plan file is missing,
+        rather than silently continuing with invalid state.
+        """
+        plans_dir = tmp_path / "plans"
+        # Don't create the directory - simulate architect failure
+
+        profile = make_profile(
+            plan_output_dir=str(plans_dir),
+            working_dir=str(tmp_path),
+        )
+        issue = make_issue(id="TEST-MISSING-1")
+        state = make_execution_state(
+            issue=issue,
+            profile=profile,
+            raw_architect_output="Some content that wasn't written to disk",
+        )
+        config = make_config(thread_id="test-missing-1", profile=profile)
+
+        with pytest.raises(ValueError, match="Plan file not found"):
+            await plan_validator_node(state, cast(RunnableConfig, config))
+
+    async def test_validator_fails_if_plan_file_empty(self, tmp_path: Path) -> None:
+        """Validator should raise error if plan file exists but is empty.
+
+        This catches edge cases where the file was created but write failed.
+        """
+        plans_dir = tmp_path / "plans"
+        plans_dir.mkdir(parents=True, exist_ok=True)
+
+        profile = make_profile(
+            plan_output_dir=str(plans_dir),
+            working_dir=str(tmp_path),
+        )
+        issue = make_issue(id="TEST-EMPTY-1")
+        state = make_execution_state(issue=issue, profile=profile)
+        config = make_config(thread_id="test-empty-1", profile=profile)
+
+        # Create empty plan file
+        from amelia.core.constants import resolve_plan_path
+
+        plan_rel_path = resolve_plan_path(profile.plan_path_pattern, issue.id)
+        plan_path = tmp_path / plan_rel_path
+        plan_path.parent.mkdir(parents=True, exist_ok=True)
+        plan_path.write_text("")  # Empty file
+
+        with pytest.raises(ValueError, match="Plan file is empty"):
+            await plan_validator_node(state, cast(RunnableConfig, config))

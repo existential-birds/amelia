@@ -5,7 +5,6 @@ Developer (execute agentically) ↔ Reviewer (review) → Done. Provides node fu
 the state machine and the create_orchestrator_graph() factory.
 """
 import asyncio
-import re
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
@@ -17,13 +16,13 @@ from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from loguru import logger
 
-from amelia.agents.architect import Architect
+from amelia.agents.architect import Architect, MarkdownPlanOutput
 from amelia.agents.developer import Developer
 from amelia.agents.evaluator import Evaluator
 from amelia.agents.reviewer import Reviewer
-from amelia.core.constants import ToolName, resolve_plan_path
+from amelia.core.constants import resolve_plan_path
 from amelia.core.state import ExecutionState
-from amelia.core.types import Profile, StreamEmitter
+from amelia.core.types import Profile, StreamEmitter, StreamEvent, StreamEventType
 from amelia.drivers.factory import DriverFactory
 from amelia.server.models.tokens import TokenUsage
 
@@ -125,82 +124,95 @@ async def _save_token_usage(
         )
 
 
-def _extract_goal_from_markdown(markdown: str | None) -> str | None:
-    """Temporary: Extract goal from plan markdown. Remove in #199.
+async def plan_validator_node(
+    state: ExecutionState,
+    config: RunnableConfig | None = None,
+) -> dict[str, Any]:
+    """Validate and extract structure from architect's plan file.
 
-    Tries multiple patterns in order of specificity:
-    1. **Goal:** prefix (explicit goal line from prompt format)
-    2. ## Goal: or # Goal: headers
-    3. Plan title from header (e.g., "## Implementation Plan: XYZ")
-    4. First non-empty, non-header line as fallback
+    Reads the plan file written by the architect and uses an LLM to extract
+    structured fields (goal, plan_markdown, key_files) using the MarkdownPlanOutput schema.
 
     Args:
-        markdown: Raw markdown plan content.
+        state: Current execution state with raw_architect_output.
+        config: RunnableConfig with profile in configurable.
 
     Returns:
-        Extracted goal string or None if not found.
+        Partial state dict with goal, plan_markdown, plan_path, key_files.
+
+    Raises:
+        ValueError: If plan file not found or empty.
     """
-    if not markdown:
-        return None
+    stream_emitter, workflow_id, profile = _extract_config_params(config)
 
-    lines = markdown.split("\n")
+    if not state.issue:
+        raise ValueError("Issue is required in state for plan validation")
 
-    # Pattern 1: **Goal:** prefix (most explicit - matches prompt format)
-    for line in lines:
-        stripped = line.strip()
-        if stripped.startswith("**Goal:**"):
-            goal = stripped.replace("**Goal:**", "").strip()
-            if goal:
-                logger.debug("Goal extracted", pattern="**Goal:** prefix", goal=goal[:100])
-                return goal
+    # Resolve plan path - use working_dir to match call_architect_node
+    plan_rel_path = resolve_plan_path(profile.plan_path_pattern, state.issue.id)
+    working_dir = Path(profile.working_dir) if profile.working_dir else Path(".")
+    plan_path = working_dir / plan_rel_path
 
-    # Pattern 2: ## Goal or # Goal headers
-    for i, line in enumerate(lines):
-        stripped = line.strip().lower()
-        if stripped.startswith("## goal") or stripped.startswith("# goal"):
-            # Try inline content after "Goal:"
-            original = lines[i].strip()
-            parts = original.split(":", 1)
-            if len(parts) > 1 and parts[1].strip():
-                goal = parts[1].strip()
-                logger.debug("Goal extracted", pattern="Goal header inline", goal=goal[:100])
-                return goal
-            # Try next line if header has no inline content
-            if i + 1 < len(lines):
-                next_line = lines[i + 1].strip()
-                if next_line and not next_line.startswith("#"):
-                    logger.debug(
-                        "Goal extracted", pattern="Goal header next line", goal=next_line[:100]
-                    )
-                    return next_line
+    logger.info(
+        "Orchestrator: Validating plan structure",
+        plan_path=str(plan_path),
+        workflow_id=workflow_id,
+    )
 
-    # Pattern 3: Plan title from header (e.g., "## Implementation Plan: XYZ")
-    for line in lines:
-        stripped = line.strip()
-        # Match "# ... Plan: <title>" or "## ... Plan: <title>"
-        match = re.match(r"^#+\s+.*?Plan[:\s]+(.+)$", stripped, re.IGNORECASE)
-        if match:
-            goal = match.group(1).strip()
-            if goal:
-                logger.debug("Goal extracted", pattern="Plan header title", goal=goal[:100])
-                return goal
+    # Emit start event to UI
+    if stream_emitter:
+        await stream_emitter(
+            StreamEvent(
+                type=StreamEventType.AGENT_OUTPUT,
+                content=f"Validating plan: {plan_path}",
+                timestamp=datetime.now(UTC),
+                agent="validator",
+                workflow_id=workflow_id,
+            )
+        )
 
-    # Pattern 4: First meaningful non-header line (fallback)
-    for line in lines[:20]:  # Only check first 20 lines
-        stripped = line.strip()
-        # Skip empty, headers, lists, and table rows
-        if (
-            stripped
-            and not stripped.startswith("#")
-            and not stripped.startswith("-")
-            and not stripped.startswith("|")
-            and len(stripped) > 20
-        ):
-            logger.debug("Goal extracted", pattern="first meaningful line", goal=stripped[:100])
-            return stripped
+    # Read plan file - fail fast if not found
+    if not plan_path.exists():
+        raise ValueError(f"Plan file not found at {plan_path}")
 
-    logger.debug("Goal extraction failed - no patterns matched")
-    return None
+    plan_content = plan_path.read_text()
+    if not plan_content.strip():
+        raise ValueError(f"Plan file is empty at {plan_path}")
+
+    # Get validator driver
+    model = profile.validator_model or profile.model
+    driver = DriverFactory.get_driver(profile.driver, model=model)
+
+    # Extract structured fields using LLM
+    prompt = f"""Extract the implementation plan structure from the following markdown plan.
+
+<plan>
+{plan_content}
+</plan>
+
+Return:
+- goal: 1-2 sentence summary of what this plan accomplishes
+- plan_markdown: The full plan content (preserve as-is)
+- key_files: List of files that will be created or modified"""
+
+    output, _session_id = await driver.generate(
+        prompt=prompt,
+        schema=MarkdownPlanOutput,
+    )
+
+    logger.info(
+        "Plan validated",
+        goal=output.goal,
+        key_files_count=len(output.key_files),
+        workflow_id=workflow_id,
+    )
+
+    return {
+        "goal": output.goal,
+        "plan_markdown": output.plan_markdown,
+        "plan_path": plan_path,
+        "key_files": output.key_files,
+    }
 
 
 async def call_architect_node(
@@ -210,15 +222,15 @@ async def call_architect_node(
     """Orchestrator node for the Architect agent to generate an implementation plan.
 
     Consumes the Architect's async generator, streaming events and collecting
-    the final state with the generated plan.
+    the final state. The plan_validator_node handles extracting structured
+    fields (goal, plan_markdown, key_files) from the written plan file.
 
     Args:
         state: Current execution state containing the issue and profile.
         config: Optional RunnableConfig with stream_emitter in configurable.
 
     Returns:
-        Partial state dict with goal, plan_markdown, plan_path, raw_architect_output,
-        tool_calls, and tool_results.
+        Partial state dict with raw_architect_output, tool_calls, and tool_results.
 
     Raises:
         ValueError: If no issue is provided in the state.
@@ -264,90 +276,20 @@ async def call_architect_node(
     # Save token usage from driver (best-effort)
     await _save_token_usage(driver, workflow_id, "architect", repository)
 
-    # Read plan from predictable path (reusing plan_path computed above)
-    plan_content: str | None = None
-    plan_file_path: Path | None = None
-
-    if plan_path.exists():
-        try:
-            plan_content = plan_path.read_text()
-            plan_file_path = plan_path
-            logger.debug(
-                "Read plan from predictable path",
-                plan_path=str(plan_path),
-                plan_length=len(plan_content),
-            )
-        except Exception as e:
-            logger.warning(
-                "Failed to read plan file",
-                plan_path=str(plan_path),
-                error=str(e),
-            )
-    else:
-        logger.debug(
-            "Plan file not found at expected path, falling back to tool call parsing",
-            plan_path=str(plan_path),
-        )
-        # Fallback: Search tool calls for write_file commands that created markdown files
-        for tool_call in final_state.tool_calls:
-            if tool_call.tool_name == ToolName.WRITE_FILE and isinstance(tool_call.tool_input, dict):
-                file_path = tool_call.tool_input.get("file_path", "")
-                content = tool_call.tool_input.get("content", "")
-                # Check if this looks like a plan file (has **Goal:** marker)
-                if file_path.endswith(".md") and "**Goal:**" in content:
-                    plan_content = content
-                    plan_file_path = Path(file_path)
-                    logger.debug(
-                        "Found plan in Write tool call",
-                        file_path=file_path,
-                        content_length=len(content),
-                    )
-                    break
-
-    # Extract goal: try plan content first (agentic mode), then raw output (legacy)
-    goal = _extract_goal_from_markdown(plan_content) if plan_content else None
-    if goal is None:
-        goal = _extract_goal_from_markdown(final_state.raw_architect_output)
-
-    # Use plan file content if available, otherwise fall back to raw output
-    plan_markdown = plan_content or final_state.raw_architect_output
-
-    # Log the architect plan generation with diagnostic details
-    raw_output_preview = (
-        final_state.raw_architect_output[:500]
-        if final_state.raw_architect_output
-        else None
-    )
+    # Log the architect plan generation
     logger.info(
         "Agent action completed",
         agent="architect",
         action="generated_plan",
         details={
-            "goal": goal,
-            "goal_length": len(goal) if goal else 0,
-            "plan_markdown_length": len(plan_markdown) if plan_markdown else 0,
             "raw_output_length": len(final_state.raw_architect_output) if final_state.raw_architect_output else 0,
-            "raw_output_preview": raw_output_preview,
             "tool_calls_count": len(final_state.tool_calls),
-            "plan_file_path": str(plan_file_path) if plan_file_path else None,
-            "plan_from_tool_call": plan_file_path is not None and plan_content is not None,
         },
     )
 
-    # Warn if goal extraction failed from all sources
-    if goal is None and (plan_content or final_state.raw_architect_output):
-        logger.warning(
-            "Goal extraction failed - no '**Goal:**' line found",
-            plan_file_path=str(plan_file_path) if plan_file_path else None,
-            raw_output_first_lines="\n".join(final_state.raw_architect_output.split("\n")[:10]) if final_state.raw_architect_output else None,
-        )
-
-    # Return partial state update
+    # Return partial state update - plan_validator_node handles plan extraction
     return {
-        "goal": goal,
         "raw_architect_output": final_state.raw_architect_output,
-        "plan_markdown": plan_markdown,
-        "plan_path": str(final_state.plan_path) if final_state.plan_path else None,
         "tool_calls": list(final_state.tool_calls),
         "tool_results": list(final_state.tool_results),
     }
@@ -678,7 +620,8 @@ async def call_reviewer_node(
     # Save token usage from driver (best-effort)
     await _save_token_usage(driver, workflow_id, "reviewer", repository)
 
-    # Log the review completion
+    # Log the review completion with iteration tracking
+    next_iteration = state.review_iteration + 1
     logger.info(
         "Agent action completed",
         agent="reviewer",
@@ -687,12 +630,14 @@ async def call_reviewer_node(
             "severity": review_result.severity,
             "approved": review_result.approved,
             "comment_count": len(review_result.comments),
+            "review_iteration": next_iteration,
         },
     )
 
     return {
         "last_review": review_result,
         "driver_session_id": new_session_id,
+        "review_iteration": next_iteration,
     }
 
 
@@ -913,6 +858,7 @@ def create_orchestrator_graph(
 
     # Add nodes
     workflow.add_node("architect_node", call_architect_node)
+    workflow.add_node("plan_validator_node", plan_validator_node)
     workflow.add_node("human_approval_node", human_approval_node)
     workflow.add_node("developer_node", call_developer_node)
     workflow.add_node("reviewer_node", call_reviewer_node)
@@ -921,8 +867,9 @@ def create_orchestrator_graph(
     workflow.set_entry_point("architect_node")
 
     # Define edges
-    # Architect -> Human approval
-    workflow.add_edge("architect_node", "human_approval_node")
+    # Architect -> Plan Validator -> Human approval
+    workflow.add_edge("architect_node", "plan_validator_node")
+    workflow.add_edge("plan_validator_node", "human_approval_node")
 
     # Conditional edge from human_approval_node:
     # - approve: continue to developer_node

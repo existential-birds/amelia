@@ -69,6 +69,9 @@ class Profile(BaseModel):
     working_dir: str | None = None
     plan_output_dir: str = "docs/plans"
     plan_path_pattern: str = "docs/plans/{date}-{issue_key}.md"
+    validator_model: str | None = None
+    """Optional model for plan validation. Uses a fast/cheap model for extraction.
+    If not set, falls back to profile.model."""
     retry: RetryConfig = Field(default_factory=RetryConfig)
     max_review_iterations: int = 3
     auto_approve_reviews: bool = False
