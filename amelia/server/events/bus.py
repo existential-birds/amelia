@@ -6,7 +6,8 @@ from typing import TYPE_CHECKING
 
 from loguru import logger
 
-from amelia.core.types import StreamEvent
+from amelia.core.types import StreamEvent, StreamEventType
+from amelia.server.config import ServerConfig
 from amelia.server.models import WorkflowEvent
 
 
@@ -127,6 +128,11 @@ class EventBus:
         Args:
             event: The stream event to broadcast.
         """
+        # Filter tool results unless explicitly enabled
+        config = ServerConfig()
+        if event.type == StreamEventType.CLAUDE_TOOL_RESULT and not config.stream_tool_results:
+            return
+
         if self._connection_manager:
             task = asyncio.create_task(self._connection_manager.broadcast_stream(event))
             self._broadcast_tasks.add(task)

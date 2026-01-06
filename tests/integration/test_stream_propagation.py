@@ -182,6 +182,8 @@ class TestStreamEventTypes:
         expected_type_str: str,
     ):
         """All StreamEventType values are broadcast correctly."""
+        from unittest.mock import patch
+
         mock_ws = AsyncMock(spec=WebSocket)
         mock_ws.send_json = AsyncMock()
         await connection_manager.connect(mock_ws)
@@ -194,7 +196,10 @@ class TestStreamEventTypes:
             workflow_id="wf-test",
         )
 
-        event_bus.emit_stream(event)
+        # Enable tool results streaming for this test
+        with patch("amelia.server.events.bus.ServerConfig") as mock_config_cls:
+            mock_config_cls.return_value.stream_tool_results = True
+            event_bus.emit_stream(event)
         await asyncio.sleep(0.1)
 
         call_args = mock_ws.send_json.call_args[0][0]

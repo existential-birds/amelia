@@ -81,3 +81,9 @@ class ServerConfig(BaseSettings):
         ge=1,
         description="Maximum number of concurrent workflows",
     )
+
+    # Streaming
+    stream_tool_results: bool = Field(
+        default=False,
+        description="Stream tool result events to dashboard WebSocket. Enable for debugging.",
+    )

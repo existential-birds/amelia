@@ -33,35 +33,6 @@ uv run amelia review --local                     # Review uncommitted changes
 
 **Pre-push hook**: A git pre-push hook runs `ruff check`, `mypy`, and `pytest` before every push. All checks must pass to push to remote.
 
-## Graphite Stacked PRs
-
-This repo uses [Graphite](https://graphite.dev/) for stacked PRs. **Always use `gt` commands instead of raw `git push`** to keep the stack properly tracked.
-
-```bash
-# Before starting work - sync with remote
-gt sync
-
-# After making changes
-git add -A && git commit -m "message"
-gt restack              # If Graphite asks for it
-gt submit --stack       # Push all branches in stack
-
-# View stack structure
-gt ls
-
-# Switch branches within stack
-gt checkout <branch>
-```
-
-**Why this matters**: Graphite tracks version history for each PR. Using raw `git push` bypasses this tracking and can cause sync errors like `refs/gt-fetch-head` issues. Always use `gt submit` to push changes.
-
-**If sync breaks**: If you see errors about missing refs (e.g., `graphite-base/XXX`), try:
-```bash
-gt untrack <branch>
-gt track <branch> --parent <parent-branch>
-gt sync
-```
-
 ## Dashboard Frontend
 
 The dashboard is a React + TypeScript frontend in `dashboard/`.
@@ -138,6 +109,7 @@ Server settings via environment variables (prefix `AMELIA_`):
 | `AMELIA_CHECKPOINT_PATH` | `~/.amelia/checkpoints.db` | Path to LangGraph checkpoint database |
 | `AMELIA_DATABASE_PATH` | `~/.amelia/amelia.db` | Path to main SQLite database |
 | `AMELIA_MAX_CONCURRENT` | `5` | Maximum concurrent workflows |
+| `AMELIA_STREAM_TOOL_RESULTS` | `false` | Stream tool result events to dashboard. Enable for debugging. |
 
 **Debugging tip**: Set `AMELIA_CHECKPOINT_RETENTION_DAYS=-1` to preserve checkpoints for debugging workflow issues.
 
