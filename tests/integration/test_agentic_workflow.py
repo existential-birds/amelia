@@ -11,11 +11,13 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from langchain_core.runnables.config import RunnableConfig
 
+from amelia.agents.architect import MarkdownPlanOutput
 from amelia.agents.reviewer import ReviewResponse
 from amelia.core.orchestrator import (
     call_architect_node,
     call_developer_node,
     call_reviewer_node,
+    plan_validator_node,
 )
 from amelia.core.state import ExecutionState
 from amelia.drivers.api import ApiDriver
@@ -323,3 +325,202 @@ class TestReviewerNodeIntegration:
         assert result3["last_review"].approved is True, "should be approved in round 3"
         assert result3["last_review"].severity == "low"
         assert result3["review_iteration"] == 3
+
+
+@pytest.mark.integration
+class TestArchitectValidatorFlowIntegration:
+    """Test architect → plan_validator flow with real components, mock at driver level."""
+
+    async def test_architect_to_validator_handoff(self, tmp_path: Path) -> None:
+        """Verify architect creates plan file and validator extracts structured data.
+
+        Real components: DriverFactory, ApiDriver, Architect, plan_validator_node
+        Mock boundary: ApiDriver.execute_agentic (architect), ApiDriver.generate (validator)
+
+        This tests the complete handoff:
+        1. architect_node calls LLM, writes plan file via Write tool, returns raw_architect_output
+        2. plan_validator_node reads plan file, extracts goal/plan_markdown/key_files
+        """
+        from amelia.core.constants import resolve_plan_path
+
+        plans_dir = tmp_path / "plans"
+        plans_dir.mkdir(parents=True, exist_ok=True)
+
+        profile = make_profile(
+            plan_output_dir=str(plans_dir),
+            working_dir=str(tmp_path),
+        )
+        issue = make_issue(
+            id="TEST-FLOW-1",
+            title="Add user authentication",
+            description="Implement JWT-based authentication for the API",
+        )
+        state = make_execution_state(issue=issue, profile=profile)
+        config = make_config(thread_id="test-flow-1", profile=profile)
+
+        # Compute expected plan path
+        plan_rel_path = resolve_plan_path(profile.plan_path_pattern, issue.id)
+        expected_plan_path = tmp_path / plan_rel_path
+
+        # --- Phase 1: Architect node ---
+        # The architect writes the plan content to disk via Write tool
+        plan_content = """# Implementation Plan: Add User Authentication
+
+## Goal
+Implement JWT-based authentication for the API endpoints.
+
+## Key Files
+- `src/auth/jwt.py` - JWT token handling
+- `src/api/middleware.py` - Authentication middleware
+- `tests/test_auth.py` - Authentication tests
+
+## Tasks
+
+### Task 1: Create JWT utilities
+Create the JWT token generation and validation utilities.
+
+### Task 2: Add authentication middleware
+Implement middleware to validate tokens on protected routes.
+
+### Task 3: Write tests
+Add comprehensive tests for the authentication flow.
+"""
+        # Mock messages include Write tool call (how architect saves plan in production)
+        mock_architect_messages = [
+            AgenticMessage(
+                type=AgenticMessageType.THINKING,
+                content="Analyzing the authentication requirements...",
+            ),
+            AgenticMessage(
+                type=AgenticMessageType.TOOL_CALL,
+                tool_name="Write",
+                tool_input={"file_path": str(expected_plan_path), "content": plan_content},
+                tool_call_id="write-plan-1",
+            ),
+            AgenticMessage(
+                type=AgenticMessageType.TOOL_RESULT,
+                tool_name="Write",
+                tool_output=f"File written to {expected_plan_path}",
+                tool_call_id="write-plan-1",
+            ),
+            AgenticMessage(
+                type=AgenticMessageType.RESULT,
+                content="I've created an implementation plan for adding user authentication.",
+                session_id="architect-session-123",
+            ),
+        ]
+
+        async def mock_execute_agentic(*_args: Any, **_kwargs: Any) -> Any:
+            """Mock async generator for architect's execute_agentic.
+
+            Simulates agentic execution with Write tool call. Since we're mocking,
+            we manually write the file to simulate what the tool would do.
+            """
+            for msg in mock_architect_messages:
+                # Simulate Write tool execution when we yield the tool result
+                if msg.type == AgenticMessageType.TOOL_RESULT and msg.tool_name == "Write":
+                    expected_plan_path.parent.mkdir(parents=True, exist_ok=True)
+                    expected_plan_path.write_text(plan_content)
+                yield msg
+
+        with patch.object(ApiDriver, "execute_agentic", mock_execute_agentic):
+            architect_result = await call_architect_node(state, cast(RunnableConfig, config))
+
+        # Verify architect returns raw output
+        assert "raw_architect_output" in architect_result
+        # raw_architect_output is the RESULT message content, not the plan itself
+        assert "implementation plan" in architect_result["raw_architect_output"].lower()
+
+        # Verify tool calls were recorded
+        assert "tool_calls" in architect_result
+        assert len(architect_result["tool_calls"]) >= 1
+        write_call = architect_result["tool_calls"][0]
+        assert write_call.tool_name == "Write"
+
+        # Verify plan file was written to disk (by our mock simulating the Write tool)
+        assert expected_plan_path.exists(), f"Plan file should exist at {expected_plan_path}"
+        assert expected_plan_path.read_text() == plan_content
+
+        # --- Phase 2: Plan Validator node ---
+        # Update state with architect results (simulating graph transition)
+        state_after_architect = state.model_copy(
+            update={"raw_architect_output": architect_result["raw_architect_output"]}
+        )
+
+        # Mock the validator's generate call to extract structured data
+        mock_validator_output = MarkdownPlanOutput(
+            goal="Implement JWT-based authentication for the API endpoints",
+            plan_markdown=plan_content,
+            key_files=["src/auth/jwt.py", "src/api/middleware.py", "tests/test_auth.py"],
+        )
+
+        with patch.object(ApiDriver, "generate", new_callable=AsyncMock) as mock_generate:
+            mock_generate.return_value = (mock_validator_output, "validator-session-456")
+            validator_result = await plan_validator_node(
+                state_after_architect, cast(RunnableConfig, config)
+            )
+
+        # Verify validator extracts structured fields
+        assert "goal" in validator_result
+        assert validator_result["goal"] == "Implement JWT-based authentication for the API endpoints"
+
+        assert "plan_markdown" in validator_result
+        assert validator_result["plan_markdown"] == plan_content
+
+        assert "key_files" in validator_result
+        assert len(validator_result["key_files"]) == 3
+        assert "src/auth/jwt.py" in validator_result["key_files"]
+
+        assert "plan_path" in validator_result
+        assert validator_result["plan_path"] == expected_plan_path
+
+    async def test_validator_fails_if_plan_file_missing(self, tmp_path: Path) -> None:
+        """Validator should raise error if architect didn't write plan file.
+
+        This ensures the validator fails fast if the plan file is missing,
+        rather than silently continuing with invalid state.
+        """
+        plans_dir = tmp_path / "plans"
+        # Don't create the directory - simulate architect failure
+
+        profile = make_profile(
+            plan_output_dir=str(plans_dir),
+            working_dir=str(tmp_path),
+        )
+        issue = make_issue(id="TEST-MISSING-1")
+        state = make_execution_state(
+            issue=issue,
+            profile=profile,
+            raw_architect_output="Some content that wasn't written to disk",
+        )
+        config = make_config(thread_id="test-missing-1", profile=profile)
+
+        with pytest.raises(ValueError, match="Plan file not found"):
+            await plan_validator_node(state, cast(RunnableConfig, config))
+
+    async def test_validator_fails_if_plan_file_empty(self, tmp_path: Path) -> None:
+        """Validator should raise error if plan file exists but is empty.
+
+        This catches edge cases where the file was created but write failed.
+        """
+        plans_dir = tmp_path / "plans"
+        plans_dir.mkdir(parents=True, exist_ok=True)
+
+        profile = make_profile(
+            plan_output_dir=str(plans_dir),
+            working_dir=str(tmp_path),
+        )
+        issue = make_issue(id="TEST-EMPTY-1")
+        state = make_execution_state(issue=issue, profile=profile)
+        config = make_config(thread_id="test-empty-1", profile=profile)
+
+        # Create empty plan file
+        from amelia.core.constants import resolve_plan_path
+
+        plan_rel_path = resolve_plan_path(profile.plan_path_pattern, issue.id)
+        plan_path = tmp_path / plan_rel_path
+        plan_path.parent.mkdir(parents=True, exist_ok=True)
+        plan_path.write_text("")  # Empty file
+
+        with pytest.raises(ValueError, match="Plan file is empty"):
+            await plan_validator_node(state, cast(RunnableConfig, config))

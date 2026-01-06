@@ -125,32 +125,35 @@ class TestPlanValidatorNode:
         ]
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize(
-        "file_exists,file_content,error_match",
-        [
-            (False, None, "Plan file not found"),
-            (True, "", "Plan file is empty"),
-        ],
-        ids=["missing_file", "empty_file"],
-    )
-    async def test_validator_error_cases(
+    async def test_validator_raises_for_missing_file(
         self,
         mock_state: ExecutionState,
         mock_profile: Profile,
         tmp_path: Path,
-        file_exists: bool,
-        file_content: str | None,
-        error_match: str,
     ) -> None:
-        """Validator raises ValueError for invalid plan files."""
+        """Validator raises ValueError when plan file doesn't exist."""
         from amelia.core.orchestrator import plan_validator_node
 
-        if file_exists and file_content is not None:
-            create_plan_file(tmp_path, file_content)
-
+        # Don't create the plan file - it should be missing
         config = make_config(mock_profile)
 
-        with pytest.raises(ValueError, match=error_match):
+        with pytest.raises(ValueError, match="Plan file not found"):
+            await plan_validator_node(mock_state, config)
+
+    @pytest.mark.asyncio
+    async def test_validator_raises_for_empty_file(
+        self,
+        mock_state: ExecutionState,
+        mock_profile: Profile,
+        tmp_path: Path,
+    ) -> None:
+        """Validator raises ValueError when plan file is empty."""
+        from amelia.core.orchestrator import plan_validator_node
+
+        create_plan_file(tmp_path, "")  # Create empty file
+        config = make_config(mock_profile)
+
+        with pytest.raises(ValueError, match="Plan file is empty"):
             await plan_validator_node(mock_state, config)
 
     @pytest.mark.asyncio
