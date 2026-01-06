@@ -1,5 +1,6 @@
 """Tests for plan_validator_node function."""
 
+from datetime import date
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -50,20 +51,6 @@ def mock_profile(tmp_path: Path) -> Profile:
 
 
 @pytest.fixture
-def mock_profile_with_validator_model(tmp_path: Path) -> Profile:
-    """Create a test profile with validator_model set."""
-    return Profile(
-        name="test",
-        driver="api:openrouter",
-        model="gpt-4",
-        tracker="github",
-        validator_model="gpt-4o-mini",
-        working_dir=str(tmp_path),
-        plan_path_pattern="{date}-{issue_key}.md",
-    )
-
-
-@pytest.fixture
 def mock_issue() -> Issue:
     """Create a test issue."""
     return Issue(
@@ -84,10 +71,18 @@ def make_config(profile: Profile) -> RunnableConfig:
     return {
         "configurable": {
             "profile": profile,
-            "thread_id": "test-workflow-123",  # _extract_config_params expects thread_id
+            "thread_id": "test-workflow-123",
             "stream_emitter": AsyncMock(),
         }
     }
+
+
+def create_plan_file(tmp_path: Path, content: str) -> Path:
+    """Create a plan file at the expected location."""
+    today = date.today().isoformat()
+    plan_path = tmp_path / f"{today}-test-123.md"
+    plan_path.write_text(content)
+    return plan_path
 
 
 class TestPlanValidatorNode:
@@ -102,15 +97,10 @@ class TestPlanValidatorNode:
         tmp_path: Path,
     ) -> None:
         """Happy path - validator extracts goal, markdown, and key_files from plan."""
-        # Setup: Create plan file at expected location (working_dir / pattern)
-        from datetime import date
-
         from amelia.core.orchestrator import plan_validator_node
-        today = date.today().isoformat()
-        plan_path = tmp_path / f"{today}-test-123.md"
-        plan_path.write_text(plan_content)
 
-        # Mock the driver to return structured output
+        plan_path = create_plan_file(tmp_path, plan_content)
+
         mock_output = MarkdownPlanOutput(
             goal="Add user authentication with JWT tokens",
             plan_markdown=plan_content,
@@ -123,7 +113,6 @@ class TestPlanValidatorNode:
 
         with patch("amelia.core.orchestrator.DriverFactory") as mock_factory:
             mock_factory.get_driver.return_value = mock_driver
-
             result = await plan_validator_node(mock_state, config)
 
         assert result["goal"] == "Add user authentication with JWT tokens"
@@ -136,58 +125,65 @@ class TestPlanValidatorNode:
         ]
 
     @pytest.mark.asyncio
-    async def test_validator_fails_when_plan_file_missing(
+    @pytest.mark.parametrize(
+        "file_exists,file_content,error_match",
+        [
+            (False, None, "Plan file not found"),
+            (True, "", "Plan file is empty"),
+        ],
+        ids=["missing_file", "empty_file"],
+    )
+    async def test_validator_error_cases(
         self,
         mock_state: ExecutionState,
         mock_profile: Profile,
         tmp_path: Path,
+        file_exists: bool,
+        file_content: str | None,
+        error_match: str,
     ) -> None:
-        """Validator raises ValueError when plan file doesn't exist."""
+        """Validator raises ValueError for invalid plan files."""
         from amelia.core.orchestrator import plan_validator_node
 
-        # Don't create the plan file
-        config = make_config(mock_profile)
-
-        with pytest.raises(ValueError, match="Plan file not found"):
-            await plan_validator_node(mock_state, config)
-
-    @pytest.mark.asyncio
-    async def test_validator_fails_when_plan_file_empty(
-        self,
-        mock_state: ExecutionState,
-        mock_profile: Profile,
-        tmp_path: Path,
-    ) -> None:
-        """Validator raises ValueError when plan file is empty."""
-        # Create empty plan file at working_dir / pattern
-        from datetime import date
-
-        from amelia.core.orchestrator import plan_validator_node
-        today = date.today().isoformat()
-        plan_path = tmp_path / f"{today}-test-123.md"
-        plan_path.write_text("")
+        if file_exists and file_content is not None:
+            create_plan_file(tmp_path, file_content)
 
         config = make_config(mock_profile)
 
-        with pytest.raises(ValueError, match="Plan file is empty"):
+        with pytest.raises(ValueError, match=error_match):
             await plan_validator_node(mock_state, config)
 
     @pytest.mark.asyncio
-    async def test_validator_uses_validator_model_when_set(
+    @pytest.mark.parametrize(
+        "validator_model,expected_model",
+        [
+            ("gpt-4o-mini", "gpt-4o-mini"),  # Uses validator_model when set
+            (None, "gpt-4"),  # Falls back to profile.model
+        ],
+        ids=["uses_validator_model", "fallback_to_profile_model"],
+    )
+    async def test_validator_model_selection(
         self,
         mock_state: ExecutionState,
-        mock_profile_with_validator_model: Profile,
         plan_content: str,
         tmp_path: Path,
+        validator_model: str | None,
+        expected_model: str,
     ) -> None:
-        """Validator uses profile.validator_model when it's set."""
-        # Setup: Create plan file at working_dir / pattern
-        from datetime import date
-
+        """Validator uses correct model based on profile configuration."""
         from amelia.core.orchestrator import plan_validator_node
-        today = date.today().isoformat()
-        plan_path = tmp_path / f"{today}-test-123.md"
-        plan_path.write_text(plan_content)
+
+        profile = Profile(
+            name="test",
+            driver="api:openrouter",
+            model="gpt-4",
+            tracker="github",
+            validator_model=validator_model,
+            working_dir=str(tmp_path),
+            plan_path_pattern="{date}-{issue_key}.md",
+        )
+
+        create_plan_file(tmp_path, plan_content)
 
         mock_output = MarkdownPlanOutput(
             goal="Goal",
@@ -197,53 +193,13 @@ class TestPlanValidatorNode:
         mock_driver = MagicMock()
         mock_driver.generate = AsyncMock(return_value=(mock_output, "session-123"))
 
-        config = make_config(mock_profile_with_validator_model)
+        config = make_config(profile)
 
         with patch("amelia.core.orchestrator.DriverFactory") as mock_factory:
             mock_factory.get_driver.return_value = mock_driver
-
             await plan_validator_node(mock_state, config)
 
-        # Verify driver was created with validator_model, not profile.model
         mock_factory.get_driver.assert_called_once_with(
             "api:openrouter",
-            model="gpt-4o-mini",  # validator_model, not "gpt-4"
-        )
-
-    @pytest.mark.asyncio
-    async def test_validator_falls_back_to_profile_model(
-        self,
-        mock_state: ExecutionState,
-        mock_profile: Profile,  # No validator_model set
-        plan_content: str,
-        tmp_path: Path,
-    ) -> None:
-        """Validator falls back to profile.model when validator_model is None."""
-        # Setup: Create plan file at working_dir / pattern
-        from datetime import date
-
-        from amelia.core.orchestrator import plan_validator_node
-        today = date.today().isoformat()
-        plan_path = tmp_path / f"{today}-test-123.md"
-        plan_path.write_text(plan_content)
-
-        mock_output = MarkdownPlanOutput(
-            goal="Goal",
-            plan_markdown=plan_content,
-            key_files=[],
-        )
-        mock_driver = MagicMock()
-        mock_driver.generate = AsyncMock(return_value=(mock_output, "session-123"))
-
-        config = make_config(mock_profile)
-
-        with patch("amelia.core.orchestrator.DriverFactory") as mock_factory:
-            mock_factory.get_driver.return_value = mock_driver
-
-            await plan_validator_node(mock_state, config)
-
-        # Verify driver was created with profile.model as fallback
-        mock_factory.get_driver.assert_called_once_with(
-            "api:openrouter",
-            model="gpt-4",  # Falls back to profile.model
+            model=expected_model,
         )
