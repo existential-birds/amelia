@@ -10,7 +10,7 @@ import { ApprovalControls } from '@/components/ApprovalControls';
 import { WorkflowCanvas } from '@/components/WorkflowCanvas';
 import { AgentProgressBar, type AgentStage } from '@/components/AgentProgressBar';
 import { UsageCard } from '@/components/UsageCard';
-import { buildPipelineFromEvents, eventDrivenPipelineToCanvas } from '@/utils/pipeline';
+import { buildPipelineFromEvents } from '@/utils/pipeline';
 import { useElapsedTime, useAutoRevalidation } from '@/hooks';
 import { workflowDetailLoader } from '@/loaders';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -65,8 +65,7 @@ export default function WorkflowDetailPage() {
 
   // Build pipeline from merged events for real-time visualization
   const pipeline = useMemo(() => {
-    const edp = buildPipelineFromEvents(allEvents, { showDefaultPipeline: true });
-    return eventDrivenPipelineToCanvas(edp);
+    return buildPipelineFromEvents(allEvents, { showDefaultPipeline: true });
   }, [allEvents]);
 
   if (!workflow) {
@@ -153,7 +152,7 @@ export default function WorkflowDetailPage() {
             <h3 className="font-heading text-xs font-semibold tracking-widest text-muted-foreground mb-3">
               PIPELINE
             </h3>
-            <WorkflowCanvas pipeline={pipeline || undefined} />
+            <WorkflowCanvas pipeline={pipeline} />
           </div>
         </div>
 

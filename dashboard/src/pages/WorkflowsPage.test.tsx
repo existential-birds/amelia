@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import WorkflowsPage from './WorkflowsPage';
 import type { WorkflowSummary, WorkflowDetail } from '@/types';
+import type { EventDrivenPipeline } from '@/utils/pipeline';
 
 // Mock modules
 vi.mock('@/utils/workflow', () => ({
@@ -47,7 +48,7 @@ const mockWorkflowDetail: WorkflowDetail = {
 };
 
 // Event-driven pipeline mock data (new format)
-const mockPipeline = {
+const mockPipeline: EventDrivenPipeline = {
   nodes: [
     {
       id: 'architect',

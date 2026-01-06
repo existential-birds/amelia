@@ -37,7 +37,7 @@ describe('useAutoRevalidation', () => {
           {
             id: 'evt-1',
             workflow_id: 'wf-1',
-            event_type: 'system_info',
+            event_type: 'agent_message',
             timestamp: new Date().toISOString(),
             message: 'Some info',
             sequence: 1,
@@ -143,7 +143,7 @@ describe('useAutoRevalidation', () => {
           {
             id: 'evt-2',
             workflow_id: 'wf-2',
-            event_type: 'system_info',
+            event_type: 'agent_message',
             timestamp: new Date().toISOString(),
             message: 'Info',
             sequence: 1,
@@ -175,7 +175,7 @@ describe('useAutoRevalidation', () => {
           {
             id: 'evt-2',
             workflow_id: 'wf-2',
-            event_type: 'system_info',
+            event_type: 'agent_message',
             timestamp: new Date().toISOString(),
             message: 'Info',
             sequence: 1,
@@ -184,7 +184,7 @@ describe('useAutoRevalidation', () => {
       },
     });
 
-    // Should NOT revalidate when filtering by wf-2 (has only system_info)
+    // Should NOT revalidate when filtering by wf-2 (has only agent_message)
     renderHook(() => useAutoRevalidation('wf-2'));
     expect(mockRevalidate).not.toHaveBeenCalled();
   });

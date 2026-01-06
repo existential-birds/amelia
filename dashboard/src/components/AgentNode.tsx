@@ -1,9 +1,12 @@
 import { Handle, Position } from '@xyflow/react';
-import type { NodeProps } from '@xyflow/react';
+import type { Node, NodeProps } from '@xyflow/react';
 import { MapPin } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import type { AgentNodeData } from '../utils/pipeline';
+
+/** Node type for agent nodes in the workflow canvas. */
+export type AgentNodeType = Node<AgentNodeData, 'agent'>;
 
 const statusClasses: Record<AgentNodeData['status'], string> = {
   pending: 'opacity-50 border-border bg-card/60',
@@ -19,7 +22,7 @@ const iconClasses: Record<AgentNodeData['status'], string> = {
   blocked: 'text-destructive',
 };
 
-export function AgentNode({ data }: NodeProps<AgentNodeData>) {
+export function AgentNode({ data }: NodeProps<AgentNodeType>) {
   const { agentType, status, iterations, isExpanded } = data;
 
   return (

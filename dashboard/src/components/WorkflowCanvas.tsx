@@ -11,13 +11,14 @@ import {
   useNodesState,
   useEdgesState,
 } from '@xyflow/react';
+import type { NodeTypes } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
 import { AgentNode } from './AgentNode';
 import { getLayoutedElements } from '@/utils/layout';
 import type { EventDrivenPipeline } from '@/utils/pipeline';
 
-const nodeTypes = {
+const nodeTypes: NodeTypes = {
   agent: AgentNode,
 };
 

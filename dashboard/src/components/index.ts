@@ -32,8 +32,8 @@ export { ActivityLogSkeleton } from './ActivityLogSkeleton';
 // Layout components
 export { DashboardSidebar } from './DashboardSidebar';
 
-// Custom flow node/edge types
-export * from './flow';
+// Agent node (for WorkflowCanvas)
+export { AgentNode } from './AgentNode';
 
 // =============================================================================
 // ai-elements (re-exported for direct use when needed)

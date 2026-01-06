@@ -62,7 +62,7 @@ export interface AgentIteration {
 }
 
 /** Data for an agent node in the workflow canvas. */
-export interface AgentNodeData {
+export interface AgentNodeData extends Record<string, unknown> {
   /** Type of agent (e.g., 'architect', 'developer', 'reviewer'). */
   agentType: string;
   /** Current visual status of the node. */
@@ -220,7 +220,7 @@ export function buildPipelineFromEvents(
       const iterations = agentMap.get(agent);
       if (iterations && iterations.length > 0) {
         const lastIteration = iterations[iterations.length - 1];
-        if (lastIteration.status === 'running') {
+        if (lastIteration && lastIteration.status === 'running') {
           lastIteration.completedAt = timestamp;
           lastIteration.status = 'completed';
         }
@@ -282,6 +282,9 @@ export function buildPipelineFromEvents(
   for (let i = 0; i < agentOrder.length - 1; i++) {
     const sourceAgent = agentOrder[i];
     const targetAgent = agentOrder[i + 1];
+    // Skip if agents are undefined (shouldn't happen due to loop bounds)
+    if (!sourceAgent || !targetAgent) continue;
+
     const sourceNode = nodes.find(n => n.id === sourceAgent);
     const targetNode = nodes.find(n => n.id === targetAgent);
 

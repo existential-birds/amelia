@@ -1,22 +1,36 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { ReactFlowProvider } from '@xyflow/react';
-import { AgentNode } from './AgentNode';
+import { ReactFlowProvider, Position } from '@xyflow/react';
+import type { NodeProps } from '@xyflow/react';
+import { AgentNode, type AgentNodeType } from './AgentNode';
 import type { AgentNodeData } from '../utils/pipeline';
 
 const renderNode = (data: AgentNodeData) => {
+  // Provide all required NodeProps for testing
+  const props: NodeProps<AgentNodeType> = {
+    id: 'test-node',
+    data,
+    type: 'agent',
+    selected: false,
+    isConnectable: true,
+    positionAbsoluteX: 0,
+    positionAbsoluteY: 0,
+    zIndex: 0,
+    dragging: false,
+    draggable: false,
+    deletable: false,
+    selectable: false,
+    parentId: undefined,
+    sourcePosition: Position.Right,
+    targetPosition: Position.Left,
+    dragHandle: undefined,
+    width: 180,
+    height: 100,
+  };
+
   return render(
     <ReactFlowProvider>
-      <AgentNode
-        id="test-node"
-        data={data}
-        type="agent"
-        selected={false}
-        isConnectable={true}
-        positionAbsoluteX={0}
-        positionAbsoluteY={0}
-        zIndex={0}
-      />
+      <AgentNode {...props} />
     </ReactFlowProvider>
   );
 };

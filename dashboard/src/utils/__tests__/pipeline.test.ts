@@ -291,10 +291,11 @@ describe('buildPipelineFromEvents', () => {
     const result = buildPipelineFromEvents(events);
 
     expect(result.nodes).toHaveLength(1);
-    expect(result.nodes[0].id).toBe('architect');
-    expect(result.nodes[0].data.status).toBe('active');
-    expect(result.nodes[0].data.iterations).toHaveLength(1);
-    expect(result.nodes[0].data.iterations[0].status).toBe('running');
+    const node = result.nodes[0]!;
+    expect(node.id).toBe('architect');
+    expect(node.data.status).toBe('active');
+    expect(node.data.iterations).toHaveLength(1);
+    expect(node.data.iterations[0]!.status).toBe('running');
   });
 
   it('should create node with completed status when stage completes', () => {
@@ -305,9 +306,11 @@ describe('buildPipelineFromEvents', () => {
     const result = buildPipelineFromEvents(events);
 
     expect(result.nodes).toHaveLength(1);
-    expect(result.nodes[0].data.status).toBe('completed');
-    expect(result.nodes[0].data.iterations[0].status).toBe('completed');
-    expect(result.nodes[0].data.iterations[0].completedAt).toBe('2026-01-06T10:05:00Z');
+    const node = result.nodes[0]!;
+    const iteration = node.data.iterations[0]!;
+    expect(node.data.status).toBe('completed');
+    expect(iteration.status).toBe('completed');
+    expect(iteration.completedAt).toBe('2026-01-06T10:05:00Z');
   });
 
   it('should track multiple iterations for same agent', () => {
@@ -320,11 +323,11 @@ describe('buildPipelineFromEvents', () => {
     ];
     const result = buildPipelineFromEvents(events);
 
-    const devNode = result.nodes.find(n => n.id === 'developer');
-    expect(devNode?.data.iterations).toHaveLength(2);
-    expect(devNode?.data.iterations[0].status).toBe('completed');
-    expect(devNode?.data.iterations[1].status).toBe('running');
-    expect(devNode?.data.status).toBe('active');  // Currently running
+    const devNode = result.nodes.find(n => n.id === 'developer')!;
+    expect(devNode.data.iterations).toHaveLength(2);
+    expect(devNode.data.iterations[0]!.status).toBe('completed');
+    expect(devNode.data.iterations[1]!.status).toBe('running');
+    expect(devNode.data.status).toBe('active');  // Currently running
   });
 
   it('should create edges between adjacent agents in order of first appearance', () => {
@@ -336,8 +339,9 @@ describe('buildPipelineFromEvents', () => {
     const result = buildPipelineFromEvents(events);
 
     expect(result.edges).toHaveLength(1);
-    expect(result.edges[0].source).toBe('architect');
-    expect(result.edges[0].target).toBe('developer');
+    const edge = result.edges[0]!;
+    expect(edge.source).toBe('architect');
+    expect(edge.target).toBe('developer');
   });
 
   it('should set edge status based on source node completion', () => {
@@ -364,8 +368,9 @@ describe('buildPipelineFromEvents', () => {
     ];
     const result = buildPipelineFromEvents(events);
 
-    expect(result.nodes[0].data.status).toBe('blocked');
-    expect(result.nodes[0].data.iterations[0].status).toBe('failed');
+    const node = result.nodes[0]!;
+    expect(node.data.status).toBe('blocked');
+    expect(node.data.iterations[0]!.status).toBe('failed');
   });
 
   it('should create pending nodes for standard pipeline when no events', () => {
