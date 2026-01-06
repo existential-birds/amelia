@@ -1,14 +1,22 @@
 // dashboard/src/utils/layout.test.ts
 import { describe, it, expect } from 'vitest';
 import { getLayoutedElements } from './layout';
-import type { WorkflowNodeType } from '@/components/flow/WorkflowNode';
-import type { Edge } from '@xyflow/react';
+import type { Node, Edge } from '@xyflow/react';
+
+/** Test node data type for layout tests. */
+interface TestNodeData extends Record<string, unknown> {
+  label: string;
+  status: 'completed' | 'active' | 'pending';
+}
+
+/** Test node type for layout tests. */
+type TestNode = Node<TestNodeData>;
 
 describe('getLayoutedElements', () => {
-  const mockNodes: WorkflowNodeType[] = [
-    { id: '1', type: 'workflow', position: { x: 0, y: 0 }, data: { label: 'A', status: 'completed' } },
-    { id: '2', type: 'workflow', position: { x: 0, y: 0 }, data: { label: 'B', status: 'active' } },
-    { id: '3', type: 'workflow', position: { x: 0, y: 0 }, data: { label: 'C', status: 'pending' } },
+  const mockNodes: TestNode[] = [
+    { id: '1', type: 'test', position: { x: 0, y: 0 }, data: { label: 'A', status: 'completed' } },
+    { id: '2', type: 'test', position: { x: 0, y: 0 }, data: { label: 'B', status: 'active' } },
+    { id: '3', type: 'test', position: { x: 0, y: 0 }, data: { label: 'C', status: 'pending' } },
   ];
   const mockEdges: Edge[] = [
     { id: 'e1-2', source: '1', target: '2' },
@@ -39,7 +47,7 @@ describe('getLayoutedElements', () => {
   it('preserves node data and type', () => {
     const result = getLayoutedElements(mockNodes, mockEdges);
     expect(result[0]?.data.label).toBe('A');
-    expect(result[0]?.type).toBe('workflow');
+    expect(result[0]?.type).toBe('test');
   });
 
   it('uses horizontal left-to-right layout', () => {

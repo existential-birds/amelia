@@ -121,11 +121,11 @@ describe('useWorkflows', () => {
 
       const { rerender } = renderHook(() => useWorkflows());
 
-      // Add a non-status event
+      // Add a non-status event (system_info is not a status event)
       act(() => {
         useWorkflowStore.setState({
           eventsByWorkflow: {
-            'wf-1': [createEvent('stage_started', now.toISOString())],
+            'wf-1': [createEvent('system_info', now.toISOString())],
           },
         });
         rerender();
