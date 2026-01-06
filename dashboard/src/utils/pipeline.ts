@@ -46,6 +46,32 @@ export interface Pipeline {
   edges: PipelineEdge[];
 }
 
+/** A single execution iteration of an agent (agents can run multiple times). */
+export interface AgentIteration {
+  /** Unique identifier for this iteration. */
+  id: string;
+  /** ISO 8601 timestamp when this iteration started. */
+  startedAt: string;
+  /** ISO 8601 timestamp when this iteration completed (undefined if still running). */
+  completedAt?: string;
+  /** Current status of this iteration. */
+  status: 'running' | 'completed' | 'failed';
+  /** Optional message (e.g., "Requested changes" or "Approved"). */
+  message?: string;
+}
+
+/** Data for an agent node in the workflow canvas. */
+export interface AgentNodeData {
+  /** Type of agent (e.g., 'architect', 'developer', 'reviewer'). */
+  agentType: string;
+  /** Current visual status of the node. */
+  status: 'pending' | 'active' | 'completed' | 'blocked';
+  /** All iterations this agent has executed. */
+  iterations: AgentIteration[];
+  /** Whether the iteration history is expanded. */
+  isExpanded: boolean;
+}
+
 /**
  * Agent stages in the workflow.
  */
