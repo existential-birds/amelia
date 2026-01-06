@@ -14,7 +14,13 @@ from amelia.agents.reviewer import ReviewResponse
 from amelia.core.orchestrator import call_architect_node, call_evaluation_node, call_reviewer_node
 from amelia.core.state import ReviewResult
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
-from tests.integration.conftest import make_config, make_execution_state, make_issue, make_profile
+from tests.integration.conftest import (
+    create_mock_execute_agentic,
+    make_config,
+    make_execution_state,
+    make_issue,
+    make_profile,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -56,21 +62,16 @@ class TestOrchestratorPromptInjection:
                 session_id="session-1",
             ),
         ]
-        captured_instructions: list[str | None] = []
-
-        async def mock_execute_agentic(*args: Any, **kwargs: Any) -> Any:
-            """Mock async generator that captures instructions."""
-            captured_instructions.append(kwargs.get("instructions"))
-            for msg in mock_messages:
-                yield msg
+        captured_kwargs: list[dict[str, Any]] = []
+        mock_execute = create_mock_execute_agentic(mock_messages, captured_kwargs)
 
         # Patch at driver.execute_agentic level to check instructions
-        with patch("amelia.drivers.api.deepagents.ApiDriver.execute_agentic", mock_execute_agentic):
+        with patch("amelia.drivers.api.deepagents.ApiDriver.execute_agentic", mock_execute):
             await call_architect_node(state, cast(RunnableConfig, config))
 
             # Verify the custom prompt was used via instructions param
-            assert len(captured_instructions) == 1
-            assert captured_instructions[0] == custom_plan_prompt
+            assert len(captured_kwargs) == 1
+            assert captured_kwargs[0].get("instructions") == custom_plan_prompt
 
     async def test_reviewer_uses_injected_prompt_via_driver(self, tmp_path: Path) -> None:
         """Verify Reviewer uses injected prompt when calling driver.
@@ -134,20 +135,15 @@ class TestOrchestratorPromptInjection:
                 session_id="session-1",
             ),
         ]
-        captured_instructions: list[str | None] = []
+        captured_kwargs: list[dict[str, Any]] = []
+        mock_execute = create_mock_execute_agentic(mock_messages, captured_kwargs)
 
-        async def mock_execute_agentic(*args: Any, **kwargs: Any) -> Any:
-            """Mock async generator that captures instructions."""
-            captured_instructions.append(kwargs.get("instructions"))
-            for msg in mock_messages:
-                yield msg
-
-        with patch("amelia.drivers.api.deepagents.ApiDriver.execute_agentic", mock_execute_agentic):
+        with patch("amelia.drivers.api.deepagents.ApiDriver.execute_agentic", mock_execute):
             await call_architect_node(state, cast(RunnableConfig, config))
 
             # Verify a non-empty default prompt was used
-            assert len(captured_instructions) == 1
-            instructions = captured_instructions[0]
+            assert len(captured_kwargs) == 1
+            instructions = captured_kwargs[0].get("instructions")
             assert instructions is not None
             assert len(instructions) > 50
 
@@ -174,20 +170,15 @@ class TestOrchestratorPromptInjection:
                 session_id="session-1",
             ),
         ]
-        captured_instructions: list[str | None] = []
+        captured_kwargs: list[dict[str, Any]] = []
+        mock_execute = create_mock_execute_agentic(mock_messages, captured_kwargs)
 
-        async def mock_execute_agentic(*args: Any, **kwargs: Any) -> Any:
-            """Mock async generator that captures instructions."""
-            captured_instructions.append(kwargs.get("instructions"))
-            for msg in mock_messages:
-                yield msg
-
-        with patch("amelia.drivers.api.deepagents.ApiDriver.execute_agentic", mock_execute_agentic):
+        with patch("amelia.drivers.api.deepagents.ApiDriver.execute_agentic", mock_execute):
             await call_architect_node(state, cast(RunnableConfig, config))
 
             # Verify a non-empty default prompt was used
-            assert len(captured_instructions) == 1
-            instructions = captured_instructions[0]
+            assert len(captured_kwargs) == 1
+            instructions = captured_kwargs[0].get("instructions")
             assert instructions is not None
             assert len(instructions) > 50
 
