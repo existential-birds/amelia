@@ -94,6 +94,7 @@ class ServerLifecycle:
             "Cleanup complete",
             events_deleted=cleanup_result.events_deleted,
             workflows_deleted=cleanup_result.workflows_deleted,
+            checkpoints_deleted=cleanup_result.checkpoints_deleted,
         )
 
         logger.info("Server shutdown complete")

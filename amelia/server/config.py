@@ -43,6 +43,20 @@ class ServerConfig(BaseSettings):
         description="Maximum events per workflow",
     )
 
+    # Checkpoint retention
+    checkpoint_path: Path = Field(
+        default_factory=lambda: Path.home() / ".amelia" / "checkpoints.db",
+        description="Path to LangGraph checkpoint database file",
+    )
+    checkpoint_retention_days: int = Field(
+        default=0,
+        ge=-1,
+        description=(
+            "Days to retain checkpoints for finished workflows. "
+            "0 = delete immediately on shutdown, -1 = never delete (for debugging)"
+        ),
+    )
+
     # Timeouts
     websocket_idle_timeout_seconds: float = Field(
         default=300.0,
