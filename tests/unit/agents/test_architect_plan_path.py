@@ -77,7 +77,6 @@ class TestArchitectPlanPath:
 
         assert ".amelia/plans/jira-456.md" in prompt
 
-    @pytest.mark.asyncio
     async def test_plan_method_passes_profile_to_build_agentic_prompt(
         self,
         mock_driver: MagicMock,

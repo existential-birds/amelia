@@ -27,7 +27,6 @@ async def repo(db):
 class TestPromptCRUD:
     """Tests for prompt CRUD operations."""
 
-    @pytest.mark.asyncio
     async def test_create_prompt(self, repo: PromptRepository) -> None:
         """Should create a prompt."""
         prompt = Prompt(
@@ -41,7 +40,6 @@ class TestPromptCRUD:
         assert result is not None
         assert result.name == "Test Prompt"
 
-    @pytest.mark.asyncio
     async def test_list_prompts(self, repo: PromptRepository) -> None:
         """Should list all prompts."""
         await repo.create_prompt(Prompt(id="p1", agent="a", name="Prompt 1"))
@@ -49,7 +47,6 @@ class TestPromptCRUD:
         prompts = await repo.list_prompts()
         assert len(prompts) == 2
 
-    @pytest.mark.asyncio
     async def test_get_prompt_not_found(self, repo: PromptRepository) -> None:
         """Should return None for non-existent prompt."""
         result = await repo.get_prompt("nonexistent")
@@ -59,7 +56,6 @@ class TestPromptCRUD:
 class TestVersionManagement:
     """Tests for version management."""
 
-    @pytest.mark.asyncio
     async def test_create_version(self, repo: PromptRepository) -> None:
         """Should create a new version."""
         await repo.create_prompt(Prompt(id="test.prompt", agent="test", name="Test"))
@@ -71,7 +67,6 @@ class TestVersionManagement:
         assert version.version_number == 1
         assert version.content == "New prompt content"
 
-    @pytest.mark.asyncio
     async def test_create_version_increments_number(self, repo: PromptRepository) -> None:
         """Version numbers should auto-increment."""
         await repo.create_prompt(Prompt(id="test.prompt", agent="test", name="Test"))
@@ -80,7 +75,6 @@ class TestVersionManagement:
         assert v1.version_number == 1
         assert v2.version_number == 2
 
-    @pytest.mark.asyncio
     async def test_create_version_sets_active(self, repo: PromptRepository) -> None:
         """Creating a version should set it as active."""
         await repo.create_prompt(Prompt(id="test.prompt", agent="test", name="Test"))
@@ -88,7 +82,6 @@ class TestVersionManagement:
         prompt = await repo.get_prompt("test.prompt")
         assert prompt.current_version_id == version.id
 
-    @pytest.mark.asyncio
     async def test_get_versions(self, repo: PromptRepository) -> None:
         """Should list all versions for a prompt."""
         await repo.create_prompt(Prompt(id="test.prompt", agent="test", name="Test"))
@@ -100,7 +93,6 @@ class TestVersionManagement:
         assert versions[0].version_number == 2
         assert versions[1].version_number == 1
 
-    @pytest.mark.asyncio
     async def test_get_version_by_id(self, repo: PromptRepository) -> None:
         """Should get a specific version by ID."""
         await repo.create_prompt(Prompt(id="test.prompt", agent="test", name="Test"))
@@ -109,7 +101,6 @@ class TestVersionManagement:
         assert result is not None
         assert result.content == "Content"
 
-    @pytest.mark.asyncio
     async def test_set_active_version(self, repo: PromptRepository) -> None:
         """Should change the active version."""
         await repo.create_prompt(Prompt(id="test.prompt", agent="test", name="Test"))
@@ -120,7 +111,6 @@ class TestVersionManagement:
         prompt = await repo.get_prompt("test.prompt")
         assert prompt.current_version_id == v1.id
 
-    @pytest.mark.asyncio
     async def test_reset_to_default(self, repo: PromptRepository) -> None:
         """Should clear current_version_id."""
         await repo.create_prompt(Prompt(id="test.prompt", agent="test", name="Test"))
@@ -133,7 +123,6 @@ class TestVersionManagement:
 class TestWorkflowLinking:
     """Tests for workflow-prompt linking."""
 
-    @pytest.mark.asyncio
     async def test_record_workflow_prompt(self, repo: PromptRepository, db: Database) -> None:
         """Should record which version a workflow used."""
         # Create workflow
@@ -151,7 +140,6 @@ class TestWorkflowLinking:
         assert len(results) == 1
         assert results[0].version_id == version.id
 
-    @pytest.mark.asyncio
     async def test_get_workflow_prompts_empty(self, repo: PromptRepository) -> None:
         """Should return empty list for workflow with no prompts."""
         results = await repo.get_workflow_prompts("nonexistent")

@@ -88,7 +88,6 @@ def create_plan_file(tmp_path: Path, content: str) -> Path:
 class TestPlanValidatorNode:
     """Tests for plan_validator_node function."""
 
-    @pytest.mark.asyncio
     async def test_validator_extracts_goal_from_plan(
         self,
         mock_state: ExecutionState,
@@ -124,7 +123,6 @@ class TestPlanValidatorNode:
             "tests/test_auth.py",
         ]
 
-    @pytest.mark.asyncio
     async def test_validator_raises_for_missing_file(
         self,
         mock_state: ExecutionState,
@@ -140,7 +138,6 @@ class TestPlanValidatorNode:
         with pytest.raises(ValueError, match="Plan file not found"):
             await plan_validator_node(mock_state, config)
 
-    @pytest.mark.asyncio
     async def test_validator_raises_for_empty_file(
         self,
         mock_state: ExecutionState,
@@ -156,7 +153,6 @@ class TestPlanValidatorNode:
         with pytest.raises(ValueError, match="Plan file is empty"):
             await plan_validator_node(mock_state, config)
 
-    @pytest.mark.asyncio
     @pytest.mark.parametrize(
         "validator_model,expected_model",
         [

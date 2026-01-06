@@ -13,7 +13,6 @@ from amelia.core.state import ExecutionState
 from amelia.core.types import Issue, Profile
 
 
-@pytest.mark.asyncio
 async def test_call_architect_node_creates_plan_directory_if_missing(
     tmp_path: Path,
     mock_issue_factory: Callable[..., Issue],

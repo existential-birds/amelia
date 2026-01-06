@@ -16,7 +16,6 @@ async def db(tmp_path):
     await database.close()
 
 
-@pytest.mark.asyncio
 async def test_prompts_table_exists(db: Database) -> None:
     """Prompts table should exist after schema creation."""
     result = await db.fetch_one(
@@ -26,7 +25,6 @@ async def test_prompts_table_exists(db: Database) -> None:
     assert result[0] == "prompts"
 
 
-@pytest.mark.asyncio
 async def test_prompt_versions_table_exists(db: Database) -> None:
     """Prompt versions table should exist after schema creation."""
     result = await db.fetch_one(
@@ -36,7 +34,6 @@ async def test_prompt_versions_table_exists(db: Database) -> None:
     assert result[0] == "prompt_versions"
 
 
-@pytest.mark.asyncio
 async def test_workflow_prompt_versions_table_exists(db: Database) -> None:
     """Workflow prompt versions table should exist after schema creation."""
     result = await db.fetch_one(
@@ -45,7 +42,6 @@ async def test_workflow_prompt_versions_table_exists(db: Database) -> None:
     assert result is not None
 
 
-@pytest.mark.asyncio
 async def test_can_insert_prompt(db: Database) -> None:
     """Should be able to insert a prompt."""
     await db.execute(
@@ -58,7 +54,6 @@ async def test_can_insert_prompt(db: Database) -> None:
     assert result["agent"] == "architect"
 
 
-@pytest.mark.asyncio
 async def test_can_insert_prompt_version(db: Database) -> None:
     """Should be able to insert a prompt version with foreign key."""
     # First insert the prompt
@@ -78,7 +73,6 @@ async def test_can_insert_prompt_version(db: Database) -> None:
     assert result["version_number"] == 1
 
 
-@pytest.mark.asyncio
 async def test_version_unique_constraint(db: Database) -> None:
     """Same prompt+version_number should fail unique constraint."""
     await db.execute(
@@ -96,7 +90,6 @@ async def test_version_unique_constraint(db: Database) -> None:
         )
 
 
-@pytest.mark.asyncio
 async def test_workflow_prompt_version_foreign_keys(db: Database) -> None:
     """Workflow prompt versions should enforce foreign keys."""
     # Create a workflow first
