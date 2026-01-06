@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-01-06
+
+### Added
+
+- **orchestrator:** Add plan validator node for LLM-based structured plan extraction ([#221](https://github.com/existential-birds/amelia/pull/221))
+  - Validates architect output into structured fields (goal, plan_markdown, key_files)
+  - Configurable validator model via `Profile.validator_model` for cost optimization
+  - New server configuration: checkpoint retention, stream tool results toggle
+- **architect:** Implement streaming agentic execution for codebase exploration ([#208](https://github.com/existential-birds/amelia/pull/208))
+- **drivers:** Unify agentic message abstraction across API and CLI drivers ([#201](https://github.com/existential-birds/amelia/pull/201))
+
+### Fixed
+
+- **core:** Normalize tool names across drivers to prevent inconsistent state ([#217](https://github.com/existential-birds/amelia/pull/217))
+- **dashboard:** Fix z-index layering of scanlines and vignette overlays ([#216](https://github.com/existential-birds/amelia/pull/216))
+
 ## [0.4.1] - 2026-01-01
 
 ### Fixed
@@ -147,7 +163,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - FastAPI server with WebSocket support
 - React dashboard for workflow visualization
 
-[Unreleased]: https://github.com/existential-birds/amelia/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/existential-birds/amelia/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/existential-birds/amelia/compare/v0.4.1...v0.5.0
+[0.4.1]: https://github.com/existential-birds/amelia/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/existential-birds/amelia/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/existential-birds/amelia/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/existential-birds/amelia/compare/v0.2.1...v0.2.2

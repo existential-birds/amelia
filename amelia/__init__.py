@@ -18,7 +18,7 @@ from amelia.core.state import ExecutionState
 from amelia.main import app
 
 
-__version__ = "0.4.1"
+__version__ = "0.5.0"
 
 __all__ = [
     "app",
