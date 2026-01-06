@@ -16,7 +16,12 @@ from langchain_core.runnables.config import RunnableConfig
 from amelia.agents.reviewer import ReviewResponse
 from amelia.core.orchestrator import call_developer_node, call_reviewer_node
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
-from tests.integration.conftest import make_config, make_execution_state, make_profile
+from tests.integration.conftest import (
+    make_agentic_messages,
+    make_config,
+    make_execution_state,
+    make_profile,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -38,36 +43,6 @@ DRIVER_CONFIGS = [
         id="cli-claude",
     ),
 ]
-
-
-def make_mock_agentic_messages() -> list[AgenticMessage]:
-    """Create a standard set of AgenticMessages for testing.
-
-    Both drivers should yield AgenticMessage instances with the same structure.
-    This helper creates messages representing a typical tool-using execution.
-    """
-    return [
-        AgenticMessage(
-            type=AgenticMessageType.THINKING,
-            content="I'll create the file as requested.",
-        ),
-        AgenticMessage(
-            type=AgenticMessageType.TOOL_CALL,
-            tool_name="write_file",
-            tool_input={"file_path": "hello.txt", "content": "Hello World"},
-            tool_call_id="tool-123",
-        ),
-        AgenticMessage(
-            type=AgenticMessageType.TOOL_RESULT,
-            tool_name="write_file",
-            tool_output="File created successfully",
-        ),
-        AgenticMessage(
-            type=AgenticMessageType.RESULT,
-            content="I created hello.txt with the content 'Hello World'",
-            session_id="session-456",
-        ),
-    ]
 
 
 @pytest.mark.integration
@@ -98,7 +73,9 @@ class TestDeveloperMultiDriver:
         )
         config = make_config(thread_id=f"test-{driver_key}", profile=profile)
 
-        mock_messages = make_mock_agentic_messages()
+        mock_messages = make_agentic_messages(
+            final_text="I created hello.txt with the content 'Hello World'"
+        )
 
         async def mock_execute_agentic(*_args: Any, **_kwargs: Any) -> Any:
             """Mock async generator yielding AgenticMessage objects."""

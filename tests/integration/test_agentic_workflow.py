@@ -22,7 +22,13 @@ from amelia.core.orchestrator import (
 from amelia.core.state import ExecutionState
 from amelia.drivers.api import ApiDriver
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
-from tests.integration.conftest import make_config, make_execution_state, make_issue, make_profile
+from tests.integration.conftest import (
+    make_agentic_messages,
+    make_config,
+    make_execution_state,
+    make_issue,
+    make_profile,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -111,24 +117,10 @@ class TestDeveloperNodeIntegration:
         config = make_config(thread_id="test-wf-2", profile=profile)
 
         # Mock AgenticMessage stream from the driver's execute_agentic
-        mock_messages = [
-            AgenticMessage(
-                type=AgenticMessageType.TOOL_CALL,
-                tool_name="write_file",
-                tool_input={"file_path": "hello.txt", "content": "Hello World"},
-                tool_call_id="call-1",
-            ),
-            AgenticMessage(
-                type=AgenticMessageType.TOOL_RESULT,
-                tool_name="write_file",
-                tool_output="File created successfully",
-            ),
-            AgenticMessage(
-                type=AgenticMessageType.RESULT,
-                content="I created hello.txt with the content 'Hello World'",
-                session_id="session-123",
-            ),
-        ]
+        mock_messages = make_agentic_messages(
+            include_thinking=False,
+            final_text="I created hello.txt with the content 'Hello World'",
+        )
 
         async def mock_execute_agentic(*_args: Any, **_kwargs: Any) -> Any:
             """Mock async generator that yields AgenticMessage objects."""
