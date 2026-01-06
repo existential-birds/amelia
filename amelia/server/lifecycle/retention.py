@@ -1,4 +1,5 @@
 """Log retention service for cleaning up old workflow data."""
+from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Protocol
@@ -11,14 +12,14 @@ from pydantic import BaseModel
 class DatabaseProtocol(Protocol):
     """Protocol for database operations."""
 
-    async def execute(self, query: str, params: tuple[Any, ...] = ()) -> int:
+    async def execute(self, query: str, params: Sequence[Any] = ()) -> int:
         """Execute a query and return affected row count."""
         ...
 
     async def fetch_all(
-        self, query: str, params: tuple[Any, ...] = ()
-    ) -> list[dict[str, Any]]:
-        """Execute a query and return all rows as dicts."""
+        self, query: str, params: Sequence[Any] = ()
+    ) -> list[aiosqlite.Row]:
+        """Execute a query and return all rows."""
         ...
 
 
