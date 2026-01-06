@@ -125,6 +125,22 @@ Profile-based configuration via `settings.amelia.yaml`:
 - `tracker`: Issue source
 - `strategy`: `single` or `competitive` review
 
+### Server Configuration
+
+Server settings via environment variables (prefix `AMELIA_`):
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `AMELIA_HOST` | `127.0.0.1` | Host to bind the server to |
+| `AMELIA_PORT` | `8420` | Port to bind the server to |
+| `AMELIA_LOG_RETENTION_DAYS` | `30` | Days to retain event logs |
+| `AMELIA_CHECKPOINT_RETENTION_DAYS` | `0` | Days to retain LangGraph checkpoints. `0` = delete immediately on shutdown, `-1` = never delete (for debugging) |
+| `AMELIA_CHECKPOINT_PATH` | `~/.amelia/checkpoints.db` | Path to LangGraph checkpoint database |
+| `AMELIA_DATABASE_PATH` | `~/.amelia/amelia.db` | Path to main SQLite database |
+| `AMELIA_MAX_CONCURRENT` | `5` | Maximum concurrent workflows |
+
+**Debugging tip**: Set `AMELIA_CHECKPOINT_RETENTION_DAYS=-1` to preserve checkpoints for debugging workflow issues.
+
 ## Code Conventions
 
 - **Test-Driven Development (TDD)** - Always write tests first, then implementation. Follow the red-green-refactor cycle.
