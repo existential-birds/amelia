@@ -359,6 +359,8 @@ class ApiDriver(DriverInterface):
                         tool_raw_name = tool_call["name"]
                         # Normalize tool name to standard format
                         tool_normalized = normalize_tool_name(tool_raw_name)
+                        if tool_normalized == "write_todos":
+                            logger.debug("write_todos called", todos=tool_call.get("args", {}))
                         yield AgenticMessage(
                             type=AgenticMessageType.TOOL_CALL,
                             tool_name=tool_normalized,

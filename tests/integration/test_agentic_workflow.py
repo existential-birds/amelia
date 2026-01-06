@@ -244,6 +244,123 @@ class TestReviewerNodeIntegration:
         assert result["last_review"].approved is False
         assert result["last_review"].severity == "critical"
 
+    async def test_reviewer_node_increments_review_iteration(self, tmp_path: Path) -> None:
+        """Reviewer node should increment review_iteration after each review.
+
+        This prevents infinite loops when review is rejected - the iteration
+        counter ensures we eventually hit max_review_iterations and terminate.
+
+        Real components: DriverFactory, ApiDriver, Reviewer
+        Mock boundary: ApiDriver.generate (LLM call)
+        """
+        profile = make_profile(working_dir=str(tmp_path), max_review_iterations=3)
+        state = make_execution_state(
+            profile=profile,
+            goal="Fix the bug",
+            code_changes_for_review="diff --git a/fix.py\n+# partial fix",
+            review_iteration=0,  # Start at 0
+        )
+        config = make_config(thread_id="test-wf-iteration", profile=profile)
+
+        # Mock rejection response
+        mock_llm_response = ReviewResponse(
+            approved=False,
+            comments=["Still needs work"],
+            severity="high",
+        )
+
+        with patch.object(ApiDriver, "generate", new_callable=AsyncMock) as mock_generate:
+            mock_generate.return_value = (mock_llm_response, "session-iter")
+
+            result = await call_reviewer_node(state, cast(RunnableConfig, config))
+
+        # Key assertion: review_iteration should be incremented
+        assert "review_iteration" in result, "review_iteration must be returned by reviewer node"
+        assert result["review_iteration"] == 1, "review_iteration should increment from 0 to 1"
+
+        # Run again with incremented state to verify it keeps incrementing
+        state_round2 = state.model_copy(update={"review_iteration": 1})
+        with patch.object(ApiDriver, "generate", new_callable=AsyncMock) as mock_generate:
+            mock_generate.return_value = (mock_llm_response, "session-iter2")
+
+            result2 = await call_reviewer_node(state_round2, cast(RunnableConfig, config))
+
+        assert result2["review_iteration"] == 2, "review_iteration should increment from 1 to 2"
+
+    async def test_reviewer_node_updates_last_review_each_round(self, tmp_path: Path) -> None:
+        """Reviewer node should update last_review with new results each round.
+
+        This verifies that the review results are different after developer
+        makes changes, preventing the "same review message" infinite loop bug.
+
+        Real components: DriverFactory, ApiDriver, Reviewer
+        Mock boundary: ApiDriver.generate (LLM call)
+        """
+        profile = make_profile(working_dir=str(tmp_path), max_review_iterations=3)
+        state = make_execution_state(
+            profile=profile,
+            goal="Fix the bug",
+            code_changes_for_review="diff --git a/fix.py\n+# initial attempt",
+            review_iteration=0,
+        )
+        config = make_config(thread_id="test-wf-review-update", profile=profile)
+
+        # Round 1: Reviewer rejects with severity "high"
+        mock_response_round1 = ReviewResponse(
+            approved=False,
+            comments=["Missing error handling", "No tests"],
+            severity="high",
+        )
+
+        with patch.object(ApiDriver, "generate", new_callable=AsyncMock) as mock_generate:
+            mock_generate.return_value = (mock_response_round1, "session-r1")
+            result1 = await call_reviewer_node(state, cast(RunnableConfig, config))
+
+        assert result1["last_review"].approved is False
+        assert result1["last_review"].severity == "high"
+        assert len(result1["last_review"].comments) == 2
+        assert "Missing error handling" in result1["last_review"].comments
+
+        # Round 2: Simulate developer fixed one issue, reviewer now returns different result
+        state_round2 = state.model_copy(update={
+            "review_iteration": 1,
+            "code_changes_for_review": "diff --git a/fix.py\n+# with error handling",
+        })
+        mock_response_round2 = ReviewResponse(
+            approved=False,
+            comments=["Still no tests"],  # Different comments!
+            severity="medium",  # Lower severity!
+        )
+
+        with patch.object(ApiDriver, "generate", new_callable=AsyncMock) as mock_generate:
+            mock_generate.return_value = (mock_response_round2, "session-r2")
+            result2 = await call_reviewer_node(state_round2, cast(RunnableConfig, config))
+
+        # Verify last_review is UPDATED, not stale
+        assert result2["last_review"].approved is False
+        assert result2["last_review"].severity == "medium", "severity should update from high to medium"
+        assert len(result2["last_review"].comments) == 1, "comment count should change"
+        assert "Still no tests" in result2["last_review"].comments, "comments should be new"
+
+        # Round 3: All fixed, approved
+        state_round3 = state.model_copy(update={
+            "review_iteration": 2,
+            "code_changes_for_review": "diff --git a/fix.py\n+# with tests",
+        })
+        mock_response_round3 = ReviewResponse(
+            approved=True,
+            comments=["LGTM!"],
+            severity="low",
+        )
+
+        with patch.object(ApiDriver, "generate", new_callable=AsyncMock) as mock_generate:
+            mock_generate.return_value = (mock_response_round3, "session-r3")
+            result3 = await call_reviewer_node(state_round3, cast(RunnableConfig, config))
+
+        assert result3["last_review"].approved is True, "should be approved in round 3"
+        assert result3["last_review"].severity == "low"
+        assert result3["review_iteration"] == 3
+
 
 @pytest.mark.integration
 class TestWorkflowRouting:

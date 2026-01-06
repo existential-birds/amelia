@@ -602,7 +602,8 @@ async def call_reviewer_node(
     # Save token usage from driver (best-effort)
     await _save_token_usage(driver, workflow_id, "reviewer", repository)
 
-    # Log the review completion
+    # Log the review completion with iteration tracking
+    next_iteration = state.review_iteration + 1
     logger.info(
         "Agent action completed",
         agent="reviewer",
@@ -611,12 +612,14 @@ async def call_reviewer_node(
             "severity": review_result.severity,
             "approved": review_result.approved,
             "comment_count": len(review_result.comments),
+            "review_iteration": next_iteration,
         },
     )
 
     return {
         "last_review": review_result,
         "driver_session_id": new_session_id,
+        "review_iteration": next_iteration,
     }
 
 
