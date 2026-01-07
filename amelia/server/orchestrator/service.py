@@ -1286,7 +1286,6 @@ class OrchestratorService:
 
             # Resume execution from checkpoint
             try:
-                was_interrupted = False
                 async for chunk in graph.astream(
                     None,  # Resume from checkpoint, no new input needed
                     config=config,
@@ -1304,21 +1303,20 @@ class OrchestratorService:
                         continue
                     await self._handle_stream_chunk(workflow_id, chunk)
 
-                if not was_interrupted:
-                    # Workflow completed after human approval.
-                    # Note: A separate COMPLETED emission exists in _run_workflow() for
-                    # workflows that complete without interruption. These are mutually exclusive
-                    # code paths - only one COMPLETED event is ever emitted per workflow.
-                    await self._emit(
-                        workflow_id,
-                        EventType.WORKFLOW_COMPLETED,
-                        "Workflow completed successfully",
-                    )
-                    await emit_workflow_event(
-                        ExtWorkflowEventType.COMPLETED,
-                        workflow_id=workflow_id,
-                    )
-                    await self._repository.set_status(workflow_id, "completed")
+                # Workflow completed after human approval.
+                # Note: A separate COMPLETED emission exists in _run_workflow() for
+                # workflows that complete without interruption. These are mutually exclusive
+                # code paths - only one COMPLETED event is ever emitted per workflow.
+                await self._emit(
+                    workflow_id,
+                    EventType.WORKFLOW_COMPLETED,
+                    "Workflow completed successfully",
+                )
+                await emit_workflow_event(
+                    ExtWorkflowEventType.COMPLETED,
+                    workflow_id=workflow_id,
+                )
+                await self._repository.set_status(workflow_id, "completed")
 
             except Exception as e:
                 logger.exception("Workflow failed after approval", workflow_id=workflow_id)
@@ -1795,23 +1793,6 @@ class OrchestratorService:
 
             # Save back to repository
             await self._repository.update(state)
-
-            # DEBUG: Verify the save worked by reading back
-            verify_state = await self._repository.get(workflow_id)
-            if verify_state and verify_state.execution_state:
-                logger.info(
-                    "VERIFY after sync save",
-                    workflow_id=workflow_id,
-                    saved_goal=verify_state.execution_state.goal[:100] if verify_state.execution_state.goal else None,
-                    saved_plan=verify_state.execution_state.plan_markdown is not None,
-                    saved_plan_len=len(verify_state.execution_state.plan_markdown) if verify_state.execution_state.plan_markdown else 0,
-                )
-            else:
-                logger.warning(
-                    "VERIFY after sync: no execution_state found!",
-                    workflow_id=workflow_id,
-                )
-
             logger.debug("Synced plan to ServerExecutionState", workflow_id=workflow_id)
 
         except Exception as e:
