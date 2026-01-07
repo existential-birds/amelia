@@ -18,7 +18,14 @@ from pydantic import ValidationError
 
 from amelia.core.orchestrator import create_orchestrator_graph, create_review_graph
 from amelia.core.state import ExecutionState
-from amelia.core.types import Issue, Profile, Settings, StreamEmitter, StreamEvent
+from amelia.core.types import (
+    Issue,
+    Profile,
+    Settings,
+    StageEventEmitter,
+    StreamEmitter,
+    StreamEvent,
+)
 from amelia.ext import WorkflowEventType as ExtWorkflowEventType
 from amelia.ext.exceptions import PolicyDeniedError
 from amelia.ext.hooks import (
@@ -152,6 +159,30 @@ class OrchestratorService:
             self._event_bus.emit_stream(event)
 
         return emit
+
+    def _create_stage_event_emitter(self, workflow_id: str) -> StageEventEmitter:
+        """Create a stage event emitter callback for nodes to signal stage start.
+
+        Nodes call this emitter when they begin execution, allowing real-time
+        STAGE_STARTED events to be persisted and broadcast. This is the canonical
+        way for nodes to emit stage start events, since stream_mode="updates"
+        only provides chunks after nodes complete.
+
+        Args:
+            workflow_id: The workflow ID to associate with emitted events.
+
+        Returns:
+            Async callback that takes a stage name and emits STAGE_STARTED.
+        """
+        async def emit_stage_started(stage_name: str) -> None:
+            await self._emit(
+                workflow_id,
+                EventType.STAGE_STARTED,
+                f"Starting {stage_name}",
+                data={"stage": stage_name},
+            )
+
+        return emit_stage_started
 
     async def _resolve_prompts(self, workflow_id: str) -> dict[str, str]:
         """Resolve all prompts for a workflow.
@@ -753,11 +784,13 @@ class OrchestratorService:
 
             # Create stream emitter and pass it via config
             stream_emitter = self._create_stream_emitter()
+            stage_event_emitter = self._create_stage_event_emitter(workflow_id)
             config: RunnableConfig = {
                 "configurable": {
                     "thread_id": workflow_id,
                     "execution_mode": "server",
                     "stream_emitter": stream_emitter,
+                    "stage_event_emitter": stage_event_emitter,
                     "profile": profile,
                     "repository": self._repository,
                     "prompts": prompts,
@@ -826,6 +859,13 @@ class OrchestratorService:
                         # Sync plan from LangGraph checkpoint to ServerExecutionState
                         # so it's available via REST API while blocked
                         await self._sync_plan_from_checkpoint(workflow_id, graph, config)
+                        # Emit STAGE_STARTED for human_approval_node (interrupted before running)
+                        await self._emit(
+                            workflow_id,
+                            EventType.STAGE_STARTED,
+                            "Starting human_approval_node",
+                            data={"stage": "human_approval_node"},
+                        )
                         await self._emit(
                             workflow_id,
                             EventType.APPROVAL_REQUIRED,
@@ -1030,11 +1070,13 @@ class OrchestratorService:
 
             # Create stream emitter and pass it via config
             stream_emitter = self._create_stream_emitter()
+            stage_event_emitter = self._create_stage_event_emitter(workflow_id)
             config: RunnableConfig = {
                 "configurable": {
                     "thread_id": workflow_id,
                     "execution_mode": "server",
                     "stream_emitter": stream_emitter,
+                    "stage_event_emitter": stage_event_emitter,
                     "profile": profile,
                     "repository": self._repository,
                     "prompts": prompts,
@@ -1221,11 +1263,13 @@ class OrchestratorService:
 
             # Create stream emitter and pass it via config
             stream_emitter = self._create_stream_emitter()
+            stage_event_emitter = self._create_stage_event_emitter(workflow_id)
             config: RunnableConfig = {
                 "configurable": {
                     "thread_id": workflow_id,
                     "execution_mode": "server",
                     "stream_emitter": stream_emitter,
+                    "stage_event_emitter": stage_event_emitter,
                     "profile": profile,
                     "repository": self._repository,
                     "prompts": prompts,
@@ -1480,11 +1524,11 @@ class OrchestratorService:
         """Handle a chunk from astream(stream_mode='updates').
 
         With stream_mode='updates', each chunk maps node names to their
-        state updates. We emit STAGE_STARTED before and STAGE_COMPLETED
-        after each node that's in STAGE_NODES.
+        state updates. We emit STAGE_COMPLETED after each node that's in
+        STAGE_NODES.
 
-        Additionally emits AGENT_MESSAGE and task lifecycle events (TASK_STARTED,
-        TASK_COMPLETED, TASK_FAILED) based on node output.
+        Note: STAGE_STARTED events are emitted by the nodes themselves when
+        they begin execution (via stage_event_emitter in config).
 
         Args:
             workflow_id: The workflow this chunk belongs to.
@@ -1498,18 +1542,10 @@ class OrchestratorService:
                     state.current_stage = node_name
                     await self._repository.update(state)
 
-                # Emit both started and completed for each node update
-                # (astream "updates" mode gives us the result after completion)
-                await self._emit(
-                    workflow_id,
-                    EventType.STAGE_STARTED,
-                    f"Starting {node_name}",
-                    data={"stage": node_name},
-                )
-
                 # Emit agent-specific messages based on node
                 await self._emit_agent_messages(workflow_id, node_name, output)
 
+                # Emit STAGE_COMPLETED for the current node
                 await self._emit(
                     workflow_id,
                     EventType.STAGE_COMPLETED,

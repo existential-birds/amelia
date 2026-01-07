@@ -4,36 +4,19 @@ import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import WorkflowDetailPage from './WorkflowDetailPage';
 import { createMockWorkflowDetail, createMockEvent } from '@/__tests__/fixtures';
 
-// Mock the workflow store
+// Mock the workflow store - supports both selector and no-selector usage patterns
+const mockEventsByWorkflow: Record<string, unknown[]> = {};
 vi.mock('@/store/workflowStore', () => ({
-  useWorkflowStore: vi.fn(() => ({
-    eventsByWorkflow: {},
-  })),
+  useWorkflowStore: vi.fn((selector?: (state: { eventsByWorkflow: Record<string, unknown[]> }) => unknown) => {
+    const state = { eventsByWorkflow: mockEventsByWorkflow };
+    return selector ? selector(state) : state;
+  }),
 }));
 
 // Mock modules
 vi.mock('@/utils/workflow', () => ({
   formatElapsedTime: vi.fn(() => '1h 30m'),
 }));
-
-// Mock buildPipeline (legacy) but keep buildPipelineFromEvents real
-vi.mock('@/utils/pipeline', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/utils/pipeline')>();
-  return {
-    ...actual,
-    buildPipeline: vi.fn(() => ({
-      nodes: [
-        { id: 'architect', label: 'Architect', status: 'completed' as const },
-        { id: 'developer', label: 'Developer', status: 'active' as const, subtitle: 'In progress...' },
-        { id: 'reviewer', label: 'Reviewer', status: 'pending' as const },
-      ],
-      edges: [
-        { from: 'architect', to: 'developer', label: '', status: 'completed' as const },
-        { from: 'developer', to: 'reviewer', label: '', status: 'active' as const },
-      ],
-    })),
-  };
-});
 
 const mockWorkflow = createMockWorkflowDetail({
   id: 'wf-001',
@@ -67,6 +50,8 @@ function renderWithRouter(loaderData: { workflow: typeof mockWorkflow | null }) 
 describe('WorkflowDetailPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Reset mock state
+    Object.keys(mockEventsByWorkflow).forEach(key => delete mockEventsByWorkflow[key]);
   });
 
   it('should render workflow header with issue_id', async () => {
@@ -74,15 +59,6 @@ describe('WorkflowDetailPage', () => {
 
     await waitFor(() => {
       expect(screen.getByText('PROJ-123')).toBeInTheDocument();
-    });
-  });
-
-  it('should render pipeline visualization', async () => {
-    renderWithRouter({ workflow: mockWorkflow });
-
-    await waitFor(() => {
-      // Pipeline section header
-      expect(screen.getByText('PIPELINE')).toBeInTheDocument();
     });
   });
 
@@ -100,12 +76,11 @@ describe('WorkflowDetailPage', () => {
 describe('WorkflowDetailPage event merging', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Reset mock state
+    Object.keys(mockEventsByWorkflow).forEach(key => delete mockEventsByWorkflow[key]);
   });
 
   it('merges loader events with real-time events from store', async () => {
-    // Import the mock to configure it
-    const { useWorkflowStore } = await import('@/store/workflowStore');
-
     const loaderEvents = [
       createMockEvent({
         id: 'evt-1',
@@ -127,10 +102,8 @@ describe('WorkflowDetailPage event merging', () => {
       }),
     ];
 
-    // Configure the mock to return store events for this workflow
-    vi.mocked(useWorkflowStore).mockReturnValue({
-      eventsByWorkflow: { 'wf-1': storeEvents },
-    });
+    // Configure the mock state
+    mockEventsByWorkflow['wf-1'] = storeEvents;
 
     const workflowWithEvents = createMockWorkflowDetail({
       id: 'wf-1',
@@ -155,21 +128,17 @@ describe('WorkflowDetailPage event merging', () => {
 
     render(<RouterProvider router={router} />);
 
-    // Wait for the page to render
+    // Wait for the page to render with merged events passed to ActivityLog
     await waitFor(() => {
       expect(screen.getByText('MERGE-TEST')).toBeInTheDocument();
     });
 
-    // The merged events should be passed to ActivityLog and WorkflowCanvas
-    // When both stage_started and stage_completed events are present,
-    // the pipeline builder should show architect as completed
-    // (verified through the pipeline visualization)
-    expect(screen.getByText('PIPELINE')).toBeInTheDocument();
+    // Activity log should be present (receives merged events)
+    const activityLogHeaders = screen.getAllByText('ACTIVITY LOG');
+    expect(activityLogHeaders.length).toBeGreaterThanOrEqual(1);
   });
 
   it('deduplicates events by id when merging', async () => {
-    const { useWorkflowStore } = await import('@/store/workflowStore');
-
     // Same event appears in both loader and store (e.g., after reconnection)
     const duplicateEvent = createMockEvent({
       id: 'evt-duplicate',
@@ -180,9 +149,8 @@ describe('WorkflowDetailPage event merging', () => {
       message: 'Architect started',
     });
 
-    vi.mocked(useWorkflowStore).mockReturnValue({
-      eventsByWorkflow: { 'wf-dup': [duplicateEvent] },
-    });
+    // Configure the mock state
+    mockEventsByWorkflow['wf-dup'] = [duplicateEvent];
 
     const workflowWithDuplicateEvent = createMockWorkflowDetail({
       id: 'wf-dup',
@@ -212,13 +180,11 @@ describe('WorkflowDetailPage event merging', () => {
     });
 
     // Page renders without error - deduplication is working
-    // (If dedup failed, buildPipelineFromEvents might show incorrect state)
-    expect(screen.getByText('PIPELINE')).toBeInTheDocument();
+    const activityLogHeaders = screen.getAllByText('ACTIVITY LOG');
+    expect(activityLogHeaders.length).toBeGreaterThanOrEqual(1);
   });
 
   it('sorts merged events by sequence number', async () => {
-    const { useWorkflowStore } = await import('@/store/workflowStore');
-
     // Loader has event with sequence 3
     const loaderEvents = [
       createMockEvent({
@@ -251,9 +217,8 @@ describe('WorkflowDetailPage event merging', () => {
       }),
     ];
 
-    vi.mocked(useWorkflowStore).mockReturnValue({
-      eventsByWorkflow: { 'wf-sort': storeEvents },
-    });
+    // Configure the mock state
+    mockEventsByWorkflow['wf-sort'] = storeEvents;
 
     const workflowForSort = createMockWorkflowDetail({
       id: 'wf-sort',
@@ -282,9 +247,8 @@ describe('WorkflowDetailPage event merging', () => {
       expect(screen.getByText('SORT-TEST')).toBeInTheDocument();
     });
 
-    // If events are sorted correctly (1, 2, 3), the pipeline will show:
-    // - architect: completed (stage_started then stage_completed)
-    // - developer: active (stage_started but no stage_completed)
-    expect(screen.getByText('PIPELINE')).toBeInTheDocument();
+    // Events are sorted correctly (1, 2, 3) and passed to activity log
+    const activityLogHeaders = screen.getAllByText('ACTIVITY LOG');
+    expect(activityLogHeaders.length).toBeGreaterThanOrEqual(1);
   });
 });

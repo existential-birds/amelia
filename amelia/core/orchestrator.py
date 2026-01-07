@@ -22,7 +22,13 @@ from amelia.agents.evaluator import Evaluator
 from amelia.agents.reviewer import Reviewer
 from amelia.core.constants import resolve_plan_path
 from amelia.core.state import ExecutionState
-from amelia.core.types import Profile, StreamEmitter, StreamEvent, StreamEventType
+from amelia.core.types import (
+    Profile,
+    StageEventEmitter,
+    StreamEmitter,
+    StreamEvent,
+    StreamEventType,
+)
 from amelia.drivers.factory import DriverFactory
 from amelia.server.models.tokens import TokenUsage
 
@@ -33,8 +39,8 @@ if TYPE_CHECKING:
 
 def _extract_config_params(
     config: RunnableConfig | None,
-) -> tuple[StreamEmitter | None, str, Profile]:
-    """Extract stream_emitter, workflow_id, and profile from RunnableConfig.
+) -> tuple[StreamEmitter | None, StageEventEmitter | None, str, Profile]:
+    """Extract stream_emitter, stage_event_emitter, workflow_id, and profile from config.
 
     Extracts values from config.configurable dictionary. workflow_id is required.
 
@@ -42,7 +48,7 @@ def _extract_config_params(
         config: Optional RunnableConfig with configurable parameters.
 
     Returns:
-        Tuple of (stream_emitter, workflow_id, profile).
+        Tuple of (stream_emitter, stage_event_emitter, workflow_id, profile).
 
     Raises:
         ValueError: If workflow_id (thread_id) or profile is not provided.
@@ -50,6 +56,7 @@ def _extract_config_params(
     config = config or {}
     configurable = config.get("configurable", {})
     stream_emitter = configurable.get("stream_emitter")
+    stage_event_emitter = configurable.get("stage_event_emitter")
     workflow_id = configurable.get("thread_id")
     profile = configurable.get("profile")
 
@@ -58,7 +65,7 @@ def _extract_config_params(
     if not profile:
         raise ValueError("profile is required in config.configurable")
 
-    return stream_emitter, workflow_id, profile
+    return stream_emitter, stage_event_emitter, workflow_id, profile
 
 
 async def _save_token_usage(
@@ -143,7 +150,11 @@ async def plan_validator_node(
     Raises:
         ValueError: If plan file not found or empty.
     """
-    stream_emitter, workflow_id, profile = _extract_config_params(config)
+    stream_emitter, stage_event_emitter, workflow_id, profile = _extract_config_params(config)
+
+    # Emit STAGE_STARTED event at the beginning of the node
+    if stage_event_emitter:
+        await stage_event_emitter("plan_validator_node")
 
     if not state.issue:
         raise ValueError("Issue is required in state for plan validation")
@@ -241,8 +252,12 @@ async def call_architect_node(
     if state.issue is None:
         raise ValueError("Cannot call Architect: no issue provided in state.")
 
-    # Extract stream_emitter, workflow_id, and profile from config
-    stream_emitter, workflow_id, profile = _extract_config_params(config)
+    # Extract stream_emitter, stage_event_emitter, workflow_id, and profile from config
+    stream_emitter, stage_event_emitter, workflow_id, profile = _extract_config_params(config)
+
+    # Emit STAGE_STARTED event at the beginning of the node
+    if stage_event_emitter:
+        await stage_event_emitter("architect_node")
 
     # Get optional repository for token usage tracking
     config = config or {}
@@ -519,8 +534,12 @@ async def call_developer_node(
     if not state.goal:
         raise ValueError("Developer node has no goal. The architect should have generated a goal first.")
 
-    # Extract stream_emitter, workflow_id, and profile from config
-    stream_emitter, workflow_id, profile = _extract_config_params(config)
+    # Extract stream_emitter, stage_event_emitter, workflow_id, and profile from config
+    stream_emitter, stage_event_emitter, workflow_id, profile = _extract_config_params(config)
+
+    # Emit STAGE_STARTED event at the beginning of the node
+    if stage_event_emitter:
+        await stage_event_emitter("developer_node")
 
     # Get optional repository for token usage tracking
     config = config or {}
@@ -585,8 +604,12 @@ async def call_reviewer_node(
         has_code_changes_for_review=bool(state.code_changes_for_review),
     )
 
-    # Extract stream_emitter, workflow_id, and profile from config
-    stream_emitter, workflow_id, profile = _extract_config_params(config)
+    # Extract stream_emitter, stage_event_emitter, workflow_id, and profile from config
+    stream_emitter, stage_event_emitter, workflow_id, profile = _extract_config_params(config)
+
+    # Emit STAGE_STARTED event at the beginning of the node
+    if stage_event_emitter:
+        await stage_event_emitter("reviewer_node")
 
     # Get optional repository for token usage tracking
     config = config or {}
@@ -657,7 +680,11 @@ async def call_evaluation_node(
     Returns:
         Partial state dict with evaluation_result, approved_items, and driver_session_id.
     """
-    stream_emitter, workflow_id, profile = _extract_config_params(config)
+    stream_emitter, stage_event_emitter, workflow_id, profile = _extract_config_params(config)
+
+    # Emit STAGE_STARTED event at the beginning of the node
+    if stage_event_emitter:
+        await stage_event_emitter("evaluation_node")
 
     # Extract prompts from config for agent injection
     config = config or {}
@@ -753,8 +780,8 @@ def route_after_review(
     if state.last_review and state.last_review.approved:
         return "__end__"
 
-    # Extract profile from config
-    _, _, profile = _extract_config_params(config)
+    # Extract profile from config (only need profile, ignore stream/stage emitters)
+    _, _, _, profile = _extract_config_params(config)
     max_iterations = profile.max_review_iterations
 
     if state.review_iteration >= max_iterations:

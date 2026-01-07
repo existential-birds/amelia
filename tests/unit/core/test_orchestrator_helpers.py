@@ -22,9 +22,11 @@ class TestExtractConfigParams:
                 "profile": profile,
             }
         }
-        stream_emitter, workflow_id, extracted_profile = _extract_config_params(config)
+        stream_emitter, stage_event_emitter, workflow_id, extracted_profile = _extract_config_params(config)
         assert extracted_profile == profile
         assert workflow_id == "wf-123"
+        assert stream_emitter is None
+        assert stage_event_emitter is None
 
     def test_raises_if_profile_missing(self) -> None:
         """Should raise ValueError if profile not in config."""

@@ -1,16 +1,14 @@
 /**
  * @fileoverview Workflow detail page with full status display.
  */
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useLoaderData } from 'react-router-dom';
 import { PageHeader } from '@/components/PageHeader';
 import { StatusBadge } from '@/components/StatusBadge';
 import { ActivityLog } from '@/components/ActivityLog';
 import { ApprovalControls } from '@/components/ApprovalControls';
-import { WorkflowCanvas } from '@/components/WorkflowCanvas';
 import { AgentProgressBar, type AgentStage } from '@/components/AgentProgressBar';
 import { UsageCard } from '@/components/UsageCard';
-import { buildPipelineFromEvents } from '@/utils/pipeline';
 import { useElapsedTime, useAutoRevalidation } from '@/hooks';
 import { workflowDetailLoader } from '@/loaders';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -30,17 +28,22 @@ function getCompletedStages(currentStage: string | null): AgentStage[] {
 }
 
 /**
- * Displays comprehensive workflow details with progress, pipeline, and activity.
+ * Displays comprehensive workflow details with progress and activity.
  *
- * Shows header with status, progress bar, visual pipeline canvas,
- * approval controls (when blocked), and real-time activity log.
+ * Shows header with status, progress bar, approval controls (when blocked),
+ * usage stats, and real-time activity log.
  *
  * @returns The workflow detail page UI
  */
 export default function WorkflowDetailPage() {
   const { workflow } = useLoaderData<typeof workflowDetailLoader>();
   const elapsedTime = useElapsedTime(workflow);
-  const { eventsByWorkflow } = useWorkflowStore();
+
+  // Use targeted selector to only subscribe to this workflow's events
+  const workflowId = workflow?.id ?? '';
+  const storeEvents = useWorkflowStore(
+    useCallback((state) => state.eventsByWorkflow[workflowId] ?? [], [workflowId])
+  );
 
   // Auto-revalidate when this workflow's status changes (approval events, completion, etc.)
   useAutoRevalidation(workflow?.id);
@@ -48,7 +51,6 @@ export default function WorkflowDetailPage() {
   // Merge loader events with real-time WebSocket events
   const allEvents = useMemo(() => {
     const loaderEvents = workflow?.recent_events ?? [];
-    const storeEvents = eventsByWorkflow[workflow?.id ?? ''] ?? [];
 
     // Deduplicate by event id using a Map
     const eventMap = new Map<string, WorkflowEvent>();
@@ -61,12 +63,7 @@ export default function WorkflowDetailPage() {
 
     // Sort by sequence number for correct ordering
     return Array.from(eventMap.values()).sort((a, b) => a.sequence - b.sequence);
-  }, [workflow?.recent_events, workflow?.id, eventsByWorkflow]);
-
-  // Build pipeline from merged events for real-time visualization
-  const pipeline = useMemo(() => {
-    return buildPipelineFromEvents(allEvents, { showDefaultPipeline: true });
-  }, [allEvents]);
+  }, [workflow?.recent_events, storeEvents]);
 
   if (!workflow) {
     return (
@@ -146,14 +143,6 @@ export default function WorkflowDetailPage() {
 
           {/* Usage card - shows token usage breakdown by agent */}
           <UsageCard tokenUsage={workflow.token_usage} className="border-l-2 border-l-primary" />
-
-          {/* Workflow Canvas (pipeline visualization) */}
-          <div className="p-4 border border-border rounded-lg bg-card/50 border-l-2 border-l-status-completed">
-            <h3 className="font-heading text-xs font-semibold tracking-widest text-muted-foreground mb-3">
-              PIPELINE
-            </h3>
-            <WorkflowCanvas pipeline={pipeline} />
-          </div>
         </div>
 
         {/* Right column: Activity Log */}

@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Handle, Position } from '@xyflow/react';
 import type { Node, NodeProps } from '@xyflow/react';
 import { MapPin } from 'lucide-react';
@@ -22,7 +23,7 @@ const iconClasses: Record<AgentNodeData['status'], string> = {
   blocked: 'text-destructive',
 };
 
-export function AgentNode({ data }: NodeProps<AgentNodeType>) {
+export const AgentNode = memo(function AgentNode({ data }: NodeProps<AgentNodeType>) {
   const { agentType, status, iterations, isExpanded } = data;
 
   return (
@@ -69,4 +70,4 @@ export function AgentNode({ data }: NodeProps<AgentNodeType>) {
       <Handle type="source" position={Position.Right} className="!bg-border" />
     </div>
   );
-}
+});

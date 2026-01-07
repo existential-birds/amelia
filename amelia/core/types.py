@@ -166,3 +166,11 @@ class StreamEvent(BaseModel, frozen=True):
 
 StreamEmitter = Callable[[StreamEvent], Awaitable[None]]
 """Type alias for async streaming event emitter function."""
+
+StageEventEmitter = Callable[[str], Awaitable[None]]
+"""Type alias for async stage event emitter function.
+
+Takes the stage name (e.g., "architect_node") and emits a STAGE_STARTED event.
+This allows nodes to emit stage start events when they actually begin execution,
+rather than relying on the streaming consumer to predict the next stage.
+"""

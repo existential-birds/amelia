@@ -2,15 +2,11 @@
  * @fileoverview React Flow canvas for visualizing workflow pipelines.
  *
  * Simplified component that accepts an EventDrivenPipeline and renders
- * agent nodes with status-based styling.
+ * agent nodes with status-based styling. Uses controlled state since the
+ * canvas is read-only (no user interaction with nodes/edges).
  */
 import { useMemo } from 'react';
-import {
-  ReactFlow,
-  Background,
-  useNodesState,
-  useEdgesState,
-} from '@xyflow/react';
+import { ReactFlow, Background } from '@xyflow/react';
 import type { NodeTypes } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
@@ -31,7 +27,9 @@ interface WorkflowCanvasProps {
  * Visualizes a workflow pipeline using React Flow.
  *
  * Displays agent nodes with status-based styling in a horizontal layout.
- * Shows empty state when pipeline has no nodes.
+ * Shows empty state when pipeline has no nodes. Uses controlled props since
+ * the canvas is read-only (nodesDraggable, nodesConnectable, elementsSelectable
+ * are all false).
  *
  * @param props - Component props
  * @param props.pipeline - Event-driven pipeline data with nodes and edges
@@ -39,14 +37,11 @@ interface WorkflowCanvasProps {
  * @returns The workflow canvas visualization
  */
 export function WorkflowCanvas({ pipeline, className }: WorkflowCanvasProps) {
-  // Apply Dagre layout to nodes
+  // Apply Dagre layout to nodes - memoized to avoid recalculating on every render
   const layoutedNodes = useMemo(() => {
     if (pipeline.nodes.length === 0) return [];
     return getLayoutedElements(pipeline.nodes, pipeline.edges);
   }, [pipeline.nodes, pipeline.edges]);
-
-  const [nodes] = useNodesState(layoutedNodes);
-  const [edges] = useEdgesState(pipeline.edges);
 
   if (pipeline.nodes.length === 0) {
     return (
@@ -69,8 +64,8 @@ export function WorkflowCanvas({ pipeline, className }: WorkflowCanvasProps) {
       className={className}
     >
       <ReactFlow
-        nodes={nodes}
-        edges={edges}
+        nodes={layoutedNodes}
+        edges={pipeline.edges}
         nodeTypes={nodeTypes}
         nodesDraggable={false}
         nodesConnectable={false}

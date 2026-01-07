@@ -184,6 +184,31 @@ export interface EventDrivenPipeline {
 const DEFAULT_AGENTS = ['architect', 'developer', 'reviewer'];
 
 /**
+ * Extract the agent name from a stage event.
+ *
+ * Stage events have `agent: "system"` but the actual stage name is in `data.stage`.
+ * This function extracts the agent name from the stage, stripping the `_node` suffix.
+ *
+ * @param event - The workflow event to extract agent name from
+ * @returns The agent name (e.g., 'architect', 'developer', 'reviewer') or the event's agent field as fallback
+ *
+ * @example
+ * // Event with data.stage = "architect_node" returns "architect"
+ * // Event with data.stage = "developer_node" returns "developer"
+ * // Event without data.stage returns event.agent
+ */
+function extractAgentFromStageEvent(event: WorkflowEvent): string {
+  // For stage events, the agent name is in data.stage (e.g., "architect_node")
+  if (event.data?.stage && typeof event.data.stage === 'string') {
+    const stage = event.data.stage;
+    // Strip "_node" suffix if present (e.g., "architect_node" -> "architect")
+    return stage.endsWith('_node') ? stage.slice(0, -5) : stage;
+  }
+  // Fallback to event.agent for non-stage events or missing data
+  return event.agent;
+}
+
+/**
  * Build pipeline visualization from workflow events.
  *
  * This function derives node status directly from events rather than
@@ -204,19 +229,26 @@ export function buildPipelineFromEvents(
   const sortedEvents = [...events].sort((a, b) => a.sequence - b.sequence);
 
   for (const event of sortedEvents) {
-    const { agent, event_type, timestamp, id } = event;
+    const { event_type, timestamp, id } = event;
 
     if (event_type === 'stage_started') {
+      // Extract agent from data.stage (e.g., "architect_node" -> "architect")
+      const agent = extractAgentFromStageEvent(event);
       if (!agentMap.has(agent)) {
         agentMap.set(agent, []);
         agentOrder.push(agent);
       }
-      agentMap.get(agent)!.push({
-        id: `${agent}-${id}`,
-        startedAt: timestamp,
-        status: 'running',
-      });
+      const iterations = agentMap.get(agent);
+      if (iterations) {
+        iterations.push({
+          id: `${agent}-${id}`,
+          startedAt: timestamp,
+          status: 'running',
+        });
+      }
     } else if (event_type === 'stage_completed') {
+      // Extract agent from data.stage (e.g., "architect_node" -> "architect")
+      const agent = extractAgentFromStageEvent(event);
       const iterations = agentMap.get(agent);
       if (iterations && iterations.length > 0) {
         const lastIteration = iterations[iterations.length - 1];

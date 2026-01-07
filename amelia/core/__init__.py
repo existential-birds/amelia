@@ -9,6 +9,7 @@ Exports:
     AmeliaError: Base exception for all Amelia errors.
     ConfigurationError: Invalid or missing configuration.
     PathTraversalError: Attempted path traversal outside allowed directory.
+    StageEventEmitter: Callback for emitting STAGE_STARTED events from nodes.
     StreamEmitter: Protocol for emitting stream events.
     StreamEvent: Event payload for streaming updates.
     StreamEventType: Enum of stream event categories.
@@ -22,6 +23,7 @@ from amelia.core.exceptions import (
     PathTraversalError as PathTraversalError,
 )
 from amelia.core.types import (
+    StageEventEmitter as StageEventEmitter,
     StreamEmitter as StreamEmitter,
     StreamEvent as StreamEvent,
     StreamEventType as StreamEventType,

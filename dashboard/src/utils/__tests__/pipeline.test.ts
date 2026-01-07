@@ -263,6 +263,29 @@ describe('AgentNodeData type', () => {
 });
 
 describe('buildPipelineFromEvents', () => {
+  /**
+   * Create a stage event with proper structure.
+   * Stage events have agent: "system" and data.stage contains the actual stage name.
+   */
+  const makeStageEvent = (
+    stage: string,
+    event_type: 'stage_started' | 'stage_completed',
+    sequence: number,
+    timestamp: string = '2026-01-06T10:00:00Z'
+  ): WorkflowEvent => ({
+    id: `evt-${sequence}`,
+    workflow_id: 'wf-1',
+    sequence,
+    timestamp,
+    agent: 'system',
+    event_type,
+    message: `${stage} ${event_type}`,
+    data: { stage: `${stage}_node` },
+  });
+
+  /**
+   * Create a non-stage event (e.g., workflow_failed).
+   */
   const makeEvent = (
     agent: string,
     event_type: string,
@@ -286,7 +309,7 @@ describe('buildPipelineFromEvents', () => {
 
   it('should create node with active status for stage_started without completion', () => {
     const events = [
-      makeEvent('architect', 'stage_started', 1),
+      makeStageEvent('architect', 'stage_started', 1),
     ];
     const result = buildPipelineFromEvents(events);
 
@@ -300,8 +323,8 @@ describe('buildPipelineFromEvents', () => {
 
   it('should create node with completed status when stage completes', () => {
     const events = [
-      makeEvent('architect', 'stage_started', 1, '2026-01-06T10:00:00Z'),
-      makeEvent('architect', 'stage_completed', 2, '2026-01-06T10:05:00Z'),
+      makeStageEvent('architect', 'stage_started', 1, '2026-01-06T10:00:00Z'),
+      makeStageEvent('architect', 'stage_completed', 2, '2026-01-06T10:05:00Z'),
     ];
     const result = buildPipelineFromEvents(events);
 
@@ -315,11 +338,11 @@ describe('buildPipelineFromEvents', () => {
 
   it('should track multiple iterations for same agent', () => {
     const events = [
-      makeEvent('developer', 'stage_started', 1, '2026-01-06T10:00:00Z'),
-      makeEvent('developer', 'stage_completed', 2, '2026-01-06T10:05:00Z'),
-      makeEvent('reviewer', 'stage_started', 3, '2026-01-06T10:05:00Z'),
-      makeEvent('reviewer', 'stage_completed', 4, '2026-01-06T10:10:00Z'),
-      makeEvent('developer', 'stage_started', 5, '2026-01-06T10:10:00Z'),  // Second iteration
+      makeStageEvent('developer', 'stage_started', 1, '2026-01-06T10:00:00Z'),
+      makeStageEvent('developer', 'stage_completed', 2, '2026-01-06T10:05:00Z'),
+      makeStageEvent('reviewer', 'stage_started', 3, '2026-01-06T10:05:00Z'),
+      makeStageEvent('reviewer', 'stage_completed', 4, '2026-01-06T10:10:00Z'),
+      makeStageEvent('developer', 'stage_started', 5, '2026-01-06T10:10:00Z'),  // Second iteration
     ];
     const result = buildPipelineFromEvents(events);
 
@@ -332,9 +355,9 @@ describe('buildPipelineFromEvents', () => {
 
   it('should create edges between adjacent agents in order of first appearance', () => {
     const events = [
-      makeEvent('architect', 'stage_started', 1),
-      makeEvent('architect', 'stage_completed', 2),
-      makeEvent('developer', 'stage_started', 3),
+      makeStageEvent('architect', 'stage_started', 1),
+      makeStageEvent('architect', 'stage_completed', 2),
+      makeStageEvent('developer', 'stage_started', 3),
     ];
     const result = buildPipelineFromEvents(events);
 
@@ -346,11 +369,11 @@ describe('buildPipelineFromEvents', () => {
 
   it('should set edge status based on source node completion', () => {
     const events = [
-      makeEvent('architect', 'stage_started', 1),
-      makeEvent('architect', 'stage_completed', 2),
-      makeEvent('developer', 'stage_started', 3),
-      makeEvent('developer', 'stage_completed', 4),
-      makeEvent('reviewer', 'stage_started', 5),
+      makeStageEvent('architect', 'stage_started', 1),
+      makeStageEvent('architect', 'stage_completed', 2),
+      makeStageEvent('developer', 'stage_started', 3),
+      makeStageEvent('developer', 'stage_completed', 4),
+      makeStageEvent('reviewer', 'stage_started', 5),
     ];
     const result = buildPipelineFromEvents(events);
 
@@ -363,7 +386,7 @@ describe('buildPipelineFromEvents', () => {
 
   it('should handle workflow_failed by marking current agent as blocked', () => {
     const events = [
-      makeEvent('developer', 'stage_started', 1),
+      makeStageEvent('developer', 'stage_started', 1),
       makeEvent('system', 'workflow_failed', 2),
     ];
     const result = buildPipelineFromEvents(events);
@@ -380,5 +403,102 @@ describe('buildPipelineFromEvents', () => {
     expect(result.nodes).toHaveLength(3);
     expect(result.nodes.map(n => n.id)).toEqual(['architect', 'developer', 'reviewer']);
     expect(result.nodes.every(n => n.data.status === 'pending')).toBe(true);
+  });
+
+  describe('extractAgentFromStageEvent', () => {
+    it('should extract agent name from data.stage with _node suffix', () => {
+      const events = [
+        makeStageEvent('architect', 'stage_started', 1),
+      ];
+      const result = buildPipelineFromEvents(events);
+
+      // Verify the agent name was extracted correctly
+      expect(result.nodes).toHaveLength(1);
+      expect(result.nodes[0]!.id).toBe('architect');
+      expect(result.nodes[0]!.data.agentType).toBe('architect');
+    });
+
+    it('should handle stage names without _node suffix', () => {
+      // Create an event with data.stage but no _node suffix
+      const event: WorkflowEvent = {
+        id: 'evt-1',
+        workflow_id: 'wf-1',
+        sequence: 1,
+        timestamp: '2026-01-06T10:00:00Z',
+        agent: 'system',
+        event_type: 'stage_started',
+        message: 'test',
+        data: { stage: 'custom_agent' },
+      };
+      const result = buildPipelineFromEvents([event]);
+
+      expect(result.nodes).toHaveLength(1);
+      expect(result.nodes[0]!.id).toBe('custom_agent');
+    });
+
+    it('should fallback to event.agent when data.stage is missing', () => {
+      // Create an event without data.stage
+      const event: WorkflowEvent = {
+        id: 'evt-1',
+        workflow_id: 'wf-1',
+        sequence: 1,
+        timestamp: '2026-01-06T10:00:00Z',
+        agent: 'fallback_agent',
+        event_type: 'stage_started',
+        message: 'test',
+      };
+      const result = buildPipelineFromEvents([event]);
+
+      expect(result.nodes).toHaveLength(1);
+      expect(result.nodes[0]!.id).toBe('fallback_agent');
+    });
+
+    it('should handle all three standard agents from events with data.stage', () => {
+      const events = [
+        makeStageEvent('architect', 'stage_started', 1),
+        makeStageEvent('architect', 'stage_completed', 2),
+        makeStageEvent('developer', 'stage_started', 3),
+        makeStageEvent('developer', 'stage_completed', 4),
+        makeStageEvent('reviewer', 'stage_started', 5),
+        makeStageEvent('reviewer', 'stage_completed', 6),
+      ];
+      const result = buildPipelineFromEvents(events);
+
+      expect(result.nodes).toHaveLength(3);
+      expect(result.nodes.map(n => n.id)).toEqual(['architect', 'developer', 'reviewer']);
+    });
+
+    it('should correctly match stage_started and stage_completed events for same agent', () => {
+      // Both events have agent: "system" but data.stage should match them
+      const events: WorkflowEvent[] = [
+        {
+          id: 'evt-1',
+          workflow_id: 'wf-1',
+          sequence: 1,
+          timestamp: '2026-01-06T10:00:00Z',
+          agent: 'system',
+          event_type: 'stage_started',
+          message: 'test',
+          data: { stage: 'developer_node' },
+        },
+        {
+          id: 'evt-2',
+          workflow_id: 'wf-1',
+          sequence: 2,
+          timestamp: '2026-01-06T10:05:00Z',
+          agent: 'system',
+          event_type: 'stage_completed',
+          message: 'test',
+          data: { stage: 'developer_node' },
+        },
+      ];
+      const result = buildPipelineFromEvents(events);
+
+      expect(result.nodes).toHaveLength(1);
+      expect(result.nodes[0]!.id).toBe('developer');
+      expect(result.nodes[0]!.data.status).toBe('completed');
+      expect(result.nodes[0]!.data.iterations[0]!.status).toBe('completed');
+      expect(result.nodes[0]!.data.iterations[0]!.completedAt).toBe('2026-01-06T10:05:00Z');
+    });
   });
 });
