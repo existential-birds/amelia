@@ -2452,45 +2452,30 @@ git commit -m "test: verify all tests pass after unified events refactoring"
 
 ---
 
-## Task 19: Remove Backend StreamEvent Infrastructure
+## Task 19: Deprecate Backend StreamEvent Infrastructure
+
+**Status:** ✅ COMPLETED (modified approach - deprecation instead of removal)
 
 **Files:**
 - Modify: `amelia/core/types.py`
-- Modify: `amelia/core/__init__.py`
 - Modify: `amelia/server/models/events.py`
 
-**Step 1: Remove StreamEvent types from core/types.py**
+**What was done:**
 
-Delete the following from `amelia/core/types.py`:
-- `StreamEventType` enum (lines ~133-139)
-- `StreamEvent` class (lines ~142-164)
-- `StreamEmitter` type alias (line ~167)
+The original plan called for removing StreamEvent types entirely, but this was modified to:
 
-**Step 2: Remove exports from core/__init__.py**
+1. **Mark types as deprecated** in `amelia/core/types.py`:
+   - `StreamEventType` enum - marked deprecated, references `EventType.CLAUDE_*`
+   - `StreamEvent` class - marked deprecated, references `WorkflowEvent` with `EventLevel.TRACE`
+   - `StreamEmitter` type alias - marked deprecated, agents will emit to EventBus directly
 
-Remove these exports from `amelia/core/__init__.py`:
-```python
-# Remove these lines:
-StreamEmitter,
-StreamEvent,
-StreamEventType,
-```
+2. **Remove `StreamEventPayload`** from `amelia/server/models/events.py` (done)
 
-**Step 3: Remove StreamEventPayload from models/events.py**
+**Why the change:** Agents still import and use these types. Removing them would break imports until Task 22 completes the agent migration. Deprecation maintains backward compatibility.
 
-Delete the `StreamEventPayload` class from `amelia/server/models/events.py` (lines ~134-161).
+**Actual removal:** Deferred to Task 23 after agents are migrated.
 
-**Step 4: Run tests to verify imports are cleaned up**
-
-Run: `uv run pytest tests/unit/server/models/ -v`
-Expected: May have import errors that need fixing in subsequent tasks
-
-**Step 5: Commit**
-
-```bash
-git add amelia/core/types.py amelia/core/__init__.py amelia/server/models/events.py
-git commit -m "chore(events): remove StreamEvent types from core"
-```
+**Commit:** `chore(events): remove StreamEvent types from core`
 
 ---
 
@@ -2806,7 +2791,7 @@ git commit -m "feat(agents): update to emit WorkflowEvent instead of StreamEvent
 
 ---
 
-## Task 23: Delete Obsolete Backend Tests
+## Task 23: Delete Obsolete Backend Tests and Remove Deprecated Types
 
 **Files:**
 - Delete: `tests/unit/core/test_stream_types.py`
@@ -2814,6 +2799,8 @@ git commit -m "feat(agents): update to emit WorkflowEvent instead of StreamEvent
 - Delete: `tests/unit/server/events/test_connection_manager_stream.py`
 - Delete: `tests/integration/test_stream_propagation.py`
 - Modify: `tests/conftest.py`
+- Modify: `amelia/core/types.py` (final removal of deprecated types)
+- Modify: `amelia/core/__init__.py` (remove deprecated exports)
 
 **Step 1: Delete obsolete test files**
 
@@ -2824,24 +2811,44 @@ rm tests/unit/server/events/test_connection_manager_stream.py
 rm tests/integration/test_stream_propagation.py
 ```
 
+Note: Some of these files may have already been deleted in Task 21. Skip any that don't exist.
+
 **Step 2: Remove sample_stream_event fixture from conftest.py**
 
-In `tests/conftest.py`, delete the `sample_stream_event` fixture (lines ~180-188).
+In `tests/conftest.py`, delete the `sample_stream_event` fixture if it still exists.
 
-**Step 3: Run tests to verify nothing is broken**
+**Step 3: Remove deprecated StreamEvent types from core/types.py**
+
+Now that agents are migrated (Task 22), remove the deprecated types from `amelia/core/types.py`:
+- Delete `StreamEventType` enum
+- Delete `StreamEvent` class
+- Delete `StreamEmitter` type alias
+- Clean up any unused imports (datetime, StrEnum, Any, uuid4 if no longer needed)
+
+**Step 4: Remove deprecated exports from core/__init__.py**
+
+Remove these exports from `amelia/core/__init__.py`:
+```python
+# Remove these lines:
+StreamEmitter,
+StreamEvent,
+StreamEventType,
+```
+
+**Step 5: Run tests to verify nothing is broken**
 
 Run: `uv run pytest tests/ -v --ignore=tests/e2e`
-Expected: PASS (no import errors from deleted files)
+Expected: PASS (no import errors - agents now use WorkflowEvent)
 
-**Step 4: Commit**
+**Step 6: Commit**
 
 ```bash
-git rm tests/unit/core/test_stream_types.py
-git rm tests/unit/server/events/test_bus_stream.py
-git rm tests/unit/server/events/test_connection_manager_stream.py
-git rm tests/integration/test_stream_propagation.py
-git add tests/conftest.py
-git commit -m "chore(tests): remove obsolete StreamEvent tests"
+git rm tests/unit/core/test_stream_types.py 2>/dev/null || true
+git rm tests/unit/server/events/test_bus_stream.py 2>/dev/null || true
+git rm tests/unit/server/events/test_connection_manager_stream.py 2>/dev/null || true
+git rm tests/integration/test_stream_propagation.py 2>/dev/null || true
+git add tests/conftest.py amelia/core/types.py amelia/core/__init__.py
+git commit -m "chore: remove obsolete StreamEvent tests and deprecated types"
 ```
 
 ---
@@ -3045,7 +3052,7 @@ This plan implements unified events in 28 tasks:
 | **Frontend Types** | 8-14 | Add frontend types, virtualization, activity components |
 | **Refactor Components** | 15-17 | Refactor ActivityLog, LogsPage, clean up old components |
 | **Verify** | 18 | Run full test suite |
-| **Backend Cleanup** | 19-23 | Remove StreamEvent infrastructure, consolidate emit/broadcast, update agents |
+| **Backend Cleanup** | 19-23 | Deprecate StreamEvent (19), consolidate emit/broadcast (20-21), update agents (22), then remove deprecated types (23) |
 | **Frontend Cleanup** | 24-27 | Remove stream types, store, WebSocket handling, fixtures |
 | **Final Verification** | 28 | Complete verification and cleanup |
 
