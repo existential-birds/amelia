@@ -1,51 +1,11 @@
 /**
  * @fileoverview Pipeline conversion utilities for workflow visualization.
  *
- * In the agentic execution model, the pipeline shows agent stages rather
- * than individual batch/steps.
+ * Builds event-driven pipeline visualization from workflow events, enabling
+ * real-time updates as events arrive via WebSocket.
  */
 import type { Node, Edge } from '@xyflow/react';
-import type { WorkflowDetail, WorkflowEvent } from '@/types';
-
-/**
- * Node in the pipeline visualization.
- * @property id - Unique identifier for the node
- * @property label - Primary label displayed in the node
- * @property subtitle - Optional secondary text displayed below the label
- * @property status - Current execution status of the node
- * @property tokens - Optional token count to display
- */
-export interface PipelineNode {
-  id: string;
-  label: string;
-  subtitle?: string;
-  status: 'completed' | 'active' | 'blocked' | 'pending';
-  tokens?: string;
-}
-
-/**
- * Edge connecting pipeline nodes.
- * @property from - Source node ID
- * @property to - Target node ID
- * @property label - Label displayed on the edge
- * @property status - Status determining the edge's visual style
- */
-export interface PipelineEdge {
-  from: string;
-  to: string;
-  label: string;
-  status: 'completed' | 'active' | 'pending';
-}
-
-/**
- * Pipeline data structure for WorkflowCanvas.
- * @property nodes - Array of pipeline nodes to render
- * @property edges - Array of edges connecting the nodes
- */
-export interface Pipeline {
-  nodes: PipelineNode[];
-  edges: PipelineEdge[];
-}
+import type { WorkflowEvent } from '@/types';
 
 /** A single execution iteration of an agent (agents can run multiple times). */
 export interface AgentIteration {
@@ -72,102 +32,6 @@ export interface AgentNodeData extends Record<string, unknown> {
   /** Whether the iteration history is expanded. */
   isExpanded: boolean;
 }
-
-/**
- * Agent stages in the workflow.
- */
-const AGENT_STAGES = ['architect', 'developer', 'reviewer'] as const;
-
-/**
- * Maps current_stage to a stage index for comparison.
- * @param stage - The current stage name (e.g., 'architect_node', 'developer_node') or null
- * @returns The numeric index of the stage in AGENT_STAGES, or -1 if stage is null or unknown
- */
-function getStageIndex(stage: string | null): number {
-  if (!stage) return -1;
-  // Map node names to stage names
-  const stageMap: Record<string, string> = {
-    'architect_node': 'architect',
-    'developer_node': 'developer',
-    'reviewer_node': 'reviewer',
-    'human_approval_node': 'architect', // Approval happens after architect
-  };
-  const mappedStage = stageMap[stage] || stage;
-  return AGENT_STAGES.indexOf(mappedStage as typeof AGENT_STAGES[number]);
-}
-
-/**
- * Determines the status of a stage based on current execution position.
- * @param stageIndex - The index of the stage being evaluated
- * @param currentStageIndex - The index of the currently executing stage
- * @param workflowStatus - The overall workflow status
- * @returns The visual status of the stage: 'completed', 'active', 'blocked', or 'pending'
- */
-function getStageStatus(
-  stageIndex: number,
-  currentStageIndex: number,
-  workflowStatus: WorkflowDetail['status']
-): 'completed' | 'active' | 'blocked' | 'pending' {
-  if (stageIndex < currentStageIndex) {
-    return 'completed';
-  }
-  if (stageIndex === currentStageIndex) {
-    if (workflowStatus === 'blocked') {
-      return 'blocked';
-    }
-    if (workflowStatus === 'completed' || workflowStatus === 'failed') {
-      return 'completed';
-    }
-    return 'active';
-  }
-  return 'pending';
-}
-
-/**
- * Converts a workflow detail into a pipeline visualization format.
- * Shows agent stages for agentic execution.
- *
- * @param workflow - The workflow detail
- * @returns Pipeline data with agent stage nodes
- */
-export function buildPipeline(workflow: WorkflowDetail): Pipeline | null {
-  const nodes: PipelineNode[] = [];
-  const edges: PipelineEdge[] = [];
-
-  const currentStageIndex = getStageIndex(workflow.current_stage);
-
-  // Create nodes for each agent stage
-  AGENT_STAGES.forEach((stage, index) => {
-    const status = getStageStatus(index, currentStageIndex, workflow.status);
-
-    nodes.push({
-      id: stage,
-      label: stage.charAt(0).toUpperCase() + stage.slice(1),
-      subtitle: status === 'active' ? 'In progress...' : undefined,
-      status,
-    });
-
-    // Add edge from previous stage
-    // Edge status is based on the source node (previous stage), not the target
-    if (index > 0) {
-      // Safe: index > 0 guarantees index - 1 is valid
-      const prevStage = AGENT_STAGES[index - 1]!;
-      const prevStatus = getStageStatus(index - 1, currentStageIndex, workflow.status);
-      edges.push({
-        from: prevStage,
-        to: stage,
-        label: '',
-        status: prevStatus === 'completed' ? 'completed' : prevStatus === 'active' ? 'active' : 'pending',
-      });
-    }
-  });
-
-  return { nodes, edges };
-}
-
-// ============================================================================
-// Event-Driven Pipeline Builder
-// ============================================================================
 
 /** Options for buildPipelineFromEvents. */
 export interface BuildPipelineOptions {
@@ -336,30 +200,6 @@ export function buildPipelineFromEvents(
       data: { status: edgeStatus },
     });
   }
-
-  return { nodes, edges };
-}
-
-/**
- * Convert EventDrivenPipeline to the simpler Pipeline format expected by WorkflowCanvas.
- *
- * This bridges the gap between the event-driven pipeline builder (which uses React Flow
- * types with AgentNodeData) and the WorkflowCanvas component (which expects PipelineNode/PipelineEdge).
- */
-export function eventDrivenPipelineToCanvas(edp: EventDrivenPipeline): Pipeline {
-  const nodes: PipelineNode[] = edp.nodes.map((node) => ({
-    id: node.id,
-    label: node.data.agentType.charAt(0).toUpperCase() + node.data.agentType.slice(1),
-    subtitle: node.data.status === 'active' ? 'In progress...' : undefined,
-    status: node.data.status,
-  }));
-
-  const edges: PipelineEdge[] = edp.edges.map((edge) => ({
-    from: edge.source,
-    to: edge.target,
-    label: '',
-    status: edge.data?.status ?? 'pending',
-  }));
 
   return { nodes, edges };
 }

@@ -199,9 +199,9 @@ describe('WorkflowsPage', () => {
     renderWithRouter({ workflows: [mockWorkflowSummary], detail: mockWorkflowDetail }, '/workflows');
 
     await waitFor(() => {
-      // WorkflowCanvas renders pipeline nodes - agent types are displayed capitalized
-      expect(screen.getByText('architect')).toBeInTheDocument();
-      expect(screen.getByText('developer')).toBeInTheDocument();
+      // WorkflowCanvas renders pipeline nodes with proper display names
+      expect(screen.getByText('Architect')).toBeInTheDocument();
+      expect(screen.getByText('Developer')).toBeInTheDocument();
     });
   });
 

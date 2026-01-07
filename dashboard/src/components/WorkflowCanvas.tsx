@@ -1,15 +1,15 @@
 /**
  * @fileoverview React Flow canvas for visualizing workflow pipelines.
  *
- * Simplified component that accepts an EventDrivenPipeline and renders
- * agent nodes with status-based styling. Uses controlled state since the
- * canvas is read-only (no user interaction with nodes/edges).
+ * Uses ai-elements Canvas component as base. Accepts an EventDrivenPipeline
+ * and renders agent nodes with status-based styling. Read-only canvas with
+ * no user interaction for nodes/edges.
  */
-import { useMemo } from 'react';
-import { ReactFlow, Background } from '@xyflow/react';
+import { useEffect, useMemo } from 'react';
+import { useReactFlow } from '@xyflow/react';
 import type { NodeTypes } from '@xyflow/react';
-import '@xyflow/react/dist/style.css';
 
+import { Canvas } from './ai-elements/canvas';
 import { AgentNode } from './AgentNode';
 import { getLayoutedElements } from '@/utils/layout';
 import type { EventDrivenPipeline } from '@/utils/pipeline';
@@ -18,18 +18,31 @@ const nodeTypes: NodeTypes = {
   agent: AgentNode,
 };
 
+/**
+ * Inner component that triggers fitView when the node count changes.
+ * Must be rendered inside Canvas to access the React Flow instance.
+ */
+function FitViewOnChange({ nodeCount }: { nodeCount: number }) {
+  const { fitView } = useReactFlow();
+
+  useEffect(() => {
+    fitView({ padding: 0.2 });
+  }, [nodeCount, fitView]);
+
+  return null;
+}
+
 interface WorkflowCanvasProps {
   pipeline: EventDrivenPipeline;
   className?: string;
 }
 
 /**
- * Visualizes a workflow pipeline using React Flow.
+ * Visualizes a workflow pipeline using ai-elements Canvas.
  *
  * Displays agent nodes with status-based styling in a horizontal layout.
- * Shows empty state when pipeline has no nodes. Uses controlled props since
- * the canvas is read-only (nodesDraggable, nodesConnectable, elementsSelectable
- * are all false).
+ * Shows empty state when pipeline has no nodes. Read-only canvas with
+ * nodesDraggable, nodesConnectable, and elementsSelectable disabled.
  *
  * @param props - Component props
  * @param props.pipeline - Event-driven pipeline data with nodes and edges
@@ -63,21 +76,20 @@ export function WorkflowCanvas({ pipeline, className }: WorkflowCanvasProps) {
       aria-label="Workflow pipeline visualization"
       className={className}
     >
-      <ReactFlow
+      <Canvas
         nodes={layoutedNodes}
         edges={pipeline.edges}
         nodeTypes={nodeTypes}
         nodesDraggable={false}
         nodesConnectable={false}
         elementsSelectable={false}
-        panOnScroll
-        fitView
+        selectionOnDrag={false}
         fitViewOptions={{ padding: 0.2 }}
         minZoom={0.5}
         maxZoom={1.5}
       >
-        <Background color="var(--border)" gap={16} />
-      </ReactFlow>
+        <FitViewOnChange nodeCount={layoutedNodes.length} />
+      </Canvas>
     </div>
   );
 }

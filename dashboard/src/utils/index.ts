@@ -3,4 +3,5 @@
  */
 
 export { getActiveWorkflow } from './workflow';
-export { buildPipeline } from './pipeline';
+export { buildPipelineFromEvents } from './pipeline';
+export type { EventDrivenPipeline, AgentNodeData, AgentIteration } from './pipeline';

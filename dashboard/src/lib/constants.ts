@@ -16,6 +16,8 @@ export const AGENT_STYLES: Record<string, { text: string; bg: string }> = {
   ARCHITECT: { text: 'text-agent-architect', bg: 'bg-agent-architect-bg' },
   DEVELOPER: { text: 'text-agent-developer', bg: 'bg-agent-developer-bg' },
   REVIEWER: { text: 'text-agent-reviewer', bg: 'bg-agent-reviewer-bg' },
+  PLAN_VALIDATOR: { text: 'text-agent-pm', bg: 'bg-agent-pm-bg' },
+  HUMAN_APPROVAL: { text: 'text-destructive', bg: 'bg-destructive/10' },
   SYSTEM: { text: 'text-muted-foreground', bg: '' },
 };
 
@@ -72,6 +74,26 @@ const AGENT_ACCENT_STYLES_MAP: Record<string, AgentAccentStyle> = {
     focusRing: 'focus-visible:border-agent-pm/50 focus-visible:ring-agent-pm/20',
     button: 'bg-agent-pm hover:bg-agent-pm/90 text-white',
     buttonShadow: 'shadow-agent-pm/25',
+  },
+  plan_validator: {
+    border: 'border-agent-pm/20',
+    shadow: 'shadow-agent-pm/10 dark:shadow-agent-pm/5',
+    headerGradient: 'from-agent-pm/5 via-transparent to-agent-pm/5',
+    iconBg: 'bg-agent-pm/10',
+    iconText: 'text-agent-pm',
+    focusRing: 'focus-visible:border-agent-pm/50 focus-visible:ring-agent-pm/20',
+    button: 'bg-agent-pm hover:bg-agent-pm/90 text-white',
+    buttonShadow: 'shadow-agent-pm/25',
+  },
+  human_approval: {
+    border: 'border-destructive/20',
+    shadow: 'shadow-destructive/10 dark:shadow-destructive/5',
+    headerGradient: 'from-destructive/5 via-transparent to-destructive/5',
+    iconBg: 'bg-destructive/10',
+    iconText: 'text-destructive',
+    focusRing: 'focus-visible:border-destructive/50 focus-visible:ring-destructive/20',
+    button: 'bg-destructive hover:bg-destructive/90 text-white',
+    buttonShadow: 'shadow-destructive/25',
   },
 };
 
