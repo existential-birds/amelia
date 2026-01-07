@@ -251,24 +251,6 @@ class Database:
             await self.connection.execute("ROLLBACK")
             raise
 
-    async def _ensure_column_exists(
-        self, table: str, column: str, column_def: str
-    ) -> None:
-        """Add a column to a table if it doesn't already exist.
-
-        Args:
-            table: The table name.
-            column: The column name to check/add.
-            column_def: The column definition (e.g., "TEXT NOT NULL DEFAULT 'x'").
-        """
-        # Check if column exists via PRAGMA table_info
-        rows = await self.fetch_all(f"PRAGMA table_info({table})")
-        existing_columns = {row["name"] for row in rows}
-
-        if column not in existing_columns:
-            logger.info(f"Migrating: adding column {table}.{column}")
-            await self.execute(f"ALTER TABLE {table} ADD COLUMN {column} {column_def}")
-
     async def ensure_schema(self) -> None:
         """Create database schema if it doesn't exist.
 
@@ -358,15 +340,6 @@ class Database:
                 PRIMARY KEY (workflow_id, prompt_id)
             )
         """)
-
-        # Migrate: Add level column if it doesn't exist (for pre-unified-events databases)
-        await self._ensure_column_exists("events", "level", "TEXT NOT NULL DEFAULT 'debug'")
-        await self._ensure_column_exists("events", "correlation_id", "TEXT")
-        await self._ensure_column_exists("events", "tool_name", "TEXT")
-        await self._ensure_column_exists("events", "tool_input_json", "TEXT")
-        await self._ensure_column_exists("events", "is_error", "INTEGER NOT NULL DEFAULT 0")
-        await self._ensure_column_exists("events", "trace_id", "TEXT")
-        await self._ensure_column_exists("events", "parent_id", "TEXT")
 
         # Indexes
         await self.execute(
