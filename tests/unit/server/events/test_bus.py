@@ -162,159 +162,56 @@ async def test_cleanup_handles_task_exceptions(event_bus: EventBus, sample_event
     assert len(event_bus._broadcast_tasks) == 0
 
 
-async def test_emit_stream_filters_tool_results_by_default(event_bus: EventBus) -> None:
-    """emit_stream should filter tool results when stream_tool_results=False (default)."""
-    from unittest.mock import patch
-
-    from amelia.core.types import StreamEvent, StreamEventType
-
-    mock_manager = AsyncMock()
-    event_bus.set_connection_manager(mock_manager)
-
-    tool_result_event = StreamEvent(
-        id="evt-1",
-        type=StreamEventType.CLAUDE_TOOL_RESULT,
-        content="file contents here",
-        timestamp=datetime.now(UTC),
-        agent="developer",
-        workflow_id="wf-1",
-        tool_name="Read",
-        tool_input={"file": "test.py"},
-    )
-
-    with patch("amelia.server.events.bus.ServerConfig") as mock_config_cls:
-        mock_config_cls.return_value.stream_tool_results = False
-        event_bus.emit_stream(tool_result_event)
-
-    # Should NOT broadcast - filtered out
-    mock_manager.broadcast_stream.assert_not_called()
-
-
-async def test_emit_stream_allows_tool_results_when_enabled(event_bus: EventBus) -> None:
-    """emit_stream should broadcast tool results when stream_tool_results=True."""
-    from unittest.mock import patch
-
-    from amelia.core.types import StreamEvent, StreamEventType
-
-    broadcast_called = asyncio.Event()
-    mock_manager = AsyncMock()
-
-    async def mock_broadcast(event: StreamEvent) -> None:
-        broadcast_called.set()
-
-    mock_manager.broadcast_stream = mock_broadcast
-    event_bus.set_connection_manager(mock_manager)
-
-    tool_result_event = StreamEvent(
-        id="evt-2",
-        type=StreamEventType.CLAUDE_TOOL_RESULT,
-        content="file contents here",
-        timestamp=datetime.now(UTC),
-        agent="developer",
-        workflow_id="wf-1",
-        tool_name="Read",
-        tool_input={"file": "test.py"},
-    )
-
-    with patch("amelia.server.events.bus.ServerConfig") as mock_config_cls:
-        mock_config_cls.return_value.stream_tool_results = True
-        event_bus.emit_stream(tool_result_event)
-
-    # Should broadcast
-    await asyncio.wait_for(broadcast_called.wait(), timeout=1.0)
-
-
-async def test_emit_stream_allows_other_event_types(event_bus: EventBus) -> None:
-    """emit_stream should broadcast non-tool-result events regardless of setting."""
-    from unittest.mock import patch
-
-    from amelia.core.types import StreamEvent, StreamEventType
-
-    broadcast_called = asyncio.Event()
-    mock_manager = AsyncMock()
-
-    async def mock_broadcast(event: StreamEvent) -> None:
-        broadcast_called.set()
-
-    mock_manager.broadcast_stream = mock_broadcast
-    event_bus.set_connection_manager(mock_manager)
-
-    thinking_event = StreamEvent(
-        id="evt-3",
-        type=StreamEventType.CLAUDE_THINKING,
-        content="thinking...",
-        timestamp=datetime.now(UTC),
-        agent="developer",
-        workflow_id="wf-1",
-        tool_name=None,
-        tool_input=None,
-    )
-
-    with patch("amelia.server.events.bus.ServerConfig") as mock_config_cls:
-        mock_config_cls.return_value.stream_tool_results = False
-        event_bus.emit_stream(thinking_event)
-
-    # Should still broadcast - not a tool result
-    await asyncio.wait_for(broadcast_called.wait(), timeout=1.0)
-
-
-class TestEventBusTraceEmit:
-    """Tests for trace event emission."""
+class TestEventBusTraceEvents:
+    """Tests for trace event handling in unified emit."""
 
     @pytest.mark.asyncio
-    async def test_emit_stream_converts_to_workflow_event(self) -> None:
-        """emit_stream converts StreamEvent to WorkflowEvent for persistence."""
-        from amelia.core.types import StreamEvent, StreamEventType
+    async def test_emit_broadcasts_trace_events(self) -> None:
+        """emit() broadcasts trace-level events to WebSocket."""
         from amelia.server.models.events import EventLevel, EventType
 
         bus = EventBus()
-        captured_events: list[WorkflowEvent] = []
+        mock_manager = AsyncMock()
+        bus.set_connection_manager(mock_manager)
 
-        def capture(event: WorkflowEvent) -> None:
-            captured_events.append(event)
-
-        bus.subscribe(capture)
-
-        stream_event = StreamEvent(
-            type=StreamEventType.CLAUDE_TOOL_CALL,
+        trace_event = WorkflowEvent(
+            id="evt-1",
+            workflow_id="wf-1",
+            sequence=1,
             timestamp=datetime.now(UTC),
             agent="developer",
-            workflow_id="wf-123",
+            event_type=EventType.CLAUDE_TOOL_CALL,
+            level=EventLevel.TRACE,
+            message="Tool call: Edit",
             tool_name="Edit",
-            tool_input={"file": "test.py"},
         )
 
-        bus.emit_stream(stream_event)
+        bus.emit(trace_event)
+        await bus.wait_for_broadcasts()
 
-        assert len(captured_events) == 1
-        workflow_event = captured_events[0]
-        assert workflow_event.event_type == EventType.CLAUDE_TOOL_CALL
-        assert workflow_event.level == EventLevel.TRACE
-        assert workflow_event.tool_name == "Edit"
-        assert workflow_event.tool_input == {"file": "test.py"}
-        assert workflow_event.workflow_id == "wf-123"
+        mock_manager.broadcast.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_emit_stream_respects_trace_retention_zero(self) -> None:
-        """emit_stream skips persistence when trace_retention_days=0."""
-        from amelia.core.types import StreamEvent, StreamEventType
+    async def test_emit_trace_skips_persistence_when_disabled(self) -> None:
+        """emit() skips subscriber notification for trace events when retention=0."""
+        from amelia.server.models.events import EventLevel, EventType
 
         bus = EventBus()
-        captured_events: list[WorkflowEvent] = []
-        bus.subscribe(lambda e: captured_events.append(e))
-
-        # Configure trace_retention_days=0
         bus.configure(trace_retention_days=0)
+        captured: list[WorkflowEvent] = []
+        bus.subscribe(lambda e: captured.append(e))
 
-        stream_event = StreamEvent(
-            type=StreamEventType.CLAUDE_THINKING,
+        trace_event = WorkflowEvent(
+            id="evt-1",
+            workflow_id="wf-1",
+            sequence=1,
             timestamp=datetime.now(UTC),
             agent="developer",
-            workflow_id="wf-123",
-            content="Thinking...",
+            event_type=EventType.CLAUDE_TOOL_CALL,
+            level=EventLevel.TRACE,
+            message="Tool call",
         )
 
-        bus.emit_stream(stream_event)
+        bus.emit(trace_event)
 
-        # Should not call subscribers (no persistence)
-        assert len(captured_events) == 0
+        assert len(captured) == 0  # Not persisted
