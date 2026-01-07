@@ -351,13 +351,17 @@ class WorkflowRepository:
         # Use Pydantic's serialization which handles nested types (Path, models, etc.)
         serialized = event.model_dump(mode="json")
         data_json = json.dumps(serialized["data"]) if serialized["data"] else None
+        tool_input_json = (
+            json.dumps(serialized["tool_input"]) if serialized["tool_input"] else None
+        )
 
         await self._db.execute(
             """
             INSERT INTO events (
                 id, workflow_id, sequence, timestamp, agent,
-                event_type, message, data_json, correlation_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                event_type, level, message, data_json, correlation_id,
+                tool_name, tool_input_json, is_error, trace_id, parent_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 event.id,
@@ -366,9 +370,15 @@ class WorkflowRepository:
                 event.timestamp.isoformat(),
                 event.agent,
                 event.event_type.value,
+                event.level.value if event.level else None,
                 event.message,
                 data_json,
                 event.correlation_id,
+                event.tool_name,
+                tool_input_json,
+                1 if event.is_error else 0,
+                event.trace_id,
+                event.parent_id,
             ),
         )
 
@@ -406,7 +416,8 @@ class WorkflowRepository:
         """Convert database row to WorkflowEvent model.
 
         Handles conversion of the data_json column to the data field,
-        parsing JSON when present.
+        parsing JSON when present. Also handles tool_input_json and is_error
+        conversion.
 
         Args:
             row: Database row from events table.
@@ -420,6 +431,17 @@ class WorkflowRepository:
             event_data["data"] = json.loads(event_data.pop("data_json"))
         else:
             event_data.pop("data_json", None)  # Remove None value
+
+        # Parse tool_input_json to tool_input
+        if event_data.get("tool_input_json"):
+            event_data["tool_input"] = json.loads(event_data.pop("tool_input_json"))
+        else:
+            event_data.pop("tool_input_json", None)
+
+        # Convert is_error from SQLite integer (0/1) to boolean
+        if "is_error" in event_data:
+            event_data["is_error"] = bool(event_data["is_error"])
+
         return WorkflowEvent(**event_data)
 
     async def get_events_after(self, since_event_id: str) -> list[WorkflowEvent]:
@@ -449,7 +471,8 @@ class WorkflowRepository:
         rows = await self._db.fetch_all(
             """
             SELECT id, workflow_id, sequence, timestamp, agent, event_type,
-                   message, data_json, correlation_id
+                   level, message, data_json, correlation_id,
+                   tool_name, tool_input_json, is_error, trace_id, parent_id
             FROM events
             WHERE workflow_id = ? AND sequence > ?
             ORDER BY sequence ASC
@@ -478,7 +501,8 @@ class WorkflowRepository:
         rows = await self._db.fetch_all(
             """
             SELECT id, workflow_id, sequence, timestamp, agent, event_type,
-                   message, data_json, correlation_id
+                   level, message, data_json, correlation_id,
+                   tool_name, tool_input_json, is_error, trace_id, parent_id
             FROM events
             WHERE workflow_id = ?
             ORDER BY sequence DESC

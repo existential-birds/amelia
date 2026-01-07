@@ -7,6 +7,7 @@ import pytest
 
 from amelia.server.database.repository import WorkflowRepository
 from amelia.server.models import EventType
+from amelia.server.models.events import EventLevel, WorkflowEvent
 from amelia.server.models.state import InvalidStateTransitionError, ServerExecutionState
 
 
@@ -385,3 +386,144 @@ class TestWorkflowRepository:
         events = await repository.get_recent_events("any-workflow", limit=limit)
 
         assert events == []
+
+
+class TestRepositoryEvents:
+    """Tests for event persistence with level and trace fields."""
+
+    @pytest.fixture
+    async def repository(self, db_with_schema):
+        """WorkflowRepository instance."""
+        return WorkflowRepository(db_with_schema)
+
+    @pytest.fixture
+    async def sample_workflow(self, repository):
+        """Create a sample workflow for tests."""
+        state = ServerExecutionState(
+            id="wf-event-test",
+            issue_id="ISSUE-EVENT",
+            worktree_path="/path/to/event-test",
+            worktree_name="feat-event",
+            workflow_status="in_progress",
+            started_at=datetime.now(UTC),
+        )
+        await repository.create(state)
+        return state
+
+    async def test_save_event_with_level(self, repository, sample_workflow) -> None:
+        """save_event persists level field."""
+        event = WorkflowEvent(
+            id="evt-level-test",
+            workflow_id=sample_workflow.id,
+            sequence=1,
+            timestamp=datetime.now(UTC),
+            agent="system",
+            event_type=EventType.WORKFLOW_STARTED,
+            level=EventLevel.INFO,
+            message="Started",
+        )
+        await repository.save_event(event)
+
+        row = await repository._db.fetch_one(
+            "SELECT level FROM events WHERE id = ?", (event.id,)
+        )
+        assert row["level"] == "info"
+
+    async def test_save_event_with_trace_fields(self, repository, sample_workflow) -> None:
+        """save_event persists trace-specific fields."""
+        event = WorkflowEvent(
+            id="evt-trace-test",
+            workflow_id=sample_workflow.id,
+            sequence=1,
+            timestamp=datetime.now(UTC),
+            agent="developer",
+            event_type=EventType.CLAUDE_TOOL_CALL,
+            level=EventLevel.TRACE,
+            message="Tool call: Edit",
+            tool_name="Edit",
+            tool_input={"file": "test.py", "content": "hello"},
+            is_error=False,
+        )
+        await repository.save_event(event)
+
+        row = await repository._db.fetch_one(
+            "SELECT tool_name, tool_input_json, is_error FROM events WHERE id = ?",
+            (event.id,),
+        )
+        assert row["tool_name"] == "Edit"
+        assert row["is_error"] == 0
+        import json
+        assert json.loads(row["tool_input_json"]) == {"file": "test.py", "content": "hello"}
+
+    async def test_row_to_event_restores_level(self, repository, sample_workflow) -> None:
+        """_row_to_event restores level and trace fields."""
+        event = WorkflowEvent(
+            id="evt-restore-test",
+            workflow_id=sample_workflow.id,
+            sequence=1,
+            timestamp=datetime.now(UTC),
+            agent="developer",
+            event_type=EventType.CLAUDE_TOOL_CALL,
+            level=EventLevel.TRACE,
+            message="Tool call",
+            tool_name="Read",
+            tool_input={"path": "/test"},
+            is_error=True,
+        )
+        await repository.save_event(event)
+
+        events = await repository.get_recent_events(sample_workflow.id, limit=1)
+        restored = events[0]
+
+        assert restored.level == EventLevel.TRACE
+        assert restored.tool_name == "Read"
+        assert restored.tool_input == {"path": "/test"}
+        assert restored.is_error is True
+
+    async def test_save_event_with_distributed_tracing(
+        self, repository, sample_workflow
+    ) -> None:
+        """save_event persists trace_id and parent_id fields."""
+        event = WorkflowEvent(
+            id="evt-tracing-test",
+            workflow_id=sample_workflow.id,
+            sequence=1,
+            timestamp=datetime.now(UTC),
+            agent="developer",
+            event_type=EventType.CLAUDE_TOOL_RESULT,
+            level=EventLevel.TRACE,
+            message="Tool result",
+            trace_id="trace-abc-123",
+            parent_id="evt-parent-call",
+        )
+        await repository.save_event(event)
+
+        row = await repository._db.fetch_one(
+            "SELECT trace_id, parent_id FROM events WHERE id = ?",
+            (event.id,),
+        )
+        assert row["trace_id"] == "trace-abc-123"
+        assert row["parent_id"] == "evt-parent-call"
+
+    async def test_row_to_event_restores_tracing_fields(
+        self, repository, sample_workflow
+    ) -> None:
+        """_row_to_event restores trace_id and parent_id."""
+        event = WorkflowEvent(
+            id="evt-restore-tracing",
+            workflow_id=sample_workflow.id,
+            sequence=1,
+            timestamp=datetime.now(UTC),
+            agent="developer",
+            event_type=EventType.CLAUDE_TOOL_CALL,
+            message="Tool call",
+            trace_id="trace-xyz-789",
+            parent_id="evt-stage-start",
+        )
+        await repository.save_event(event)
+
+        events = await repository.get_recent_events(sample_workflow.id, limit=1)
+        restored = events[0]
+
+        assert restored.trace_id == "trace-xyz-789"
+        assert restored.parent_id == "evt-stage-start"
