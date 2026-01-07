@@ -16,6 +16,23 @@ vi.mock('@/utils/pipeline', () => ({
   buildPipelineFromEvents: vi.fn(),
 }));
 
+// Mock useVirtualizer to render all items (JSDOM doesn't support scroll dimensions)
+vi.mock('@tanstack/react-virtual', () => ({
+  useVirtualizer: ({ count, estimateSize }: { count: number; estimateSize: (index: number) => number }) => {
+    const items = Array.from({ length: count }, (_, index) => ({
+      index,
+      key: index,
+      size: estimateSize(index),
+      start: Array.from({ length: index }, (_, i) => estimateSize(i)).reduce((a, b) => a + b, 0),
+    }));
+    return {
+      getVirtualItems: () => items,
+      getTotalSize: () => items.reduce((acc, item) => acc + item.size, 0),
+      scrollToIndex: vi.fn(),
+    };
+  },
+}));
+
 import { getActiveWorkflow, formatElapsedTime } from '@/utils/workflow';
 import { buildPipelineFromEvents } from '@/utils/pipeline';
 
@@ -39,7 +56,7 @@ const mockWorkflowDetail: WorkflowDetail = {
   failure_reason: null,
   token_usage: null,
   recent_events: [
-    { id: 'e1', workflow_id: '1', sequence: 1, timestamp: '2025-12-07T09:01:00Z', event_type: 'stage_started', agent: 'developer', message: 'Started coding' },
+    { id: 'e1', workflow_id: '1', sequence: 1, timestamp: '2025-12-07T09:01:00Z', event_type: 'stage_started', agent: 'developer', message: 'Started coding', level: 'info' },
   ],
   // Agentic execution fields
   goal: null,
@@ -95,7 +112,7 @@ const mockSecondWorkflowDetail: WorkflowDetail = {
   failure_reason: null,
   token_usage: null,
   recent_events: [
-    { id: 'e2', workflow_id: 'wf-002', sequence: 1, timestamp: '2025-12-07T08:01:00Z', event_type: 'stage_started', agent: 'reviewer', message: 'Started review' },
+    { id: 'e2', workflow_id: 'wf-002', sequence: 1, timestamp: '2025-12-07T08:01:00Z', event_type: 'stage_started', agent: 'reviewer', message: 'Started review', level: 'info' },
   ],
   // Agentic execution fields
   goal: 'Fix the login bug',
@@ -211,8 +228,8 @@ describe('WorkflowsPage', () => {
     await waitFor(() => {
       // JobQueue renders the section title
       expect(screen.getByText('JOB QUEUE')).toBeInTheDocument();
-      // ActivityLog renders the section title
-      expect(screen.getByText('ACTIVITY LOG')).toBeInTheDocument();
+      // ActivityLog renders stage headers based on events
+      expect(screen.getByText('Implementation (Developer)')).toBeInTheDocument();
     });
   });
 
@@ -222,8 +239,8 @@ describe('WorkflowsPage', () => {
     await waitFor(() => {
       // Should not see loading text when detail is pre-loaded
       expect(screen.queryByText('Loading activity...')).not.toBeInTheDocument();
-      // Should see actual activity log
-      expect(screen.getByText('ACTIVITY LOG')).toBeInTheDocument();
+      // Should see actual activity log with stage headers
+      expect(screen.getByText('Implementation (Developer)')).toBeInTheDocument();
     });
   });
 
