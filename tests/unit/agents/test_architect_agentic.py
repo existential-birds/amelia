@@ -59,7 +59,7 @@ class TestArchitectPlanAsyncGenerator:
         mock_agentic_driver: MagicMock,
         state_with_issue: tuple[ExecutionState, Profile],
     ) -> None:
-        """plan() should yield (ExecutionState, StreamEvent) tuples."""
+        """plan() should yield (ExecutionState, WorkflowEvent) tuples."""
         state, profile = state_with_issue
 
         async def mock_stream(*args: Any, **kwargs: Any) -> AsyncIterator[AgenticMessage]:

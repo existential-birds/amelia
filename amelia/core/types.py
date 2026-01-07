@@ -5,10 +5,7 @@ Pydantic models (RetryConfig, Profile, Settings, Issue, Design) used throughout
 the Amelia agentic coding orchestrator.
 """
 from collections.abc import Awaitable, Callable
-from datetime import datetime
-from enum import StrEnum
-from typing import Any, Literal
-from uuid import uuid4
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -136,49 +133,4 @@ StageEventEmitter = Callable[[str], Awaitable[None]]
 Takes the stage name (e.g., "architect_node") and emits a STAGE_STARTED event.
 This allows nodes to emit stage start events when they actually begin execution,
 rather than relying on the streaming consumer to predict the next stage.
-"""
-
-
-# DEPRECATED: Legacy stream types for backward compatibility during migration.
-# Will be removed after Task 22 completes agent migration to WorkflowEvent.
-# See docs/plans/2026-01-06-unified-events.md for migration plan.
-
-
-class StreamEventType(StrEnum):
-    """DEPRECATED: Stream event types, migrating to EventType.
-
-    Use EventType.CLAUDE_THINKING, etc. instead.
-    Will be removed after Task 22 of unified events migration.
-    """
-
-    CLAUDE_THINKING = "claude_thinking"
-    CLAUDE_TOOL_CALL = "claude_tool_call"
-    CLAUDE_TOOL_RESULT = "claude_tool_result"
-    AGENT_OUTPUT = "agent_output"
-
-
-class StreamEvent(BaseModel):
-    """DEPRECATED: Ephemeral streaming event, migrating to WorkflowEvent.
-
-    Will be removed after Task 22 of unified events migration.
-    Use WorkflowEvent with EventLevel.TRACE instead.
-    """
-
-    model_config = ConfigDict(frozen=True)
-
-    id: str = Field(default_factory=lambda: str(uuid4()))
-    type: StreamEventType
-    content: str | None = None
-    timestamp: datetime
-    agent: str
-    workflow_id: str
-    tool_name: str | None = None
-    tool_input: dict[str, Any] | None = None
-
-
-StreamEmitter = Callable[[StreamEvent], Awaitable[None]]
-"""DEPRECATED: Type alias for stream emitter callback.
-
-Will be removed after Task 22 of unified events migration.
-Agents will emit directly to EventBus instead.
 """

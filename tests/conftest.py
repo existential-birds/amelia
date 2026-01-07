@@ -5,7 +5,6 @@ used throughout the test suite for the agentic execution model.
 """
 import os
 from collections.abc import Callable, Generator
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, NamedTuple
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -22,8 +21,6 @@ from amelia.core.types import (
     Profile,
     Settings,
     StrategyType,
-    StreamEvent,
-    StreamEventType,
     TrackerType,
 )
 from amelia.drivers.base import DriverInterface
@@ -184,16 +181,6 @@ def mock_driver() -> MagicMock:
     return mock
 
 
-@pytest.fixture
-def sample_stream_event() -> StreamEvent:
-    """Create sample StreamEvent for testing stream broadcasting."""
-    return StreamEvent(
-        type=StreamEventType.CLAUDE_THINKING,
-        content="Analyzing requirements",
-        timestamp=datetime.now(UTC),
-        agent="developer",
-        workflow_id="wf-123",
-    )
 
 
 @pytest.fixture

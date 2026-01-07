@@ -304,7 +304,7 @@ class TestArchitectNodeTokenUsage(TestTokenUsageExtraction):
         from datetime import UTC, datetime
 
         from amelia.core.orchestrator import call_architect_node
-        from amelia.core.types import StreamEvent, StreamEventType
+        from amelia.server.models.events import EventType, WorkflowEvent
 
         profile = config_with_repository[0]["configurable"]["profile"]
         mock_repository = config_with_repository[1]
@@ -315,19 +315,21 @@ class TestArchitectNodeTokenUsage(TestTokenUsageExtraction):
             issue=issue,
         )
 
-        # The architect.plan() now yields (ExecutionState, StreamEvent) tuples
+        # The architect.plan() now yields (ExecutionState, WorkflowEvent) tuples
         mock_final_state = state.model_copy(update={
             "raw_architect_output": "**Goal:** Implement feature X\n\n# Plan\n\nStep 1...",
             "plan_path": Path("/docs/plans/test.md"),
             "tool_calls": [],
             "tool_results": [],
         })
-        mock_event = StreamEvent(
-            type=StreamEventType.AGENT_OUTPUT,
-            content="Plan generated",
+        mock_event = WorkflowEvent(
+            id="evt-test-1",
+            workflow_id="wf-test-123",
+            sequence=0,
+            event_type=EventType.AGENT_OUTPUT,
+            message="Plan generated",
             timestamp=datetime.now(UTC),
             agent="architect",
-            workflow_id="wf-test-123",
         )
 
         async def mock_plan_generator(*args, **kwargs):
