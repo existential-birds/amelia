@@ -11,6 +11,7 @@ from amelia.core.orchestrator import call_developer_node
 from amelia.core.state import ExecutionState
 from amelia.core.types import Issue, Profile
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
+from amelia.server.models.events import EventType
 
 
 def create_mock_execute_agentic(
@@ -159,9 +160,8 @@ class TestDeveloperUnifiedExecution:
         mock_profile_factory: Callable[..., Profile],
         mock_issue_factory: Callable[..., Issue],
     ) -> None:
-        """Developer should convert THINKING AgenticMessage to StreamEvent."""
+        """Developer should convert THINKING AgenticMessage to WorkflowEvent."""
         from amelia.agents.developer import Developer
-        from amelia.core.types import StreamEventType
 
         profile = mock_profile_factory()
         issue = mock_issue_factory()
@@ -192,9 +192,9 @@ class TestDeveloperUnifiedExecution:
             results.append((state_update, event))
 
         # Find the thinking event
-        thinking_events = [r for r in results if r[1].type == StreamEventType.CLAUDE_THINKING]
+        thinking_events = [r for r in results if r[1].event_type == EventType.CLAUDE_THINKING]
         assert len(thinking_events) >= 1
-        assert thinking_events[0][1].content == "Thinking about the problem..."
+        assert thinking_events[0][1].message == "Thinking about the problem..."
         assert thinking_events[0][1].agent == "developer"
         assert thinking_events[0][1].workflow_id == "wf-test"
 
@@ -203,9 +203,8 @@ class TestDeveloperUnifiedExecution:
         mock_profile_factory: Callable[..., Profile],
         mock_issue_factory: Callable[..., Issue],
     ) -> None:
-        """Developer should convert TOOL_CALL AgenticMessage to StreamEvent."""
+        """Developer should convert TOOL_CALL AgenticMessage to WorkflowEvent."""
         from amelia.agents.developer import Developer
-        from amelia.core.types import StreamEventType
 
         profile = mock_profile_factory()
         issue = mock_issue_factory()
@@ -238,7 +237,7 @@ class TestDeveloperUnifiedExecution:
             results.append((state_update, event))
 
         # Find the tool call event
-        tool_call_events = [r for r in results if r[1].type == StreamEventType.CLAUDE_TOOL_CALL]
+        tool_call_events = [r for r in results if r[1].event_type == EventType.CLAUDE_TOOL_CALL]
         assert len(tool_call_events) >= 1
         assert tool_call_events[0][1].tool_name == "Write"
         assert tool_call_events[0][1].tool_input == {"file_path": "/test/file.py", "content": "print('hello')"}
@@ -248,9 +247,8 @@ class TestDeveloperUnifiedExecution:
         mock_profile_factory: Callable[..., Profile],
         mock_issue_factory: Callable[..., Issue],
     ) -> None:
-        """Developer should convert TOOL_RESULT AgenticMessage to StreamEvent."""
+        """Developer should convert TOOL_RESULT AgenticMessage to WorkflowEvent."""
         from amelia.agents.developer import Developer
-        from amelia.core.types import StreamEventType
 
         profile = mock_profile_factory()
         issue = mock_issue_factory()
@@ -284,18 +282,17 @@ class TestDeveloperUnifiedExecution:
             results.append((state_update, event))
 
         # Find the tool result event
-        tool_result_events = [r for r in results if r[1].type == StreamEventType.CLAUDE_TOOL_RESULT]
+        tool_result_events = [r for r in results if r[1].event_type == EventType.CLAUDE_TOOL_RESULT]
         assert len(tool_result_events) >= 1
-        assert tool_result_events[0][1].content == "File content here"
+        assert tool_result_events[0][1].message == "Tool Read completed"
 
     async def test_developer_processes_result_message(
         self,
         mock_profile_factory: Callable[..., Profile],
         mock_issue_factory: Callable[..., Issue],
     ) -> None:
-        """Developer should convert RESULT AgenticMessage to StreamEvent and update state."""
+        """Developer should convert RESULT AgenticMessage to WorkflowEvent and update state."""
         from amelia.agents.developer import Developer
-        from amelia.core.types import StreamEventType
 
         profile = mock_profile_factory()
         issue = mock_issue_factory()
@@ -323,9 +320,9 @@ class TestDeveloperUnifiedExecution:
             results.append((state_update, event))
 
         # Find the agent output event
-        output_events = [r for r in results if r[1].type == StreamEventType.AGENT_OUTPUT]
+        output_events = [r for r in results if r[1].event_type == EventType.AGENT_OUTPUT]
         assert len(output_events) >= 1
-        assert output_events[0][1].content == "Task completed successfully"
+        assert output_events[0][1].message == "Task completed successfully"
 
         # Check final state
         final_state = results[-1][0]

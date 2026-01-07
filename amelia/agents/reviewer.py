@@ -4,14 +4,20 @@ import asyncio
 import json
 import re
 from datetime import UTC, datetime
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
+from uuid import uuid4
 
 from loguru import logger
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from amelia.core.state import ExecutionState, ReviewResult, Severity
-from amelia.core.types import Profile, StreamEmitter, StreamEvent, StreamEventType
+from amelia.core.types import Profile
 from amelia.drivers.base import DriverInterface
+from amelia.server.models.events import EventLevel, EventType, WorkflowEvent
+
+
+if TYPE_CHECKING:
+    from amelia.server.events.bus import EventBus
 
 
 # Valid severity values from the Severity literal type
@@ -184,20 +190,20 @@ Be specific with file paths and line numbers. Provide actionable feedback."""
     def __init__(
         self,
         driver: DriverInterface,
-        stream_emitter: StreamEmitter | None = None,
+        event_bus: "EventBus | None" = None,
         prompts: dict[str, str] | None = None,
     ):
         """Initialize the Reviewer agent.
 
         Args:
             driver: LLM driver interface for generating reviews.
-            stream_emitter: Optional callback for streaming events.
+            event_bus: Optional EventBus for emitting workflow events.
             prompts: Optional dict mapping prompt IDs to custom content.
                 Supports keys: "reviewer.template", "reviewer.structured", "reviewer.agentic".
 
         """
         self.driver = driver
-        self._stream_emitter = stream_emitter
+        self._event_bus = event_bus
         self._prompts = prompts or {}
 
     @property
@@ -238,7 +244,7 @@ Be specific with file paths and line numbers. Provide actionable feedback."""
 
         return None
 
-    async def _handle_empty_changes(
+    def _handle_empty_changes(
         self,
         workflow_id: str,
         method: str,
@@ -263,17 +269,20 @@ Be specific with file paths and line numbers. Provide actionable feedback."""
 
         logger.warning("No code changes to review, auto-approving", **log_kwargs)
 
-        if self._stream_emitter is not None:
-            event = StreamEvent(
-                type=StreamEventType.AGENT_OUTPUT,
-                content="No code changes to review - auto-approved",
+        if self._event_bus is not None:
+            event = WorkflowEvent(
+                id=str(uuid4()),
+                workflow_id=workflow_id,
+                sequence=0,
                 timestamp=datetime.now(UTC),
                 agent="reviewer",
-                workflow_id=workflow_id,
+                event_type=EventType.AGENT_OUTPUT,
+                level=EventLevel.TRACE,
+                message="No code changes to review - auto-approved",
             )
-            await self._stream_emitter(event)
+            self._event_bus.emit(event)
 
-    async def _emit_review_completion(
+    def _emit_review_completion(
         self,
         workflow_id: str,
         approved: bool,
@@ -282,7 +291,7 @@ Be specific with file paths and line numbers. Provide actionable feedback."""
         *,
         use_emoji: bool = True,
     ) -> None:
-        """Emit stream event for review completion.
+        """Emit event for review completion.
 
         Args:
             workflow_id: Workflow ID for stream events.
@@ -292,11 +301,11 @@ Be specific with file paths and line numbers. Provide actionable feedback."""
             use_emoji: Whether to include emoji in status display.
 
         """
-        if self._stream_emitter is None:
+        if self._event_bus is None:
             return
 
         if use_emoji:
-            status = "✅ Approved" if approved else "⚠️ Changes requested"
+            status = "Approved" if approved else "Changes requested"
         else:
             status = "Approved" if approved else "Changes requested"
 
@@ -306,14 +315,17 @@ Be specific with file paths and line numbers. Provide actionable feedback."""
             for comment in comments:
                 content_parts.append(f"- {comment}")
 
-        event = StreamEvent(
-            type=StreamEventType.AGENT_OUTPUT,
-            content="\n".join(content_parts),
+        event = WorkflowEvent(
+            id=str(uuid4()),
+            workflow_id=workflow_id,
+            sequence=0,
             timestamp=datetime.now(UTC),
             agent="reviewer",
-            workflow_id=workflow_id,
+            event_type=EventType.AGENT_OUTPUT,
+            level=EventLevel.TRACE,
+            message="\n".join(content_parts),
         )
-        await self._stream_emitter(event)
+        self._event_bus.emit(event)
 
     def _build_prompt(
         self,
@@ -414,7 +426,7 @@ Be specific with file paths and line numbers. Provide actionable feedback."""
         """
         # Handle empty code changes - warn and auto-approve
         if not code_changes or not code_changes.strip():
-            await self._handle_empty_changes(workflow_id, "_single_review", persona=persona)
+            self._handle_empty_changes(workflow_id, "_single_review", persona=persona)
             result = ReviewResult(
                 reviewer_persona=persona,
                 approved=True,
@@ -444,7 +456,7 @@ Be specific with file paths and line numbers. Provide actionable feedback."""
         )
 
         # Emit completion event before return
-        await self._emit_review_completion(
+        self._emit_review_completion(
             workflow_id,
             response.approved,
             response.severity,
@@ -536,7 +548,7 @@ Be specific with file paths and line numbers. Provide actionable feedback."""
         """
         # Handle empty code changes - return approved result with no items
         if not code_changes or not code_changes.strip():
-            await self._handle_empty_changes(workflow_id, "structured_review")
+            self._handle_empty_changes(workflow_id, "structured_review")
             result = StructuredReviewResult(
                 summary="No code changes to review.",
                 items=[],
@@ -565,11 +577,11 @@ Be specific with file paths and line numbers. Provide actionable feedback."""
         )
 
         # Emit completion event before return
-        if self._stream_emitter is not None:
+        if self._event_bus is not None:
             verdict_display = {
-                "approved": "✅ Approved",
-                "needs_fixes": "⚠️ Needs fixes",
-                "blocked": "🛑 Blocked",
+                "approved": "Approved",
+                "needs_fixes": "Needs fixes",
+                "blocked": "Blocked",
             }
             content_parts = [
                 f"**Structured review:** {verdict_display.get(response.verdict, response.verdict)}",
@@ -585,14 +597,17 @@ Be specific with file paths and line numbers. Provide actionable feedback."""
                 content_parts.append("\n**Good patterns:**")
                 for pattern in response.good_patterns:
                     content_parts.append(f"- {pattern}")
-            event = StreamEvent(
-                type=StreamEventType.AGENT_OUTPUT,
-                content="\n".join(content_parts),
+            event = WorkflowEvent(
+                id=str(uuid4()),
+                workflow_id=workflow_id,
+                sequence=0,
                 timestamp=datetime.now(UTC),
                 agent="reviewer",
-                workflow_id=workflow_id,
+                event_type=EventType.AGENT_OUTPUT,
+                level=EventLevel.TRACE,
+                message="\n".join(content_parts),
             )
-            await self._stream_emitter(event)
+            self._event_bus.emit(event)
 
         logger.info(
             "Structured review completed",
@@ -678,10 +693,10 @@ The changes are in git - diff against commit: {base_commit}"""
             session_id=session_id,
             instructions=system_prompt,
         ):
-            # Emit stream events for visibility using to_stream_event()
-            if self._stream_emitter is not None and msg.type != AgenticMessageType.RESULT:
-                event = msg.to_stream_event(agent="reviewer", workflow_id=workflow_id)
-                await self._stream_emitter(event)
+            # Emit stream events for visibility using to_workflow_event()
+            if self._event_bus is not None and msg.type != AgenticMessageType.RESULT:
+                event = msg.to_workflow_event(workflow_id=workflow_id, agent="reviewer")
+                self._event_bus.emit(event)
 
             # Capture final result from RESULT message
             if msg.type == AgenticMessageType.RESULT:
@@ -709,7 +724,7 @@ The changes are in git - diff against commit: {base_commit}"""
             )
 
         # Emit completion event
-        await self._emit_review_completion(
+        self._emit_review_completion(
             workflow_id,
             result.approved,
             result.severity,

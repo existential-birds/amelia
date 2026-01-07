@@ -6,6 +6,8 @@ rich markdown implementation plans for agentic execution.
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
+from uuid import uuid4
 
 from loguru import logger
 from pydantic import BaseModel, ConfigDict
@@ -13,8 +15,13 @@ from pydantic import BaseModel, ConfigDict
 from amelia.core.agentic_state import ToolCall, ToolResult
 from amelia.core.constants import resolve_plan_path
 from amelia.core.state import ExecutionState
-from amelia.core.types import Design, Profile, StreamEmitter, StreamEvent, StreamEventType
+from amelia.core.types import Design, Profile
 from amelia.drivers.base import AgenticMessageType, DriverInterface
+from amelia.server.models.events import EventLevel, EventType, WorkflowEvent
+
+
+if TYPE_CHECKING:
+    from amelia.server.events.bus import EventBus
 
 
 class PlanOutput(BaseModel):
@@ -115,20 +122,20 @@ Before planning, discover:
     def __init__(
         self,
         driver: DriverInterface,
-        stream_emitter: StreamEmitter | None = None,
+        event_bus: "EventBus | None" = None,
         prompts: dict[str, str] | None = None,
     ):
         """Initialize the Architect agent.
 
         Args:
             driver: LLM driver interface for plan generation.
-            stream_emitter: Optional callback for streaming events.
+            event_bus: Optional EventBus for emitting workflow events.
             prompts: Optional dict mapping prompt IDs to custom content.
                 Supports keys: "architect.system", "architect.plan".
 
         """
         self.driver = driver
-        self._stream_emitter = stream_emitter
+        self._event_bus = event_bus
         self._prompts = prompts or {}
 
     @property
@@ -233,7 +240,7 @@ Before planning, discover:
         profile: Profile,
         *,
         workflow_id: str,
-    ) -> AsyncIterator[tuple[ExecutionState, StreamEvent]]:
+    ) -> AsyncIterator[tuple[ExecutionState, WorkflowEvent]]:
         """Generate a markdown implementation plan from an issue using agentic execution.
 
         Creates a rich markdown plan by exploring the codebase with read-only tools,
@@ -246,7 +253,7 @@ Before planning, discover:
             workflow_id: Workflow ID for stream events (required).
 
         Yields:
-            Tuples of (updated ExecutionState, StreamEvent) as exploration and
+            Tuples of (updated ExecutionState, WorkflowEvent) as exploration and
             planning progresses.
 
         Raises:
@@ -275,10 +282,10 @@ Before planning, discover:
             cwd=cwd,
             instructions=self.plan_prompt,
         ):
-            event: StreamEvent | None = None
+            event: WorkflowEvent | None = None
 
             if message.type == AgenticMessageType.THINKING:
-                event = message.to_stream_event(agent="architect", workflow_id=workflow_id)
+                event = message.to_workflow_event(workflow_id=workflow_id, agent="architect")
 
             elif message.type == AgenticMessageType.TOOL_CALL:
                 call = ToolCall(
@@ -292,7 +299,7 @@ Before planning, discover:
                     tool_name=message.tool_name,
                     call_id=call.id,
                 )
-                event = message.to_stream_event(agent="architect", workflow_id=workflow_id)
+                event = message.to_workflow_event(workflow_id=workflow_id, agent="architect")
 
             elif message.type == AgenticMessageType.TOOL_RESULT:
                 result = ToolResult(
@@ -306,11 +313,11 @@ Before planning, discover:
                     "Architect tool result recorded",
                     call_id=result.call_id,
                 )
-                event = message.to_stream_event(agent="architect", workflow_id=workflow_id)
+                event = message.to_workflow_event(workflow_id=workflow_id, agent="architect")
 
             elif message.type == AgenticMessageType.RESULT:
                 raw_output = message.content or ""
-                event = message.to_stream_event(agent="architect", workflow_id=workflow_id)
+                event = message.to_workflow_event(workflow_id=workflow_id, agent="architect")
 
                 # In agentic mode, Claude writes the plan via Write tool.
                 # The orchestrator extracts the plan from tool_calls.
@@ -523,14 +530,17 @@ Respond with a structured ArchitectOutput."""
         )
 
         # Emit completion event
-        if self._stream_emitter is not None:
-            event = StreamEvent(
-                type=StreamEventType.AGENT_OUTPUT,
-                content=f"Analysis complete: {response.goal[:100]}...",
+        if self._event_bus is not None:
+            event = WorkflowEvent(
+                id=str(uuid4()),
+                workflow_id=workflow_id,
+                sequence=0,
                 timestamp=datetime.now(UTC),
                 agent="architect",
-                workflow_id=workflow_id,
+                event_type=EventType.AGENT_OUTPUT,
+                level=EventLevel.TRACE,
+                message=f"Analysis complete: {response.goal[:100]}...",
             )
-            await self._stream_emitter(event)
+            self._event_bus.emit(event)
 
         return response

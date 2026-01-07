@@ -25,9 +25,6 @@ from amelia.core.state import ExecutionState
 from amelia.core.types import (
     Profile,
     StageEventEmitter,
-    StreamEmitter,
-    StreamEvent,
-    StreamEventType,
 )
 from amelia.drivers.factory import DriverFactory
 from amelia.server.models.tokens import TokenUsage
@@ -35,12 +32,13 @@ from amelia.server.models.tokens import TokenUsage
 
 if TYPE_CHECKING:
     from amelia.server.database.repository import WorkflowRepository
+    from amelia.server.events.bus import EventBus
 
 
 def _extract_config_params(
     config: RunnableConfig | None,
-) -> tuple[StreamEmitter | None, StageEventEmitter | None, str, Profile]:
-    """Extract stream_emitter, stage_event_emitter, workflow_id, and profile from config.
+) -> tuple["EventBus | None", StageEventEmitter | None, str, Profile]:
+    """Extract event_bus, stage_event_emitter, workflow_id, and profile from config.
 
     Extracts values from config.configurable dictionary. workflow_id is required.
 
@@ -48,14 +46,14 @@ def _extract_config_params(
         config: Optional RunnableConfig with configurable parameters.
 
     Returns:
-        Tuple of (stream_emitter, stage_event_emitter, workflow_id, profile).
+        Tuple of (event_bus, stage_event_emitter, workflow_id, profile).
 
     Raises:
         ValueError: If workflow_id (thread_id) or profile is not provided.
     """
     config = config or {}
     configurable = config.get("configurable", {})
-    stream_emitter = configurable.get("stream_emitter")
+    event_bus = configurable.get("event_bus")
     stage_event_emitter = configurable.get("stage_event_emitter")
     workflow_id = configurable.get("thread_id")
     profile = configurable.get("profile")
@@ -65,7 +63,7 @@ def _extract_config_params(
     if not profile:
         raise ValueError("profile is required in config.configurable")
 
-    return stream_emitter, stage_event_emitter, workflow_id, profile
+    return event_bus, stage_event_emitter, workflow_id, profile
 
 
 async def _save_token_usage(
@@ -150,7 +148,7 @@ async def plan_validator_node(
     Raises:
         ValueError: If plan file not found or empty.
     """
-    stream_emitter, stage_event_emitter, workflow_id, profile = _extract_config_params(config)
+    event_bus, stage_event_emitter, workflow_id, profile = _extract_config_params(config)
 
     # Emit STAGE_STARTED event at the beginning of the node
     if stage_event_emitter:
@@ -170,17 +168,8 @@ async def plan_validator_node(
         workflow_id=workflow_id,
     )
 
-    # Emit start event to UI
-    if stream_emitter:
-        await stream_emitter(
-            StreamEvent(
-                type=StreamEventType.AGENT_OUTPUT,
-                content=f"Validating plan: {plan_path}",
-                timestamp=datetime.now(UTC),
-                agent="validator",
-                workflow_id=workflow_id,
-            )
-        )
+    # Emit start event to UI (trace level event not persisted)
+    # Validator doesn't use event_bus directly for trace events
 
     # Read plan file - fail fast if not found
     if not plan_path.exists():
@@ -252,8 +241,8 @@ async def call_architect_node(
     if state.issue is None:
         raise ValueError("Cannot call Architect: no issue provided in state.")
 
-    # Extract stream_emitter, stage_event_emitter, workflow_id, and profile from config
-    stream_emitter, stage_event_emitter, workflow_id, profile = _extract_config_params(config)
+    # Extract event_bus, stage_event_emitter, workflow_id, and profile from config
+    event_bus, stage_event_emitter, workflow_id, profile = _extract_config_params(config)
 
     # Emit STAGE_STARTED event at the beginning of the node
     if stage_event_emitter:
@@ -268,7 +257,7 @@ async def call_architect_node(
     prompts = configurable.get("prompts", {})
 
     driver = DriverFactory.get_driver(profile.driver, model=profile.model)
-    architect = Architect(driver, stream_emitter=stream_emitter, prompts=prompts)
+    architect = Architect(driver, event_bus=event_bus, prompts=prompts)
 
     # Ensure the plan directory exists before the architect runs
     plan_rel_path = resolve_plan_path(profile.plan_path_pattern, state.issue.id)
@@ -285,8 +274,8 @@ async def call_architect_node(
         workflow_id=workflow_id,
     ):
         final_state = new_state
-        if stream_emitter:
-            await stream_emitter(event)
+        if event_bus:
+            event_bus.emit(event)
 
     # Save token usage from driver (best-effort)
     await _save_token_usage(driver, workflow_id, "architect", repository)
@@ -534,8 +523,8 @@ async def call_developer_node(
     if not state.goal:
         raise ValueError("Developer node has no goal. The architect should have generated a goal first.")
 
-    # Extract stream_emitter, stage_event_emitter, workflow_id, and profile from config
-    stream_emitter, stage_event_emitter, workflow_id, profile = _extract_config_params(config)
+    # Extract event_bus, stage_event_emitter, workflow_id, and profile from config
+    event_bus, stage_event_emitter, workflow_id, profile = _extract_config_params(config)
 
     # Emit STAGE_STARTED event at the beginning of the node
     if stage_event_emitter:
@@ -546,15 +535,15 @@ async def call_developer_node(
     repository = config.get("configurable", {}).get("repository")
 
     driver = DriverFactory.get_driver(profile.driver, model=profile.model)
-    developer = Developer(driver, stream_emitter=stream_emitter)
+    developer = Developer(driver, event_bus=event_bus)
 
     # Collect the final state from the developer's agentic execution
     final_state = state
     async for new_state, event in developer.run(state, profile):
         final_state = new_state
-        # Stream events are handled by the stream_emitter if provided
-        if stream_emitter:
-            await stream_emitter(event)
+        # Stream events are emitted via event_bus if provided
+        if event_bus:
+            event_bus.emit(event)
 
     # Save token usage from driver (best-effort)
     await _save_token_usage(driver, workflow_id, "developer", repository)
@@ -604,8 +593,8 @@ async def call_reviewer_node(
         has_code_changes_for_review=bool(state.code_changes_for_review),
     )
 
-    # Extract stream_emitter, stage_event_emitter, workflow_id, and profile from config
-    stream_emitter, stage_event_emitter, workflow_id, profile = _extract_config_params(config)
+    # Extract event_bus, stage_event_emitter, workflow_id, and profile from config
+    event_bus, stage_event_emitter, workflow_id, profile = _extract_config_params(config)
 
     # Emit STAGE_STARTED event at the beginning of the node
     if stage_event_emitter:
@@ -620,7 +609,7 @@ async def call_reviewer_node(
     prompts = configurable.get("prompts", {})
 
     driver = DriverFactory.get_driver(profile.driver, model=profile.model)
-    reviewer = Reviewer(driver, stream_emitter=stream_emitter, prompts=prompts)
+    reviewer = Reviewer(driver, event_bus=event_bus, prompts=prompts)
 
     # Use agentic review when we have a base_commit - this avoids large diff issues
     # The agent will fetch the diff using git tools and auto-detect technologies
@@ -680,7 +669,7 @@ async def call_evaluation_node(
     Returns:
         Partial state dict with evaluation_result, approved_items, and driver_session_id.
     """
-    stream_emitter, stage_event_emitter, workflow_id, profile = _extract_config_params(config)
+    event_bus, stage_event_emitter, workflow_id, profile = _extract_config_params(config)
 
     # Emit STAGE_STARTED event at the beginning of the node
     if stage_event_emitter:
@@ -692,7 +681,7 @@ async def call_evaluation_node(
     prompts = configurable.get("prompts", {})
 
     driver = DriverFactory.get_driver(profile.driver, model=profile.model)
-    evaluator = Evaluator(driver=driver, stream_emitter=stream_emitter, prompts=prompts)
+    evaluator = Evaluator(driver=driver, event_bus=event_bus, prompts=prompts)
 
     evaluation_result, new_session_id = await evaluator.evaluate(
         state, profile, workflow_id=workflow_id

@@ -3,6 +3,8 @@
 Note: Plan extraction tests are in test_orchestrator_plan_extraction.py
 """
 
+from unittest.mock import MagicMock
+
 import pytest
 from langchain_core.runnables.config import RunnableConfig
 
@@ -22,17 +24,15 @@ class TestExtractConfigParams:
                 "profile": profile,
             }
         }
-        stream_emitter, stage_event_emitter, workflow_id, extracted_profile = _extract_config_params(config)
+        event_bus, stage_event_emitter, workflow_id, extracted_profile = _extract_config_params(config)
         assert extracted_profile == profile
         assert workflow_id == "wf-123"
-        assert stream_emitter is None
+        assert event_bus is None
         assert stage_event_emitter is None
 
     def test_extracts_emitters_from_config(self) -> None:
-        """Should extract stream and stage emitters when provided."""
-
-        async def mock_stream(event: object) -> None:
-            pass
+        """Should extract event_bus and stage emitter when provided."""
+        mock_event_bus = MagicMock()
 
         async def mock_stage(name: str) -> None:
             pass
@@ -42,12 +42,12 @@ class TestExtractConfigParams:
             "configurable": {
                 "thread_id": "wf-123",
                 "profile": profile,
-                "stream_emitter": mock_stream,
+                "event_bus": mock_event_bus,
                 "stage_event_emitter": mock_stage,
             }
         }
-        stream, stage, wf_id, prof = _extract_config_params(config)
-        assert stream is mock_stream
+        event_bus, stage, wf_id, prof = _extract_config_params(config)
+        assert event_bus is mock_event_bus
         assert stage is mock_stage
         assert wf_id == "wf-123"
         assert prof == profile

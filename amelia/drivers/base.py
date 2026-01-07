@@ -1,11 +1,14 @@
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
+from uuid import uuid4
 
 from pydantic import BaseModel
 
-from amelia.core.types import StreamEvent, StreamEventType
+
+if TYPE_CHECKING:
+    from amelia.server.models.events import WorkflowEvent
 
 
 class AgenticMessageType(StrEnum):
@@ -44,28 +47,64 @@ class AgenticMessage(BaseModel):
     session_id: str | None = None
     is_error: bool = False
 
-    def to_stream_event(self, agent: str, workflow_id: str) -> StreamEvent:
-        """Convert to StreamEvent for dashboard consumption.
-
-        Args:
-            agent: Agent name (e.g., "developer", "reviewer").
-            workflow_id: Unique workflow identifier.
+    def _build_message(self) -> str:
+        """Build a human-readable message from the agentic message content.
 
         Returns:
-            StreamEvent for dashboard streaming.
+            Message string appropriate for the message type.
         """
+        if self.type == AgenticMessageType.THINKING:
+            return self.content or "Thinking..."
+        elif self.type == AgenticMessageType.TOOL_CALL:
+            return f"Calling {self.tool_name or 'tool'}"
+        elif self.type == AgenticMessageType.TOOL_RESULT:
+            if self.is_error:
+                return f"Tool {self.tool_name or 'unknown'} failed"
+            return f"Tool {self.tool_name or 'unknown'} completed"
+        else:  # RESULT
+            return self.content or self.tool_output or "Completed"
+
+    def to_workflow_event(
+        self,
+        workflow_id: str,
+        agent: str,
+        sequence: int = 0,
+    ) -> "WorkflowEvent":
+        """Convert agentic message to WorkflowEvent for emission.
+
+        Args:
+            workflow_id: The workflow this event belongs to.
+            agent: The agent that generated this message.
+            sequence: Event sequence number (0 = will be assigned later).
+
+        Returns:
+            WorkflowEvent with trace level.
+        """
+        # Import inside method to avoid circular imports
+        from amelia.server.models.events import (  # noqa: PLC0415
+            EventLevel,
+            EventType,
+            WorkflowEvent,
+        )
+
         type_mapping = {
-            AgenticMessageType.THINKING: StreamEventType.CLAUDE_THINKING,
-            AgenticMessageType.TOOL_CALL: StreamEventType.CLAUDE_TOOL_CALL,
-            AgenticMessageType.TOOL_RESULT: StreamEventType.CLAUDE_TOOL_RESULT,
-            AgenticMessageType.RESULT: StreamEventType.AGENT_OUTPUT,
+            AgenticMessageType.THINKING: EventType.CLAUDE_THINKING,
+            AgenticMessageType.TOOL_CALL: EventType.CLAUDE_TOOL_CALL,
+            AgenticMessageType.TOOL_RESULT: EventType.CLAUDE_TOOL_RESULT,
+            AgenticMessageType.RESULT: EventType.AGENT_OUTPUT,
         }
-        return StreamEvent(
-            type=type_mapping[self.type],
-            content=self.content or self.tool_output,
+
+        message = self._build_message()
+
+        return WorkflowEvent(
+            id=str(uuid4()),
+            workflow_id=workflow_id,
+            sequence=sequence,
             timestamp=datetime.now(UTC),
             agent=agent,
-            workflow_id=workflow_id,
+            event_type=type_mapping[self.type],
+            level=EventLevel.TRACE,
+            message=message,
             tool_name=self.tool_name,
             tool_input=self.tool_input,
             is_error=self.is_error,

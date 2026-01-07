@@ -7,16 +7,19 @@ which items to implement, reject, defer, or clarify.
 from datetime import UTC, datetime
 from enum import Enum
 from typing import TYPE_CHECKING
+from uuid import uuid4
 
 from loguru import logger
 from pydantic import BaseModel, ConfigDict, Field
 
-from amelia.core.types import Profile, StreamEmitter, StreamEvent, StreamEventType
+from amelia.core.types import Profile
 from amelia.drivers.base import DriverInterface
+from amelia.server.models.events import EventLevel, EventType, WorkflowEvent
 
 
 if TYPE_CHECKING:
     from amelia.core.state import ExecutionState
+    from amelia.server.events.bus import EventBus
 
 
 class Disposition(str, Enum):
@@ -138,19 +141,19 @@ Provide clear evidence for each disposition decision."""
     def __init__(
         self,
         driver: DriverInterface,
-        stream_emitter: StreamEmitter | None = None,
+        event_bus: "EventBus | None" = None,
         prompts: dict[str, str] | None = None,
     ):
         """Initialize the Evaluator agent.
 
         Args:
             driver: LLM driver interface for generating evaluations.
-            stream_emitter: Optional callback for streaming events.
+            event_bus: Optional EventBus for emitting workflow events.
             prompts: Optional dict of prompt_id -> content for customization.
 
         """
         self.driver = driver
-        self._stream_emitter = stream_emitter
+        self._event_bus = event_bus
         self._prompts = prompts or {}
 
     @property
@@ -252,15 +255,18 @@ Return your evaluation as an EvaluationOutput with all items and a summary.""")
                 agent="evaluator",
                 workflow_id=workflow_id,
             )
-            if self._stream_emitter is not None:
-                event = StreamEvent(
-                    type=StreamEventType.AGENT_OUTPUT,
-                    content="No review comments to evaluate",
+            if self._event_bus is not None:
+                event = WorkflowEvent(
+                    id=str(uuid4()),
+                    workflow_id=workflow_id,
+                    sequence=0,
                     timestamp=datetime.now(UTC),
                     agent="evaluator",
-                    workflow_id=workflow_id,
+                    event_type=EventType.AGENT_OUTPUT,
+                    level=EventLevel.TRACE,
+                    message="No review comments to evaluate",
                 )
-                await self._stream_emitter(event)
+                self._event_bus.emit(event)
 
             result = EvaluationResult(
                 items_to_implement=[],
@@ -315,7 +321,7 @@ Return your evaluation as an EvaluationOutput with all items and a summary.""")
         )
 
         # Emit completion event
-        if self._stream_emitter is not None:
+        if self._event_bus is not None:
             summary_parts = []
             if items_to_implement:
                 summary_parts.append(f"{len(items_to_implement)} to implement")
@@ -326,16 +332,19 @@ Return your evaluation as an EvaluationOutput with all items and a summary.""")
             if items_needing_clarification:
                 summary_parts.append(f"{len(items_needing_clarification)} need clarification")
 
-            content = f"Evaluation complete: {', '.join(summary_parts)}" if summary_parts else "Evaluation complete: no items"
+            message = f"Evaluation complete: {', '.join(summary_parts)}" if summary_parts else "Evaluation complete: no items"
 
-            event = StreamEvent(
-                type=StreamEventType.AGENT_OUTPUT,
-                content=content,
+            event = WorkflowEvent(
+                id=str(uuid4()),
+                workflow_id=workflow_id,
+                sequence=0,
                 timestamp=datetime.now(UTC),
                 agent="evaluator",
-                workflow_id=workflow_id,
+                event_type=EventType.AGENT_OUTPUT,
+                level=EventLevel.TRACE,
+                message=message,
             )
-            await self._stream_emitter(event)
+            self._event_bus.emit(event)
 
         result = EvaluationResult(
             items_to_implement=items_to_implement,

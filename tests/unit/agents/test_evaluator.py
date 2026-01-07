@@ -295,13 +295,13 @@ class TestEvaluator:
         with pytest.raises(ValueError, match="must have last_review"):
             await evaluator.evaluate(state, profile, workflow_id="wf-123")
 
-    async def test_evaluate_with_stream_emitter(
+    async def test_evaluate_with_event_bus(
         self,
         mock_driver: MagicMock,
         mock_execution_state_factory: Callable[..., tuple[ExecutionState, Profile]],
     ) -> None:
-        """Test that stream emitter is called during evaluation."""
-        stream_emitter = AsyncMock()
+        """Test that event_bus.emit is called during evaluation."""
+        mock_event_bus = MagicMock()
 
         review_result = ReviewResult(
             reviewer_persona="General",
@@ -331,12 +331,12 @@ class TestEvaluator:
         )
         mock_driver.generate = AsyncMock(return_value=(evaluation_output, None))
 
-        evaluator = Evaluator(driver=mock_driver, stream_emitter=stream_emitter)
+        evaluator = Evaluator(driver=mock_driver, event_bus=mock_event_bus)
         await evaluator.evaluate(state, profile, workflow_id="wf-123")
 
-        # Verify stream emitter was called
-        stream_emitter.assert_called_once()
-        call_args = stream_emitter.call_args[0][0]
+        # Verify event_bus.emit was called
+        mock_event_bus.emit.assert_called_once()
+        call_args = mock_event_bus.emit.call_args[0][0]
         assert call_args.agent == "evaluator"
         assert call_args.workflow_id == "wf-123"
 

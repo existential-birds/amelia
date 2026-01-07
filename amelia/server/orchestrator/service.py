@@ -23,8 +23,6 @@ from amelia.core.types import (
     Profile,
     Settings,
     StageEventEmitter,
-    StreamEmitter,
-    StreamEvent,
 )
 from amelia.ext import WorkflowEventType as ExtWorkflowEventType
 from amelia.ext.exceptions import PolicyDeniedError
@@ -144,21 +142,6 @@ class OrchestratorService:
                 "human_approval_node",
             ],
         )
-
-    def _create_stream_emitter(self) -> StreamEmitter:
-        """Create a stream emitter callback for broadcasting events.
-
-        Stream events are broadcast via WebSocket but NOT persisted to the database.
-        Each StreamEvent already contains its own workflow_id, so the emitter
-        doesn't need workflow context.
-
-        Returns:
-            Async callback that broadcasts StreamEvent via WebSocket.
-        """
-        async def emit(event: StreamEvent) -> None:
-            self._event_bus.emit_stream(event)
-
-        return emit
 
     def _create_stage_event_emitter(self, workflow_id: str) -> StageEventEmitter:
         """Create a stage event emitter callback for nodes to signal stage start.
@@ -782,14 +765,13 @@ class OrchestratorService:
             # CRITICAL: Pass interrupt_before to enable server-mode approval
             graph = self._create_server_graph(checkpointer)
 
-            # Create stream emitter and pass it via config
-            stream_emitter = self._create_stream_emitter()
+            # Pass event_bus and stage_event_emitter via config
             stage_event_emitter = self._create_stage_event_emitter(workflow_id)
             config: RunnableConfig = {
                 "configurable": {
                     "thread_id": workflow_id,
                     "execution_mode": "server",
-                    "stream_emitter": stream_emitter,
+                    "event_bus": self._event_bus,
                     "stage_event_emitter": stage_event_emitter,
                     "profile": profile,
                     "repository": self._repository,
@@ -1070,14 +1052,13 @@ class OrchestratorService:
                 interrupt_before=interrupt_before,
             )
 
-            # Create stream emitter and pass it via config
-            stream_emitter = self._create_stream_emitter()
+            # Pass event_bus and stage_event_emitter via config
             stage_event_emitter = self._create_stage_event_emitter(workflow_id)
             config: RunnableConfig = {
                 "configurable": {
                     "thread_id": workflow_id,
                     "execution_mode": "server",
-                    "stream_emitter": stream_emitter,
+                    "event_bus": self._event_bus,
                     "stage_event_emitter": stage_event_emitter,
                     "profile": profile,
                     "repository": self._repository,
@@ -1264,14 +1245,13 @@ class OrchestratorService:
         ) as checkpointer:
             graph = self._create_server_graph(checkpointer)
 
-            # Create stream emitter and pass it via config
-            stream_emitter = self._create_stream_emitter()
+            # Pass event_bus and stage_event_emitter via config
             stage_event_emitter = self._create_stage_event_emitter(workflow_id)
             config: RunnableConfig = {
                 "configurable": {
                     "thread_id": workflow_id,
                     "execution_mode": "server",
-                    "stream_emitter": stream_emitter,
+                    "event_bus": self._event_bus,
                     "stage_event_emitter": stage_event_emitter,
                     "profile": profile,
                     "repository": self._repository,

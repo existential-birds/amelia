@@ -7,8 +7,9 @@ import pytest
 
 from amelia.agents.architect import Architect
 from amelia.core.state import ExecutionState
-from amelia.core.types import Profile, StreamEvent
+from amelia.core.types import Profile
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
+from amelia.server.models.events import WorkflowEvent
 
 
 class TestArchitectPlanAsyncGenerator:
@@ -83,7 +84,7 @@ class TestArchitectPlanAsyncGenerator:
         assert len(results) >= 1
         for new_state, event in results:
             assert isinstance(new_state, ExecutionState)
-            assert isinstance(event, StreamEvent)
+            assert isinstance(event, WorkflowEvent)
 
 
 class TestArchitectCwdPassing:

@@ -12,8 +12,9 @@ from amelia.agents.reviewer import (
     normalize_severity,
 )
 from amelia.core.state import ExecutionState
-from amelia.core.types import Profile, StreamEventType
+from amelia.core.types import Profile
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
+from amelia.server.models.events import EventType
 from tests.conftest import AsyncIteratorMock
 
 
@@ -216,8 +217,8 @@ class TestStructuredReview:
         mock_execution_state_factory: Callable[..., tuple[ExecutionState, Profile]],
         structured_review_output: StructuredReviewResult,
     ) -> None:
-        """Test that stream emitter is called during structured review."""
-        stream_emitter = AsyncMock()
+        """Test that event_bus.emit is called during structured review."""
+        mock_event_bus = MagicMock()
 
         state, profile = mock_execution_state_factory(
             goal="Implement feature",
@@ -227,7 +228,7 @@ class TestStructuredReview:
             return_value=(structured_review_output, None)
         )
 
-        reviewer = Reviewer(driver=mock_driver, stream_emitter=stream_emitter)
+        reviewer = Reviewer(driver=mock_driver, event_bus=mock_event_bus)
         await reviewer.structured_review(
             state,
             code_changes="diff content",
@@ -235,9 +236,9 @@ class TestStructuredReview:
             workflow_id="wf-123",
         )
 
-        # Verify stream emitter was called
-        stream_emitter.assert_called_once()
-        call_args = stream_emitter.call_args[0][0]
+        # Verify event_bus.emit was called
+        mock_event_bus.emit.assert_called_once()
+        call_args = mock_event_bus.emit.call_args[0][0]
         assert call_args.agent == "reviewer"
         assert call_args.workflow_id == "wf-123"
 
@@ -458,13 +459,13 @@ class TestAgenticReview:
         # Verify execute_agentic was called
         mock_driver.execute_agentic.assert_called_once()
 
-    async def test_agentic_review_emits_stream_events(
+    async def test_agentic_review_emits_workflow_events(
         self,
         mock_driver: MagicMock,
         mock_execution_state_factory: Callable[..., tuple[ExecutionState, Profile]],
     ) -> None:
-        """Test that stream events are emitted for AgenticMessage stream."""
-        stream_emitter = AsyncMock()
+        """Test that workflow events are emitted for AgenticMessage stream."""
+        mock_event_bus = MagicMock()
         state, profile = mock_execution_state_factory(
             goal="Implement feature",
         )
@@ -493,7 +494,7 @@ class TestAgenticReview:
         ]
         mock_driver.execute_agentic = MagicMock(return_value=AsyncIteratorMock(messages))
 
-        reviewer = Reviewer(driver=mock_driver, stream_emitter=stream_emitter)
+        reviewer = Reviewer(driver=mock_driver, event_bus=mock_event_bus)
         await reviewer.agentic_review(
             state,
             base_commit="abc123",
@@ -503,12 +504,12 @@ class TestAgenticReview:
 
         # Should emit events for THINKING, TOOL_CALL, TOOL_RESULT + final output
         # At minimum 3 events during stream + 1 final output event
-        assert stream_emitter.call_count >= 3
+        assert mock_event_bus.emit.call_count >= 3
 
         # Verify event types were properly mapped
-        event_types = [call.args[0].type for call in stream_emitter.call_args_list]
-        assert StreamEventType.CLAUDE_THINKING in event_types
-        assert StreamEventType.CLAUDE_TOOL_CALL in event_types
+        event_types = [call.args[0].event_type for call in mock_event_bus.emit.call_args_list]
+        assert EventType.CLAUDE_THINKING in event_types
+        assert EventType.CLAUDE_TOOL_CALL in event_types
 
     async def test_agentic_review_handles_error_result(
         self,
@@ -547,13 +548,13 @@ class TestAgenticReview:
         assert result.approved is False
         assert session_id == "session-error"
 
-    async def test_agentic_review_uses_to_stream_event(
+    async def test_agentic_review_uses_to_workflow_event(
         self,
         mock_driver: MagicMock,
         mock_execution_state_factory: Callable[..., tuple[ExecutionState, Profile]],
     ) -> None:
-        """Test that agentic_review uses AgenticMessage.to_stream_event() for conversion."""
-        stream_emitter = AsyncMock()
+        """Test that agentic_review uses AgenticMessage.to_workflow_event() for conversion."""
+        mock_event_bus = MagicMock()
         state, profile = mock_execution_state_factory(
             goal="Implement feature",
         )
@@ -572,7 +573,7 @@ class TestAgenticReview:
         ]
         mock_driver.execute_agentic = MagicMock(return_value=AsyncIteratorMock(messages))
 
-        reviewer = Reviewer(driver=mock_driver, stream_emitter=stream_emitter)
+        reviewer = Reviewer(driver=mock_driver, event_bus=mock_event_bus)
         await reviewer.agentic_review(
             state,
             base_commit="abc123",
@@ -580,8 +581,8 @@ class TestAgenticReview:
             workflow_id="wf-123",
         )
 
-        # Verify stream events have correct agent and workflow_id (set by to_stream_event)
-        for call in stream_emitter.call_args_list:
+        # Verify workflow events have correct agent and workflow_id (set by to_workflow_event)
+        for call in mock_event_bus.emit.call_args_list:
             event = call.args[0]
             assert event.agent == "reviewer"
             assert event.workflow_id == "wf-123"

@@ -4,13 +4,19 @@ This module provides the Developer agent that executes code changes using
 autonomous tool-calling LLM execution rather than structured step-by-step plans.
 """
 from collections.abc import AsyncIterator
+from typing import TYPE_CHECKING
 
 from loguru import logger
 
 from amelia.core.agentic_state import ToolCall, ToolResult
 from amelia.core.state import ExecutionState
-from amelia.core.types import Profile, StreamEmitter, StreamEvent
+from amelia.core.types import Profile
 from amelia.drivers.base import AgenticMessageType, DriverInterface
+from amelia.server.models.events import WorkflowEvent
+
+
+if TYPE_CHECKING:
+    from amelia.server.events.bus import EventBus
 
 
 class Developer:
@@ -28,17 +34,17 @@ class Developer:
     def __init__(
         self,
         driver: DriverInterface,
-        stream_emitter: StreamEmitter | None = None,
+        event_bus: "EventBus | None" = None,
     ):
         self.driver = driver
-        self._stream_emitter = stream_emitter
+        self._event_bus = event_bus
 
     async def run(
         self,
         state: ExecutionState,
         profile: Profile,
         workflow_id: str = "developer",
-    ) -> AsyncIterator[tuple[ExecutionState, StreamEvent]]:
+    ) -> AsyncIterator[tuple[ExecutionState, WorkflowEvent]]:
         """Execute development task agentically.
 
         Uses the driver's execute_agentic method to let the LLM autonomously
@@ -77,10 +83,10 @@ class Developer:
             session_id=session_id,
             instructions=None,
         ):
-            event: StreamEvent | None = None
+            event: WorkflowEvent | None = None
 
             if message.type == AgenticMessageType.THINKING:
-                event = message.to_stream_event(agent="developer", workflow_id=workflow_id)
+                event = message.to_workflow_event(workflow_id=workflow_id, agent="developer")
 
             elif message.type == AgenticMessageType.TOOL_CALL:
                 call = ToolCall(
@@ -94,7 +100,7 @@ class Developer:
                     tool_name=message.tool_name,
                     call_id=call.id,
                 )
-                event = message.to_stream_event(agent="developer", workflow_id=workflow_id)
+                event = message.to_workflow_event(workflow_id=workflow_id, agent="developer")
 
             elif message.type == AgenticMessageType.TOOL_RESULT:
                 result = ToolResult(
@@ -108,7 +114,7 @@ class Developer:
                     "Tool result recorded",
                     call_id=result.call_id,
                 )
-                event = message.to_stream_event(agent="developer", workflow_id=workflow_id)
+                event = message.to_workflow_event(workflow_id=workflow_id, agent="developer")
 
             elif message.type == AgenticMessageType.RESULT:
                 # Update session_id from result message
@@ -116,7 +122,7 @@ class Developer:
                     session_id = message.session_id
 
                 is_complete = not message.is_error
-                event = message.to_stream_event(agent="developer", workflow_id=workflow_id)
+                event = message.to_workflow_event(workflow_id=workflow_id, agent="developer")
 
                 current_state = state.model_copy(update={
                     "tool_calls": tool_calls,

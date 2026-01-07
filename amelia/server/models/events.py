@@ -161,7 +161,7 @@ class WorkflowEvent(BaseModel):
 
     id: str = Field(..., description="Unique event identifier")
     workflow_id: str = Field(..., description="Workflow this event belongs to")
-    sequence: int = Field(..., ge=1, description="Monotonic sequence number")
+    sequence: int = Field(..., ge=0, description="Monotonic sequence number (0 for trace-only events)")
     timestamp: datetime = Field(..., description="When event occurred")
     agent: str = Field(..., description="Event source agent")
     event_type: EventType = Field(..., description="Event type category")
