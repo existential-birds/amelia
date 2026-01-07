@@ -1,6 +1,6 @@
 # User Guide
 
-This guide gets you from zero to orchestrating AI agents in about three minutes. Possibly four if you read slowly.
+Install, configure, and run your first multi-agent workflow in under five minutes.
 
 ## Quick Links
 
@@ -29,7 +29,7 @@ This guide gets you from zero to orchestrating AI agents in about three minutes.
    ```bash
    amelia plan 123  # Generate plan for issue #123
    ```
-   If this works, you now have AI agents arguing about your codebase. Congratulations.
+   You should see the Architect agent generate an implementation plan for review.
 
 ## What's Next
 

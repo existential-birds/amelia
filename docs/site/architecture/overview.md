@@ -8,11 +8,29 @@ This document provides a technical deep dive into Amelia's architecture, compone
 
 **Phase 2 (In Progress):** Observable orchestration through a local web dashboard. FastAPI server with SQLite persistence, REST API for workflow management, React dashboard with real-time WebSocket updates, and agentic execution with streaming tool calls.
 
-## The Vision: Complete Workflow Autonomy
+## Design Philosophy
 
-The [roadmap](/reference/roadmap) charts a path toward **complete end-to-end workflow control**—where developers never need to open GitHub, Jira, or any tracker web UI. Built on the assumption that LLMs will continually improve, Amelia automatically gets better as models advance.
+Amelia follows the four-layer agent architecture pattern established in industry research:
 
-See [Design Principles](/reference/roadmap#design-principles) for the guiding philosophy.
+| Layer | Amelia Implementation |
+|-------|----------------------|
+| **Model** | Pluggable LLM drivers (API or CLI-wrapped) |
+| **Tools** | SafeShell, SafeFile with defense-in-depth security |
+| **Orchestration** | LangGraph state machine with human approval gates |
+| **Deployment** | Local-first server with SQLite persistence |
+
+The [roadmap](/reference/roadmap) extends this foundation toward enterprise-grade deployment with evaluation-gated releases, distributed tracing, and agent authorization controls. See [Design Principles](/reference/roadmap#design-principles) for the guiding philosophy.
+
+## Research Foundation
+
+Amelia's architecture incorporates findings from industry research on agentic AI systems:
+
+- **Orchestrator-worker pattern**: Specialized agents (Architect, Developer, Reviewer) coordinated through state machine
+- **Iterative refinement**: Developer + Reviewer loop implements the generator-critic pattern
+- **Defense in depth**: Layered guardrails (metacharacters -> blocklist -> patterns -> allowlist)
+- **Trajectory as truth**: Full execution trace persisted for debugging, not just final outputs
+
+See the [roadmap](/reference/roadmap#research-foundation) for complete research synthesis.
 
 ## System Architecture
 
@@ -702,6 +720,18 @@ AmeliaError (base)
 │   └── CommandNotAllowedError  # Not in strict allowlist
 └── AgenticExecutionError       # Agentic mode failures
 ```
+
+## Observability Architecture
+
+Amelia implements the three pillars of observability:
+
+| Pillar | Implementation | Purpose |
+|--------|----------------|---------|
+| **Logs** | Loguru structured logging with agent context | Discrete events for debugging |
+| **Traces** | Event correlation IDs linking related operations | Causal path through workflow |
+| **Metrics** | Token usage tracking per agent and workflow | Cost and efficiency monitoring |
+
+**Why trajectory matters:** Final outputs alone don't indicate agent quality. Amelia persists the full execution trace (tool calls, results, agent decisions) enabling post-hoc debugging and process evaluation. This follows the principle that "the trajectory is the truth"—understanding how an agent reached a conclusion is as important as the conclusion itself.
 
 ## Observability
 

@@ -130,3 +130,64 @@
     display: none;
   }
 }
+
+/**
+ * Component: H1 Left Accent Bar
+ * Gradient accent line for primary headings - technical precision detail
+ * -------------------------------------------------------------------------- */
+
+.vp-doc h1 {
+  position: relative;
+  padding-left: 1.25rem;
+}
+
+.vp-doc h1::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.15em;
+  bottom: 0.15em;
+  width: 4px;
+  background: linear-gradient(
+    180deg,
+    var(--vp-c-brand-1) 0%,
+    var(--vp-c-tip-1) 100%
+  );
+  border-radius: 2px;
+}
+
+/* Light mode gradient - terracotta to blue */
+html:not(.dark) .vp-doc h1::before {
+  background: linear-gradient(
+    180deg,
+    oklch(50% 0.15 30) 0%,
+    var(--vp-c-brand-1) 100%
+  );
+}
+
+/**
+ * Component: Code Block Left Accent
+ * Subtle left border for code blocks - IDE-inspired styling
+ * -------------------------------------------------------------------------- */
+
+div[class*="language-"] {
+  position: relative;
+  border-left: 3px solid var(--vp-c-brand-1);
+  border-radius: 0 8px 8px 0;
+  overflow: hidden;
+}
+
+/* Soften the accent in light mode */
+html:not(.dark) div[class*="language-"] {
+  border-left-color: var(--vp-c-brand-3);
+}
+
+/* Language label refinement */
+div[class*="language-"] > span.lang {
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.65rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
