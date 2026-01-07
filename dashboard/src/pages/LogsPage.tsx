@@ -4,7 +4,8 @@
  * Displays all stream events across workflows with filtering and auto-scroll.
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import {
   ArrowDown,
   Trash2,
@@ -123,12 +124,14 @@ function StreamLogItem({ event }: { event: StreamEvent }) {
  *
  * @returns The logs page UI with stream event viewer
  */
+/** Estimated row height for virtualization */
+const ESTIMATED_ROW_HEIGHT = 60;
+
 export default function LogsPage() {
   const events = useStreamStore((state) => state.events);
   const clearEvents = useStreamStore((state) => state.clearEvents);
 
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const parentRef = useRef<HTMLDivElement>(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [typeFilter, setTypeFilter] = useState<StreamEventType | 'all'>('all');
 
@@ -136,24 +139,38 @@ export default function LogsPage() {
   const filteredEvents =
     typeFilter === 'all' ? events : events.filter((e) => e.subtype === typeFilter);
 
-  // Auto-scroll when at bottom
+  // Virtualizer for efficient rendering of large event lists
+  const rowVirtualizer = useVirtualizer({
+    count: filteredEvents.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => ESTIMATED_ROW_HEIGHT,
+    overscan: 5,
+  });
+
+  // Auto-scroll to bottom when new events arrive (if already at bottom)
   useEffect(() => {
-    if (isAtBottom && scrollRef.current?.scrollIntoView) {
-      scrollRef.current.scrollIntoView({ behavior: 'smooth' });
+    if (isAtBottom && filteredEvents.length > 0) {
+      rowVirtualizer.scrollToIndex(filteredEvents.length - 1, {
+        behavior: 'smooth',
+      });
     }
-  }, [filteredEvents.length, isAtBottom]);
+  }, [filteredEvents.length, isAtBottom, rowVirtualizer]);
 
-  // Track scroll position
-  const handleScroll = () => {
-    if (!containerRef.current) return;
-    const { scrollTop, scrollHeight, clientHeight } = containerRef.current;
+  // Track scroll position to determine if user is at bottom
+  const handleScroll = useCallback(() => {
+    if (!parentRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = parentRef.current;
     setIsAtBottom(scrollHeight - scrollTop - clientHeight < 50);
-  };
+  }, []);
 
-  const scrollToBottom = () => {
-    scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
+  const scrollToBottom = useCallback(() => {
+    if (filteredEvents.length > 0) {
+      rowVirtualizer.scrollToIndex(filteredEvents.length - 1, {
+        behavior: 'smooth',
+      });
+    }
     setIsAtBottom(true);
-  };
+  }, [filteredEvents.length, rowVirtualizer]);
 
   return (
     <div className="flex flex-col h-full w-full">
@@ -192,7 +209,7 @@ export default function LogsPage() {
       </PageHeader>
 
       <div
-        ref={containerRef}
+        ref={parentRef}
         onScroll={handleScroll}
         className="flex-1 overflow-y-auto p-4 relative"
       >
@@ -203,14 +220,31 @@ export default function LogsPage() {
             <p className="text-sm">Events will appear here as workflows run</p>
           </div>
         ) : (
-          <div className="space-y-2">
-            {filteredEvents.map((event) => (
-              <StreamLogItem
-                key={event.id}
-                event={event}
-              />
-            ))}
-            <div ref={scrollRef} />
+          <div
+            style={{
+              height: `${rowVirtualizer.getTotalSize()}px`,
+              width: '100%',
+              position: 'relative',
+            }}
+          >
+            {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+              const event = filteredEvents[virtualRow.index];
+              return (
+                <div
+                  key={event.id}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    transform: `translateY(${virtualRow.start}px)`,
+                    paddingBottom: '8px',
+                  }}
+                >
+                  <StreamLogItem event={event} />
+                </div>
+              );
+            })}
           </div>
         )}
 

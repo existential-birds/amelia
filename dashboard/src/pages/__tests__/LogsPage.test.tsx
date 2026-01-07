@@ -1,9 +1,33 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import LogsPage from '../LogsPage';
 import { useStreamStore } from '../../store/stream-store';
 import { StreamEventType, type StreamEvent } from '../../types';
+
+// Mock useVirtualizer to render all items (JSDOM doesn't support scroll dimensions)
+vi.mock('@tanstack/react-virtual', () => ({
+  useVirtualizer: ({
+    count,
+    estimateSize,
+  }: {
+    count: number;
+    estimateSize: () => number;
+  }) => {
+    const size = estimateSize();
+    const items = Array.from({ length: count }, (_, index) => ({
+      index,
+      key: index,
+      size,
+      start: index * size,
+    }));
+    return {
+      getVirtualItems: () => items,
+      getTotalSize: () => count * size,
+      scrollToIndex: vi.fn(),
+    };
+  },
+}));
 
 // Helper to wrap component with Router
 const renderWithRouter = (ui: React.ReactElement) => {
