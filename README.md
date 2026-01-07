@@ -2,6 +2,8 @@
 
 ![Amelia Terminal](docs/design/terminal_screen.jpg)
 
+![Active Workflow](docs/design/amelia_active_workflow.png)
+
 [Amelia](https://en.wikipedia.org/wiki/Amelia_Earhart) is a local agentic coding system that orchestrates software development through Architect, Developer, and Reviewer agents. They argue about your code so you don't have to.
 
 See the [**Roadmap**](https://existential-birds.github.io/amelia/reference/roadmap) for where we're headed.
