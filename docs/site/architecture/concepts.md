@@ -11,6 +11,19 @@ Each agent has:
 - **Tools**: Access to specific operations (shell commands, file operations)
 - **Input/output schemas**: Structured communication with defined types
 
+## Agent Quality Framework
+
+Agent quality is measured across four pillars established in industry research:
+
+| Pillar | Definition | How Amelia Addresses It |
+|--------|------------|------------------------|
+| **Effectiveness** | Does the agent achieve the goal? | Human approval gates validate plans before execution |
+| **Efficiency** | Tokens, latency, steps to completion | Token usage tracking, review iteration limits |
+| **Robustness** | Graceful handling of failures | Retry configuration, structured error types |
+| **Safety** | Operation within ethical/security bounds | 4-layer shell security, path traversal protection |
+
+Traditional QA fails for agents because failures are subtle degradations, not crashes. The system returns 200 OK with wrong answers. This is why observability and trajectory evaluation are architectural requirements, not afterthoughts.
+
 ## Amelia's Agents
 
 ### Architect (`amelia/agents/architect.py`)
@@ -256,10 +269,10 @@ This abstraction means Amelia works with any issue source without changing the c
 
 ## Key Takeaways
 
-1. **Agents are specialized**: Each has a focused role, leading to better outputs
-2. **Agentic execution**: The Developer autonomously decides actions with streaming feedback
-3. **Orchestration provides structure**: State machine ensures consistent workflow
-4. **Tools enable action**: Agents execute real changes, not just generate text
-5. **Review-fix loop**: Iterative improvement with configurable iteration limits
-6. **Abstractions enable flexibility**: Drivers and trackers adapt to different environments
-7. **Human stays in control**: Approval gates ensure oversight at critical points
+1. **Agents are specialized**: Architect, Developer, and Reviewer each have focused roles with defined input/output contracts
+2. **Trajectory is truth**: Full execution trace persisted for debugging, not just final outputs
+3. **Human-in-the-loop**: Approval gates at critical decision points prevent runaway execution
+4. **Defense in depth**: Multiple security layers (metacharacters → blocklist → patterns → allowlist)
+5. **Abstractions enable flexibility**: Drivers and trackers adapt to enterprise constraints without code changes
+6. **Observability by design**: Events, correlation IDs, and token tracking from day one
+7. **Iterative refinement**: Developer ↔ Reviewer loop with configurable iteration limits
