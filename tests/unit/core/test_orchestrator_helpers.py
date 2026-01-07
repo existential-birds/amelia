@@ -28,6 +28,30 @@ class TestExtractConfigParams:
         assert stream_emitter is None
         assert stage_event_emitter is None
 
+    def test_extracts_emitters_from_config(self) -> None:
+        """Should extract stream and stage emitters when provided."""
+
+        async def mock_stream(event: object) -> None:
+            pass
+
+        async def mock_stage(name: str) -> None:
+            pass
+
+        profile = Profile(name="test", driver="cli:claude", model="sonnet")
+        config: RunnableConfig = {
+            "configurable": {
+                "thread_id": "wf-123",
+                "profile": profile,
+                "stream_emitter": mock_stream,
+                "stage_event_emitter": mock_stage,
+            }
+        }
+        stream, stage, wf_id, prof = _extract_config_params(config)
+        assert stream is mock_stream
+        assert stage is mock_stage
+        assert wf_id == "wf-123"
+        assert prof == profile
+
     def test_raises_if_profile_missing(self) -> None:
         """Should raise ValueError if profile not in config."""
         config: RunnableConfig = {
