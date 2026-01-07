@@ -28,10 +28,13 @@ async def test_emit_stream_broadcasts_to_connection_manager(
     mock_manager.broadcast_stream.assert_awaited_once_with(sample_stream_event)
 
 
-async def test_emit_stream_does_not_call_subscribers(
+async def test_emit_stream_does_not_call_subscribers_when_trace_disabled(
     event_bus: EventBus, sample_stream_event: StreamEvent
 ):
-    """emit_stream() should NOT call regular WorkflowEvent subscribers."""
+    """emit_stream() should NOT call regular WorkflowEvent subscribers when trace retention is disabled."""
+    # Disable trace retention so emit_stream doesn't call emit()
+    event_bus.configure(trace_retention_days=0)
+
     subscriber_called = False
 
     def subscriber(event: WorkflowEvent) -> None:
@@ -51,8 +54,43 @@ async def test_emit_stream_does_not_call_subscribers(
     # Wait for all pending broadcast tasks to complete
     await event_bus.cleanup()
 
-    # Regular subscribers should NOT be called for stream events
+    # Regular subscribers should NOT be called for stream events when trace is disabled
     assert not subscriber_called
+
+
+async def test_emit_stream_calls_subscribers_when_trace_enabled(
+    event_bus: EventBus, sample_stream_event: StreamEvent
+):
+    """emit_stream() SHOULD call regular WorkflowEvent subscribers when trace retention is enabled."""
+    # Enable trace retention (default is 7, but let's be explicit)
+    event_bus.configure(trace_retention_days=7)
+
+    subscriber_called = False
+    received_event: WorkflowEvent | None = None
+
+    def subscriber(event: WorkflowEvent) -> None:
+        nonlocal subscriber_called, received_event
+        subscriber_called = True
+        received_event = event
+
+    event_bus.subscribe(subscriber)
+
+    # Create mock connection manager
+    mock_manager = AsyncMock()
+    mock_manager.broadcast_stream = AsyncMock()
+    mock_manager.broadcast = AsyncMock()  # emit() will call broadcast() too
+    event_bus.set_connection_manager(mock_manager)
+
+    # Emit stream event
+    event_bus.emit_stream(sample_stream_event)
+
+    # Wait for all pending broadcast tasks to complete
+    await event_bus.cleanup()
+
+    # Regular subscribers SHOULD be called for stream events when trace is enabled
+    assert subscriber_called
+    assert received_event is not None
+    assert received_event.workflow_id == sample_stream_event.workflow_id
 
 
 async def test_emit_stream_tracks_broadcast_tasks(

@@ -37,6 +37,9 @@ class TestStreamEventPropagation:
         sample_stream_event: StreamEvent,
     ):
         """Stream events are broadcast to connected WebSocket clients."""
+        # Disable trace retention to avoid dual broadcasts (event + stream)
+        event_bus.configure(trace_retention_days=0)
+
         # Connect WebSocket
         await connection_manager.connect(mock_websocket)
 
@@ -61,6 +64,9 @@ class TestStreamEventPropagation:
         sample_stream_event: StreamEvent,
     ):
         """Stream events are broadcast to ALL connected clients."""
+        # Disable trace retention to avoid dual broadcasts (event + stream)
+        event_bus.configure(trace_retention_days=0)
+
         # Connect multiple WebSockets
         ws1 = AsyncMock(spec=WebSocket)
         ws1.send_json = AsyncMock()
