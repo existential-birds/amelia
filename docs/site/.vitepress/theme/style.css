@@ -163,32 +163,29 @@
   --amelia-font-display: "Bebas Neue", sans-serif;
 }
 
-/* Apply heading font to all headings */
+/* Technical monospace headings for H1-H2 - signals engineering credibility */
 .vp-doc h1,
-.vp-doc h2,
+.vp-doc h2 {
+  font-family: var(--vp-font-family-mono);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+  color: var(--vp-c-heading-1);
+}
+
+.vp-doc h1 {
+  font-weight: 600;
+  letter-spacing: -0.03em;
+}
+
+/* Condensed font for section headers H3-H6 */
 .vp-doc h3,
 .vp-doc h4,
 .vp-doc h5,
 .vp-doc h6 {
   font-family: var(--amelia-font-heading);
   font-weight: 600;
-}
-
-.vp-doc h1 {
-  font-weight: 700;
-  letter-spacing: -0.02em;
-}
-
-/* Heading colors - Coral/Terracotta for visual excitement */
-.vp-doc h1,
-.vp-doc h2 {
-  color: var(--vp-c-heading-1);
-}
-
-.vp-doc h3,
-.vp-doc h4,
-.vp-doc h5,
-.vp-doc h6 {
+  letter-spacing: 0.01em;
   color: var(--vp-c-heading-2);
 }
 
@@ -367,4 +364,33 @@ html:not(.dark) {
   --docsearch-hit-active-color: var(--vp-c-text-1) !important;
   --docsearch-hit-background: var(--vp-c-bg) !important;
   --docsearch-footer-background: var(--vp-c-bg) !important;
+}
+
+/**
+ * Component: Background Pattern (Dark Mode)
+ * Subtle engineering grid for precision aesthetic
+ * -------------------------------------------------------------------------- */
+
+.dark {
+  --grid-line-color: rgba(136, 168, 150, 0.04);
+}
+
+/* Subtle grid pattern on main content area */
+.dark .VPContent {
+  background-image:
+    linear-gradient(var(--grid-line-color) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line-color) 1px, transparent 1px);
+  background-size: 48px 48px;
+  background-position: -1px -1px;
+}
+
+/* Enhanced hero with gradient + subtle noise texture */
+.dark .VPHome .VPHero {
+  background:
+    radial-gradient(
+      ellipse at 70% 30%,
+      rgba(255, 200, 87, 0.04) 0%,
+      transparent 50%
+    ),
+    url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.015'/%3E%3C/svg%3E");
 }
