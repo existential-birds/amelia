@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { useWorkflowStore } from '../store/workflowStore';
-import { useStreamStore } from '../store/stream-store';
 import type { WebSocketMessage, WorkflowEvent } from '../types';
 
 /**
@@ -75,7 +74,6 @@ export function useWebSocket() {
   const addEvent = useWorkflowStore((state) => state.addEvent);
   const setConnected = useWorkflowStore((state) => state.setConnected);
   const setLastEventId = useWorkflowStore((state) => state.setLastEventId);
-  const addStreamEvent = useStreamStore((state) => state.addEvent);
 
   /**
    * Handle incoming workflow events.
@@ -172,10 +170,6 @@ export function useWebSocket() {
             handleEvent(message.payload);
             break;
 
-          case 'stream':
-            addStreamEvent(message.payload);
-            break;
-
           case 'ping':
             ws.send(JSON.stringify({ type: 'pong' }));
             break;
@@ -214,7 +208,7 @@ export function useWebSocket() {
       console.error('WebSocket error:', error);
       setConnected(false, 'WebSocket error');
     };
-  }, [handleEvent, scheduleReconnect, setConnected, setLastEventId, addStreamEvent]);
+  }, [handleEvent, scheduleReconnect, setConnected, setLastEventId]);
 
   // Keep connectRef in sync with connect
   connectRef.current = connect;

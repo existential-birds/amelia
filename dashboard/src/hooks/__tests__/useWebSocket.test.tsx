@@ -2,10 +2,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook } from '@testing-library/react';
 import { useWebSocket } from '../useWebSocket';
 import { useWorkflowStore } from '../../store/workflowStore';
-import { useStreamStore } from '../../store/stream-store';
 import { createMockEvent } from '../../__tests__/fixtures';
 import { suppressConsoleLogs } from '@/test/helpers';
-import type { WebSocketMessage, StreamEvent } from '../../types';
+import type { WebSocketMessage } from '../../types';
 
 // Mock WebSocket
 class MockWebSocket {
@@ -70,7 +69,6 @@ describe('useWebSocket', () => {
       isConnected: false,
       connectionError: null,
     });
-    useStreamStore.getState().clearEvents();
     suppressConsoleLogs();
   });
 
@@ -289,106 +287,5 @@ describe('useWebSocket', () => {
     ws.triggerMessage({ type: 'backfill_complete', count: 42 });
 
     expect(useWorkflowStore.getState().isConnected).toBe(true);
-  });
-
-  describe('stream events', () => {
-    it('should dispatch stream events to stream store', () => {
-      renderHook(() => useWebSocket());
-
-      const ws = MockWebSocket.getLatestInstance()!;
-      ws.triggerOpen();
-
-      const streamEvent: StreamEvent = {
-        id: 'stream-001',
-        subtype: 'claude_thinking',
-        content: 'Analyzing the requirements...',
-        timestamp: '2025-12-13T10:00:00Z',
-        agent: 'developer',
-        workflow_id: 'wf-123',
-        tool_name: null,
-        tool_input: null,
-      };
-
-      ws.triggerMessage({ type: 'stream', payload: streamEvent });
-
-      const events = useStreamStore.getState().events;
-      expect(events).toHaveLength(1);
-      expect(events[0]).toEqual(streamEvent);
-    });
-
-    it('should not add stream events to workflow store', () => {
-      renderHook(() => useWebSocket());
-
-      const ws = MockWebSocket.getLatestInstance()!;
-      ws.triggerOpen();
-
-      const streamEvent: StreamEvent = {
-        id: 'stream-002',
-        subtype: 'claude_tool_call',
-        content: null,
-        timestamp: '2025-12-13T10:01:00Z',
-        agent: 'architect',
-        workflow_id: 'wf-456',
-        tool_name: 'read_file',
-        tool_input: { path: '/src/main.py' },
-      };
-
-      ws.triggerMessage({ type: 'stream', payload: streamEvent });
-
-      // Stream events should not appear in workflow store
-      const workflowState = useWorkflowStore.getState();
-      expect(workflowState.eventsByWorkflow['wf-456']).toBeUndefined();
-      expect(workflowState.lastEventId).toBeNull();
-    });
-
-    it('should handle multiple stream events', () => {
-      renderHook(() => useWebSocket());
-
-      const ws = MockWebSocket.getLatestInstance()!;
-      ws.triggerOpen();
-
-      const event1: StreamEvent = {
-        id: 'stream-003',
-        subtype: 'claude_thinking',
-        content: 'First thought',
-        timestamp: '2025-12-13T10:00:00Z',
-        agent: 'developer',
-        workflow_id: 'wf-123',
-        tool_name: null,
-        tool_input: null,
-      };
-
-      const event2: StreamEvent = {
-        id: 'stream-004',
-        subtype: 'claude_tool_call',
-        content: null,
-        timestamp: '2025-12-13T10:00:01Z',
-        agent: 'developer',
-        workflow_id: 'wf-123',
-        tool_name: 'execute_shell',
-        tool_input: { command: 'ls -la' },
-      };
-
-      const event3: StreamEvent = {
-        id: 'stream-005',
-        subtype: 'agent_output',
-        content: 'Task completed successfully',
-        timestamp: '2025-12-13T10:00:02Z',
-        agent: 'developer',
-        workflow_id: 'wf-123',
-        tool_name: null,
-        tool_input: null,
-      };
-
-      ws.triggerMessage({ type: 'stream', payload: event1 });
-      ws.triggerMessage({ type: 'stream', payload: event2 });
-      ws.triggerMessage({ type: 'stream', payload: event3 });
-
-      const events = useStreamStore.getState().events;
-      expect(events).toHaveLength(3);
-      expect(events[0]).toEqual(event1);
-      expect(events[1]).toEqual(event2);
-      expect(events[2]).toEqual(event3);
-    });
   });
 });
