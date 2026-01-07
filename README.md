@@ -4,14 +4,14 @@
 
 ![Active Workflow](docs/design/amelia_active_workflow.png)
 
-[Amelia](https://en.wikipedia.org/wiki/Amelia_Earhart) is a local agentic coding system that orchestrates software development through Architect, Developer, and Reviewer agents. They argue about your code so you don't have to.
+[Amelia](https://en.wikipedia.org/wiki/Amelia_Earhart) is multi-agent orchestration for software development with human-in-the-loop approval gates, defense-in-depth security, and end-to-end observability. Local-first, enterprise-ready.
 
 See the [**Roadmap**](https://existential-birds.github.io/amelia/reference/roadmap) for where we're headed.
 
 ## Current Status
 
 > [!WARNING]
-> This is an experimental project. It will occasionally do something baffling. So will you. You'll figure it out together.
+> This project is under active development. APIs and configuration may change between releases.
 
 - Full orchestrator loop with human approval gates (CLI and web dashboard)
 - CLI driver (Claude CLI wrapper) with structured outputs, streaming, and agentic execution
@@ -20,6 +20,8 @@ See the [**Roadmap**](https://existential-birds.github.io/amelia/reference/roadm
 - Real tool execution in Developer agent (shell commands, file writes)
 - FastAPI server with SQLite persistence and WebSocket event streaming
 - Web dashboard with workflow visualization, real-time activity log, and approval controls
+
+**Architecture:** Aligned with [12-Factor Agents](https://github.com/humanlayer/12-factor-agents) for reliable LLM-powered software.
 
 ## Features
 
@@ -168,7 +170,13 @@ AMELIA_SETTINGS=/path/to/your/project/settings.amelia.yaml uv run amelia dev
 
 ## How It Works
 
-Amelia orchestrates configurable AI agents through a workflow graph. See [Architecture](https://existential-birds.github.io/amelia/architecture/overview) for data flow and [Concepts](https://existential-birds.github.io/amelia/architecture/concepts) for how agents and drivers work.
+Amelia orchestrates specialized agents through a LangGraph state machine:
+
+```
+Issue → Architect (plan) → Human Approval → Developer (execute) ↔ Reviewer (review) → Done
+```
+
+See [Architecture](https://existential-birds.github.io/amelia/architecture/overview) for data flow and [Concepts](https://existential-birds.github.io/amelia/architecture/concepts) for how agents and drivers work.
 
 ## CLI Commands
 
