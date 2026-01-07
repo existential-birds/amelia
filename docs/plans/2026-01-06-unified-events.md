@@ -2,9 +2,11 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Unify WorkflowEvent and StreamEvent into a single model with `level` field (info/debug/trace), persist trace events, add virtualization to Activity log for performance, and group events hierarchically by stage.
+**Goal:** Unify WorkflowEvent and StreamEvent into a single model with `level` field (info/debug/trace), persist trace events, add virtualization to Activity log for performance, group events hierarchically by stage, and add distributed tracing support with `trace_id`/`parent_id` for causal analysis.
 
-**Architecture:** Add `EventLevel` enum to categorize events. Extend `WorkflowEvent` to hold trace-specific fields (`tool_name`, `tool_input`, `is_error`). Update database schema. Refactor ActivityLog with `@tanstack/react-virtual` for performance and stage-based grouping. Keep LogsPage for trace events only.
+**Architecture:** Add `EventLevel` enum to categorize events. Extend `WorkflowEvent` to hold trace-specific fields (`tool_name`, `tool_input`, `is_error`) and distributed tracing fields (`trace_id`, `parent_id`). Update database schema with index on `trace_id`. Refactor ActivityLog with `@tanstack/react-virtual` for performance and stage-based grouping. Keep LogsPage for trace events only.
+
+**Distributed Tracing:** Following OpenTelemetry conventions for future integration. `trace_id` flows through all events in a workflow execution. `parent_id` links cause→effect (e.g., tool_call → tool_result). See #234 for follow-up metrics work.
 
 **Tech Stack:** Python/Pydantic (backend), SQLite (database), React/TypeScript (frontend), @tanstack/react-virtual (virtualization), Zustand (state)
 
@@ -217,6 +219,22 @@ class TestWorkflowEvent:
         assert event.tool_input == {"file": "test.py"}
         assert event.is_error is False
 
+    def test_workflow_event_distributed_tracing_fields(self) -> None:
+        """WorkflowEvent includes trace_id and parent_id for distributed tracing."""
+        event = WorkflowEvent(
+            id="evt-1",
+            workflow_id="wf-1",
+            sequence=1,
+            timestamp=datetime.now(UTC),
+            agent="developer",
+            event_type=EventType.CLAUDE_TOOL_RESULT,
+            message="Tool result",
+            trace_id="trace-abc-123",
+            parent_id="evt-parent",
+        )
+        assert event.trace_id == "trace-abc-123"
+        assert event.parent_id == "evt-parent"
+
     def test_workflow_event_level_defaults_from_event_type(self) -> None:
         """Level defaults based on event_type when not provided."""
         # INFO event
@@ -286,6 +304,8 @@ class WorkflowEvent(BaseModel):
         tool_name: Tool name for trace events (optional).
         tool_input: Tool input parameters for trace events (optional).
         is_error: Whether trace event represents an error (default False).
+        trace_id: Distributed trace ID (flows through all events in a workflow execution).
+        parent_id: Parent event ID for causal chain (e.g., tool_call -> tool_result).
     """
 
     id: str = Field(..., description="Unique event identifier")
@@ -316,6 +336,15 @@ class WorkflowEvent(BaseModel):
     is_error: bool = Field(
         default=False,
         description="Whether trace event represents an error",
+    )
+    # Distributed tracing fields (OTel-compatible)
+    trace_id: str | None = Field(
+        default=None,
+        description="Distributed trace ID (flows through all events in a workflow execution)",
+    )
+    parent_id: str | None = Field(
+        default=None,
+        description="Parent event ID for causal chain (e.g., tool_call -> tool_result)",
     )
 
     def model_post_init(self, __context: Any) -> None:
@@ -407,6 +436,21 @@ class TestEventsSchema:
         indexes = await db.fetch_all("PRAGMA index_list(events)")
         index_names = [idx["name"] for idx in indexes]
         assert "idx_events_level" in index_names
+
+    @pytest.mark.asyncio
+    async def test_events_table_has_distributed_tracing_columns(self, db: Database) -> None:
+        """Events table has trace_id and parent_id columns."""
+        columns = await db.fetch_all("PRAGMA table_info(events)")
+        column_names = [col["name"] for col in columns]
+        assert "trace_id" in column_names
+        assert "parent_id" in column_names
+
+    @pytest.mark.asyncio
+    async def test_events_trace_id_index_exists(self, db: Database) -> None:
+        """Events table has index on trace_id column."""
+        indexes = await db.fetch_all("PRAGMA index_list(events)")
+        index_names = [idx["name"] for idx in indexes]
+        assert "idx_events_trace_id" in index_names
 ```
 
 **Step 2: Run test to verify it fails**
@@ -434,13 +478,20 @@ await self.execute("""
         correlation_id TEXT,
         tool_name TEXT,
         tool_input_json TEXT,
-        is_error INTEGER NOT NULL DEFAULT 0
+        is_error INTEGER NOT NULL DEFAULT 0,
+        trace_id TEXT,
+        parent_id TEXT
     )
 """)
 
 # Add index for level-based queries (after other event indexes):
 await self.execute(
     "CREATE INDEX IF NOT EXISTS idx_events_level ON events(level)"
+)
+
+# Add index for distributed tracing queries:
+await self.execute(
+    "CREATE INDEX IF NOT EXISTS idx_events_trace_id ON events(trace_id)"
 )
 ```
 
@@ -548,6 +599,52 @@ class TestRepositoryEvents:
         assert restored.tool_name == "Read"
         assert restored.tool_input == {"path": "/test"}
         assert restored.is_error is True
+
+    @pytest.mark.asyncio
+    async def test_save_event_with_distributed_tracing(self, repository, sample_workflow) -> None:
+        """save_event persists trace_id and parent_id fields."""
+        event = WorkflowEvent(
+            id="evt-tracing-test",
+            workflow_id=sample_workflow.id,
+            sequence=1,
+            timestamp=datetime.now(UTC),
+            agent="developer",
+            event_type=EventType.CLAUDE_TOOL_RESULT,
+            level=EventLevel.TRACE,
+            message="Tool result",
+            trace_id="trace-abc-123",
+            parent_id="evt-parent-call",
+        )
+        await repository.save_event(event)
+
+        row = await repository._db.fetch_one(
+            "SELECT trace_id, parent_id FROM events WHERE id = ?",
+            (event.id,),
+        )
+        assert row["trace_id"] == "trace-abc-123"
+        assert row["parent_id"] == "evt-parent-call"
+
+    @pytest.mark.asyncio
+    async def test_row_to_event_restores_tracing_fields(self, repository, sample_workflow) -> None:
+        """_row_to_event restores trace_id and parent_id."""
+        event = WorkflowEvent(
+            id="evt-restore-tracing",
+            workflow_id=sample_workflow.id,
+            sequence=1,
+            timestamp=datetime.now(UTC),
+            agent="developer",
+            event_type=EventType.CLAUDE_TOOL_CALL,
+            message="Tool call",
+            trace_id="trace-xyz-789",
+            parent_id="evt-stage-start",
+        )
+        await repository.save_event(event)
+
+        events = await repository.get_recent_events(sample_workflow.id, limit=1)
+        restored = events[0]
+
+        assert restored.trace_id == "trace-xyz-789"
+        assert restored.parent_id == "evt-stage-start"
 ```
 
 **Step 2: Run test to verify it fails**
@@ -577,8 +674,9 @@ async def save_event(self, event: WorkflowEvent) -> None:
         INSERT INTO events (
             id, workflow_id, sequence, timestamp, agent,
             event_type, level, message, data_json, correlation_id,
-            tool_name, tool_input_json, is_error
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            tool_name, tool_input_json, is_error,
+            trace_id, parent_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             event.id,
@@ -594,6 +692,8 @@ async def save_event(self, event: WorkflowEvent) -> None:
             event.tool_name,
             tool_input_json,
             1 if event.is_error else 0,
+            event.trace_id,
+            event.parent_id,
         ),
     )
 ```
@@ -622,6 +722,8 @@ def _row_to_event(self, row: dict[str, Any]) -> WorkflowEvent:
         tool_name=row.get("tool_name"),
         tool_input=tool_input,
         is_error=bool(row.get("is_error", 0)),
+        trace_id=row.get("trace_id"),
+        parent_id=row.get("parent_id"),
     )
 ```
 
@@ -1103,6 +1205,24 @@ describe('WorkflowEvent types', () => {
     const levels: EventLevel[] = ['info', 'debug', 'trace'];
     expect(levels).toHaveLength(3);
   });
+
+  it('supports distributed tracing fields', () => {
+    const event: WorkflowEvent = {
+      id: 'evt-1',
+      workflow_id: 'wf-1',
+      sequence: 1,
+      timestamp: '2025-01-01T00:00:00Z',
+      agent: 'developer',
+      event_type: 'claude_tool_result',
+      level: 'trace',
+      message: 'Tool result',
+      trace_id: 'trace-abc-123',
+      parent_id: 'evt-parent',
+    };
+
+    expect(event.trace_id).toBe('trace-abc-123');
+    expect(event.parent_id).toBe('evt-parent');
+  });
 });
 ```
 
@@ -1189,6 +1309,10 @@ export interface WorkflowEvent {
   tool_input?: Record<string, unknown>;
   /** Whether trace event represents an error. */
   is_error?: boolean;
+  /** Distributed trace ID for correlating all events in a workflow run. */
+  trace_id?: string;
+  /** Parent event ID for causal chain analysis. */
+  parent_id?: string;
 }
 ```
 
@@ -1201,7 +1325,7 @@ Expected: PASS
 
 ```bash
 git add dashboard/src/types/index.ts dashboard/src/types/__tests__/index.test.ts
-git commit -m "feat(dashboard): add EventLevel type and extend WorkflowEvent"
+git commit -m "feat(dashboard): add EventLevel type and extend WorkflowEvent with tracing"
 ```
 
 ---
