@@ -47,9 +47,6 @@ def _extract_config_params(
     Args:
         config: Optional RunnableConfig with configurable parameters.
 
-    Returns:
-        Tuple of (stream_emitter, stage_event_emitter, workflow_id, profile).
-
     Raises:
         ValueError: If workflow_id (thread_id) or profile is not provided.
     """
@@ -65,7 +62,7 @@ def _extract_config_params(
     if not profile:
         raise ValueError("profile is required in config.configurable")
 
-    return stream_emitter, stage_event_emitter, workflow_id, profile
+    return stream_emitter, stage_event_emitter, workflow_id, profile  # noqa: RET504
 
 
 async def _save_token_usage(
@@ -252,19 +249,14 @@ async def call_architect_node(
     if state.issue is None:
         raise ValueError("Cannot call Architect: no issue provided in state.")
 
-    # Extract stream_emitter, stage_event_emitter, workflow_id, and profile from config
     stream_emitter, stage_event_emitter, workflow_id, profile = _extract_config_params(config)
 
-    # Emit STAGE_STARTED event at the beginning of the node
     if stage_event_emitter:
         await stage_event_emitter("architect_node")
 
-    # Get optional repository for token usage tracking
     config = config or {}
     configurable = config.get("configurable", {})
     repository = configurable.get("repository")
-
-    # Extract prompts from config for agent injection
     prompts = configurable.get("prompts", {})
 
     driver = DriverFactory.get_driver(profile.driver, model=profile.model)
@@ -277,7 +269,6 @@ async def call_architect_node(
     plan_path.parent.mkdir(parents=True, exist_ok=True)
     logger.debug("Ensured plan directory exists", plan_dir=str(plan_path.parent))
 
-    # Consume async generator, emitting events and collecting final state
     final_state = state
     async for new_state, event in architect.plan(
         state=state,
@@ -288,10 +279,8 @@ async def call_architect_node(
         if stream_emitter:
             await stream_emitter(event)
 
-    # Save token usage from driver (best-effort)
     await _save_token_usage(driver, workflow_id, "architect", repository)
 
-    # Log the architect plan generation
     logger.info(
         "Agent action completed",
         agent="architect",
@@ -302,7 +291,6 @@ async def call_architect_node(
         },
     )
 
-    # Return partial state update - plan_validator_node handles plan extraction
     return {
         "raw_architect_output": final_state.raw_architect_output,
         "tool_calls": list(final_state.tool_calls),
@@ -534,29 +522,23 @@ async def call_developer_node(
     if not state.goal:
         raise ValueError("Developer node has no goal. The architect should have generated a goal first.")
 
-    # Extract stream_emitter, stage_event_emitter, workflow_id, and profile from config
     stream_emitter, stage_event_emitter, workflow_id, profile = _extract_config_params(config)
 
-    # Emit STAGE_STARTED event at the beginning of the node
     if stage_event_emitter:
         await stage_event_emitter("developer_node")
 
-    # Get optional repository for token usage tracking
     config = config or {}
     repository = config.get("configurable", {}).get("repository")
 
     driver = DriverFactory.get_driver(profile.driver, model=profile.model)
     developer = Developer(driver, stream_emitter=stream_emitter)
 
-    # Collect the final state from the developer's agentic execution
     final_state = state
     async for new_state, event in developer.run(state, profile):
         final_state = new_state
-        # Stream events are handled by the stream_emitter if provided
         if stream_emitter:
             await stream_emitter(event)
 
-    # Save token usage from driver (best-effort)
     await _save_token_usage(driver, workflow_id, "developer", repository)
 
     logger.info(
@@ -569,7 +551,6 @@ async def call_developer_node(
         },
     )
 
-    # Return the accumulated state from agentic execution
     return {
         "tool_calls": list(final_state.tool_calls),
         "tool_results": list(final_state.tool_results),
@@ -604,26 +585,19 @@ async def call_reviewer_node(
         has_code_changes_for_review=bool(state.code_changes_for_review),
     )
 
-    # Extract stream_emitter, stage_event_emitter, workflow_id, and profile from config
     stream_emitter, stage_event_emitter, workflow_id, profile = _extract_config_params(config)
 
-    # Emit STAGE_STARTED event at the beginning of the node
     if stage_event_emitter:
         await stage_event_emitter("reviewer_node")
 
-    # Get optional repository for token usage tracking
     config = config or {}
     configurable = config.get("configurable", {})
     repository = configurable.get("repository")
-
-    # Extract prompts from config for agent injection
     prompts = configurable.get("prompts", {})
 
     driver = DriverFactory.get_driver(profile.driver, model=profile.model)
     reviewer = Reviewer(driver, stream_emitter=stream_emitter, prompts=prompts)
 
-    # Use agentic review when we have a base_commit - this avoids large diff issues
-    # The agent will fetch the diff using git tools and auto-detect technologies
     if state.base_commit:
         logger.info(
             "Using agentic review with base_commit",
@@ -634,16 +608,13 @@ async def call_reviewer_node(
             state, state.base_commit, profile, workflow_id=workflow_id
         )
     else:
-        # Fallback to traditional review if no base_commit
         code_changes = await get_code_changes_for_review(state, profile)
         review_result, new_session_id = await reviewer.review(
             state, code_changes, profile, workflow_id=workflow_id
         )
 
-    # Save token usage from driver (best-effort)
     await _save_token_usage(driver, workflow_id, "reviewer", repository)
 
-    # Log the review completion with iteration tracking
     next_iteration = state.review_iteration + 1
     logger.info(
         "Agent action completed",
@@ -682,11 +653,9 @@ async def call_evaluation_node(
     """
     stream_emitter, stage_event_emitter, workflow_id, profile = _extract_config_params(config)
 
-    # Emit STAGE_STARTED event at the beginning of the node
     if stage_event_emitter:
         await stage_event_emitter("evaluation_node")
 
-    # Extract prompts from config for agent injection
     config = config or {}
     configurable = config.get("configurable", {})
     prompts = configurable.get("prompts", {})
@@ -698,7 +667,6 @@ async def call_evaluation_node(
         state, profile, workflow_id=workflow_id
     )
 
-    # Auto-approve all items to implement if auto_approve is set
     approved_items: list[int] = []
     if state.auto_approve:
         approved_items = [item.number for item in evaluation_result.items_to_implement]
@@ -742,7 +710,6 @@ async def review_approval_node(
     execution_mode = config.get("configurable", {}).get("execution_mode", "cli")
 
     if execution_mode == "server":
-        # Server mode: interrupt for human input, approval comes from resumed state
         return {}
 
     # CLI mode: prompt user (this would use typer.confirm or similar)
@@ -780,7 +747,6 @@ def route_after_review(
     if state.last_review and state.last_review.approved:
         return "__end__"
 
-    # Extract profile from config (only need profile, ignore stream/stage emitters)
     _, _, _, profile = _extract_config_params(config)
     max_iterations = profile.max_review_iterations
 
@@ -826,7 +792,6 @@ def route_after_fixes(state: ExecutionState) -> str:
     """
     max_passes = state.max_review_passes
 
-    # Check if we've hit max passes
     if state.review_pass >= max_passes:
         logger.warning(
             "Max review passes reached",
@@ -836,9 +801,8 @@ def route_after_fixes(state: ExecutionState) -> str:
         return END
 
     if state.auto_approve:
-        # In auto mode, check if there are still items to fix
         if state.evaluation_result and state.evaluation_result.items_to_implement:
-            return "reviewer_node"  # Loop back for another pass
+            return "reviewer_node"
         return END
 
     return "end_approval_node"

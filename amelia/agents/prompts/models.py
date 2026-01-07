@@ -51,18 +51,6 @@ class PromptVersion(BaseModel):
     @field_validator("content")
     @classmethod
     def content_not_empty(cls, v: str) -> str:
-        """Validate that content is not empty or whitespace-only.
-
-        Args:
-            v: The content string to validate.
-
-        Returns:
-            The validated content string, unchanged.
-
-        Raises:
-            ValueError: If content is empty or contains only whitespace.
-
-        """
         if not v.strip():
             raise ValueError("Prompt content cannot be empty")
         return v
@@ -110,27 +98,9 @@ class PromptRepositoryProtocol(Protocol):
     """
 
     async def get_prompt(self, prompt_id: str) -> Prompt | None:
-        """Get a prompt by ID.
-
-        Args:
-            prompt_id: The prompt identifier.
-
-        Returns:
-            The prompt if found, None otherwise.
-
-        """
         ...
 
     async def get_version(self, version_id: str) -> PromptVersion | None:
-        """Get a specific version by ID.
-
-        Args:
-            version_id: The version identifier.
-
-        Returns:
-            The version if found, None otherwise.
-
-        """
         ...
 
     async def record_workflow_prompt(
@@ -139,12 +109,4 @@ class PromptRepositoryProtocol(Protocol):
         prompt_id: str,
         version_id: str,
     ) -> None:
-        """Record which prompt version a workflow used.
-
-        Args:
-            workflow_id: The workflow identifier.
-            prompt_id: The prompt identifier.
-            version_id: The version identifier.
-
-        """
         ...

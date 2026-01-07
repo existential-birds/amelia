@@ -1,10 +1,95 @@
 """WebSocket streaming helpers for CLI."""
 
 import json
+from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any
 
 import websockets
 from rich.console import Console
+
+
+@dataclass(frozen=True)
+class EventFormat:
+    """Format configuration for displaying an event type."""
+
+    style: str
+    """Rich markup style for the message (e.g., 'blue', 'bold green')."""
+    prefix: str = ""
+    """Optional prefix to prepend to the message."""
+    include_message: bool = True
+    """Whether to include the event message in output."""
+    newline_before: bool = False
+    """Whether to print a newline before the message."""
+
+
+# Simple event types with straightforward formatting
+_SIMPLE_EVENT_FORMATS: dict[str, EventFormat] = {
+    "workflow_started": EventFormat(style="blue", prefix="Workflow started: "),
+    "workflow_completed": EventFormat(
+        style="bold green",
+        prefix="Workflow completed successfully!",
+        include_message=False,
+        newline_before=True,
+    ),
+    "workflow_failed": EventFormat(
+        style="bold red", prefix="Workflow failed: ", newline_before=True
+    ),
+    "workflow_cancelled": EventFormat(
+        style="yellow", prefix="Workflow cancelled: ", newline_before=True
+    ),
+    "approval_granted": EventFormat(
+        style="green", prefix="Plan approved", include_message=False
+    ),
+    "approval_rejected": EventFormat(style="red", prefix="Plan rejected: "),
+    "approval_required": EventFormat(
+        style="yellow bold", prefix="Approval required: ", newline_before=True
+    ),
+}
+
+# Event types that require custom formatting logic
+EventFormatter = Callable[[Console, dict[str, Any]], None]
+
+
+def _format_stage_started(console: Console, event: dict[str, Any]) -> None:
+    """Format stage started event."""
+    data = event.get("data", {}) or {}
+    stage = data.get("stage", "unknown")
+    console.print(f"[dim]Starting {stage}...[/dim]")
+
+
+def _format_stage_completed(console: Console, event: dict[str, Any]) -> None:
+    """Format stage completed event."""
+    data = event.get("data", {}) or {}
+    stage = data.get("stage", "unknown")
+    console.print(f"[green]Completed {stage}[/green]")
+
+
+def _format_review_completed(console: Console, event: dict[str, Any]) -> None:
+    """Format review completion event with approval status and details."""
+    data = event.get("data", {}) or {}
+    approved = data.get("approved", False)
+    severity = data.get("severity", "unknown")
+    comment_count = data.get("comment_count", 0)
+    status = "[green]approved[/green]" if approved else "[yellow]changes requested[/yellow]"
+    console.print(
+        f"\n[bold]Review {status}[/bold] ({severity} severity, {comment_count} comments)"
+    )
+
+
+def _format_agent_message(console: Console, event: dict[str, Any]) -> None:
+    """Format agent message with agent name prefix."""
+    message = event.get("message", "")
+    agent = event.get("agent", "system")
+    console.print(f"[cyan][{agent}][/cyan] {message}")
+
+
+_CUSTOM_FORMATTERS: dict[str, EventFormatter] = {
+    "stage_started": _format_stage_started,
+    "stage_completed": _format_stage_completed,
+    "review_completed": _format_review_completed,
+    "agent_message": _format_agent_message,
+}
 
 
 async def stream_workflow_events(
@@ -30,30 +115,22 @@ async def stream_workflow_events(
     ws_url = base_url.replace("http://", "ws://").replace("https://", "wss://") + "/ws/events"
 
     async with websockets.connect(ws_url) as ws:
-        # Subscribe to the specific workflow
         await ws.send(json.dumps({"type": "subscribe", "workflow_id": workflow_id}))
 
         async for message in ws:
             data = json.loads(message)
             message_type = data.get("type")
 
-            # Handle server pings
             if message_type == "ping":
                 await ws.send(json.dumps({"type": "pong"}))
                 continue
 
-            # Handle wrapped events from server
             if message_type == "event":
                 event = data.get("payload", {})
                 _display_event(console, event)
 
-                # Exit on terminal states
                 event_type = event.get("event_type")
-                if event_type == "workflow_completed":
-                    break
-                if event_type == "workflow_failed":
-                    break
-                if event_type == "workflow_cancelled":
+                if event_type in {"workflow_completed", "workflow_failed", "workflow_cancelled"}:
                     break
             elif message_type == "backfill_complete":
                 console.print(f"[dim]Backfill complete: {data.get('count', 0)} events[/dim]")
@@ -73,37 +150,19 @@ def _display_event(console: Console, event: dict[str, Any]) -> None:
     """
     event_type = event.get("event_type", "unknown")
     message = event.get("message", "")
-    data = event.get("data", {}) or {}
-    agent = event.get("agent", "system")
 
-    if event_type == "workflow_started":
-        console.print(f"[blue]Workflow started: {message}[/blue]")
-    elif event_type == "workflow_completed":
-        console.print("\n[bold green]Workflow completed successfully![/bold green]")
-    elif event_type == "workflow_failed":
-        console.print(f"\n[bold red]Workflow failed: {message}[/bold red]")
-    elif event_type == "workflow_cancelled":
-        console.print(f"\n[yellow]Workflow cancelled: {message}[/yellow]")
-    elif event_type == "stage_started":
-        stage = data.get("stage", "unknown")
-        console.print(f"[dim]Starting {stage}...[/dim]")
-    elif event_type == "stage_completed":
-        stage = data.get("stage", "unknown")
-        console.print(f"[green]Completed {stage}[/green]")
-    elif event_type == "approval_required":
-        console.print(f"\n[yellow bold]Approval required: {message}[/yellow bold]")
-    elif event_type == "approval_granted":
-        console.print("[green]Plan approved[/green]")
-    elif event_type == "approval_rejected":
-        console.print(f"[red]Plan rejected: {message}[/red]")
-    elif event_type == "review_completed":
-        approved = data.get("approved", False)
-        severity = data.get("severity", "unknown")
-        comment_count = data.get("comment_count", 0)
-        status = "[green]approved[/green]" if approved else "[yellow]changes requested[/yellow]"
-        console.print(f"\n[bold]Review {status}[/bold] ({severity} severity, {comment_count} comments)")
-    elif event_type == "agent_message":
-        console.print(f"[cyan][{agent}][/cyan] {message}")
-    else:
-        # Show other events with less emphasis
-        console.print(f"[dim]{event_type}: {message}[/dim]")
+    # Check for custom formatters first (events needing special logic)
+    if event_type in _CUSTOM_FORMATTERS:
+        _CUSTOM_FORMATTERS[event_type](console, event)
+        return
+
+    # Check for simple format configurations
+    if event_type in _SIMPLE_EVENT_FORMATS:
+        fmt = _SIMPLE_EVENT_FORMATS[event_type]
+        text = fmt.prefix + (message if fmt.include_message else "")
+        newline = "\n" if fmt.newline_before else ""
+        console.print(f"{newline}[{fmt.style}]{text}[/{fmt.style}]")
+        return
+
+    # Default: show other events with less emphasis
+    console.print(f"[dim]{event_type}: {message}[/dim]")
