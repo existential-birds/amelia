@@ -21,12 +21,19 @@ const nodeTypes: NodeTypes = {
 /**
  * Inner component that triggers fitView when the node count changes.
  * Must be rendered inside Canvas to access the React Flow instance.
+ *
+ * Uses requestAnimationFrame to defer fitView until after React Flow
+ * has rendered the updated nodes, ensuring correct bounds calculation.
  */
 function FitViewOnChange({ nodeCount }: { nodeCount: number }) {
   const { fitView } = useReactFlow();
 
   useEffect(() => {
-    fitView({ padding: 0.2 });
+    // Defer fitView to next frame to allow React Flow to render nodes first
+    const frameId = requestAnimationFrame(() => {
+      fitView({ padding: 0.2 });
+    });
+    return () => cancelAnimationFrame(frameId);
   }, [nodeCount, fitView]);
 
   return null;

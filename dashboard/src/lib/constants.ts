@@ -16,7 +16,8 @@ export const AGENT_STYLES: Record<string, { text: string; bg: string }> = {
   ARCHITECT: { text: 'text-agent-architect', bg: 'bg-agent-architect-bg' },
   DEVELOPER: { text: 'text-agent-developer', bg: 'bg-agent-developer-bg' },
   REVIEWER: { text: 'text-agent-reviewer', bg: 'bg-agent-reviewer-bg' },
-  PLAN_VALIDATOR: { text: 'text-agent-pm', bg: 'bg-agent-pm-bg' },
+  VALIDATOR: { text: 'text-agent-pm', bg: 'bg-agent-pm-bg' },
+  EVALUATOR: { text: 'text-agent-pm', bg: 'bg-agent-pm-bg' },
   HUMAN_APPROVAL: { text: 'text-destructive', bg: 'bg-destructive/10' },
   SYSTEM: { text: 'text-muted-foreground', bg: '' },
 };

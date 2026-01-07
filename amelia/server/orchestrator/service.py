@@ -864,12 +864,14 @@ class OrchestratorService:
                             workflow_id,
                             EventType.STAGE_STARTED,
                             "Starting human_approval_node",
+                            agent="human_approval",
                             data={"stage": "human_approval_node"},
                         )
                         await self._emit(
                             workflow_id,
                             EventType.APPROVAL_REQUIRED,
                             "Plan ready for review - awaiting human approval",
+                            agent="human_approval",
                             data={"paused_at": "human_approval_node"},
                         )
                         # Emit extension hook for approval gate
@@ -1233,6 +1235,7 @@ class OrchestratorService:
                 workflow_id,
                 EventType.APPROVAL_GRANTED,
                 "Plan approved",
+                agent="human_approval",
             )
             # Emit extension hook for approval
             await emit_workflow_event(

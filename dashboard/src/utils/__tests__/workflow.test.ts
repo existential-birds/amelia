@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getActiveWorkflow, formatTokens, formatCost, formatDuration } from '../workflow';
+import { getActiveWorkflow, getMostRecentCompleted, formatTokens, formatCost, formatDuration } from '../workflow';
 import type { WorkflowSummary } from '@/types';
 
 // Helper to create workflow summaries
@@ -122,6 +122,48 @@ describe('getActiveWorkflow', () => {
     ];
     // Should select the most recent running workflow (running-oldest), not the first in array
     expect(getActiveWorkflow(workflows)?.id).toBe('running-oldest');
+  });
+});
+
+describe('getMostRecentCompleted', () => {
+  it('should return the most recently completed workflow', () => {
+    const workflows = [
+      createWorkflow({ id: 'oldest', status: 'completed', started_at: '2025-01-01T00:00:00Z' }),
+      createWorkflow({ id: 'newest', status: 'completed', started_at: '2025-01-03T00:00:00Z' }),
+      createWorkflow({ id: 'middle', status: 'completed', started_at: '2025-01-02T00:00:00Z' }),
+    ];
+    expect(getMostRecentCompleted(workflows)?.id).toBe('newest');
+  });
+
+  it('should return null when no completed workflows exist', () => {
+    const workflows = [
+      createWorkflow({ id: '1', status: 'in_progress' }),
+      createWorkflow({ id: '2', status: 'blocked' }),
+    ];
+    expect(getMostRecentCompleted(workflows)).toBeNull();
+  });
+
+  it('should return null for empty array', () => {
+    expect(getMostRecentCompleted([])).toBeNull();
+  });
+
+  it('should ignore non-completed workflows', () => {
+    const workflows = [
+      createWorkflow({ id: 'completed', status: 'completed', started_at: '2025-01-01T00:00:00Z' }),
+      createWorkflow({ id: 'running', status: 'in_progress', started_at: '2025-01-03T00:00:00Z' }),
+      createWorkflow({ id: 'failed', status: 'failed', started_at: '2025-01-02T00:00:00Z' }),
+    ];
+    expect(getMostRecentCompleted(workflows)?.id).toBe('completed');
+  });
+
+  it('should handle workflows with null started_at', () => {
+    const workflows = [
+      createWorkflow({ id: '1', status: 'completed', started_at: null }),
+      createWorkflow({ id: '2', status: 'completed', started_at: '2025-01-01T00:00:00Z' }),
+    ];
+    // Should return one of them without throwing
+    const result = getMostRecentCompleted(workflows);
+    expect(result).not.toBeNull();
   });
 });
 

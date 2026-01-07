@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { workflowsLoader, workflowDetailLoader, historyLoader } from '../workflows';
 import { api } from '../../api/client';
-import { getActiveWorkflow } from '../../utils/workflow';
+import { getActiveWorkflow, getMostRecentCompleted } from '../../utils/workflow';
 import { createMockWorkflowSummary, createMockWorkflowDetail } from '@/__tests__/fixtures';
 import type { LoaderFunctionArgs } from 'react-router-dom';
 
@@ -46,12 +46,15 @@ describe('Workflow Loaders', () => {
       });
 
       vi.mocked(api.getWorkflows).mockResolvedValueOnce([mockWorkflowSummary]);
+      vi.mocked(api.getWorkflowHistory).mockResolvedValueOnce([]);
+      vi.mocked(getMostRecentCompleted).mockReturnValueOnce(null);
       vi.mocked(getActiveWorkflow).mockReturnValueOnce(mockWorkflowSummary);
       vi.mocked(api.getWorkflow).mockResolvedValueOnce(mockWorkflowDetail);
 
       const result = await workflowsLoader(createLoaderArgs({}));
 
       expect(api.getWorkflows).toHaveBeenCalledTimes(1);
+      expect(api.getWorkflowHistory).toHaveBeenCalledTimes(1);
       expect(result).toHaveProperty('workflows');
       expect(result).toHaveProperty('detail');
       expect(result.workflows).toEqual([mockWorkflowSummary]);
@@ -60,6 +63,8 @@ describe('Workflow Loaders', () => {
 
     it('should return null detail when no workflows exist', async () => {
       vi.mocked(api.getWorkflows).mockResolvedValueOnce([]);
+      vi.mocked(api.getWorkflowHistory).mockResolvedValueOnce([]);
+      vi.mocked(getMostRecentCompleted).mockReturnValueOnce(null);
       vi.mocked(getActiveWorkflow).mockReturnValueOnce(null);
 
       const result = await workflowsLoader(createLoaderArgs({}));
@@ -80,6 +85,8 @@ describe('Workflow Loaders', () => {
       });
 
       vi.mocked(api.getWorkflows).mockResolvedValueOnce([mockWorkflowSummary]);
+      vi.mocked(api.getWorkflowHistory).mockResolvedValueOnce([]);
+      vi.mocked(getMostRecentCompleted).mockReturnValueOnce(null);
       vi.mocked(getActiveWorkflow).mockReturnValueOnce(mockWorkflowSummary);
       vi.mocked(api.getWorkflow).mockRejectedValueOnce(new Error('Detail fetch failed'));
 
@@ -100,6 +107,8 @@ describe('Workflow Loaders', () => {
       });
 
       vi.mocked(api.getWorkflows).mockResolvedValueOnce([runningWorkflow]);
+      vi.mocked(api.getWorkflowHistory).mockResolvedValueOnce([]);
+      vi.mocked(getMostRecentCompleted).mockReturnValueOnce(null);
       vi.mocked(getActiveWorkflow).mockReturnValueOnce(runningWorkflow);
       vi.mocked(api.getWorkflow).mockResolvedValueOnce(runningDetail);
 
@@ -110,8 +119,33 @@ describe('Workflow Loaders', () => {
       expect(result.detail).toEqual(runningDetail);
     });
 
+    it('should include most recently completed workflow in list when no active workflows', async () => {
+      const completedWorkflow = createMockWorkflowSummary({
+        id: 'wf-completed',
+        status: 'completed',
+        started_at: '2025-12-01T10:00:00Z',
+      });
+      const completedDetail = createMockWorkflowDetail({
+        id: 'wf-completed',
+        status: 'completed',
+      });
+
+      vi.mocked(api.getWorkflows).mockResolvedValueOnce([]);
+      vi.mocked(api.getWorkflowHistory).mockResolvedValueOnce([completedWorkflow]);
+      vi.mocked(getMostRecentCompleted).mockReturnValueOnce(completedWorkflow);
+      vi.mocked(getActiveWorkflow).mockReturnValueOnce(completedWorkflow);
+      vi.mocked(api.getWorkflow).mockResolvedValueOnce(completedDetail);
+
+      const result = await workflowsLoader(createLoaderArgs({}));
+
+      // Should include the completed workflow in the list
+      expect(result.workflows).toEqual([completedWorkflow]);
+      expect(result.detail).toEqual(completedDetail);
+    });
+
     it('should propagate API errors from getWorkflows', async () => {
       vi.mocked(api.getWorkflows).mockRejectedValueOnce(new Error('Network error'));
+      vi.mocked(api.getWorkflowHistory).mockResolvedValueOnce([]);
 
       await expect(workflowsLoader(createLoaderArgs({}))).rejects.toThrow('Network error');
     });

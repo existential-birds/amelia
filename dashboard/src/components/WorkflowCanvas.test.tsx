@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, act } from '@testing-library/react';
 import { WorkflowCanvas } from './WorkflowCanvas';
 import type { EventDrivenPipeline } from '../utils/pipeline';
 
@@ -28,7 +28,12 @@ describe('WorkflowCanvas', () => {
   const emptyPipeline: EventDrivenPipeline = { nodes: [], edges: [] };
 
   beforeEach(() => {
+    vi.useFakeTimers();
     mockFitView.mockClear();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('renders empty state when pipeline has no nodes', () => {
@@ -140,6 +145,11 @@ describe('WorkflowCanvas', () => {
 
       render(<WorkflowCanvas pipeline={pipeline} />);
 
+      // Flush requestAnimationFrame callback
+      act(() => {
+        vi.runAllTimers();
+      });
+
       expect(mockFitView).toHaveBeenCalledWith({ padding: 0.2 });
     });
 
@@ -157,6 +167,11 @@ describe('WorkflowCanvas', () => {
       };
 
       const { rerender } = render(<WorkflowCanvas pipeline={initialPipeline} />);
+
+      // Flush initial requestAnimationFrame
+      act(() => {
+        vi.runAllTimers();
+      });
 
       // Reset mock to track only subsequent calls
       mockFitView.mockClear();
@@ -182,6 +197,11 @@ describe('WorkflowCanvas', () => {
 
       rerender(<WorkflowCanvas pipeline={updatedPipeline} />);
 
+      // Flush requestAnimationFrame callback after rerender
+      act(() => {
+        vi.runAllTimers();
+      });
+
       // fitView should be called again when node count changes
       expect(mockFitView).toHaveBeenCalledWith({ padding: 0.2 });
     });
@@ -201,6 +221,11 @@ describe('WorkflowCanvas', () => {
 
       const { rerender } = render(<WorkflowCanvas pipeline={initialPipeline} />);
 
+      // Flush initial requestAnimationFrame
+      act(() => {
+        vi.runAllTimers();
+      });
+
       // Reset mock to track only subsequent calls
       mockFitView.mockClear();
 
@@ -218,6 +243,11 @@ describe('WorkflowCanvas', () => {
       };
 
       rerender(<WorkflowCanvas pipeline={updatedPipeline} />);
+
+      // Flush any pending timers
+      act(() => {
+        vi.runAllTimers();
+      });
 
       // fitView should NOT be called when only status changes (same node count)
       expect(mockFitView).not.toHaveBeenCalled();

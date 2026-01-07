@@ -346,8 +346,8 @@ function getHeatShieldsEvents(workflowId: string, startedAt: string): WorkflowEv
   addEvent(0, 'orchestrator', 'workflow_started', 'Workflow started for INFRA-2847');
   addEvent(1, 'architect', 'stage_started', 'Analyzing thermal requirements for re-entry');
   addEvent(15, 'architect', 'stage_completed', 'Heat shield specification complete - 47 ceramic tiles required');
-  addEvent(16, 'orchestrator', 'approval_required', 'Plan ready for review - awaiting human approval');
-  addEvent(20, 'orchestrator', 'approval_granted', 'Plan approved by human operator');
+  addEvent(16, 'human_approval', 'approval_required', 'Plan ready for review - awaiting human approval');
+  addEvent(20, 'human_approval', 'approval_granted', 'Plan approved by human operator');
   addEvent(21, 'developer', 'stage_started', 'Implementing ceramic tile array');
   addEvent(25, 'developer', 'file_created', 'Created src/thermal/heat_shield.py');
   addEvent(30, 'developer', 'file_created', 'Created src/thermal/tile_array.py');
@@ -386,10 +386,10 @@ function getOrbitalDeploymentEvents(workflowId: string, startedAt: string): Work
   addEvent(2, 'architect', 'stage_started', 'Designing orbital deployment pipeline');
   addEvent(10, 'architect', 'file_created', 'Created docs/orbital-k8s-architecture.md');
   addEvent(25, 'architect', 'stage_completed', 'Architecture complete - "essentially just Kubernetes but with more thrust"');
-  addEvent(26, 'orchestrator', 'approval_required', 'Plan requires human approval - note: this is not a drill');
+  addEvent(26, 'human_approval', 'approval_required', 'Plan requires human approval - note: this is not a drill');
   addEvent(30, 'system', 'system_warning', 'Detected unusual number of rocket emojis in specification');
   addEvent(35, 'architect', 'stage_started', 'Waiting for approval... humans are slow');
-  addEvent(40, 'orchestrator', 'approval_required', 'Still waiting - position in approval queue: 1');
+  addEvent(40, 'human_approval', 'approval_required', 'Still waiting - position in approval queue: 1');
 
   return events;
 }
@@ -421,8 +421,8 @@ function getSolarDistributedEvents(workflowId: string, startedAt: string): Workf
   addEvent(2, 'architect', 'stage_started', 'Analyzing distributed computing requirements across solar system');
   addEvent(12, 'architect', 'file_created', 'Created docs/solar-system-latency-analysis.md');
   addEvent(30, 'architect', 'stage_completed', 'Plan complete - 47 pages, mentioned "microservices" in section 3.2');
-  addEvent(31, 'orchestrator', 'approval_required', 'Plan ready - humans will probably approve without reading');
-  addEvent(31.5, 'orchestrator', 'approval_granted', 'Plan approved in 0.3 seconds (as predicted)');
+  addEvent(31, 'human_approval', 'approval_required', 'Plan ready - humans will probably approve without reading');
+  addEvent(31.5, 'human_approval', 'approval_granted', 'Plan approved in 0.3 seconds (as predicted)');
   addEvent(32, 'developer', 'stage_started', 'Implementing inter-planetary message queue');
   addEvent(40, 'developer', 'file_created', 'Created src/distributed/solar_mq.py');
   addEvent(50, 'developer', 'file_created', 'Created src/distributed/light_speed_cache.py');
@@ -462,7 +462,7 @@ function getMicroservicesThrustEvents(workflowId: string, startedAt: string): Wo
   addEvent(0, 'orchestrator', 'workflow_started', 'Workflow started for SPEC-322');
   addEvent(1, 'architect', 'stage_started', 'Analyzing thrust requirements for container orchestration');
   addEvent(10, 'architect', 'stage_completed', 'Specification ready - 47 pages of thruster microservices');
-  addEvent(10.5, 'orchestrator', 'approval_granted', 'Auto-approved (contained word "microservices")');
+  addEvent(10.5, 'human_approval', 'approval_granted', 'Auto-approved (contained word "microservices")');
   addEvent(11, 'developer', 'stage_started', 'Implementing thruster control microservice');
   addEvent(20, 'developer', 'file_created', 'Created src/thrust/engine_controller.py');
   addEvent(30, 'developer', 'file_created', 'Created src/thrust/fuel_injection.py');
@@ -500,7 +500,7 @@ function getEscapeVelocityEvents(workflowId: string, startedAt: string): Workflo
   addEvent(5, 'architect', 'stage_started', 'Calculating escape velocity requirements');
   addEvent(20, 'architect', 'file_created', 'Created docs/escape-velocity-optimization.md');
   addEvent(35, 'architect', 'stage_completed', 'Analysis complete - need 11.2 km/s, currently at 0 km/s');
-  addEvent(36, 'orchestrator', 'approval_required', 'Plan requires approval - involves leaving planet');
+  addEvent(36, 'human_approval', 'approval_required', 'Plan requires approval - involves leaving planet');
   addEvent(37, 'system', 'system_warning', 'This optimization cannot be reversed once deployed');
 
   return events;

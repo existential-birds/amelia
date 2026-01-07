@@ -102,6 +102,23 @@ export function getActiveWorkflow(workflows: WorkflowSummary[]): WorkflowSummary
 }
 
 /**
+ * Gets the most recently completed workflow from a list.
+ *
+ * Used to keep a completed workflow visible in the active workflows view
+ * so the canvas doesn't immediately clear when a workflow finishes.
+ *
+ * @param workflows - List of workflow summaries (typically from history)
+ * @returns The most recently completed workflow or null if none exist
+ */
+export function getMostRecentCompleted(workflows: WorkflowSummary[]): WorkflowSummary | null {
+  const completed = workflows
+    .filter(w => w.status === 'completed')
+    .sort(sortByStartTimeDesc);
+
+  return completed[0] ?? null;
+}
+
+/**
  * Determines the end time for elapsed time calculation.
  * Uses completed_at if available, otherwise uses current time for in-progress workflows,
  * or the last event timestamp for blocked/failed/canceled workflows.

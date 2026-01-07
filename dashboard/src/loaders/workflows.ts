@@ -1,5 +1,5 @@
 import { api } from '@/api/client';
-import { getActiveWorkflow } from '@/utils/workflow';
+import { getActiveWorkflow, getMostRecentCompleted } from '@/utils/workflow';
 import type { LoaderFunctionArgs } from 'react-router-dom';
 import type { WorkflowsLoaderData } from '@/types/api';
 import { getDemoMode } from '@/hooks/useDemoMode';
@@ -36,7 +36,19 @@ export async function workflowsLoader({ request, params }: LoaderFunctionArgs): 
     return { workflows, detail };
   }
 
-  const workflows = await api.getWorkflows();
+  // Fetch active workflows and history in parallel
+  const [activeWorkflows, historyWorkflows] = await Promise.all([
+    api.getWorkflows(),
+    api.getWorkflowHistory(),
+  ]);
+
+  // Include the most recently completed workflow in the list so the canvas
+  // doesn't immediately clear when a workflow completes
+  const recentCompleted = getMostRecentCompleted(historyWorkflows);
+  const workflows = recentCompleted
+    ? [...activeWorkflows, recentCompleted]
+    : activeWorkflows;
+
   const active = getActiveWorkflow(workflows);
 
   // Determine which workflow detail to fetch:
