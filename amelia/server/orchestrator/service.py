@@ -1272,7 +1272,7 @@ class OrchestratorService:
                     chunk_tuple = cast(tuple[str, Any], chunk)
                     # In agentic mode, no interrupts expected after initial approval
                     if self._is_interrupt_chunk(chunk_tuple):
-                        mode, data = chunk_tuple
+                        _, data = chunk_tuple
                         state = await graph.aget_state(config)
                         next_nodes = state.next if state else []
                         logger.warning(

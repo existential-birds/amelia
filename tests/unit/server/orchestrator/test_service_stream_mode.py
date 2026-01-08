@@ -92,6 +92,7 @@ class TestStreamModeTaskEvents:
         self, mock_repository, mock_event_bus
     ):
         """Combined stream mode should parse (mode, data) tuples."""
+        from amelia.server.models.events import EventType
         from amelia.server.orchestrator.service import OrchestratorService
 
         service = OrchestratorService(
@@ -109,8 +110,12 @@ class TestStreamModeTaskEvents:
         for chunk in chunks:
             await service._handle_combined_stream_chunk("workflow-123", chunk)
 
-        # Verify both handlers were called appropriately
-        assert mock_event_bus.emit.call_count >= 2  # STAGE_STARTED + STAGE_COMPLETED
+        # Verify both handlers were called: tasks mode emits STAGE_STARTED,
+        # updates mode emits STAGE_COMPLETED
+        assert mock_event_bus.emit.call_count >= 2
+        emitted_types = [call.args[0].event_type for call in mock_event_bus.emit.call_args_list]
+        assert EventType.STAGE_STARTED in emitted_types
+        assert EventType.STAGE_COMPLETED in emitted_types
 
     @pytest.mark.asyncio
     async def test_interrupt_detected_in_combined_mode(
