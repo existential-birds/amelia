@@ -261,3 +261,132 @@ Content.
 ### Task 3: Also valid
 """
         assert extract_task_count(plan) == 2  # Only Task 1 and Task 3
+
+
+class TestPlanValidatorNodeTotalTasks:
+    """Tests for plan_validator_node total_tasks extraction."""
+
+    @pytest.fixture
+    def mock_profile(self) -> Profile:
+        return Profile(
+            name="test",
+            driver="api:openrouter",
+            model="anthropic/claude-3.5-sonnet",
+        )
+
+    @pytest.fixture
+    def state_with_plan(self, tmp_path: Path, mock_profile: Profile) -> tuple[ExecutionState, Path]:
+        plan_content = """
+# Test Plan
+
+### Task 1: First task
+
+Do first thing.
+
+### Task 2: Second task
+
+Do second thing.
+"""
+        plan_path = tmp_path / "docs" / "plans" / "test-plan.md"
+        plan_path.parent.mkdir(parents=True, exist_ok=True)
+        plan_path.write_text(plan_content)
+
+        state = ExecutionState(
+            profile_id="test",
+            raw_architect_output=str(plan_path),
+            issue=Issue(id="TEST-123", title="Test", description="Test"),
+        )
+        return state, plan_path
+
+    async def test_plan_validator_sets_total_tasks(
+        self, state_with_plan: tuple[ExecutionState, Path], tmp_path: Path
+    ) -> None:
+        """plan_validator_node should extract and return total_tasks from plan."""
+        from amelia.core.orchestrator import plan_validator_node
+
+        state, plan_path = state_with_plan
+
+        mock_output = MagicMock()
+        mock_output.goal = "Test goal"
+        mock_output.key_files = ["file1.py"]
+        mock_output.plan_markdown = plan_path.read_text()
+
+        mock_driver = MagicMock()
+        mock_driver.generate = AsyncMock(return_value=(mock_output, "session-123"))
+
+        profile = Profile(
+            name="test",
+            driver="api:openrouter",
+            model="anthropic/claude-3.5-sonnet",
+            working_dir=str(tmp_path),
+            plan_path_pattern="docs/plans/test-plan.md",
+        )
+        config: RunnableConfig = {
+            "configurable": {
+                "profile": profile,
+                "thread_id": "test-workflow-123",
+            }
+        }
+
+        with patch("amelia.core.orchestrator.DriverFactory") as mock_factory:
+            mock_factory.get_driver.return_value = mock_driver
+            result = await plan_validator_node(state, config)
+
+        assert result["total_tasks"] == 2
+
+    async def test_plan_validator_sets_total_tasks_none_for_legacy_plans(
+        self, tmp_path: Path
+    ) -> None:
+        """plan_validator_node should set total_tasks=None for plans without task markers."""
+        from amelia.core.orchestrator import plan_validator_node
+
+        plan_content = """
+# Legacy Plan
+
+No task markers here, just freeform instructions.
+
+## Setup
+
+Do setup.
+
+## Implementation
+
+Do implementation.
+"""
+        plan_path = tmp_path / "docs" / "plans" / "legacy-plan.md"
+        plan_path.parent.mkdir(parents=True, exist_ok=True)
+        plan_path.write_text(plan_content)
+
+        state = ExecutionState(
+            profile_id="test",
+            raw_architect_output=str(plan_path),
+            issue=Issue(id="TEST-456", title="Legacy", description="Legacy test"),
+        )
+
+        mock_output = MagicMock()
+        mock_output.goal = "Legacy goal"
+        mock_output.key_files = []
+        mock_output.plan_markdown = plan_content
+
+        mock_driver = MagicMock()
+        mock_driver.generate = AsyncMock(return_value=(mock_output, "session-123"))
+
+        profile = Profile(
+            name="test",
+            driver="api:openrouter",
+            model="anthropic/claude-3.5-sonnet",
+            working_dir=str(tmp_path),
+            plan_path_pattern="docs/plans/legacy-plan.md",
+        )
+        config: RunnableConfig = {
+            "configurable": {
+                "profile": profile,
+                "thread_id": "test-workflow-456",
+            }
+        }
+
+        with patch("amelia.core.orchestrator.DriverFactory") as mock_factory:
+            mock_factory.get_driver.return_value = mock_driver
+            result = await plan_validator_node(state, config)
+
+        assert result["total_tasks"] is None
