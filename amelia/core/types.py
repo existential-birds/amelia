@@ -70,6 +70,7 @@ class Profile(BaseModel):
     If not set, falls back to profile.model."""
     retry: RetryConfig = Field(default_factory=RetryConfig)
     max_review_iterations: int = 3
+    max_task_review_iterations: int = 5  # Per-task review iteration limit (for task-based execution)
     auto_approve_reviews: bool = False
 
 class Settings(BaseModel):
