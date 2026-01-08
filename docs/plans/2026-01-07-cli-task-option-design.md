@@ -2,7 +2,7 @@
 
 **Issue:** #209 - Add --task option to CLI for one-off tasks with noop tracker
 **Date:** 2026-01-07
-**Status:** Approved
+**Status:** Implemented
 
 ## Problem
 
