@@ -42,10 +42,12 @@ class TestStartCommandTaskFlags:
                 id="wf-123", status="pending"
             ))
 
-            runner.invoke(
+            result = runner.invoke(
                 app,
                 ["start", "TASK-1", "-p", "noop", "--title", "Add logout button"],
             )
+
+            assert result.exit_code == 0, f"Command failed: {result.stdout}"
 
             # Verify create_workflow was called with task_title
             mock_client.create_workflow.assert_called_once()

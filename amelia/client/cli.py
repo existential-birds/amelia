@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
+from loguru import logger
 from rich.console import Console
 from rich.table import Table
 
@@ -427,6 +428,11 @@ def plan_command(
                 title=title,
                 description=description or "",
             )
+        elif title is not None:
+            # --title provided but tracker is not noop - reject like server does
+            raise ValueError(
+                f"--title requires noop tracker, but profile uses '{profile.tracker}'"
+            )
         else:
             # Fetch issue using tracker
             tracker = create_tracker(profile)
@@ -472,4 +478,5 @@ def plan_command(
         raise typer.Exit(1) from None
     except Exception as e:
         console.print(f"[red]Error generating plan:[/red] {e}")
+        logger.exception("Unexpected error in plan command")
         raise typer.Exit(1) from None

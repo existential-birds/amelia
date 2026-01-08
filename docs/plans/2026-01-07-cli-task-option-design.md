@@ -105,4 +105,4 @@ async def start_workflow(self, ..., task_title: str | None = None, task_descript
 
 **Integration tests:**
 - `POST /workflows` with task fields and noop profile succeeds
-- `POST /workflows` with task fields and github profile returns 400
+- `POST /workflows` with task fields and GitHub profile returns 400

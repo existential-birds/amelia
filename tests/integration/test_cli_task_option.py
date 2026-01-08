@@ -1,6 +1,6 @@
 """Integration tests for CLI task option (--title/--description)."""
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from typer.testing import CliRunner
@@ -64,9 +64,9 @@ profiles:
              patch("amelia.client.cli.AmeliaClient") as mock_client_class:
             mock_ctx.return_value = (str(noop_worktree), "noop-repo")
             mock_client = mock_client_class.return_value
-            mock_client.create_workflow = AsyncMock(return_value=type(
-                "Response", (), {"id": "wf-123", "status": "pending"}
-            )())
+            mock_client.create_workflow = AsyncMock(return_value=MagicMock(
+                id="wf-123", status="pending"
+            ))
 
             result = runner.invoke(
                 app,
