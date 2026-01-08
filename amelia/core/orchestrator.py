@@ -41,13 +41,16 @@ if TYPE_CHECKING:
 def extract_task_count(plan_markdown: str) -> int | None:
     """Extract task count from plan markdown by counting ### Task N: patterns.
 
+    Supports both simple numbering (### Task 1:) and hierarchical numbering
+    (### Task 1.1:) formats.
+
     Args:
         plan_markdown: The markdown content of the plan.
 
     Returns:
         Number of tasks found, or None if no task patterns detected.
     """
-    pattern = r"^### Task \d+:"
+    pattern = r"^### Task \d+(\.\d+)?:"
     matches = re.findall(pattern, plan_markdown, re.MULTILINE)
     return len(matches) if matches else None
 

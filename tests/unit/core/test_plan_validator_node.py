@@ -262,6 +262,54 @@ Content.
 """
         assert extract_task_count(plan) == 2  # Only Task 1 and Task 3
 
+    def test_extract_task_count_supports_hierarchical_numbering(self) -> None:
+        """Should count ### Task N.M: patterns (hierarchical/phased format)."""
+        from amelia.core.orchestrator import extract_task_count
+
+        plan = """
+# Implementation Plan
+
+## Phase 1: Foundation
+
+### Task 1.1: Initialize project
+
+Setup steps.
+
+### Task 1.2: Configure database
+
+Database config.
+
+## Phase 2: Implementation
+
+### Task 2.1: Build API
+
+API work.
+
+### Task 2.2: Add tests
+
+Test work.
+"""
+        assert extract_task_count(plan) == 4
+
+    def test_extract_task_count_supports_mixed_numbering(self) -> None:
+        """Should count both simple and hierarchical task patterns."""
+        from amelia.core.orchestrator import extract_task_count
+
+        plan = """
+### Task 1: Simple task
+
+Content.
+
+### Task 1.1: Hierarchical task
+
+Content.
+
+### Task 2: Another simple
+
+Content.
+"""
+        assert extract_task_count(plan) == 3
+
 
 class TestPlanValidatorNodeTotalTasks:
     """Tests for plan_validator_node total_tasks extraction."""
