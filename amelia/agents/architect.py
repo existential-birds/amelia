@@ -330,14 +330,20 @@ Before planning, discover:
                     tool_calls_count=len(tool_calls),
                 )
 
+                # Extract plan_path from Write tool calls
+                extracted_plan_path: Path | None = None
+                for tc in tool_calls:
+                    if tc.tool_name == "Write" and "file_path" in tc.tool_input:
+                        extracted_plan_path = Path(tc.tool_input["file_path"])
+                        break  # Use first Write call (should be the plan)
+
                 # Yield final state with all updates
-                # plan_path is None - orchestrator extracts plan from tool_calls
                 current_state = state.model_copy(update={
                     "tool_calls": tool_calls,
                     "tool_results": tool_results,
                     "raw_architect_output": raw_output,
                     "plan_markdown": raw_output,  # Backward compat until #199
-                    "plan_path": None,
+                    "plan_path": extracted_plan_path,
                 })
                 yield current_state, event
                 continue  # Result is the final message - let loop drain naturally

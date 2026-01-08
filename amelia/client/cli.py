@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
+from loguru import logger
 from rich.console import Console
 from rich.table import Table
 
@@ -19,6 +20,7 @@ from amelia.client.git import get_worktree_context
 from amelia.client.models import CreateWorkflowResponse, WorkflowSummary
 from amelia.config import load_settings
 from amelia.core.state import ExecutionState
+from amelia.core.types import Issue
 from amelia.drivers.factory import DriverFactory
 from amelia.trackers.factory import create_tracker
 
@@ -93,6 +95,14 @@ def start_command(
         str | None,
         typer.Option("--profile", "-p", help="Profile name for configuration"),
     ] = None,
+    title: Annotated[
+        str | None,
+        typer.Option("--title", help="Task title for noop tracker (bypasses issue lookup)"),
+    ] = None,
+    description: Annotated[
+        str | None,
+        typer.Option("--description", help="Task description (requires --title)"),
+    ] = None,
 ) -> None:
     """Start a new workflow for an issue in the current worktree.
 
@@ -102,7 +112,14 @@ def start_command(
     Args:
         issue_id: Issue identifier to work on (e.g., ISSUE-123).
         profile: Optional profile name for driver and tracker configuration.
+        title: Optional task title for noop tracker (bypasses issue lookup).
+        description: Optional task description (requires --title to be set).
     """
+    # Validate --description requires --title
+    if description and not title:
+        console.print("[red]Error:[/red] --description requires --title to be set")
+        raise typer.Exit(1)
+
     worktree_path, worktree_name = _get_worktree_context()
 
     client = AmeliaClient()
@@ -113,6 +130,8 @@ def start_command(
             worktree_path=worktree_path,
             worktree_name=worktree_name,
             profile=profile,
+            task_title=title,
+            task_description=description,
         )
 
     try:
@@ -360,6 +379,14 @@ def plan_command(
         str | None,
         typer.Option("--profile", "-p", help="Profile name for configuration"),
     ] = None,
+    title: Annotated[
+        str | None,
+        typer.Option("--title", help="Task title for noop tracker (bypasses issue lookup)"),
+    ] = None,
+    description: Annotated[
+        str | None,
+        typer.Option("--description", help="Task description (requires --title)"),
+    ] = None,
 ) -> None:
     """Generate an implementation plan for an issue without executing it.
 
@@ -370,7 +397,14 @@ def plan_command(
     Args:
         issue_id: Issue identifier to generate a plan for (e.g., ISSUE-123).
         profile_name: Optional profile name for driver and tracker configuration.
+        title: Optional task title for noop tracker (bypasses issue lookup).
+        description: Optional task description (requires --title to be set).
     """
+    # Validate --description requires --title
+    if description and not title:
+        console.print("[red]Error:[/red] --description requires --title to be set")
+        raise typer.Exit(1)
+
     worktree_path, _worktree_name = _get_worktree_context()
 
     async def _generate_plan() -> ExecutionState:
@@ -387,9 +421,22 @@ def plan_command(
         # Update profile with worktree path
         profile = profile.model_copy(update={"working_dir": worktree_path})
 
-        # Fetch issue using tracker
-        tracker = create_tracker(profile)
-        issue = tracker.get_issue(issue_id, cwd=worktree_path)
+        # Get issue: construct directly if title provided with noop tracker, else use tracker
+        if title is not None and profile.tracker in ("noop", "none"):
+            issue = Issue(
+                id=issue_id,
+                title=title,
+                description=description or "",
+            )
+        elif title is not None:
+            # --title provided but tracker is not noop - reject like server does
+            raise ValueError(
+                f"--title requires noop tracker, but profile uses '{profile.tracker}'"
+            )
+        else:
+            # Fetch issue using tracker
+            tracker = create_tracker(profile)
+            issue = tracker.get_issue(issue_id, cwd=worktree_path)
 
         # Create minimal execution state
         state = ExecutionState(
@@ -431,4 +478,5 @@ def plan_command(
         raise typer.Exit(1) from None
     except Exception as e:
         console.print(f"[red]Error generating plan:[/red] {e}")
+        logger.exception("Unexpected error in plan command")
         raise typer.Exit(1) from None

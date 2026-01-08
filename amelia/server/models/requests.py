@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 from typing import Annotated
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 def _validate_worktree_path(cls: type, v: str) -> str:
@@ -105,6 +105,30 @@ class CreateWorkflowRequest(BaseModel):
             description="Optional driver override in type:name format (e.g., sdk:claude)",
         ),
     ] = None
+    task_title: Annotated[
+        str | None,
+        Field(
+            default=None,
+            max_length=500,
+            description="Task title for noop tracker (bypasses issue lookup)",
+        ),
+    ] = None
+    task_description: Annotated[
+        str | None,
+        Field(
+            default=None,
+            max_length=5000,
+            description="Task description for noop tracker (requires task_title)",
+        ),
+    ] = None
+
+    @model_validator(mode="after")
+    def validate_task_fields(self) -> "CreateWorkflowRequest":
+        """Validate task_description requires task_title."""
+        if self.task_description is not None and self.task_title is None:
+            raise ValueError("task_description requires task_title")
+        return self
+
     @field_validator("issue_id", mode="after")
     @classmethod
     def validate_issue_id(cls, v: str) -> str:

@@ -366,6 +366,8 @@ class OrchestratorService:
         worktree_name: str | None = None,
         profile: str | None = None,
         driver: str | None = None,
+        task_title: str | None = None,
+        task_description: str | None = None,
     ) -> str:
         """Start a new workflow.
 
@@ -375,6 +377,8 @@ class OrchestratorService:
             worktree_name: Human-readable worktree name (optional).
             profile: Optional profile name.
             driver: Optional driver override.
+            task_title: Optional task title for direct Issue construction (noop tracker only).
+            task_description: Optional task description (defaults to task_title if not provided).
 
         Returns:
             The workflow ID (UUID).
@@ -383,6 +387,7 @@ class OrchestratorService:
             InvalidWorktreeError: If worktree path doesn't exist or is not a git repo.
             WorkflowConflictError: If worktree already has active workflow.
             ConcurrencyLimitError: If at max concurrent workflows.
+            ValueError: If task_title is provided but tracker is not noop.
         """
         # Validate worktree before acquiring lock (fast-fail)
         worktree = Path(worktree_path)
@@ -453,9 +458,24 @@ class OrchestratorService:
                 update={"working_dir": worktree_path}
             )
 
-            # Fetch issue from tracker (pass worktree_path so gh CLI uses correct repo)
-            tracker = create_tracker(loaded_profile)
-            issue = tracker.get_issue(issue_id, cwd=worktree_path)
+            # Construct Issue: either from task_title (noop tracker only) or from tracker
+            if task_title is not None:
+                # Validate that tracker is noop when using task_title
+                if loaded_profile.tracker not in ("noop", "none"):
+                    raise ValueError(
+                        f"task_title can only be used with noop tracker, "
+                        f"but profile '{loaded_profile.name}' uses tracker '{loaded_profile.tracker}'"
+                    )
+                # Construct Issue directly from task_title/task_description
+                issue = Issue(
+                    id=issue_id,
+                    title=task_title,
+                    description=task_description or task_title,
+                )
+            else:
+                # Fetch issue from tracker (pass worktree_path so gh CLI uses correct repo)
+                tracker = create_tracker(loaded_profile)
+                issue = tracker.get_issue(issue_id, cwd=worktree_path)
 
             # Get current HEAD to track changes from workflow start
             base_commit = await get_git_head(worktree_path)

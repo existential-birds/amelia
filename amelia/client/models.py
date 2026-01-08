@@ -12,12 +12,16 @@ class CreateWorkflowRequest(BaseModel):
         worktree_path: Absolute path to the git worktree directory.
         worktree_name: Optional human-readable name for the worktree.
         profile: Optional profile name from settings to use.
+        task_title: Optional task title for noop tracker (bypasses issue lookup).
+        task_description: Optional task description (requires task_title).
     """
 
     issue_id: str = Field(..., min_length=1, max_length=100)
     worktree_path: str = Field(..., min_length=1, max_length=4096)
     worktree_name: str | None = Field(default=None, max_length=255)
     profile: str | None = Field(default=None, max_length=64)
+    task_title: str | None = Field(default=None, max_length=500)
+    task_description: str | None = Field(default=None, max_length=5000)
 
 
 class CreateReviewWorkflowRequest(BaseModel):

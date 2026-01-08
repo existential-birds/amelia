@@ -145,6 +145,36 @@ class TestCreateWorkflowRequest:
                 driver=invalid_driver,
             )
 
+    def test_task_description_without_title_rejected(self):
+        """task_description without task_title is rejected."""
+        with pytest.raises(ValidationError):
+            CreateWorkflowRequest(
+                issue_id="TASK-1",
+                worktree_path="/absolute/path",
+                task_description="Some description without title",
+            )
+
+    def test_task_fields_valid(self):
+        """task_title and task_description are accepted together."""
+        req = CreateWorkflowRequest(
+            issue_id="TASK-1",
+            worktree_path="/absolute/path",
+            task_title="Add logout button",
+            task_description="Add to navbar with confirmation",
+        )
+        assert req.task_title == "Add logout button"
+        assert req.task_description == "Add to navbar with confirmation"
+
+    def test_task_title_only_valid(self):
+        """task_title alone is valid (description defaults to None)."""
+        req = CreateWorkflowRequest(
+            issue_id="TASK-1",
+            worktree_path="/absolute/path",
+            task_title="Fix typo in README",
+        )
+        assert req.task_title == "Fix typo in README"
+        assert req.task_description is None
+
 
 class TestRejectRequest:
     """Tests for RejectRequest schema."""

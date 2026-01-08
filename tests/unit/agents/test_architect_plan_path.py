@@ -106,3 +106,44 @@ class TestArchitectPlanPath:
         assert len(captured_prompts) == 1
         assert "docs/plans/" in captured_prompts[0]
         assert "test-123" in captured_prompts[0].lower()
+
+    async def test_plan_extracts_plan_path_from_write_tool_call(
+        self,
+        mock_driver: MagicMock,
+        state_and_profile: tuple[ExecutionState, Profile],
+    ) -> None:
+        """Plan method should extract plan_path from Write tool call."""
+        from pathlib import Path
+
+        state, profile = state_and_profile
+
+        async def mock_execute_agentic(*args: Any, **kwargs: Any) -> Any:
+            # Simulate Write tool call followed by result
+            yield AgenticMessage(
+                type=AgenticMessageType.TOOL_CALL,
+                tool_name="Write",
+                tool_input={"file_path": "/repo/docs/plans/2026-01-07-test-123.md", "content": "# Plan"},
+                tool_use_id="write-1",
+                session_id="session-1",
+            )
+            yield AgenticMessage(
+                type=AgenticMessageType.TOOL_RESULT,
+                tool_output="File written successfully",
+                tool_use_id="write-1",
+                session_id="session-1",
+            )
+            yield AgenticMessage(
+                type=AgenticMessageType.RESULT,
+                content="Plan complete",
+                session_id="session-1",
+            )
+
+        mock_driver.execute_agentic = mock_execute_agentic
+
+        architect = Architect(driver=mock_driver)
+        final_state = state
+        async for new_state, _event in architect.plan(state, profile, workflow_id="wf-1"):
+            final_state = new_state
+
+        # plan_path should be extracted from the Write tool call
+        assert final_state.plan_path == Path("/repo/docs/plans/2026-01-07-test-123.md")

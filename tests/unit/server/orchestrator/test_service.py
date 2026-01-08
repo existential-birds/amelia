@@ -1448,3 +1448,119 @@ class TestRunWorkflowCheckpointResume:
         assert first_arg is not None, "Expected astream to be called with initial_state"
         assert isinstance(first_arg, dict), "Expected initial_state to be a dict"
         assert first_arg.get("profile_id") == "test", "Expected profile_id in initial_state"
+
+
+# =============================================================================
+# Task Title/Description Tests
+# =============================================================================
+
+
+class TestStartWorkflowWithTaskFields:
+    """Tests for start_workflow with task_title/task_description."""
+
+    async def test_noop_tracker_with_task_title_constructs_issue(
+        self,
+        orchestrator: OrchestratorService,
+        mock_repository: AsyncMock,
+        tmp_path: Path,
+    ) -> None:
+        """start_workflow with task_title and noop tracker constructs Issue directly."""
+        # Create valid worktree with noop tracker settings
+        worktree = tmp_path / "worktree"
+        worktree.mkdir()
+        (worktree / ".git").touch()
+        settings_content = """
+active_profile: noop
+profiles:
+  noop:
+    name: noop
+    driver: cli:claude
+    model: sonnet
+    tracker: noop
+    strategy: single
+"""
+        (worktree / "settings.amelia.yaml").write_text(settings_content)
+
+        with patch.object(orchestrator, "_run_workflow_with_retry", new=AsyncMock()):
+            workflow_id = await orchestrator.start_workflow(
+                issue_id="TASK-1",
+                worktree_path=str(worktree),
+                task_title="Add logout button",
+                task_description="Add to navbar with confirmation",
+            )
+
+            assert workflow_id is not None
+
+            # Verify the execution state has our custom issue
+            call_args = mock_repository.create.call_args
+            state = call_args[0][0]
+            assert state.execution_state.issue.title == "Add logout button"
+            assert state.execution_state.issue.description == "Add to navbar with confirmation"
+
+    async def test_task_title_with_non_noop_tracker_errors(
+        self,
+        orchestrator: OrchestratorService,
+        tmp_path: Path,
+    ) -> None:
+        """start_workflow with task_title and non-noop tracker should error."""
+        # Create valid worktree with github tracker settings
+        worktree = tmp_path / "worktree"
+        worktree.mkdir()
+        (worktree / ".git").touch()
+        settings_content = """
+active_profile: github
+profiles:
+  github:
+    name: github
+    driver: cli:claude
+    model: sonnet
+    tracker: github
+    strategy: single
+"""
+        (worktree / "settings.amelia.yaml").write_text(settings_content)
+
+        with pytest.raises(ValueError) as exc_info:
+            await orchestrator.start_workflow(
+                issue_id="TASK-1",
+                worktree_path=str(worktree),
+                task_title="Add logout button",
+            )
+
+        assert "noop" in str(exc_info.value).lower()
+        assert "tracker" in str(exc_info.value).lower()
+
+    async def test_task_title_defaults_description_to_title(
+        self,
+        orchestrator: OrchestratorService,
+        mock_repository: AsyncMock,
+        tmp_path: Path,
+    ) -> None:
+        """task_description defaults to task_title when not provided."""
+        # Create valid worktree with noop tracker
+        worktree = tmp_path / "worktree"
+        worktree.mkdir()
+        (worktree / ".git").touch()
+        settings_content = """
+active_profile: noop
+profiles:
+  noop:
+    name: noop
+    driver: cli:claude
+    model: sonnet
+    tracker: noop
+    strategy: single
+"""
+        (worktree / "settings.amelia.yaml").write_text(settings_content)
+
+        with patch.object(orchestrator, "_run_workflow_with_retry", new=AsyncMock()):
+            await orchestrator.start_workflow(
+                issue_id="TASK-1",
+                worktree_path=str(worktree),
+                task_title="Fix typo in README",
+                # No task_description provided
+            )
+
+            call_args = mock_repository.create.call_args
+            state = call_args[0][0]
+            # Description should default to title
+            assert state.execution_state.issue.description == "Fix typo in README"
