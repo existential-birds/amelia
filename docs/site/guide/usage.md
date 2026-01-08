@@ -14,7 +14,7 @@ profiles:
   dev:
     name: dev
     driver: api:openrouter
-    model: "anthropic/claude-3.5-sonnet"
+    model: "openrouter:minimax/minimax-m2"
     tracker: github
     strategy: single
 ```
@@ -76,7 +76,7 @@ profiles:
   dev:
     name: dev
     driver: api:openrouter
-    model: "anthropic/claude-3.5-sonnet"
+    model: "openrouter:minimax/minimax-m2"
     tracker: github
     strategy: single
     plan_output_dir: "docs/plans"

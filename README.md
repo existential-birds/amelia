@@ -73,73 +73,77 @@ Compare model performance and track token usage across runs.
 
 ## Quick Start
 
-### 1. Install Prerequisites
-
-> [!IMPORTANT]
-> You must install the [Beagle plugin](https://github.com/existential-birds/beagle?tab=readme-ov-file#installation) for Claude Code before using Amelia. It provides the skills and commands needed to work with Amelia workflows.
+### 1. Install
 
 ```bash
 # Install uv (Linux/macOS)
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Install amelia as a global tool
+# Install amelia
 uv tool install git+https://github.com/existential-birds/amelia.git
-
-# Or install from a local path
-uv tool install /path/to/amelia
 
 # Set your API key
 export OPENROUTER_API_KEY="sk-..."
 ```
 
-### 2. Configure Your Project
+> [!IMPORTANT]
+> For Claude Code users: install the [Beagle plugin](https://github.com/existential-birds/beagle?tab=readme-ov-file#installation) for Amelia skills and commands.
+
+### 2. Try It Out
+
+Create a new folder and run a task directly—no issue tracker needed:
 
 ```bash
-# Navigate to your project
-cd /path/to/your/project
+mkdir my-app && cd my-app
+git init
 
-# Create config in your project root
+# Create minimal config
 cat > settings.amelia.yaml << 'EOF'
 active_profile: dev
 profiles:
   dev:
     name: dev
     driver: api:openrouter
-    model: "anthropic/claude-3.5-sonnet"
+    model: "openrouter:minimax/minimax-m2"
+EOF
+
+# Start the server (opens dashboard at localhost:8420)
+amelia dev
+```
+
+In another terminal, run your first task:
+
+```bash
+cd my-app
+
+# Run a task directly with --task
+amelia start --task "Create a Python CLI that fetches weather for a city using wttr.in"
+```
+
+Watch the Architect plan, approve it in the dashboard, then watch the Developer build it. That's the full loop.
+
+### 3. Working with Issues
+
+For real projects, connect to GitHub issues:
+
+```bash
+# Update your config to use GitHub tracker
+cat > settings.amelia.yaml << 'EOF'
+active_profile: dev
+profiles:
+  dev:
+    name: dev
+    driver: api:openrouter
+    model: "openrouter:minimax/minimax-m2"
     tracker: github
     strategy: single
 EOF
-```
 
-See **[Configuration](https://existential-birds.github.io/amelia/guide/configuration)** for all available parameters including retry settings and driver options.
-
-### 3. Create or Select an Issue
-
-Amelia works on issues from your configured tracker. Create one if needed:
-
-```bash
-# Create a new GitHub issue
-gh issue create --title "Add user authentication" --body "Implement login/logout functionality"
-
-# Or use an existing issue number
-gh issue list
-```
-
-### 4. Run Amelia
-
-```bash
-# Start the server (opens dashboard at localhost:8420)
-amelia dev
-
-# In another terminal, start a workflow for an issue
+# Start a workflow for issue #123
 amelia start 123
-
-# Review uncommitted changes
-amelia review --local
 ```
 
-> [!TIP]
-> Use `tracker: noop` to test without a real issue tracker. Amelia will pretend the issue exists. It's very committed to the bit.
+See **[Configuration](https://existential-birds.github.io/amelia/guide/configuration)** for all options including Jira integration and retry settings.
 
 ## Alternative Installation
 
@@ -187,6 +191,7 @@ amelia server                 # API server only
 
 # Workflow commands (requires server running)
 amelia start 123              # Start workflow for issue #123
+amelia start --task "desc"    # Run ad-hoc task without issue tracker
 amelia status                 # Show active workflows
 amelia approve                # Approve the generated plan
 amelia reject "feedback"      # Reject with feedback
@@ -208,7 +213,7 @@ profiles:
   home:
     name: home
     driver: api:openrouter
-    model: "anthropic/claude-3.5-sonnet"
+    model: "openrouter:minimax/minimax-m2"
     tracker: github
     strategy: single
 ```

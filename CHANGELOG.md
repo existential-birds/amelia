@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-01-08
+
+### Added
+
+- **cli:** Add `--task` option to run tasks instantly without creating issues first ([#241](https://github.com/existential-birds/amelia/pull/241))
+  - Execute ad-hoc tasks directly via `amelia start --task "description"` without tracker integration
+  - Uses noop tracker with synthetic issue for immediate execution
+
+### Changed
+
+- **events:** Unify StreamEvent and WorkflowEvent into single event system ([#239](https://github.com/existential-birds/amelia/pull/239))
+  - Simplified event architecture with consistent event types across server and dashboard
+  - Improved real-time streaming reliability with LangGraph native tasks stream mode
+- **orchestrator:** Replace custom stage_event_emitter with LangGraph native tasks stream mode ([#242](https://github.com/existential-birds/amelia/pull/242))
+
 ## [0.5.1] - 2026-01-06
 
 ### Fixed
@@ -169,7 +184,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - FastAPI server with WebSocket support
 - React dashboard for workflow visualization
 
-[Unreleased]: https://github.com/existential-birds/amelia/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/existential-birds/amelia/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/existential-birds/amelia/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/existential-birds/amelia/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/existential-birds/amelia/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/existential-birds/amelia/compare/v0.4.0...v0.4.1

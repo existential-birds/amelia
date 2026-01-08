@@ -34,7 +34,7 @@ Defines the runtime environment and constraints.
 |-------|------|---------|-------------|
 | `name` | `str` | — | Profile name (e.g., "work", "personal"). |
 | `driver` | `DriverType` | — | LLM driver type (e.g., "api:openrouter", "cli:claude"). |
-| `model` | `str \| None` | `None` | LLM model identifier. Required for API drivers (e.g., "openrouter:anthropic/claude-3.5-sonnet"). |
+| `model` | `str \| None` | `None` | LLM model identifier. Required for API drivers (e.g., "openrouter:minimax/minimax-m2"). |
 | `tracker` | `TrackerType` | `"none"` | Issue tracker type. |
 | `strategy` | `StrategyType` | `"single"` | Review strategy (single or competitive). |
 | `working_dir` | `str \| None` | `None` | Working directory for agentic execution. |
