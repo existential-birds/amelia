@@ -155,8 +155,6 @@ export function createMockEvent(
     event_type: 'workflow_started',
     level: 'info',
     message: 'Test event',
-    data: undefined,
-    correlation_id: undefined,
     ...overrides,
   };
 }

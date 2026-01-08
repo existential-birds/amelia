@@ -4,9 +4,12 @@ import type { WorkflowEvent } from '@/types';
 const DEFAULT_STYLE = { text: 'text-muted-foreground', bg: '' } as const;
 
 const AGENT_STYLES: Record<string, { text: string; bg: string }> = {
-  ARCHITECT: { text: 'text-blue-400', bg: '' },
-  DEVELOPER: { text: 'text-green-400', bg: '' },
-  REVIEWER: { text: 'text-yellow-400', bg: '' },
+  ARCHITECT: { text: 'text-agent-architect', bg: 'bg-agent-architect-bg' },
+  DEVELOPER: { text: 'text-agent-developer', bg: 'bg-agent-developer-bg' },
+  REVIEWER: { text: 'text-agent-reviewer', bg: 'bg-agent-reviewer-bg' },
+  VALIDATOR: { text: 'text-agent-pm', bg: 'bg-agent-pm-bg' },
+  PLAN_VALIDATOR: { text: 'text-agent-pm', bg: 'bg-agent-pm-bg' },
+  HUMAN_APPROVAL: { text: 'text-destructive', bg: 'bg-destructive/5' },
   SYSTEM: DEFAULT_STYLE,
 };
 
@@ -37,7 +40,7 @@ export function ActivityLogEvent({ event }: ActivityLogEventProps) {
         {formatTime(event.timestamp)}
       </span>
       <span className={cn('font-semibold', style.text)}>
-        [{agentKey}]
+        {agentKey}
       </span>
       <span className="text-foreground/80 break-words">{event.message}</span>
     </div>

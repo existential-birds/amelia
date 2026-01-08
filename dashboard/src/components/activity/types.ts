@@ -3,13 +3,22 @@ import type { WorkflowEvent } from '@/types';
 /**
  * Agent stages in workflow execution order.
  */
-export type AgentStage = 'architect' | 'developer' | 'reviewer';
+export type AgentStage =
+  | 'system'
+  | 'architect'
+  | 'plan_validator'
+  | 'human_approval'
+  | 'developer'
+  | 'reviewer';
 
 /**
  * Stage labels for display.
  */
 export const STAGE_LABELS: Record<AgentStage, string> = {
+  system: 'System',
   architect: 'Planning (Architect)',
+  plan_validator: 'Plan Validation',
+  human_approval: 'Human Approval',
   developer: 'Implementation (Developer)',
   reviewer: 'Review (Reviewer)',
 };
@@ -17,7 +26,14 @@ export const STAGE_LABELS: Record<AgentStage, string> = {
 /**
  * Stage order for sorting.
  */
-export const STAGE_ORDER: AgentStage[] = ['architect', 'developer', 'reviewer'];
+export const STAGE_ORDER: AgentStage[] = [
+  'system',
+  'architect',
+  'plan_validator',
+  'human_approval',
+  'developer',
+  'reviewer',
+];
 
 /**
  * Grouped events by stage for hierarchical display.
@@ -44,4 +60,4 @@ export interface StageGroup {
  */
 export type VirtualRow =
   | { type: 'header'; group: StageGroup }
-  | { type: 'event'; event: WorkflowEvent; stageIndex: number };
+  | { type: 'event'; event: WorkflowEvent };

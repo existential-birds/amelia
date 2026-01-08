@@ -232,6 +232,7 @@ export default function LogsPage() {
         <PageHeader.Right>
           {/* Filter dropdown */}
           <select
+            aria-label="Filter by event type"
             value={typeFilter}
             onChange={(e) =>
               setTypeFilter(e.target.value as TraceEventType | 'all')

@@ -21,6 +21,7 @@ vi.mock('@tanstack/react-virtual', () => ({
       getVirtualItems: () => items,
       getTotalSize: () => items.reduce((acc, item) => acc + item.size, 0),
       scrollToIndex: vi.fn(),
+      measureElement: () => undefined,
     };
   },
 }));

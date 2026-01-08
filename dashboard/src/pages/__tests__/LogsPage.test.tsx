@@ -25,6 +25,7 @@ vi.mock('@tanstack/react-virtual', () => ({
       getVirtualItems: () => items,
       getTotalSize: () => count * size,
       scrollToIndex: vi.fn(),
+      measureElement: () => undefined,
     };
   },
 }));
@@ -187,7 +188,7 @@ describe('LogsPage', () => {
     });
     renderWithRouter(<LogsPage />);
 
-    expect(screen.getByText(/\[architect\]/i)).toBeInTheDocument();
+    expect(screen.getByText(/architect/i)).toBeInTheDocument();
   });
 
   it('formats timestamp correctly', () => {

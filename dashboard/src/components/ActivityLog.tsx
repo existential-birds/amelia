@@ -36,7 +36,7 @@ export function ActivityLog({
   // Group events by stage and flatten for virtualization
   const { rows } = useActivityLogGroups(allEvents, collapsedStages);
 
-  // Virtualizer
+  // Virtualizer with dynamic height measurement
   const rowVirtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => parentRef.current,
@@ -45,6 +45,7 @@ export function ActivityLog({
       return row?.type === 'header' ? 44 : 36;
     },
     overscan: 10,
+    measureElement: (element) => element.getBoundingClientRect().height,
   });
 
   // Auto-scroll to bottom when new events arrive
@@ -95,12 +96,14 @@ export function ActivityLog({
           return (
             <div
               key={virtualRow.key}
+              data-index={virtualRow.index}
+              ref={rowVirtualizer.measureElement}
               style={{
                 position: 'absolute',
                 top: 0,
                 left: 0,
                 width: '100%',
-                height: `${virtualRow.size}px`,
+                minHeight: `${virtualRow.size}px`,
                 transform: `translateY(${virtualRow.start}px)`,
               }}
             >

@@ -59,14 +59,14 @@ export function useActivityLogGroups(
 
     // Flatten for virtualization
     const rows: VirtualRow[] = [];
-    groups.forEach((group, idx) => {
+    for (const group of groups) {
       rows.push({ type: 'header', group });
       if (!collapsedStages.has(group.stage)) {
-        group.events.forEach((event) => {
-          rows.push({ type: 'event', event, stageIndex: idx });
-        });
+        for (const event of group.events) {
+          rows.push({ type: 'event', event });
+        }
       }
-    });
+    }
 
     return { groups, rows };
   }, [events, collapsedStages]);

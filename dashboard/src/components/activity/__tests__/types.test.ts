@@ -3,8 +3,15 @@ import type { StageGroup, VirtualRow, AgentStage } from '../types';
 
 describe('Activity log types', () => {
   it('AgentStage type supports all agent values', () => {
-    const stages: AgentStage[] = ['architect', 'developer', 'reviewer'];
-    expect(stages).toHaveLength(3);
+    const stages: AgentStage[] = [
+      'system',
+      'architect',
+      'plan_validator',
+      'human_approval',
+      'developer',
+      'reviewer',
+    ];
+    expect(stages).toHaveLength(6);
   });
 
   it('StageGroup has required fields', () => {
@@ -48,7 +55,6 @@ describe('Activity log types', () => {
         level: 'debug',
         message: 'Started task',
       },
-      stageIndex: 1,
     };
 
     expect(headerRow.type).toBe('header');

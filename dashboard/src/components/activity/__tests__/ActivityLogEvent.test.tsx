@@ -29,6 +29,6 @@ describe('ActivityLogEvent', () => {
 
   it('renders agent name', () => {
     render(<ActivityLogEvent event={makeEvent({ agent: 'architect' })} />);
-    expect(screen.getByText('[ARCHITECT]')).toBeInTheDocument();
+    expect(screen.getByText('ARCHITECT')).toBeInTheDocument();
   });
 });

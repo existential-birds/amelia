@@ -162,7 +162,7 @@ class OrchestratorService:
                 workflow_id,
                 EventType.STAGE_STARTED,
                 f"Starting {stage_name}",
-                data={"stage": stage_name},
+                agent=stage_name.removesuffix("_node"),
             )
 
         return emit_stage_started

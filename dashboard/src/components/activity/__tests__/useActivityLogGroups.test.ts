@@ -68,11 +68,14 @@ describe('useActivityLogGroups', () => {
     expect(architectEvents).toHaveLength(0);
   });
 
-  it('orders stages as architect -> developer -> reviewer', () => {
+  it('orders stages as system -> architect -> plan_validator -> human_approval -> developer -> reviewer', () => {
     const events: WorkflowEvent[] = [
       makeEvent({ id: '1', agent: 'reviewer', sequence: 1 }),
       makeEvent({ id: '2', agent: 'architect', sequence: 2 }),
       makeEvent({ id: '3', agent: 'developer', sequence: 3 }),
+      makeEvent({ id: '4', agent: 'system', sequence: 4 }),
+      makeEvent({ id: '5', agent: 'human_approval', sequence: 5 }),
+      makeEvent({ id: '6', agent: 'plan_validator', sequence: 6 }),
     ];
 
     const { result } = renderHook(() =>
@@ -80,7 +83,14 @@ describe('useActivityLogGroups', () => {
     );
 
     const stageOrder = result.current.groups.map((g) => g.stage);
-    expect(stageOrder).toEqual(['architect', 'developer', 'reviewer']);
+    expect(stageOrder).toEqual([
+      'system',
+      'architect',
+      'plan_validator',
+      'human_approval',
+      'developer',
+      'reviewer',
+    ]);
   });
 
   it('marks stage active if has stage_started but not stage_completed', () => {
@@ -94,5 +104,22 @@ describe('useActivityLogGroups', () => {
 
     expect(result.current.groups[0]?.isActive).toBe(true);
     expect(result.current.groups[0]?.isCompleted).toBe(false);
+  });
+
+  it('maps unknown agents to developer stage', () => {
+    const events: WorkflowEvent[] = [
+      makeEvent({ id: '1', agent: 'unknown_agent', sequence: 1 }),
+      makeEvent({ id: '2', agent: 'some_other_agent', sequence: 2 }),
+      makeEvent({ id: '3', agent: 'developer', sequence: 3 }),
+    ];
+
+    const { result } = renderHook(() =>
+      useActivityLogGroups(events, new Set())
+    );
+
+    // All events should be grouped under developer
+    expect(result.current.groups).toHaveLength(1);
+    expect(result.current.groups[0]?.stage).toBe('developer');
+    expect(result.current.groups[0]?.events).toHaveLength(3);
   });
 });
