@@ -539,6 +539,12 @@ async def call_developer_node(
     if state.total_tasks is not None:
         task_number = state.current_task_index + 1  # 1-indexed for display
         task_prompt = f"Execute Task {task_number} from plan at {state.plan_path}"
+        logger.info(
+            "Starting task execution",
+            task=task_number,
+            total_tasks=state.total_tasks,
+            fresh_session=True,
+        )
         state = state.model_copy(update={
             "driver_session_id": None,  # Fresh session for each task
             "goal": f"{state.goal}\n\n**Current Task:** {task_prompt}",
@@ -792,6 +798,15 @@ async def next_task_node(
     Returns:
         State update with incremented task index, reset iteration, cleared session.
     """
+    completed_task = state.current_task_index + 1
+    next_task = state.current_task_index + 2
+    logger.info(
+        "Transitioning to next task",
+        completed=completed_task,
+        next=next_task,
+        total_tasks=state.total_tasks,
+    )
+
     # Commit current task changes
     await commit_task_changes(state, config)
 
@@ -879,19 +894,52 @@ def route_after_task_review(
     if not profile:
         raise ValueError("profile is required in config.configurable")
 
-    if state.last_review and state.last_review.approved:
+    task_number = state.current_task_index + 1
+    approved = state.last_review.approved if state.last_review else False
+
+    if approved:
         # Task approved - check if more tasks remain
         # total_tasks should always be set when using task-based routing,
         # but handle None for safety (treat as single task complete)
         if state.total_tasks is None or state.current_task_index + 1 >= state.total_tasks:
+            logger.debug(
+                "Task routing decision",
+                task=task_number,
+                approved=True,
+                route="__end__",
+                reason="all_tasks_complete",
+            )
             return "__end__"  # All tasks complete
+        logger.debug(
+            "Task routing decision",
+            task=task_number,
+            approved=True,
+            route="next_task_node",
+        )
         return "next_task_node"  # Move to next task
 
     # Not approved - check iteration limit
     max_iterations = profile.max_task_review_iterations
     if state.task_review_iteration >= max_iterations:
+        logger.debug(
+            "Task routing decision",
+            task=task_number,
+            approved=False,
+            iteration=state.task_review_iteration,
+            max_iterations=max_iterations,
+            route="__end__",
+            reason="max_iterations_reached",
+        )
         return "__end__"  # Halt on repeated failure
 
+    logger.debug(
+        "Task routing decision",
+        task=task_number,
+        approved=False,
+        iteration=state.task_review_iteration,
+        max_iterations=max_iterations,
+        route="developer",
+    )
     return "developer"  # Retry with feedback
 
 
