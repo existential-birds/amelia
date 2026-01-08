@@ -1284,10 +1284,11 @@ class OrchestratorService:
                 async for chunk in graph.astream(
                     None,  # Resume from checkpoint, no new input needed
                     config=config,
-                    stream_mode="updates",
+                    stream_mode=["updates", "tasks"],
                 ):
                     # In agentic mode, no interrupts expected after initial approval
-                    if "__interrupt__" in chunk:
+                    if self._is_interrupt_chunk(chunk):
+                        mode, data = chunk
                         state = await graph.aget_state(config)
                         next_nodes = state.next if state else []
                         logger.warning(
@@ -1296,7 +1297,7 @@ class OrchestratorService:
                             next_nodes=next_nodes,
                         )
                         continue
-                    await self._handle_stream_chunk(workflow_id, chunk)
+                    await self._handle_combined_stream_chunk(workflow_id, chunk)
 
                 # Workflow completed after human approval.
                 # Note: A separate COMPLETED emission exists in _run_workflow() for
