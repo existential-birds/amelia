@@ -155,10 +155,6 @@ def rebuild_execution_state() -> None:
     module.StructuredReviewResult = StructuredReviewResult  # type: ignore[attr-defined]
     module.EvaluationResult = EvaluationResult  # type: ignore[attr-defined]
 
-    # Also update globals for immediate visibility
-    globals()["StructuredReviewResult"] = StructuredReviewResult
-    globals()["EvaluationResult"] = EvaluationResult
-
     ExecutionState.model_rebuild(
         _types_namespace={
             "StructuredReviewResult": StructuredReviewResult,

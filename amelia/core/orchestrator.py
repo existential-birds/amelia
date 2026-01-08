@@ -809,7 +809,9 @@ async def commit_task_changes(state: ExecutionState, config: RunnableConfig) -> 
         state: Current execution state.
         config: Runnable config with profile.
     """
-    profile: Profile = config["configurable"]["profile"]
+    profile: Profile | None = config.get("configurable", {}).get("profile")
+    if not profile:
+        raise ValueError("profile is required in config.configurable")
     working_dir = Path(profile.working_dir) if profile.working_dir else Path.cwd()
 
     task_number = state.current_task_index + 1
@@ -873,7 +875,9 @@ def route_after_task_review(
         "developer" if not approved and iterations remain.
         "__end__" if all tasks complete or max iterations reached.
     """
-    profile: Profile = config["configurable"]["profile"]
+    profile: Profile | None = config.get("configurable", {}).get("profile")
+    if not profile:
+        raise ValueError("profile is required in config.configurable")
 
     if state.last_review and state.last_review.approved:
         # Task approved - check if more tasks remain
