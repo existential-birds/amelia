@@ -314,6 +314,53 @@ def memory_checkpointer() -> MemorySaver:
 
 
 @pytest.fixture
+def git_repo(tmp_path: Path) -> Path:
+    """Initialize a git repo with initial commit for testing.
+
+    Creates a minimal git repository with user config and an initial commit,
+    suitable for tests that require git operations (commits, diffs, etc.).
+    Disables GPG/SSH signing to avoid passphrase prompts in CI/test environments.
+
+    Args:
+        tmp_path: Pytest's temporary directory fixture.
+
+    Returns:
+        Path to the initialized git repository.
+    """
+    import subprocess
+
+    subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True, check=True)
+    subprocess.run(
+        ["git", "config", "user.email", "test@test.com"],
+        cwd=tmp_path,
+        capture_output=True,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Test"],
+        cwd=tmp_path,
+        capture_output=True,
+        check=True,
+    )
+    # Disable commit signing for test environment
+    subprocess.run(
+        ["git", "config", "commit.gpgsign", "false"],
+        cwd=tmp_path,
+        capture_output=True,
+        check=True,
+    )
+    (tmp_path / "README.md").write_text("# Test")
+    subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True, check=True)
+    subprocess.run(
+        ["git", "commit", "-m", "Initial"],
+        cwd=tmp_path,
+        capture_output=True,
+        check=True,
+    )
+    return tmp_path
+
+
+@pytest.fixture
 def orchestrator_graph() -> CompiledStateGraph[Any]:
     """Create orchestrator graph with in-memory checkpointer.
 

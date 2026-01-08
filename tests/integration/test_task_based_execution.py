@@ -20,10 +20,8 @@ from amelia.core.orchestrator import (
     call_developer_node,
     call_reviewer_node,
     next_task_node,
-    route_after_review_or_task,
-    route_after_task_review,
 )
-from amelia.core.state import ExecutionState, ReviewResult
+from amelia.core.state import ExecutionState
 from amelia.core.types import Issue, Profile
 from amelia.drivers.api import ApiDriver
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
@@ -106,162 +104,6 @@ def _create_developer_mock_messages(task_index: int) -> list[AgenticMessage]:
             session_id=f"session-task-{task_index}",
         ),
     ]
-
-
-@pytest.mark.integration
-class TestTaskBasedRoutingLogic:
-    """Test the routing logic for task-based execution."""
-
-    def test_route_after_task_review_ends_when_all_tasks_complete(
-        self,
-        integration_profile: Profile,
-    ) -> None:
-        """Should END when approved and all tasks complete.
-
-        Real components: route_after_task_review routing function
-        """
-        # State: on last task (index 1 of 2 total), review approved
-        state = ExecutionState(
-            profile_id="test",
-            total_tasks=2,
-            current_task_index=1,  # On task 2 (0-indexed)
-            last_review=ReviewResult(
-                reviewer_persona="single",
-                approved=True,
-                comments=["LGTM!"],
-                severity="low",
-            ),
-        )
-        config = {"configurable": {"profile": integration_profile}}
-
-        result = route_after_task_review(state, cast(RunnableConfig, config))
-        assert result == "__end__"
-
-    def test_route_after_task_review_goes_to_next_task_when_approved(
-        self,
-        integration_profile: Profile,
-    ) -> None:
-        """Should go to next_task_node when approved and more tasks remain.
-
-        Real components: route_after_task_review routing function
-        """
-        # State: on first task (index 0 of 3 total), review approved
-        state = ExecutionState(
-            profile_id="test",
-            total_tasks=3,
-            current_task_index=0,  # On task 1, more tasks remain
-            last_review=ReviewResult(
-                reviewer_persona="single",
-                approved=True,
-                comments=["Task 1 done!"],
-                severity="low",
-            ),
-        )
-        config = {"configurable": {"profile": integration_profile}}
-
-        result = route_after_task_review(state, cast(RunnableConfig, config))
-        assert result == "next_task_node"
-
-    def test_route_after_task_review_retries_developer_when_not_approved(
-        self,
-        integration_profile: Profile,
-    ) -> None:
-        """Should retry developer when review not approved and iterations remain.
-
-        Real components: route_after_task_review routing function
-        """
-        # State: task rejected, under iteration limit (max=2, current=1)
-        state = ExecutionState(
-            profile_id="test",
-            total_tasks=2,
-            current_task_index=0,
-            task_review_iteration=1,  # Under limit of 2
-            last_review=ReviewResult(
-                reviewer_persona="single",
-                approved=False,
-                comments=["Needs work"],
-                severity="high",
-            ),
-        )
-        config = {"configurable": {"profile": integration_profile}}
-
-        result = route_after_task_review(state, cast(RunnableConfig, config))
-        assert result == "developer"
-
-    def test_route_after_task_review_ends_on_max_iterations(
-        self,
-        integration_profile: Profile,
-    ) -> None:
-        """Should END when max iterations reached without approval.
-
-        Real components: route_after_task_review routing function
-        """
-        # State: at max iterations (2), still not approved
-        state = ExecutionState(
-            profile_id="test",
-            total_tasks=2,
-            current_task_index=0,
-            task_review_iteration=2,  # At limit (max=2)
-            last_review=ReviewResult(
-                reviewer_persona="single",
-                approved=False,
-                comments=["Still not right"],
-                severity="critical",
-            ),
-        )
-        config = {"configurable": {"profile": integration_profile}}
-
-        result = route_after_task_review(state, cast(RunnableConfig, config))
-        assert result == "__end__"
-
-    def test_route_after_review_or_task_uses_task_routing_when_total_tasks_set(
-        self,
-        integration_profile: Profile,
-    ) -> None:
-        """Should use task-based routing when total_tasks is set.
-
-        Real components: route_after_review_or_task wrapper function
-        """
-        # State: task-based execution mode (total_tasks set)
-        state = ExecutionState(
-            profile_id="test",
-            total_tasks=3,  # Task-based mode
-            current_task_index=0,
-            last_review=ReviewResult(
-                reviewer_persona="single",
-                approved=True,
-                comments=["Done!"],
-                severity="low",
-            ),
-        )
-        config = {"configurable": {"profile": integration_profile}}
-
-        result = route_after_review_or_task(state, cast(RunnableConfig, config))
-        assert result == "next_task_node"
-
-    def test_route_after_review_or_task_uses_legacy_routing_when_total_tasks_none(
-        self,
-        integration_profile: Profile,
-    ) -> None:
-        """Should use legacy routing when total_tasks is None.
-
-        Real components: route_after_review_or_task wrapper function
-        """
-        # State: legacy mode (total_tasks not set)
-        state = ExecutionState(
-            profile_id="test",
-            total_tasks=None,  # Legacy mode
-            last_review=ReviewResult(
-                reviewer_persona="single",
-                approved=True,
-                comments=["Done!"],
-                severity="low",
-            ),
-        )
-        config = {"configurable": {"profile": integration_profile}}
-
-        result = route_after_review_or_task(state, cast(RunnableConfig, config))
-        assert result == "__end__"
 
 
 @pytest.mark.integration
@@ -457,8 +299,7 @@ class TestNextTaskNodeTransition:
 
     async def test_next_task_node_increments_index_and_resets_iteration(
         self,
-        tmp_path: Path,
-        integration_profile: Profile,
+        git_repo: Path,
         integration_issue: Issue,
     ) -> None:
         """next_task_node should increment task index and reset iteration.
@@ -466,33 +307,18 @@ class TestNextTaskNodeTransition:
         Real components: next_task_node state transitions
         Mock boundary: git commands for commit (via subprocess)
         """
-        import subprocess
-
-        # Initialize git repo for commit_task_changes
-        subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True, check=True)
-        subprocess.run(
-            ["git", "config", "user.email", "test@test.com"],
-            cwd=tmp_path,
-            capture_output=True,
-            check=True,
-        )
-        subprocess.run(
-            ["git", "config", "user.name", "Test"],
-            cwd=tmp_path,
-            capture_output=True,
-            check=True,
-        )
-        (tmp_path / "README.md").write_text("# Test")
-        subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True, check=True)
-        subprocess.run(
-            ["git", "commit", "-m", "Initial"],
-            cwd=tmp_path,
-            capture_output=True,
-            check=True,
+        # Create profile with git_repo as working directory
+        profile = make_profile(
+            name="test-task-execution",
+            driver="api:openrouter",
+            model="openrouter:anthropic/claude-sonnet-4-20250514",
+            working_dir=str(git_repo),
+            plan_output_dir=str(git_repo / "plans"),
+            max_task_review_iterations=2,
         )
 
         # Create a change to commit
-        (tmp_path / "task_0.py").write_text("# Task 0 code")
+        (git_repo / "task_0.py").write_text("# Task 0 code")
 
         state = ExecutionState(
             profile_id="test-task-execution",
@@ -505,7 +331,7 @@ class TestNextTaskNodeTransition:
 
         config = make_config(
             thread_id="test-next-task",
-            profile=integration_profile,
+            profile=profile,
         )
 
         result = await next_task_node(state, cast(RunnableConfig, config))
@@ -517,8 +343,7 @@ class TestNextTaskNodeTransition:
 
     async def test_next_task_node_commits_changes(
         self,
-        tmp_path: Path,
-        integration_profile: Profile,
+        git_repo: Path,
         integration_issue: Issue,
     ) -> None:
         """next_task_node should commit changes for the completed task.
@@ -527,31 +352,18 @@ class TestNextTaskNodeTransition:
         """
         import subprocess
 
-        # Initialize git repo
-        subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True, check=True)
-        subprocess.run(
-            ["git", "config", "user.email", "test@test.com"],
-            cwd=tmp_path,
-            capture_output=True,
-            check=True,
-        )
-        subprocess.run(
-            ["git", "config", "user.name", "Test"],
-            cwd=tmp_path,
-            capture_output=True,
-            check=True,
-        )
-        (tmp_path / "README.md").write_text("# Test")
-        subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True, check=True)
-        subprocess.run(
-            ["git", "commit", "-m", "Initial"],
-            cwd=tmp_path,
-            capture_output=True,
-            check=True,
+        # Create profile with git_repo as working directory
+        profile = make_profile(
+            name="test-task-execution",
+            driver="api:openrouter",
+            model="openrouter:anthropic/claude-sonnet-4-20250514",
+            working_dir=str(git_repo),
+            plan_output_dir=str(git_repo / "plans"),
+            max_task_review_iterations=2,
         )
 
         # Create a change that will be committed
-        (tmp_path / "new_file.py").write_text("# New code")
+        (git_repo / "new_file.py").write_text("# New code")
 
         state = ExecutionState(
             profile_id="test-task-execution",
@@ -562,7 +374,7 @@ class TestNextTaskNodeTransition:
 
         config = make_config(
             thread_id="test-commit",
-            profile=integration_profile,
+            profile=profile,
         )
 
         await next_task_node(state, cast(RunnableConfig, config))
@@ -570,7 +382,7 @@ class TestNextTaskNodeTransition:
         # Verify commit was made
         result = subprocess.run(
             ["git", "log", "--oneline"],
-            cwd=tmp_path,
+            cwd=git_repo,
             capture_output=True,
             text=True,
         )
