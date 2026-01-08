@@ -31,60 +31,71 @@ function getNodeDisplayName(agentType: string): string {
   return NODE_DISPLAY_NAMES[agentType] ?? agentType.replace(/_/g, ' ');
 }
 
-/** Agent-specific active state styling (border, background, shadow). */
-const AGENT_ACTIVE_CLASSES: Record<string, string> = {
-  architect: 'border-agent-architect bg-agent-architect/10 shadow-lg shadow-agent-architect/20',
-  developer: 'border-agent-developer bg-agent-developer/10 shadow-lg shadow-agent-developer/20',
-  reviewer: 'border-agent-reviewer bg-agent-reviewer/10 shadow-lg shadow-agent-reviewer/20',
-  plan_validator: 'border-agent-pm bg-agent-pm/10 shadow-lg shadow-agent-pm/20',
-  human_approval: 'border-destructive bg-destructive/10 shadow-lg shadow-destructive/20',
+/** Theme configuration for each agent type. */
+interface AgentTheme {
+  /** Icon component for the agent. */
+  icon: LucideIcon;
+  /** Active state container classes (border, background, shadow). */
+  activeClasses: string;
+  /** Completed state container classes (muted version). */
+  completedClasses: string;
+  /** Active state icon classes. */
+  activeIconClasses: string;
+  /** Completed state icon classes. */
+  completedIconClasses: string;
+}
+
+/** Consolidated theme configuration for all agent types. */
+const AGENT_THEME_CONFIG: Record<string, AgentTheme> = {
+  architect: {
+    icon: Compass,
+    activeClasses: 'border-agent-architect bg-agent-architect/10 shadow-lg shadow-agent-architect/20',
+    completedClasses: 'border-agent-architect/40 bg-agent-architect/5',
+    activeIconClasses: 'text-agent-architect animate-pulse',
+    completedIconClasses: 'text-agent-architect/70',
+  },
+  developer: {
+    icon: Code,
+    activeClasses: 'border-agent-developer bg-agent-developer/10 shadow-lg shadow-agent-developer/20',
+    completedClasses: 'border-agent-developer/40 bg-agent-developer/5',
+    activeIconClasses: 'text-agent-developer animate-pulse',
+    completedIconClasses: 'text-agent-developer/70',
+  },
+  reviewer: {
+    icon: Eye,
+    activeClasses: 'border-agent-reviewer bg-agent-reviewer/10 shadow-lg shadow-agent-reviewer/20',
+    completedClasses: 'border-agent-reviewer/40 bg-agent-reviewer/5',
+    activeIconClasses: 'text-agent-reviewer animate-pulse',
+    completedIconClasses: 'text-agent-reviewer/70',
+  },
+  plan_validator: {
+    icon: ClipboardCheck,
+    activeClasses: 'border-agent-pm bg-agent-pm/10 shadow-lg shadow-agent-pm/20',
+    completedClasses: 'border-agent-pm/40 bg-agent-pm/5',
+    activeIconClasses: 'text-agent-pm animate-pulse',
+    completedIconClasses: 'text-agent-pm/70',
+  },
+  human_approval: {
+    icon: Hand,
+    activeClasses: 'border-destructive bg-destructive/10 shadow-lg shadow-destructive/20',
+    completedClasses: 'border-destructive/40 bg-destructive/5',
+    activeIconClasses: 'text-destructive animate-pulse',
+    completedIconClasses: 'text-destructive/70',
+  },
 };
 
-/** Agent-specific completed state styling (muted version of active colors). */
-const AGENT_COMPLETED_CLASSES: Record<string, string> = {
-  architect: 'border-agent-architect/40 bg-agent-architect/5',
-  developer: 'border-agent-developer/40 bg-agent-developer/5',
-  reviewer: 'border-agent-reviewer/40 bg-agent-reviewer/5',
-  plan_validator: 'border-agent-pm/40 bg-agent-pm/5',
-  human_approval: 'border-destructive/40 bg-destructive/5',
+/** Default theme for unknown agent types. */
+const DEFAULT_THEME: AgentTheme = {
+  icon: CircleDot,
+  activeClasses: 'border-primary bg-primary/10 shadow-lg shadow-primary/20',
+  completedClasses: 'border-primary/40 bg-primary/5',
+  activeIconClasses: 'text-primary animate-pulse',
+  completedIconClasses: 'text-primary/70',
 };
 
-/** Agent-specific active icon styling. */
-const AGENT_ACTIVE_ICON_CLASSES: Record<string, string> = {
-  architect: 'text-agent-architect animate-pulse',
-  developer: 'text-agent-developer animate-pulse',
-  reviewer: 'text-agent-reviewer animate-pulse',
-  plan_validator: 'text-agent-pm animate-pulse',
-  human_approval: 'text-destructive animate-pulse',
-};
-
-/** Agent-specific completed icon styling (muted version). */
-const AGENT_COMPLETED_ICON_CLASSES: Record<string, string> = {
-  architect: 'text-agent-architect/70',
-  developer: 'text-agent-developer/70',
-  reviewer: 'text-agent-reviewer/70',
-  plan_validator: 'text-agent-pm/70',
-  human_approval: 'text-destructive/70',
-};
-
-/** Default active classes for unknown agent types. */
-const DEFAULT_ACTIVE_CLASSES = 'border-primary bg-primary/10 shadow-lg shadow-primary/20';
-const DEFAULT_ACTIVE_ICON_CLASSES = 'text-primary animate-pulse';
-const DEFAULT_COMPLETED_CLASSES = 'border-primary/40 bg-primary/5';
-const DEFAULT_COMPLETED_ICON_CLASSES = 'text-primary/70';
-
-/** Agent-specific icons. */
-const AGENT_ICONS: Record<string, LucideIcon> = {
-  architect: Compass,
-  developer: Code,
-  reviewer: Eye,
-  plan_validator: ClipboardCheck,
-  human_approval: Hand,
-};
-
-/** Get the icon component for an agent type. */
-function getAgentIcon(agentType: string): LucideIcon {
-  return AGENT_ICONS[agentType] ?? CircleDot;
+/** Get the theme configuration for an agent type. */
+function getAgentTheme(agentType: string): AgentTheme {
+  return AGENT_THEME_CONFIG[agentType] ?? DEFAULT_THEME;
 }
 
 const baseStatusClasses: Record<AgentNodeData['status'], string> = {
@@ -104,10 +115,10 @@ const baseIconClasses: Record<AgentNodeData['status'], string> = {
 /** Get status classes for a node, with agent-specific styling. */
 function getStatusClasses(status: AgentNodeData['status'], agentType: string): string {
   if (status === 'active') {
-    return AGENT_ACTIVE_CLASSES[agentType] ?? DEFAULT_ACTIVE_CLASSES;
+    return getAgentTheme(agentType).activeClasses;
   }
   if (status === 'completed') {
-    return AGENT_COMPLETED_CLASSES[agentType] ?? DEFAULT_COMPLETED_CLASSES;
+    return getAgentTheme(agentType).completedClasses;
   }
   return baseStatusClasses[status];
 }
@@ -115,17 +126,17 @@ function getStatusClasses(status: AgentNodeData['status'], agentType: string): s
 /** Get icon classes for a node, with agent-specific styling. */
 function getIconClasses(status: AgentNodeData['status'], agentType: string): string {
   if (status === 'active') {
-    return AGENT_ACTIVE_ICON_CLASSES[agentType] ?? DEFAULT_ACTIVE_ICON_CLASSES;
+    return getAgentTheme(agentType).activeIconClasses;
   }
   if (status === 'completed') {
-    return AGENT_COMPLETED_ICON_CLASSES[agentType] ?? DEFAULT_COMPLETED_ICON_CLASSES;
+    return getAgentTheme(agentType).completedIconClasses;
   }
   return baseIconClasses[status];
 }
 
 export const AgentNode = memo(function AgentNode({ data }: NodeProps<AgentNodeType>) {
   const { agentType, status, iterations, isExpanded } = data;
-  const Icon = getAgentIcon(agentType);
+  const Icon = getAgentTheme(agentType).icon;
 
   return (
     <div

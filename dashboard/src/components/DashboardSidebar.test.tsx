@@ -1,11 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
-import { DashboardSidebar } from './DashboardSidebar';
-import { SidebarProvider } from '@/components/ui/sidebar';
+import { screen } from '@testing-library/react';
 import { useDemoMode } from '@/hooks/useDemoMode';
+import { renderSidebar } from '@/test/helpers';
 
-// Mock the workflow store
+// Mock the workflow store (inline due to vi.mock hoisting)
 vi.mock('@/store/workflowStore', () => ({
   useWorkflowStore: vi.fn((selector) => {
     const state = { isConnected: true };
@@ -13,20 +11,10 @@ vi.mock('@/store/workflowStore', () => ({
   }),
 }));
 
-// Mock the demo mode hook
+// Mock the demo mode hook (inline due to vi.mock hoisting)
 vi.mock('@/hooks/useDemoMode', () => ({
   useDemoMode: vi.fn(() => ({ isDemo: false, demoType: null })),
 }));
-
-const renderSidebar = (initialRoute = '/') => {
-  return render(
-    <MemoryRouter initialEntries={[initialRoute]}>
-      <SidebarProvider>
-        <DashboardSidebar />
-      </SidebarProvider>
-    </MemoryRouter>
-  );
-};
 
 describe('DashboardSidebar', () => {
   beforeEach(() => {
@@ -65,7 +53,7 @@ describe('DashboardSidebar', () => {
   });
 
   it('applies active styling to current route', () => {
-    renderSidebar('/workflows');
+    renderSidebar({ initialRoute: '/workflows' });
     const link = screen.getByRole('link', { name: /Active Jobs/ });
     // NavLink sets aria-current="page" when active
     expect(link).toHaveAttribute('aria-current', 'page');

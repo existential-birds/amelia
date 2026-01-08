@@ -1,10 +1,8 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
-import { DashboardSidebar } from './DashboardSidebar';
-import { SidebarProvider } from '@/components/ui/sidebar';
+import { screen } from '@testing-library/react';
+import { renderSidebar } from '@/test/helpers';
 
-// Mock the workflow store
+// Mock the workflow store (inline due to vi.mock hoisting)
 vi.mock('@/store/workflowStore', () => ({
   useWorkflowStore: vi.fn((selector) => {
     const state = { isConnected: true };
@@ -12,20 +10,10 @@ vi.mock('@/store/workflowStore', () => ({
   }),
 }));
 
-// Mock the demo mode hook
+// Mock the demo mode hook (inline due to vi.mock hoisting)
 vi.mock('@/hooks/useDemoMode', () => ({
   useDemoMode: vi.fn(() => ({ isDemo: false, demoType: null })),
 }));
-
-const renderSidebar = (open = true) => {
-  return render(
-    <MemoryRouter>
-      <SidebarProvider defaultOpen={open}>
-        <DashboardSidebar />
-      </SidebarProvider>
-    </MemoryRouter>
-  );
-};
 
 describe('DashboardSidebar Accessibility', () => {
   afterEach(() => {
@@ -33,19 +21,17 @@ describe('DashboardSidebar Accessibility', () => {
   });
 
   it('connection status has proper ARIA attributes when expanded', () => {
-    renderSidebar(true);
-    // Should have role="status"
+    renderSidebar({ open: true });
+    // getByRole throws if element not found, no need for toBeInTheDocument()
     const status = screen.getByRole('status');
-    expect(status).toBeInTheDocument();
     // In expanded mode, it should contain text "Connected"
     expect(status).toHaveTextContent('Connected');
   });
 
   it('connection status has proper ARIA attributes when collapsed', () => {
-    renderSidebar(false);
-    // Should have role="status"
+    renderSidebar({ open: false });
+    // getByRole throws if element not found, no need for toBeInTheDocument()
     const status = screen.getByRole('status');
-    expect(status).toBeInTheDocument();
     // In collapsed mode, it should have aria-label since text is hidden
     expect(status).toHaveAttribute('aria-label', 'Connection status: Connected');
   });

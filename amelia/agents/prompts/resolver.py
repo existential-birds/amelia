@@ -22,12 +22,6 @@ class PromptResolver:
     """
 
     def __init__(self, repository: PromptRepositoryProtocol) -> None:
-        """Initialize resolver with repository.
-
-        Args:
-            repository: Database repository for prompts.
-
-        """
         self.repository = repository
 
     async def get_prompt(self, prompt_id: str) -> ResolvedPrompt:

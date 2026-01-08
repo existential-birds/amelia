@@ -20,14 +20,10 @@ class ToolName(StrEnum):
     READ_FILE = "read_file"
 
 
-# All known tool name aliases → standard ToolName
-# Maps driver-specific names to canonical ToolName values
 TOOL_NAME_ALIASES: dict[str, str] = {
-    # Claude CLI uses PascalCase
     "Write": ToolName.WRITE_FILE,
     "Read": ToolName.READ_FILE,
     "Bash": ToolName.RUN_SHELL_COMMAND,
-    # DeepAgents uses lowercase
     "write": ToolName.WRITE_FILE,
     "read": ToolName.READ_FILE,
 }
@@ -64,24 +60,21 @@ def resolve_plan_path(pattern: str, issue_key: str) -> str:
     return pattern.format(date=today, issue_key=normalized_key)
 
 
-# Shell metacharacters that indicate shell injection attempts
-# These are ALWAYS blocked regardless of security mode
 BLOCKED_SHELL_METACHARACTERS: tuple[str, ...] = (
-    "|",    # Pipe
-    ";",    # Command separator
-    "&&",   # AND operator
-    "||",   # OR operator
-    "`",    # Command substitution (backtick)
-    "$(",   # Command substitution
-    "${",   # Variable expansion
-    ">",    # Redirect stdout
-    ">>",   # Append stdout
-    "<",    # Redirect stdin
-    "&",    # Background execution
-    "\n",   # Newline (command separator)
+    "|",
+    ";",
+    "&&",
+    "||",
+    "`",
+    "$(",
+    "${",
+    ">",
+    ">>",
+    "<",
+    "&",
+    "\n",
 )
 
-# Commands that are always blocked (privilege escalation, system control)
 BLOCKED_COMMANDS: frozenset[str] = frozenset({
     "sudo",
     "su",
@@ -100,37 +93,26 @@ BLOCKED_COMMANDS: frozenset[str] = frozenset({
     "umount",
 })
 
-# Dangerous argument patterns (compiled regex)
-# These patterns detect destructive or exfiltration attempts
 DANGEROUS_PATTERNS: tuple[re.Pattern[str], ...] = (
-    # Destructive rm commands
-    re.compile(r"^rm\s+.*-[rf]*\s*/$", re.IGNORECASE),           # rm -rf /
-    re.compile(r"^rm\s+.*-[rf]*\s*~", re.IGNORECASE),            # rm -rf ~
-    re.compile(r"^rm\s+.*-[rf]*\s*/home", re.IGNORECASE),        # rm -rf /home
-    re.compile(r"^rm\s+.*-[rf]*\s*/etc", re.IGNORECASE),         # rm -rf /etc
-    re.compile(r"^rm\s+.*-[rf]*\s*/usr", re.IGNORECASE),         # rm -rf /usr
-    re.compile(r"^rm\s+.*-[rf]*\s*/var", re.IGNORECASE),         # rm -rf /var
-
-    # Curl/wget piped to shell (common malware pattern)
+    re.compile(r"^rm\s+.*-[rf]*\s*/$", re.IGNORECASE),
+    re.compile(r"^rm\s+.*-[rf]*\s*~", re.IGNORECASE),
+    re.compile(r"^rm\s+.*-[rf]*\s*/home", re.IGNORECASE),
+    re.compile(r"^rm\s+.*-[rf]*\s*/etc", re.IGNORECASE),
+    re.compile(r"^rm\s+.*-[rf]*\s*/usr", re.IGNORECASE),
+    re.compile(r"^rm\s+.*-[rf]*\s*/var", re.IGNORECASE),
     re.compile(r"curl\s+.*\|\s*sh", re.IGNORECASE),
     re.compile(r"curl\s+.*\|\s*bash", re.IGNORECASE),
     re.compile(r"wget\s+.*\|\s*sh", re.IGNORECASE),
     re.compile(r"wget\s+.*\|\s*bash", re.IGNORECASE),
-
-    # Writing to system directories
     re.compile(r">\s*/etc/"),
     re.compile(r">\s*/usr/"),
     re.compile(r">\s*/var/"),
     re.compile(r">\s*/bin/"),
     re.compile(r">\s*/sbin/"),
-
-    # Chmod 777 on system paths
     re.compile(r"chmod\s+777\s+/"),
     re.compile(r"chmod\s+-R\s+777\s+/"),
 )
 
-# For strict mode: default allowlist of safe commands
-# Only used when security.shell_mode = "strict" in config
 STRICT_MODE_ALLOWED_COMMANDS: frozenset[str] = frozenset({
     "git",
     "npm",

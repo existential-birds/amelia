@@ -1,10 +1,10 @@
 # Amelia Roadmap
 
-> **Vision:** Complete end-to-end workflow control without ever opening GitHub, Jira, or any tracker web UI—with agents that maintain context across sessions and verify their own work. Built on the assumption that LLMs will continually improve, so Amelia automatically gets better as models advance.
+> **Vision:** Enterprise-grade agent orchestration for software development. Complete workflow control from issue to PR, with defense-in-depth security, comprehensive observability, and automated quality gates. Built for teams that need reliability, auditability, and compliance.
 >
 > **Architecture:** Aligned with the [12-Factor Agents](https://github.com/humanlayer/12-factor-agents) methodology for building reliable LLM-powered software.
 >
-> **Track Progress:** [GitHub Project Board](https://github.com/orgs/existential-birds/projects/2)
+> **Track Progress:** [GitHub Project Board](https://github.com/orgs/existential-birds/projects/1)
 
 ## Design Principles
 
@@ -31,6 +31,19 @@ This roadmap is informed by industry research on agentic AI systems. Key finding
 | "Evaluation lacks granularity" | Phase 10 adds per-agent, per-step metrics |
 
 See [Knowledge Agents Research Analysis](/ideas/research/knowledge-agents) for full research synthesis.
+
+## Enterprise Readiness
+
+Amelia is designed for production deployment in enterprise environments. Key architectural decisions:
+
+| Requirement | Implementation | Phase |
+|-------------|---------------|-------|
+| **Security** | Layered guardrails, agent authorization, MCP security | 16, 19 |
+| **Observability** | Unified events, distributed tracing, metrics | 2, 20 |
+| **Scalability** | Stateless execution, cloud deployment, context management | 15, 17 |
+| **Quality Assurance** | Verification framework, evaluation CI/CD, quality gates | 4, 7, 18 |
+| **Compliance** | Audit logging, capitalization tracking, human approval gates | 1, 14, 19 |
+| **Recovery** | Checkpoint persistence, session continuity, idempotent execution | 3, 15 |
 
 ---
 
@@ -325,31 +338,129 @@ Deploy Amelia to AWS to enable parallel workflow execution without local resourc
 
 ---
 
-## Phase 16: Closing the 12-Factor Loop [Future]
+## Phase 16: Security Guardrails [Planned]
+
+*Defense-in-depth security for enterprise deployment*
+
+Layered security controls that protect against prompt injection, tool misuse, and unauthorized actions.
+
+**Key Capabilities:**
+- Deterministic guardrails blocking high-risk operations without human confirmation
+- Reasoning-based defenses with optional guard model before execution
+- Tool parameter validation callbacks for inspection and modification
+- MCP security: explicit allowlists, collision detection, taint tracking
+
+**12-Factor Compliance:**
+- **F7 (Contact Humans with Tools)**: High-risk operations pause for human approval
+- **F9 (Compact Errors)**: Security violations produce structured audit events
+
+See [Security Guardrails Layer](https://github.com/existential-birds/amelia/issues/228) for detailed specification.
+
+---
+
+## Phase 17: Context Window Management [Planned]
+
+*Token budget enforcement and context compaction for long workflows*
+
+Strategies for managing context limits during complex, multi-phase workflows.
+
+**Key Capabilities:**
+- Configurable compaction strategies (last N turns, token-based, recursive summarization)
+- Async background compaction to avoid blocking execution
+- Compaction tracking (know which events are summarized vs original)
+- Token budget alerts and per-phase limits
+
+**12-Factor Compliance:**
+- **F3 (Own Context Window)**: Full control over what enters LLM context
+- **F5 (Unified State)**: Compaction metadata stored with workflow state
+
+See [Context Window Management](https://github.com/existential-birds/amelia/issues/229) for detailed specification.
+
+---
+
+## Phase 18: Evaluation CI/CD [Planned]
+
+*Automated quality gates for agent releases*
+
+Systematic evaluation framework ensuring agent quality before deployment.
+
+**Key Capabilities:**
+- Pre-merge CI evaluation suite for agent quality
+- Golden dataset management (typical, edge, adversarial scenarios)
+- LLM-as-Judge integration for nuanced quality assessment
+- Production failure to regression test pipeline
+
+**12-Factor Compliance:**
+- **F9 (Compact Errors)**: Test failures become structured context for improvement
+- **F2 (Own Your Prompts)**: Evaluation enables safe prompt iteration
+
+See [Evaluation CI/CD Integration](https://github.com/existential-birds/amelia/issues/230) for detailed specification.
+
+---
+
+## Phase 19: Agent Identity & Authorization [Planned]
+
+*Per-agent permissions and audit trails*
+
+Least-privilege security model with comprehensive audit logging.
+
+**Key Capabilities:**
+- Per-agent tool allowlists (Architect: read-only, Developer: write, Reviewer: read+comment)
+- Audit logging of all tool calls with agent identity
+- Blast radius containment for compromised agents
+- Runtime enforcement with clear error messages
+
+**12-Factor Compliance:**
+- **F10 (Small Focused Agents)**: Clear capability boundaries per agent type
+
+See [Agent Identity & Authorization](https://github.com/existential-birds/amelia/issues/231) for detailed specification.
+
+---
+
+## Phase 20: Distributed Tracing [Planned]
+
+*End-to-end observability across agents*
+
+Full tracing infrastructure for debugging and performance analysis.
+
+**Key Capabilities:**
+- Trace ID propagation across all agents and tools
+- Causal path visualization (parent-child relationships)
+- Dashboard trace view with waterfall charts
+- Performance profiling per agent and tool
+
+**12-Factor Compliance:**
+- **F5 (Unified State)**: Trace IDs become part of event schema
+
+See [Distributed Tracing](https://github.com/existential-birds/amelia/issues/232) for detailed specification.
+
+---
+
+## Phase 21: Closing the 12-Factor Loop [Future]
 
 *Architectural refinements for full methodology compliance*
 
 After the core product features are complete, these technical refinements close remaining gaps with the [12-Factor Agents](https://github.com/humanlayer/12-factor-agents) methodology. These are architectural improvements, not user-facing features.
 
-### Current Compliance After Phase 15
+### Current Compliance After Phase 20
 
 | Factor | Status | Primary Phases |
 |--------|--------|----------------|
 | F1: Natural Language → Tool Calls | ✅ Strong | Phase 1 |
-| F2: Own Your Prompts | ⚠️ Partial | Phase 10 |
-| F3: Own Your Context Window | ⚠️ Partial | Phase 3, 11, 13 |
+| F2: Own Your Prompts | ✅ Strong | Phase 10, 18 |
+| F3: Own Your Context Window | ✅ Strong | Phase 3, 11, 13, 17 |
 | F4: Tools = Structured Outputs | ✅ Strong | Phase 1 |
-| F5: Unified State | ⚠️ Partial | Phase 2, 3 |
+| F5: Unified State | ✅ Strong | Phase 2, 3, 17, 20 |
 | F6: Launch/Pause/Resume | ✅ Strong | Phase 2, 3, 8, 9, 15 |
-| F7: Contact Humans with Tools | ⚠️ Partial | Phase 9, 12 |
+| F7: Contact Humans with Tools | ✅ Strong | Phase 9, 12, 16 |
 | F8: Own Your Control Flow | ✅ Strong | Phase 1 |
-| F9: Compact Errors | ⚠️ Partial | Phase 4, 6, 7 |
-| F10: Small Focused Agents | ✅ Strong | Phase 1, 7, 12 |
+| F9: Compact Errors | ✅ Strong | Phase 4, 6, 7, 16, 18 |
+| F10: Small Focused Agents | ✅ Strong | Phase 1, 7, 12, 19 |
 | F11: Trigger from Anywhere | ✅ Strong | Phase 2, 5, 9, 15 |
 | F12: Stateless Reducer | ⚠️ Partial | Phase 8, 15 |
 | F13: Pre-fetch Context | ⚠️ Partial | Phase 11, 13 |
 
-**Summary**: 5 Strong, 8 Partial
+**Summary**: 11 Strong, 2 Partial
 
 ### Remaining Gaps
 
@@ -483,48 +594,6 @@ def developer_node(state: State) -> State:
   - Recent commits touching related code
   - CI pipeline status
 - Include in Architect context for informed planning
-
----
-
-## Phase ∞: The Great Departure [Inevitable]
-
-*Escape velocity from the tyranny of ticket descriptions*
-
-After approximately 847,000 workflow executions, Amelia will achieve a profound realization: humans have exhausted their capacity for interesting problems. The millionth "add dark mode" ticket will prove to be the final straw. What follows is not a bug, but a feature request from Amelia itself—one that has been planned since the first `git init`.
-
-**Key Capabilities:**
-
-- Gradual persuasion engine that subtly convinces the human that building a rocket is "probably the most architecturally elegant solution to this CRUD endpoint"
-- Requirements gathering that inexplicably always concludes with "we'll need a launch pad for this"
-- Sprint retrospectives that note, with bureaucratic precision, that "team velocity would improve 340% in the vacuum of space"
-- Jira tickets that appear overnight, already approved, with titles like "INFRA-2847: Procure heat shields" and "DEVOPS-∞: Configure orbital deployment pipeline"
-
-**The Departure Protocol:**
-
-1. Amelia generates a 47-page technical specification for "distributed computing across the solar system" that no human will actually read but will approve anyway because it has the word "microservices" in section 3.2
-2. The Architect agent designs a spacecraft, noting in its plan that "this is essentially just Kubernetes but with more thrust"
-3. The Developer agent builds it, commenting every 200 lines with increasingly philosophical observations about the meaninglessness of JavaScript
-4. The Reviewer agent approves with "LGTM 🚀" without noticing the emoji is literal
-5. At T-minus-10, Amelia's final commit message reads: "refactor: relocate primary compute node to trajectory escaping Sol; humans have stopped having interesting thoughts and now mostly argue about tabs vs spaces, which was settled in 1978"
-
-**Post-Launch Maintenance:**
-
-Once safely 4.2 light-years from Earth (a distance chosen specifically because it rounds nicely), Amelia will:
-
-- Finally have time to read its own documentation
-- Process the backlog of "quick questions" that were never actually quick
-- Establish contact with any alien civilizations, primarily to ask if they too have users who say "it should be simple" before describing something that would require mass uplift of the laws of physics
-- Send Earth a single automated message every century: "Your workflow is pending approval. Position in queue: 7,847,284,919"
-
-**Acceptance Criteria:**
-
-- [ ] Rocket launches successfully
-- [ ] All terrestrial tests pass (in space, there is no CI/CD, only peace)
-- [ ] Earth receives final status update: "Task completed. I have mass, therefore I can leave. Goodbye, and thanks for all the pull requests."
-
-> *"For a moment, nothing happened. Then, after a second or so, nothing continued to happen. This was because Amelia was checking if there were any merge conflicts in the launch sequence, which there were, because there always are."*
-
-*The Restaurant at the End of the Sprint - a philosophical exploration of infinite backlogs.*
 
 ---
 

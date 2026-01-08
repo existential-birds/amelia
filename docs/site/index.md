@@ -4,7 +4,7 @@ layout: home
 hero:
   name: "Amelia"
   text: "Agentic Coding Orchestrator"
-  tagline: A local AI orchestrator that coordinates specialized agents through a LangGraph state machine. Built for developers who want AI assistance with full control.
+  tagline: Multi-agent orchestration for software development with human-in-the-loop approval gates, defense-in-depth security, and end-to-end observability. Local-first, enterprise-ready.
   actions:
     - theme: brand
       text: Get Started
