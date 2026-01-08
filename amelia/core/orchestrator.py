@@ -800,6 +800,10 @@ async def next_task_node(
 
     Returns:
         State update with incremented task index, reset iteration, cleared session.
+
+    Raises:
+        RuntimeError: If commit fails, halting the workflow to preserve
+            one-commit-per-task semantics per issue #188.
     """
     completed_task = state.current_task_index + 1
     next_task = state.current_task_index + 2
@@ -810,8 +814,17 @@ async def next_task_node(
         total_tasks=state.total_tasks,
     )
 
-    # Commit current task changes
-    await commit_task_changes(state, config)
+    # Commit current task changes - halt on failure to preserve clean commit history
+    commit_success = await commit_task_changes(state, config)
+    if not commit_success:
+        logger.error(
+            "Cannot proceed to next task: commit failed",
+            completed_task=completed_task,
+        )
+        raise RuntimeError(
+            f"Failed to commit changes for task {completed_task}. "
+            "Halting workflow to preserve one-commit-per-task semantics."
+        )
 
     return {
         "current_task_index": state.current_task_index + 1,
@@ -820,12 +833,15 @@ async def next_task_node(
     }
 
 
-async def commit_task_changes(state: ExecutionState, config: RunnableConfig) -> None:
+async def commit_task_changes(state: ExecutionState, config: RunnableConfig) -> bool:
     """Commit changes for completed task.
 
     Args:
         state: Current execution state.
         config: Runnable config with profile.
+
+    Returns:
+        True if commit succeeded or no changes to commit, False if commit failed.
     """
     profile: Profile | None = config.get("configurable", {}).get("profile")
     if not profile:
@@ -847,7 +863,7 @@ async def commit_task_changes(state: ExecutionState, config: RunnableConfig) -> 
             "Failed to stage changes for task commit",
             error=stderr.decode(),
         )
-        return
+        return False
 
     # Check if there are staged changes
     proc = await asyncio.create_subprocess_exec(
@@ -860,7 +876,7 @@ async def commit_task_changes(state: ExecutionState, config: RunnableConfig) -> 
     if proc.returncode == 0:
         # Exit code 0 means no changes (diff is quiet/empty)
         logger.info("No changes to commit for task", task=task_number)
-        return
+        return True
 
     # Commit with task reference
     issue_key = state.issue.id if state.issue else "unknown"
@@ -875,8 +891,10 @@ async def commit_task_changes(state: ExecutionState, config: RunnableConfig) -> 
     _, stderr = await proc.communicate()
     if proc.returncode == 0:
         logger.info("Committed task changes", task=task_number, message=commit_msg)
+        return True
     else:
         logger.warning("Failed to commit task changes", error=stderr.decode())
+        return False
 
 
 def route_after_task_review(
