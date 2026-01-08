@@ -5,6 +5,7 @@ Developer (execute agentically) <-> Reviewer (review) -> Done. Provides node fun
 the state machine and the create_orchestrator_graph() factory.
 """
 import asyncio
+import re
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
@@ -30,6 +31,20 @@ from amelia.server.models.tokens import TokenUsage
 if TYPE_CHECKING:
     from amelia.server.database.repository import WorkflowRepository
     from amelia.server.events.bus import EventBus
+
+
+def extract_task_count(plan_markdown: str) -> int | None:
+    """Extract task count from plan markdown by counting ### Task N: patterns.
+
+    Args:
+        plan_markdown: The markdown content of the plan.
+
+    Returns:
+        Number of tasks found, or None if no task patterns detected.
+    """
+    pattern = r"^### Task \d+:"
+    matches = re.findall(pattern, plan_markdown, re.MULTILINE)
+    return len(matches) if matches else None
 
 
 def _extract_config_params(

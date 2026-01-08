@@ -202,3 +202,62 @@ class TestPlanValidatorNode:
             "api:openrouter",
             model=expected_model,
         )
+
+
+class TestExtractTaskCount:
+    """Tests for extract_task_count helper function."""
+
+    def test_extract_task_count_returns_count_for_valid_tasks(self) -> None:
+        """Should count ### Task N: patterns in plan markdown."""
+        from amelia.core.orchestrator import extract_task_count
+
+        plan = """
+# Implementation Plan
+
+### Task 1: Setup
+
+Do the setup.
+
+### Task 2: Implementation
+
+Do the implementation.
+
+### Task 3: Testing
+
+Run tests.
+"""
+        assert extract_task_count(plan) == 3
+
+    def test_extract_task_count_returns_none_for_no_tasks(self) -> None:
+        """Should return None when no ### Task N: patterns found."""
+        from amelia.core.orchestrator import extract_task_count
+
+        plan = """
+# Implementation Plan
+
+Some content without task markers.
+
+## Section 1
+
+More content.
+"""
+        assert extract_task_count(plan) is None
+
+    def test_extract_task_count_ignores_malformed_patterns(self) -> None:
+        """Should only match exact ### Task N: pattern."""
+        from amelia.core.orchestrator import extract_task_count
+
+        plan = """
+### Task 1: Valid
+
+Content.
+
+#### Task 2: Wrong level (h4)
+
+### Task: Missing number
+
+### Task2: Missing space
+
+### Task 3: Also valid
+"""
+        assert extract_task_count(plan) == 2  # Only Task 1 and Task 3
