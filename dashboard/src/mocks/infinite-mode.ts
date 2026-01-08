@@ -17,7 +17,7 @@ import type {
 
 /**
  * Determine the event level based on event type.
- * Matches the Python get_event_level() function.
+ * Matches the Python get_event_level() function in amelia/server/models/events.py.
  */
 function getEventLevel(eventType: WorkflowEvent['event_type']): EventLevel {
   const infoEvents = new Set([
@@ -30,11 +30,7 @@ function getEventLevel(eventType: WorkflowEvent['event_type']): EventLevel {
     'approval_required',
     'approval_granted',
     'approval_rejected',
-    'review_requested',
     'review_completed',
-    'revision_requested',
-    'system_error',
-    'system_warning',
   ]);
 
   const traceEvents = new Set([

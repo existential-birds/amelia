@@ -4,7 +4,6 @@ This module provides the Developer agent that executes code changes using
 autonomous tool-calling LLM execution rather than structured step-by-step plans.
 """
 from collections.abc import AsyncIterator
-from typing import TYPE_CHECKING
 
 from loguru import logger
 
@@ -13,10 +12,6 @@ from amelia.core.state import ExecutionState
 from amelia.core.types import Profile
 from amelia.drivers.base import AgenticMessageType, DriverInterface
 from amelia.server.models.events import WorkflowEvent
-
-
-if TYPE_CHECKING:
-    from amelia.server.events.bus import EventBus
 
 
 class Developer:
@@ -31,13 +26,8 @@ class Developer:
 
     """
 
-    def __init__(
-        self,
-        driver: DriverInterface,
-        event_bus: "EventBus | None" = None,
-    ):
+    def __init__(self, driver: DriverInterface):
         self.driver = driver
-        self._event_bus = event_bus
 
     async def run(
         self,

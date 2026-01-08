@@ -535,7 +535,7 @@ async def call_developer_node(
     repository = config.get("configurable", {}).get("repository")
 
     driver = DriverFactory.get_driver(profile.driver, model=profile.model)
-    developer = Developer(driver, event_bus=event_bus)
+    developer = Developer(driver)
 
     # Collect the final state from the developer's agentic execution
     final_state = state
