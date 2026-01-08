@@ -1477,14 +1477,14 @@ class OrchestratorService:
         workflow_id: str,
         chunk: dict[str, Any],
     ) -> None:
-        """Handle a chunk from astream(stream_mode='updates').
+        """Handle an updates chunk from astream(stream_mode=['updates', 'tasks']).
 
-        With stream_mode='updates', each chunk maps node names to their
+        With combined stream mode, updates chunks map node names to their
         state updates. We emit STAGE_COMPLETED after each node that's in
         STAGE_NODES.
 
-        Note: STAGE_STARTED events are emitted via stream_mode='tasks'
-        when nodes begin execution.
+        Note: STAGE_STARTED events are emitted by _handle_tasks_event when
+        task events arrive from the tasks stream mode.
 
         Args:
             workflow_id: The workflow this chunk belongs to.
