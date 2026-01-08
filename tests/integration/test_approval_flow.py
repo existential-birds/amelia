@@ -148,9 +148,10 @@ class TestGraphInterruptHandling:
     ):
         """__interrupt__ chunk sets status to blocked and emits APPROVAL_REQUIRED."""
         # Setup LangGraph mocks with custom interrupt sequence
+        # Combined stream mode returns (mode, data) tuples
         interrupt_items = [
-            {"architect_node": {}},  # First node completes
-            {"__interrupt__": ("Paused for approval",)},  # Interrupt signal
+            ("updates", {"architect_node": {}}),  # First node completes
+            ("updates", {"__interrupt__": ("Paused for approval",)}),  # Interrupt signal
         ]
         mocks = langgraph_mock_factory(astream_items=interrupt_items)
         mock_create_graph.return_value = mocks.graph

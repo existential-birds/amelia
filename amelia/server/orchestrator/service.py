@@ -1053,17 +1053,20 @@ class OrchestratorService:
                     config=config,
                     stream_mode=["updates", "tasks"],
                 ):
+                    # Combined mode returns (mode, data) tuples
+                    # Cast for type checker - astream with list mode returns tuples
+                    chunk_tuple = cast(tuple[str, Any], chunk)
                     # No interrupt handling - review graph runs autonomously
                     # But we still need to check for unexpected interrupts
-                    if self._is_interrupt_chunk(chunk):
-                        mode, data = chunk
+                    if self._is_interrupt_chunk(chunk_tuple):
+                        mode, data = chunk_tuple
                         logger.warning(
                             "Unexpected interrupt in review workflow",
                             workflow_id=workflow_id,
                         )
                         continue
                     # Emit stage events for each node
-                    await self._handle_combined_stream_chunk(workflow_id, chunk)
+                    await self._handle_combined_stream_chunk(workflow_id, chunk_tuple)
 
                 # Fetch fresh state from DB to get accurate current_stage
                 # (the local state variable is stale - _handle_stream_chunk updates DB)
@@ -1263,9 +1266,12 @@ class OrchestratorService:
                     config=config,
                     stream_mode=["updates", "tasks"],
                 ):
+                    # Combined mode returns (mode, data) tuples
+                    # Cast for type checker - astream with list mode returns tuples
+                    chunk_tuple = cast(tuple[str, Any], chunk)
                     # In agentic mode, no interrupts expected after initial approval
-                    if self._is_interrupt_chunk(chunk):
-                        mode, data = chunk
+                    if self._is_interrupt_chunk(chunk_tuple):
+                        mode, data = chunk_tuple
                         state = await graph.aget_state(config)
                         next_nodes = state.next if state else []
                         logger.warning(
@@ -1274,7 +1280,7 @@ class OrchestratorService:
                             next_nodes=next_nodes,
                         )
                         continue
-                    await self._handle_combined_stream_chunk(workflow_id, chunk)
+                    await self._handle_combined_stream_chunk(workflow_id, chunk_tuple)
 
                 # Workflow completed after human approval.
                 # Note: A separate COMPLETED emission exists in _run_workflow() for
