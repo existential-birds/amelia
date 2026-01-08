@@ -59,8 +59,6 @@ export function JobQueueItem({ workflow, selected, onSelect, className }: JobQue
       <div className="font-body text-sm text-foreground truncate">
         {workflow.worktree_name}
       </div>
-
-      {/* TODO: Add ETA row when backend provides estimated completion time */}
     </button>
   );
 }
