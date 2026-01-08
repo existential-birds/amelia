@@ -1,6 +1,6 @@
 """Tests for call_developer_node using profile from config."""
 
-from collections.abc import AsyncGenerator, Callable, Sequence
+from collections.abc import Callable
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -12,34 +12,7 @@ from amelia.core.state import ExecutionState
 from amelia.core.types import Issue, Profile
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
 from amelia.server.models.events import EventType
-
-
-def create_mock_execute_agentic(
-    messages: Sequence[AgenticMessage],
-) -> Callable[..., AsyncGenerator[AgenticMessage, None]]:
-    """Create a mock execute_agentic async generator function.
-
-    This helper reduces boilerplate in tests that need to mock driver.execute_agentic().
-    Each test can specify the AgenticMessage objects to yield.
-
-    Args:
-        messages: Sequence of AgenticMessage objects to yield.
-
-    Returns:
-        An async generator function that yields the provided messages.
-
-    Example:
-        mock_driver = MagicMock()
-        mock_driver.execute_agentic = create_mock_execute_agentic([
-            AgenticMessage(type=AgenticMessageType.THINKING, content="..."),
-            AgenticMessage(type=AgenticMessageType.RESULT, content="Done"),
-        ])
-    """
-    async def mock_execute_agentic(*args: Any, **kwargs: Any) -> AsyncGenerator[AgenticMessage, None]:
-        for msg in messages:
-            yield msg
-
-    return mock_execute_agentic
+from tests.conftest import create_mock_execute_agentic
 
 
 class TestDeveloperNodeProfileFromConfig:

@@ -178,30 +178,6 @@ def make_agentic_messages(
     return messages
 
 
-def create_mock_execute_agentic(
-    messages: list[AgenticMessage],
-    capture_kwargs: list[dict[str, Any]] | None = None,
-) -> Any:
-    """Create a mock execute_agentic async generator.
-
-    Args:
-        messages: Messages to yield from the generator.
-        capture_kwargs: Optional list to capture kwargs passed to the mock.
-
-    Returns:
-        Async generator function suitable for mocking execute_agentic.
-    """
-    async def mock_execute_agentic(
-        *args: Any, **kwargs: Any
-    ) -> AsyncGenerator[AgenticMessage, None]:
-        if capture_kwargs is not None:
-            capture_kwargs.append(kwargs)
-        for msg in messages:
-            yield msg
-
-    return mock_execute_agentic
-
-
 # =============================================================================
 # Fixtures
 # =============================================================================

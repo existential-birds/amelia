@@ -14,8 +14,8 @@ from amelia.agents.reviewer import ReviewResponse
 from amelia.core.orchestrator import call_architect_node, call_evaluation_node, call_reviewer_node
 from amelia.core.state import ReviewResult
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
+from tests.conftest import create_mock_execute_agentic
 from tests.integration.conftest import (
-    create_mock_execute_agentic,
     make_config,
     make_execution_state,
     make_issue,
