@@ -22,7 +22,6 @@ from amelia.core.types import (
     Issue,
     Profile,
     Settings,
-    StageEventEmitter,
 )
 from amelia.ext import WorkflowEventType as ExtWorkflowEventType
 from amelia.ext.exceptions import PolicyDeniedError
@@ -1080,11 +1079,19 @@ class OrchestratorService:
                 async for chunk in graph.astream(
                     initial_state,
                     config=config,
-                    stream_mode="updates",
+                    stream_mode=["updates", "tasks"],
                 ):
                     # No interrupt handling - review graph runs autonomously
-                    # Emit stage events for each node that completes
-                    await self._handle_stream_chunk(workflow_id, chunk)
+                    # But we still need to check for unexpected interrupts
+                    if self._is_interrupt_chunk(chunk):
+                        mode, data = chunk
+                        logger.warning(
+                            "Unexpected interrupt in review workflow",
+                            workflow_id=workflow_id,
+                        )
+                        continue
+                    # Emit stage events for each node
+                    await self._handle_combined_stream_chunk(workflow_id, chunk)
 
                 # Fetch fresh state from DB to get accurate current_stage
                 # (the local state variable is stale - _handle_stream_chunk updates DB)
