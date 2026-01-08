@@ -4,7 +4,7 @@ import asyncio
 import contextlib
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from uuid import uuid4
 
 import yaml
@@ -828,32 +828,27 @@ class OrchestratorService:
                 async for chunk in graph.astream(
                     input_state,
                     config=config,
-                    stream_mode="updates",
+                    stream_mode=["updates", "tasks"],
                 ):
-                    # Check for interrupt signal from LangGraph
-                    if "__interrupt__" in chunk:
+                    # Combined mode returns (mode, data) tuples
+                    # Cast for type checker - astream with list mode returns tuples
+                    chunk_tuple = cast(tuple[str, Any], chunk)
+                    if self._is_interrupt_chunk(chunk_tuple):
                         was_interrupted = True
+                        mode, data = chunk_tuple
+                        interrupt_data = data.get("__interrupt__") if isinstance(data, dict) else None
                         logger.info(
                             "Workflow paused for human approval",
                             workflow_id=workflow_id,
-                            interrupt_data=chunk["__interrupt__"],
+                            interrupt_data=interrupt_data,
                         )
                         # Sync plan from LangGraph checkpoint to ServerExecutionState
                         # so it's available via REST API while blocked
                         await self._sync_plan_from_checkpoint(workflow_id, graph, config)
-                        # Emit STAGE_STARTED for human_approval_node (interrupted before running)
-                        await self._emit(
-                            workflow_id,
-                            EventType.STAGE_STARTED,
-                            "Starting human_approval_node",
-                            agent="human_approval",
-                            data={"stage": "human_approval_node"},
-                        )
                         await self._emit(
                             workflow_id,
                             EventType.APPROVAL_REQUIRED,
                             "Plan ready for review - awaiting human approval",
-                            agent="human_approval",
                             data={"paused_at": "human_approval_node"},
                         )
                         # Emit extension hook for approval gate
@@ -870,8 +865,8 @@ class OrchestratorService:
                             stage="human_approval_node",
                         )
                         break
-                    # Emit stage events for each node that completes
-                    await self._handle_stream_chunk(workflow_id, chunk)
+                    # Handle combined mode chunk
+                    await self._handle_combined_stream_chunk(workflow_id, chunk_tuple)
 
                 if not was_interrupted:
                     # Workflow completed without interruption (no human approval needed).
@@ -1591,6 +1586,25 @@ class OrchestratorService:
                 # Return special marker to indicate interrupt
                 return  # Caller handles interrupt separately
             await self._handle_stream_chunk(workflow_id, data)
+
+    def _is_interrupt_chunk(self, chunk: tuple[str, Any] | dict[str, Any]) -> bool:
+        """Check if a stream chunk represents an interrupt.
+
+        Works with both combined mode (tuple) and single mode (dict).
+
+        Args:
+            chunk: Stream chunk from astream().
+
+        Returns:
+            True if this chunk contains an interrupt signal.
+        """
+        if isinstance(chunk, tuple):
+            mode, data = chunk
+            if mode == "updates" and isinstance(data, dict):
+                return "__interrupt__" in data
+            return False
+        # Single mode (dict)
+        return "__interrupt__" in chunk
 
     async def _emit_agent_messages(
         self,

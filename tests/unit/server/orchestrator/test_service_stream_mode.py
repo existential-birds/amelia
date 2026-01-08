@@ -1,8 +1,9 @@
 # tests/unit/server/orchestrator/test_service_stream_mode.py
 """Tests for LangGraph combined stream mode handling."""
 
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 
 
 @pytest.fixture
@@ -32,8 +33,8 @@ class TestStreamModeTaskEvents:
         self, mock_repository, mock_event_bus
     ):
         """Task events should emit STAGE_STARTED before node executes."""
-        from amelia.server.orchestrator.service import OrchestratorService
         from amelia.server.models.events import EventType
+        from amelia.server.orchestrator.service import OrchestratorService
 
         # Create service with mocks
         service = OrchestratorService(
@@ -110,3 +111,42 @@ class TestStreamModeTaskEvents:
 
         # Verify both handlers were called appropriately
         assert mock_event_bus.emit.call_count >= 2  # STAGE_STARTED + STAGE_COMPLETED
+
+    @pytest.mark.asyncio
+    async def test_interrupt_detected_in_combined_mode(
+        self, mock_repository, mock_event_bus
+    ):
+        """Interrupts in updates mode should still be detected."""
+        from amelia.server.orchestrator.service import OrchestratorService
+
+        service = OrchestratorService(
+            repository=mock_repository,
+            event_bus=mock_event_bus,
+        )
+
+        # Simulate interrupt chunk
+        chunk = ("updates", {"__interrupt__": ({"value": "test"},)})
+
+        # The interrupt should be detected
+        is_interrupt = service._is_interrupt_chunk(chunk)
+        assert is_interrupt is True
+
+    @pytest.mark.asyncio
+    async def test_non_interrupt_not_flagged(
+        self, mock_repository, mock_event_bus
+    ):
+        """Regular updates should not be flagged as interrupts."""
+        from amelia.server.orchestrator.service import OrchestratorService
+
+        service = OrchestratorService(
+            repository=mock_repository,
+            event_bus=mock_event_bus,
+        )
+
+        # Regular update chunk
+        chunk = ("updates", {"architect_node": {"goal": "Test"}})
+        assert service._is_interrupt_chunk(chunk) is False
+
+        # Tasks chunk
+        chunk = ("tasks", {"id": "t1", "name": "architect_node"})
+        assert service._is_interrupt_chunk(chunk) is False
