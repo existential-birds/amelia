@@ -66,6 +66,8 @@ async def create_workflow(
         worktree_name=request.worktree_name,
         profile=request.profile,
         driver=request.driver,
+        task_title=request.task_title,
+        task_description=request.task_description,
     )
 
     logger.info("Created workflow", workflow_id=workflow_id, issue_id=request.issue_id)
