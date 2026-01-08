@@ -81,3 +81,73 @@ class TestStartCommandTaskFlags:
             call_kwargs = mock_client.create_workflow.call_args.kwargs
             assert call_kwargs.get("task_title") == "Add logout button"
             assert call_kwargs.get("task_description") == "Implement logout functionality in the navbar"
+
+
+class TestPlanCommandTaskFlags:
+    """Tests for --title and --description flags on plan command."""
+
+    @pytest.fixture
+    def runner(self):
+        """Typer CLI test runner."""
+        return CliRunner()
+
+    def test_description_without_title_errors(self, runner):
+        """--description without --title should error at client side."""
+        result = runner.invoke(
+            app,
+            ["plan", "TASK-1", "--description", "Some description"],
+        )
+        assert result.exit_code != 0
+        # Check both stdout and output (typer uses different attributes)
+        output = (result.stdout + result.output).lower()
+        assert "requires" in output or "title" in output
+
+    def test_title_flag_constructs_issue_directly(self, runner, tmp_path):
+        """--title should construct Issue directly, bypassing tracker."""
+        # Create mock git worktree with settings
+        worktree = tmp_path / "repo"
+        worktree.mkdir()
+        (worktree / ".git").touch()
+        settings_content = """
+active_profile: noop
+profiles:
+  noop:
+    name: noop
+    driver: cli:claude
+    model: sonnet
+    tracker: noop
+    strategy: single
+"""
+        (worktree / "settings.amelia.yaml").write_text(settings_content)
+
+        with patch("amelia.client.cli._get_worktree_context") as mock_ctx, \
+             patch("amelia.client.cli.Architect") as mock_architect_class, \
+             patch("amelia.client.cli.DriverFactory") as mock_driver_factory, \
+             patch("amelia.client.cli.create_tracker") as mock_create_tracker:
+            mock_ctx.return_value = (str(worktree), "repo")
+
+            # Mock architect to capture the state
+            mock_architect = mock_architect_class.return_value
+            captured_state = None
+
+            async def capture_plan(*args, **kwargs):
+                nonlocal captured_state
+                captured_state = kwargs.get("state") or args[0]
+                # Yield a final state
+                final_state = captured_state.model_copy(update={"plan_path": "/tmp/plan.md"})
+                yield final_state, None
+
+            mock_architect.plan = capture_plan
+
+            result = runner.invoke(
+                app,
+                ["plan", "TASK-1", "-p", "noop", "--title", "Fix typo", "--description", "Fix README"],
+            )
+
+            # Tracker should NOT be called when --title is provided with noop
+            mock_create_tracker.assert_not_called()
+
+            # State should have our custom issue
+            assert captured_state is not None
+            assert captured_state.issue.title == "Fix typo"
+            assert captured_state.issue.description == "Fix README"

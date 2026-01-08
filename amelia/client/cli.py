@@ -19,6 +19,7 @@ from amelia.client.git import get_worktree_context
 from amelia.client.models import CreateWorkflowResponse, WorkflowSummary
 from amelia.config import load_settings
 from amelia.core.state import ExecutionState
+from amelia.core.types import Issue
 from amelia.drivers.factory import DriverFactory
 from amelia.trackers.factory import create_tracker
 
@@ -377,6 +378,14 @@ def plan_command(
         str | None,
         typer.Option("--profile", "-p", help="Profile name for configuration"),
     ] = None,
+    title: Annotated[
+        str | None,
+        typer.Option("--title", help="Task title for noop tracker (bypasses issue lookup)"),
+    ] = None,
+    description: Annotated[
+        str | None,
+        typer.Option("--description", help="Task description (requires --title)"),
+    ] = None,
 ) -> None:
     """Generate an implementation plan for an issue without executing it.
 
@@ -387,7 +396,14 @@ def plan_command(
     Args:
         issue_id: Issue identifier to generate a plan for (e.g., ISSUE-123).
         profile_name: Optional profile name for driver and tracker configuration.
+        title: Optional task title for noop tracker (bypasses issue lookup).
+        description: Optional task description (requires --title to be set).
     """
+    # Validate --description requires --title
+    if description and not title:
+        console.print("[red]Error:[/red] --description requires --title to be set")
+        raise typer.Exit(1)
+
     worktree_path, _worktree_name = _get_worktree_context()
 
     async def _generate_plan() -> ExecutionState:
@@ -404,9 +420,17 @@ def plan_command(
         # Update profile with worktree path
         profile = profile.model_copy(update={"working_dir": worktree_path})
 
-        # Fetch issue using tracker
-        tracker = create_tracker(profile)
-        issue = tracker.get_issue(issue_id, cwd=worktree_path)
+        # Get issue: construct directly if title provided with noop tracker, else use tracker
+        if title is not None and profile.tracker in ("noop", "none"):
+            issue = Issue(
+                id=issue_id,
+                title=title,
+                description=description or "",
+            )
+        else:
+            # Fetch issue using tracker
+            tracker = create_tracker(profile)
+            issue = tracker.get_issue(issue_id, cwd=worktree_path)
 
         # Create minimal execution state
         state = ExecutionState(
