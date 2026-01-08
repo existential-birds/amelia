@@ -4,7 +4,6 @@ Contains type aliases (DriverType, TrackerType, StrategyType) and
 Pydantic models (RetryConfig, Profile, Settings, Issue, Design) used throughout
 the Amelia agentic coding orchestrator.
 """
-from collections.abc import Awaitable, Callable
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -125,12 +124,3 @@ class Design(BaseModel):
     relevant_files: list[str] = Field(default_factory=list)
     conventions: str | None = None
     raw_content: str
-
-
-StageEventEmitter = Callable[[str], Awaitable[None]]
-"""Type alias for async stage event emitter function.
-
-Takes the stage name (e.g., "architect_node") and emits a STAGE_STARTED event.
-This allows nodes to emit stage start events when they actually begin execution,
-rather than relying on the streaming consumer to predict the next stage.
-"""

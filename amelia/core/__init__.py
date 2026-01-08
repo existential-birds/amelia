@@ -9,7 +9,6 @@ Exports:
     AmeliaError: Base exception for all Amelia errors.
     ConfigurationError: Invalid or missing configuration.
     PathTraversalError: Attempted path traversal outside allowed directory.
-    StageEventEmitter: Callback for emitting STAGE_STARTED events from nodes.
     strip_ansi: Remove ANSI escape codes from strings.
 """
 
@@ -18,8 +17,5 @@ from amelia.core.exceptions import (
     AmeliaError as AmeliaError,
     ConfigurationError as ConfigurationError,
     PathTraversalError as PathTraversalError,
-)
-from amelia.core.types import (
-    StageEventEmitter as StageEventEmitter,
 )
 from amelia.core.utils import strip_ansi as strip_ansi
