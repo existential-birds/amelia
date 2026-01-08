@@ -68,6 +68,10 @@ class ExecutionState(BaseModel):
         final_response: Final response from the agent when complete.
         error: Error message if status is 'failed'.
         review_iteration: Current iteration in review-fix loop.
+        total_tasks: Number of tasks parsed from plan (None = legacy single-session mode).
+        current_task_index: 0-indexed task being executed, increments after each task passes review.
+        task_review_iteration: Review iteration counter that resets to 0 when moving to next task.
+        max_task_review_iterations: Per-task review iteration limit (configurable via profile).
         structured_review: Structured review output from reviewer agent.
         evaluation_result: Output from the evaluator agent.
         approved_items: Item numbers approved for fixing by human or auto-approve.
@@ -105,6 +109,12 @@ class ExecutionState(BaseModel):
 
     # Review iteration tracking (for review-fix loop)
     review_iteration: int = 0
+
+    # Task execution tracking (for multi-task plans)
+    total_tasks: int | None = None  # Parsed from plan (None = legacy single-session)
+    current_task_index: int = 0  # 0-indexed, increments after each task passes review
+    task_review_iteration: int = 0  # Resets to 0 when moving to next task
+    max_task_review_iterations: int = 5  # Per-task limit (configurable via profile)
 
     # Review workflow fields (structured review-fix cycle)
     # Note: Types use Any until StructuredReviewResult and EvaluationResult are defined

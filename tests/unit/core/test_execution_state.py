@@ -23,3 +23,30 @@ class TestExecutionStateRawArchitectOutput:
         new_state = state.model_copy(update={"raw_architect_output": "# Updated"})
         assert new_state.raw_architect_output == "# Updated"
         assert state.raw_architect_output is None  # Original unchanged
+
+
+class TestTaskExecutionFields:
+    """Tests for task execution tracking fields."""
+
+    def test_task_execution_fields_have_correct_defaults(self) -> None:
+        """Task execution tracking fields should have sensible defaults."""
+        state = ExecutionState(profile_id="test")
+
+        assert state.total_tasks is None  # None = legacy single-session mode
+        assert state.current_task_index == 0  # 0-indexed
+        assert state.task_review_iteration == 0  # Resets per task
+        assert state.max_task_review_iterations == 5  # Default limit
+
+    def test_task_execution_fields_are_settable(self) -> None:
+        """Task execution fields should be settable via model_copy."""
+        state = ExecutionState(profile_id="test")
+
+        updated = state.model_copy(update={
+            "total_tasks": 3,
+            "current_task_index": 1,
+            "task_review_iteration": 2,
+        })
+
+        assert updated.total_tasks == 3
+        assert updated.current_task_index == 1
+        assert updated.task_review_iteration == 2
