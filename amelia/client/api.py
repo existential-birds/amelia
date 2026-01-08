@@ -144,6 +144,8 @@ class AmeliaClient:
         worktree_path: str,
         worktree_name: str | None = None,
         profile: str | None = None,
+        task_title: str | None = None,
+        task_description: str | None = None,
     ) -> CreateWorkflowResponse:
         """Create a new workflow.
 
@@ -152,6 +154,8 @@ class AmeliaClient:
             worktree_path: Absolute path to git worktree
             worktree_name: Human-readable name for worktree
             profile: Optional profile name for configuration
+            task_title: Optional task title for noop tracker (bypasses issue lookup)
+            task_description: Optional task description (requires task_title)
 
         Returns:
             CreateWorkflowResponse with workflow id and initial status
@@ -167,6 +171,8 @@ class AmeliaClient:
             worktree_path=worktree_path,
             worktree_name=worktree_name,
             profile=profile,
+            task_title=task_title,
+            task_description=task_description,
         )
 
         async with self._http_client() as client:
