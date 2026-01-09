@@ -5,6 +5,7 @@
  * Sidebar primitives with React Router for active state management.
  */
 
+import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   Sidebar,
@@ -32,11 +33,13 @@ import {
   Gauge,
   Coins,
   Settings,
+  Bolt,
 } from 'lucide-react';
 import { APP_VERSION } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 import { useWorkflowStore } from '@/store/workflowStore';
 import { useDemoMode } from '@/hooks/useDemoMode';
+import { QuickShotModal } from './QuickShotModal';
 
 /**
  * Navigation link component using React Router's NavLink for active state.
@@ -136,6 +139,7 @@ export function DashboardSidebar() {
   const { state } = useSidebar();
   const isCollapsed = state === 'collapsed';
   const { isDemo } = useDemoMode();
+  const [quickShotOpen, setQuickShotOpen] = useState(false);
 
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border">
@@ -196,13 +200,33 @@ export function DashboardSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {/* Tools Section - Coming Soon features */}
+        {/* Tools Section - Quick Shot and Coming Soon features */}
         <SidebarGroup>
           <SidebarGroupLabel className="text-xs font-heading text-muted-foreground/60 font-semibold tracking-wider">
             TOOLS
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  tooltip="Quick Shot"
+                  onClick={() => setQuickShotOpen(true)}
+                  className="cursor-pointer"
+                >
+                  <div
+                    className={cn(
+                      'flex items-center gap-3 w-full',
+                      'hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+                      'group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0'
+                    )}
+                  >
+                    <Bolt className="h-4 w-4 shrink-0" />
+                    <span className="font-heading font-semibold tracking-wide truncate group-data-[collapsible=icon]:hidden">
+                      Quick Shot
+                    </span>
+                  </div>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
               <SidebarNavLink
                 to="/specs"
                 icon={BookOpen}
@@ -352,6 +376,8 @@ export function DashboardSidebar() {
           <SidebarTrigger className="text-muted-foreground hover:text-foreground" />
         </div>
       </SidebarFooter>
+
+      <QuickShotModal open={quickShotOpen} onOpenChange={setQuickShotOpen} />
     </Sidebar>
   );
 }
