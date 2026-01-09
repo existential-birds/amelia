@@ -320,7 +320,9 @@ class TestArchitectNodeTokenUsage(TestTokenUsageExtraction):
             agent="architect",
         )
 
-        async def mock_plan_generator(*args, **kwargs):
+        async def mock_plan_generator(
+            *args: Any, **kwargs: Any
+        ) -> AsyncGenerator[tuple[ExecutionState, WorkflowEvent], None]:
             """Mock async generator that yields (state, event) tuples."""
             yield (mock_final_state, mock_event)
 

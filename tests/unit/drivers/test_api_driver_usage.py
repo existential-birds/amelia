@@ -1,10 +1,13 @@
 """Tests for ApiDriver token usage tracking."""
 import asyncio
 import os
+from collections.abc import AsyncIterator, Generator
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages.ai import UsageMetadata
 
 
 class TestApiDriverGetUsage:
@@ -26,7 +29,7 @@ class TestApiDriverUsageAccumulation:
     """Tests for ApiDriver usage accumulation during execute_agentic."""
 
     @pytest.fixture
-    def mock_deepagents_for_usage(self):
+    def mock_deepagents_for_usage(self) -> Generator[MagicMock, None, None]:
         """Set up mock for DeepAgents with usage metadata."""
         with patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-key"}), \
              patch("amelia.drivers.api.deepagents.create_deep_agent") as mock_create, \
@@ -41,12 +44,16 @@ class TestApiDriverUsageAccumulation:
         """execute_agentic should accumulate usage from AIMessage.usage_metadata."""
         from amelia.drivers.api.deepagents import ApiDriver
 
-        # Create AIMessages with usage_metadata
+        # Create AIMessages with usage_metadata using proper UsageMetadata type
         msg1 = AIMessage(content="First response")
-        msg1.usage_metadata = {"input_tokens": 100, "output_tokens": 50}
+        msg1.usage_metadata = UsageMetadata(
+            input_tokens=100, output_tokens=50, total_tokens=150
+        )
 
         msg2 = AIMessage(content="Second response")
-        msg2.usage_metadata = {"input_tokens": 200, "output_tokens": 100}
+        msg2.usage_metadata = UsageMetadata(
+            input_tokens=200, output_tokens=100, total_tokens=300
+        )
 
         # Set up mock agent to yield chunks with these messages
         stream_chunks = [
@@ -54,7 +61,7 @@ class TestApiDriverUsageAccumulation:
             {"messages": [HumanMessage(content="test"), msg1, msg2]},
         ]
 
-        async def mock_astream(*args, **kwargs):
+        async def mock_astream(*args: Any, **kwargs: Any) -> AsyncIterator[dict[str, Any]]:
             for chunk in stream_chunks:
                 yield chunk
 
@@ -85,12 +92,14 @@ class TestApiDriverUsageAccumulation:
 
         # Create AIMessage with OpenRouter cost in response_metadata
         msg = AIMessage(content="Response")
-        msg.usage_metadata = {"input_tokens": 100, "output_tokens": 50}
+        msg.usage_metadata = UsageMetadata(
+            input_tokens=100, output_tokens=50, total_tokens=150
+        )
         msg.response_metadata = {"openrouter": {"cost": 0.0025}}
 
         stream_chunks = [{"messages": [msg]}]
 
-        async def mock_astream(*args, **kwargs):
+        async def mock_astream(*args: Any, **kwargs: Any) -> AsyncIterator[dict[str, Any]]:
             for chunk in stream_chunks:
                 yield chunk
 
@@ -114,11 +123,15 @@ class TestApiDriverUsageAccumulation:
         from amelia.drivers.api.deepagents import ApiDriver
 
         msg1 = AIMessage(content="First")
-        msg1.usage_metadata = {"input_tokens": 100, "output_tokens": 50}
+        msg1.usage_metadata = UsageMetadata(
+            input_tokens=100, output_tokens=50, total_tokens=150
+        )
         msg1.response_metadata = {"openrouter": {"cost": 0.001}}
 
         msg2 = AIMessage(content="Second")
-        msg2.usage_metadata = {"input_tokens": 100, "output_tokens": 50}
+        msg2.usage_metadata = UsageMetadata(
+            input_tokens=100, output_tokens=50, total_tokens=150
+        )
         msg2.response_metadata = {"openrouter": {"cost": 0.002}}
 
         stream_chunks = [
@@ -126,7 +139,7 @@ class TestApiDriverUsageAccumulation:
             {"messages": [msg1, msg2]},
         ]
 
-        async def mock_astream(*args, **kwargs):
+        async def mock_astream(*args: Any, **kwargs: Any) -> AsyncIterator[dict[str, Any]]:
             for chunk in stream_chunks:
                 yield chunk
 
@@ -150,9 +163,11 @@ class TestApiDriverUsageAccumulation:
         from amelia.drivers.api.deepagents import ApiDriver
 
         msg = AIMessage(content="Done")
-        msg.usage_metadata = {"input_tokens": 10, "output_tokens": 5}
+        msg.usage_metadata = UsageMetadata(
+            input_tokens=10, output_tokens=5, total_tokens=15
+        )
 
-        async def mock_astream(*args, **kwargs):
+        async def mock_astream(*args: Any, **kwargs: Any) -> AsyncIterator[dict[str, Any]]:
             await asyncio.sleep(0.1)  # 100ms delay
             yield {"messages": [msg]}
 
@@ -167,6 +182,7 @@ class TestApiDriverUsageAccumulation:
 
         usage = driver.get_usage()
         assert usage is not None
+        assert usage.duration_ms is not None
         assert usage.duration_ms >= 100  # At least 100ms
 
     async def test_resets_usage_on_new_execution(
@@ -176,14 +192,18 @@ class TestApiDriverUsageAccumulation:
         from amelia.drivers.api.deepagents import ApiDriver
 
         msg1 = AIMessage(content="First run")
-        msg1.usage_metadata = {"input_tokens": 100, "output_tokens": 50}
+        msg1.usage_metadata = UsageMetadata(
+            input_tokens=100, output_tokens=50, total_tokens=150
+        )
 
         msg2 = AIMessage(content="Second run")
-        msg2.usage_metadata = {"input_tokens": 200, "output_tokens": 100}
+        msg2.usage_metadata = UsageMetadata(
+            input_tokens=200, output_tokens=100, total_tokens=300
+        )
 
         call_count = 0
 
-        async def mock_astream(*args, **kwargs):
+        async def mock_astream(*args: Any, **kwargs: Any) -> AsyncIterator[dict[str, Any]]:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
@@ -201,11 +221,13 @@ class TestApiDriverUsageAccumulation:
         async for _ in driver.execute_agentic("first", "/tmp"):
             pass
         usage1 = driver.get_usage()
+        assert usage1 is not None
 
         # Second execution
         async for _ in driver.execute_agentic("second", "/tmp"):
             pass
         usage2 = driver.get_usage()
+        assert usage2 is not None
 
         # Usage should be from second run only, not accumulated
         assert usage1.input_tokens == 100
