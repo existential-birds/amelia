@@ -1,8 +1,6 @@
 """Tests for ClaudeCliDriver.get_usage() method."""
 from unittest.mock import MagicMock
 
-import pytest
-
 from amelia.drivers.base import DriverUsage
 from amelia.drivers.cli.claude import ClaudeCliDriver
 

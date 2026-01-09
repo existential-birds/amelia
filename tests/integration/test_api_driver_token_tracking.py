@@ -10,7 +10,6 @@ import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 
 from amelia.drivers.api.deepagents import ApiDriver
-from amelia.drivers.base import DriverUsage
 
 
 class TestApiDriverTokenTrackingIntegration:
