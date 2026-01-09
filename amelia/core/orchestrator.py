@@ -5,6 +5,8 @@ Developer (execute agentically) <-> Reviewer (review) -> Done. Provides node fun
 the state machine and the create_orchestrator_graph() factory.
 """
 import asyncio
+import os
+import re
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
@@ -20,16 +22,38 @@ from amelia.agents.architect import Architect, MarkdownPlanOutput
 from amelia.agents.developer import Developer
 from amelia.agents.evaluator import Evaluator
 from amelia.agents.reviewer import Reviewer
-from amelia.core.constants import resolve_plan_path
-from amelia.core.state import ExecutionState
+from amelia.core.constants import ToolName, resolve_plan_path
+from amelia.core.state import ExecutionState, rebuild_execution_state
 from amelia.core.types import Profile
 from amelia.drivers.factory import DriverFactory
 from amelia.server.models.tokens import TokenUsage
 
 
+# Resolve forward references in ExecutionState. Must be done after importing
+# Reviewer and Evaluator since they define StructuredReviewResult and EvaluationResult.
+rebuild_execution_state()
+
+
 if TYPE_CHECKING:
     from amelia.server.database.repository import WorkflowRepository
     from amelia.server.events.bus import EventBus
+
+
+def extract_task_count(plan_markdown: str) -> int | None:
+    """Extract task count from plan markdown by counting ### Task N: patterns.
+
+    Supports both simple numbering (### Task 1:) and hierarchical numbering
+    (### Task 1.1:) formats.
+
+    Args:
+        plan_markdown: The markdown content of the plan.
+
+    Returns:
+        Number of tasks found, or None if no task patterns detected.
+    """
+    pattern = r"^### Task \d+(\.\d+)?:"
+    matches = re.findall(pattern, plan_markdown, re.MULTILINE)
+    return len(matches) if matches else None
 
 
 def _extract_config_params(
@@ -115,13 +139,12 @@ async def _save_token_usage(
             output_tokens=usage.output_tokens,
             cost_usd=usage.cost_usd,
         )
-    except Exception as e:
+    except Exception:
         # Best-effort - don't fail workflow on token tracking errors
-        logger.warning(
+        logger.exception(
             "Failed to save token usage",
             agent=agent,
             workflow_id=workflow_id,
-            error=str(e),
         )
 
 
@@ -167,7 +190,7 @@ async def plan_validator_node(
     if not plan_path.exists():
         raise ValueError(f"Plan file not found at {plan_path}")
 
-    plan_content = plan_path.read_text()
+    plan_content = await asyncio.to_thread(plan_path.read_text)
     if not plan_content.strip():
         raise ValueError(f"Plan file is empty at {plan_path}")
 
@@ -192,10 +215,14 @@ Return:
         schema=MarkdownPlanOutput,
     )
 
+    # Parse task count from plan markdown
+    total_tasks = extract_task_count(plan_content)
+
     logger.info(
         "Plan validated",
         goal=output.goal,
         key_files_count=len(output.key_files),
+        total_tasks=total_tasks,
         workflow_id=workflow_id,
     )
 
@@ -204,6 +231,7 @@ Return:
         "plan_markdown": output.plan_markdown,
         "plan_path": plan_path,
         "key_files": output.key_files,
+        "total_tasks": total_tasks,
     }
 
 
@@ -262,6 +290,34 @@ async def call_architect_node(
             event_bus.emit(event)
 
     await _save_token_usage(driver, workflow_id, "architect", repository)
+
+    # Fallback: If plan file doesn't exist, write it from Write tool call content
+    # This handles cases where Claude Code's Write tool didn't persist the file
+    if not plan_path.exists():
+        logger.warning(
+            "Plan file not found after architect execution, attempting fallback",
+            plan_path=str(plan_path),
+            tool_calls_count=len(final_state.tool_calls),
+        )
+        # Look for Write tool call with plan content
+        for tc in final_state.tool_calls:
+            if tc.tool_name == ToolName.WRITE_FILE and "content" in tc.tool_input:
+                plan_content = tc.tool_input.get("content", "")
+                if plan_content:
+                    plan_path.write_text(plan_content)
+                    logger.info(
+                        "Wrote plan file from Write tool call content",
+                        plan_path=str(plan_path),
+                        content_length=len(plan_content),
+                    )
+                    break
+        else:
+            # No Write tool call found - this is a critical error
+            logger.error(
+                "No Write tool call found for plan file",
+                plan_path=str(plan_path),
+                tool_calls=[tc.tool_name for tc in final_state.tool_calls],
+            )
 
     logger.info(
         "Agent action completed",
@@ -487,6 +543,10 @@ async def call_developer_node(
     Uses the new agentic execution model where the Developer autonomously
     decides what tools to use rather than following a step-by-step plan.
 
+    For task-based execution (when total_tasks is set), this node:
+    - Clears driver_session_id for fresh context per task
+    - Injects task-scoped prompt pointing to the current task in the plan
+
     Args:
         state: Current execution state containing the goal.
         config: Optional RunnableConfig with stream_emitter in configurable.
@@ -506,6 +566,21 @@ async def call_developer_node(
 
     # Extract event_bus, workflow_id, and profile from config
     event_bus, workflow_id, profile = _extract_config_params(config)
+
+    # Task-based execution: clear session and inject task-scoped prompt
+    if state.total_tasks is not None:
+        task_number = state.current_task_index + 1  # 1-indexed for display
+        task_prompt = f"Execute Task {task_number} from plan at {state.plan_path}"
+        logger.info(
+            "Starting task execution",
+            task=task_number,
+            total_tasks=state.total_tasks,
+            fresh_session=True,
+        )
+        state = state.model_copy(update={
+            "driver_session_id": None,  # Fresh session for each task
+            "goal": f"{state.goal}\n\n**Current Task:** {task_prompt}",
+        })
 
     config = config or {}
     repository = config.get("configurable", {}).get("repository")
@@ -607,11 +682,18 @@ async def call_reviewer_node(
         },
     )
 
-    return {
+    # Build return dict
+    result_dict = {
         "last_review": review_result,
         "driver_session_id": new_session_id,
         "review_iteration": next_iteration,
     }
+
+    # Increment task review iteration for task-based execution
+    if state.total_tasks is not None:
+        result_dict["task_review_iteration"] = state.task_review_iteration + 1
+
+    return result_dict
 
 
 async def call_evaluation_node(
@@ -736,6 +818,234 @@ def route_after_review(
     return "developer"
 
 
+async def next_task_node(
+    state: ExecutionState, config: RunnableConfig
+) -> dict[str, Any]:
+    """Transition to next task: commit changes, increment index, reset iteration.
+
+    Args:
+        state: Current execution state with task tracking.
+        config: Runnable config.
+
+    Returns:
+        State update with incremented task index, reset iteration, cleared session.
+
+    Raises:
+        RuntimeError: If commit fails, halting the workflow to preserve
+            one-commit-per-task semantics per issue #188.
+    """
+    completed_task = state.current_task_index + 1
+    next_task = state.current_task_index + 2
+    logger.info(
+        "Transitioning to next task",
+        completed=completed_task,
+        next=next_task,
+        total_tasks=state.total_tasks,
+    )
+
+    # Commit current task changes - halt on failure to preserve clean commit history
+    commit_success = await commit_task_changes(state, config)
+    if not commit_success:
+        logger.error(
+            "Cannot proceed to next task: commit failed",
+            completed_task=completed_task,
+        )
+        raise RuntimeError(
+            f"Failed to commit changes for task {completed_task}. "
+            "Halting workflow to preserve one-commit-per-task semantics."
+        )
+
+    return {
+        "current_task_index": state.current_task_index + 1,
+        "task_review_iteration": 0,
+        "driver_session_id": None,  # Fresh session for next task
+    }
+
+
+async def commit_task_changes(state: ExecutionState, config: RunnableConfig) -> bool:
+    """Commit changes for completed task.
+
+    Args:
+        state: Current execution state.
+        config: Runnable config with profile.
+
+    Returns:
+        True if commit succeeded or no changes to commit, False if commit failed.
+    """
+    profile: Profile | None = config.get("configurable", {}).get("profile")
+    if not profile:
+        raise ValueError("profile is required in config.configurable")
+    working_dir = Path(profile.working_dir) if profile.working_dir else Path.cwd()
+
+    task_number = state.current_task_index + 1
+
+    # Disable git prompts to prevent hangs in headless/server contexts
+    git_env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
+    timeout_seconds = 60
+
+    # Stage all changes
+    proc = await asyncio.create_subprocess_exec(
+        "git", "add", "-A",
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        cwd=working_dir,
+        env=git_env,
+    )
+    try:
+        _, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout_seconds)
+    except TimeoutError:
+        logger.warning("Timeout staging changes for task commit", task=task_number)
+        proc.kill()
+        return False
+    if proc.returncode != 0:
+        logger.warning(
+            "Failed to stage changes for task commit",
+            error=stderr.decode(),
+        )
+        return False
+
+    # Check if there are staged changes
+    proc = await asyncio.create_subprocess_exec(
+        "git", "diff", "--cached", "--quiet",
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        cwd=working_dir,
+        env=git_env,
+    )
+    try:
+        await asyncio.wait_for(proc.communicate(), timeout=timeout_seconds)
+    except TimeoutError:
+        logger.warning("Timeout checking staged changes for task", task=task_number)
+        proc.kill()
+        return False
+    if proc.returncode == 0:
+        # Exit code 0 means no changes (diff is quiet/empty)
+        logger.info("No changes to commit for task", task=task_number)
+        return True
+    if proc.returncode != 1:
+        # Exit code 1 means changes exist; any other code is an error
+        logger.warning(
+            "Failed to check staged diff for task commit",
+            returncode=proc.returncode,
+            task=task_number,
+        )
+        return False
+
+    # Commit with task reference
+    issue_key = state.issue.id if state.issue else "unknown"
+    commit_msg = f"feat({issue_key}): complete task {task_number}"
+
+    proc = await asyncio.create_subprocess_exec(
+        "git", "commit", "-m", commit_msg,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        cwd=working_dir,
+        env=git_env,
+    )
+    try:
+        _, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout_seconds)
+    except TimeoutError:
+        logger.warning("Timeout committing task changes", task=task_number)
+        proc.kill()
+        return False
+    if proc.returncode == 0:
+        logger.info("Committed task changes", task=task_number, message=commit_msg)
+        return True
+    else:
+        logger.warning("Failed to commit task changes", error=stderr.decode())
+        return False
+
+
+def route_after_task_review(
+    state: ExecutionState, config: RunnableConfig
+) -> Literal["developer", "next_task_node", "__end__"]:
+    """Route after task review: next task, retry developer, or end.
+
+    Args:
+        state: Current execution state with task tracking fields.
+        config: Runnable config with profile.
+
+    Returns:
+        "next_task_node" if approved and more tasks remain.
+        "developer" if not approved and iterations remain.
+        "__end__" if all tasks complete or max iterations reached.
+    """
+    profile: Profile | None = config.get("configurable", {}).get("profile")
+    if not profile:
+        raise ValueError("profile is required in config.configurable")
+
+    task_number = state.current_task_index + 1
+    approved = state.last_review.approved if state.last_review else False
+
+    if approved:
+        # Task approved - check if more tasks remain
+        # total_tasks should always be set when using task-based routing,
+        # but handle None for safety (treat as single task complete)
+        if state.total_tasks is None or state.current_task_index + 1 >= state.total_tasks:
+            logger.debug(
+                "Task routing decision",
+                task=task_number,
+                approved=True,
+                route="__end__",
+                reason="all_tasks_complete",
+            )
+            return "__end__"  # All tasks complete
+        logger.debug(
+            "Task routing decision",
+            task=task_number,
+            approved=True,
+            route="next_task_node",
+        )
+        return "next_task_node"  # Move to next task
+
+    # Not approved - check iteration limit
+    max_iterations = profile.max_task_review_iterations
+    if state.task_review_iteration >= max_iterations:
+        logger.debug(
+            "Task routing decision",
+            task=task_number,
+            approved=False,
+            iteration=state.task_review_iteration,
+            max_iterations=max_iterations,
+            route="__end__",
+            reason="max_iterations_reached",
+        )
+        return "__end__"  # Halt on repeated failure
+
+    logger.debug(
+        "Task routing decision",
+        task=task_number,
+        approved=False,
+        iteration=state.task_review_iteration,
+        max_iterations=max_iterations,
+        route="developer",
+    )
+    return "developer"  # Retry with feedback
+
+
+def route_after_review_or_task(
+    state: ExecutionState, config: RunnableConfig
+) -> Literal["developer", "developer_node", "next_task_node", "__end__"]:
+    """Route after review: handles both legacy and task-based execution.
+
+    For task-based execution (total_tasks is set), uses route_after_task_review.
+    For legacy execution (total_tasks is None), uses route_after_review.
+
+    Args:
+        state: Current execution state.
+        config: Runnable config with profile.
+
+    Returns:
+        Routing target: developer_node (legacy), developer (task retry),
+        next_task_node (task approved), or __end__.
+    """
+    if state.total_tasks is not None:
+        return route_after_task_review(state, config)
+    # Legacy mode: route_after_review returns "developer" but graph uses "developer_node"
+    result = route_after_review(state, config)
+    return "developer_node" if result == "developer" else result
+
+
 def route_after_evaluation(state: ExecutionState) -> str:
     """Route after evaluation node.
 
@@ -806,11 +1116,16 @@ def create_orchestrator_graph(
 ) -> CompiledStateGraph[Any]:
     """Creates and compiles the LangGraph state machine for agentic orchestration.
 
-    The simplified agentic graph flow:
-    START -> architect_node -> human_approval_node -> developer_node -> reviewer_node -> END
-                                                        ^                    |
-                                                        +--------------------+
-                                                        (if changes requested)
+    The graph flow supports both legacy and task-based execution:
+
+    Legacy flow (total_tasks is None):
+    START -> architect_node -> plan_validator_node -> human_approval_node
+          -> developer_node <-> reviewer_node -> END
+
+    Task-based flow (total_tasks is set):
+    START -> architect_node -> plan_validator_node -> human_approval_node
+          -> developer_node -> reviewer_node -> next_task_node -> developer_node
+          (loops for each task until all complete or max iterations reached)
 
     Args:
         checkpoint_saver: Optional checkpoint saver for state persistence.
@@ -829,6 +1144,7 @@ def create_orchestrator_graph(
     workflow.add_node("human_approval_node", human_approval_node)
     workflow.add_node("developer_node", call_developer_node)
     workflow.add_node("reviewer_node", call_reviewer_node)
+    workflow.add_node("next_task_node", next_task_node)  # Task-based execution
 
     # Set entry point
     workflow.set_entry_point("architect_node")
@@ -853,15 +1169,22 @@ def create_orchestrator_graph(
     # Developer -> Reviewer
     workflow.add_edge("developer_node", "reviewer_node")
 
-    # Reviewer -> Developer (if not approved) or END (if approved)
+    # Reviewer routing: handles both legacy and task-based execution
+    # - Legacy: developer_node (retry) or __end__ (approved)
+    # - Task-based: developer (retry), next_task_node (task approved), or __end__ (all done)
     workflow.add_conditional_edges(
         "reviewer_node",
-        route_after_review,
+        route_after_review_or_task,
         {
             "developer": "developer_node",
-            END: END,
+            "developer_node": "developer_node",
+            "next_task_node": "next_task_node",
+            "__end__": END,
         }
     )
+
+    # next_task_node loops back to developer for the next task
+    workflow.add_edge("next_task_node", "developer_node")
 
     # Set default interrupt_before only if checkpoint_saver is provided and interrupt_before is None
     if interrupt_before is None and checkpoint_saver is not None:

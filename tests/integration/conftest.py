@@ -6,9 +6,9 @@ This module provides:
 """
 
 import socket
-from collections.abc import AsyncGenerator, Callable
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -17,7 +17,7 @@ from langgraph.graph.state import CompiledStateGraph
 
 from amelia.core.orchestrator import create_orchestrator_graph
 from amelia.core.state import ExecutionState
-from amelia.core.types import Issue, Profile
+from amelia.core.types import DriverType, Issue, Profile, StrategyType, TrackerType
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
 from amelia.server.database.repository import WorkflowRepository
 from amelia.server.events.bus import EventBus
@@ -57,20 +57,20 @@ def make_issue(
 
 def make_profile(
     name: str = "test",
-    driver: str = "api:openrouter",
+    driver: DriverType = "api:openrouter",
     model: str = "openrouter:anthropic/claude-sonnet-4-20250514",
-    tracker: str = "noop",
-    strategy: str = "single",
+    tracker: TrackerType = "noop",
+    strategy: StrategyType = "single",
     plan_output_dir: str | None = None,
     **kwargs: Any,
 ) -> Profile:
     """Create a Profile with sensible defaults for testing."""
     return Profile(
         name=name,
-        driver=driver,  # type: ignore[arg-type]
+        driver=driver,
         model=model,
-        tracker=tracker,  # type: ignore[arg-type]
-        strategy=strategy,  # type: ignore[arg-type]
+        tracker=tracker,
+        strategy=strategy,
         plan_output_dir=plan_output_dir or "/tmp/test-plans",
         **kwargs,
     )
@@ -178,30 +178,6 @@ def make_agentic_messages(
     return messages
 
 
-def create_mock_execute_agentic(
-    messages: list[AgenticMessage],
-    capture_kwargs: list[dict[str, Any]] | None = None,
-) -> Any:
-    """Create a mock execute_agentic async generator.
-
-    Args:
-        messages: Messages to yield from the generator.
-        capture_kwargs: Optional list to capture kwargs passed to the mock.
-
-    Returns:
-        Async generator function suitable for mocking execute_agentic.
-    """
-    async def mock_execute_agentic(
-        *args: Any, **kwargs: Any
-    ) -> AsyncGenerator[AgenticMessage, None]:
-        if capture_kwargs is not None:
-            capture_kwargs.append(kwargs)
-        for msg in messages:
-            yield msg
-
-    return mock_execute_agentic
-
-
 # =============================================================================
 # Fixtures
 # =============================================================================
@@ -243,7 +219,7 @@ def mock_repository() -> AsyncMock:
         repo.workflows[state.id] = state
 
     async def get(workflow_id: str) -> ServerExecutionState | None:
-        return repo.workflows.get(workflow_id)
+        return cast(ServerExecutionState | None, repo.workflows.get(workflow_id))
 
     async def set_status(
         workflow_id: str, status: str, failure_reason: str | None = None
@@ -257,7 +233,7 @@ def mock_repository() -> AsyncMock:
         repo.events.append(event)
 
     async def get_max_event_sequence(workflow_id: str) -> int:
-        return repo.event_sequence.get(workflow_id, 0)
+        return cast(int, repo.event_sequence.get(workflow_id, 0))
 
     repo.create = create
     repo.get = get
@@ -311,6 +287,53 @@ def event_bus(connection_manager: ConnectionManager) -> EventBus:
 def memory_checkpointer() -> MemorySaver:
     """Create an in-memory checkpoint saver for integration tests."""
     return MemorySaver()
+
+
+@pytest.fixture
+def git_repo(tmp_path: Path) -> Path:
+    """Initialize a git repo with initial commit for testing.
+
+    Creates a minimal git repository with user config and an initial commit,
+    suitable for tests that require git operations (commits, diffs, etc.).
+    Disables GPG/SSH signing to avoid passphrase prompts in CI/test environments.
+
+    Args:
+        tmp_path: Pytest's temporary directory fixture.
+
+    Returns:
+        Path to the initialized git repository.
+    """
+    import subprocess
+
+    subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True, check=True)
+    subprocess.run(
+        ["git", "config", "user.email", "test@test.com"],
+        cwd=tmp_path,
+        capture_output=True,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Test"],
+        cwd=tmp_path,
+        capture_output=True,
+        check=True,
+    )
+    # Disable commit signing for test environment
+    subprocess.run(
+        ["git", "config", "commit.gpgsign", "false"],
+        cwd=tmp_path,
+        capture_output=True,
+        check=True,
+    )
+    (tmp_path / "README.md").write_text("# Test")
+    subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True, check=True)
+    subprocess.run(
+        ["git", "commit", "-m", "Initial"],
+        cwd=tmp_path,
+        capture_output=True,
+        check=True,
+    )
+    return tmp_path
 
 
 @pytest.fixture

@@ -238,6 +238,7 @@ class Profile(BaseModel):
     plan_output_dir: str = "docs/plans"
     retry: RetryConfig = Field(default_factory=RetryConfig)
     max_review_iterations: int = 3                 # Max review-fix loop iterations
+    max_task_review_iterations: int = 5        # Per-task review iteration limit
 ```
 
 #### RetryConfig
@@ -363,6 +364,11 @@ class ExecutionState(BaseModel):
     final_response: str | None = None
     error: str | None = None
     review_iteration: int = 0                      # Current iteration in review-fix loop
+
+    # Task execution tracking (for multi-task plans)
+    total_tasks: int | None = None             # Parsed from plan (None = legacy single-session)
+    current_task_index: int = 0                # 0-indexed, increments after each task passes review
+    task_review_iteration: int = 0             # Resets to 0 when moving to next task
 ```
 
 **Note**: The full `Profile` object is not stored in state for determinism. Instead, it's passed via LangGraph's RunnableConfig:
@@ -462,9 +468,12 @@ The LangGraph state machine consists of these nodes:
 | Node | Function | Next |
 |------|----------|------|
 | `architect_node` | Calls `Architect.plan()` to generate goal and markdown plan | `human_approval_node` |
+| `plan_validator_node` | Validates plan and extracts task count | `human_approval_node` |
 | `human_approval_node` | Prompts user via typer or dashboard | Developer (approved) or END (rejected) |
 | `developer_node` | Executes agentically via `execute_agentic()` with streaming tool calls | `reviewer_node` |
 | `reviewer_node` | Calls `Reviewer.review()` | `developer_node` (changes requested) or END (approved) |
+| `next_task_node` | Advances to next task after commit | `developer_node` or END |
+| `commit_task_changes` | Commits changes after task review passes | `next_task_node` |
 
 ## Conditional Edges
 
@@ -482,6 +491,15 @@ def route_after_review(state, config):
         return END
     if state.review_iteration >= profile.max_review_iterations:
         return END  # Stop after max iterations
+    return "developer_node"  # Fix issues
+
+# From reviewer_node (task-based execution)
+def route_after_task_review(state, config):
+    profile = config["configurable"]["profile"]
+    if state.last_review and state.last_review.approved:
+        return "commit_task_changes"  # Commit and move to next task
+    if state.task_review_iteration >= profile.max_task_review_iterations:
+        return END  # Max iterations for this task
     return "developer_node"  # Fix issues
 ```
 

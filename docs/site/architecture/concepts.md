@@ -107,6 +107,33 @@ Amelia uses **LangGraph's StateGraph** for orchestration:
 - `review_iteration`: Current iteration in review-fix loop
 - `agentic_status`: Current execution status
 
+## Task-Based Execution
+
+For complex implementations, plans are broken into discrete **tasks** that are executed and reviewed individually.
+
+### How It Works
+
+1. **Plan Parsing**: The `plan_validator_node` extracts task count from the plan markdown
+2. **Per-Task Execution**: Developer works on one task at a time (`current_task_index`)
+3. **Per-Task Review**: Each task has its own review cycle (`task_review_iteration` resets per task)
+4. **Commit on Approval**: When a task passes review, changes are committed before moving to the next task
+5. **Progression**: `next_task_node` advances to the next task until all tasks complete
+
+### Benefits
+
+- **Incremental commits**: Each task's changes are committed separately
+- **Focused review**: Reviewer evaluates one task at a time
+- **Failure isolation**: If a task fails after max iterations, previous tasks are preserved
+- **Progress visibility**: Clear tracking of which task is being worked on
+
+### State Fields
+
+| Field | Purpose |
+|-------|---------|
+| `total_tasks` | Number of tasks in the plan (None = legacy mode) |
+| `current_task_index` | Which task is being worked on (0-indexed) |
+| `task_review_iteration` | Review attempts for current task (resets per task) |
+
 ## Tool Use
 
 Agents don't just generate text - they call tools. This is what makes them "agentic."

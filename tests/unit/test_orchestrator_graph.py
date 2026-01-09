@@ -1,20 +1,23 @@
 """Tests for orchestrator graph creation and routing logic."""
 
 from collections.abc import Callable
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from langgraph.graph import END
 
 from amelia.agents.evaluator import Disposition, EvaluatedItem, EvaluationResult
 from amelia.core.orchestrator import (
+    call_reviewer_node,
     create_orchestrator_graph,
     create_review_graph,
+    next_task_node,
     route_after_end_approval,
     route_after_evaluation,
     route_after_fixes,
+    route_after_task_review,
 )
-from amelia.core.state import ExecutionState
+from amelia.core.state import ExecutionState, ReviewResult
 from amelia.core.types import Profile
 
 
@@ -163,3 +166,284 @@ class TestReviewRoutingFunctions:
         """Test routing after end approval based on human_approved state."""
         state, _ = mock_execution_state_factory(goal="Test", human_approved=human_approved)
         assert route_after_end_approval(state) == expected
+
+
+class TestRouteAfterTaskReview:
+    """Tests for route_after_task_review routing function."""
+
+    @pytest.fixture
+    def mock_profile_task_review(self) -> Profile:
+        return Profile(
+            name="test",
+            driver="cli:claude",
+            model="sonnet",
+            max_task_review_iterations=3,
+        )
+
+    @pytest.fixture
+    def approved_review(self) -> ReviewResult:
+        return ReviewResult(
+            reviewer_persona="test",
+            approved=True,
+            comments=[],
+            severity="low",
+        )
+
+    @pytest.fixture
+    def rejected_review(self) -> ReviewResult:
+        return ReviewResult(
+            reviewer_persona="test",
+            approved=False,
+            comments=["Needs fixes"],
+            severity="medium",
+        )
+
+    def test_route_after_task_review_ends_when_all_tasks_complete(
+        self, mock_profile_task_review: Profile, approved_review: ReviewResult
+    ) -> None:
+        """Should END when approved and all tasks complete."""
+        state = ExecutionState(
+            profile_id="test",
+            total_tasks=2,
+            current_task_index=1,  # On task 2 (0-indexed)
+            last_review=approved_review,
+        )
+        config = {"configurable": {"profile": mock_profile_task_review}}
+
+        result = route_after_task_review(state, config)
+        assert result == "__end__"
+
+    def test_route_after_task_review_goes_to_next_task_when_approved(
+        self, mock_profile_task_review: Profile, approved_review: ReviewResult
+    ) -> None:
+        """Should go to next_task_node when approved and more tasks remain."""
+        state = ExecutionState(
+            profile_id="test",
+            total_tasks=3,
+            current_task_index=0,  # On task 1, more tasks remain
+            last_review=approved_review,
+        )
+        config = {"configurable": {"profile": mock_profile_task_review}}
+
+        result = route_after_task_review(state, config)
+        assert result == "next_task_node"
+
+    def test_route_after_task_review_retries_developer_when_not_approved(
+        self, mock_profile_task_review: Profile, rejected_review: ReviewResult
+    ) -> None:
+        """Should retry developer when review not approved and iterations remain."""
+        state = ExecutionState(
+            profile_id="test",
+            total_tasks=2,
+            current_task_index=0,
+            task_review_iteration=1,  # Under limit of 3
+            last_review=rejected_review,
+        )
+        config = {"configurable": {"profile": mock_profile_task_review}}
+
+        result = route_after_task_review(state, config)
+        assert result == "developer"
+
+    def test_route_after_task_review_ends_on_max_iterations(
+        self, mock_profile_task_review: Profile, rejected_review: ReviewResult
+    ) -> None:
+        """Should END when max iterations reached without approval."""
+        state = ExecutionState(
+            profile_id="test",
+            total_tasks=2,
+            current_task_index=0,
+            task_review_iteration=3,  # At limit
+            last_review=rejected_review,
+        )
+        config = {"configurable": {"profile": mock_profile_task_review}}
+
+        result = route_after_task_review(state, config)
+        assert result == "__end__"
+
+    def test_route_after_task_review_uses_profile_max_iterations(self) -> None:
+        """Should respect profile's max_task_review_iterations setting."""
+        profile = Profile(
+            name="test",
+            driver="cli:claude",
+            model="sonnet",
+            max_task_review_iterations=10,
+        )
+        rejected_review = ReviewResult(
+            reviewer_persona="test",
+            approved=False,
+            comments=["Needs fixes"],
+            severity="medium",
+        )
+        state = ExecutionState(
+            profile_id="test",
+            total_tasks=2,
+            current_task_index=0,
+            task_review_iteration=5,  # Under custom limit of 10
+            last_review=rejected_review,
+        )
+        config = {"configurable": {"profile": profile}}
+
+        result = route_after_task_review(state, config)
+        assert result == "developer"  # Should retry since under limit
+
+
+class TestNextTaskNode:
+    """Tests for next_task_node function."""
+
+    @pytest.fixture
+    def task_state_for_next(self) -> ExecutionState:
+        return ExecutionState(
+            profile_id="test",
+            total_tasks=3,
+            current_task_index=0,
+            task_review_iteration=2,
+            driver_session_id="session-123",
+        )
+
+    @pytest.mark.asyncio
+    async def test_next_task_node_increments_task_index(
+        self, task_state_for_next: ExecutionState
+    ) -> None:
+        """next_task_node should increment current_task_index."""
+        config = {"configurable": {"profile": MagicMock()}}
+
+        with patch(
+            "amelia.core.orchestrator.commit_task_changes", new_callable=AsyncMock
+        ):
+            result = await next_task_node(task_state_for_next, config)
+
+        assert result["current_task_index"] == 1
+
+    @pytest.mark.asyncio
+    async def test_next_task_node_resets_review_iteration(
+        self, task_state_for_next: ExecutionState
+    ) -> None:
+        """next_task_node should reset task_review_iteration to 0."""
+        config = {"configurable": {"profile": MagicMock()}}
+
+        with patch(
+            "amelia.core.orchestrator.commit_task_changes", new_callable=AsyncMock
+        ):
+            result = await next_task_node(task_state_for_next, config)
+
+        assert result["task_review_iteration"] == 0
+
+    @pytest.mark.asyncio
+    async def test_next_task_node_clears_session_id(
+        self, task_state_for_next: ExecutionState
+    ) -> None:
+        """next_task_node should clear driver_session_id for fresh session."""
+        config = {"configurable": {"profile": MagicMock()}}
+
+        with patch(
+            "amelia.core.orchestrator.commit_task_changes", new_callable=AsyncMock
+        ):
+            result = await next_task_node(task_state_for_next, config)
+
+        assert result["driver_session_id"] is None
+
+    @pytest.mark.asyncio
+    async def test_next_task_node_commits_changes(
+        self, task_state_for_next: ExecutionState
+    ) -> None:
+        """next_task_node should commit current task changes."""
+        config = {"configurable": {"profile": MagicMock()}}
+
+        with patch(
+            "amelia.core.orchestrator.commit_task_changes", new_callable=AsyncMock
+        ) as mock_commit:
+            await next_task_node(task_state_for_next, config)
+
+        mock_commit.assert_called_once_with(task_state_for_next, config)
+
+    @pytest.mark.asyncio
+    async def test_next_task_node_raises_on_commit_failure(
+        self, task_state_for_next: ExecutionState
+    ) -> None:
+        """next_task_node should raise RuntimeError when commit fails.
+
+        This halts the workflow to preserve one-commit-per-task semantics,
+        allowing manual intervention before proceeding.
+        """
+        config = {"configurable": {"profile": MagicMock()}}
+
+        with patch(
+            "amelia.core.orchestrator.commit_task_changes",
+            new_callable=AsyncMock,
+            return_value=False,
+        ), pytest.raises(RuntimeError) as exc_info:
+            await next_task_node(task_state_for_next, config)
+
+        assert "Failed to commit changes for task 1" in str(exc_info.value)
+        assert "one-commit-per-task" in str(exc_info.value)
+
+
+class TestReviewerNodeTaskIteration:
+    """Tests for call_reviewer_node task_review_iteration behavior."""
+
+    @pytest.mark.asyncio
+    async def test_reviewer_node_increments_task_review_iteration(self) -> None:
+        """Reviewer node should increment task_review_iteration for task-based execution."""
+        state = ExecutionState(
+            profile_id="test",
+            total_tasks=2,  # Task-based mode
+            current_task_index=0,
+            task_review_iteration=1,
+            code_changes_for_review="diff --git a/test.py\n+# test",
+        )
+        profile = Profile(name="test", driver="cli:claude", model="sonnet")
+        config = {"configurable": {"profile": profile, "thread_id": "test-wf"}}
+
+        # Mock reviewer to return a review result
+        mock_review = ReviewResult(
+            reviewer_persona="test",
+            approved=False,
+            comments=["Needs work"],
+            severity="medium",
+        )
+
+        with patch("amelia.core.orchestrator.Reviewer") as mock_reviewer_class:
+            mock_reviewer = MagicMock()
+            mock_reviewer.review = AsyncMock(return_value=(mock_review, "session-123"))
+            mock_reviewer_class.return_value = mock_reviewer
+
+            result = await call_reviewer_node(state, config)
+
+        assert result["task_review_iteration"] == 2
+
+
+class TestOrchestratorGraphTaskBasedRouting:
+    """Tests for task-based routing wired into the orchestrator graph."""
+
+    def test_orchestrator_graph_has_next_task_node(self) -> None:
+        """Orchestrator graph should include next_task_node."""
+        graph = create_orchestrator_graph()
+        graph_obj = graph.get_graph()
+        node_names = [node.name for node in graph_obj.nodes.values()]
+        assert "next_task_node" in node_names
+
+    def test_orchestrator_graph_next_task_node_routes_to_developer(self) -> None:
+        """Graph should have edge from next_task_node to developer_node."""
+        graph = create_orchestrator_graph()
+        graph_obj = graph.get_graph()
+        edges = graph_obj.edges
+
+        # Find edge from next_task_node
+        next_task_edges = [e for e in edges if e.source == "next_task_node"]
+        assert len(next_task_edges) == 1
+        assert next_task_edges[0].target == "developer_node"
+
+    def test_orchestrator_graph_reviewer_can_route_to_next_task(self) -> None:
+        """Graph should allow routing from reviewer to next_task_node."""
+        graph = create_orchestrator_graph()
+        graph_obj = graph.get_graph()
+        edges = graph_obj.edges
+
+        # Find edges from reviewer_node
+        reviewer_edges = [e for e in edges if e.source == "reviewer_node"]
+
+        # Reviewer should have conditional edges that include next_task_node as a target
+        targets = [e.target for e in reviewer_edges]
+        assert (
+            "next_task_node" in targets
+        ), "reviewer_node should be able to route to next_task_node"

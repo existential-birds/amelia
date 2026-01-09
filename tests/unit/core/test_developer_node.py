@@ -1,45 +1,19 @@
 """Tests for call_developer_node using profile from config."""
 
-from collections.abc import AsyncGenerator, Callable, Sequence
+from collections.abc import Callable
 from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
 from langchain_core.runnables.config import RunnableConfig
 
+from amelia.core.constants import ToolName
 from amelia.core.orchestrator import call_developer_node
 from amelia.core.state import ExecutionState
 from amelia.core.types import Issue, Profile
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
 from amelia.server.models.events import EventType
-
-
-def create_mock_execute_agentic(
-    messages: Sequence[AgenticMessage],
-) -> Callable[..., AsyncGenerator[AgenticMessage, None]]:
-    """Create a mock execute_agentic async generator function.
-
-    This helper reduces boilerplate in tests that need to mock driver.execute_agentic().
-    Each test can specify the AgenticMessage objects to yield.
-
-    Args:
-        messages: Sequence of AgenticMessage objects to yield.
-
-    Returns:
-        An async generator function that yields the provided messages.
-
-    Example:
-        mock_driver = MagicMock()
-        mock_driver.execute_agentic = create_mock_execute_agentic([
-            AgenticMessage(type=AgenticMessageType.THINKING, content="..."),
-            AgenticMessage(type=AgenticMessageType.RESULT, content="Done"),
-        ])
-    """
-    async def mock_execute_agentic(*args: Any, **kwargs: Any) -> AsyncGenerator[AgenticMessage, None]:
-        for msg in messages:
-            yield msg
-
-    return mock_execute_agentic
+from tests.conftest import create_mock_execute_agentic
 
 
 class TestDeveloperNodeProfileFromConfig:
@@ -125,13 +99,13 @@ class TestDeveloperUnifiedExecution:
             ),
             AgenticMessage(
                 type=AgenticMessageType.TOOL_CALL,
-                tool_name="Read",
+                tool_name=ToolName.READ_FILE,
                 tool_input={"file_path": "/some/file.py"},
                 tool_call_id="call-1",
             ),
             AgenticMessage(
                 type=AgenticMessageType.TOOL_RESULT,
-                tool_name="Read",
+                tool_name=ToolName.READ_FILE,
                 tool_output="file contents here",
                 tool_call_id="call-1",
             ),
@@ -219,7 +193,7 @@ class TestDeveloperUnifiedExecution:
         mock_driver.execute_agentic = create_mock_execute_agentic([
             AgenticMessage(
                 type=AgenticMessageType.TOOL_CALL,
-                tool_name="Write",
+                tool_name=ToolName.WRITE_FILE,
                 tool_input={"file_path": "/test/file.py", "content": "print('hello')"},
                 tool_call_id="call-123",
             ),
@@ -239,7 +213,7 @@ class TestDeveloperUnifiedExecution:
         # Find the tool call event
         tool_call_events = [r for r in results if r[1].event_type == EventType.CLAUDE_TOOL_CALL]
         assert len(tool_call_events) >= 1
-        assert tool_call_events[0][1].tool_name == "Write"
+        assert tool_call_events[0][1].tool_name == ToolName.WRITE_FILE
         assert tool_call_events[0][1].tool_input == {"file_path": "/test/file.py", "content": "print('hello')"}
 
     async def test_developer_processes_tool_result_message(
@@ -263,7 +237,7 @@ class TestDeveloperUnifiedExecution:
         mock_driver.execute_agentic = create_mock_execute_agentic([
             AgenticMessage(
                 type=AgenticMessageType.TOOL_RESULT,
-                tool_name="Read",
+                tool_name=ToolName.READ_FILE,
                 tool_output="File content here",
                 tool_call_id="call-456",
                 is_error=False,
@@ -284,7 +258,7 @@ class TestDeveloperUnifiedExecution:
         # Find the tool result event
         tool_result_events = [r for r in results if r[1].event_type == EventType.CLAUDE_TOOL_RESULT]
         assert len(tool_result_events) >= 1
-        assert tool_result_events[0][1].message == "Tool Read completed"
+        assert tool_result_events[0][1].message == f"Tool {ToolName.READ_FILE} completed"
 
     async def test_developer_processes_result_message(
         self,
@@ -389,13 +363,13 @@ class TestDeveloperUnifiedExecution:
         mock_driver.execute_agentic = create_mock_execute_agentic([
             AgenticMessage(
                 type=AgenticMessageType.TOOL_CALL,
-                tool_name="Read",
+                tool_name=ToolName.READ_FILE,
                 tool_input={"file_path": "/a.py"},
                 tool_call_id="call-1",
             ),
             AgenticMessage(
                 type=AgenticMessageType.TOOL_CALL,
-                tool_name="Write",
+                tool_name=ToolName.WRITE_FILE,
                 tool_input={"file_path": "/b.py", "content": "code"},
                 tool_call_id="call-2",
             ),
@@ -416,8 +390,8 @@ class TestDeveloperUnifiedExecution:
         final_state = results[-1][0]
         assert len(final_state.tool_calls) >= 2
         tool_names = [tc.tool_name for tc in final_state.tool_calls]
-        assert "Read" in tool_names
-        assert "Write" in tool_names
+        assert ToolName.READ_FILE in tool_names
+        assert ToolName.WRITE_FILE in tool_names
 
     async def test_developer_tracks_tool_results_in_state(
         self,
@@ -440,14 +414,14 @@ class TestDeveloperUnifiedExecution:
         mock_driver.execute_agentic = create_mock_execute_agentic([
             AgenticMessage(
                 type=AgenticMessageType.TOOL_RESULT,
-                tool_name="Read",
+                tool_name=ToolName.READ_FILE,
                 tool_output="file content 1",
                 tool_call_id="call-1",
                 is_error=False,
             ),
             AgenticMessage(
                 type=AgenticMessageType.TOOL_RESULT,
-                tool_name="Write",
+                tool_name=ToolName.WRITE_FILE,
                 tool_output="written successfully",
                 tool_call_id="call-2",
                 is_error=False,
@@ -540,3 +514,135 @@ class TestDeveloperUnifiedExecution:
         with pytest.raises(ValueError, match="must have a goal"):
             async for _ in developer.run(state, profile, "wf-test"):
                 pass
+
+
+class TestDeveloperTaskBasedExecution:
+    """Tests for task-based execution in call_developer_node."""
+
+    @pytest.fixture
+    def mock_profile_with_working_dir(self, tmp_path: Any) -> Profile:
+        return Profile(
+            name="test",
+            driver="api:openrouter",
+            model="anthropic/claude-3.5-sonnet",
+            working_dir=str(tmp_path),
+        )
+
+    @pytest.fixture
+    def multi_task_state(self, tmp_path: Any) -> ExecutionState:
+        plan_path = tmp_path / "docs" / "plans" / "plan.md"
+        return ExecutionState(
+            profile_id="test",
+            goal="Implement feature",
+            plan_markdown="### Task 1: Setup\n\n### Task 2: Build",
+            plan_path=plan_path,
+            total_tasks=2,
+            current_task_index=0,
+            driver_session_id="old-session-123",  # Should be cleared
+        )
+
+    async def test_developer_node_clears_session_for_task_execution(
+        self,
+        multi_task_state: ExecutionState,
+        mock_profile_with_working_dir: Profile,
+    ) -> None:
+        """Developer node should clear driver_session_id for fresh task sessions."""
+        config: RunnableConfig = {
+            "configurable": {
+                "thread_id": "wf-test",
+                "profile": mock_profile_with_working_dir,
+            }
+        }
+
+        # Track what session_id is passed to the driver
+        captured_session_id: str | None = "NOT_SET"
+
+        async def mock_run(
+            state: ExecutionState, profile: Profile, workflow_id: str = ""
+        ) -> Any:
+            nonlocal captured_session_id
+            captured_session_id = state.driver_session_id
+            # Return minimal valid state updates
+            yield (state.model_copy(update={"agentic_status": "completed"}), MagicMock())
+
+        with patch("amelia.core.orchestrator.Developer") as mock_developer_class:
+            mock_developer = MagicMock()
+            mock_developer.run = mock_run
+            mock_developer_class.return_value = mock_developer
+
+            await call_developer_node(multi_task_state, config)
+
+        # Should have cleared session_id before calling developer
+        assert captured_session_id is None
+
+    async def test_developer_node_injects_task_scoped_prompt(
+        self,
+        multi_task_state: ExecutionState,
+        mock_profile_with_working_dir: Profile,
+    ) -> None:
+        """Developer node should inject task-specific prompt for multi-task execution."""
+        config: RunnableConfig = {
+            "configurable": {
+                "thread_id": "wf-test",
+                "profile": mock_profile_with_working_dir,
+            }
+        }
+
+        captured_goal: str | None = None
+
+        async def mock_run(
+            state: ExecutionState, profile: Profile, workflow_id: str = ""
+        ) -> Any:
+            nonlocal captured_goal
+            captured_goal = state.goal
+            yield (state.model_copy(update={"agentic_status": "completed"}), MagicMock())
+
+        with patch("amelia.core.orchestrator.Developer") as mock_developer_class:
+            mock_developer = MagicMock()
+            mock_developer.run = mock_run
+            mock_developer_class.return_value = mock_developer
+
+            await call_developer_node(multi_task_state, config)
+
+        # Should include task pointer in goal
+        assert captured_goal is not None
+        assert "Task 1" in captured_goal
+        assert str(multi_task_state.plan_path) in captured_goal
+
+    async def test_developer_node_preserves_session_for_legacy_mode(
+        self,
+        mock_profile_with_working_dir: Profile,
+    ) -> None:
+        """Developer node should preserve session_id when total_tasks is None."""
+        state = ExecutionState(
+            profile_id="test",
+            goal="Legacy goal",
+            plan_markdown="Do stuff",
+            total_tasks=None,  # Legacy mode
+            driver_session_id="existing-session",
+        )
+        config: RunnableConfig = {
+            "configurable": {
+                "thread_id": "wf-test",
+                "profile": mock_profile_with_working_dir,
+            }
+        }
+
+        captured_session_id: str | None = "NOT_SET"
+
+        async def mock_run(
+            state: ExecutionState, profile: Profile, workflow_id: str = ""
+        ) -> Any:
+            nonlocal captured_session_id
+            captured_session_id = state.driver_session_id
+            yield (state.model_copy(update={"agentic_status": "completed"}), MagicMock())
+
+        with patch("amelia.core.orchestrator.Developer") as mock_developer_class:
+            mock_developer = MagicMock()
+            mock_developer.run = mock_run
+            mock_developer_class.return_value = mock_developer
+
+            await call_developer_node(state, config)
+
+        # Should preserve existing session_id in legacy mode
+        assert captured_session_id == "existing-session"

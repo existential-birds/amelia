@@ -4,7 +4,7 @@ This module provides factory fixtures for creating test data and mocks
 used throughout the test suite for the agentic execution model.
 """
 import os
-from collections.abc import Callable, Generator
+from collections.abc import AsyncGenerator, Callable, Generator
 from pathlib import Path
 from typing import Any, NamedTuple
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -13,7 +13,7 @@ import pytest
 from pytest import TempPathFactory
 
 from amelia.core.agentic_state import ToolCall, ToolResult
-from amelia.core.state import ExecutionState
+from amelia.core.state import ExecutionState, rebuild_execution_state
 from amelia.core.types import (
     Design,
     DriverType,
@@ -23,8 +23,13 @@ from amelia.core.types import (
     StrategyType,
     TrackerType,
 )
-from amelia.drivers.base import DriverInterface
+from amelia.drivers.base import AgenticMessage, DriverInterface
 from amelia.server.events.bus import EventBus
+
+
+# Rebuild ExecutionState to resolve forward references for StructuredReviewResult
+# and EvaluationResult. This must be called before any tests instantiate ExecutionState.
+rebuild_execution_state()
 
 
 @pytest.fixture
@@ -69,6 +74,45 @@ def async_iterator_mock_factory() -> Callable[[list[Any]], AsyncIteratorMock]:
     def _create(items: list[Any]) -> AsyncIteratorMock:
         return AsyncIteratorMock(items)
     return _create
+
+
+def create_mock_execute_agentic(
+    messages: list[AgenticMessage],
+    capture_kwargs: list[dict[str, Any]] | None = None,
+) -> Callable[..., AsyncGenerator[AgenticMessage, None]]:
+    """Create a mock execute_agentic async generator function.
+
+    This helper reduces boilerplate in tests that need to mock driver.execute_agentic().
+    Each test can specify the AgenticMessage objects to yield.
+
+    Args:
+        messages: Sequence of AgenticMessage objects to yield.
+        capture_kwargs: Optional list to capture kwargs passed to the mock.
+
+    Returns:
+        An async generator function that yields the provided messages.
+
+    Example:
+        mock_driver = MagicMock()
+        mock_driver.execute_agentic = create_mock_execute_agentic([
+            AgenticMessage(type=AgenticMessageType.THINKING, content="..."),
+            AgenticMessage(type=AgenticMessageType.RESULT, content="Done"),
+        ])
+
+        # With kwargs capture:
+        captured: list[dict[str, Any]] = []
+        mock_driver.execute_agentic = create_mock_execute_agentic(messages, captured)
+        # After calling mock: captured[0] contains the kwargs
+    """
+    async def mock_execute_agentic(
+        *args: Any, **kwargs: Any
+    ) -> AsyncGenerator[AgenticMessage, None]:
+        if capture_kwargs is not None:
+            capture_kwargs.append(kwargs)
+        for msg in messages:
+            yield msg
+
+    return mock_execute_agentic
 
 
 @pytest.fixture

@@ -146,6 +146,17 @@ class Developer:
 You have a detailed implementation plan to follow. Execute it using your tools.
 Use your judgment to handle unexpected situations - the plan is a guide, not rigid steps.
 
+## CRITICAL: No Summary Files
+
+DO NOT create any of the following files:
+- TASK_*_COMPLETION.md, TASK_*_INDEX.md, TASK_*_SUMMARY.md
+- IMPLEMENTATION_*.md, EXECUTION_*.md
+- CODE_REVIEW*.md, FINAL_SUMMARY.md
+- Any markdown file that summarizes progress, completion status, or documents work done
+
+These files waste tokens and provide no value. The code changes ARE the deliverable.
+Only create files explicitly listed in the plan's "Create:" directives.
+
 ---
 IMPLEMENTATION PLAN:
 ---
@@ -155,6 +166,11 @@ IMPLEMENTATION PLAN:
         # Design context (fallback if no plan)
         elif state.design:
             parts.append(f"\nDesign Context:\n{state.design.raw_content}")
+            parts.append("""
+## CRITICAL: No Summary Files
+
+DO NOT create TASK_*_COMPLETION.md, CODE_REVIEW*.md, IMPLEMENTATION_*.md, or any
+progress/summary markdown files. Only create files explicitly required for the task.""")
 
         # Issue context (fallback if no plan)
         if state.issue and not state.plan_markdown:

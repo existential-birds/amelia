@@ -7,12 +7,17 @@ from __future__ import annotations
 
 import operator
 from pathlib import Path
-from typing import Annotated, Any, Literal
+from typing import TYPE_CHECKING, Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from amelia.core.agentic_state import AgenticStatus, ToolCall, ToolResult
 from amelia.core.types import Design, Issue
+
+
+if TYPE_CHECKING:
+    from amelia.agents.evaluator import EvaluationResult
+    from amelia.agents.reviewer import StructuredReviewResult
 
 
 Severity = Literal["low", "medium", "high", "critical"]
@@ -68,6 +73,9 @@ class ExecutionState(BaseModel):
         final_response: Final response from the agent when complete.
         error: Error message if status is 'failed'.
         review_iteration: Current iteration in review-fix loop.
+        total_tasks: Number of tasks parsed from plan (None = legacy single-session mode).
+        current_task_index: 0-indexed task being executed, increments after each task passes review.
+        task_review_iteration: Review iteration counter that resets to 0 when moving to next task.
         structured_review: Structured review output from reviewer agent.
         evaluation_result: Output from the evaluator agent.
         approved_items: Item numbers approved for fixing by human or auto-approve.
@@ -106,11 +114,50 @@ class ExecutionState(BaseModel):
     # Review iteration tracking (for review-fix loop)
     review_iteration: int = 0
 
+    # Task execution tracking (for multi-task plans)
+    total_tasks: int | None = None  # Parsed from plan (None = legacy single-session)
+    current_task_index: int = 0  # 0-indexed, increments after each task passes review
+    task_review_iteration: int = 0  # Resets to 0 when moving to next task
+
     # Review workflow fields (structured review-fix cycle)
-    # Note: Types use Any until StructuredReviewResult and EvaluationResult are defined
-    structured_review: Any | None = None  # StructuredReviewResult from reviewer agent
-    evaluation_result: Any | None = None  # EvaluationResult from evaluator agent
+    structured_review: StructuredReviewResult | None = None
+    evaluation_result: EvaluationResult | None = None
     approved_items: list[int] = Field(default_factory=list)
     auto_approve: bool = False
     review_pass: int = 0
     max_review_passes: int = 3
+
+
+def rebuild_execution_state() -> None:
+    """Rebuild ExecutionState to resolve forward references.
+
+    Must be called after importing StructuredReviewResult and EvaluationResult
+    to enable Pydantic validation and Python's get_type_hints() to work.
+
+    This function:
+    1. Imports the forward-referenced types
+    2. Injects them into this module's global namespace (required for get_type_hints)
+    3. Calls model_rebuild() to refresh Pydantic's type resolution
+
+    Example:
+        from amelia.core.state import rebuild_execution_state
+        rebuild_execution_state()
+    """
+    import sys  # noqa: PLC0415
+
+    from amelia.agents.evaluator import EvaluationResult  # noqa: PLC0415
+    from amelia.agents.reviewer import StructuredReviewResult  # noqa: PLC0415
+
+    # Inject types into this module's namespace for get_type_hints() compatibility.
+    # These dynamic assignments are required for Python's typing.get_type_hints()
+    # to resolve forward references when used by LangGraph's StateGraph.
+    module = sys.modules[__name__]
+    module.StructuredReviewResult = StructuredReviewResult  # type: ignore[attr-defined]
+    module.EvaluationResult = EvaluationResult  # type: ignore[attr-defined]
+
+    ExecutionState.model_rebuild(
+        _types_namespace={
+            "StructuredReviewResult": StructuredReviewResult,
+            "EvaluationResult": EvaluationResult,
+        }
+    )

@@ -7,6 +7,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from amelia.agents.architect import Architect
+from amelia.core.constants import ToolName
 from amelia.core.state import ExecutionState
 from amelia.core.types import Issue, Profile
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
@@ -121,7 +122,7 @@ class TestArchitectPlanPath:
             # Simulate Write tool call followed by result
             yield AgenticMessage(
                 type=AgenticMessageType.TOOL_CALL,
-                tool_name="Write",
+                tool_name=ToolName.WRITE_FILE,
                 tool_input={"file_path": "/repo/docs/plans/2026-01-07-test-123.md", "content": "# Plan"},
                 tool_use_id="write-1",
                 session_id="session-1",
