@@ -216,7 +216,6 @@ export function DashboardSidebar() {
                   <div
                     className={cn(
                       'flex items-center gap-3 w-full',
-                      'hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
                       'group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0'
                     )}
                   >

@@ -210,6 +210,8 @@ export function QuickShotModal({ open, onOpenChange }: QuickShotModalProps) {
                   <Textarea
                     id={field.name}
                     placeholder={field.placeholder}
+                    aria-invalid={!!errors[field.name]}
+                    aria-describedby={errors[field.name] ? `${field.name}-error` : undefined}
                     className={cn(
                       'mt-1 font-mono text-sm bg-background border-input',
                       'focus:border-primary focus:ring-primary/15 focus:ring-[3px]',
@@ -222,6 +224,8 @@ export function QuickShotModal({ open, onOpenChange }: QuickShotModalProps) {
                   <Input
                     id={field.name}
                     placeholder={field.placeholder}
+                    aria-invalid={!!errors[field.name]}
+                    aria-describedby={errors[field.name] ? `${field.name}-error` : undefined}
                     className={cn(
                       'mt-1 font-mono text-sm bg-background border-input',
                       'focus:border-primary focus:ring-primary/15 focus:ring-[3px]',
@@ -231,7 +235,7 @@ export function QuickShotModal({ open, onOpenChange }: QuickShotModalProps) {
                   />
                 )}
                 {errors[field.name] && (
-                  <p className="mt-1 text-xs text-destructive">
+                  <p id={`${field.name}-error`} className="mt-1 text-xs text-destructive">
                     {errors[field.name]?.message}
                   </p>
                 )}
