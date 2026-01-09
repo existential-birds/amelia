@@ -144,6 +144,16 @@ Default: `3`
 max_review_iterations: 5
 ```
 
+### `profiles.<name>.max_task_review_iterations` (optional)
+
+Maximum review-fix iterations per task in task-based execution mode. When plans contain multiple tasks, each task has its own review cycle with this limit.
+
+Default: `5`
+
+```yaml
+max_task_review_iterations: 3
+```
+
 ### `profiles.<name>.retry` (optional)
 
 Retry configuration for transient failures (e.g., API rate limits, network errors).

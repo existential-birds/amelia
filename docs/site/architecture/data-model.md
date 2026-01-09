@@ -41,6 +41,7 @@ Defines the runtime environment and constraints.
 | `plan_output_dir` | `str` | `"docs/plans"` | Directory for saving implementation plans. |
 | `retry` | `RetryConfig` | `RetryConfig()` | Retry configuration for transient failures. |
 | `max_review_iterations` | `int` | `3` | Maximum review-fix loop iterations before terminating. |
+| `max_task_review_iterations` | `int` | `5` | Per-task review iteration limit for task-based execution. |
 
 **Location:** `amelia/core/types.py`
 
@@ -190,6 +191,9 @@ The central state object for the LangGraph orchestrator. This model is frozen (i
 | `final_response` | `str \| None` | `None` | Final response from the agent when complete. |
 | `error` | `str \| None` | `None` | Error message if status is 'failed'. |
 | `review_iteration` | `int` | `0` | Current iteration in review-fix loop. |
+| `total_tasks` | `int \| None` | `None` | Number of tasks parsed from plan (None = legacy single-session mode). |
+| `current_task_index` | `int` | `0` | 0-indexed task being executed, increments after each task passes review. |
+| `task_review_iteration` | `int` | `0` | Review iteration counter that resets to 0 when moving to next task. |
 | `structured_review` | `Any \| None` | `None` | Structured review output from reviewer agent. |
 | `evaluation_result` | `Any \| None` | `None` | Output from the evaluator agent. |
 | `approved_items` | `list[int]` | `[]` | Item numbers approved for fixing by human or auto-approve. |
@@ -358,7 +362,10 @@ ExecutionState
 ├── tool_calls: List[ToolCall] (with reducer)
 ├── tool_results: List[ToolResult] (with reducer)
 ├── last_review: ReviewResult
-└── agent_history: List[str] (with reducer)
+├── agent_history: List[str] (with reducer)
+├── total_tasks: int | None (task-based execution)
+├── current_task_index: int
+└── task_review_iteration: int
 
 AgenticState (standalone agentic execution)
 ├── workflow_id: str
