@@ -371,9 +371,8 @@ class TestNextTaskNode:
             "amelia.core.orchestrator.commit_task_changes",
             new_callable=AsyncMock,
             return_value=False,
-        ):
-            with pytest.raises(RuntimeError) as exc_info:
-                await next_task_node(task_state_for_next, config)
+        ), pytest.raises(RuntimeError) as exc_info:
+            await next_task_node(task_state_for_next, config)
 
         assert "Failed to commit changes for task 1" in str(exc_info.value)
         assert "one-commit-per-task" in str(exc_info.value)
