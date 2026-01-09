@@ -1564,3 +1564,100 @@ profiles:
             state = call_args[0][0]
             # Description should default to title
             assert state.execution_state.issue.description == "Fix typo in README"
+
+
+# =============================================================================
+# Approval Event Cleanup Tests
+# =============================================================================
+
+
+class TestApprovalEventCleanup:
+    """Tests for approval event cleanup when workflow completes."""
+
+    async def test_approval_events_cleaned_on_workflow_complete(
+        self,
+        orchestrator: OrchestratorService,
+        mock_repository: AsyncMock,
+        valid_worktree: str,
+    ) -> None:
+        """Approval events dict should be cleaned when workflow task completes.
+
+        This prevents memory leak from _approval_events dict accumulating entries
+        for completed workflows.
+        """
+        # Setup: Create a mock async function that completes immediately
+        async def mock_run() -> None:
+            pass
+
+        # Manually add an approval event for a workflow
+        workflow_id = "wf-cleanup-test"
+        orchestrator._approval_events[workflow_id] = asyncio.Event()
+
+        # Simulate creating and completing a task using the cleanup callback
+        task = asyncio.create_task(mock_run())
+        orchestrator._active_tasks[valid_worktree] = (workflow_id, task)
+
+        # Add the cleanup callback (mimicking what start_workflow does)
+        def cleanup_task(_: asyncio.Task[None]) -> None:
+            orchestrator._active_tasks.pop(valid_worktree, None)
+            orchestrator._sequence_counters.pop(workflow_id, None)
+            orchestrator._sequence_locks.pop(workflow_id, None)
+            # BUG: This cleanup is missing from the actual implementation
+            orchestrator._approval_events.pop(workflow_id, None)
+
+        task.add_done_callback(cleanup_task)
+
+        # Wait for task to complete
+        await task
+
+        # Approval event should be removed after cleanup callback runs
+        # Note: done callbacks run synchronously after task completion
+        assert workflow_id not in orchestrator._approval_events, (
+            "_approval_events should be cleaned up when workflow completes"
+        )
+
+    async def test_approval_events_cleaned_via_start_workflow(
+        self,
+        orchestrator: OrchestratorService,
+        mock_repository: AsyncMock,
+        valid_worktree: str,
+    ) -> None:
+        """Verify start_workflow's cleanup callback cleans approval events.
+
+        This tests the actual cleanup_task callback that start_workflow creates,
+        which should include approval event cleanup.
+        """
+        # Create a mock that completes immediately to trigger cleanup
+        run_completed = asyncio.Event()
+
+        async def mock_run_workflow_with_retry(
+            workflow_id: str, state: ServerExecutionState
+        ) -> None:
+            # Simulate an approval event being created during workflow
+            orchestrator._approval_events[workflow_id] = asyncio.Event()
+            run_completed.set()
+
+        with patch.object(
+            orchestrator, "_run_workflow_with_retry", new=mock_run_workflow_with_retry
+        ):
+            workflow_id = await orchestrator.start_workflow(
+                issue_id="ISSUE-123",
+                worktree_path=valid_worktree,
+                worktree_name="feat-cleanup",
+            )
+
+            # Wait for workflow to complete
+            await run_completed.wait()
+
+            # Get the task and wait for it to fully complete
+            _, task = orchestrator._active_tasks.get(valid_worktree, (None, None))
+            if task:
+                await task
+
+            # Give done callbacks a moment to run
+            await asyncio.sleep(0.01)
+
+            # Approval event should be cleaned up
+            assert workflow_id not in orchestrator._approval_events, (
+                "start_workflow's cleanup callback should remove _approval_events entry"
+            )

@@ -500,6 +500,7 @@ class OrchestratorService:
             self._active_tasks.pop(worktree_path, None)
             self._sequence_counters.pop(workflow_id, None)
             self._sequence_locks.pop(workflow_id, None)
+            self._approval_events.pop(workflow_id, None)
             logger.debug(
                 "Workflow task completed",
                 workflow_id=workflow_id,
@@ -616,6 +617,7 @@ class OrchestratorService:
             self._active_tasks.pop(worktree_path, None)
             self._sequence_counters.pop(workflow_id, None)
             self._sequence_locks.pop(workflow_id, None)
+            self._approval_events.pop(workflow_id, None)
             logger.debug(
                 "Workflow task completed",
                 workflow_id=workflow_id,
