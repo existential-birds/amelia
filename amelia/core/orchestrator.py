@@ -5,6 +5,7 @@ Developer (execute agentically) <-> Reviewer (review) -> Done. Provides node fun
 the state machine and the create_orchestrator_graph() factory.
 """
 import asyncio
+import os
 import re
 from datetime import UTC, datetime
 from pathlib import Path
@@ -878,14 +879,24 @@ async def commit_task_changes(state: ExecutionState, config: RunnableConfig) -> 
 
     task_number = state.current_task_index + 1
 
+    # Disable git prompts to prevent hangs in headless/server contexts
+    git_env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
+    timeout_seconds = 60
+
     # Stage all changes
     proc = await asyncio.create_subprocess_exec(
         "git", "add", "-A",
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
         cwd=working_dir,
+        env=git_env,
     )
-    _, stderr = await proc.communicate()
+    try:
+        _, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout_seconds)
+    except TimeoutError:
+        logger.warning("Timeout staging changes for task commit", task=task_number)
+        proc.kill()
+        return False
     if proc.returncode != 0:
         logger.warning(
             "Failed to stage changes for task commit",
@@ -899,12 +910,26 @@ async def commit_task_changes(state: ExecutionState, config: RunnableConfig) -> 
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
         cwd=working_dir,
+        env=git_env,
     )
-    await proc.communicate()
+    try:
+        await asyncio.wait_for(proc.communicate(), timeout=timeout_seconds)
+    except TimeoutError:
+        logger.warning("Timeout checking staged changes for task", task=task_number)
+        proc.kill()
+        return False
     if proc.returncode == 0:
         # Exit code 0 means no changes (diff is quiet/empty)
         logger.info("No changes to commit for task", task=task_number)
         return True
+    if proc.returncode != 1:
+        # Exit code 1 means changes exist; any other code is an error
+        logger.warning(
+            "Failed to check staged diff for task commit",
+            returncode=proc.returncode,
+            task=task_number,
+        )
+        return False
 
     # Commit with task reference
     issue_key = state.issue.id if state.issue else "unknown"
@@ -915,8 +940,14 @@ async def commit_task_changes(state: ExecutionState, config: RunnableConfig) -> 
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
         cwd=working_dir,
+        env=git_env,
     )
-    _, stderr = await proc.communicate()
+    try:
+        _, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout_seconds)
+    except TimeoutError:
+        logger.warning("Timeout committing task changes", task=task_number)
+        proc.kill()
+        return False
     if proc.returncode == 0:
         logger.info("Committed task changes", task=task_number, message=commit_msg)
         return True

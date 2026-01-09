@@ -356,6 +356,28 @@ class TestNextTaskNode:
 
         mock_commit.assert_called_once_with(task_state_for_next, config)
 
+    @pytest.mark.asyncio
+    async def test_next_task_node_raises_on_commit_failure(
+        self, task_state_for_next: ExecutionState
+    ) -> None:
+        """next_task_node should raise RuntimeError when commit fails.
+
+        This halts the workflow to preserve one-commit-per-task semantics,
+        allowing manual intervention before proceeding.
+        """
+        config = {"configurable": {"profile": MagicMock()}}
+
+        with patch(
+            "amelia.core.orchestrator.commit_task_changes",
+            new_callable=AsyncMock,
+            return_value=False,
+        ):
+            with pytest.raises(RuntimeError) as exc_info:
+                await next_task_node(task_state_for_next, config)
+
+        assert "Failed to commit changes for task 1" in str(exc_info.value)
+        assert "one-commit-per-task" in str(exc_info.value)
+
 
 class TestReviewerNodeTaskIteration:
     """Tests for call_reviewer_node task_review_iteration behavior."""
