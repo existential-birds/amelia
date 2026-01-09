@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { useWorkflowStore } from '../workflowStore';
+import { useWorkflowStore, resetBatchState } from '../workflowStore';
 import { createMockEvent } from '../../__tests__/fixtures';
 
 // Mock sessionStorage
@@ -24,6 +24,7 @@ Object.defineProperty(window, 'sessionStorage', { value: sessionStorageMock });
 describe('workflowStore', () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    resetBatchState();
     useWorkflowStore.setState({
       eventsByWorkflow: {},
       eventIdsByWorkflow: {},

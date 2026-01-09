@@ -9,6 +9,11 @@ const SLOW_THRESHOLD_MS = 10000;
 const VERY_SLOW_THRESHOLD_MS = 30000;
 
 /**
+ * Loading stage based on elapsed time.
+ */
+type LoadingStage = 'normal' | 'slow' | 'verySlow';
+
+/**
  * Loading spinner with progressive timeout feedback.
  *
  * Shows a standard spinner initially, then displays helpful messages
@@ -21,18 +26,23 @@ const VERY_SLOW_THRESHOLD_MS = 30000;
  * @returns React element with spinner and optional timeout messages
  */
 export function LoadingTimeout({ className }: { className?: string }) {
-  const [elapsedMs, setElapsedMs] = useState(0);
+  const [stage, setStage] = useState<LoadingStage>('normal');
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setElapsedMs((prev) => prev + 1000);
-    }, 1000);
+    const slowTimer = setTimeout(() => setStage('slow'), SLOW_THRESHOLD_MS);
+    const verySlowTimer = setTimeout(
+      () => setStage('verySlow'),
+      VERY_SLOW_THRESHOLD_MS
+    );
 
-    return () => clearInterval(interval);
+    return () => {
+      clearTimeout(slowTimer);
+      clearTimeout(verySlowTimer);
+    };
   }, []);
 
-  const isSlow = elapsedMs > SLOW_THRESHOLD_MS;
-  const isVerySlow = elapsedMs > VERY_SLOW_THRESHOLD_MS;
+  const isSlow = stage === 'slow' || stage === 'verySlow';
+  const isVerySlow = stage === 'verySlow';
 
   return (
     <div

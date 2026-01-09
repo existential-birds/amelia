@@ -1574,48 +1574,6 @@ profiles:
 class TestApprovalEventCleanup:
     """Tests for approval event cleanup when workflow completes."""
 
-    async def test_approval_events_cleaned_on_workflow_complete(
-        self,
-        orchestrator: OrchestratorService,
-        mock_repository: AsyncMock,
-        valid_worktree: str,
-    ) -> None:
-        """Approval events dict should be cleaned when workflow task completes.
-
-        This prevents memory leak from _approval_events dict accumulating entries
-        for completed workflows.
-        """
-        # Setup: Create a mock async function that completes immediately
-        async def mock_run() -> None:
-            pass
-
-        # Manually add an approval event for a workflow
-        workflow_id = "wf-cleanup-test"
-        orchestrator._approval_events[workflow_id] = asyncio.Event()
-
-        # Simulate creating and completing a task using the cleanup callback
-        task = asyncio.create_task(mock_run())
-        orchestrator._active_tasks[valid_worktree] = (workflow_id, task)
-
-        # Add the cleanup callback (mimicking what start_workflow does)
-        def cleanup_task(_: asyncio.Task[None]) -> None:
-            orchestrator._active_tasks.pop(valid_worktree, None)
-            orchestrator._sequence_counters.pop(workflow_id, None)
-            orchestrator._sequence_locks.pop(workflow_id, None)
-            # Cleanup approval events (matches start_workflow's cleanup_task callback)
-            orchestrator._approval_events.pop(workflow_id, None)
-
-        task.add_done_callback(cleanup_task)
-
-        # Wait for task to complete
-        await task
-
-        # Approval event should be removed after cleanup callback runs
-        # Note: done callbacks run synchronously after task completion
-        assert workflow_id not in orchestrator._approval_events, (
-            "_approval_events should be cleaned up when workflow completes"
-        )
-
     async def test_approval_events_cleaned_via_start_workflow(
         self,
         orchestrator: OrchestratorService,

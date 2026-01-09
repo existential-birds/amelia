@@ -221,6 +221,19 @@ function scheduleFlush(): void {
 }
 
 /**
+ * Reset batch state for test isolation.
+ * Call this in test setup to ensure clean state between tests.
+ * @internal Exported for testing only.
+ */
+export function resetBatchState(): void {
+  pendingEvents = [];
+  if (flushTimeoutId !== null) {
+    clearTimeout(flushTimeoutId);
+    flushTimeoutId = null;
+  }
+}
+
+/**
  * Zustand store hook for managing workflow real-time events and connection state.
  *
  * This store handles:

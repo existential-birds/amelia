@@ -30,9 +30,7 @@ const DEFAULT_TIMEOUT_MS = 30000;
  * @returns An AbortSignal that will abort after the timeout.
  */
 function createTimeoutSignal(timeoutMs: number = DEFAULT_TIMEOUT_MS): AbortSignal {
-  const controller = new AbortController();
-  setTimeout(() => controller.abort(), timeoutMs);
-  return controller.signal;
+  return AbortSignal.timeout(timeoutMs);
 }
 
 /**

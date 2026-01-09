@@ -8,15 +8,22 @@ describe('LoadingTimeout', () => {
   });
 
   afterEach(() => {
-    vi.runOnlyPendingTimers();
+    act(() => {
+      vi.runOnlyPendingTimers();
+    });
     vi.useRealTimers();
   });
 
-  it('should show loading spinner initially', () => {
+  it('should show loading spinner initially', async () => {
     render(<LoadingTimeout />);
 
     expect(screen.getByRole('status')).toBeInTheDocument();
     expect(screen.queryByText(/taking longer/i)).not.toBeInTheDocument();
+
+    // Flush any pending interval callbacks to avoid act() warning
+    await act(async () => {
+      vi.runOnlyPendingTimers();
+    });
   });
 
   it('should show timeout message after 10 seconds', () => {

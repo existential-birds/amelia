@@ -116,10 +116,10 @@ class TestWebSocketEndpoint:
         )
         assert backfill_expired_sent
 
-    async def test_websocket_backfill_respects_limit(
+    async def test_websocket_backfill_requests_limit(
         self, mock_connection_manager, mock_repository, mock_websocket
     ) -> None:
-        """WebSocket backfill should be limited to prevent memory exhaustion."""
+        """WebSocket backfill should request a limit to prevent memory exhaustion."""
         # Create 1500 mock events (exceeds 1000 limit)
         many_events = [
             WorkflowEvent(
