@@ -1564,3 +1564,58 @@ profiles:
             state = call_args[0][0]
             # Description should default to title
             assert state.execution_state.issue.description == "Fix typo in README"
+
+
+# =============================================================================
+# Approval Event Cleanup Tests
+# =============================================================================
+
+
+class TestApprovalEventCleanup:
+    """Tests for approval event cleanup when workflow completes."""
+
+    async def test_approval_events_cleaned_via_start_workflow(
+        self,
+        orchestrator: OrchestratorService,
+        mock_repository: AsyncMock,
+        valid_worktree: str,
+    ) -> None:
+        """Verify start_workflow's cleanup callback cleans approval events.
+
+        This tests the actual cleanup_task callback that start_workflow creates,
+        which should include approval event cleanup.
+        """
+        # Create a mock that completes immediately to trigger cleanup
+        run_completed = asyncio.Event()
+
+        async def mock_run_workflow_with_retry(
+            workflow_id: str, state: ServerExecutionState
+        ) -> None:
+            # Simulate an approval event being created during workflow
+            orchestrator._approval_events[workflow_id] = asyncio.Event()
+            run_completed.set()
+
+        with patch.object(
+            orchestrator, "_run_workflow_with_retry", new=mock_run_workflow_with_retry
+        ):
+            workflow_id = await orchestrator.start_workflow(
+                issue_id="ISSUE-123",
+                worktree_path=valid_worktree,
+                worktree_name="feat-cleanup",
+            )
+
+            # Wait for workflow to complete
+            await run_completed.wait()
+
+            # Get the task and wait for it to fully complete
+            _, task = orchestrator._active_tasks.get(valid_worktree, (None, None))
+            if task:
+                await task
+
+            # Give done callbacks a moment to run
+            await asyncio.sleep(0.01)
+
+            # Approval event should be cleaned up
+            assert workflow_id not in orchestrator._approval_events, (
+                "start_workflow's cleanup callback should remove _approval_events entry"
+            )

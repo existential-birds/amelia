@@ -87,8 +87,8 @@ class TestWebSocketEndpoint:
         with patch("amelia.server.routes.websocket.connection_manager", mock_connection_manager):
             await websocket_endpoint(mock_websocket, since="evt-1")
 
-        # Should get events after evt-1
-        mock_repository.get_events_after.assert_awaited_once_with("evt-1")
+        # Should get events after evt-1 with limit
+        mock_repository.get_events_after.assert_awaited_once_with("evt-1", limit=1000)
 
         # Should send backfilled events
         assert mock_websocket.send_json.call_count >= 2
@@ -115,3 +115,30 @@ class TestWebSocketEndpoint:
             for call in mock_websocket.send_json.call_args_list
         )
         assert backfill_expired_sent
+
+    async def test_websocket_backfill_requests_limit(
+        self, mock_connection_manager, mock_repository, mock_websocket
+    ) -> None:
+        """WebSocket backfill should request a limit to prevent memory exhaustion."""
+        # Create 1500 mock events (exceeds 1000 limit)
+        many_events = [
+            WorkflowEvent(
+                id=f"evt-{i}",
+                workflow_id="wf-123",
+                sequence=i,
+                timestamp=datetime.now(UTC),
+                agent="system",
+                event_type=EventType.CLAUDE_TOOL_CALL,
+                message=f"Event {i}",
+            )
+            for i in range(2, 1502)
+        ]
+        mock_repository.get_events_after.return_value = many_events
+
+        mock_websocket.receive_json.side_effect = Exception("disconnect")
+
+        with patch("amelia.server.routes.websocket.connection_manager", mock_connection_manager):
+            await websocket_endpoint(mock_websocket, since="evt-1")
+
+        # Should request with limit
+        mock_repository.get_events_after.assert_awaited_once_with("evt-1", limit=1000)

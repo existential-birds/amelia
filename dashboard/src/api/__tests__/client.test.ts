@@ -41,7 +41,10 @@ describe('API Client', () => {
 
       const result = await api.getWorkflows();
 
-      expect(global.fetch).toHaveBeenCalledWith('/api/workflows/active');
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/workflows/active',
+        expect.objectContaining({ signal: expect.any(AbortSignal) })
+      );
       expect(result).toEqual(mockWorkflows);
     });
 
@@ -60,7 +63,10 @@ describe('API Client', () => {
 
       const result = await api.getWorkflow('wf-1');
 
-      expect(global.fetch).toHaveBeenCalledWith('/api/workflows/wf-1');
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/workflows/wf-1',
+        expect.objectContaining({ signal: expect.any(AbortSignal) })
+      );
       expect(result.id).toBe('wf-1');
     });
 
@@ -90,10 +96,14 @@ describe('API Client', () => {
 
         await api[method](id);
 
-        expect(global.fetch).toHaveBeenCalledWith(expectedUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-        });
+        expect(global.fetch).toHaveBeenCalledWith(
+          expectedUrl,
+          expect.objectContaining({
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            signal: expect.any(AbortSignal),
+          })
+        );
       }
     );
 
@@ -105,17 +115,51 @@ describe('API Client', () => {
 
       await api.rejectWorkflow(id, feedback);
 
-      expect(global.fetch).toHaveBeenCalledWith('/api/workflows/wf-1/reject', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ feedback }),
-      });
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/workflows/wf-1/reject',
+        expect.objectContaining({
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ feedback }),
+          signal: expect.any(AbortSignal),
+        })
+      );
     });
 
     it('should handle HTTP errors on mutations', async () => {
       mockFetchError(403, 'Forbidden', 'FORBIDDEN');
 
       await expect(api.approveWorkflow('wf-1')).rejects.toThrow('Forbidden');
+    });
+  });
+
+  describe('request timeout', () => {
+    it('should convert AbortError to ApiError with timeout code', async () => {
+      // Mock fetch that immediately throws AbortError (simulating timeout)
+      const abortError = new Error('The operation was aborted');
+      abortError.name = 'AbortError';
+
+      (global.fetch as ReturnType<typeof vi.fn>).mockRejectedValueOnce(abortError);
+
+      // The ApiError should be thrown with timeout details
+      await expect(api.getWorkflows()).rejects.toMatchObject({
+        message: 'Request timeout',
+        code: 'TIMEOUT',
+        status: 408,
+      });
+    });
+
+    it('should pass AbortSignal to fetch', async () => {
+      mockFetchSuccess({ workflows: [], total: 0, has_more: false });
+
+      await api.getWorkflows();
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/workflows/active',
+        expect.objectContaining({
+          signal: expect.any(AbortSignal),
+        })
+      );
     });
   });
 
@@ -160,9 +204,18 @@ describe('API Client', () => {
       const result = await api.getWorkflowHistory();
 
       expect(global.fetch).toHaveBeenCalledTimes(3);
-      expect(global.fetch).toHaveBeenCalledWith('/api/workflows?status=completed');
-      expect(global.fetch).toHaveBeenCalledWith('/api/workflows?status=failed');
-      expect(global.fetch).toHaveBeenCalledWith('/api/workflows?status=cancelled');
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/workflows?status=completed',
+        expect.objectContaining({ signal: expect.any(AbortSignal) })
+      );
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/workflows?status=failed',
+        expect.objectContaining({ signal: expect.any(AbortSignal) })
+      );
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/workflows?status=cancelled',
+        expect.objectContaining({ signal: expect.any(AbortSignal) })
+      );
       // Should be sorted by started_at descending
       expect(result).toHaveLength(3);
       expect(result[0]!.id).toBe('wf-2'); // Most recent (11:00)

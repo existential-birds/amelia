@@ -120,6 +120,9 @@ describe('useWebSocket', () => {
 
     ws.triggerMessage({ type: 'event', payload: event });
 
+    // Events are batched - flush the batch to apply to state
+    vi.advanceTimersByTime(100);
+
     const state = useWorkflowStore.getState();
     expect(state.eventsByWorkflow['wf-123']).toHaveLength(1);
     expect(state.eventsByWorkflow['wf-123']![0]).toEqual(event);

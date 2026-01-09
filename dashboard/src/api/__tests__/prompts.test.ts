@@ -49,7 +49,10 @@ describe('Prompts API', () => {
 
       const prompts = await api.getPrompts();
 
-      expect(global.fetch).toHaveBeenCalledWith('/api/prompts');
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/prompts',
+        expect.objectContaining({ signal: expect.any(AbortSignal) })
+      );
       expect(prompts).toHaveLength(1);
       expect(prompts[0]!.id).toBe('architect.system');
     });
@@ -83,7 +86,10 @@ describe('Prompts API', () => {
 
       const prompt = await api.getPrompt('architect.system');
 
-      expect(global.fetch).toHaveBeenCalledWith('/api/prompts/architect.system');
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/prompts/architect.system',
+        expect.objectContaining({ signal: expect.any(AbortSignal) })
+      );
       expect(prompt.id).toBe('architect.system');
       expect(prompt.versions).toHaveLength(1);
     });
@@ -116,7 +122,10 @@ describe('Prompts API', () => {
 
       const versions = await api.getPromptVersions('architect.system');
 
-      expect(global.fetch).toHaveBeenCalledWith('/api/prompts/architect.system/versions');
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/prompts/architect.system/versions',
+        expect.objectContaining({ signal: expect.any(AbortSignal) })
+      );
       expect(versions).toHaveLength(2);
       expect(versions[0]!.version_number).toBe(1);
     });
@@ -143,7 +152,10 @@ describe('Prompts API', () => {
 
       const version = await api.getPromptVersion('architect.system', 'v-123');
 
-      expect(global.fetch).toHaveBeenCalledWith('/api/prompts/architect.system/versions/v-123');
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/prompts/architect.system/versions/v-123',
+        expect.objectContaining({ signal: expect.any(AbortSignal) })
+      );
       expect(version.id).toBe('v-123');
       expect(version.content).toBe('Full prompt content here...');
     });
@@ -172,11 +184,15 @@ describe('Prompts API', () => {
 
       const version = await api.createPromptVersion('architect.system', 'New content', 'Test note');
 
-      expect(global.fetch).toHaveBeenCalledWith('/api/prompts/architect.system/versions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: 'New content', change_note: 'Test note' }),
-      });
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/prompts/architect.system/versions',
+        expect.objectContaining({
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: 'New content', change_note: 'Test note' }),
+          signal: expect.any(AbortSignal),
+        })
+      );
       expect(version.id).toBe('v-789');
       expect(version.version_number).toBe(2);
     });
@@ -195,11 +211,15 @@ describe('Prompts API', () => {
 
       await api.createPromptVersion('architect.system', 'New content', null);
 
-      expect(global.fetch).toHaveBeenCalledWith('/api/prompts/architect.system/versions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: 'New content', change_note: null }),
-      });
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/prompts/architect.system/versions',
+        expect.objectContaining({
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: 'New content', change_note: null }),
+          signal: expect.any(AbortSignal),
+        })
+      );
     });
 
     it('should handle HTTP errors', async () => {
@@ -217,10 +237,14 @@ describe('Prompts API', () => {
 
       await api.resetPromptToDefault('architect.system');
 
-      expect(global.fetch).toHaveBeenCalledWith('/api/prompts/architect.system/reset', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      });
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/prompts/architect.system/reset',
+        expect.objectContaining({
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: expect.any(AbortSignal),
+        })
+      );
     });
 
     it('should handle HTTP errors', async () => {
@@ -243,7 +267,10 @@ describe('Prompts API', () => {
 
       const defaultContent = await api.getPromptDefault('architect.system');
 
-      expect(global.fetch).toHaveBeenCalledWith('/api/prompts/architect.system/default');
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/prompts/architect.system/default',
+        expect.objectContaining({ signal: expect.any(AbortSignal) })
+      );
       expect(defaultContent.prompt_id).toBe('architect.system');
       expect(defaultContent.content).toBe('Default prompt content...');
     });

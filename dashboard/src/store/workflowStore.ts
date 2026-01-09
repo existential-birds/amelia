@@ -12,6 +12,23 @@ import type { WorkflowEvent } from '../types';
 const MAX_EVENTS_PER_WORKFLOW = 500;
 
 /**
+ * Batch configuration for event processing.
+ *
+ * Events are batched to reduce React re-renders and GC pressure when
+ * processing high-volume event streams from WebSocket.
+ */
+const BATCH_FLUSH_INTERVAL_MS = 100;
+const BATCH_SIZE_LIMIT = 50;
+
+/**
+ * Pending events waiting to be flushed to state.
+ * This is kept outside the store to avoid triggering re-renders
+ * when events are added to the pending queue.
+ */
+let pendingEvents: WorkflowEvent[] = [];
+let flushTimeoutId: ReturnType<typeof setTimeout> | null = null;
+
+/**
  * Zustand store state for real-time WebSocket events and connection state.
  *
  * Note: Workflow data and UI state (including selection) come from React Router loaders and URL params.
@@ -69,8 +86,10 @@ interface WorkflowState {
   /**
    * Adds a new event to the store for the specified workflow.
    *
-   * Automatically trims the event list if it exceeds MAX_EVENTS_PER_WORKFLOW,
-   * keeping only the most recent events. Updates lastEventId.
+   * Events are batched and flushed every BATCH_FLUSH_INTERVAL_MS (100ms)
+   * or when BATCH_SIZE_LIMIT (50) events accumulate, whichever comes first.
+   * This reduces React re-renders and GC pressure when processing
+   * high-volume event streams.
    *
    * @param event - The workflow event to add.
    */
@@ -112,12 +131,119 @@ interface WorkflowState {
 }
 
 /**
+ * Apply a batch of events to the current state.
+ *
+ * This is the core logic extracted for batching. It processes multiple
+ * events in a single pass, deduplicating by event ID and trimming
+ * to MAX_EVENTS_PER_WORKFLOW if needed.
+ *
+ * @param state - Current store state
+ * @param events - Array of events to apply
+ * @returns Partial state update with new event data
+ */
+function applyEventBatch(
+  state: WorkflowState,
+  events: WorkflowEvent[]
+): Partial<WorkflowState> {
+  if (events.length === 0) return {};
+
+  const newEventsByWorkflow = { ...state.eventsByWorkflow };
+  const newEventIdsByWorkflow = { ...state.eventIdsByWorkflow };
+  let lastEventId = state.lastEventId;
+
+  for (const event of events) {
+    const workflowId = event.workflow_id;
+    const existingIds = newEventIdsByWorkflow[workflowId] ?? new Set<string>();
+
+    // O(1) duplicate check - prevents duplicates from StrictMode
+    // double-effect invocation, reconnection backfill, or server retries.
+    if (existingIds.has(event.id)) {
+      continue;
+    }
+
+    const existing = newEventsByWorkflow[workflowId] ?? [];
+    const updated = [...existing, event];
+
+    // Trim oldest events if exceeding limit (keep most recent)
+    const needsTrim = updated.length > MAX_EVENTS_PER_WORKFLOW;
+    const trimmed = needsTrim
+      ? updated.slice(-MAX_EVENTS_PER_WORKFLOW)
+      : updated;
+
+    // Rebuild Set if trimmed (to remove old IDs), otherwise clone and add
+    const newIds = needsTrim
+      ? new Set(trimmed.map((e) => e.id))
+      : new Set(existingIds).add(event.id);
+
+    newEventsByWorkflow[workflowId] = trimmed;
+    newEventIdsByWorkflow[workflowId] = newIds;
+    lastEventId = event.id;
+  }
+
+  return {
+    eventsByWorkflow: newEventsByWorkflow,
+    eventIdsByWorkflow: newEventIdsByWorkflow,
+    lastEventId,
+  };
+}
+
+/**
+ * Flush pending events to state.
+ *
+ * This is called either when the flush timer fires or when the
+ * batch size limit is reached. It applies all pending events
+ * in a single state update to minimize re-renders.
+ */
+function flushPendingEvents(): void {
+  if (pendingEvents.length === 0) return;
+
+  const eventsToFlush = pendingEvents;
+  pendingEvents = [];
+
+  if (flushTimeoutId !== null) {
+    clearTimeout(flushTimeoutId);
+    flushTimeoutId = null;
+  }
+
+  useWorkflowStore.setState((state) => applyEventBatch(state, eventsToFlush));
+}
+
+/**
+ * Schedule a flush if not already scheduled.
+ *
+ * This ensures events are flushed within BATCH_FLUSH_INTERVAL_MS
+ * even if the batch size limit is not reached.
+ */
+function scheduleFlush(): void {
+  if (flushTimeoutId === null) {
+    flushTimeoutId = setTimeout(flushPendingEvents, BATCH_FLUSH_INTERVAL_MS);
+  }
+}
+
+/**
+ * Reset batch state for test isolation.
+ * Call this in test setup to ensure clean state between tests.
+ * @internal Exported for testing only.
+ */
+export function resetBatchState(): void {
+  pendingEvents = [];
+  if (flushTimeoutId !== null) {
+    clearTimeout(flushTimeoutId);
+    flushTimeoutId = null;
+  }
+}
+
+/**
  * Zustand store hook for managing workflow real-time events and connection state.
  *
  * This store handles:
  * - Real-time WebSocket events (grouped by workflow, auto-trimmed)
  * - WebSocket connection status and errors
  * - Pending action tracking for optimistic UI updates
+ *
+ * Events are batched and flushed every 100ms or when 50 events accumulate,
+ * whichever comes first. This reduces React re-renders and GC pressure
+ * when processing high-volume event streams.
  *
  * State is persisted to sessionStorage, but only lastEventId is saved.
  * Real-time events are ephemeral and not persisted.
@@ -128,7 +254,7 @@ interface WorkflowState {
  * ```typescript
  * const { addEvent, isConnected } = useWorkflowStore();
  *
- * // Add a real-time event
+ * // Add a real-time event (batched)
  * addEvent({
  *   id: 'evt-1',
  *   workflow_id: 'workflow-123',
@@ -153,43 +279,16 @@ export const useWorkflowStore = create<WorkflowState>()(
       connectionError: null,
       pendingActions: [],
 
-      addEvent: (event) =>
-        set((state) => {
-          const existingIds =
-            state.eventIdsByWorkflow[event.workflow_id] ?? new Set<string>();
+      addEvent: (event) => {
+        pendingEvents.push(event);
 
-          // O(1) duplicate check - prevents duplicates from StrictMode
-          // double-effect invocation, reconnection backfill, or server retries.
-          if (existingIds.has(event.id)) {
-            return state;
-          }
-
-          const existing = state.eventsByWorkflow[event.workflow_id] ?? [];
-          const updated = [...existing, event];
-
-          // Trim oldest events if exceeding limit (keep most recent)
-          const needsTrim = updated.length > MAX_EVENTS_PER_WORKFLOW;
-          const trimmed = needsTrim
-            ? updated.slice(-MAX_EVENTS_PER_WORKFLOW)
-            : updated;
-
-          // Rebuild Set if trimmed (to remove old IDs), otherwise clone and add
-          const newIds = needsTrim
-            ? new Set(trimmed.map((e) => e.id))
-            : new Set(existingIds).add(event.id);
-
-          return {
-            eventsByWorkflow: {
-              ...state.eventsByWorkflow,
-              [event.workflow_id]: trimmed,
-            },
-            eventIdsByWorkflow: {
-              ...state.eventIdsByWorkflow,
-              [event.workflow_id]: newIds,
-            },
-            lastEventId: event.id,
-          };
-        }),
+        // Flush immediately if batch is full
+        if (pendingEvents.length >= BATCH_SIZE_LIMIT) {
+          flushPendingEvents();
+        } else {
+          scheduleFlush();
+        }
+      },
 
       setLastEventId: (id) => set({ lastEventId: id }),
 

@@ -6,19 +6,18 @@ import { Suspense } from 'react';
 import { RouterProvider } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { LoadingTimeout } from '@/components/LoadingTimeout';
 import { router } from '@/router';
 
 /**
  * Global loading spinner displayed during lazy-loaded route transitions.
- * Renders a centered spinning indicator with primary color styling.
+ * Uses LoadingTimeout for progressive feedback during slow loads.
  *
- * @returns A full-screen loading spinner component.
+ * @returns A full-screen loading spinner component with timeout feedback.
  */
 function GlobalLoadingSpinner() {
   return (
-    <div className="flex items-center justify-center min-h-screen bg-background">
-      <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-    </div>
+    <LoadingTimeout className="min-h-screen bg-background" />
   );
 }
 

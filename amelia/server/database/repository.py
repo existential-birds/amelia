@@ -444,11 +444,14 @@ class WorkflowRepository:
 
         return WorkflowEvent(**event_data)
 
-    async def get_events_after(self, since_event_id: str) -> list[WorkflowEvent]:
-        """Get all events after a specific event (for backfill on reconnect).
+    async def get_events_after(
+        self, since_event_id: str, limit: int = 1000
+    ) -> list[WorkflowEvent]:
+        """Get events after a specific event (for backfill on reconnect).
 
         Args:
             since_event_id: The event ID to start after.
+            limit: Maximum number of events to return (default 1000).
 
         Returns:
             List of events after the given event, ordered by sequence.
@@ -467,7 +470,7 @@ class WorkflowRepository:
 
         workflow_id, since_sequence = row["workflow_id"], row["sequence"]
 
-        # Get all events from same workflow with higher sequence
+        # Get events from same workflow with higher sequence, limited
         rows = await self._db.fetch_all(
             """
             SELECT id, workflow_id, sequence, timestamp, agent, event_type,
@@ -476,8 +479,9 @@ class WorkflowRepository:
             FROM events
             WHERE workflow_id = ? AND sequence > ?
             ORDER BY sequence ASC
+            LIMIT ?
             """,
-            (workflow_id, since_sequence),
+            (workflow_id, since_sequence, limit),
         )
 
         return [self._row_to_event(row) for row in rows]

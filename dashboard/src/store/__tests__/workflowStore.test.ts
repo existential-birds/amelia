@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { useWorkflowStore } from '../workflowStore';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { useWorkflowStore, resetBatchState } from '../workflowStore';
 import { createMockEvent } from '../../__tests__/fixtures';
 
 // Mock sessionStorage
@@ -23,6 +23,8 @@ Object.defineProperty(window, 'sessionStorage', { value: sessionStorageMock });
 
 describe('workflowStore', () => {
   beforeEach(() => {
+    vi.useFakeTimers();
+    resetBatchState();
     useWorkflowStore.setState({
       eventsByWorkflow: {},
       eventIdsByWorkflow: {},
@@ -34,6 +36,17 @@ describe('workflowStore', () => {
     sessionStorageMock.clear();
   });
 
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /**
+   * Helper function to flush batched events.
+   * Should be called after addEvent() to ensure events are applied to state.
+   */
+  function flushEvents(): void {
+    vi.advanceTimersByTime(100);
+  }
 
   describe('addEvent', () => {
     it('should add event to workflow event list', () => {
@@ -44,6 +57,7 @@ describe('workflowStore', () => {
       });
 
       useWorkflowStore.getState().addEvent(event);
+      flushEvents();
 
       const state = useWorkflowStore.getState();
       expect(state.eventsByWorkflow['wf-1']).toHaveLength(1);
@@ -70,6 +84,7 @@ describe('workflowStore', () => {
 
       useWorkflowStore.getState().addEvent(event1);
       useWorkflowStore.getState().addEvent(event2);
+      flushEvents();
 
       const events = useWorkflowStore.getState().eventsByWorkflow['wf-1'];
       expect(events).toHaveLength(2);
@@ -88,6 +103,7 @@ describe('workflowStore', () => {
       // Simulate StrictMode causing duplicate event additions
       useWorkflowStore.getState().addEvent(event);
       useWorkflowStore.getState().addEvent(event); // Same event added again
+      flushEvents();
 
       const events = useWorkflowStore.getState().eventsByWorkflow['wf-1'];
       expect(events).toHaveLength(1);
@@ -113,9 +129,11 @@ describe('workflowStore', () => {
 
       useWorkflowStore.getState().addEvent(event1);
       useWorkflowStore.getState().addEvent(event2);
+      flushEvents();
 
       // Try to add duplicate of first event
       useWorkflowStore.getState().addEvent(event1);
+      flushEvents();
 
       // lastEventId should remain evt-2, not revert to evt-1
       expect(useWorkflowStore.getState().lastEventId).toBe('evt-2');
@@ -142,6 +160,7 @@ describe('workflowStore', () => {
 
       useWorkflowStore.getState().addEvent(event1);
       useWorkflowStore.getState().addEvent(event2);
+      flushEvents();
 
       // Should deduplicate by id, not object reference
       const events = useWorkflowStore.getState().eventsByWorkflow['wf-1'];
@@ -165,6 +184,7 @@ describe('workflowStore', () => {
 
       useWorkflowStore.getState().addEvent(event1);
       useWorkflowStore.getState().addEvent(event2);
+      flushEvents();
 
       expect(useWorkflowStore.getState().eventsByWorkflow['wf-1']).toHaveLength(1);
       expect(useWorkflowStore.getState().eventsByWorkflow['wf-2']).toHaveLength(1);
@@ -173,7 +193,7 @@ describe('workflowStore', () => {
     it('should trim events when exceeding MAX_EVENTS_PER_WORKFLOW', () => {
       const MAX_EVENTS = 500;
 
-      // Add 501 events
+      // Add 501 events - this exceeds the batch limit of 50, so will trigger multiple flushes
       for (let i = 1; i <= MAX_EVENTS + 1; i++) {
         const event = createMockEvent({
           id: `evt-${i}`,
@@ -184,6 +204,7 @@ describe('workflowStore', () => {
         });
         useWorkflowStore.getState().addEvent(event);
       }
+      flushEvents();
 
       const events = useWorkflowStore.getState().eventsByWorkflow['wf-1'];
       expect(events).toHaveLength(MAX_EVENTS);
@@ -241,6 +262,7 @@ describe('workflowStore', () => {
           message: 'Started',
         })
       );
+      flushEvents();
 
       const stored = sessionStorageMock.getItem('amelia-workflow-state');
       expect(stored).not.toBeNull();
@@ -251,6 +273,59 @@ describe('workflowStore', () => {
 
       // Should NOT persist events
       expect(parsed.state.eventsByWorkflow).toBeUndefined();
+    });
+  });
+
+  describe('batched event processing', () => {
+    it('should batch multiple events into single state update', () => {
+      const store = useWorkflowStore.getState();
+
+      // Add 40 events rapidly (less than batch limit of 50, so no immediate flush)
+      for (let i = 0; i < 40; i++) {
+        store.addEvent({
+          id: `evt-${i}`,
+          workflow_id: 'wf-1',
+          sequence: i,
+          timestamp: '2026-01-08T10:00:00Z',
+          agent: 'system',
+          event_type: 'stage_started',
+          level: 'info',
+          message: `Event ${i}`,
+        });
+      }
+
+      // Before flush, events should NOT be in state yet (batching defers updates)
+      const stateBeforeFlush = useWorkflowStore.getState();
+      expect(stateBeforeFlush.eventsByWorkflow['wf-1'] ?? []).toHaveLength(0);
+
+      // Flush the batch
+      vi.advanceTimersByTime(100);
+
+      // After flush, all events should be in store
+      const stateAfterFlush = useWorkflowStore.getState();
+      expect(stateAfterFlush.eventsByWorkflow['wf-1']).toHaveLength(40);
+    });
+
+    it('should flush batch immediately when reaching batch size limit', () => {
+      const store = useWorkflowStore.getState();
+
+      // Add events up to batch limit (50)
+      for (let i = 0; i < 50; i++) {
+        store.addEvent({
+          id: `evt-${i}`,
+          workflow_id: 'wf-1',
+          sequence: i,
+          timestamp: '2026-01-08T10:00:00Z',
+          agent: 'system',
+          event_type: 'stage_started',
+          level: 'info',
+          message: `Event ${i}`,
+        });
+      }
+
+      // Should flush immediately without waiting for timer
+      const state = useWorkflowStore.getState();
+      expect(state.eventsByWorkflow['wf-1']).toHaveLength(50);
     });
   });
 });
