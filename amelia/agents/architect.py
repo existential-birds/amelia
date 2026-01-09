@@ -13,7 +13,7 @@ from loguru import logger
 from pydantic import BaseModel, ConfigDict
 
 from amelia.core.agentic_state import ToolCall, ToolResult
-from amelia.core.constants import resolve_plan_path
+from amelia.core.constants import ToolName, resolve_plan_path
 from amelia.core.state import ExecutionState
 from amelia.core.types import Design, Profile
 from amelia.drivers.base import AgenticMessageType, DriverInterface
@@ -331,9 +331,10 @@ Before planning, discover:
                 )
 
                 # Extract plan_path from Write tool calls
+                # Note: CLI driver normalizes "Write" to "write_file" (ToolName.WRITE_FILE)
                 extracted_plan_path: Path | None = None
                 for tc in tool_calls:
-                    if tc.tool_name == "Write" and "file_path" in tc.tool_input:
+                    if tc.tool_name == ToolName.WRITE_FILE and "file_path" in tc.tool_input:
                         extracted_plan_path = Path(tc.tool_input["file_path"])
                         break  # Use first Write call (should be the plan)
 

@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from langchain_core.runnables.config import RunnableConfig
 
+from amelia.core.constants import ToolName
 from amelia.core.orchestrator import call_developer_node
 from amelia.core.state import ExecutionState
 from amelia.core.types import Issue, Profile
@@ -98,13 +99,13 @@ class TestDeveloperUnifiedExecution:
             ),
             AgenticMessage(
                 type=AgenticMessageType.TOOL_CALL,
-                tool_name="Read",
+                tool_name=ToolName.READ_FILE,
                 tool_input={"file_path": "/some/file.py"},
                 tool_call_id="call-1",
             ),
             AgenticMessage(
                 type=AgenticMessageType.TOOL_RESULT,
-                tool_name="Read",
+                tool_name=ToolName.READ_FILE,
                 tool_output="file contents here",
                 tool_call_id="call-1",
             ),
@@ -192,7 +193,7 @@ class TestDeveloperUnifiedExecution:
         mock_driver.execute_agentic = create_mock_execute_agentic([
             AgenticMessage(
                 type=AgenticMessageType.TOOL_CALL,
-                tool_name="Write",
+                tool_name=ToolName.WRITE_FILE,
                 tool_input={"file_path": "/test/file.py", "content": "print('hello')"},
                 tool_call_id="call-123",
             ),
@@ -212,7 +213,7 @@ class TestDeveloperUnifiedExecution:
         # Find the tool call event
         tool_call_events = [r for r in results if r[1].event_type == EventType.CLAUDE_TOOL_CALL]
         assert len(tool_call_events) >= 1
-        assert tool_call_events[0][1].tool_name == "Write"
+        assert tool_call_events[0][1].tool_name == ToolName.WRITE_FILE
         assert tool_call_events[0][1].tool_input == {"file_path": "/test/file.py", "content": "print('hello')"}
 
     async def test_developer_processes_tool_result_message(
@@ -236,7 +237,7 @@ class TestDeveloperUnifiedExecution:
         mock_driver.execute_agentic = create_mock_execute_agentic([
             AgenticMessage(
                 type=AgenticMessageType.TOOL_RESULT,
-                tool_name="Read",
+                tool_name=ToolName.READ_FILE,
                 tool_output="File content here",
                 tool_call_id="call-456",
                 is_error=False,
@@ -257,7 +258,7 @@ class TestDeveloperUnifiedExecution:
         # Find the tool result event
         tool_result_events = [r for r in results if r[1].event_type == EventType.CLAUDE_TOOL_RESULT]
         assert len(tool_result_events) >= 1
-        assert tool_result_events[0][1].message == "Tool Read completed"
+        assert tool_result_events[0][1].message == f"Tool {ToolName.READ_FILE} completed"
 
     async def test_developer_processes_result_message(
         self,
@@ -362,13 +363,13 @@ class TestDeveloperUnifiedExecution:
         mock_driver.execute_agentic = create_mock_execute_agentic([
             AgenticMessage(
                 type=AgenticMessageType.TOOL_CALL,
-                tool_name="Read",
+                tool_name=ToolName.READ_FILE,
                 tool_input={"file_path": "/a.py"},
                 tool_call_id="call-1",
             ),
             AgenticMessage(
                 type=AgenticMessageType.TOOL_CALL,
-                tool_name="Write",
+                tool_name=ToolName.WRITE_FILE,
                 tool_input={"file_path": "/b.py", "content": "code"},
                 tool_call_id="call-2",
             ),
@@ -389,8 +390,8 @@ class TestDeveloperUnifiedExecution:
         final_state = results[-1][0]
         assert len(final_state.tool_calls) >= 2
         tool_names = [tc.tool_name for tc in final_state.tool_calls]
-        assert "Read" in tool_names
-        assert "Write" in tool_names
+        assert ToolName.READ_FILE in tool_names
+        assert ToolName.WRITE_FILE in tool_names
 
     async def test_developer_tracks_tool_results_in_state(
         self,
@@ -413,14 +414,14 @@ class TestDeveloperUnifiedExecution:
         mock_driver.execute_agentic = create_mock_execute_agentic([
             AgenticMessage(
                 type=AgenticMessageType.TOOL_RESULT,
-                tool_name="Read",
+                tool_name=ToolName.READ_FILE,
                 tool_output="file content 1",
                 tool_call_id="call-1",
                 is_error=False,
             ),
             AgenticMessage(
                 type=AgenticMessageType.TOOL_RESULT,
-                tool_name="Write",
+                tool_name=ToolName.WRITE_FILE,
                 tool_output="written successfully",
                 tool_call_id="call-2",
                 is_error=False,

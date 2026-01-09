@@ -13,6 +13,7 @@ from langchain_core.runnables.config import RunnableConfig
 
 from amelia.agents.architect import MarkdownPlanOutput
 from amelia.agents.reviewer import ReviewResponse
+from amelia.core.constants import ToolName
 from amelia.core.orchestrator import (
     call_architect_node,
     call_developer_node,
@@ -385,13 +386,13 @@ Add comprehensive tests for the authentication flow.
             ),
             AgenticMessage(
                 type=AgenticMessageType.TOOL_CALL,
-                tool_name="Write",
+                tool_name=ToolName.WRITE_FILE,
                 tool_input={"file_path": str(expected_plan_path), "content": plan_content},
                 tool_call_id="write-plan-1",
             ),
             AgenticMessage(
                 type=AgenticMessageType.TOOL_RESULT,
-                tool_name="Write",
+                tool_name=ToolName.WRITE_FILE,
                 tool_output=f"File written to {expected_plan_path}",
                 tool_call_id="write-plan-1",
             ),
@@ -410,7 +411,7 @@ Add comprehensive tests for the authentication flow.
             """
             for msg in mock_architect_messages:
                 # Simulate Write tool execution when we yield the tool result
-                if msg.type == AgenticMessageType.TOOL_RESULT and msg.tool_name == "Write":
+                if msg.type == AgenticMessageType.TOOL_RESULT and msg.tool_name == ToolName.WRITE_FILE:
                     expected_plan_path.parent.mkdir(parents=True, exist_ok=True)
                     expected_plan_path.write_text(plan_content)
                 yield msg
@@ -427,7 +428,7 @@ Add comprehensive tests for the authentication flow.
         assert "tool_calls" in architect_result
         assert len(architect_result["tool_calls"]) >= 1
         write_call = architect_result["tool_calls"][0]
-        assert write_call.tool_name == "Write"
+        assert write_call.tool_name == ToolName.WRITE_FILE
 
         # Verify plan file was written to disk (by our mock simulating the Write tool)
         assert expected_plan_path.exists(), f"Plan file should exist at {expected_plan_path}"

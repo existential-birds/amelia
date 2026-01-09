@@ -21,7 +21,7 @@ from amelia.agents.architect import Architect, MarkdownPlanOutput
 from amelia.agents.developer import Developer
 from amelia.agents.evaluator import Evaluator
 from amelia.agents.reviewer import Reviewer
-from amelia.core.constants import resolve_plan_path
+from amelia.core.constants import ToolName, resolve_plan_path
 from amelia.core.state import ExecutionState, rebuild_execution_state
 from amelia.core.types import Profile
 from amelia.drivers.factory import DriverFactory
@@ -289,6 +289,34 @@ async def call_architect_node(
             event_bus.emit(event)
 
     await _save_token_usage(driver, workflow_id, "architect", repository)
+
+    # Fallback: If plan file doesn't exist, write it from Write tool call content
+    # This handles cases where Claude Code's Write tool didn't persist the file
+    if not plan_path.exists():
+        logger.warning(
+            "Plan file not found after architect execution, attempting fallback",
+            plan_path=str(plan_path),
+            tool_calls_count=len(final_state.tool_calls),
+        )
+        # Look for Write tool call with plan content
+        for tc in final_state.tool_calls:
+            if tc.tool_name == ToolName.WRITE_FILE and "content" in tc.tool_input:
+                plan_content = tc.tool_input.get("content", "")
+                if plan_content:
+                    plan_path.write_text(plan_content)
+                    logger.info(
+                        "Wrote plan file from Write tool call content",
+                        plan_path=str(plan_path),
+                        content_length=len(plan_content),
+                    )
+                    break
+        else:
+            # No Write tool call found - this is a critical error
+            logger.error(
+                "No Write tool call found for plan file",
+                plan_path=str(plan_path),
+                tool_calls=[tc.tool_name for tc in final_state.tool_calls],
+            )
 
     logger.info(
         "Agent action completed",
