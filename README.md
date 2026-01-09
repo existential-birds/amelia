@@ -25,6 +25,12 @@ See the [**Roadmap**](https://existential-birds.github.io/amelia/reference/roadm
 
 ## Features
 
+### Quick Shot
+
+Start ad-hoc tasks directly from the sidebar without navigating away from your current workflow.
+
+![Quick Shot](docs/design/quick_shot_feature.png)
+
 ### Plan View
 
 Review and approve generated implementation plans before execution.
@@ -60,6 +66,12 @@ Inspect individual agent runs, tool calls, and outputs.
 Compare model performance and track token usage across runs.
 
 ![Metrics](docs/design/hugo_opus_vs_gemini.jpeg)
+
+### Long-Running Workflows
+
+Handle complex tasks with hundreds of tool calls across multiple agent runs.
+
+![Long Running Agent](docs/design/long_running_agent.png)
 
 ## Prerequisites
 
