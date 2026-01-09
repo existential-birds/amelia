@@ -275,11 +275,13 @@ During API submission, the button shows an electric pulse with scanning line.
 
 | Field | Type | Required | Validation |
 |-------|------|----------|------------|
-| Task ID | Input | Yes | Non-empty, alphanumeric + hyphens |
+| Task ID | Input | Yes | Non-empty, alphanumeric + hyphens/underscores, 1-100 chars |
 | Worktree Path | Input | Yes | Absolute path (starts with `/`) |
-| Profile | Input | No | Optional, from settings.amelia.yaml |
+| Profile | Input | No | Lowercase alphanumeric + hyphens/underscores |
 | Title | Input | Yes | Non-empty, max 500 chars |
 | Description | Textarea | No | Defaults to title if empty, max 5000 chars |
+
+**Note:** Task ID maps to `issue_id` in the API. The UI uses "Task ID" for user-friendliness.
 
 ### Validation Behavior
 
@@ -300,7 +302,13 @@ async createWorkflow(request: {
   profile?: string;
   task_title: string;
   task_description?: string;
-}): Promise<{ workflow_id: string }>
+}): Promise<CreateWorkflowResponse>
+
+interface CreateWorkflowResponse {
+  id: string;
+  status: string;
+  message: string;
+}
 ```
 
 **Request:** `POST /api/workflows`
@@ -314,20 +322,30 @@ async createWorkflow(request: {
 }
 ```
 
-**Response:** `{ "workflow_id": "wf-abc123" }`
+**Response:**
+```json
+{
+  "id": "wf-abc123",
+  "status": "pending",
+  "message": "Workflow created for issue TASK-001"
+}
+```
 
 ---
 
 ## Error Handling
 
-| Scenario | UI Response |
-|----------|-------------|
-| Validation error | Inline red text below field, field border turns red |
-| API error (4xx) | Toast notification with error message |
-| API error (5xx) | Toast with "Server error. Please try again." |
-| Network error | Toast with "Connection failed. Check your network." |
-| Loading state | Button text → "LAUNCHING...", scan-line animation |
-| Success | Toast with "Workflow started" + link to `/workflows/{id}` |
+| Scenario | HTTP Status | UI Response |
+|----------|-------------|-------------|
+| Validation error | - | Inline red text below field, field border turns red |
+| Invalid worktree | 400 | Toast with server error message |
+| Worktree in use | 409 | Toast: "This worktree already has an active workflow" |
+| Too many workflows | 429 | Toast: "Too many workflows running. Try again later." |
+| Other client error | 4xx | Toast notification with error message |
+| Server error | 5xx | Toast: "Server error. Please try again." |
+| Network error | - | Toast: "Connection failed. Check your network." |
+| Loading state | - | Button text → "LAUNCHING...", scan-line animation |
+| Success | 201 | Toast with "Workflow started" + link to `/workflows/{id}` |
 
 ---
 
@@ -418,7 +436,7 @@ const handleSubmit = async () => {
 
   try {
     const result = await api.createWorkflow(formData);
-    toast.success(`Workflow started: ${result.workflow_id}`);
+    toast.success(`Workflow started: ${result.id}`);
     onClose();
   } catch (error) {
     toast.error(error.message);
@@ -432,10 +450,28 @@ const handleSubmit = async () => {
 
 ```tsx
 const schema = z.object({
-  issue_id: z.string().min(1, "Task ID is required"),
-  worktree_path: z.string().regex(/^\//, "Must be absolute path"),
-  profile: z.string().optional(),
-  task_title: z.string().min(1).max(500),
-  task_description: z.string().max(5000).optional(),
+  issue_id: z
+    .string()
+    .min(1, "Task ID is required")
+    .max(100, "Task ID must be 100 characters or less")
+    .regex(/^[a-zA-Z0-9_-]+$/, "Only letters, numbers, hyphens, and underscores"),
+  worktree_path: z
+    .string()
+    .min(1, "Worktree path is required")
+    .regex(/^\//, "Must be an absolute path"),
+  profile: z
+    .string()
+    .regex(/^[a-z0-9_-]*$/, "Lowercase letters, numbers, hyphens, and underscores only")
+    .optional()
+    .or(z.literal("")),
+  task_title: z
+    .string()
+    .min(1, "Title is required")
+    .max(500, "Title must be 500 characters or less"),
+  task_description: z
+    .string()
+    .max(5000, "Description must be 5000 characters or less")
+    .optional()
+    .or(z.literal("")),
 });
 ```
