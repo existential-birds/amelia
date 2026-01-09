@@ -53,3 +53,24 @@ class TestDriverUsageModel:
         assert usage.model == "test-model"
         assert usage.cost_usd is None
         assert usage.duration_ms is None
+
+
+class TestDriverInterfaceProtocol:
+    """Tests for DriverInterface protocol changes."""
+
+    def test_driver_interface_has_get_usage_method(self) -> None:
+        """DriverInterface protocol should define get_usage() method."""
+        from amelia.drivers.base import DriverInterface, DriverUsage
+
+        # Check that get_usage is in the protocol's annotations
+        assert hasattr(DriverInterface, "get_usage")
+
+        # Verify it's a callable that returns DriverUsage | None
+        import inspect
+        import types
+        sig = inspect.signature(DriverInterface.get_usage)
+        # Return annotation is a UnionType: DriverUsage | None
+        ret = sig.return_annotation
+        assert isinstance(ret, types.UnionType)
+        assert DriverUsage in ret.__args__
+        assert type(None) in ret.__args__

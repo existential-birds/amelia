@@ -186,3 +186,7 @@ class DriverInterface(Protocol):
             AgenticMessage for each event during execution.
         """
         ...
+
+    def get_usage(self) -> DriverUsage | None:
+        """Return accumulated usage from last execution, or None if unavailable."""
+        ...
