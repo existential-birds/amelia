@@ -4,7 +4,7 @@
 
 ![Active Workflow](docs/design/amelia_active_workflow.png)
 
-[Amelia](https://en.wikipedia.org/wiki/Amelia_Earhart) is multi-agent orchestration for software development with human-in-the-loop approval gates, defense-in-depth security, and end-to-end observability. Local-first, enterprise-ready.
+[Amelia](https://en.wikipedia.org/wiki/Amelia_Earhart) is multi-agent orchestration for software development with human-in-the-loop approval gates, defense-in-depth security, and end-to-end observability.
 
 See the [**Roadmap**](https://existential-birds.github.io/amelia/reference/roadmap) for where we're headed.
 
