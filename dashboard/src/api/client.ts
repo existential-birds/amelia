@@ -19,6 +19,47 @@ import type {
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 
 /**
+ * Default timeout for API requests in milliseconds (30 seconds).
+ */
+const DEFAULT_TIMEOUT_MS = 30000;
+
+/**
+ * Creates an AbortSignal that triggers after the specified timeout.
+ *
+ * @param timeoutMs - Timeout duration in milliseconds.
+ * @returns An AbortSignal that will abort after the timeout.
+ */
+function createTimeoutSignal(timeoutMs: number = DEFAULT_TIMEOUT_MS): AbortSignal {
+  const controller = new AbortController();
+  setTimeout(() => controller.abort(), timeoutMs);
+  return controller.signal;
+}
+
+/**
+ * Wraps fetch with timeout support.
+ *
+ * @param url - The URL to fetch.
+ * @param options - Fetch options (method, headers, body, etc.).
+ * @returns The fetch Response.
+ * @throws {ApiError} When the request times out or fails.
+ */
+async function fetchWithTimeout(
+  url: string,
+  options: RequestInit = {}
+): Promise<Response> {
+  const signal = createTimeoutSignal();
+
+  try {
+    return await fetch(url, { ...options, signal });
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new ApiError('Request timeout', 'TIMEOUT', 408);
+    }
+    throw error;
+  }
+}
+
+/**
  * Custom error class for API-related errors.
  *
  * Extends the standard Error class to include additional context about API failures,
@@ -112,7 +153,7 @@ export const api = {
    * ```
    */
   async getWorkflows(): Promise<WorkflowSummary[]> {
-    const response = await fetch(`${API_BASE_URL}/workflows/active`);
+    const response = await fetchWithTimeout(`${API_BASE_URL}/workflows/active`);
     const data = await handleResponse<WorkflowListResponse>(response);
     return data.workflows;
   },
@@ -134,7 +175,7 @@ export const api = {
    * ```
    */
   async getWorkflow(id: string): Promise<WorkflowDetailResponse> {
-    const response = await fetch(`${API_BASE_URL}/workflows/${id}`);
+    const response = await fetchWithTimeout(`${API_BASE_URL}/workflows/${id}`);
     return handleResponse<WorkflowDetailResponse>(response);
   },
 
@@ -155,7 +196,7 @@ export const api = {
    * ```
    */
   async approveWorkflow(id: string): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/workflows/${id}/approve`, {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/workflows/${id}/approve`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
     });
@@ -180,7 +221,7 @@ export const api = {
    * ```
    */
   async rejectWorkflow(id: string, feedback: string): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/workflows/${id}/reject`, {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/workflows/${id}/reject`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ feedback }),
@@ -205,7 +246,7 @@ export const api = {
    * ```
    */
   async cancelWorkflow(id: string): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/workflows/${id}/cancel`, {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/workflows/${id}/cancel`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
     });
@@ -233,7 +274,7 @@ export const api = {
     const statuses: WorkflowStatus[] = ['completed', 'failed', 'cancelled'];
     const results = await Promise.all(
       statuses.map(async (status) => {
-        const response = await fetch(`${API_BASE_URL}/workflows?status=${status}`);
+        const response = await fetchWithTimeout(`${API_BASE_URL}/workflows?status=${status}`);
         const data = await handleResponse<WorkflowListResponse>(response);
         return data.workflows;
       })
@@ -265,7 +306,7 @@ export const api = {
    * ```
    */
   async getPrompts(): Promise<PromptSummary[]> {
-    const response = await fetch(`${API_BASE_URL}/prompts`);
+    const response = await fetchWithTimeout(`${API_BASE_URL}/prompts`);
     const data = await handleResponse<{ prompts: PromptSummary[] }>(response);
     return data.prompts;
   },
@@ -284,7 +325,7 @@ export const api = {
    * ```
    */
   async getPrompt(id: string): Promise<PromptDetail> {
-    const response = await fetch(`${API_BASE_URL}/prompts/${id}`);
+    const response = await fetchWithTimeout(`${API_BASE_URL}/prompts/${id}`);
     return handleResponse<PromptDetail>(response);
   },
 
@@ -302,7 +343,7 @@ export const api = {
    * ```
    */
   async getPromptVersions(promptId: string): Promise<VersionSummary[]> {
-    const response = await fetch(`${API_BASE_URL}/prompts/${promptId}/versions`);
+    const response = await fetchWithTimeout(`${API_BASE_URL}/prompts/${promptId}/versions`);
     const data = await handleResponse<{ versions: VersionSummary[] }>(response);
     return data.versions;
   },
@@ -325,7 +366,7 @@ export const api = {
     promptId: string,
     versionId: string
   ): Promise<VersionDetail> {
-    const response = await fetch(
+    const response = await fetchWithTimeout(
       `${API_BASE_URL}/prompts/${promptId}/versions/${versionId}`
     );
     return handleResponse<VersionDetail>(response);
@@ -355,7 +396,7 @@ export const api = {
     content: string,
     changeNote: string | null
   ): Promise<VersionDetail> {
-    const response = await fetch(`${API_BASE_URL}/prompts/${promptId}/versions`, {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/prompts/${promptId}/versions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content, change_note: changeNote }),
@@ -377,7 +418,7 @@ export const api = {
    * ```
    */
   async resetPromptToDefault(promptId: string): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/prompts/${promptId}/reset`, {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/prompts/${promptId}/reset`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
     });
@@ -398,7 +439,7 @@ export const api = {
    * ```
    */
   async getPromptDefault(promptId: string): Promise<DefaultContent> {
-    const response = await fetch(`${API_BASE_URL}/prompts/${promptId}/default`);
+    const response = await fetchWithTimeout(`${API_BASE_URL}/prompts/${promptId}/default`);
     return handleResponse<DefaultContent>(response);
   },
 };
