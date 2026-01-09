@@ -5,10 +5,13 @@
  * quickly launch workflows directly from the dashboard UI.
  */
 
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Zap } from 'lucide-react';
+import { toast } from 'sonner';
+import { api, ApiError } from '@/api/client';
 import {
   Dialog,
   DialogContent,
@@ -122,6 +125,9 @@ const fields: FieldConfig[] = [
  * @param props.onOpenChange - Callback when open state changes
  */
 export function QuickShotModal({ open, onOpenChange }: QuickShotModalProps) {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLaunching, setIsLaunching] = useState(false);
+
   const {
     register,
     handleSubmit,
@@ -140,8 +146,32 @@ export function QuickShotModal({ open, onOpenChange }: QuickShotModalProps) {
   });
 
   const onSubmit = async (data: QuickShotFormData) => {
-    // TODO: Implement API call in Part 2
-    console.log('Form data:', data);
+    setIsLaunching(true);
+    // Brief ripple animation
+    await new Promise((r) => setTimeout(r, 400));
+    setIsLaunching(false);
+    setIsSubmitting(true);
+
+    try {
+      const result = await api.createWorkflow({
+        issue_id: data.issue_id,
+        worktree_path: data.worktree_path,
+        profile: data.profile || undefined,
+        task_title: data.task_title,
+        task_description: data.task_description || undefined,
+      });
+      toast.success(`Workflow started: ${result.id}`);
+      reset();
+      onOpenChange(false);
+    } catch (error) {
+      if (error instanceof ApiError) {
+        toast.error(error.message);
+      } else {
+        toast.error('Connection failed. Check your network.');
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleClose = () => {
@@ -223,15 +253,25 @@ export function QuickShotModal({ open, onOpenChange }: QuickShotModalProps) {
             </Button>
             <Button
               type="submit"
-              disabled={!isValid}
+              disabled={!isValid || isSubmitting}
               className={cn(
-                'font-heading uppercase tracking-wide',
+                'font-heading uppercase tracking-wide relative overflow-hidden',
                 'transition-all duration-normal',
-                isValid && 'animate-quick-shot-charge'
+                isValid && !isSubmitting && 'animate-quick-shot-charge',
+                isLaunching && 'after:absolute after:inset-0 after:animate-quick-shot-ripple after:bg-primary/20 after:rounded-[inherit]'
               )}
             >
-              <Zap className="mr-2 h-4 w-4" />
-              Start Workflow
+              {isSubmitting ? (
+                <>
+                  <span className="absolute inset-0 bg-gradient-to-r from-transparent via-primary-foreground/30 to-transparent animate-quick-shot-scan" />
+                  Launching...
+                </>
+              ) : (
+                <>
+                  <Zap className="mr-2 h-4 w-4" />
+                  Start Workflow
+                </>
+              )}
             </Button>
           </DialogFooter>
         </form>

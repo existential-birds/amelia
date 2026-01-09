@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QuickShotModal } from './QuickShotModal';
+import { api, ApiError } from '@/api/client';
+import { toast } from 'sonner';
 
 // Mock the API client
 vi.mock('@/api/client', () => ({
@@ -123,6 +125,108 @@ describe('QuickShotModal', () => {
         const submitButton = screen.getByRole('button', { name: /start workflow/i });
         expect(submitButton).not.toBeDisabled();
       });
+    });
+  });
+
+  describe('submission', () => {
+    it('calls createWorkflow API on valid submit', async () => {
+      const user = userEvent.setup();
+      const mockCreateWorkflow = vi.mocked(api.createWorkflow);
+      mockCreateWorkflow.mockResolvedValueOnce({
+        id: 'wf-abc123',
+        status: 'pending',
+        message: 'Workflow created',
+      });
+
+      render(<QuickShotModal {...defaultProps} />);
+
+      await user.type(screen.getByLabelText(/task id/i), 'TASK-001');
+      await user.type(screen.getByLabelText(/worktree path/i), '/Users/me/repo');
+      await user.type(screen.getByLabelText(/task title/i), 'Test title');
+
+      await user.click(screen.getByRole('button', { name: /start workflow/i }));
+
+      await waitFor(() => {
+        expect(mockCreateWorkflow).toHaveBeenCalledWith({
+          issue_id: 'TASK-001',
+          worktree_path: '/Users/me/repo',
+          profile: undefined,
+          task_title: 'Test title',
+          task_description: undefined,
+        });
+      });
+    });
+
+    it('shows success toast and closes modal on success', async () => {
+      const user = userEvent.setup();
+      const onOpenChange = vi.fn();
+      const mockCreateWorkflow = vi.mocked(api.createWorkflow);
+      mockCreateWorkflow.mockResolvedValueOnce({
+        id: 'wf-abc123',
+        status: 'pending',
+        message: 'Workflow created',
+      });
+
+      render(<QuickShotModal open={true} onOpenChange={onOpenChange} />);
+
+      await user.type(screen.getByLabelText(/task id/i), 'TASK-001');
+      await user.type(screen.getByLabelText(/worktree path/i), '/Users/me/repo');
+      await user.type(screen.getByLabelText(/task title/i), 'Test title');
+
+      await user.click(screen.getByRole('button', { name: /start workflow/i }));
+
+      await waitFor(() => {
+        expect(toast.success).toHaveBeenCalledWith(
+          expect.stringContaining('wf-abc123')
+        );
+        expect(onOpenChange).toHaveBeenCalledWith(false);
+      });
+    });
+
+    it('shows error toast on API error', async () => {
+      const user = userEvent.setup();
+      const mockCreateWorkflow = vi.mocked(api.createWorkflow);
+      mockCreateWorkflow.mockRejectedValueOnce(
+        new ApiError('Worktree in use', 'WORKTREE_IN_USE', 409)
+      );
+
+      render(<QuickShotModal {...defaultProps} />);
+
+      await user.type(screen.getByLabelText(/task id/i), 'TASK-001');
+      await user.type(screen.getByLabelText(/worktree path/i), '/Users/me/repo');
+      await user.type(screen.getByLabelText(/task title/i), 'Test title');
+
+      await user.click(screen.getByRole('button', { name: /start workflow/i }));
+
+      await waitFor(() => {
+        expect(toast.error).toHaveBeenCalledWith('Worktree in use');
+      });
+    });
+
+    it('shows loading state during submission', async () => {
+      const user = userEvent.setup();
+      const mockCreateWorkflow = vi.mocked(api.createWorkflow);
+      let resolvePromise: (value: { id: string; status: string; message: string }) => void;
+      mockCreateWorkflow.mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolvePromise = resolve;
+        })
+      );
+
+      render(<QuickShotModal {...defaultProps} />);
+
+      await user.type(screen.getByLabelText(/task id/i), 'TASK-001');
+      await user.type(screen.getByLabelText(/worktree path/i), '/Users/me/repo');
+      await user.type(screen.getByLabelText(/task title/i), 'Test title');
+
+      await user.click(screen.getByRole('button', { name: /start workflow/i }));
+
+      // Wait for the launching state to appear (after 400ms ripple animation)
+      await waitFor(() => {
+        expect(screen.getByText(/launching/i)).toBeInTheDocument();
+      });
+
+      resolvePromise!({ id: 'wf-123', status: 'pending', message: 'ok' });
     });
   });
 });
