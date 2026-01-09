@@ -2,6 +2,7 @@
 import asyncio
 import os
 import subprocess
+import time
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -23,6 +24,7 @@ from amelia.drivers.base import (
     AgenticMessage,
     AgenticMessageType,
     DriverInterface,
+    DriverUsage,
     GenerateResult,
 )
 
@@ -174,6 +176,7 @@ class ApiDriver(DriverInterface):
         """
         self.model = model or self.DEFAULT_MODEL
         self.cwd = cwd
+        self._usage: DriverUsage | None = None
 
     async def generate(
         self,
@@ -311,6 +314,14 @@ class ApiDriver(DriverInterface):
         if not prompt or not prompt.strip():
             raise ValueError("Prompt cannot be empty")
 
+        # Initialize usage tracking
+        start_time = time.perf_counter()
+        total_input = 0
+        total_output = 0
+        total_cost = 0.0
+        num_turns = 0
+        seen_message_ids: set[int] = set()
+
         try:
             chat_model = _create_chat_model(self.model)
             backend = LocalSandbox(root_dir=cwd)
@@ -341,6 +352,25 @@ class ApiDriver(DriverInterface):
 
                 if isinstance(message, AIMessage):
                     last_message = message
+
+                    # Extract usage from new AIMessages (avoid double-counting)
+                    msg_id = id(message)
+                    if msg_id not in seen_message_ids:
+                        seen_message_ids.add(msg_id)
+                        num_turns += 1
+
+                        # Extract token usage from usage_metadata
+                        usage_meta = getattr(message, "usage_metadata", None)
+                        if usage_meta:
+                            total_input += usage_meta.get("input_tokens", 0)
+                            total_output += usage_meta.get("output_tokens", 0)
+
+                        # Extract cost from OpenRouter response_metadata
+                        # OpenRouter returns cost in token_usage object
+                        resp_meta = getattr(message, "response_metadata", None)
+                        if resp_meta:
+                            token_usage = resp_meta.get("token_usage", {})
+                            total_cost += token_usage.get("cost", 0.0)
 
                     # Text blocks in list content -> THINKING (intermediate text during tool use)
                     # Plain string content is NOT yielded as THINKING - it will be yielded as RESULT
@@ -385,6 +415,17 @@ class ApiDriver(DriverInterface):
                         model=self.model,
                     )
 
+            # Store accumulated usage before yielding result
+            duration_ms = int((time.perf_counter() - start_time) * 1000)
+            self._usage = DriverUsage(
+                input_tokens=total_input if total_input > 0 else None,
+                output_tokens=total_output if total_output > 0 else None,
+                cost_usd=total_cost if total_cost > 0 else None,
+                duration_ms=duration_ms,
+                num_turns=num_turns if num_turns > 0 else None,
+                model=self.model,
+            )
+
             # Final result from last AI message
             if last_message:
                 final_content = ""
@@ -415,3 +456,11 @@ class ApiDriver(DriverInterface):
             raise
         except Exception as e:
             raise RuntimeError(f"Agentic execution failed: {e}") from e
+
+    def get_usage(self) -> DriverUsage | None:
+        """Return accumulated usage from last execution.
+
+        Returns:
+            DriverUsage with accumulated totals, or None if no execution occurred.
+        """
+        return self._usage

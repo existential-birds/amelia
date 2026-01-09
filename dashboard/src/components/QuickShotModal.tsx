@@ -67,7 +67,7 @@ interface QuickShotModalProps {
  * Field configuration for rendering form fields.
  */
 interface FieldConfig {
-  name: keyof QuickShotFormData;
+  name: keyof QuickShotFormData & string;
   label: string;
   placeholder: string;
   required: boolean;

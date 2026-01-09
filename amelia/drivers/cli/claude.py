@@ -21,7 +21,7 @@ from loguru import logger
 from pydantic import BaseModel, ValidationError
 
 from amelia.core.constants import normalize_tool_name
-from amelia.drivers.base import AgenticMessage, AgenticMessageType, GenerateResult
+from amelia.drivers.base import AgenticMessage, AgenticMessageType, DriverUsage, GenerateResult
 from amelia.logging import log_claude_result
 
 
@@ -450,3 +450,30 @@ class ClaudeCliDriver:
 
     def clear_tool_history(self) -> None:
         self.tool_call_history = []
+
+    def get_usage(self) -> DriverUsage | None:
+        """Return usage from last execution.
+
+        Translates SDK ResultMessage fields to the driver-agnostic DriverUsage model.
+
+        Returns:
+            DriverUsage with accumulated usage data, or None if no execution occurred
+            or no usage data is available.
+        """
+        if self.last_result_message is None:
+            return None
+
+        usage_data = getattr(self.last_result_message, "usage", None)
+        if usage_data is None:
+            return None
+
+        return DriverUsage(
+            input_tokens=usage_data.get("input_tokens"),
+            output_tokens=usage_data.get("output_tokens"),
+            cache_read_tokens=usage_data.get("cache_read_input_tokens"),
+            cache_creation_tokens=usage_data.get("cache_creation_input_tokens"),
+            cost_usd=getattr(self.last_result_message, "total_cost_usd", None),
+            duration_ms=getattr(self.last_result_message, "duration_ms", None),
+            num_turns=getattr(self.last_result_message, "num_turns", None),
+            model=usage_data.get("model") or self.model,
+        )
