@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-01-08
+
+### Added
+
+- **dashboard:** Add Quick Shot modal for rapid workflow creation ([#250](https://github.com/existential-birds/amelia/pull/250))
+  - Start ad-hoc tasks directly from the sidebar without navigating to a new page
+  - Input field for task description with keyboard shortcut support
+- **orchestrator:** Add task-based execution for multi-task plans ([#245](https://github.com/existential-birds/amelia/pull/245))
+  - Architect plans can now specify multiple tasks that execute sequentially
+  - Developer node iterates through tasks with per-task completion tracking
+  - Progress events stream task completion status to dashboard
+
+### Fixed
+
+- **dashboard:** Fix logging performance and memory issues ([#249](https://github.com/existential-birds/amelia/pull/249))
+  - Reduce excessive console logging that caused UI slowdowns
+  - Fix memory leak from unbounded event accumulation in workflow store
+
 ## [0.6.0] - 2026-01-08
 
 ### Added
@@ -184,7 +202,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - FastAPI server with WebSocket support
 - React dashboard for workflow visualization
 
-[Unreleased]: https://github.com/existential-birds/amelia/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/existential-birds/amelia/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/existential-birds/amelia/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/existential-birds/amelia/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/existential-birds/amelia/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/existential-birds/amelia/compare/v0.4.1...v0.5.0
