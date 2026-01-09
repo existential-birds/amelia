@@ -1,3 +1,4 @@
+import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -176,9 +177,18 @@ describe('QuickShotModal', () => {
       await user.click(screen.getByRole('button', { name: /start workflow/i }));
 
       await waitFor(() => {
-        expect(toast.success).toHaveBeenCalledWith(
-          expect.stringContaining('wf-abc123')
+        expect(toast.success).toHaveBeenCalled();
+        // Verify the JSX content includes a link to the workflow
+        const callArg = vi.mocked(toast.success).mock.calls[0][0] as React.ReactElement;
+        // Find the anchor element in children (may be nested)
+        const children = React.Children.toArray(callArg.props.children);
+        const link = children.find(
+          (child): child is React.ReactElement =>
+            React.isValidElement(child) && child.type === 'a'
         );
+        expect(link).toBeDefined();
+        expect(link?.props.href).toBe('/workflows/wf-abc123');
+        expect(link?.props.children).toBe('wf-abc123');
         expect(onOpenChange).toHaveBeenCalledWith(false);
       });
     });

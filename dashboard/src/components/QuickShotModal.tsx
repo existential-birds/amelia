@@ -157,7 +157,17 @@ export function QuickShotModal({ open, onOpenChange }: QuickShotModalProps) {
         task_title: data.task_title,
         task_description: data.task_description || undefined,
       });
-      toast.success(`Workflow started: ${result.id}`);
+      toast.success(
+        <span>
+          Workflow started:{' '}
+          <a
+            href={`/workflows/${result.id}`}
+            className="underline hover:text-primary"
+          >
+            {result.id}
+          </a>
+        </span>
+      );
       reset();
       onOpenChange(false);
     } catch (error) {
