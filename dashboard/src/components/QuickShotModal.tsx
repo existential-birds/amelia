@@ -27,31 +27,28 @@ import { cn } from '@/lib/utils';
 
 /**
  * Zod schema for Quick Shot form validation.
+ * All fields are strings to match form defaults.
  */
 const quickShotSchema = z.object({
   issue_id: z
-    .string({ required_error: 'Task ID is required' })
+    .string()
     .min(1, 'Task ID is required')
     .max(100, 'Task ID must be 100 characters or less')
     .regex(/^[a-zA-Z0-9_-]+$/, 'Only letters, numbers, hyphens, and underscores'),
   worktree_path: z
-    .string({ required_error: 'Worktree path is required' })
+    .string()
     .min(1, 'Worktree path is required')
     .regex(/^\//, 'Must be an absolute path'),
   profile: z
     .string()
-    .regex(/^[a-z0-9_-]*$/, 'Lowercase letters, numbers, hyphens, and underscores only')
-    .optional()
-    .default(''),
+    .regex(/^[a-z0-9_-]*$/, 'Lowercase letters, numbers, hyphens, and underscores only'),
   task_title: z
-    .string({ required_error: 'Title is required' })
+    .string()
     .min(1, 'Title is required')
     .max(500, 'Title must be 500 characters or less'),
   task_description: z
     .string()
-    .max(5000, 'Description must be 5000 characters or less')
-    .optional()
-    .default(''),
+    .max(5000, 'Description must be 5000 characters or less'),
 });
 
 type QuickShotFormData = z.infer<typeof quickShotSchema>;
