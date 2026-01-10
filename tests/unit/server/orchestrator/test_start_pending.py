@@ -19,7 +19,7 @@ from amelia.server.orchestrator.service import OrchestratorService
 def mock_event_bus() -> MagicMock:
     """Create a mock event bus."""
     bus = MagicMock()
-    bus.emit = AsyncMock()
+    bus.emit = MagicMock()  # emit() is synchronous
     return bus
 
 
