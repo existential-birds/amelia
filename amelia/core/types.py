@@ -1,6 +1,6 @@
 """Configuration and shared type definitions for the Amelia orchestrator.
 
-Contains type aliases (DriverType, TrackerType, StrategyType) and
+Contains type aliases (DriverType, TrackerType) and
 Pydantic models (RetryConfig, Profile, Settings, Issue, Design) used throughout
 the Amelia agentic coding orchestrator.
 """
@@ -11,7 +11,6 @@ from pydantic import BaseModel, ConfigDict, Field
 
 DriverType = Literal["cli:claude", "api:openrouter", "cli", "api"]
 TrackerType = Literal["jira", "github", "none", "noop"]
-StrategyType = Literal["single", "competitive"]
 
 
 class RetryConfig(BaseModel):
@@ -47,7 +46,6 @@ class Profile(BaseModel):
             For api:openrouter use model name directly (e.g., 'minimax/minimax-m2').
             The provider is inferred from the driver setting.
         tracker: Issue tracker type (jira, github, none, noop).
-        strategy: Review strategy (single or competitive).
         working_dir: Working directory for agentic execution.
         plan_output_dir: Directory for saving implementation plans (default: docs/plans).
         plan_path_pattern: Path pattern for plan files with {date} and {issue_key} placeholders.
@@ -62,7 +60,6 @@ class Profile(BaseModel):
     driver: DriverType
     model: str
     tracker: TrackerType = "none"
-    strategy: StrategyType = "single"
     working_dir: str | None = None
     plan_output_dir: str = "docs/plans"
     plan_path_pattern: str = "docs/plans/{date}-{issue_key}.md"

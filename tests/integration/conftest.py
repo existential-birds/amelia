@@ -17,7 +17,7 @@ from langgraph.graph.state import CompiledStateGraph
 
 from amelia.core.orchestrator import create_orchestrator_graph
 from amelia.core.state import ExecutionState
-from amelia.core.types import DriverType, Issue, Profile, StrategyType, TrackerType
+from amelia.core.types import DriverType, Issue, Profile, TrackerType
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
 from amelia.server.database.repository import WorkflowRepository
 from amelia.server.events.bus import EventBus
@@ -60,7 +60,6 @@ def make_profile(
     driver: DriverType = "api:openrouter",
     model: str = "openrouter:anthropic/claude-sonnet-4-20250514",
     tracker: TrackerType = "noop",
-    strategy: StrategyType = "single",
     plan_output_dir: str | None = None,
     **kwargs: Any,
 ) -> Profile:
@@ -70,7 +69,6 @@ def make_profile(
         driver=driver,
         model=model,
         tracker=tracker,
-        strategy=strategy,
         plan_output_dir=plan_output_dir or "/tmp/test-plans",
         **kwargs,
     )

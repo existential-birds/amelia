@@ -53,7 +53,6 @@ def mock_settings(tmp_path: Path) -> Settings:
         driver="api:openrouter",
         model="openrouter:anthropic/claude-sonnet-4",
         tracker="noop",
-        strategy="single",
         working_dir=str(tmp_path),
         plan_output_dir=str(tmp_path / "plans"),
     )
@@ -130,7 +129,6 @@ class TestPlanCommand:
             driver="api:openrouter",
             model="openrouter:anthropic/claude-sonnet-4",
             tracker="jira",
-            strategy="single",
             working_dir=str(tmp_path),
             plan_output_dir=str(plans_dir),
         )

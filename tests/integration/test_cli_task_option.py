@@ -30,7 +30,6 @@ profiles:
     driver: cli:claude
     model: sonnet
     tracker: noop
-    strategy: single
 """
         (worktree / "settings.amelia.yaml").write_text(settings_content)
         return worktree
@@ -49,7 +48,6 @@ profiles:
     driver: cli:claude
     model: sonnet
     tracker: github
-    strategy: single
 """
         (worktree / "settings.amelia.yaml").write_text(settings_content)
         return worktree

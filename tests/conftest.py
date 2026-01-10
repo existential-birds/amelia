@@ -20,7 +20,6 @@ from amelia.core.types import (
     Issue,
     Profile,
     Settings,
-    StrategyType,
     TrackerType,
 )
 from amelia.drivers.base import AgenticMessage, DriverInterface
@@ -144,7 +143,6 @@ def mock_profile_factory(tmp_path_factory: TempPathFactory) -> Callable[..., Pro
         driver: DriverType = "cli:claude",
         model: str = "sonnet",
         tracker: TrackerType = "noop",
-        strategy: StrategyType = "single",
         **kwargs: Any
     ) -> Profile:
         # Use temp directory for working_dir unless explicitly overridden
@@ -152,20 +150,18 @@ def mock_profile_factory(tmp_path_factory: TempPathFactory) -> Callable[..., Pro
             kwargs["working_dir"] = str(base_tmp)
 
         if preset == "cli_single":
-            return Profile(name="test_cli", driver="cli:claude", model="sonnet", tracker="noop", strategy="single", **kwargs)
+            return Profile(name="test_cli", driver="cli:claude", model="sonnet", tracker="noop", **kwargs)
         elif preset == "api_single":
-            return Profile(name="test_api", driver="api:openrouter", model="anthropic/claude-sonnet-4-20250514", tracker="noop", strategy="single", **kwargs)
-        elif preset == "api_competitive":
-            return Profile(name="test_comp", driver="api:openrouter", model="anthropic/claude-sonnet-4-20250514", tracker="noop", strategy="competitive", **kwargs)
-        return Profile(name=name, driver=driver, model=model, tracker=tracker, strategy=strategy, **kwargs)
+            return Profile(name="test_api", driver="api:openrouter", model="anthropic/claude-sonnet-4-20250514", tracker="noop", **kwargs)
+        return Profile(name=name, driver=driver, model=model, tracker=tracker, **kwargs)
     return _create
 
 
 @pytest.fixture
 def mock_settings(mock_profile_factory: Callable[..., Profile]) -> Settings:
     """Create mock Settings instance with test profiles."""
-    test_profile = mock_profile_factory(name="test", driver="cli:claude", tracker="noop", strategy="single")
-    work_profile = mock_profile_factory(name="work", driver="cli:claude", tracker="jira", strategy="single")
+    test_profile = mock_profile_factory(name="test", driver="cli:claude", tracker="noop")
+    work_profile = mock_profile_factory(name="work", driver="cli:claude", tracker="jira")
     return Settings(
         active_profile="test",
         profiles={"test": test_profile, "work": work_profile}

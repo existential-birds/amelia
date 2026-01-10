@@ -8,7 +8,7 @@ by actually verifying the driver abstraction works at runtime.
 
 from pathlib import Path
 from typing import Any, cast
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import pytest
 from langchain_core.runnables.config import RunnableConfig
