@@ -178,6 +178,81 @@ def make_agentic_messages(
     return messages
 
 
+def make_reviewer_agentic_messages(
+    *,
+    approved: bool = True,
+    comments: list[str] | None = None,
+    severity: str = "low",
+) -> list[AgenticMessage]:
+    """Create mock agentic messages that produce reviewer-parseable output.
+
+    The reviewer now uses agentic_review() which calls execute_agentic() and
+    parses the beagle markdown format from the RESULT message.
+
+    Args:
+        approved: Whether the review should approve the changes.
+        comments: List of review comments. If None, defaults based on approval.
+        severity: Severity level for issues ("low", "medium", "high", "critical").
+
+    Returns:
+        List of AgenticMessage for mocking execute_agentic.
+    """
+    if comments is None:
+        comments = ["LGTM! Good work."] if approved else ["Issue found in code."]
+
+    # Map severity to beagle format section
+    severity_map = {
+        "low": "Minor",
+        "medium": "Minor",
+        "high": "Major",
+        "critical": "Critical",
+    }
+    section = severity_map.get(severity, "Minor")
+
+    # Build issues section if not approved
+    issues_section = ""
+    if not approved:
+        issues_section = f"\n### {section} (Should Fix)\n\n"
+        for i, comment in enumerate(comments, 1):
+            issues_section += f"{i}. [test.py:10] {comment}\n"
+            issues_section += f"   - Issue: {comment}\n"
+            issues_section += "   - Why: Quality concern\n"
+            issues_section += "   - Fix: Address the issue\n\n"
+
+    # Build verdict
+    verdict = "Yes" if approved else "No"
+    rationale = "All changes look good." if approved else "Issues need to be addressed."
+
+    review_output = f"""## Review Summary
+
+Review of the code changes.
+
+## Issues
+{issues_section if not approved else "No issues found."}
+
+## Good Patterns
+
+- Well-structured code
+
+## Verdict
+
+**Ready:** {verdict}
+**Rationale:** {rationale}
+"""
+
+    return [
+        AgenticMessage(
+            type=AgenticMessageType.THINKING,
+            content="Analyzing the code changes...",
+        ),
+        AgenticMessage(
+            type=AgenticMessageType.RESULT,
+            content=review_output,
+            session_id="session-review",
+        ),
+    ]
+
+
 # =============================================================================
 # Fixtures
 # =============================================================================

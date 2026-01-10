@@ -10,12 +10,11 @@ the orchestrator's routing logic and node transitions:
 
 from pathlib import Path
 from typing import Any, cast
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import pytest
 from langchain_core.runnables.config import RunnableConfig
 
-from amelia.agents.reviewer import ReviewResponse
 from amelia.core.orchestrator import (
     call_developer_node,
     call_reviewer_node,
@@ -25,7 +24,7 @@ from amelia.core.state import ExecutionState
 from amelia.core.types import Issue, Profile
 from amelia.drivers.api import ApiDriver
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
-from tests.integration.conftest import make_config, make_profile
+from tests.integration.conftest import make_config, make_profile, make_reviewer_agentic_messages
 
 
 @pytest.fixture(autouse=True)
@@ -260,7 +259,7 @@ class TestReviewerNodeTaskIteration:
         """Reviewer node should increment task_review_iteration for task-based execution.
 
         Real components: call_reviewer_node iteration tracking
-        Mock boundary: ApiDriver.generate
+        Mock boundary: ApiDriver.execute_agentic
         """
         state = ExecutionState(
             profile_id="test-task-execution",
@@ -277,16 +276,17 @@ class TestReviewerNodeTaskIteration:
             profile=integration_profile,
         )
 
-        mock_review = ReviewResponse(
+        mock_messages = make_reviewer_agentic_messages(
             approved=False,
             comments=["Needs work"],
             severity="high",
         )
 
-        with patch.object(
-            ApiDriver, "generate", new_callable=AsyncMock
-        ) as mock_generate:
-            mock_generate.return_value = (mock_review, "session-review")
+        async def mock_execute_agentic(*_args: Any, **_kwargs: Any) -> Any:
+            for msg in mock_messages:
+                yield msg
+
+        with patch.object(ApiDriver, "execute_agentic", mock_execute_agentic):
             result = await call_reviewer_node(state, cast(RunnableConfig, config))
 
         # task_review_iteration should be incremented to 2
