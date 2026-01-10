@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-01-09
+
+### Added
+
+- **drivers:** Add driver-agnostic token usage tracking ([#252](https://github.com/existential-birds/amelia/pull/252))
+  - Unified `DriverUsage` model tracks tokens, cost, and duration across all driver types
+  - Both API and CLI drivers now emit consistent usage metrics
+  - Orchestrator aggregates usage per-agent for dashboard cost breakdown
+
+### Changed
+
+- **Breaking:** Auto-infer provider from driver setting, removing redundant configuration ([#254](https://github.com/existential-birds/amelia/pull/254))
+
+  **Migration:** Remove `provider` field from profile configuration. The provider is now automatically inferred from the driver setting (e.g., `api:openrouter` infers OpenRouter provider).
+
 ## [0.7.0] - 2026-01-08
 
 ### Added
@@ -202,7 +217,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - FastAPI server with WebSocket support
 - React dashboard for workflow visualization
 
-[Unreleased]: https://github.com/existential-birds/amelia/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/existential-birds/amelia/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/existential-birds/amelia/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/existential-birds/amelia/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/existential-birds/amelia/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/existential-birds/amelia/compare/v0.5.0...v0.5.1
