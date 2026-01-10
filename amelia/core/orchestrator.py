@@ -27,6 +27,7 @@ from amelia.core.state import ExecutionState, rebuild_execution_state
 from amelia.core.types import Profile
 from amelia.drivers.factory import DriverFactory
 from amelia.server.models.tokens import TokenUsage
+from amelia.tools.git_utils import get_current_commit
 
 
 # Resolve forward references in ExecutionState. Must be done after importing
@@ -378,157 +379,6 @@ async def human_approval_node(
     return {"human_approved": approved}
 
 
-async def get_code_changes_for_review(state: ExecutionState, profile: Profile) -> str:
-    """Retrieve code changes for review from state or git diff.
-
-    Priority order:
-    1. state.code_changes_for_review (explicit changes from driver)
-    2. git diff against state.base_commit (workflow start commit)
-    3. git diff against merge-base with main/master (feature branch changes)
-    4. git diff HEAD (uncommitted changes only)
-
-    Args:
-        state: Current execution state that may contain code changes.
-        profile: Profile containing the working directory for git operations.
-
-    Returns:
-        Code changes as a string, either from state or from git diff.
-    """
-    logger.debug(
-        "get_code_changes_for_review called",
-        base_commit=state.base_commit,
-        has_code_changes_for_review=bool(state.code_changes_for_review),
-        working_dir=profile.working_dir,
-    )
-
-    if state.code_changes_for_review:
-        return state.code_changes_for_review
-
-    cwd = profile.working_dir
-
-    async def git_diff(ref: str) -> str | None:
-        """Run git diff against a reference, return output or None if empty/failed."""
-        proc = await asyncio.create_subprocess_exec(
-            "git", "diff", ref,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            cwd=cwd,
-        )
-        stdout, stderr = await proc.communicate()
-        if proc.returncode == 0 and stdout.decode().strip():
-            return stdout.decode()
-        return None
-
-    try:
-        # Priority 1: Diff against base_commit if available (workflow start)
-        if state.base_commit:
-            diff = await git_diff(state.base_commit)
-            if diff:
-                logger.debug("Using diff against base_commit", base_commit=state.base_commit[:8])
-                return diff
-            logger.debug(
-                "base_commit diff was empty",
-                base_commit=state.base_commit[:8] if state.base_commit else None,
-            )
-        else:
-            logger.debug("No base_commit available in state")
-
-        # Priority 2: Find merge-base with main/master for feature branch changes
-        for base_branch in ["main", "master"]:
-            proc = await asyncio.create_subprocess_exec(
-                "git", "merge-base", base_branch, "HEAD",
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                cwd=cwd,
-            )
-            stdout, stderr = await proc.communicate()
-            if proc.returncode == 0:
-                merge_base = stdout.decode().strip()
-                diff = await git_diff(merge_base)
-                if diff:
-                    logger.debug("Using diff against merge-base", merge_base=merge_base[:8])
-                    return diff
-                logger.debug(
-                    "merge-base diff was empty",
-                    base_branch=base_branch,
-                    merge_base=merge_base[:8] if merge_base else None,
-                )
-                break  # Found merge-base but no diff, continue to fallback
-            else:
-                logger.debug(
-                    "merge-base lookup failed",
-                    base_branch=base_branch,
-                    stderr=stderr.decode().strip(),
-                )
-
-        # Priority 3: Uncommitted changes (git diff HEAD)
-        proc = await asyncio.create_subprocess_exec(
-            "git", "diff", "HEAD",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            cwd=cwd,
-        )
-        head_stdout, head_stderr = await proc.communicate()
-        diff_output = head_stdout.decode()
-        head_returncode = proc.returncode
-        logger.debug(
-            "git diff HEAD result",
-            returncode=head_returncode,
-            diff_length=len(diff_output),
-            diff_empty=not diff_output.strip(),
-        )
-        if head_returncode == 0 and diff_output.strip():
-            return diff_output
-
-        # Priority 4: Recent commits (for when developer committed changes)
-        # Try to find commits that aren't pushed yet to remote tracking branch
-        proc = await asyncio.create_subprocess_exec(
-            "git", "rev-list", "--count", "@{upstream}..HEAD",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            cwd=cwd,
-        )
-        count_stdout, _ = await proc.communicate()
-        if proc.returncode == 0:
-            unpushed_count = int(count_stdout.decode().strip() or "0")
-            if unpushed_count > 0:
-                # Diff against HEAD~N where N is unpushed commits
-                proc = await asyncio.create_subprocess_exec(
-                    "git", "diff", f"HEAD~{unpushed_count}",
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                    cwd=cwd,
-                )
-                stdout, _ = await proc.communicate()
-                if proc.returncode == 0 and stdout.decode().strip():
-                    logger.debug(
-                        "Using diff of unpushed commits",
-                        unpushed_count=unpushed_count,
-                    )
-                    return stdout.decode()
-        else:
-            # No upstream tracking branch - try to diff against last commit
-            # This handles new branches without upstream
-            proc = await asyncio.create_subprocess_exec(
-                "git", "diff", "HEAD~1",
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                cwd=cwd,
-            )
-            stdout, _ = await proc.communicate()
-            if proc.returncode == 0 and stdout.decode().strip():
-                logger.debug("Using diff of last commit (no upstream)")
-                return stdout.decode()
-
-        # Final fallback: return empty or whatever git diff HEAD gave us
-        if head_returncode == 0:
-            return diff_output
-        else:
-            return f"Error getting git diff: {head_stderr.decode()}"
-    except (FileNotFoundError, OSError) as e:
-        return f"Failed to execute git diff: {str(e)}"
-
-
 async def call_developer_node(
     state: ExecutionState,
     config: RunnableConfig | None = None,
@@ -618,9 +468,10 @@ async def call_reviewer_node(
 ) -> dict[str, Any]:
     """Orchestrator node for the Reviewer agent to review code changes.
 
-    Uses agentic review when a base_commit is available, which allows the
-    reviewer agent to fetch the diff using git tools. This avoids the
-    "Argument list too long" error that can occur with large diffs.
+    Always uses agentic review which fetches the diff via git tools. This avoids
+    the "Argument list too long" error that can occur with large diffs.
+
+    If base_commit is not set in state, computes it using get_current_commit().
 
     Args:
         state: Current execution state containing issue and goal information.
@@ -630,11 +481,6 @@ async def call_reviewer_node(
         Partial state dict with review results.
     """
     logger.info(f"Orchestrator: Calling Reviewer for issue {state.issue.id if state.issue else 'N/A'}")
-    logger.debug(
-        "Reviewer node state",
-        base_commit=state.base_commit,
-        has_code_changes_for_review=bool(state.code_changes_for_review),
-    )
 
     # Extract event_bus, workflow_id, and profile from config
     event_bus, workflow_id, profile = _extract_config_params(config)
@@ -650,20 +496,35 @@ async def call_reviewer_node(
     agent_name = "task_reviewer" if is_non_final_task else "reviewer"
     reviewer = Reviewer(driver, event_bus=event_bus, prompts=prompts, agent_name=agent_name)
 
-    if state.base_commit:
-        logger.info(
-            "Using agentic review with base_commit",
-            agent=agent_name,
-            base_commit=state.base_commit,
-        )
-        review_result, new_session_id = await reviewer.agentic_review(
-            state, state.base_commit, profile, workflow_id=workflow_id
-        )
+    # Compute base_commit if not in state
+    base_commit = state.base_commit
+    if not base_commit:
+        computed_commit = await get_current_commit(cwd=profile.working_dir)
+        if computed_commit:
+            base_commit = computed_commit
+            logger.info(
+                "Computed base_commit for agentic review",
+                agent=agent_name,
+                base_commit=base_commit,
+            )
+        else:
+            # Fallback to HEAD if get_current_commit fails
+            base_commit = "HEAD"
+            logger.warning(
+                "Could not compute base_commit, falling back to HEAD",
+                agent=agent_name,
+            )
     else:
-        code_changes = await get_code_changes_for_review(state, profile)
-        review_result, new_session_id = await reviewer.review(
-            state, code_changes, profile, workflow_id=workflow_id
+        logger.debug(
+            "Using existing base_commit for agentic review",
+            agent=agent_name,
+            base_commit=base_commit,
         )
+
+    # Always use agentic review - it fetches the diff via git tools
+    review_result, new_session_id = await reviewer.agentic_review(
+        state, base_commit, profile, workflow_id=workflow_id
+    )
 
     await _save_token_usage(driver, workflow_id, agent_name, repository)
 
