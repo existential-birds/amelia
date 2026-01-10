@@ -97,8 +97,10 @@ class StructuredReviewResult(BaseModel):
 class Reviewer:
     """Agent responsible for reviewing code changes against requirements.
 
-    Review Methods:
-        agentic_review(): Auto-detects technologies, loads review skills, fetches diff via git.
+    Review Method:
+        agentic_review(): Agentic review that auto-detects technologies, loads review
+            skills, and fetches diff via git. Returns ReviewResult with properly
+            separated issues (not including observations or praise).
 
     Attributes:
         driver: LLM driver interface for generating reviews.
