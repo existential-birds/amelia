@@ -41,6 +41,7 @@ from amelia.server.exceptions import (
 )
 from amelia.server.models import ServerExecutionState
 from amelia.server.models.events import EventType, WorkflowEvent
+from amelia.server.models.requests import CreateWorkflowRequest
 from amelia.trackers.factory import create_tracker
 
 
@@ -508,6 +509,56 @@ class OrchestratorService:
             )
 
         task.add_done_callback(cleanup_task)
+
+        return workflow_id
+
+    async def queue_workflow(self, request: CreateWorkflowRequest) -> str:
+        """Queue a workflow without starting it.
+
+        Creates a workflow in pending state. Multiple pending workflows
+        can exist for the same worktree (unlike running workflows).
+
+        Args:
+            request: Workflow creation request with start=False.
+
+        Returns:
+            The workflow ID (prefixed with "wf-").
+        """
+        # Generate workflow ID with wf- prefix
+        workflow_id = f"wf-{uuid4().hex[:12]}"
+
+        # Determine worktree name
+        worktree_path = Path(request.worktree_path)
+        worktree_name = request.worktree_name or worktree_path.name
+
+        # Create state in pending without starting
+        state = ServerExecutionState(
+            id=workflow_id,
+            issue_id=request.issue_id,
+            worktree_path=str(worktree_path.resolve()),
+            worktree_name=worktree_name,
+            workflow_status="pending",
+            # No started_at - workflow hasn't started
+            # No planned_at - not planned yet
+        )
+
+        # Save to database
+        await self._repository.create(state)
+
+        # Emit created event
+        await self._emit(
+            workflow_id,
+            EventType.WORKFLOW_CREATED,
+            f"Workflow queued for {request.issue_id}",
+            data={"issue_id": request.issue_id, "queued": True},
+        )
+
+        logger.info(
+            "Workflow queued",
+            workflow_id=workflow_id,
+            issue_id=request.issue_id,
+            worktree=worktree_name,
+        )
 
         return workflow_id
 
