@@ -111,6 +111,10 @@ class ServerExecutionState(BaseModel):
         default=None,
         description="When workflow ended",
     )
+    planned_at: datetime | None = Field(
+        default=None,
+        description="When workflow planning (architect stage) completed",
+    )
     stage_timestamps: dict[str, datetime] = Field(
         default_factory=dict,
         description="When each stage started",
@@ -147,3 +151,8 @@ class ServerExecutionState(BaseModel):
             ]
         }
     }
+
+    @property
+    def is_planned(self) -> bool:
+        """Return True if the workflow has completed planning."""
+        return self.planned_at is not None
