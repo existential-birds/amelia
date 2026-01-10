@@ -149,7 +149,8 @@ InvalidStateError: Cannot approve workflow in status 'executing'
 - Trying to reject a completed workflow
 
 **Valid state transitions:**
-- `pending` → `planning` (workflow started)
+- `pending` → `in_progress` (workflow started via `amelia run`)
+- `pending` → `planning` (workflow started with immediate execution)
 - `planning` → `pending_approval` (after Architect generates plan)
 - `pending_approval` → `executing` (after approval)
 - `pending_approval` → `planning` (after rejection with feedback)
@@ -165,6 +166,68 @@ Check workflow status before performing operations:
 ```bash
 curl http://127.0.0.1:8420/api/workflows/<workflow-id>
 ```
+
+### Queue Workflow Issues
+
+#### Workflow stuck in pending state
+
+**Cause:** Workflow was queued but never started.
+
+**Solutions:**
+
+1. Start the workflow manually:
+   ```bash
+   amelia run <workflow-id>
+   ```
+
+2. Start all pending workflows:
+   ```bash
+   amelia run --all
+   ```
+
+3. Check if the workflow has a plan ready:
+   ```bash
+   curl http://127.0.0.1:8420/api/workflows/<workflow-id>
+   # Look for planned_at field
+   ```
+
+#### Cannot start queued workflow (409)
+
+**Error:**
+```
+WorkflowConflictError: Cannot start workflow - another workflow is active on this worktree
+```
+
+**Cause:** Only one workflow can be active (in_progress or blocked) per worktree at a time.
+
+**Solutions:**
+
+1. Wait for existing workflow to complete
+2. Cancel the existing active workflow:
+   ```bash
+   amelia cancel <active-workflow-id>
+   ```
+3. Start the queued workflow after the active one completes
+
+#### Plan not generating
+
+**Cause:** The `--plan` flag runs the Architect in the background. Planning can fail silently.
+
+**Solutions:**
+
+1. Check server logs for Architect errors:
+   ```bash
+   export LOGURU_LEVEL=DEBUG
+   amelia dev
+   ```
+
+2. Verify the issue exists and is accessible:
+   ```bash
+   # For GitHub issues
+   gh issue view <issue-id>
+   ```
+
+3. Note: The workflow remains in `pending` state even if planning fails. The `planned_at` field will be null.
 
 ### Invalid worktree (400)
 

@@ -204,6 +204,8 @@ amelia server                 # API server only
 # Workflow commands (requires server running)
 amelia start 123              # Start workflow for issue #123
 amelia start --task "desc"    # Run ad-hoc task without issue tracker
+amelia start 123 --queue      # Queue workflow for later execution
+amelia run abc-123            # Start a queued workflow
 amelia status                 # Show active workflows
 amelia approve                # Approve the generated plan
 amelia reject "feedback"      # Reject with feedback

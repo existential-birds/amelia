@@ -171,6 +171,61 @@ amelia cancel --force
 Options:
 - `--force, -f` - Skip confirmation prompt
 
+### Queue Workflow Commands
+
+Queue workflows for later execution or to review plans before starting.
+
+#### `amelia start <ISSUE_ID> --queue`
+
+Queue a workflow without starting execution.
+
+```bash
+# Queue workflow without starting
+amelia start ISSUE-123 --queue
+
+# Queue and generate plan for review
+amelia start ISSUE-123 --queue --plan
+```
+
+Options:
+- `--queue, -q` - Queue workflow in pending state without starting
+- `--plan` - Run Architect to generate plan while queued (requires `--queue`)
+- `--profile, -p` - Profile name from settings.amelia.yaml
+
+The workflow will be created in `pending` state. Use `amelia run` to start execution.
+
+#### `amelia run <WORKFLOW_ID>`
+
+Start a pending workflow.
+
+```bash
+# Start a specific pending workflow
+amelia run abc-123-def
+
+# Start all pending workflows
+amelia run --all
+
+# Start pending workflows for specific worktree
+amelia run --all --worktree /path/to/repo
+```
+
+Options:
+- `--all, -a` - Start all pending workflows
+- `--worktree, -w` - Filter by worktree path (use with `--all`)
+
+#### Queue Workflow Lifecycle
+
+1. **Queue** - Workflow created in `pending` state, not executing
+2. **Plan (optional)** - Architect runs, `planned_at` set when complete
+3. **Start** - Workflow transitions to `in_progress` and begins execution
+4. **Complete** - Normal completion flow
+
+#### Use Cases
+
+- **Review before committing** - Review Architect plans before spending compute on execution
+- **Batch processing** - Queue multiple issues for later processing
+- **Managed concurrency** - Queue work during active workflow execution
+
 ### Server Commands
 
 #### `amelia dev`
@@ -290,6 +345,8 @@ curl -X POST http://localhost:8420/api/workflows \
 | `worktree_name` | string | No | Custom worktree display name |
 | `profile` | string | No | Profile name from settings |
 | `driver` | string | No | Driver override (e.g., `api:openrouter`) |
+| `start` | boolean | No | Start workflow immediately (default: true). Set to false to queue. |
+| `plan_now` | boolean | No | Run Architect when queuing (requires `start: false`). |
 
 **Response:** `201 Created`
 ```json
@@ -299,6 +356,14 @@ curl -X POST http://localhost:8420/api/workflows \
   "message": "Workflow created for issue 123"
 }
 ```
+
+**Behavior Matrix:**
+
+| `start` | `plan_now` | Result |
+|---------|------------|--------|
+| `true` (default) | ignored | Immediate execution |
+| `false` | `false` | Queue only (pending state) |
+| `false` | `true` | Queue and generate plan |
 
 #### List Workflows
 
@@ -451,6 +516,58 @@ curl -X POST http://localhost:8420/api/workflows/550e8400-e29b-41d4-a716-4466554
 {
   "status": "cancelled",
   "workflow_id": "550e8400-e29b-41d4-a716-446655440000"
+}
+```
+
+#### Start Workflow
+
+```bash
+POST /api/workflows/{workflow_id}/start
+```
+
+```bash
+curl -X POST http://localhost:8420/api/workflows/550e8400-e29b-41d4-a716-446655440000/start
+```
+
+Starts a pending workflow. Returns 409 if workflow is not in pending state.
+
+**Response:** `200 OK`
+```json
+{
+  "status": "started",
+  "workflow_id": "550e8400-e29b-41d4-a716-446655440000"
+}
+```
+
+#### Start Batch
+
+```bash
+POST /api/workflows/start-batch
+```
+
+```bash
+curl -X POST http://localhost:8420/api/workflows/start-batch \
+  -H "Content-Type: application/json" \
+  -d '{
+    "workflow_ids": ["uuid-1", "uuid-2"]
+  }'
+```
+
+Start multiple pending workflows at once.
+
+**Request Body:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `workflow_ids` | array | No | Specific workflow IDs to start. If null, starts all pending. |
+| `worktree_path` | string | No | Filter by worktree path (when starting all pending). |
+
+**Response:** `200 OK`
+```json
+{
+  "started": ["uuid-1", "uuid-2"],
+  "errors": {
+    "uuid-3": "Workflow not found"
+  }
 }
 ```
 

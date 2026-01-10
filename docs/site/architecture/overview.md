@@ -6,6 +6,15 @@ This document provides a technical deep dive into Amelia's architecture, compone
 
 **Phase 1 (Complete):** Multi-agent orchestration with the **Architect → Developer → Reviewer** loop. Issues flow through planning, execution, and review stages with human approval gates before any code ships. Supports both API-based (OpenRouter) and CLI-based (Claude) LLM drivers, with Jira and GitHub issue tracker integrations.
 
+```
+Issue → [Queue] → Architect (plan) → Human Approval → Developer (execute) ↔ Reviewer (review) → Done
+           ↓
+     (optional)
+   pending state
+```
+
+**Queue Step (Optional):** With `--queue` flag, workflows enter `pending` state instead of immediate execution. Use `amelia run` to start queued workflows. The `--plan` flag runs the Architect while queued, setting `planned_at` when complete.
+
 **Phase 2 (In Progress):** Observable orchestration through a local web dashboard. FastAPI server with SQLite persistence, REST API for workflow management, React dashboard with real-time WebSocket updates, and agentic execution with streaming tool calls.
 
 ## Design Philosophy
