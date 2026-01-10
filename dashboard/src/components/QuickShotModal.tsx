@@ -142,43 +142,61 @@ export function QuickShotModal({ open, onOpenChange }: QuickShotModalProps) {
     },
   });
 
-  const onSubmit = async (data: QuickShotFormData) => {
-    setIsLaunching(true);
-    // Brief ripple animation
-    await new Promise((r) => setTimeout(r, 400));
-    setIsLaunching(false);
-    setIsSubmitting(true);
+  /**
+   * Submits the workflow with the specified action type.
+   *
+   * @param action - The action type: 'start' (immediate), 'queue' (add to queue),
+   *                 or 'plan_queue' (plan then queue)
+   */
+  const submitWithAction = (action: 'start' | 'queue' | 'plan_queue') => {
+    return handleSubmit(async (data: QuickShotFormData) => {
+      setIsLaunching(true);
+      // Brief ripple animation
+      await new Promise((r) => setTimeout(r, 400));
+      setIsLaunching(false);
+      setIsSubmitting(true);
 
-    try {
-      const result = await api.createWorkflow({
-        issue_id: data.issue_id,
-        worktree_path: data.worktree_path,
-        profile: data.profile || undefined,
-        task_title: data.task_title,
-        task_description: data.task_description || undefined,
-      });
-      toast.success(
-        <span>
-          Workflow started:{' '}
-          <a
-            href={`/workflows/${result.id}`}
-            className="underline hover:text-primary"
-          >
-            {result.id}
-          </a>
-        </span>
-      );
-      reset();
-      onOpenChange(false);
-    } catch (error) {
-      if (error instanceof ApiError) {
-        toast.error(error.message);
-      } else {
-        toast.error('Connection failed. Check your network.');
+      try {
+        const result = await api.createWorkflow({
+          issue_id: data.issue_id,
+          worktree_path: data.worktree_path,
+          profile: data.profile || undefined,
+          task_title: data.task_title,
+          task_description: data.task_description || undefined,
+          start: action === 'start',
+          plan_now: action === 'plan_queue',
+        });
+
+        const actionLabel =
+          action === 'start'
+            ? 'started'
+            : action === 'plan_queue'
+              ? 'queued for planning'
+              : 'queued';
+
+        toast.success(
+          <span>
+            Workflow {actionLabel}:{' '}
+            <a
+              href={`/workflows/${result.id}`}
+              className="underline hover:text-primary"
+            >
+              {result.id}
+            </a>
+          </span>
+        );
+        reset();
+        onOpenChange(false);
+      } catch (error) {
+        if (error instanceof ApiError) {
+          toast.error(error.message);
+        } else {
+          toast.error('Connection failed. Check your network.');
+        }
+      } finally {
+        setIsSubmitting(false);
       }
-    } finally {
-      setIsSubmitting(false);
-    }
+    });
   };
 
   const handleClose = () => {
@@ -199,7 +217,7 @@ export function QuickShotModal({ open, onOpenChange }: QuickShotModalProps) {
           </DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 py-4">
+        <div className="space-y-4 py-4">
           {fields.map((field, index) => (
             <div
               key={field.name}
@@ -256,15 +274,34 @@ export function QuickShotModal({ open, onOpenChange }: QuickShotModalProps) {
           <DialogFooter className="gap-2 pt-4">
             <Button
               type="button"
-              variant="secondary"
+              variant="ghost"
               onClick={handleClose}
               className="font-heading uppercase tracking-wide"
             >
               Cancel
             </Button>
             <Button
-              type="submit"
+              type="button"
+              variant="secondary"
               disabled={!isValid || isSubmitting || isLaunching}
+              onClick={submitWithAction('queue')}
+              className="font-heading uppercase tracking-wide"
+            >
+              Queue
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={!isValid || isSubmitting || isLaunching}
+              onClick={submitWithAction('plan_queue')}
+              className="font-heading uppercase tracking-wide"
+            >
+              Plan & Queue
+            </Button>
+            <Button
+              type="button"
+              disabled={!isValid || isSubmitting || isLaunching}
+              onClick={submitWithAction('start')}
               className={cn(
                 'font-heading uppercase tracking-wide relative overflow-hidden',
                 'transition-all duration-normal',
@@ -280,12 +317,12 @@ export function QuickShotModal({ open, onOpenChange }: QuickShotModalProps) {
               ) : (
                 <>
                   <Zap className="mr-2 h-4 w-4" />
-                  Start Workflow
+                  Start
                 </>
               )}
             </Button>
           </DialogFooter>
-        </form>
+        </div>
       </DialogContent>
     </Dialog>
   );
