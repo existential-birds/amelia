@@ -70,7 +70,6 @@ class CreateWorkflowRequest(BaseModel):
     Attributes:
         issue_id: Issue identifier (alphanumeric with dashes/underscores, 1-100 chars)
         worktree_path: Absolute path to worktree directory
-        worktree_name: Optional custom worktree name
         profile: Optional profile name (lowercase alphanumeric with dashes/underscores)
         driver: Optional driver override in type:name format (e.g., sdk:claude, api:openrouter)
     """
@@ -87,10 +86,6 @@ class CreateWorkflowRequest(BaseModel):
         str,
         Field(description="Absolute path to worktree directory"),
     ]
-    worktree_name: Annotated[
-        str | None,
-        Field(default=None, description="Optional custom worktree name"),
-    ] = None
     profile: Annotated[
         str | None,
         Field(
@@ -121,6 +116,11 @@ class CreateWorkflowRequest(BaseModel):
             description="Task description for noop tracker (requires task_title)",
         ),
     ] = None
+    start: bool = True
+    """Whether to start the workflow immediately. False = queue without starting."""
+
+    plan_now: bool = False
+    """If not starting, whether to run Architect immediately. Ignored if start=True."""
 
     @model_validator(mode="after")
     def validate_task_fields(self) -> "CreateWorkflowRequest":
@@ -225,13 +225,11 @@ class CreateReviewWorkflowRequest(BaseModel):
     Attributes:
         diff_content: The git diff content to review.
         worktree_path: Absolute path for conflict detection (typically cwd).
-        worktree_name: Optional human-readable name.
         profile: Optional profile name from settings.
     """
 
     diff_content: Annotated[str, Field(min_length=1, description="Git diff content to review")]
     worktree_path: Annotated[str, Field(description="Absolute path for conflict detection")]
-    worktree_name: Annotated[str | None, Field(default=None)] = None
     profile: Annotated[str | None, Field(default=None)] = None
 
     validate_worktree_path = field_validator("worktree_path", mode="after")(
@@ -251,5 +249,20 @@ class RejectRequest(BaseModel):
         str,
         Field(min_length=1, description="Rejection feedback explaining what needs to change"),
     ]
+
+
+class BatchStartRequest(BaseModel):
+    """Request to start multiple pending workflows.
+
+    Attributes:
+        workflow_ids: Specific workflow IDs to start, or None for all pending.
+        worktree_path: Filter by worktree path.
+    """
+
+    workflow_ids: list[str] | None = None
+    """Specific workflow IDs to start, or None for all pending."""
+
+    worktree_path: str | None = None
+    """Filter by worktree path."""
 
 

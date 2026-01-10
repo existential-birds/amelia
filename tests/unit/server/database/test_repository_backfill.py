@@ -62,7 +62,6 @@ class TestEventBackfill:
             id="wf-1",
             issue_id="ISSUE-1",
             worktree_path="/tmp/wf1",
-            worktree_name="wf1",
             workflow_status="pending",
             started_at=datetime.now(UTC),
         )
@@ -70,7 +69,6 @@ class TestEventBackfill:
             id="wf-2",
             issue_id="ISSUE-2",
             worktree_path="/tmp/wf2",
-            worktree_name="wf2",
             workflow_status="pending",
             started_at=datetime.now(UTC),
         )

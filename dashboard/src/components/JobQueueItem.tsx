@@ -13,7 +13,7 @@ import type { WorkflowSummary } from '@/types';
  * @property className - Optional additional CSS classes
  */
 interface JobQueueItemProps {
-  workflow: Pick<WorkflowSummary, 'id' | 'issue_id' | 'worktree_name' | 'status' | 'current_stage'>;
+  workflow: Pick<WorkflowSummary, 'id' | 'issue_id' | 'worktree_path' | 'status' | 'current_stage'>;
   selected: boolean;
   onSelect: (id: string) => void;
   className?: string;
@@ -55,9 +55,9 @@ export function JobQueueItem({ workflow, selected, onSelect, className }: JobQue
         <StatusBadge status={workflow.status} />
       </div>
 
-      {/* Row 2: Worktree Name */}
+      {/* Row 2: Worktree Path */}
       <div className="font-body text-sm text-foreground truncate">
-        {workflow.worktree_name}
+        {workflow.worktree_path}
       </div>
     </button>
   );

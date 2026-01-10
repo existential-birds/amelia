@@ -49,16 +49,16 @@ class WorkflowRepository:
         await self._db.execute(
             """
             INSERT INTO workflows (
-                id, issue_id, worktree_path, worktree_name,
-                status, started_at, completed_at, failure_reason, state_json
+                id, issue_id, worktree_path,
+                status, created_at, started_at, completed_at, failure_reason, state_json
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 state.id,
                 state.issue_id,
                 state.worktree_path,
-                state.worktree_name,
                 state.workflow_status,
+                state.created_at,
                 state.started_at,
                 state.completed_at,
                 state.failure_reason,
@@ -86,22 +86,29 @@ class WorkflowRepository:
     async def get_by_worktree(
         self,
         worktree_path: str,
+        statuses: tuple[WorkflowStatus, ...] = ("in_progress", "blocked"),
     ) -> ServerExecutionState | None:
-        """Get active workflow for a worktree.
+        """Get workflow for a worktree matching specified statuses.
+
+        By default, only returns workflows that are actively running (in_progress
+        or blocked). This excludes pending workflows because multiple pending
+        workflows on the same worktree are allowed by design.
 
         Args:
             worktree_path: Worktree path to check.
+            statuses: Workflow statuses to match. Defaults to ('in_progress', 'blocked').
 
         Returns:
-            Active workflow or None if no active workflow.
+            Matching workflow or None if no workflow matches.
         """
+        placeholders = ",".join("?" for _ in statuses)
         row = await self._db.fetch_one(
-            """
+            f"""
             SELECT state_json FROM workflows
             WHERE worktree_path = ?
-            AND status IN ('pending', 'in_progress', 'blocked')
+            AND status IN ({placeholders})
             """,
-            (worktree_path,),
+            (worktree_path, *statuses),
         )
         if row is None:
             return None

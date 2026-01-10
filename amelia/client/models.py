@@ -10,18 +10,20 @@ class CreateWorkflowRequest(BaseModel):
     Attributes:
         issue_id: The issue identifier (e.g., PROJ-123).
         worktree_path: Absolute path to the git worktree directory.
-        worktree_name: Optional human-readable name for the worktree.
         profile: Optional profile name from settings to use.
         task_title: Optional task title for noop tracker (bypasses issue lookup).
         task_description: Optional task description (requires task_title).
+        start: Whether to start workflow immediately (default True for backward compat).
+        plan_now: Whether to run Architect before queueing (requires start=False).
     """
 
     issue_id: str = Field(..., min_length=1, max_length=100)
     worktree_path: str = Field(..., min_length=1, max_length=4096)
-    worktree_name: str | None = Field(default=None, max_length=255)
     profile: str | None = Field(default=None, max_length=64)
     task_title: str | None = Field(default=None, max_length=500)
     task_description: str | None = Field(default=None, max_length=5000)
+    start: bool = True
+    plan_now: bool = False
 
 
 class CreateReviewWorkflowRequest(BaseModel):
@@ -30,13 +32,11 @@ class CreateReviewWorkflowRequest(BaseModel):
     Attributes:
         diff_content: Git diff content to review.
         worktree_path: Absolute path to the git worktree directory.
-        worktree_name: Optional human-readable name for the worktree.
         profile: Optional profile name from settings to use.
     """
 
     diff_content: str = Field(..., min_length=1)
     worktree_path: str = Field(..., min_length=1, max_length=4096)
-    worktree_name: str | None = Field(default=None, max_length=255)
     profile: str | None = Field(default=None, max_length=64)
 
 
@@ -72,7 +72,6 @@ class WorkflowResponse(BaseModel):
         issue_id: The issue identifier this workflow is processing.
         status: Current workflow status (pending, in_progress, completed, failed).
         worktree_path: Absolute path to the git worktree directory.
-        worktree_name: Human-readable name for the worktree.
         started_at: Timestamp when the workflow started (optional).
         completed_at: Timestamp when the workflow completed (if finished).
         failure_reason: Error message if the workflow failed.
@@ -83,7 +82,6 @@ class WorkflowResponse(BaseModel):
     issue_id: str
     status: str
     worktree_path: str
-    worktree_name: str
     started_at: datetime | None = None
     completed_at: datetime | None = None
     failure_reason: str | None = None
@@ -97,7 +95,7 @@ class WorkflowSummary(BaseModel):
         id: Unique workflow identifier (UUID).
         issue_id: The issue identifier this workflow is processing.
         status: Current workflow status.
-        worktree_name: Human-readable name for the worktree.
+        worktree_path: Absolute path to the git worktree directory.
         started_at: Timestamp when the workflow started.
         current_stage: Current stage in the workflow pipeline (if in progress).
     """
@@ -105,7 +103,7 @@ class WorkflowSummary(BaseModel):
     id: str
     issue_id: str
     status: str
-    worktree_name: str
+    worktree_path: str
     started_at: datetime | None = None
     current_stage: str | None = None
 
@@ -122,3 +120,15 @@ class WorkflowListResponse(BaseModel):
     workflows: list[WorkflowSummary]
     total: int
     cursor: str | None = None
+
+
+class BatchStartResponse(BaseModel):
+    """Response from batch start operation.
+
+    Attributes:
+        started: Workflow IDs that were successfully started.
+        errors: Map of workflow_id to error message for failures.
+    """
+
+    started: list[str]
+    errors: dict[str, str]

@@ -59,7 +59,6 @@ async def create_test_workflow(
     workflow_id: str,
     issue_id: str = "TEST-456",
     worktree_path: str = "/test/path",
-    worktree_name: str = "test-worktree",
     workflow_status: str = "pending",
 ) -> ServerExecutionState:
     """Create and persist a test workflow."""
@@ -68,7 +67,6 @@ async def create_test_workflow(
         id=workflow_id,
         issue_id=issue_id,
         worktree_path=worktree_path,
-        worktree_name=worktree_name,
         workflow_status=workflow_status,
         started_at=datetime.now(UTC),
         execution_state=execution_state,
@@ -105,7 +103,6 @@ class TestAPIResponseSchemas:
             workflow_id="test-workflow-id-123",
             issue_id="TEST-456",
             worktree_path="/test/path",
-            worktree_name="test-worktree",
         )
 
         # Override dependencies - real repository, mocked orchestrator
@@ -158,7 +155,6 @@ class TestAPIResponseSchemas:
         response = await client.create_workflow(
             issue_id="TEST-123",
             worktree_path="/test/repo/path",
-            worktree_name="main",
         )
 
         # Verify correct response type
@@ -185,7 +181,6 @@ class TestAPIResponseSchemas:
                 json={
                     "issue_id": "TEST-789",
                     "worktree_path": "/some/path",
-                    "worktree_name": "feature",
                 },
             )
 
@@ -213,7 +208,6 @@ class TestAPIResponseSchemas:
         assert response.id == "test-workflow-id-123"
         assert response.issue_id == "TEST-456"
         assert response.worktree_path == "/test/path"
-        assert response.worktree_name == "test-worktree"
         assert response.status == "pending"
 
     async def test_get_workflow_raw_response_schema(
@@ -233,7 +227,6 @@ class TestAPIResponseSchemas:
         assert "id" in data
         assert "issue_id" in data
         assert "worktree_path" in data
-        assert "worktree_name" in data
         assert "status" in data
 
         # Verify values match our test workflow

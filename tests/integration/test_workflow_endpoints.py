@@ -131,7 +131,6 @@ async def create_test_workflow(
         id=workflow_id,
         issue_id=issue_id,
         worktree_path=worktree_path,
-        worktree_name=worktree_path.split("/")[-1],
         workflow_status=workflow_status,
         started_at=datetime.now(UTC),
         execution_state=execution_state,

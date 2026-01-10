@@ -233,7 +233,7 @@ class TestApproveCommand:
                     id="wf-789",
                     issue_id="TEST-789",
                     status="awaiting_approval",
-                    worktree_name="test-worktree",
+                    worktree_path="/tmp/test-worktree",
                     started_at=datetime.now(UTC),
                 )
             ],
@@ -291,7 +291,7 @@ class TestRejectCommand:
                     id="wf-reject",
                     issue_id="TEST-REJECT",
                     status="awaiting_approval",
-                    worktree_name="test-worktree",
+                    worktree_path="/tmp/test-worktree",
                     started_at=datetime.now(UTC),
                 )
             ],
@@ -330,7 +330,7 @@ class TestStatusCommand:
                     id="wf-status",
                     issue_id="TEST-STATUS",
                     status="running",
-                    worktree_name="test-worktree",
+                    worktree_path="/tmp/test-worktree",
                     started_at=datetime.now(UTC),
                 )
             ],
@@ -358,14 +358,14 @@ class TestStatusCommand:
                     id="wf-1",
                     issue_id="TEST-1",
                     status="running",
-                    worktree_name="worktree-1",
+                    worktree_path="/tmp/worktree-1",
                     started_at=datetime.now(UTC),
                 ),
                 WorkflowSummary(
                     id="wf-2",
                     issue_id="TEST-2",
                     status="awaiting_approval",
-                    worktree_name="worktree-2",
+                    worktree_path="/tmp/worktree-2",
                     started_at=datetime.now(UTC),
                 ),
             ],
@@ -422,7 +422,7 @@ class TestCancelCommand:
                     id="wf-cancel",
                     issue_id="TEST-CANCEL",
                     status="running",
-                    worktree_name="test-worktree",
+                    worktree_path="/tmp/test-worktree",
                     started_at=datetime.now(UTC),
                 )
             ],
@@ -472,7 +472,7 @@ class TestCancelCommand:
                     id="wf-confirm",
                     issue_id="TEST-CONFIRM",
                     status="running",
-                    worktree_name="test-worktree",
+                    worktree_path="/tmp/test-worktree",
                     started_at=datetime.now(UTC),
                 )
             ],
@@ -506,7 +506,7 @@ class TestCancelCommand:
                     id="wf-decline",
                     issue_id="TEST-DECLINE",
                     status="running",
-                    worktree_name="test-worktree",
+                    worktree_path="/tmp/test-worktree",
                     started_at=datetime.now(UTC),
                 )
             ],

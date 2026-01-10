@@ -6,6 +6,7 @@ from typing import Any
 import httpx
 
 from amelia.client.models import (
+    BatchStartResponse,
     CreateReviewWorkflowRequest,
     CreateWorkflowRequest,
     CreateWorkflowResponse,
@@ -74,7 +75,6 @@ class AmeliaClient:
         >>> workflow = await client.create_workflow(
         ...     issue_id="ISSUE-123",
         ...     worktree_path="/home/user/repo",
-        ...     worktree_name="main"
         ... )
         >>> await client.approve_workflow(workflow.id)
     """
@@ -142,20 +142,22 @@ class AmeliaClient:
         self,
         issue_id: str,
         worktree_path: str,
-        worktree_name: str | None = None,
         profile: str | None = None,
         task_title: str | None = None,
         task_description: str | None = None,
+        start: bool = True,
+        plan_now: bool = False,
     ) -> CreateWorkflowResponse:
         """Create a new workflow.
 
         Args:
             issue_id: Issue identifier (e.g., "ISSUE-123")
             worktree_path: Absolute path to git worktree
-            worktree_name: Human-readable name for worktree
             profile: Optional profile name for configuration
             task_title: Optional task title for noop tracker (bypasses issue lookup)
             task_description: Optional task description (requires task_title)
+            start: Whether to start workflow immediately (default True)
+            plan_now: Whether to run Architect before queueing (requires start=False)
 
         Returns:
             CreateWorkflowResponse with workflow id and initial status
@@ -169,10 +171,11 @@ class AmeliaClient:
         request = CreateWorkflowRequest(
             issue_id=issue_id,
             worktree_path=worktree_path,
-            worktree_name=worktree_name,
             profile=profile,
             task_title=task_title,
             task_description=task_description,
+            start=start,
+            plan_now=plan_now,
         )
 
         async with self._http_client() as client:
@@ -193,7 +196,6 @@ class AmeliaClient:
         self,
         diff_content: str,
         worktree_path: str,
-        worktree_name: str | None = None,
         profile: str | None = None,
     ) -> CreateWorkflowResponse:
         """Create a review-fix workflow.
@@ -201,7 +203,6 @@ class AmeliaClient:
         Args:
             diff_content: The git diff to review.
             worktree_path: Absolute path to git worktree.
-            worktree_name: Human-readable name for worktree.
             profile: Optional profile name for configuration.
 
         Returns:
@@ -216,7 +217,6 @@ class AmeliaClient:
         request = CreateReviewWorkflowRequest(
             diff_content=diff_content,
             worktree_path=worktree_path,
-            worktree_name=worktree_name,
             profile=profile,
         )
 
@@ -368,3 +368,74 @@ class AmeliaClient:
 
         # This should never be reached, but mypy needs it
         raise RuntimeError("Unexpected code path in get_workflow")
+
+    async def start_workflow(self, workflow_id: str) -> dict[str, str]:
+        """Start a pending workflow.
+
+        Transitions a workflow from pending to in_progress state.
+
+        Args:
+            workflow_id: Workflow ID to start.
+
+        Returns:
+            Dict with workflow_id and status.
+
+        Raises:
+            WorkflowNotFoundError: If workflow doesn't exist.
+            InvalidRequestError: If workflow is not in pending state.
+            ServerUnreachableError: If server is not running.
+        """
+        async with self._http_client() as client:
+            response = await client.post(
+                f"{self.base_url}/api/workflows/{workflow_id}/start"
+            )
+
+            if response.status_code == 202:
+                data: dict[str, str] = response.json()
+                return data
+            elif response.status_code == 404:
+                raise WorkflowNotFoundError(f"Workflow {workflow_id} not found")
+            elif response.status_code == 409:
+                raise InvalidRequestError(response.json().get("detail", "Invalid state"))
+            else:
+                response.raise_for_status()
+
+        # This should never be reached, but mypy needs it
+        raise RuntimeError("Unexpected code path in start_workflow")
+
+    async def start_batch(
+        self,
+        workflow_ids: list[str] | None = None,
+        worktree_path: str | None = None,
+    ) -> BatchStartResponse:
+        """Start multiple pending workflows.
+
+        Args:
+            workflow_ids: Specific workflow IDs to start, or None for all pending.
+            worktree_path: Optional filter by worktree path.
+
+        Returns:
+            BatchStartResponse with started IDs and errors.
+
+        Raises:
+            ServerUnreachableError: If server is not running.
+        """
+        request_body: dict[str, Any] = {}
+        if workflow_ids is not None:
+            request_body["workflow_ids"] = workflow_ids
+        if worktree_path is not None:
+            request_body["worktree_path"] = worktree_path
+
+        async with self._http_client() as client:
+            response = await client.post(
+                f"{self.base_url}/api/workflows/start-batch",
+                json=request_body,
+            )
+
+            if response.status_code == 200:
+                return BatchStartResponse.model_validate(response.json())
+            else:
+                response.raise_for_status()
+
+        # This should never be reached, but mypy needs it
+        raise RuntimeError("Unexpected code path in start_batch")

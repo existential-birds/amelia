@@ -244,4 +244,198 @@ describe('API Client', () => {
       await expect(api.getWorkflowHistory()).rejects.toThrow('Internal server error');
     });
   });
+
+  // ==========================================================================
+  // Queue Workflow Methods
+  // ==========================================================================
+
+  describe('startWorkflow', () => {
+    it('should POST to /api/workflows/{id}/start', async () => {
+      mockFetchSuccess({ workflow_id: 'wf-123', status: 'started' });
+
+      const result = await api.startWorkflow('wf-123');
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/workflows/wf-123/start',
+        expect.objectContaining({
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: expect.any(AbortSignal),
+        })
+      );
+      expect(result.workflow_id).toBe('wf-123');
+      expect(result.status).toBe('started');
+    });
+
+    it('should handle HTTP errors', async () => {
+      mockFetchError(404, 'Workflow not found', 'NOT_FOUND');
+
+      await expect(api.startWorkflow('wf-999')).rejects.toThrow('Workflow not found');
+    });
+
+    it('should handle conflict when workflow already running', async () => {
+      mockFetchError(409, 'Workflow already running', 'CONFLICT');
+
+      await expect(api.startWorkflow('wf-1')).rejects.toThrow('Workflow already running');
+    });
+  });
+
+  describe('startBatch', () => {
+    it('should POST to /api/workflows/start-batch with empty request', async () => {
+      mockFetchSuccess({ started: ['wf-1', 'wf-2'], errors: {} });
+
+      const result = await api.startBatch({});
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/workflows/start-batch',
+        expect.objectContaining({
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+          signal: expect.any(AbortSignal),
+        })
+      );
+      expect(result.started).toEqual(['wf-1', 'wf-2']);
+      expect(result.errors).toEqual({});
+    });
+
+    it('should pass workflow_ids when provided', async () => {
+      mockFetchSuccess({ started: ['wf-1'], errors: {} });
+
+      await api.startBatch({ workflow_ids: ['wf-1'] });
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/workflows/start-batch',
+        expect.objectContaining({
+          body: JSON.stringify({ workflow_ids: ['wf-1'] }),
+        })
+      );
+    });
+
+    it('should pass worktree_path when provided', async () => {
+      mockFetchSuccess({ started: ['wf-1'], errors: {} });
+
+      await api.startBatch({ worktree_path: '/repo' });
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/workflows/start-batch',
+        expect.objectContaining({
+          body: JSON.stringify({ worktree_path: '/repo' }),
+        })
+      );
+    });
+
+    it('should pass both workflow_ids and worktree_path', async () => {
+      mockFetchSuccess({ started: ['wf-1'], errors: {} });
+
+      await api.startBatch({
+        workflow_ids: ['wf-1', 'wf-2'],
+        worktree_path: '/repo',
+      });
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/workflows/start-batch',
+        expect.objectContaining({
+          body: JSON.stringify({ workflow_ids: ['wf-1', 'wf-2'], worktree_path: '/repo' }),
+        })
+      );
+    });
+
+    it('should handle partial errors in batch response', async () => {
+      mockFetchSuccess({
+        started: ['wf-1'],
+        errors: { 'wf-2': 'Already running' },
+      });
+
+      const result = await api.startBatch({ workflow_ids: ['wf-1', 'wf-2'] });
+
+      expect(result.started).toEqual(['wf-1']);
+      expect(result.errors).toEqual({ 'wf-2': 'Already running' });
+    });
+
+    it('should handle HTTP errors', async () => {
+      mockFetchError(500, 'Internal server error', 'INTERNAL_ERROR');
+
+      await expect(api.startBatch({})).rejects.toThrow('Internal server error');
+    });
+  });
+
+  describe('getWorkflowDefaults', () => {
+    it('should return worktree_path and profile from most recent workflow', async () => {
+      mockFetchSuccess({
+        workflows: [
+          {
+            id: 'wf-1',
+            issue_id: 'TASK-001',
+            worktree_path: '/Users/test/project',
+            profile: 'dev-profile',
+            status: 'completed',
+            created_at: '2025-01-01T09:00:00Z',
+            started_at: '2025-01-01T10:00:00Z',
+            current_stage: null,
+            total_cost_usd: null,
+            total_tokens: null,
+            total_duration_ms: null,
+          },
+        ],
+        total: 1,
+        has_more: false,
+      });
+
+      const result = await api.getWorkflowDefaults();
+
+      expect(result).toEqual({
+        worktree_path: '/Users/test/project',
+        profile: 'dev-profile',
+      });
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/workflows?limit=1',
+        expect.anything()
+      );
+    });
+
+    it('should return null values when no workflows exist', async () => {
+      mockFetchSuccess({
+        workflows: [],
+        total: 0,
+        has_more: false,
+      });
+
+      const result = await api.getWorkflowDefaults();
+
+      expect(result).toEqual({
+        worktree_path: null,
+        profile: null,
+      });
+    });
+
+    it('should return null profile when workflow has no profile', async () => {
+      mockFetchSuccess({
+        workflows: [
+          {
+            id: 'wf-1',
+            issue_id: 'TASK-001',
+            worktree_path: '/Users/test/project',
+            profile: null,
+            status: 'completed',
+            created_at: '2025-01-01T09:00:00Z',
+            started_at: '2025-01-01T10:00:00Z',
+            current_stage: null,
+            total_cost_usd: null,
+            total_tokens: null,
+            total_duration_ms: null,
+          },
+        ],
+        total: 1,
+        has_more: false,
+      });
+
+      const result = await api.getWorkflowDefaults();
+
+      expect(result).toEqual({
+        worktree_path: '/Users/test/project',
+        profile: null,
+      });
+    });
+  });
 });

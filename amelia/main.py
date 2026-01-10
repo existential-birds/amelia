@@ -14,6 +14,7 @@ from amelia.client.cli import (
     cancel_command,
     plan_command,
     reject_command,
+    run_command,
     start_command,
     status_command,
 )
@@ -35,6 +36,7 @@ app.command(name="approve", help="Approve the workflow plan in the current workt
 app.command(name="reject", help="Reject the workflow plan in the current worktree.")(reject_command)
 app.command(name="status", help="Show status of active workflows.")(status_command)
 app.command(name="cancel", help="Cancel the active workflow in the current worktree.")(cancel_command)
+app.command(name="run", help="Start pending workflow(s).")(run_command)
 
 @app.callback()
 def main_callback() -> None:
@@ -142,7 +144,6 @@ def review(
                 response = await client.create_review_workflow(
                     diff_content=diff_content,
                     worktree_path=os.getcwd(),
-                    worktree_name="local-review",
                     profile=profile_name,
                 )
                 typer.echo(f"Created review workflow: {response.id}")

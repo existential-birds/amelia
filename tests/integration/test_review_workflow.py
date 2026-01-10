@@ -53,7 +53,6 @@ class TestCreateReviewWorkflowEndpoint:
             json={
                 "diff_content": "+ new line",
                 "worktree_path": str(worktree),
-                "worktree_name": "test-review",
             },
         )
 

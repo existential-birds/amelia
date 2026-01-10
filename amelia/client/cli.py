@@ -15,9 +15,10 @@ from amelia.client.api import (
     RateLimitError,
     ServerUnreachableError,
     WorkflowConflictError,
+    WorkflowNotFoundError,
 )
 from amelia.client.git import get_worktree_context
-from amelia.client.models import CreateWorkflowResponse, WorkflowSummary
+from amelia.client.models import BatchStartResponse, CreateWorkflowResponse, WorkflowSummary
 from amelia.config import load_settings
 from amelia.core.state import ExecutionState
 from amelia.core.types import Issue
@@ -103,6 +104,14 @@ def start_command(
         str | None,
         typer.Option("--description", help="Task description (requires --title)"),
     ] = None,
+    queue: Annotated[
+        bool,
+        typer.Option("--queue", help="Queue workflow without starting immediately"),
+    ] = False,
+    plan: Annotated[
+        bool,
+        typer.Option("--plan", help="Run Architect before queueing (requires --queue)"),
+    ] = False,
 ) -> None:
     """Start a new workflow for an issue in the current worktree.
 
@@ -114,13 +123,20 @@ def start_command(
         profile: Optional profile name for driver and tracker configuration.
         title: Optional task title for noop tracker (bypasses issue lookup).
         description: Optional task description (requires --title to be set).
+        queue: If True, queue workflow without starting immediately.
+        plan: If True, run Architect before queueing (requires --queue).
     """
     # Validate --description requires --title
     if description and not title:
         console.print("[red]Error:[/red] --description requires --title to be set")
         raise typer.Exit(1)
 
-    worktree_path, worktree_name = _get_worktree_context()
+    # Validate --plan requires --queue
+    if plan and not queue:
+        console.print("[red]Error:[/red] --plan requires --queue flag")
+        raise typer.Exit(1)
+
+    worktree_path, _ = _get_worktree_context()
 
     client = AmeliaClient()
 
@@ -128,16 +144,23 @@ def start_command(
         return await client.create_workflow(
             issue_id=issue_id,
             worktree_path=worktree_path,
-            worktree_name=worktree_name,
             profile=profile,
             task_title=title,
             task_description=description,
+            start=not queue,
+            plan_now=plan,
         )
 
     try:
         workflow = asyncio.run(_create())
 
-        console.print(f"[green]✓[/green] Workflow started: [bold]{workflow.id}[/bold]")
+        if queue:
+            if plan:
+                console.print(f"[green]✓[/green] Workflow queued with plan: [bold]{workflow.id}[/bold]")
+            else:
+                console.print(f"[green]✓[/green] Workflow queued: [bold]{workflow.id}[/bold]")
+        else:
+            console.print(f"[green]✓[/green] Workflow started: [bold]{workflow.id}[/bold]")
         console.print(f"  Issue: {issue_id}")
         console.print(f"  Worktree: {worktree_path}")
         console.print(f"  Status: {workflow.status}")
@@ -294,7 +317,7 @@ def status_command(
                 wf.id,
                 wf.issue_id,
                 wf.status,
-                wf.worktree_name,
+                wf.worktree_path,
                 wf.started_at.strftime("%Y-%m-%d %H:%M") if wf.started_at else "-",
             )
 
@@ -405,7 +428,7 @@ def plan_command(
         console.print("[red]Error:[/red] --description requires --title to be set")
         raise typer.Exit(1)
 
-    worktree_path, _worktree_name = _get_worktree_context()
+    worktree_path, _ = _get_worktree_context()
 
     async def _generate_plan() -> ExecutionState:
         # Load settings from worktree
@@ -480,3 +503,76 @@ def plan_command(
         console.print(f"[red]Error generating plan:[/red] {e}")
         logger.exception("Unexpected error in plan command")
         raise typer.Exit(1) from None
+
+
+def run_command(
+    workflow_id: Annotated[str | None, typer.Argument(help="Workflow ID to start")] = None,
+    all_pending: Annotated[bool, typer.Option("--all", help="Start all pending workflows")] = False,
+    worktree: Annotated[str | None, typer.Option("--worktree", help="Filter by worktree path")] = None,
+) -> None:
+    """Start pending workflow(s).
+
+    Either starts a specific workflow by ID, or starts all pending workflows
+    when using the --all flag. Optionally filter by worktree path.
+
+    Args:
+        workflow_id: Optional workflow ID to start.
+        all_pending: If True, start all pending workflows.
+        worktree: Optional worktree path filter (only with --all).
+    """
+    if not workflow_id and not all_pending:
+        console.print("[red]Error:[/red] Provide workflow ID or use --all flag")
+        raise typer.Exit(1)
+
+    client = AmeliaClient()
+
+    if workflow_id:
+        # Start specific workflow
+        async def _start_one() -> dict[str, str]:
+            return await client.start_workflow(workflow_id)
+
+        try:
+            result = asyncio.run(_start_one())
+            console.print(f"[green]Started workflow:[/green] {workflow_id}")
+            console.print(f"  Status: {result.get('status', 'started')}")
+        except ServerUnreachableError as e:
+            console.print(f"[red]Error:[/red] {e}")
+            console.print("\n[yellow]Start the server:[/yellow] amelia server")
+            raise typer.Exit(1) from None
+        except WorkflowNotFoundError:
+            console.print(f"[red]Error:[/red] Workflow {workflow_id} not found")
+            raise typer.Exit(1) from None
+        except InvalidRequestError as e:
+            console.print(f"[red]Error:[/red] {e}")
+            raise typer.Exit(1) from None
+
+    else:
+        # Batch start
+        async def _start_batch() -> BatchStartResponse:
+            return await client.start_batch(
+                workflow_ids=None,
+                worktree_path=worktree,
+            )
+
+        try:
+            batch_result = asyncio.run(_start_batch())
+            started = batch_result.started
+            errors = batch_result.errors
+
+            if started:
+                console.print(f"[green]Started {len(started)} workflow(s):[/green]")
+                for wf_id in started:
+                    console.print(f"  - {wf_id}")
+
+            if errors:
+                console.print(f"[yellow]Failed to start {len(errors)} workflow(s):[/yellow]")
+                for wf_id, error in errors.items():
+                    console.print(f"  - {wf_id}: {error}")
+
+            if not started and not errors:
+                console.print("[dim]No pending workflows to start[/dim]")
+
+        except ServerUnreachableError as e:
+            console.print(f"[red]Error:[/red] {e}")
+            console.print("\n[yellow]Start the server:[/yellow] amelia server")
+            raise typer.Exit(1) from None

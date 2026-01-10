@@ -1,6 +1,6 @@
 """Tests for workflow state models."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 import pytest
@@ -21,7 +21,6 @@ def make_state(**overrides: Any) -> ServerExecutionState:
         "id": "wf-123",
         "issue_id": "ISSUE-456",
         "worktree_path": "/path/to/repo",
-        "worktree_name": "main",
     }
     return ServerExecutionState(**{**defaults, **overrides})
 
@@ -34,6 +33,7 @@ class TestStateTransitions:
         [
             ("pending", "in_progress"),
             ("pending", "cancelled"),
+            ("pending", "failed"),  # Workflows can fail during startup
             ("in_progress", "blocked"),
             ("in_progress", "completed"),
             ("in_progress", "failed"),
@@ -53,7 +53,7 @@ class TestStateTransitions:
         "current,target",
         [
             ("pending", "completed"),
-            ("pending", "failed"),
+            # ("pending", "failed") is now valid - workflows can fail during startup
             ("pending", "blocked"),
             ("in_progress", "pending"),
             ("in_progress", "in_progress"),
@@ -97,7 +97,6 @@ class TestServerExecutionState:
         assert state.id == "wf-123"
         assert state.issue_id == "ISSUE-456"
         assert state.worktree_path == "/path/to/repo"
-        assert state.worktree_name == "main"
         assert state.workflow_status == "pending"
 
     def test_state_json_round_trip(self) -> None:
@@ -129,9 +128,33 @@ class TestServerExecutionStateComposition:
             id="wf-123",
             issue_id="ISSUE-456",
             worktree_path="/tmp/test",
-            worktree_name="test-branch",
             execution_state=core_state,
         )
         assert server_state.execution_state is not None
         assert server_state.execution_state.profile_id == "test"
+
+
+class TestServerExecutionStatePlannedAt:
+    """Tests for planned_at field."""
+
+    def test_planned_at_defaults_to_none(self) -> None:
+        """planned_at should default to None for new workflows."""
+        state = make_state()
+        assert state.planned_at is None
+
+    def test_planned_at_can_be_set(self) -> None:
+        """planned_at can be set to a datetime."""
+        now = datetime.now(UTC)
+        state = make_state(planned_at=now)
+        assert state.planned_at == now
+
+    def test_is_planned_property_false_when_no_plan(self) -> None:
+        """is_planned should return False when planned_at is None."""
+        state = make_state()
+        assert state.is_planned is False
+
+    def test_is_planned_property_true_when_planned(self) -> None:
+        """is_planned should return True when planned_at is set."""
+        state = make_state(planned_at=datetime.now(UTC))
+        assert state.is_planned is True
 

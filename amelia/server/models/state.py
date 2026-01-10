@@ -1,6 +1,6 @@
 """Workflow state models and state machine validation."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -21,7 +21,7 @@ WorkflowStatus = Literal[
 
 # State machine validation - prevents invalid transitions
 VALID_TRANSITIONS: dict[WorkflowStatus, set[WorkflowStatus]] = {
-    "pending": {"in_progress", "cancelled"},
+    "pending": {"in_progress", "cancelled", "failed"},  # Can fail during startup
     "in_progress": {"blocked", "completed", "failed", "cancelled"},
     "blocked": {"in_progress", "failed", "cancelled"},
     "completed": set(),  # Terminal state
@@ -74,7 +74,6 @@ class ServerExecutionState(BaseModel):
         id: Unique workflow identifier (UUID).
         issue_id: Issue being worked on.
         worktree_path: Absolute path to git worktree root.
-        worktree_name: Human-readable worktree name (branch or directory).
         execution_state: Core orchestration state.
         workflow_status: Current workflow status.
         started_at: When workflow started.
@@ -89,7 +88,6 @@ class ServerExecutionState(BaseModel):
     id: str = Field(..., description="Unique workflow identifier")
     issue_id: str = Field(..., description="Issue being worked on")
     worktree_path: str = Field(..., description="Absolute path to worktree")
-    worktree_name: str = Field(..., description="Human-readable worktree name")
     workflow_type: Literal["full", "review"] = Field(
         default="full",
         description="Type of workflow: 'full' for standard, 'review' for review-only",
@@ -103,6 +101,10 @@ class ServerExecutionState(BaseModel):
         default="pending",
         description="Current workflow status",
     )
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        description="When workflow was created/queued",
+    )
     started_at: datetime | None = Field(
         default=None,
         description="When workflow started",
@@ -110,6 +112,10 @@ class ServerExecutionState(BaseModel):
     completed_at: datetime | None = Field(
         default=None,
         description="When workflow ended",
+    )
+    planned_at: datetime | None = Field(
+        default=None,
+        description="When workflow planning (architect stage) completed",
     )
     stage_timestamps: dict[str, datetime] = Field(
         default_factory=dict,
@@ -139,7 +145,6 @@ class ServerExecutionState(BaseModel):
                     "id": "wf-123",
                     "issue_id": "ISSUE-456",
                     "worktree_path": "/home/user/project",
-                    "worktree_name": "main",
                     "workflow_status": "in_progress",
                     "started_at": "2025-01-01T12:00:00Z",
                     "current_stage": "development",
@@ -147,3 +152,8 @@ class ServerExecutionState(BaseModel):
             ]
         }
     }
+
+    @property
+    def is_planned(self) -> bool:
+        """Return True if the workflow has completed planning."""
+        return self.planned_at is not None

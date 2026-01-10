@@ -10,6 +10,7 @@ Exports:
     CreateWorkflowRequest: Request model for starting a workflow.
     RejectRequest: Request model for rejecting changes.
     ActionResponse: Generic action success response.
+    BatchStartResponse: Response from batch start operation.
     CreateWorkflowResponse: Response model for workflow creation.
     ErrorResponse: Standardized error response model.
     TokenSummary: Aggregated token usage summary.
@@ -40,6 +41,7 @@ from amelia.server.models.events import EventType, WorkflowEvent
 from amelia.server.models.requests import CreateWorkflowRequest, RejectRequest
 from amelia.server.models.responses import (
     ActionResponse,
+    BatchStartResponse,
     CreateWorkflowResponse,
     ErrorResponse,
     WorkflowDetailResponse,
@@ -82,6 +84,7 @@ __all__ = [
     "RejectRequest",
     # Responses
     "ActionResponse",
+    "BatchStartResponse",
     "CreateWorkflowResponse",
     "ErrorResponse",
     "TokenSummary",

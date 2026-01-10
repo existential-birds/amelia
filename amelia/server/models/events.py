@@ -53,6 +53,7 @@ class EventType(StrEnum):
     """
 
     # Lifecycle
+    WORKFLOW_CREATED = "workflow_created"
     WORKFLOW_STARTED = "workflow_started"
     WORKFLOW_COMPLETED = "workflow_completed"
     WORKFLOW_FAILED = "workflow_failed"
@@ -99,6 +100,7 @@ class EventType(StrEnum):
 
 # Event type to level mapping
 _INFO_TYPES: frozenset[EventType] = frozenset({
+    EventType.WORKFLOW_CREATED,
     EventType.WORKFLOW_STARTED,
     EventType.WORKFLOW_COMPLETED,
     EventType.WORKFLOW_FAILED,

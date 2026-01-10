@@ -9,6 +9,7 @@ import pytest
 from pydantic import ValidationError
 
 from amelia.server.models.requests import (
+    BatchStartRequest,
     CreateReviewWorkflowRequest,
     CreateWorkflowRequest,
     RejectRequest,
@@ -196,13 +197,11 @@ class TestCreateReviewWorkflowRequest:
         request = CreateReviewWorkflowRequest(
             diff_content="+ added line",
             worktree_path=str(worktree),
-            worktree_name="test-review",
             profile="default",
         )
 
         assert request.diff_content == "+ added line"
         assert request.worktree_path == str(worktree)
-        assert request.worktree_name == "test-review"
         assert request.profile == "default"
 
     def test_empty_diff_content_rejected(self, tmp_path: Path) -> None:
@@ -239,5 +238,86 @@ class TestCreateReviewWorkflowRequest:
             worktree_path=str(worktree),
         )
 
-        assert request.worktree_name is None
         assert request.profile is None
+
+
+class TestCreateWorkflowRequestQueueParams:
+    """Tests for queue-related parameters."""
+
+    def test_start_defaults_to_true(self) -> None:
+        """start should default to True for backward compatibility."""
+        request = CreateWorkflowRequest(
+            issue_id="ISSUE-123",
+            worktree_path="/path/to/repo",
+        )
+        assert request.start is True
+
+    def test_plan_now_defaults_to_false(self) -> None:
+        """plan_now should default to False."""
+        request = CreateWorkflowRequest(
+            issue_id="ISSUE-123",
+            worktree_path="/path/to/repo",
+        )
+        assert request.plan_now is False
+
+    def test_queue_mode_start_false(self) -> None:
+        """Setting start=False queues without immediate execution."""
+        request = CreateWorkflowRequest(
+            issue_id="ISSUE-123",
+            worktree_path="/path/to/repo",
+            start=False,
+        )
+        assert request.start is False
+        assert request.plan_now is False
+
+    def test_queue_with_plan_mode(self) -> None:
+        """Setting start=False, plan_now=True runs Architect then queues."""
+        request = CreateWorkflowRequest(
+            issue_id="ISSUE-123",
+            worktree_path="/path/to/repo",
+            start=False,
+            plan_now=True,
+        )
+        assert request.start is False
+        assert request.plan_now is True
+
+    def test_plan_now_ignored_when_start_true(self) -> None:
+        """plan_now is ignored when start=True (immediate execution)."""
+        request = CreateWorkflowRequest(
+            issue_id="ISSUE-123",
+            worktree_path="/path/to/repo",
+            start=True,
+            plan_now=True,
+        )
+        # Should be valid - plan_now is simply ignored
+        assert request.start is True
+        assert request.plan_now is True  # Stored but not used
+
+
+class TestBatchStartRequest:
+    """Tests for BatchStartRequest model."""
+
+    def test_empty_request_valid(self) -> None:
+        """Empty request means start all pending workflows."""
+        request = BatchStartRequest()
+        assert request.workflow_ids is None
+        assert request.worktree_path is None
+
+    def test_specific_workflow_ids(self) -> None:
+        """Can specify exact workflow IDs to start."""
+        request = BatchStartRequest(workflow_ids=["wf-1", "wf-2", "wf-3"])
+        assert request.workflow_ids == ["wf-1", "wf-2", "wf-3"]
+
+    def test_filter_by_worktree(self) -> None:
+        """Can filter by worktree path."""
+        request = BatchStartRequest(worktree_path="/path/to/repo")
+        assert request.worktree_path == "/path/to/repo"
+
+    def test_combined_filter(self) -> None:
+        """Can combine workflow IDs and worktree filter."""
+        request = BatchStartRequest(
+            workflow_ids=["wf-1", "wf-2"],
+            worktree_path="/path/to/repo",
+        )
+        assert request.workflow_ids == ["wf-1", "wf-2"]
+        assert request.worktree_path == "/path/to/repo"

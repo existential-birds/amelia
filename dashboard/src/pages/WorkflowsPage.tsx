@@ -16,6 +16,7 @@ import { WorkflowCanvas } from '@/components/WorkflowCanvas';
 import { ActivityLog } from '@/components/ActivityLog';
 import { JobQueue } from '@/components/JobQueue';
 import { ApprovalControls } from '@/components/ApprovalControls';
+import { PendingWorkflowControls } from '@/components/PendingWorkflowControls';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { success, error } from '@/components/Toast';
@@ -108,8 +109,8 @@ export default function WorkflowsPage() {
                 </Tooltip>
               )}
             </div>
-            {detail?.worktree_name && (
-              <PageHeader.Subtitle>{detail.worktree_name}</PageHeader.Subtitle>
+            {detail?.worktree_path && (
+              <PageHeader.Subtitle>{detail.worktree_path}</PageHeader.Subtitle>
             )}
           </div>
         </PageHeader.Left>
@@ -134,6 +135,23 @@ export default function WorkflowsPage() {
             planSummary={detail.goal || 'Awaiting plan generation'}
             planMarkdown={detail.plan_markdown}
             status="pending"
+          />
+        </div>
+      )}
+
+      {/* Pending Workflow Controls - shown when workflow is queued */}
+      {detail?.status === 'pending' && (
+        <div className="px-4 pt-4">
+          <PendingWorkflowControls
+            workflowId={detail.id}
+            createdAt={detail.created_at}
+            hasPlan={!!detail.plan_markdown}
+            worktreeHasActiveWorkflow={workflows.some(
+              (w) =>
+                w.id !== detail.id &&
+                w.worktree_path === detail.worktree_path &&
+                w.status === 'in_progress'
+            )}
           />
         </div>
       )}

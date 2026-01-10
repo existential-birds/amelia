@@ -72,7 +72,6 @@ async def workflow(repository: WorkflowRepository) -> ServerExecutionState:
         id="wf-test",
         issue_id="ISSUE-1",
         worktree_path="/tmp/test",
-        worktree_name="test",
         workflow_status="pending",
         started_at=datetime.now(UTC),
     )

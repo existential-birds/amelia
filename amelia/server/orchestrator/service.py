@@ -4,7 +4,7 @@ import asyncio
 import contextlib
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 from uuid import uuid4
 
 import yaml
@@ -41,7 +41,13 @@ from amelia.server.exceptions import (
 )
 from amelia.server.models import ServerExecutionState
 from amelia.server.models.events import EventType, WorkflowEvent
+from amelia.server.models.requests import BatchStartRequest, CreateWorkflowRequest
+from amelia.server.models.responses import BatchStartResponse
 from amelia.trackers.factory import create_tracker
+
+
+if TYPE_CHECKING:
+    from amelia.agents.architect import Architect
 
 
 # Nodes that emit stage events
@@ -117,6 +123,7 @@ class OrchestratorService:
         expanded_path.parent.mkdir(parents=True, exist_ok=True)
         self._checkpoint_path = str(expanded_path)
         self._active_tasks: dict[str, tuple[str, asyncio.Task[None]]] = {}  # worktree_path -> (workflow_id, task)
+        self._planning_tasks: dict[str, asyncio.Task[None]] = {}  # workflow_id -> planning task
         self._approval_events: dict[str, asyncio.Event] = {}  # workflow_id -> event
         self._approval_lock = asyncio.Lock()  # Prevents race conditions on approvals
         self._start_lock = asyncio.Lock()  # Prevents race conditions on workflow start
@@ -271,6 +278,86 @@ class OrchestratorService:
             )
             return None
 
+    async def _prepare_workflow_state(
+        self,
+        worktree_path: str,
+        issue_id: str,
+        profile_name: str | None = None,
+        task_title: str | None = None,
+        task_description: str | None = None,
+    ) -> tuple[str, Profile, ExecutionState]:
+        """Prepare common state needed to create or start a workflow.
+
+        Centralizes the common initialization logic for settings loading,
+        profile resolution, issue fetching, and ExecutionState creation
+        shared across queue_workflow, start_workflow, and queue_and_plan_workflow.
+
+        Args:
+            worktree_path: Resolved worktree path (already validated).
+            issue_id: The issue ID to work on.
+            profile_name: Optional profile name (defaults to active profile).
+            task_title: Optional task title for noop tracker.
+            task_description: Optional task description (defaults to task_title).
+
+        Returns:
+            Tuple of (resolved_path, profile, execution_state).
+
+        Raises:
+            ValueError: If settings are invalid, profile not found, or task_title
+                used with non-noop tracker.
+        """
+        # Load settings from worktree (required - no fallback)
+        try:
+            settings = self._load_settings_for_worktree(worktree_path)
+        except ValidationError as e:
+            raise ValueError(
+                f"Invalid settings.amelia.yaml in {worktree_path}: {e}"
+            ) from e
+        if settings is None:
+            raise ValueError(
+                f"No settings.amelia.yaml found in {worktree_path}. "
+                "Each worktree must have its own settings file."
+            )
+
+        # Load the profile (use provided profile name or active profile as fallback)
+        resolved_profile_name = profile_name or settings.active_profile
+        if resolved_profile_name not in settings.profiles:
+            raise ValueError(f"Profile '{resolved_profile_name}' not found in settings")
+        profile = settings.profiles[resolved_profile_name]
+
+        # ALWAYS set working_dir to worktree_path for agent execution
+        profile = profile.model_copy(update={"working_dir": worktree_path})
+
+        # Fetch issue from tracker (or construct from task_title)
+        if task_title is not None:
+            # Validate that tracker is noop when using task_title
+            if profile.tracker not in ("noop", "none"):
+                raise ValueError(
+                    f"task_title can only be used with noop tracker, "
+                    f"but profile '{profile.name}' uses tracker '{profile.tracker}'"
+                )
+            issue = Issue(
+                id=issue_id,
+                title=task_title,
+                description=task_description or task_title,
+            )
+        else:
+            # Fetch issue from tracker
+            tracker = create_tracker(profile)
+            issue = tracker.get_issue(issue_id, cwd=worktree_path)
+
+        # Get current HEAD to track changes
+        base_commit = await get_git_head(worktree_path)
+
+        # Create ExecutionState with all required fields
+        execution_state = ExecutionState(
+            profile_id=profile.name,
+            issue=issue,
+            base_commit=base_commit,
+        )
+
+        return worktree_path, profile, execution_state
+
     def _load_settings_for_worktree(self, worktree_path: str) -> Settings | None:
         """Load settings from a worktree directory.
 
@@ -334,11 +421,46 @@ class OrchestratorService:
             )
             return None
 
+    def _validate_worktree_path(self, worktree_path: str) -> Path:
+        """Validate and resolve worktree path securely.
+
+        Resolves the path to its canonical form, removing any path traversal
+        sequences (../) and following symlinks. Then validates the resolved
+        path exists and is a git repository.
+
+        Args:
+            worktree_path: User-provided worktree path to validate.
+
+        Returns:
+            Resolved, validated Path object.
+
+        Raises:
+            InvalidWorktreeError: If path doesn't exist, isn't a directory,
+                or isn't a git repository.
+        """
+        # Expand ~ and resolve to canonical form FIRST - this prevents path
+        # traversal attacks by converting paths like "/safe/../unsafe" to their
+        # real location
+        try:
+            worktree = Path(worktree_path).expanduser().resolve()
+        except (OSError, RuntimeError, ValueError) as e:
+            raise InvalidWorktreeError(worktree_path, f"invalid path: {e}") from e
+
+        # Now validate the RESOLVED path
+        if not worktree.exists():
+            raise InvalidWorktreeError(str(worktree), "directory does not exist")
+        if not worktree.is_dir():
+            raise InvalidWorktreeError(str(worktree), "path is not a directory")
+        git_path = worktree / ".git"
+        if not git_path.exists():
+            raise InvalidWorktreeError(str(worktree), "not a git repository (.git missing)")
+
+        return worktree
+
     async def start_workflow(
         self,
         issue_id: str,
         worktree_path: str,
-        worktree_name: str | None = None,
         profile: str | None = None,
         driver: str | None = None,
         task_title: str | None = None,
@@ -349,7 +471,6 @@ class OrchestratorService:
         Args:
             issue_id: The issue ID to work on.
             worktree_path: Absolute path to the worktree.
-            worktree_name: Human-readable worktree name (optional).
             profile: Optional profile name.
             driver: Optional driver override.
             task_title: Optional task title for direct Issue construction (noop tracker only).
@@ -364,21 +485,16 @@ class OrchestratorService:
             ConcurrencyLimitError: If at max concurrent workflows.
             ValueError: If task_title is provided but tracker is not noop.
         """
-        # Validate worktree before acquiring lock (fast-fail)
-        worktree = Path(worktree_path)
-        if not worktree.exists():
-            raise InvalidWorktreeError(worktree_path, "directory does not exist")
-        if not worktree.is_dir():
-            raise InvalidWorktreeError(worktree_path, "path is not a directory")
-        git_path = worktree / ".git"
-        if not git_path.exists():
-            raise InvalidWorktreeError(worktree_path, "not a git repository (.git missing)")
+        # Validate and resolve worktree before acquiring lock (fast-fail)
+        worktree = self._validate_worktree_path(worktree_path)
+        resolved_path = str(worktree)
 
         async with self._start_lock:
             # Check worktree conflict - workflow_id is cached in tuple
-            if worktree_path in self._active_tasks:
-                existing_id, _ = self._active_tasks[worktree_path]
-                raise WorkflowConflictError(worktree_path, existing_id)
+            # Use resolved path for consistent comparison
+            if resolved_path in self._active_tasks:
+                existing_id, _ = self._active_tasks[resolved_path]
+                raise WorkflowConflictError(resolved_path, existing_id)
 
             # Check concurrency limit
             current_count = len(self._active_tasks)
@@ -390,14 +506,14 @@ class OrchestratorService:
 
             # Load settings from worktree (required - no fallback)
             try:
-                settings = self._load_settings_for_worktree(worktree_path)
+                settings = self._load_settings_for_worktree(resolved_path)
             except ValidationError as e:
                 raise ValueError(
-                    f"Invalid settings.amelia.yaml in {worktree_path}: {e}"
+                    f"Invalid settings.amelia.yaml in {resolved_path}: {e}"
                 ) from e
             if settings is None:
                 raise ValueError(
-                    f"No settings.amelia.yaml found in {worktree_path}. "
+                    f"No settings.amelia.yaml found in {resolved_path}. "
                     "Each worktree must have its own settings file."
                 )
 
@@ -426,47 +542,20 @@ class OrchestratorService:
                     hook_name=hook_name,
                 )
 
-            # ALWAYS set working_dir to worktree_path for agent execution
-            # This ensures agents run in the correct directory regardless of settings
-            # Create a copy to avoid mutating the shared settings profile
-            loaded_profile = loaded_profile.model_copy(
-                update={"working_dir": worktree_path}
-            )
-
-            # Construct Issue: either from task_title (noop tracker only) or from tracker
-            if task_title is not None:
-                # Validate that tracker is noop when using task_title
-                if loaded_profile.tracker not in ("noop", "none"):
-                    raise ValueError(
-                        f"task_title can only be used with noop tracker, "
-                        f"but profile '{loaded_profile.name}' uses tracker '{loaded_profile.tracker}'"
-                    )
-                # Construct Issue directly from task_title/task_description
-                issue = Issue(
-                    id=issue_id,
-                    title=task_title,
-                    description=task_description or task_title,
-                )
-            else:
-                # Fetch issue from tracker (pass worktree_path so gh CLI uses correct repo)
-                tracker = create_tracker(loaded_profile)
-                issue = tracker.get_issue(issue_id, cwd=worktree_path)
-
-            # Get current HEAD to track changes from workflow start
-            base_commit = await get_git_head(worktree_path)
-
-            # Initialize ExecutionState with profile_id, issue, and base commit
-            execution_state = ExecutionState(
-                profile_id=loaded_profile.name,
-                issue=issue,
-                base_commit=base_commit,
+            # Prepare issue and execution state using the helper
+            # (settings/profile loading done above for policy check)
+            _, loaded_profile, execution_state = await self._prepare_workflow_state(
+                worktree_path=resolved_path,
+                issue_id=issue_id,
+                profile_name=profile,
+                task_title=task_title,
+                task_description=task_description,
             )
 
             state = ServerExecutionState(
                 id=workflow_id,
                 issue_id=issue_id,
-                worktree_path=worktree_path,
-                worktree_name=worktree_name or worktree_path.split("/")[-1],
+                worktree_path=resolved_path,
                 execution_state=execution_state,
                 workflow_status="pending",
                 started_at=datetime.now(UTC),
@@ -476,19 +565,19 @@ class OrchestratorService:
             except Exception as e:
                 # Handle DB constraint violation (e.g., crash recovery scenario)
                 if "UNIQUE constraint failed" in str(e):
-                    raise WorkflowConflictError(worktree_path, "existing") from e
+                    raise WorkflowConflictError(resolved_path, "existing") from e
                 raise
 
             logger.info(
                 "Starting workflow",
                 workflow_id=workflow_id,
                 issue_id=issue_id,
-                worktree_path=worktree_path,
+                worktree_path=resolved_path,
             )
 
             # Start async task with retry wrapper for transient failures
             task = asyncio.create_task(self._run_workflow_with_retry(workflow_id, state))
-            self._active_tasks[worktree_path] = (workflow_id, task)
+            self._active_tasks[resolved_path] = (workflow_id, task)
 
         # Remove from active tasks on completion
         def cleanup_task(_: asyncio.Task[None]) -> None:
@@ -497,17 +586,81 @@ class OrchestratorService:
             Args:
                 _: The completed asyncio Task (unused).
             """
-            self._active_tasks.pop(worktree_path, None)
+            self._active_tasks.pop(resolved_path, None)
             self._sequence_counters.pop(workflow_id, None)
             self._sequence_locks.pop(workflow_id, None)
             self._approval_events.pop(workflow_id, None)
             logger.debug(
                 "Workflow task completed",
                 workflow_id=workflow_id,
-                worktree_path=worktree_path,
+                worktree_path=resolved_path,
             )
 
         task.add_done_callback(cleanup_task)
+
+        return workflow_id
+
+    async def queue_workflow(self, request: CreateWorkflowRequest) -> str:
+        """Queue a workflow without starting it.
+
+        Creates a workflow in pending state with execution_state populated
+        so it can be started later. Multiple pending workflows can exist
+        for the same worktree (unlike running workflows).
+
+        Args:
+            request: Workflow creation request with start=False.
+
+        Returns:
+            The workflow ID (UUID format).
+
+        Raises:
+            InvalidWorktreeError: If worktree doesn't exist or isn't a git repo.
+            ValueError: If settings are invalid or profile not found.
+        """
+        # Validate and resolve worktree path securely
+        worktree = self._validate_worktree_path(request.worktree_path)
+        resolved_path = str(worktree)
+
+        # Prepare common workflow state (settings, profile, issue, execution_state)
+        resolved_path, profile, execution_state = await self._prepare_workflow_state(
+            worktree_path=resolved_path,
+            issue_id=request.issue_id,
+            profile_name=request.profile,
+            task_title=request.task_title,
+            task_description=request.task_description,
+        )
+
+        # Generate workflow ID
+        workflow_id = str(uuid4())
+
+        # Create ServerExecutionState in pending status (not started)
+        state = ServerExecutionState(
+            id=workflow_id,
+            issue_id=request.issue_id,
+            worktree_path=resolved_path,
+            execution_state=execution_state,
+            workflow_status="pending",
+            # No started_at - workflow hasn't started
+            # No planned_at - not planned yet
+        )
+
+        # Save to database
+        await self._repository.create(state)
+
+        # Emit created event
+        await self._emit(
+            workflow_id,
+            EventType.WORKFLOW_CREATED,
+            f"Workflow queued for {request.issue_id}",
+            data={"issue_id": request.issue_id, "queued": True},
+        )
+
+        logger.info(
+            "Workflow queued",
+            workflow_id=workflow_id,
+            issue_id=request.issue_id,
+            worktree_path=resolved_path,
+        )
 
         return workflow_id
 
@@ -515,7 +668,6 @@ class OrchestratorService:
         self,
         diff_content: str,
         worktree_path: str,
-        worktree_name: str | None = None,
         profile: str | None = None,
     ) -> str:
         """Start a review-fix workflow.
@@ -523,7 +675,6 @@ class OrchestratorService:
         Args:
             diff_content: The git diff to review.
             worktree_path: Path for conflict detection (typically cwd).
-            worktree_name: Optional human-readable name.
             profile: Optional profile name.
 
         Returns:
@@ -533,16 +684,21 @@ class OrchestratorService:
             WorkflowConflictError: If worktree already has active workflow.
             ConcurrencyLimitError: If at max concurrent workflows.
         """
-        # Validate worktree exists (for conflict detection, not git ops)
-        worktree = Path(worktree_path)
+        # Validate and resolve worktree path securely
+        # Note: review workflow doesn't require .git, so we do minimal validation
+        try:
+            worktree = Path(worktree_path).expanduser().resolve()
+        except (OSError, RuntimeError, ValueError) as e:
+            raise InvalidWorktreeError(worktree_path, f"invalid path: {e}") from e
         if not worktree.exists() or not worktree.is_dir():
-            raise InvalidWorktreeError(worktree_path, "directory does not exist")
+            raise InvalidWorktreeError(str(worktree), "directory does not exist")
+        resolved_path = str(worktree)
 
         async with self._start_lock:
             # Same conflict and concurrency checks as start_workflow
-            if worktree_path in self._active_tasks:
-                existing_id, _ = self._active_tasks[worktree_path]
-                raise WorkflowConflictError(worktree_path, existing_id)
+            if resolved_path in self._active_tasks:
+                existing_id, _ = self._active_tasks[resolved_path]
+                raise WorkflowConflictError(resolved_path, existing_id)
 
             if len(self._active_tasks) >= self._max_concurrent:
                 raise ConcurrencyLimitError(self._max_concurrent, len(self._active_tasks))
@@ -551,14 +707,14 @@ class OrchestratorService:
 
             # Load settings from worktree (required - no fallback)
             try:
-                settings = self._load_settings_for_worktree(worktree_path)
+                settings = self._load_settings_for_worktree(resolved_path)
             except ValidationError as e:
                 raise ValueError(
-                    f"Invalid settings.amelia.yaml in {worktree_path}: {e}"
+                    f"Invalid settings.amelia.yaml in {resolved_path}: {e}"
                 ) from e
             if settings is None:
                 raise ValueError(
-                    f"No settings.amelia.yaml found in {worktree_path}. "
+                    f"No settings.amelia.yaml found in {resolved_path}. "
                     "Each worktree must have its own settings file."
                 )
 
@@ -567,8 +723,8 @@ class OrchestratorService:
             if profile_name not in settings.profiles:
                 raise ValueError(f"Profile '{profile_name}' not found in settings")
             loaded_profile = settings.profiles[profile_name]
-            # ALWAYS set working_dir to worktree_path for agent execution
-            loaded_profile = loaded_profile.model_copy(update={"working_dir": worktree_path})
+            # ALWAYS set working_dir to resolved_path for agent execution
+            loaded_profile = loaded_profile.model_copy(update={"working_dir": resolved_path})
 
             # Create dummy issue for review context
             dummy_issue = Issue(
@@ -578,7 +734,7 @@ class OrchestratorService:
             )
 
             # Get current HEAD for tracking (even though diff is provided)
-            base_commit = await get_git_head(worktree_path)
+            base_commit = await get_git_head(resolved_path)
 
             # Initialize ExecutionState with diff content
             execution_state = ExecutionState(
@@ -593,8 +749,7 @@ class OrchestratorService:
             state = ServerExecutionState(
                 id=workflow_id,
                 issue_id="LOCAL-REVIEW",
-                worktree_path=worktree_path,
-                worktree_name=worktree_name or "local-review",
+                worktree_path=resolved_path,
                 workflow_type="review",
                 execution_state=execution_state,
                 workflow_status="pending",
@@ -605,7 +760,7 @@ class OrchestratorService:
 
             # Start with review graph instead of full graph
             task = asyncio.create_task(self._run_review_workflow(workflow_id, state))
-            self._active_tasks[worktree_path] = (workflow_id, task)
+            self._active_tasks[resolved_path] = (workflow_id, task)
 
         # Same cleanup callback as start_workflow
         def cleanup_task(_: asyncio.Task[None]) -> None:
@@ -614,14 +769,14 @@ class OrchestratorService:
             Args:
                 _: The completed asyncio Task (unused).
             """
-            self._active_tasks.pop(worktree_path, None)
+            self._active_tasks.pop(resolved_path, None)
             self._sequence_counters.pop(workflow_id, None)
             self._sequence_locks.pop(workflow_id, None)
             self._approval_events.pop(workflow_id, None)
             logger.debug(
                 "Workflow task completed",
                 workflow_id=workflow_id,
-                worktree_path=worktree_path,
+                worktree_path=resolved_path,
             )
 
         task.add_done_callback(cleanup_task)
@@ -690,6 +845,12 @@ class OrchestratorService:
                 task.cancel()
                 with contextlib.suppress(TimeoutError, asyncio.CancelledError):
                     await asyncio.wait_for(task, timeout=timeout)
+
+        # Cancel any active planning tasks
+        for _workflow_id, task in list(self._planning_tasks.items()):
+            task.cancel()
+            with contextlib.suppress(TimeoutError, asyncio.CancelledError):
+                await asyncio.wait_for(task, timeout=timeout)
 
         # Flush any buffered audit events during graceful shutdown
         await flush_exporters()
@@ -965,9 +1126,11 @@ class OrchestratorService:
                     retry_config.max_delay,
                 )
                 logger.warning(
-                    f"Transient error (attempt {attempt}/{retry_config.max_retries}), "
-                    f"retrying in {delay}s",
+                    "Transient error, retrying",
                     workflow_id=workflow_id,
+                    attempt=attempt,
+                    max_retries=retry_config.max_retries,
+                    delay=delay,
                     error=str(e),
                 )
                 await asyncio.sleep(delay)
@@ -1898,3 +2061,365 @@ class OrchestratorService:
         # TODO: Query for workflows with status=in_progress or blocked
         # and mark them as failed with appropriate reason
         logger.info("No interrupted workflows to recover")
+
+    def _create_architect_for_planning(
+        self,
+        profile: Profile,
+        prompts: dict[str, str] | None = None,
+    ) -> "Architect":
+        """Create an Architect instance for plan generation.
+
+        Args:
+            profile: Profile with driver configuration.
+            prompts: Optional custom prompts for the architect.
+
+        Returns:
+            Configured Architect instance.
+        """
+        from amelia.agents.architect import Architect  # noqa: PLC0415
+        from amelia.drivers.factory import get_driver  # noqa: PLC0415
+
+        driver = get_driver(profile.driver, model=profile.model)
+        return Architect(driver=driver, event_bus=self._event_bus, prompts=prompts)
+
+    async def _run_planning_task(
+        self,
+        workflow_id: str,
+        state: ServerExecutionState,
+        execution_state: ExecutionState,
+        profile: Profile,
+    ) -> None:
+        """Background task to run Architect and generate plan.
+
+        Updates the workflow with the generated plan or marks it as failed
+        if planning fails.
+
+        Args:
+            workflow_id: The workflow ID being planned.
+            state: The server execution state to update.
+            execution_state: The execution state for the architect.
+            profile: The profile with driver configuration.
+        """
+        # Resolve prompts for architect
+        prompts = await self._resolve_prompts(workflow_id)
+
+        try:
+            architect = self._create_architect_for_planning(profile, prompts)
+
+            # Run architect and collect the final state
+            final_state: ExecutionState | None = None
+            async for updated_state, event in architect.plan(
+                state=execution_state,
+                profile=profile,
+                workflow_id=workflow_id,
+            ):
+                final_state = updated_state
+                # Emit events from architect as they come
+                if event:
+                    self._event_bus.emit(event)
+
+            if final_state is not None:
+                # Re-fetch the latest state to avoid clobbering concurrent updates
+                # (e.g., if start_pending_workflow set started_at)
+                fresh = await self._repository.get(workflow_id)
+                if fresh is None:
+                    logger.warning(
+                        "Workflow deleted during planning",
+                        workflow_id=workflow_id,
+                    )
+                    return
+
+                # Only update if workflow is still pending - avoid overwriting
+                # status/started_at if the workflow was started concurrently
+                if fresh.workflow_status != "pending":
+                    logger.info(
+                        "Planning finished but workflow is no longer pending; skipping plan write",
+                        workflow_id=workflow_id,
+                        workflow_status=fresh.workflow_status,
+                    )
+                    return
+
+                # Update state with plan on the fresh snapshot
+                fresh.execution_state = final_state
+                fresh.planned_at = datetime.now(UTC)
+                await self._repository.update(fresh)
+
+                await self._emit(
+                    workflow_id,
+                    EventType.STAGE_COMPLETED,
+                    "Plan generated, workflow queued for execution",
+                    agent="architect",
+                    data={
+                        "plan_ready": True,
+                        "goal": final_state.goal,
+                    },
+                )
+
+                logger.info(
+                    "Workflow queued with plan",
+                    workflow_id=workflow_id,
+                    issue_id=fresh.issue_id,
+                    goal=final_state.goal[:100] if final_state.goal else None,
+                )
+            else:
+                # Architect didn't yield any state (shouldn't happen)
+                logger.warning(
+                    "Architect completed without yielding state",
+                    workflow_id=workflow_id,
+                )
+
+        except asyncio.CancelledError:
+            # Don't treat cancellation (e.g., during shutdown) as a failure
+            logger.info("Planning task cancelled", workflow_id=workflow_id)
+            raise
+        except Exception as e:
+            # Mark workflow as failed using fresh state
+            try:
+                fresh = await self._repository.get(workflow_id)
+                if fresh is not None and fresh.workflow_status == "pending":
+                    fresh.workflow_status = "failed"
+                    fresh.failure_reason = f"Planning failed: {e}"
+                    await self._repository.update(fresh)
+            except Exception as update_err:
+                logger.error(
+                    "Failed to mark workflow as failed",
+                    workflow_id=workflow_id,
+                    error=str(update_err),
+                )
+
+            await self._emit(
+                workflow_id,
+                EventType.WORKFLOW_FAILED,
+                f"Planning failed: {e}",
+                data={"error": str(e)},
+            )
+
+            logger.error(
+                "Planning task failed",
+                workflow_id=workflow_id,
+                error=str(e),
+            )
+
+    async def queue_and_plan_workflow(
+        self,
+        request: CreateWorkflowRequest,
+    ) -> str:
+        """Queue a workflow and run Architect to generate plan.
+
+        Creates workflow, runs Architect to generate plan, stores plan,
+        then leaves workflow in pending state for manual start.
+
+        Args:
+            request: Workflow creation request with start=False, plan_now=True.
+
+        Returns:
+            The workflow ID.
+
+        Raises:
+            InvalidWorktreeError: If worktree doesn't exist or isn't a git repo.
+            ValueError: If settings are invalid or profile not found.
+        """
+        # Validate and resolve worktree path securely
+        worktree = self._validate_worktree_path(request.worktree_path)
+        resolved_path = str(worktree)
+
+        # Prepare common workflow state (settings, profile, issue, execution_state)
+        resolved_path, profile, execution_state = await self._prepare_workflow_state(
+            worktree_path=resolved_path,
+            issue_id=request.issue_id,
+            profile_name=request.profile,
+            task_title=request.task_title,
+            task_description=request.task_description,
+        )
+
+        # Generate workflow ID
+        workflow_id = str(uuid4())
+
+        # Create ServerExecutionState in pending status (not started)
+        state = ServerExecutionState(
+            id=workflow_id,
+            issue_id=request.issue_id,
+            worktree_path=resolved_path,
+            execution_state=execution_state,
+            workflow_status="pending",
+            # Note: started_at is None - workflow hasn't started yet
+        )
+
+        # Save initial state
+        await self._repository.create(state)
+
+        # Emit workflow created event
+        await self._emit(
+            workflow_id,
+            EventType.WORKFLOW_CREATED,
+            f"Workflow queued for {request.issue_id}, planning...",
+            data={"issue_id": request.issue_id, "queued": True, "planning": True},
+        )
+
+        logger.info(
+            "Workflow queued, spawning planning task",
+            workflow_id=workflow_id,
+            issue_id=request.issue_id,
+            worktree_path=resolved_path,
+        )
+
+        # Spawn planning task in background (non-blocking)
+        task = asyncio.create_task(
+            self._run_planning_task(workflow_id, state, execution_state, profile)
+        )
+        self._planning_tasks[workflow_id] = task
+
+        # Cleanup on completion
+        def cleanup_planning(_: asyncio.Task[None]) -> None:
+            self._planning_tasks.pop(workflow_id, None)
+
+        task.add_done_callback(cleanup_planning)
+
+        return workflow_id
+
+    async def start_pending_workflow(self, workflow_id: str) -> None:
+        """Start a pending workflow.
+
+        Transitions a workflow from pending to in_progress state and
+        spawns an execution task. Enforces single workflow per worktree
+        and global concurrency limits.
+
+        Args:
+            workflow_id: The workflow ID to start.
+
+        Raises:
+            WorkflowNotFoundError: If workflow doesn't exist.
+            InvalidStateError: If workflow is not in pending state.
+            WorkflowConflictError: If worktree already has an active workflow.
+            ConcurrencyLimitError: If at max concurrent workflows.
+        """
+        async with self._start_lock:
+            # Get workflow from repository
+            workflow = await self._repository.get(workflow_id)
+            if not workflow:
+                raise WorkflowNotFoundError(workflow_id)
+
+            # Validate workflow is in pending state
+            if workflow.workflow_status != "pending":
+                raise InvalidStateError(
+                    f"Cannot start workflow in '{workflow.workflow_status}' state",
+                    workflow_id=workflow_id,
+                    current_status=workflow.workflow_status,
+                )
+
+            # Check for worktree conflict - another active workflow on same worktree
+            active_on_worktree = await self._repository.get_by_worktree(
+                workflow.worktree_path
+            )
+            if active_on_worktree and active_on_worktree.id != workflow_id:
+                raise WorkflowConflictError(
+                    workflow.worktree_path, active_on_worktree.id
+                )
+
+            # Also check in-memory tasks for worktree conflict
+            if workflow.worktree_path in self._active_tasks:
+                existing_id, _ = self._active_tasks[workflow.worktree_path]
+                raise WorkflowConflictError(workflow.worktree_path, existing_id)
+
+            # Check concurrency limit
+            current_count = len(self._active_tasks)
+            if current_count >= self._max_concurrent:
+                raise ConcurrencyLimitError(self._max_concurrent, current_count)
+
+            # Set started_at timestamp (status transition happens in _run_workflow)
+            # NOTE: We don't set workflow_status here - _run_workflow handles
+            # the pending -> in_progress transition, consistent with start_workflow
+            workflow.started_at = datetime.now(UTC)
+            await self._repository.update(workflow)
+
+            logger.info(
+                "Starting pending workflow",
+                workflow_id=workflow_id,
+                issue_id=workflow.issue_id,
+                worktree_path=workflow.worktree_path,
+            )
+
+            # Spawn execution task
+            task = asyncio.create_task(
+                self._run_workflow_with_retry(workflow_id, workflow)
+            )
+            self._active_tasks[workflow.worktree_path] = (workflow_id, task)
+
+        # Remove from active tasks on completion (same pattern as start_workflow)
+        def cleanup_task(_: asyncio.Task[None]) -> None:
+            """Clean up resources when workflow task completes.
+
+            Args:
+                _: The completed asyncio Task (unused).
+            """
+            self._active_tasks.pop(workflow.worktree_path, None)
+            self._sequence_counters.pop(workflow_id, None)
+            self._sequence_locks.pop(workflow_id, None)
+            self._approval_events.pop(workflow_id, None)
+            logger.debug(
+                "Workflow task completed",
+                workflow_id=workflow_id,
+                worktree_path=workflow.worktree_path,
+            )
+
+        task.add_done_callback(cleanup_task)
+
+    async def start_batch_workflows(
+        self,
+        request: BatchStartRequest,
+    ) -> BatchStartResponse:
+        """Start multiple pending workflows.
+
+        Args:
+            request: Batch start request with optional filters:
+                - workflow_ids: Specific IDs to start (None = all pending)
+                - worktree_path: Filter by worktree path
+
+        Returns:
+            BatchStartResponse with:
+                - started: List of workflow IDs successfully started
+                - errors: Map of workflow_id to error message for failures
+        """
+        started: list[str] = []
+        errors: dict[str, str] = {}
+
+        # Determine which workflows to start
+        if request.workflow_ids:
+            # Start specific workflow IDs
+            workflow_ids = request.workflow_ids
+        else:
+            # Get all pending workflows
+            pending_workflows = await self._repository.find_by_status(["pending"])
+
+            # Filter by worktree_path if specified
+            if request.worktree_path:
+                pending_workflows = [
+                    w for w in pending_workflows
+                    if w.worktree_path == request.worktree_path
+                ]
+
+            workflow_ids = [w.id for w in pending_workflows]
+
+        # Attempt to start each workflow
+        for workflow_id in workflow_ids:
+            try:
+                await self.start_pending_workflow(workflow_id)
+                started.append(workflow_id)
+            except asyncio.CancelledError:
+                # Don't swallow cancellation (e.g., during shutdown)
+                raise
+            except Exception as e:
+                errors[workflow_id] = str(e)
+                logger.warning(
+                    "Failed to start workflow in batch",
+                    workflow_id=workflow_id,
+                    error=str(e),
+                )
+
+        logger.info(
+            "Batch start completed",
+            started_count=len(started),
+            error_count=len(errors),
+        )
+
+        return BatchStartResponse(started=started, errors=errors)

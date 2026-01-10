@@ -64,7 +64,6 @@ class TestMissingExecutionState:
             id="wf-error-test",
             issue_id="TEST-ERR",
             worktree_path="/tmp/test-error",
-            worktree_name="test-error",
             started_at=datetime.now(UTC),
             execution_state=None,  # Missing - will cause error
         )
@@ -116,7 +115,6 @@ class TestLifecycleEvents:
             id="wf-lifecycle-test",
             issue_id="TEST-123",
             worktree_path="/tmp/test-lifecycle",
-            worktree_name="test-lifecycle",
             started_at=datetime.now(UTC),
             execution_state=core_state,
         )
@@ -172,7 +170,6 @@ class TestGraphInterruptHandling:
             id="wf-interrupt-test",
             issue_id="TEST-456",
             worktree_path="/tmp/test-interrupt",
-            worktree_name="test-interrupt",
             started_at=datetime.now(UTC),
             execution_state=core_state,
         )

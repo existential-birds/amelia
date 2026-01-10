@@ -55,10 +55,12 @@ describe('QuickShotModal', () => {
       expect(screen.getByLabelText(/description/i)).toBeInTheDocument();
     });
 
-    it('renders Cancel and Start Workflow buttons', () => {
+    it('renders Cancel, Queue, Plan & Queue, and Start buttons', () => {
       render(<QuickShotModal {...defaultProps} />);
       expect(screen.getByRole('button', { name: /cancel/i })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /start workflow/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^queue$/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /plan.*queue/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^start$/i })).toBeInTheDocument();
     });
 
     it('does not render when closed', () => {
@@ -108,13 +110,14 @@ describe('QuickShotModal', () => {
       });
     });
 
-    it('disables submit button until required fields are valid', async () => {
+    it('disables submit buttons until required fields are valid', async () => {
       render(<QuickShotModal {...defaultProps} />);
-      const submitButton = screen.getByRole('button', { name: /start workflow/i });
-      expect(submitButton).toBeDisabled();
+      expect(screen.getByRole('button', { name: /^queue$/i })).toBeDisabled();
+      expect(screen.getByRole('button', { name: /plan.*queue/i })).toBeDisabled();
+      expect(screen.getByRole('button', { name: /^start$/i })).toBeDisabled();
     });
 
-    it('enables submit button when required fields are filled', async () => {
+    it('enables submit buttons when required fields are filled', async () => {
       const user = userEvent.setup();
       render(<QuickShotModal {...defaultProps} />);
 
@@ -123,14 +126,15 @@ describe('QuickShotModal', () => {
       await user.type(screen.getByLabelText(/task title/i), 'Test title');
 
       await waitFor(() => {
-        const submitButton = screen.getByRole('button', { name: /start workflow/i });
-        expect(submitButton).not.toBeDisabled();
+        expect(screen.getByRole('button', { name: /^queue$/i })).not.toBeDisabled();
+        expect(screen.getByRole('button', { name: /plan.*queue/i })).not.toBeDisabled();
+        expect(screen.getByRole('button', { name: /^start$/i })).not.toBeDisabled();
       });
     });
   });
 
   describe('submission', () => {
-    it('calls createWorkflow API on valid submit', async () => {
+    it('calls createWorkflow API with start=true on Start button click', async () => {
       const user = userEvent.setup();
       const mockCreateWorkflow = vi.mocked(api.createWorkflow);
       mockCreateWorkflow.mockResolvedValueOnce({
@@ -145,7 +149,7 @@ describe('QuickShotModal', () => {
       await user.type(screen.getByLabelText(/worktree path/i), '/Users/me/repo');
       await user.type(screen.getByLabelText(/task title/i), 'Test title');
 
-      await user.click(screen.getByRole('button', { name: /start workflow/i }));
+      await user.click(screen.getByRole('button', { name: /^start$/i }));
 
       await waitFor(() => {
         expect(mockCreateWorkflow).toHaveBeenCalledWith({
@@ -154,6 +158,8 @@ describe('QuickShotModal', () => {
           profile: undefined,
           task_title: 'Test title',
           task_description: undefined,
+          start: true,
+          plan_now: false,
         });
       });
     });
@@ -174,7 +180,7 @@ describe('QuickShotModal', () => {
       await user.type(screen.getByLabelText(/worktree path/i), '/Users/me/repo');
       await user.type(screen.getByLabelText(/task title/i), 'Test title');
 
-      await user.click(screen.getByRole('button', { name: /start workflow/i }));
+      await user.click(screen.getByRole('button', { name: /^start$/i }));
 
       await waitFor(() => {
         expect(toast.success).toHaveBeenCalled();
@@ -209,7 +215,7 @@ describe('QuickShotModal', () => {
       await user.type(screen.getByLabelText(/worktree path/i), '/Users/me/repo');
       await user.type(screen.getByLabelText(/task title/i), 'Test title');
 
-      await user.click(screen.getByRole('button', { name: /start workflow/i }));
+      await user.click(screen.getByRole('button', { name: /^start$/i }));
 
       await waitFor(() => {
         expect(toast.error).toHaveBeenCalledWith('Worktree in use');
@@ -232,7 +238,7 @@ describe('QuickShotModal', () => {
       await user.type(screen.getByLabelText(/worktree path/i), '/Users/me/repo');
       await user.type(screen.getByLabelText(/task title/i), 'Test title');
 
-      await user.click(screen.getByRole('button', { name: /start workflow/i }));
+      await user.click(screen.getByRole('button', { name: /^start$/i }));
 
       // Wait for the launching state to appear (after 400ms ripple animation)
       await waitFor(() => {

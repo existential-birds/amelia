@@ -74,7 +74,7 @@ export default function HistoryPage() {
                   {workflow.issue_id}
                 </span>
                 <span className="font-body text-sm text-foreground truncate">
-                  {workflow.worktree_name}
+                  {workflow.worktree_path}
                 </span>
               </div>
               <p className="text-xs text-muted-foreground mt-0.5">

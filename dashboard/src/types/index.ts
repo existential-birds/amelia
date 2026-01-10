@@ -41,11 +41,17 @@ export interface WorkflowSummary {
   /** The issue ID from the tracking system (e.g., JIRA-123, GitHub #45). */
   issue_id: string;
 
-  /** Name of the git worktree where this workflow is executing. */
-  worktree_name: string;
+  /** Absolute filesystem path to the git worktree. */
+  worktree_path: string;
+
+  /** Profile name used for this workflow, or null if not set. */
+  profile: string | null;
 
   /** Current execution state of the workflow. */
   status: WorkflowStatus;
+
+  /** ISO 8601 timestamp when the workflow was created/queued. */
+  created_at: string;
 
   /** ISO 8601 timestamp when the workflow started, or null if not yet started. */
   started_at: string | null;
@@ -155,6 +161,7 @@ export type EventLevel = 'info' | 'debug' | 'trace';
  */
 export type EventType =
   // Lifecycle
+  | 'workflow_created'
   | 'workflow_started'
   | 'workflow_completed'
   | 'workflow_failed'
@@ -431,6 +438,12 @@ export interface CreateWorkflowRequest {
 
   /** Detailed description of the task (defaults to title if empty). */
   task_description?: string;
+
+  /** Whether to start the workflow immediately. Default: true. */
+  start?: boolean;
+
+  /** If not starting, run Architect first to generate a plan. Default: false. */
+  plan_now?: boolean;
 }
 
 /**
@@ -455,6 +468,55 @@ export interface CreateWorkflowResponse {
 export interface RejectRequest {
   /** Human feedback explaining why the plan or changes were rejected. */
   feedback: string;
+}
+
+/**
+ * Response payload from starting a single pending workflow.
+ * Returned by POST /api/workflows/:id/start endpoint.
+ */
+export interface StartWorkflowResponse {
+  /** Unique identifier for the started workflow. */
+  workflow_id: string;
+
+  /** Status after starting (usually 'started' or 'in_progress'). */
+  status: string;
+}
+
+/**
+ * Request payload for batch starting queued workflows.
+ * Used by POST /api/workflows/start-batch endpoint.
+ *
+ * @example
+ * ```typescript
+ * // Start specific workflows
+ * const request: BatchStartRequest = {
+ *   workflow_ids: ['wf-1', 'wf-2'],
+ * };
+ *
+ * // Start all queued workflows for a worktree
+ * const request: BatchStartRequest = {
+ *   worktree_path: '/path/to/repo',
+ * };
+ * ```
+ */
+export interface BatchStartRequest {
+  /** Optional list of specific workflow IDs to start. */
+  workflow_ids?: string[];
+
+  /** Optional worktree path to filter workflows. */
+  worktree_path?: string;
+}
+
+/**
+ * Response payload from batch starting workflows.
+ * Returned by POST /api/workflows/start-batch endpoint.
+ */
+export interface BatchStartResponse {
+  /** List of workflow IDs that were successfully started. */
+  started: string[];
+
+  /** Map of workflow IDs to error messages for workflows that failed to start. */
+  errors: Record<string, string>;
 }
 
 // ============================================================================

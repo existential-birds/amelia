@@ -94,9 +94,9 @@ async def test_workflow_prompt_version_foreign_keys(db: Database) -> None:
     """Workflow prompt versions should enforce foreign keys."""
     # Create a workflow first
     await db.execute(
-        """INSERT INTO workflows (id, issue_id, worktree_path, worktree_name, state_json)
-           VALUES (?, ?, ?, ?, ?)""",
-        ("wf-123", "ISSUE-1", "/path", "main", "{}"),
+        """INSERT INTO workflows (id, issue_id, worktree_path, state_json)
+           VALUES (?, ?, ?, ?)""",
+        ("wf-123", "ISSUE-1", "/path", "{}"),
     )
     # Create prompt and version
     await db.execute(

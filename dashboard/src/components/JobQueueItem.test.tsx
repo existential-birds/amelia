@@ -8,7 +8,7 @@ describe('JobQueueItem', () => {
   const mockWorkflow = createMockWorkflowSummary({
     id: 'wf-001',
     issue_id: '#8',
-    worktree_name: 'feature-benchmark',
+    worktree_path: '/tmp/worktrees/feature-benchmark',
     status: 'in_progress',
     current_stage: 'Developer',
   });
@@ -16,7 +16,7 @@ describe('JobQueueItem', () => {
   it('renders issue ID and worktree name', () => {
     render(<JobQueueItem workflow={mockWorkflow} selected={false} onSelect={() => {}} />);
     expect(screen.getByText('#8')).toBeInTheDocument();
-    expect(screen.getByText('feature-benchmark')).toBeInTheDocument();
+    expect(screen.getByText('/tmp/worktrees/feature-benchmark')).toBeInTheDocument();
   });
 
   it('renders status indicator via StatusBadge', () => {

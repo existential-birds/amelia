@@ -30,7 +30,7 @@ describe('Workflow Loaders', () => {
       const mockWorkflowSummary = createMockWorkflowSummary({
         id: 'wf-1',
         issue_id: 'ISSUE-1',
-        worktree_name: 'main',
+        worktree_path: '/tmp/worktrees/main',
         status: 'in_progress',
         started_at: '2025-12-01T10:00:00Z',
         current_stage: 'architect',
@@ -38,11 +38,10 @@ describe('Workflow Loaders', () => {
       const mockWorkflowDetail = createMockWorkflowDetail({
         id: 'wf-1',
         issue_id: 'ISSUE-1',
-        worktree_name: 'main',
+        worktree_path: '/tmp/worktrees/main',
         status: 'in_progress',
         started_at: '2025-12-01T10:00:00Z',
         current_stage: 'architect',
-        worktree_path: '/path',
       });
 
       vi.mocked(api.getWorkflows).mockResolvedValueOnce([mockWorkflowSummary]);
@@ -78,7 +77,7 @@ describe('Workflow Loaders', () => {
       const mockWorkflowSummary = createMockWorkflowSummary({
         id: 'wf-1',
         issue_id: 'ISSUE-1',
-        worktree_name: 'main',
+        worktree_path: '/tmp/worktrees/main',
         status: 'in_progress',
         started_at: '2025-12-01T10:00:00Z',
         current_stage: 'architect',
@@ -177,7 +176,7 @@ describe('Workflow Loaders', () => {
       const mockWorkflowHistory = createMockWorkflowSummary({
         id: 'wf-old',
         issue_id: 'ISSUE-OLD',
-        worktree_name: 'old-branch',
+        worktree_path: '/tmp/worktrees/old-branch',
         status: 'completed',
         started_at: '2025-11-01T10:00:00Z',
         current_stage: null,

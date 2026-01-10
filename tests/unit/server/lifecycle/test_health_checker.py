@@ -68,7 +68,6 @@ async def test_check_deleted_worktree(
         id="wf-1",
         issue_id="ISSUE-123",
         worktree_path="/nonexistent/path",
-        worktree_name="deleted",
         workflow_status="in_progress",
         started_at=datetime.now(UTC),
     )

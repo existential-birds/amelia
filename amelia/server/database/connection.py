@@ -263,8 +263,8 @@ class Database:
                 id TEXT PRIMARY KEY,
                 issue_id TEXT NOT NULL,
                 worktree_path TEXT NOT NULL,
-                worktree_name TEXT NOT NULL,
                 status TEXT NOT NULL DEFAULT 'pending',
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 started_at TIMESTAMP,
                 completed_at TIMESTAMP,
                 failure_reason TEXT,
@@ -355,10 +355,17 @@ class Database:
             "CREATE INDEX IF NOT EXISTS idx_workflows_started_at ON workflows(started_at DESC)"
         )
         # Unique constraint: one active workflow per worktree
+        # Note: 'pending' is intentionally excluded - multiple pending workflows
+        # are allowed per worktree (per queue workflows design doc). Only
+        # in_progress and blocked workflows must be unique per worktree.
+        #
+        # Drop and recreate to ensure predicate is correct on upgraded DBs.
+        # Older versions may have had 'pending' in the predicate.
+        await self.execute("DROP INDEX IF EXISTS idx_workflows_active_worktree")
         await self.execute("""
-            CREATE UNIQUE INDEX IF NOT EXISTS idx_workflows_active_worktree
+            CREATE UNIQUE INDEX idx_workflows_active_worktree
                 ON workflows(worktree_path)
-                WHERE status IN ('pending', 'in_progress', 'blocked')
+                WHERE status IN ('in_progress', 'blocked')
         """)
         await self.execute("""
             CREATE UNIQUE INDEX IF NOT EXISTS idx_events_workflow_sequence

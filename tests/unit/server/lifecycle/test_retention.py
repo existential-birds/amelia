@@ -417,7 +417,6 @@ class TestTraceRetention:
                     id TEXT PRIMARY KEY,
                     issue_id TEXT NOT NULL,
                     worktree_path TEXT,
-                    worktree_name TEXT,
                     workflow_status TEXT NOT NULL DEFAULT 'pending',
                     status TEXT NOT NULL DEFAULT 'pending',
                     started_at TIMESTAMP,

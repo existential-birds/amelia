@@ -29,7 +29,8 @@ class WorkflowSummary(BaseModel):
     Attributes:
         id: Unique workflow identifier
         issue_id: Issue identifier
-        worktree_name: Name of the worktree
+        worktree_path: Absolute path to worktree
+        profile: Profile name used for this workflow (optional)
         status: Current workflow status
         started_at: When the workflow was started (optional)
         current_stage: Current agent stage (optional)
@@ -40,8 +41,16 @@ class WorkflowSummary(BaseModel):
 
     id: Annotated[str, Field(description="Unique workflow identifier")]
     issue_id: Annotated[str, Field(description="Issue identifier")]
-    worktree_name: Annotated[str, Field(description="Name of the worktree")]
+    worktree_path: Annotated[str, Field(description="Absolute path to worktree")]
+    profile: Annotated[
+        str | None,
+        Field(default=None, description="Profile name used for this workflow"),
+    ] = None
     status: Annotated[WorkflowStatus, Field(description="Current workflow status")]
+    created_at: Annotated[
+        datetime,
+        Field(description="When the workflow was created/queued"),
+    ]
     started_at: Annotated[
         datetime | None,
         Field(default=None, description="When the workflow was started"),
@@ -99,8 +108,8 @@ class WorkflowDetailResponse(BaseModel):
         id: Unique workflow identifier
         issue_id: Issue identifier
         worktree_path: Absolute path to worktree
-        worktree_name: Name of the worktree
         status: Current workflow status
+        created_at: When the workflow was created/queued
         started_at: When the workflow was started (optional)
         completed_at: When the workflow ended (optional)
         failure_reason: Error message when failed (optional)
@@ -117,8 +126,11 @@ class WorkflowDetailResponse(BaseModel):
     id: Annotated[str, Field(description="Unique workflow identifier")]
     issue_id: Annotated[str, Field(description="Issue identifier")]
     worktree_path: Annotated[str, Field(description="Absolute path to worktree")]
-    worktree_name: Annotated[str, Field(description="Name of the worktree")]
     status: Annotated[WorkflowStatus, Field(description="Current workflow status")]
+    created_at: Annotated[
+        datetime,
+        Field(description="When the workflow was created/queued"),
+    ]
     started_at: Annotated[
         datetime | None,
         Field(default=None, description="When the workflow was started"),
@@ -193,3 +205,21 @@ class ErrorResponse(BaseModel):
         dict[str, Any] | None,
         Field(default=None, description="Optional additional error details"),
     ] = None
+
+
+class BatchStartResponse(BaseModel):
+    """Response from batch start operation.
+
+    Attributes:
+        started: Workflow IDs that were successfully started.
+        errors: Map of workflow_id to error message for failures.
+    """
+
+    started: Annotated[
+        list[str],
+        Field(description="Workflow IDs that were successfully started"),
+    ]
+    errors: Annotated[
+        dict[str, str],
+        Field(description="Map of workflow_id to error message for failures"),
+    ]

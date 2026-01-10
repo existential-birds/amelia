@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import type { EventLevel, WorkflowEvent } from '../index';
+import type {
+  EventLevel,
+  WorkflowEvent,
+  CreateWorkflowRequest,
+  BatchStartRequest,
+  BatchStartResponse,
+} from '../index';
 
 describe('WorkflowEvent types', () => {
   it('supports level field', () => {
@@ -42,5 +48,62 @@ describe('WorkflowEvent types', () => {
 
     expect(event.trace_id).toBe('trace-abc-123');
     expect(event.parent_id).toBe('evt-parent');
+  });
+});
+
+describe('CreateWorkflowRequest', () => {
+  it('should allow start and plan_now fields', () => {
+    const request: CreateWorkflowRequest = {
+      issue_id: 'ISSUE-123',
+      worktree_path: '/path/to/repo',
+      task_title: 'Test task',
+      start: false,
+      plan_now: true,
+    };
+    expect(request.start).toBe(false);
+    expect(request.plan_now).toBe(true);
+  });
+
+  it('should have optional start defaulting to true semantically', () => {
+    const request: CreateWorkflowRequest = {
+      issue_id: 'ISSUE-123',
+      worktree_path: '/path/to/repo',
+      task_title: 'Test task',
+    };
+    // Fields are optional in TypeScript
+    expect(request.start).toBeUndefined();
+  });
+});
+
+describe('BatchStartRequest', () => {
+  it('should allow empty request', () => {
+    const request: BatchStartRequest = {};
+    expect(request.workflow_ids).toBeUndefined();
+    expect(request.worktree_path).toBeUndefined();
+  });
+
+  it('should allow workflow_ids list', () => {
+    const request: BatchStartRequest = {
+      workflow_ids: ['wf-1', 'wf-2'],
+    };
+    expect(request.workflow_ids).toHaveLength(2);
+  });
+
+  it('should allow worktree_path filter', () => {
+    const request: BatchStartRequest = {
+      worktree_path: '/path/to/repo',
+    };
+    expect(request.worktree_path).toBe('/path/to/repo');
+  });
+});
+
+describe('BatchStartResponse', () => {
+  it('should have started and errors fields', () => {
+    const response: BatchStartResponse = {
+      started: ['wf-1', 'wf-2'],
+      errors: { 'wf-3': 'Worktree conflict' },
+    };
+    expect(response.started).toHaveLength(2);
+    expect(response.errors['wf-3']).toBe('Worktree conflict');
   });
 });

@@ -27,7 +27,6 @@ class TestTokenUsageRepository:
             id="wf-tokens",
             issue_id="ISSUE-TOKEN",
             worktree_path="/tmp/test-tokens",
-            worktree_name="test-tokens",
             workflow_status="in_progress",
             started_at=datetime.now(UTC),
         )
@@ -220,7 +219,6 @@ class TestTokenUsageRepository:
             id="wf-other",
             issue_id="ISSUE-OTHER",
             worktree_path="/tmp/test-other",
-            worktree_name="test-other",
             workflow_status="in_progress",
             started_at=datetime.now(UTC),
         )
@@ -427,7 +425,6 @@ class TestTokenUsageRepository:
                 id=f"wf-batch-{i}",
                 issue_id=f"ISSUE-{i}",
                 worktree_path=f"/tmp/test-batch-{i}",
-                worktree_name=f"test-batch-{i}",
                 workflow_status="in_progress",
                 started_at=datetime.now(UTC),
             )

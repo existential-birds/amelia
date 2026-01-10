@@ -95,7 +95,7 @@ export default function WorkflowDetailPage() {
           <PageHeader.Label>WORKFLOW</PageHeader.Label>
           <div className="flex items-center gap-3">
             <PageHeader.Title>{workflow.issue_id}</PageHeader.Title>
-            <PageHeader.Subtitle>{workflow.worktree_name}</PageHeader.Subtitle>
+            <PageHeader.Subtitle>{workflow.worktree_path}</PageHeader.Subtitle>
           </div>
         </PageHeader.Left>
 

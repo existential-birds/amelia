@@ -76,7 +76,6 @@ def make_workflow(
         id=workflow_id,
         issue_id=issue_id,
         worktree_path=worktree_path or f"/tmp/{workflow_id}",
-        worktree_name=workflow_id,
         workflow_status=status,
         started_at=datetime.now(UTC),
         execution_state=ExecutionState(profile_id="test"),

@@ -53,7 +53,6 @@ class TestCreateReviewWorkflow:
             response = await client.create_review_workflow(
                 diff_content="+ new line",
                 worktree_path=str(worktree),
-                worktree_name="test",
                 profile="default",
             )
 

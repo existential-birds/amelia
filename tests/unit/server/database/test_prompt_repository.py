@@ -133,8 +133,8 @@ class TestWorkflowLinking:
         """Should record which version a workflow used."""
         # Create workflow
         await db.execute(
-            "INSERT INTO workflows (id, issue_id, worktree_path, worktree_name, state_json) VALUES (?, ?, ?, ?, ?)",
-            ("wf-1", "ISSUE-1", "/path", "main", "{}"),
+            "INSERT INTO workflows (id, issue_id, worktree_path, state_json) VALUES (?, ?, ?, ?)",
+            ("wf-1", "ISSUE-1", "/path", "{}"),
         )
         # Create prompt and version
         await repo.create_prompt(Prompt(id="test.prompt", agent="test", name="Test"))

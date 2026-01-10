@@ -21,8 +21,7 @@ vi.mock('@/utils/workflow', () => ({
 const mockWorkflow = createMockWorkflowDetail({
   id: 'wf-001',
   issue_id: 'PROJ-123',
-  worktree_name: 'proj-123-feature',
-  worktree_path: '/tmp/worktrees/proj-123',
+  worktree_path: '/tmp/worktrees/proj-123-feature',
   status: 'in_progress',
   started_at: '2025-12-07T09:00:00Z',
   current_stage: 'developer',
@@ -108,7 +107,7 @@ describe('WorkflowDetailPage event merging', () => {
     const workflowWithEvents = createMockWorkflowDetail({
       id: 'wf-1',
       issue_id: 'MERGE-TEST',
-      worktree_name: 'merge-test',
+      worktree_path: '/tmp/worktrees/merge-test',
       status: 'in_progress',
       current_stage: 'developer',
       recent_events: loaderEvents,
@@ -155,7 +154,7 @@ describe('WorkflowDetailPage event merging', () => {
     const workflowWithDuplicateEvent = createMockWorkflowDetail({
       id: 'wf-dup',
       issue_id: 'DUP-TEST',
-      worktree_name: 'dup-test',
+      worktree_path: '/tmp/worktrees/dup-test',
       status: 'in_progress',
       current_stage: 'architect',
       recent_events: [duplicateEvent],
@@ -223,7 +222,7 @@ describe('WorkflowDetailPage event merging', () => {
     const workflowForSort = createMockWorkflowDetail({
       id: 'wf-sort',
       issue_id: 'SORT-TEST',
-      worktree_name: 'sort-test',
+      worktree_path: '/tmp/worktrees/sort-test',
       status: 'in_progress',
       current_stage: 'developer',
       recent_events: loaderEvents,
