@@ -5,8 +5,10 @@
  * Sidebar primitives with React Router for active state management.
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
+import { api } from '@/api/client';
+import { logger } from '@/lib/logger';
 import {
   Sidebar,
   SidebarContent,
@@ -140,6 +142,26 @@ export function DashboardSidebar() {
   const isCollapsed = state === 'collapsed';
   const { isDemo } = useDemoMode();
   const [quickShotOpen, setQuickShotOpen] = useState(false);
+  const [quickShotDefaults, setQuickShotDefaults] = useState<{
+    worktree_path?: string;
+    profile?: string;
+  }>({});
+
+  // Fetch defaults for Quick Shot on mount
+  useEffect(() => {
+    api
+      .getWorkflowDefaults()
+      .then((defaults) => {
+        setQuickShotDefaults({
+          worktree_path: defaults.worktree_path ?? undefined,
+          profile: defaults.profile ?? undefined,
+        });
+      })
+      .catch((error) => {
+        // Silently ignore errors - defaults are optional
+        logger.warn('Failed to fetch workflow defaults', { error });
+      });
+  }, []);
 
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border">
@@ -376,7 +398,7 @@ export function DashboardSidebar() {
         </div>
       </SidebarFooter>
 
-      <QuickShotModal open={quickShotOpen} onOpenChange={setQuickShotOpen} />
+      <QuickShotModal open={quickShotOpen} onOpenChange={setQuickShotOpen} defaults={quickShotDefaults} />
     </Sidebar>
   );
 }

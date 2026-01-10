@@ -359,4 +359,83 @@ describe('API Client', () => {
       await expect(api.startBatch({})).rejects.toThrow('Internal server error');
     });
   });
+
+  describe('getWorkflowDefaults', () => {
+    it('should return worktree_path and profile from most recent workflow', async () => {
+      mockFetchSuccess({
+        workflows: [
+          {
+            id: 'wf-1',
+            issue_id: 'TASK-001',
+            worktree_path: '/Users/test/project',
+            worktree_name: 'project',
+            profile: 'dev-profile',
+            status: 'completed',
+            started_at: '2025-01-01T10:00:00Z',
+            current_stage: null,
+            total_cost_usd: null,
+            total_tokens: null,
+            total_duration_ms: null,
+          },
+        ],
+        total: 1,
+        has_more: false,
+      });
+
+      const result = await api.getWorkflowDefaults();
+
+      expect(result).toEqual({
+        worktree_path: '/Users/test/project',
+        profile: 'dev-profile',
+      });
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/workflows?limit=1',
+        expect.anything()
+      );
+    });
+
+    it('should return null values when no workflows exist', async () => {
+      mockFetchSuccess({
+        workflows: [],
+        total: 0,
+        has_more: false,
+      });
+
+      const result = await api.getWorkflowDefaults();
+
+      expect(result).toEqual({
+        worktree_path: null,
+        profile: null,
+      });
+    });
+
+    it('should return null profile when workflow has no profile', async () => {
+      mockFetchSuccess({
+        workflows: [
+          {
+            id: 'wf-1',
+            issue_id: 'TASK-001',
+            worktree_path: '/Users/test/project',
+            worktree_name: 'project',
+            profile: null,
+            status: 'completed',
+            started_at: '2025-01-01T10:00:00Z',
+            current_stage: null,
+            total_cost_usd: null,
+            total_tokens: null,
+            total_duration_ms: null,
+          },
+        ],
+        total: 1,
+        has_more: false,
+      });
+
+      const result = await api.getWorkflowDefaults();
+
+      expect(result).toEqual({
+        worktree_path: '/Users/test/project',
+        profile: null,
+      });
+    });
+  });
 });

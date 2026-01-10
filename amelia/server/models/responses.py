@@ -29,7 +29,9 @@ class WorkflowSummary(BaseModel):
     Attributes:
         id: Unique workflow identifier
         issue_id: Issue identifier
+        worktree_path: Absolute path to worktree
         worktree_name: Name of the worktree
+        profile: Profile name used for this workflow (optional)
         status: Current workflow status
         started_at: When the workflow was started (optional)
         current_stage: Current agent stage (optional)
@@ -40,7 +42,12 @@ class WorkflowSummary(BaseModel):
 
     id: Annotated[str, Field(description="Unique workflow identifier")]
     issue_id: Annotated[str, Field(description="Issue identifier")]
+    worktree_path: Annotated[str, Field(description="Absolute path to worktree")]
     worktree_name: Annotated[str, Field(description="Name of the worktree")]
+    profile: Annotated[
+        str | None,
+        Field(default=None, description="Profile name used for this workflow"),
+    ] = None
     status: Annotated[WorkflowStatus, Field(description="Current workflow status")]
     started_at: Annotated[
         datetime | None,

@@ -195,11 +195,15 @@ async def list_workflows(
     workflow_summaries = []
     for w in workflows:
         token_summary = token_summaries.get(w.id)
+        # Extract profile from execution state if available
+        profile = w.execution_state.profile_id if w.execution_state else None
         workflow_summaries.append(
             WorkflowSummary(
                 id=w.id,
                 issue_id=w.issue_id,
+                worktree_path=w.worktree_path,
                 worktree_name=w.worktree_name,
+                profile=profile,
                 status=w.workflow_status,
                 started_at=w.started_at,
                 current_stage=w.current_stage,
@@ -250,11 +254,15 @@ async def list_active_workflows(
     workflow_summaries = []
     for w in workflows:
         token_summary = token_summaries.get(w.id)
+        # Extract profile from execution state if available
+        profile = w.execution_state.profile_id if w.execution_state else None
         workflow_summaries.append(
             WorkflowSummary(
                 id=w.id,
                 issue_id=w.issue_id,
+                worktree_path=w.worktree_path,
                 worktree_name=w.worktree_name,
+                profile=profile,
                 status=w.workflow_status,
                 started_at=w.started_at,
                 current_stage=w.current_stage,

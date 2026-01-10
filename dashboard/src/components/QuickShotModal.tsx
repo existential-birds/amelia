@@ -5,7 +5,7 @@
  * quickly launch workflows directly from the dashboard UI.
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -54,6 +54,16 @@ const quickShotSchema = z.object({
 type QuickShotFormData = z.infer<typeof quickShotSchema>;
 
 /**
+ * Default values for pre-populating the Quick Shot form.
+ */
+interface QuickShotDefaults {
+  /** Default worktree path from most recent workflow. */
+  worktree_path?: string;
+  /** Default profile from most recent workflow. */
+  profile?: string;
+}
+
+/**
  * Props for the QuickShotModal component.
  */
 interface QuickShotModalProps {
@@ -61,6 +71,8 @@ interface QuickShotModalProps {
   open: boolean;
   /** Callback when the modal open state changes. */
   onOpenChange: (open: boolean) => void;
+  /** Optional defaults to pre-populate the form. */
+  defaults?: QuickShotDefaults;
 }
 
 /**
@@ -121,7 +133,7 @@ const fields: FieldConfig[] = [
  * @param props.open - Whether the modal is open
  * @param props.onOpenChange - Callback when open state changes
  */
-export function QuickShotModal({ open, onOpenChange }: QuickShotModalProps) {
+export function QuickShotModal({ open, onOpenChange, defaults }: QuickShotModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLaunching, setIsLaunching] = useState(false);
 
@@ -135,12 +147,26 @@ export function QuickShotModal({ open, onOpenChange }: QuickShotModalProps) {
     mode: 'all',
     defaultValues: {
       issue_id: '',
-      worktree_path: '',
-      profile: '',
+      worktree_path: defaults?.worktree_path ?? '',
+      profile: defaults?.profile ?? '',
       task_title: '',
       task_description: '',
     },
   });
+
+  // Update form when defaults change (e.g., after initial fetch completes)
+  useEffect(() => {
+    if (defaults) {
+      reset(
+        (currentValues) => ({
+          ...currentValues,
+          worktree_path: currentValues.worktree_path || defaults.worktree_path || '',
+          profile: currentValues.profile || defaults.profile || '',
+        }),
+        { keepDirty: true }
+      );
+    }
+  }, [defaults, reset]);
 
   /**
    * Submits the workflow with the specified action type.

@@ -375,6 +375,40 @@ export const api = {
     return handleResponse<BatchStartResponse>(response);
   },
 
+  /**
+   * Retrieves the most recent workflow defaults for Quick Shot pre-population.
+   *
+   * Fetches the most recent workflow (by started_at) and returns its
+   * worktree_path and profile for use as form defaults.
+   *
+   * @returns Object with worktree_path and profile, or null values if no workflows exist.
+   * @throws {ApiError} When the API request fails.
+   *
+   * @example
+   * ```typescript
+   * const defaults = await api.getWorkflowDefaults();
+   * console.log(`Default path: ${defaults.worktree_path}`);
+   * ```
+   */
+  async getWorkflowDefaults(): Promise<{
+    worktree_path: string | null;
+    profile: string | null;
+  }> {
+    // Fetch most recent workflow (limit=1, sorted by started_at desc)
+    const response = await fetchWithTimeout(`${API_BASE_URL}/workflows?limit=1`);
+    const data = await handleResponse<WorkflowListResponse>(response);
+
+    if (data.workflows.length > 0) {
+      const mostRecent = data.workflows[0];
+      return {
+        worktree_path: mostRecent.worktree_path,
+        profile: mostRecent.profile,
+      };
+    }
+
+    return { worktree_path: null, profile: null };
+  },
+
   // ==========================================================================
   // Prompts API
   // ==========================================================================
