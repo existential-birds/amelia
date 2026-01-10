@@ -554,7 +554,7 @@ class OrchestratorService:
             request: Workflow creation request with start=False.
 
         Returns:
-            The workflow ID (prefixed with "wf-").
+            The workflow ID (UUID format).
 
         Raises:
             InvalidWorktreeError: If worktree doesn't exist or isn't a git repo.
@@ -586,8 +586,8 @@ class OrchestratorService:
         # ALWAYS set working_dir to resolved_path for agent execution
         profile = profile.model_copy(update={"working_dir": resolved_path})
 
-        # Generate workflow ID with wf- prefix
-        workflow_id = f"wf-{uuid4().hex[:12]}"
+        # Generate workflow ID
+        workflow_id = str(uuid4())
 
         # Fetch issue from tracker (or construct from task_title)
         if request.task_title is not None:

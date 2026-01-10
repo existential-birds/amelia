@@ -113,7 +113,9 @@ class TestQueueWorkflow:
 
         workflow_id = await orchestrator.queue_workflow(request)
 
-        assert workflow_id.startswith("wf-")
+        # Verify workflow_id is a valid UUID
+        from uuid import UUID
+        UUID(workflow_id)  # Raises ValueError if not valid UUID
         mock_repository.create.assert_called_once()
         saved_state: ServerExecutionState = mock_repository.create.call_args[0][0]
         assert saved_state.workflow_status == "pending"
