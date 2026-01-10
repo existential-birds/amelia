@@ -1736,18 +1736,18 @@ class OrchestratorService:
         # Node returns ReviewResult Pydantic model directly
         approved = last_review.approved
         severity = last_review.severity
-        comment_count = len(last_review.comments) if last_review.comments else 0
+        issue_count = len(last_review.comments) if last_review.comments else 0
 
         await self._emit(
             workflow_id,
             EventType.AGENT_MESSAGE,
             f"Review {'approved' if approved else 'requested changes'} "
-            f"({severity} severity, {comment_count} comments)",
+            f"({severity} severity, {issue_count} issues)",
             agent="reviewer",
             data={
                 "approved": approved,
                 "severity": severity,
-                "comment_count": comment_count,
+                "issue_count": issue_count,
             },
         )
 

@@ -70,10 +70,10 @@ def _format_review_completed(console: Console, event: dict[str, Any]) -> None:
     data = event.get("data", {}) or {}
     approved = data.get("approved", False)
     severity = data.get("severity", "unknown")
-    comment_count = data.get("comment_count", 0)
+    issue_count = data.get("issue_count", 0)
     status = "[green]approved[/green]" if approved else "[yellow]changes requested[/yellow]"
     console.print(
-        f"\n[bold]Review {status}[/bold] ({severity} severity, {comment_count} comments)"
+        f"\n[bold]Review {status}[/bold] ({severity} severity, {issue_count} issues)"
     )
 
 
