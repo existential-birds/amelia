@@ -164,3 +164,30 @@ export function formatElapsedTime(workflow: WorkflowDetail | null): string {
 
   return `${hours}h ${minutes.toString().padStart(2, '0')}m`;
 }
+
+/**
+ * Formats a relative time string for display (e.g., "5m ago", "2h ago").
+ *
+ * @param timestamp - ISO 8601 timestamp to format relative to now
+ * @returns Relative time string (e.g., "5m ago", "2h ago", "3d ago")
+ */
+export function formatRelativeTime(timestamp: string): string {
+  const now = Date.now();
+  const time = new Date(timestamp).getTime();
+  const diffMs = now - time;
+
+  const diffMinutes = Math.floor(diffMs / (1000 * 60));
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffMinutes < 1) {
+    return 'just now';
+  }
+  if (diffMinutes < 60) {
+    return `${diffMinutes}m ago`;
+  }
+  if (diffHours < 24) {
+    return `${diffHours}h ago`;
+  }
+  return `${diffDays}d ago`;
+}
