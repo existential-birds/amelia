@@ -361,7 +361,10 @@ class OrchestratorService:
         # Expand ~ and resolve to canonical form FIRST - this prevents path
         # traversal attacks by converting paths like "/safe/../unsafe" to their
         # real location
-        worktree = Path(worktree_path).expanduser().resolve()
+        try:
+            worktree = Path(worktree_path).expanduser().resolve()
+        except (OSError, RuntimeError, ValueError) as e:
+            raise InvalidWorktreeError(worktree_path, f"invalid path: {e}") from e
 
         # Now validate the RESOLVED path
         if not worktree.exists():
@@ -670,7 +673,10 @@ class OrchestratorService:
         """
         # Validate and resolve worktree path securely
         # Note: review workflow doesn't require .git, so we do minimal validation
-        worktree = Path(worktree_path).expanduser().resolve()
+        try:
+            worktree = Path(worktree_path).expanduser().resolve()
+        except (OSError, RuntimeError, ValueError) as e:
+            raise InvalidWorktreeError(worktree_path, f"invalid path: {e}") from e
         if not worktree.exists() or not worktree.is_dir():
             raise InvalidWorktreeError(str(worktree), "directory does not exist")
         resolved_path = str(worktree)
