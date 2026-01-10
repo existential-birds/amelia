@@ -146,6 +146,12 @@ export default function WorkflowsPage() {
             workflowId={detail.id}
             createdAt={detail.started_at}
             hasPlan={!!detail.plan_markdown}
+            worktreeHasActiveWorkflow={workflows.some(
+              (w) =>
+                w.id !== detail.id &&
+                w.worktree_name === detail.worktree_name &&
+                w.status === 'in_progress'
+            )}
           />
         </div>
       )}

@@ -9,6 +9,7 @@ import { useRevalidator } from 'react-router-dom';
 import { Play, X, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Loader } from '@/components/ai-elements/loader';
 import { success, error as toastError } from '@/components/Toast';
 import { formatRelativeTime } from '@/utils/workflow';
@@ -20,12 +21,14 @@ import { cn } from '@/lib/utils';
  * @property workflowId - Unique identifier for the pending workflow
  * @property createdAt - Optional ISO timestamp when the workflow was queued
  * @property hasPlan - Whether the workflow has a plan ready
+ * @property worktreeHasActiveWorkflow - Whether another workflow is running on the same worktree
  * @property className - Optional additional CSS classes
  */
 interface PendingWorkflowControlsProps {
   workflowId: string;
   createdAt?: string | null;
   hasPlan?: boolean;
+  worktreeHasActiveWorkflow?: boolean;
   className?: string;
 }
 
@@ -54,12 +57,14 @@ export function PendingWorkflowControls({
   workflowId,
   createdAt,
   hasPlan = false,
+  worktreeHasActiveWorkflow = false,
   className,
 }: PendingWorkflowControlsProps) {
   const revalidator = useRevalidator();
   const [isStarting, setIsStarting] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
   const isPending = isStarting || isCancelling;
+  const isStartDisabled = isPending || worktreeHasActiveWorkflow;
 
   const handleStart = useCallback(async () => {
     setIsStarting(true);
@@ -122,19 +127,30 @@ export function PendingWorkflowControls({
       </p>
 
       <div className="flex gap-3">
-        <Button
-          type="button"
-          onClick={handleStart}
-          disabled={isPending}
-          className="bg-status-completed hover:bg-status-completed/90 focus-visible:ring-status-completed/50"
-        >
-          {isStarting ? (
-            <Loader className="w-4 h-4 mr-2" />
-          ) : (
-            <Play className="w-4 h-4 mr-2" />
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span>
+              <Button
+                type="button"
+                onClick={handleStart}
+                disabled={isStartDisabled}
+                className="bg-status-completed hover:bg-status-completed/90 focus-visible:ring-status-completed/50"
+              >
+                {isStarting ? (
+                  <Loader className="w-4 h-4 mr-2" />
+                ) : (
+                  <Play className="w-4 h-4 mr-2" />
+                )}
+                Start
+              </Button>
+            </span>
+          </TooltipTrigger>
+          {worktreeHasActiveWorkflow && (
+            <TooltipContent>
+              Another workflow is running on this worktree
+            </TooltipContent>
           )}
-          Start
-        </Button>
+        </Tooltip>
 
         <Button
           type="button"
