@@ -121,6 +121,11 @@ class CreateWorkflowRequest(BaseModel):
             description="Task description for noop tracker (requires task_title)",
         ),
     ] = None
+    start: bool = True
+    """Whether to start the workflow immediately. False = queue without starting."""
+
+    plan_now: bool = False
+    """If not starting, whether to run Architect immediately. Ignored if start=True."""
 
     @model_validator(mode="after")
     def validate_task_fields(self) -> "CreateWorkflowRequest":
@@ -251,5 +256,20 @@ class RejectRequest(BaseModel):
         str,
         Field(min_length=1, description="Rejection feedback explaining what needs to change"),
     ]
+
+
+class BatchStartRequest(BaseModel):
+    """Request to start multiple pending workflows.
+
+    Attributes:
+        workflow_ids: Specific workflow IDs to start, or None for all pending.
+        worktree_path: Filter by worktree path.
+    """
+
+    workflow_ids: list[str] | None = None
+    """Specific workflow IDs to start, or None for all pending."""
+
+    worktree_path: str | None = None
+    """Filter by worktree path."""
 
 
