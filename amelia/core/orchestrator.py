@@ -95,10 +95,10 @@ async def _save_token_usage(
     """Extract token usage from driver and save to repository.
 
     This is a best-effort operation - failures are logged but don't fail the workflow.
-    Gracefully handles drivers without last_result_message attribute (e.g., API drivers).
+    Uses the driver-agnostic get_usage() method when available.
 
     Args:
-        driver: The driver that was used for execution (may have last_result_message).
+        driver: The driver that was used for execution.
         workflow_id: Current workflow ID.
         agent: Agent name (architect, developer, reviewer).
         repository: Repository to save usage to (may be None in CLI mode).
@@ -106,28 +106,23 @@ async def _save_token_usage(
     if repository is None:
         return
 
-    # Check if driver has last_result_message (CLI driver feature)
-    result_message = getattr(driver, "last_result_message", None)
-    if result_message is None:
-        return
-
-    # Check if usage data is available
-    usage_data = getattr(result_message, "usage", None)
-    if usage_data is None:
+    # Get usage via the driver-agnostic get_usage() method
+    driver_usage = driver.get_usage() if hasattr(driver, "get_usage") else None
+    if driver_usage is None:
         return
 
     try:
         usage = TokenUsage(
             workflow_id=workflow_id,
             agent=agent,
-            model=usage_data.get("model") or getattr(driver, "model", "unknown"),
-            input_tokens=usage_data["input_tokens"],
-            output_tokens=usage_data["output_tokens"],
-            cache_read_tokens=usage_data.get("cache_read_input_tokens", 0),
-            cache_creation_tokens=usage_data.get("cache_creation_input_tokens", 0),
-            cost_usd=getattr(result_message, "total_cost_usd", None) or 0.0,
-            duration_ms=getattr(result_message, "duration_ms", 0) or 0,
-            num_turns=getattr(result_message, "num_turns", 1) or 1,
+            model=driver_usage.model or getattr(driver, "model", "unknown"),
+            input_tokens=driver_usage.input_tokens or 0,
+            output_tokens=driver_usage.output_tokens or 0,
+            cache_read_tokens=driver_usage.cache_read_tokens or 0,
+            cache_creation_tokens=driver_usage.cache_creation_tokens or 0,
+            cost_usd=driver_usage.cost_usd or 0.0,
+            duration_ms=driver_usage.duration_ms or 0,
+            num_turns=driver_usage.num_turns or 1,
             timestamp=datetime.now(UTC),
         )
         await repository.save_token_usage(usage)

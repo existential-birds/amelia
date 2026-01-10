@@ -11,6 +11,22 @@ if TYPE_CHECKING:
     from amelia.server.models.events import WorkflowEvent
 
 
+class DriverUsage(BaseModel):
+    """Token usage data returned by drivers.
+
+    All fields optional - drivers populate what they can.
+    """
+
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    cache_read_tokens: int | None = None
+    cache_creation_tokens: int | None = None
+    cost_usd: float | None = None
+    duration_ms: int | None = None
+    num_turns: int | None = None
+    model: str | None = None
+
+
 class AgenticMessageType(StrEnum):
     """Types of messages yielded during agentic execution."""
 
@@ -169,4 +185,8 @@ class DriverInterface(Protocol):
         Yields:
             AgenticMessage for each event during execution.
         """
+        ...
+
+    def get_usage(self) -> DriverUsage | None:
+        """Return accumulated usage from last execution, or None if unavailable."""
         ...

@@ -14,7 +14,7 @@ profiles:
   dev:
     name: dev
     driver: api:openrouter
-    model: "openrouter:minimax/minimax-m2"
+    model: "minimax/minimax-m2"
     tracker: github
     strategy: single
 ```
@@ -76,7 +76,7 @@ profiles:
   dev:
     name: dev
     driver: api:openrouter
-    model: "openrouter:minimax/minimax-m2"
+    model: "minimax/minimax-m2"
     tracker: github
     strategy: single
     plan_output_dir: "docs/plans"

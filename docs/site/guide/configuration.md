@@ -30,7 +30,7 @@ profiles:
   home:
     name: home
     driver: api:openrouter    # LLM via OpenRouter API
-    model: "openrouter:minimax/minimax-m2"  # Required for API drivers
+    model: "minimax/minimax-m2"  # Required for API drivers
     tracker: github           # Issues from GitHub
     strategy: single          # Single reviewer
     plan_output_dir: "docs/plans"
@@ -39,7 +39,7 @@ profiles:
   test:
     name: test
     driver: api:openrouter
-    model: "openrouter:minimax/minimax-m2"
+    model: "minimax/minimax-m2"
     tracker: noop             # No real tracker
     strategy: single
 ```
@@ -80,13 +80,13 @@ How Amelia communicates with LLMs.
 The LLM model identifier to use. Required when using `api:openrouter` or `api` drivers.
 
 ```yaml
-model: "openrouter:minimax/minimax-m2"
+model: "minimax/minimax-m2"
 ```
 
-Common models (with `openrouter:` prefix):
-- `openrouter:minimax/minimax-m2` - MiniMax M2
-- `openrouter:anthropic/claude-sonnet-4-20250514` - Claude Sonnet 4
-- `openrouter:openai/gpt-4o` - GPT-4o
+Common models:
+- `anthropic/claude-sonnet-4.5` - Claude Sonnet 4.5 (recommended)
+- `google/gemini-2.5-flash` - Gemini 2.5 Flash (cost-effective)
+- `openai/gpt-4o` - GPT-4o
 
 Not required for CLI drivers (they use the CLI's configured model).
 
@@ -265,7 +265,7 @@ profiles:
   dev:
     name: dev
     driver: api:openrouter
-    model: "openrouter:minimax/minimax-m2"
+    model: "minimax/minimax-m2"
 ```
 
 This uses: `tracker: none`, `strategy: single`, default retry settings.
@@ -302,14 +302,14 @@ profiles:
   home:
     name: home
     driver: api:openrouter
-    model: "openrouter:minimax/minimax-m2"
+    model: "minimax/minimax-m2"
     tracker: github
     strategy: single
 
   test:
     name: test
     driver: api:openrouter
-    model: "openrouter:minimax/minimax-m2"
+    model: "minimax/minimax-m2"
     tracker: noop
     strategy: single
 ```
@@ -338,7 +338,7 @@ API drivers (`api:openrouter`, `api`) require the `model` field:
 
 ```yaml
 driver: api:openrouter
-model: "openrouter:minimax/minimax-m2"
+model: "minimax/minimax-m2"
 ```
 
 ### "Missing OPENROUTER_API_KEY"

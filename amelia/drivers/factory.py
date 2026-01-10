@@ -21,7 +21,7 @@ def get_driver(driver_key: str, **kwargs: Any) -> DriverInterface:
     if driver_key in ("cli:claude", "cli"):
         return ClaudeCliDriver(**kwargs)
     elif driver_key in ("api:openrouter", "api"):
-        return ApiDriver(**kwargs)
+        return ApiDriver(provider="openrouter", **kwargs)
     else:
         raise ValueError(f"Unknown driver key: {driver_key}")
 

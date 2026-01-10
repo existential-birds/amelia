@@ -154,9 +154,9 @@ def mock_profile_factory(tmp_path_factory: TempPathFactory) -> Callable[..., Pro
         if preset == "cli_single":
             return Profile(name="test_cli", driver="cli:claude", model="sonnet", tracker="noop", strategy="single", **kwargs)
         elif preset == "api_single":
-            return Profile(name="test_api", driver="api:openrouter", model="anthropic/claude-3.5-sonnet", tracker="noop", strategy="single", **kwargs)
+            return Profile(name="test_api", driver="api:openrouter", model="anthropic/claude-sonnet-4-20250514", tracker="noop", strategy="single", **kwargs)
         elif preset == "api_competitive":
-            return Profile(name="test_comp", driver="api:openrouter", model="anthropic/claude-3.5-sonnet", tracker="noop", strategy="competitive", **kwargs)
+            return Profile(name="test_comp", driver="api:openrouter", model="anthropic/claude-sonnet-4-20250514", tracker="noop", strategy="competitive", **kwargs)
         return Profile(name=name, driver=driver, model=model, tracker=tracker, strategy=strategy, **kwargs)
     return _create
 

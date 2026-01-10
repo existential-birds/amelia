@@ -44,7 +44,8 @@ class Profile(BaseModel):
         name: Profile name (e.g., 'work', 'personal').
         driver: LLM driver type (e.g., 'api:openrouter', 'cli:claude').
         model: LLM model identifier. For cli:claude use 'sonnet', 'opus', or 'haiku'.
-            For api:openrouter use 'provider:model' format (e.g., 'anthropic/claude-3.5-sonnet').
+            For api:openrouter use model name directly (e.g., 'minimax/minimax-m2').
+            The provider is inferred from the driver setting.
         tracker: Issue tracker type (jira, github, none, noop).
         strategy: Review strategy (single or competitive).
         working_dir: Working directory for agentic execution.

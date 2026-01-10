@@ -116,7 +116,7 @@ profiles:
   dev:
     name: dev
     driver: api:openrouter
-    model: "openrouter:minimax/minimax-m2"
+    model: "minimax/minimax-m2"
 EOF
 
 # Start the server (opens dashboard at localhost:8420)
@@ -146,7 +146,7 @@ profiles:
   dev:
     name: dev
     driver: api:openrouter
-    model: "openrouter:minimax/minimax-m2"
+    model: "minimax/minimax-m2"
     tracker: github
     strategy: single
 EOF
@@ -225,7 +225,7 @@ profiles:
   home:
     name: home
     driver: api:openrouter
-    model: "openrouter:minimax/minimax-m2"
+    model: "minimax/minimax-m2"
     tracker: github
     strategy: single
 ```
