@@ -11,6 +11,9 @@ import type {
   DefaultContent,
   CreateWorkflowRequest,
   CreateWorkflowResponse,
+  StartWorkflowResponse,
+  BatchStartRequest,
+  BatchStartResponse,
 } from '../types';
 
 /**
@@ -315,6 +318,61 @@ export const api = {
       body: JSON.stringify(request),
     });
     return handleResponse<CreateWorkflowResponse>(response);
+  },
+
+  /**
+   * Starts a pending workflow.
+   *
+   * Transitions the workflow from 'pending' to 'in_progress' status
+   * and begins execution.
+   *
+   * @param id - The unique identifier of the workflow to start.
+   * @returns The started workflow response with workflow_id and status.
+   * @throws {ApiError} When the workflow is not found, not in pending state, or the API request fails.
+   *
+   * @example
+   * ```typescript
+   * const result = await api.startWorkflow('workflow-123');
+   * console.log(`Started workflow: ${result.workflow_id}, status: ${result.status}`);
+   * ```
+   */
+  async startWorkflow(id: string): Promise<StartWorkflowResponse> {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/workflows/${id}/start`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    return handleResponse<StartWorkflowResponse>(response);
+  },
+
+  /**
+   * Starts multiple pending workflows in batch.
+   *
+   * Allows starting all pending workflows, or filtering by specific IDs
+   * or worktree path. Returns both successfully started workflows and
+   * any errors that occurred.
+   *
+   * @param request - The batch start request with optional filters.
+   * @returns Response with lists of started workflow IDs and any errors.
+   * @throws {ApiError} When the API request fails.
+   *
+   * @example
+   * ```typescript
+   * // Start specific workflows
+   * const result = await api.startBatch({ workflow_ids: ['wf-1', 'wf-2'] });
+   *
+   * // Start all pending for a worktree
+   * const result = await api.startBatch({ worktree_path: '/path/to/repo' });
+   *
+   * console.log(`Started: ${result.started.length}, Errors: ${Object.keys(result.errors).length}`);
+   * ```
+   */
+  async startBatch(request: BatchStartRequest): Promise<BatchStartResponse> {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/workflows/start-batch`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+    });
+    return handleResponse<BatchStartResponse>(response);
   },
 
   // ==========================================================================
