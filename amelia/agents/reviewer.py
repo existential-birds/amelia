@@ -223,6 +223,7 @@ Rationale: [1-2 sentences]
         driver: DriverInterface,
         event_bus: "EventBus | None" = None,
         prompts: dict[str, str] | None = None,
+        agent_name: str = "reviewer",
     ):
         """Initialize the Reviewer agent.
 
@@ -231,11 +232,14 @@ Rationale: [1-2 sentences]
             event_bus: Optional EventBus for emitting workflow events.
             prompts: Optional dict mapping prompt IDs to custom content.
                 Supports keys: "reviewer.template", "reviewer.structured", "reviewer.agentic".
+            agent_name: Name used in logs/events. Use "task_reviewer" for task-based
+                execution to distinguish from final review.
 
         """
         self.driver = driver
         self._event_bus = event_bus
         self._prompts = prompts or {}
+        self._agent_name = agent_name
 
     @property
     def template_prompt(self) -> str:
@@ -306,7 +310,7 @@ Rationale: [1-2 sentences]
                 workflow_id=workflow_id,
                 sequence=0,
                 timestamp=datetime.now(UTC),
-                agent="reviewer",
+                agent=self._agent_name,
                 event_type=EventType.AGENT_OUTPUT,
                 level=EventLevel.TRACE,
                 message="No code changes to review - auto-approved",
@@ -351,7 +355,7 @@ Rationale: [1-2 sentences]
             workflow_id=workflow_id,
             sequence=0,
             timestamp=datetime.now(UTC),
-            agent="reviewer",
+            agent=self._agent_name,
             event_type=EventType.AGENT_OUTPUT,
             level=EventLevel.TRACE,
             message="\n".join(content_parts),
@@ -472,7 +476,7 @@ Rationale: [1-2 sentences]
 
         logger.debug(
             "Built review prompt",
-            agent="reviewer",
+            agent=self._agent_name,
             persona=persona,
             prompt_length=len(prompt),
             system_prompt_length=len(system_prompt),
@@ -593,7 +597,7 @@ Rationale: [1-2 sentences]
 
         logger.debug(
             "Built structured review prompt",
-            agent="reviewer",
+            agent=self._agent_name,
             method="structured_review",
             prompt_length=len(prompt),
             system_prompt_length=len(self.structured_prompt),
@@ -633,7 +637,7 @@ Rationale: [1-2 sentences]
                 workflow_id=workflow_id,
                 sequence=0,
                 timestamp=datetime.now(UTC),
-                agent="reviewer",
+                agent=self._agent_name,
                 event_type=EventType.AGENT_OUTPUT,
                 level=EventLevel.TRACE,
                 message="\n".join(content_parts),
@@ -642,7 +646,7 @@ Rationale: [1-2 sentences]
 
         logger.info(
             "Structured review completed",
-            agent="reviewer",
+            agent=self._agent_name,
             method="structured_review",
             verdict=response.verdict,
             item_count=len(response.items),
@@ -701,7 +705,7 @@ The changes are in git - diff against commit: {base_commit}"""
         if profile.working_dir is None:
             logger.warning(
                 "profile.working_dir is None, falling back to current directory",
-                agent="reviewer",
+                agent=self._agent_name,
                 workflow_id=workflow_id,
             )
         cwd = profile.working_dir or "."
@@ -712,7 +716,7 @@ The changes are in git - diff against commit: {base_commit}"""
 
         logger.info(
             "Starting agentic review",
-            agent="reviewer",
+            agent=self._agent_name,
             base_commit=base_commit,
             workflow_id=workflow_id,
         )
@@ -726,7 +730,7 @@ The changes are in git - diff against commit: {base_commit}"""
         ):
             # Emit stream events for visibility using to_workflow_event()
             if self._event_bus is not None and msg.type != AgenticMessageType.RESULT:
-                event = msg.to_workflow_event(workflow_id=workflow_id, agent="reviewer")
+                event = msg.to_workflow_event(workflow_id=workflow_id, agent=self._agent_name)
                 self._event_bus.emit(event)
 
             # Capture final result from RESULT message
@@ -737,7 +741,7 @@ The changes are in git - diff against commit: {base_commit}"""
                 if msg.is_error:
                     logger.error(
                         "Agentic review failed",
-                        agent="reviewer",
+                        agent=self._agent_name,
                         error=msg.content,
                         workflow_id=workflow_id,
                     )
@@ -779,7 +783,7 @@ The changes are in git - diff against commit: {base_commit}"""
 
         logger.info(
             "Agentic review completed",
-            agent="reviewer",
+            agent=self._agent_name,
             approved=result.approved,
             issue_count=len(result.comments),
             severity=result.severity,
@@ -808,7 +812,7 @@ The changes are in git - diff against commit: {base_commit}"""
         if not output:
             logger.warning(
                 "No output from agentic review, defaulting to not approved",
-                agent="reviewer",
+                agent=self._agent_name,
                 workflow_id=workflow_id,
             )
             return ReviewResult(
@@ -938,7 +942,7 @@ The changes are in git - diff against commit: {base_commit}"""
 
         logger.debug(
             "Parsed review result",
-            agent="reviewer",
+            agent=self._agent_name,
             approved=approved,
             issue_count=len(comments),
             severity=overall_severity,

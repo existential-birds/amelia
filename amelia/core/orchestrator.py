@@ -645,12 +645,15 @@ async def call_reviewer_node(
     prompts = configurable.get("prompts", {})
 
     driver = DriverFactory.get_driver(profile.driver, model=profile.model)
-    reviewer = Reviewer(driver, event_bus=event_bus, prompts=prompts)
+    # Use "task_reviewer" only for non-final tasks in task-based execution
+    is_non_final_task = state.total_tasks is not None and state.current_task_index + 1 < state.total_tasks
+    agent_name = "task_reviewer" if is_non_final_task else "reviewer"
+    reviewer = Reviewer(driver, event_bus=event_bus, prompts=prompts, agent_name=agent_name)
 
     if state.base_commit:
         logger.info(
             "Using agentic review with base_commit",
-            agent="reviewer",
+            agent=agent_name,
             base_commit=state.base_commit,
         )
         review_result, new_session_id = await reviewer.agentic_review(
@@ -662,12 +665,12 @@ async def call_reviewer_node(
             state, code_changes, profile, workflow_id=workflow_id
         )
 
-    await _save_token_usage(driver, workflow_id, "reviewer", repository)
+    await _save_token_usage(driver, workflow_id, agent_name, repository)
 
     next_iteration = state.review_iteration + 1
     logger.info(
         "Agent action completed",
-        agent="reviewer",
+        agent=agent_name,
         action="review_completed",
         details={
             "severity": review_result.severity,
