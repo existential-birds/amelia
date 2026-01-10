@@ -803,7 +803,7 @@ class OrchestratorService:
             raise WorkflowNotFoundError(workflow_id)
 
         # Check if workflow is in a cancellable state (not terminal)
-        cancellable_states = {"pending", "in_progress", "blocked"}
+        cancellable_states = {"pending", "planning", "in_progress", "blocked"}
         if workflow.workflow_status not in cancellable_states:
             raise InvalidStateError(
                 f"Cannot cancel workflow in '{workflow.workflow_status}' state",
@@ -2129,11 +2129,11 @@ class OrchestratorService:
                     )
                     return
 
-                # Only update if workflow is still pending - avoid overwriting
+                # Only update if workflow is still planning - avoid overwriting
                 # status/started_at if the workflow was started concurrently
-                if fresh.workflow_status != "pending":
+                if fresh.workflow_status != "planning":
                     logger.info(
-                        "Planning finished but workflow is no longer pending; skipping plan write",
+                        "Planning finished but workflow is no longer planning; skipping plan write",
                         workflow_id=workflow_id,
                         workflow_status=fresh.workflow_status,
                     )
@@ -2142,6 +2142,8 @@ class OrchestratorService:
                 # Update state with plan on the fresh snapshot
                 fresh.execution_state = final_state
                 fresh.planned_at = datetime.now(UTC)
+                fresh.workflow_status = "blocked"
+                fresh.current_stage = None  # Clear stage, waiting for approval
                 await self._repository.update(fresh)
 
                 await self._emit(
@@ -2176,7 +2178,7 @@ class OrchestratorService:
             # Mark workflow as failed using fresh state
             try:
                 fresh = await self._repository.get(workflow_id)
-                if fresh is not None and fresh.workflow_status == "pending":
+                if fresh is not None and fresh.workflow_status == "planning":
                     fresh.workflow_status = "failed"
                     fresh.failure_reason = f"Planning failed: {e}"
                     await self._repository.update(fresh)
@@ -2235,13 +2237,14 @@ class OrchestratorService:
         # Generate workflow ID
         workflow_id = str(uuid4())
 
-        # Create ServerExecutionState in pending status (not started)
+        # Create ServerExecutionState in planning status (architect running)
         state = ServerExecutionState(
             id=workflow_id,
             issue_id=request.issue_id,
             worktree_path=resolved_path,
             execution_state=execution_state,
-            workflow_status="pending",
+            workflow_status="planning",
+            current_stage="architect",
             # Note: started_at is None - workflow hasn't started yet
         )
 

@@ -162,19 +162,19 @@ class TestQueueAndPlanWorkflow:
         mock_repository.update.assert_called_once()
 
         updated_state = mock_repository.update.call_args[0][0]
-        assert updated_state.workflow_status == "pending"
+        assert updated_state.workflow_status == "blocked"
         assert updated_state.planned_at is not None
         assert updated_state.execution_state is not None
         assert updated_state.execution_state.goal is not None
 
     @pytest.mark.asyncio
-    async def test_queue_and_plan_stays_pending(
+    async def test_queue_and_plan_transitions_to_blocked(
         self,
         orchestrator: OrchestratorService,
         mock_repository: MagicMock,
         valid_worktree: str,
     ) -> None:
-        """Workflow remains pending after planning (not started)."""
+        """Workflow transitions to blocked after planning completes (waiting for approval)."""
         request = CreateWorkflowRequest(
             issue_id="ISSUE-123",
             worktree_path=valid_worktree,
@@ -429,3 +429,48 @@ class TestQueueAndPlanWorkflow:
 
             # Now update should have been called
             mock_repository.update.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_queue_and_plan_sets_planning_status_immediately(
+        self,
+        orchestrator: OrchestratorService,
+        mock_repository: MagicMock,
+        valid_worktree: str,
+    ) -> None:
+        """Workflow status is 'planning' immediately after queue_and_plan_workflow."""
+        request = CreateWorkflowRequest(
+            issue_id="ISSUE-123",
+            worktree_path=valid_worktree,
+            start=False,
+            plan_now=True,
+        )
+
+        # Use an event to block planning indefinitely
+        planning_started = asyncio.Event()
+
+        mock_architect = MagicMock()
+
+        async def blocking_plan_gen(*args, **kwargs):
+            """Mock async generator that blocks forever."""
+            planning_started.set()
+            await asyncio.sleep(1000)  # Block indefinitely
+            yield None, None
+
+        mock_architect.plan = blocking_plan_gen
+
+        with patch.object(
+            orchestrator, "_create_architect_for_planning", return_value=mock_architect
+        ):
+            workflow_id = await orchestrator.queue_and_plan_workflow(request)
+
+            # Wait for planning to start
+            await asyncio.wait_for(planning_started.wait(), timeout=1.0)
+
+            # Check the created state has planning status
+            created_state = mock_repository.create.call_args[0][0]
+            assert created_state.workflow_status == "planning"
+            assert created_state.current_stage == "architect"
+
+            # Cancel the background task
+            if workflow_id in orchestrator._planning_tasks:
+                orchestrator._planning_tasks[workflow_id].cancel()
