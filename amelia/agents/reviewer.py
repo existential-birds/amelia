@@ -1,14 +1,13 @@
 """Reviewer agent for code review in the Amelia orchestrator."""
 
 import asyncio
-import json
 import re
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Literal
 from uuid import uuid4
 
 from loguru import logger
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field
 
 from amelia.core.state import ExecutionState, ReviewResult, Severity
 from amelia.core.types import Profile
@@ -167,23 +166,55 @@ Be specific with file paths and line numbers. Provide actionable feedback."""
 
 5. **Review**: Follow the loaded skill's instructions to review the code
 
-6. **Output**: Provide your review in the following JSON format:
+6. **Output**: Provide your review in the following markdown format:
 
-```json
-{{
-  "approved": true|false,
-  "comments": ["comment 1", "comment 2"],
-  "severity": "low"|"medium"|"high"|"critical"
-}}
+```markdown
+## Review Summary
+
+[1-2 sentence overview of findings]
+
+## Issues
+
+### Critical (Blocking)
+
+1. [FILE:LINE] ISSUE_TITLE
+   - Issue: Description of what's wrong
+   - Why: Why this matters (bug, type safety, security)
+   - Fix: Specific recommended fix
+
+### Major (Should Fix)
+
+2. [FILE:LINE] ISSUE_TITLE
+   - Issue: ...
+   - Why: ...
+   - Fix: ...
+
+### Minor (Nice to Have)
+
+N. [FILE:LINE] ISSUE_TITLE
+   - Issue: ...
+   - Why: ...
+   - Fix: ...
+
+## Good Patterns
+
+- [FILE:LINE] Pattern description (preserve this)
+
+## Verdict
+
+Ready: Yes | No | With fixes 1-N
+Rationale: [1-2 sentences]
 ```
 
 ## Rules
 
 - Load skills BEFORE reviewing (not after)
-- Include FILE:LINE in your comments
-- Be specific about what needs to change
+- Number every issue sequentially (1, 2, 3...)
+- Include FILE:LINE for each issue
+- Separate Issue/Why/Fix clearly
+- Categorize by actual severity (Critical/Major/Minor)
 - Only flag real issues - check linters first before flagging style issues
-- Approved means the code is ready to merge as-is"""
+- "Ready: Yes" means approved to merge as-is"""
 
     DEFAULT_PERSONAS: list[str] = ["Security", "Performance", "Usability"]
 
@@ -192,6 +223,7 @@ Be specific with file paths and line numbers. Provide actionable feedback."""
         driver: DriverInterface,
         event_bus: "EventBus | None" = None,
         prompts: dict[str, str] | None = None,
+        agent_name: str = "reviewer",
     ):
         """Initialize the Reviewer agent.
 
@@ -200,11 +232,14 @@ Be specific with file paths and line numbers. Provide actionable feedback."""
             event_bus: Optional EventBus for emitting workflow events.
             prompts: Optional dict mapping prompt IDs to custom content.
                 Supports keys: "reviewer.template", "reviewer.structured", "reviewer.agentic".
+            agent_name: Name used in logs/events. Use "task_reviewer" for task-based
+                execution to distinguish from final review.
 
         """
         self.driver = driver
         self._event_bus = event_bus
         self._prompts = prompts or {}
+        self._agent_name = agent_name
 
     @property
     def template_prompt(self) -> str:
@@ -275,7 +310,7 @@ Be specific with file paths and line numbers. Provide actionable feedback."""
                 workflow_id=workflow_id,
                 sequence=0,
                 timestamp=datetime.now(UTC),
-                agent="reviewer",
+                agent=self._agent_name,
                 event_type=EventType.AGENT_OUTPUT,
                 level=EventLevel.TRACE,
                 message="No code changes to review - auto-approved",
@@ -320,7 +355,7 @@ Be specific with file paths and line numbers. Provide actionable feedback."""
             workflow_id=workflow_id,
             sequence=0,
             timestamp=datetime.now(UTC),
-            agent="reviewer",
+            agent=self._agent_name,
             event_type=EventType.AGENT_OUTPUT,
             level=EventLevel.TRACE,
             message="\n".join(content_parts),
@@ -441,7 +476,7 @@ Be specific with file paths and line numbers. Provide actionable feedback."""
 
         logger.debug(
             "Built review prompt",
-            agent="reviewer",
+            agent=self._agent_name,
             persona=persona,
             prompt_length=len(prompt),
             system_prompt_length=len(system_prompt),
@@ -562,7 +597,7 @@ Be specific with file paths and line numbers. Provide actionable feedback."""
 
         logger.debug(
             "Built structured review prompt",
-            agent="reviewer",
+            agent=self._agent_name,
             method="structured_review",
             prompt_length=len(prompt),
             system_prompt_length=len(self.structured_prompt),
@@ -602,7 +637,7 @@ Be specific with file paths and line numbers. Provide actionable feedback."""
                 workflow_id=workflow_id,
                 sequence=0,
                 timestamp=datetime.now(UTC),
-                agent="reviewer",
+                agent=self._agent_name,
                 event_type=EventType.AGENT_OUTPUT,
                 level=EventLevel.TRACE,
                 message="\n".join(content_parts),
@@ -611,7 +646,7 @@ Be specific with file paths and line numbers. Provide actionable feedback."""
 
         logger.info(
             "Structured review completed",
-            agent="reviewer",
+            agent=self._agent_name,
             method="structured_review",
             verdict=response.verdict,
             item_count=len(response.items),
@@ -670,7 +705,7 @@ The changes are in git - diff against commit: {base_commit}"""
         if profile.working_dir is None:
             logger.warning(
                 "profile.working_dir is None, falling back to current directory",
-                agent="reviewer",
+                agent=self._agent_name,
                 workflow_id=workflow_id,
             )
         cwd = profile.working_dir or "."
@@ -681,7 +716,7 @@ The changes are in git - diff against commit: {base_commit}"""
 
         logger.info(
             "Starting agentic review",
-            agent="reviewer",
+            agent=self._agent_name,
             base_commit=base_commit,
             workflow_id=workflow_id,
         )
@@ -695,7 +730,7 @@ The changes are in git - diff against commit: {base_commit}"""
         ):
             # Emit stream events for visibility using to_workflow_event()
             if self._event_bus is not None and msg.type != AgenticMessageType.RESULT:
-                event = msg.to_workflow_event(workflow_id=workflow_id, agent="reviewer")
+                event = msg.to_workflow_event(workflow_id=workflow_id, agent=self._agent_name)
                 self._event_bus.emit(event)
 
             # Capture final result from RESULT message
@@ -706,7 +741,7 @@ The changes are in git - diff against commit: {base_commit}"""
                 if msg.is_error:
                     logger.error(
                         "Agentic review failed",
-                        agent="reviewer",
+                        agent=self._agent_name,
                         error=msg.content,
                         workflow_id=workflow_id,
                     )
@@ -714,8 +749,22 @@ The changes are in git - diff against commit: {base_commit}"""
         # Parse the result to extract review
         result = self._parse_review_result(final_result, workflow_id)
 
+        logger.debug(
+            "After _parse_review_result",
+            approved=result.approved,
+            has_error=has_error,
+            severity=result.severity,
+            comments_count=len(result.comments),
+            workflow_id=workflow_id,
+        )
+
         # If there was an error, ensure result is not approved
         if has_error and result.approved:
+            logger.warning(
+                "Overriding approved=True due to has_error=True",
+                original_approved=result.approved,
+                workflow_id=workflow_id,
+            )
             result = ReviewResult(
                 reviewer_persona=result.reviewer_persona,
                 approved=False,
@@ -734,9 +783,10 @@ The changes are in git - diff against commit: {base_commit}"""
 
         logger.info(
             "Agentic review completed",
-            agent="reviewer",
+            agent=self._agent_name,
             approved=result.approved,
-            comment_count=len(result.comments),
+            issue_count=len(result.comments),
+            severity=result.severity,
             workflow_id=workflow_id,
         )
 
@@ -745,21 +795,24 @@ The changes are in git - diff against commit: {base_commit}"""
     def _parse_review_result(self, output: str | None, workflow_id: str) -> ReviewResult:
         """Parse the agent's output to extract ReviewResult.
 
-        Attempts to find and parse JSON from the output. Falls back to
-        a basic analysis if JSON parsing fails.
+        Parses the beagle review markdown format with sections:
+        - Review Summary
+        - Issues (Critical/Major/Minor)
+        - Good Patterns
+        - Verdict
 
         Args:
             output: The agent's final output text.
             workflow_id: Workflow ID for logging.
 
         Returns:
-            Parsed ReviewResult.
+            Parsed ReviewResult with issues as comments (not good patterns).
 
         """
         if not output:
             logger.warning(
                 "No output from agentic review, defaulting to not approved",
-                agent="reviewer",
+                agent=self._agent_name,
                 workflow_id=workflow_id,
             )
             return ReviewResult(
@@ -769,69 +822,136 @@ The changes are in git - diff against commit: {base_commit}"""
                 severity="high",
             )
 
-        # Try to find JSON in the output
+        # Parse verdict to determine approval
+        # Handle markdown formatting like **Ready:** Yes, **Ready**: Yes, or __Ready:__ Yes
+        # Pattern allows bold/italic markers before "Ready", between "Ready" and ":", and after ":"
+        verdict_match = re.search(
+            r"[*_]{0,2}Ready[*_]{0,2}:[*_]{0,2}\s*(Yes|No|With fixes[^\n]*)",
+            output,
+            re.IGNORECASE,
+        )
+        logger.debug(
+            "Parsing verdict from review output",
+            verdict_match_found=verdict_match is not None,
+            verdict_text=verdict_match.group(1) if verdict_match else None,
+            output_preview=output[:500] if output else None,
+            workflow_id=workflow_id,
+        )
+        if verdict_match:
+            verdict_text = verdict_match.group(1).lower()
+            approved = verdict_text == "yes"
+            logger.debug(
+                "Verdict parsed from regex match",
+                verdict_text=verdict_text,
+                approved=approved,
+                workflow_id=workflow_id,
+            )
+        else:
+            # Fallback: check for approval keywords
+            output_lower = output.lower()
+            approved = any(
+                word in output_lower
+                for word in ["ready: yes", "approved", "lgtm", "looks good"]
+            )
+            not_approved = any(
+                word in output_lower
+                for word in ["ready: no", "not approved", "needs fixes", "blocked"]
+            )
+            if not_approved:
+                approved = False
 
-        # Look for JSON block in markdown code fence
-        json_match = re.search(r"```json\s*\n(.*?)\n```", output, re.DOTALL)
-        if json_match:
-            try:
-                data = json.loads(json_match.group(1))
-                return ReviewResult(
-                    reviewer_persona="Agentic",
-                    approved=data.get("approved", False),
-                    comments=data.get("comments", []),
-                    severity=normalize_severity(data.get("severity")),
-                )
-            except (json.JSONDecodeError, ValidationError) as e:
-                logger.warning(
-                    "Failed to parse JSON from review output",
-                    agent="reviewer",
-                    error=str(e),
-                    workflow_id=workflow_id,
-                )
+        # Parse issues from each severity section
+        issues: list[tuple[str, str]] = []  # (severity, issue_text)
 
-        # Try to find raw JSON object by attempting to parse from each { position
-        # This handles nested structures like arrays in the comments field
-        for i, char in enumerate(output):
-            if char == "{":
-                for j in range(len(output), i, -1):
-                    if output[j - 1] == "}":
-                        try:
-                            data = json.loads(output[i:j])
-                            if "approved" in data:
-                                return ReviewResult(
-                                    reviewer_persona="Agentic",
-                                    approved=data.get("approved", False),
-                                    comments=data.get("comments", []),
-                                    severity=normalize_severity(data.get("severity")),
-                                )
-                        except json.JSONDecodeError:
-                            continue
+        # Match numbered issues: "1. [FILE:LINE] TITLE" or just "1. TITLE"
+        issue_pattern = re.compile(
+            r"^\s*(\d+)\.\s*(?:\[([^\]]+)\])?\s*(.+?)$",
+            re.MULTILINE,
+        )
 
-        # Fallback: analyze text for approval keywords
-        output_lower = output.lower()
-        approved = any(word in output_lower for word in ["approved", "lgtm", "looks good", "ready to merge"])
-        not_approved = any(word in output_lower for word in ["not approved", "needs fixes", "blocked", "changes requested"])
-
-        if not_approved:
-            approved = False
-
-        # Extract any bullet points or numbered items as comments
-        comments = []
+        # Determine current section by tracking headers
+        current_severity: str | None = None
         for line in output.split("\n"):
-            line = line.strip()
-            if line.startswith(("- ", "* ", "• ")) or re.match(r"^\d+\.", line):
-                # Clean up the line
-                comment = re.sub(r"^[-*•]\s*|\d+\.\s*", "", line).strip()
-                if comment and len(comment) > 10:  # Filter out very short lines
-                    comments.append(comment)
+            line_stripped = line.strip().lower()
 
+            # Detect severity section headers
+            if "### critical" in line_stripped or "critical (blocking)" in line_stripped:
+                current_severity = "critical"
+            elif "### major" in line_stripped or "major (should fix)" in line_stripped:
+                current_severity = "major"
+            elif "### minor" in line_stripped or "minor (nice to have)" in line_stripped:
+                current_severity = "minor"
+            elif line_stripped.startswith("## good patterns"):
+                current_severity = None  # Stop collecting issues
+            elif line_stripped.startswith("## verdict"):
+                current_severity = None
+
+            # Match issues in current section
+            if current_severity:
+                issue_match = issue_pattern.match(line)
+                if issue_match:
+                    file_line = issue_match.group(2) or ""
+                    title = issue_match.group(3).strip()
+                    if file_line:
+                        issue_text = f"[{current_severity}] [{file_line}] {title}"
+                    else:
+                        issue_text = f"[{current_severity}] {title}"
+                    issues.append((current_severity, issue_text))
+
+        # Determine overall severity from highest issue severity
+        severity_priority = {"critical": 3, "major": 2, "minor": 1}
+        if issues:
+            max_severity_value = max(severity_priority.get(sev, 0) for sev, _ in issues)
+            severity_map: dict[int, Severity] = {
+                3: "critical",
+                2: "high",  # major maps to high
+                1: "medium",  # minor maps to medium
+                0: "low",
+            }
+            overall_severity = severity_map[max_severity_value]
+        else:
+            overall_severity = "low" if approved else "medium"
+
+        # Extract just the issue text for comments
+        comments = [issue_text for _, issue_text in issues]
+
+        # If no structured issues found, try legacy parsing
         if not comments:
+            for line in output.split("\n"):
+                line = line.strip()
+                if line.startswith(("- ", "* ", "• ")) or re.match(r"^\d+\.", line):
+                    # Skip good patterns section items
+                    if "good pattern" in output.lower():
+                        good_patterns_pos = output.lower().find("## good patterns")
+                        verdict_pos = output.lower().find("## verdict")
+                        line_pos = output.find(line)
+                        in_good_patterns = (
+                            good_patterns_pos != -1
+                            and line_pos > good_patterns_pos
+                            and (verdict_pos == -1 or line_pos < verdict_pos)
+                        )
+                        if in_good_patterns:
+                            continue  # Skip good patterns
+
+                    comment = re.sub(r"^[-*•]\s*|\d+\.\s*", "", line).strip()
+                    if comment and len(comment) > 10:
+                        comments.append(comment)
+
+        if not comments and not approved:
             comments = ["See review output for details"]
+
+        logger.debug(
+            "Parsed review result",
+            agent=self._agent_name,
+            approved=approved,
+            issue_count=len(comments),
+            severity=overall_severity,
+            workflow_id=workflow_id,
+        )
 
         return ReviewResult(
             reviewer_persona="Agentic",
             approved=approved,
-            comments=comments[:10],  # Limit to 10 comments
-            severity="medium" if approved else "high",
+            comments=comments[:20],  # Limit to 20 issues
+            severity=overall_severity,
         )

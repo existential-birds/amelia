@@ -419,7 +419,28 @@ class TestAgenticReview:
             goal="Implement feature",
         )
 
-        # Create mock AgenticMessage stream
+        # Create mock AgenticMessage stream with beagle markdown format
+        beagle_review_output = """## Review Summary
+
+Code looks good overall.
+
+## Issues
+
+### Critical (Blocking)
+
+### Major (Should Fix)
+
+### Minor (Nice to Have)
+
+## Good Patterns
+
+- [file.py:10] Good use of type hints
+
+## Verdict
+
+Ready: Yes
+Rationale: No issues found, code is ready to merge.
+"""
         messages = [
             AgenticMessage(
                 type=AgenticMessageType.THINKING,
@@ -437,7 +458,7 @@ class TestAgenticReview:
             ),
             AgenticMessage(
                 type=AgenticMessageType.RESULT,
-                content='```json\n{"approved": true, "comments": ["LGTM"], "severity": "low"}\n```',
+                content=beagle_review_output,
                 session_id="session-789",
             ),
         ]
@@ -452,7 +473,7 @@ class TestAgenticReview:
         )
 
         assert result.approved is True
-        assert "LGTM" in result.comments
+        assert len(result.comments) == 0  # No issues found
         assert result.severity == "low"
         assert session_id == "session-789"
 
@@ -587,21 +608,52 @@ class TestAgenticReview:
             assert event.agent == "reviewer"
             assert event.workflow_id == "wf-123"
 
-    async def test_agentic_review_parses_json_result(
+    async def test_agentic_review_parses_beagle_markdown_result(
         self,
         mock_driver: MagicMock,
         mock_execution_state_factory: Callable[..., tuple[ExecutionState, Profile]],
     ) -> None:
-        """Test that agentic_review correctly parses JSON result from agent."""
+        """Test that agentic_review correctly parses beagle markdown result from agent."""
         state, profile = mock_execution_state_factory(
             goal="Implement feature",
         )
 
-        # Create mock AgenticMessage stream with JSON result in markdown fence
+        # Create mock AgenticMessage stream with beagle markdown format
+        beagle_review_output = """## Review Summary
+
+Found 2 issues that should be addressed.
+
+## Issues
+
+### Critical (Blocking)
+
+### Major (Should Fix)
+
+1. [file.py:42] Fix bug in error handling
+   - Issue: Missing null check
+   - Why: Could cause crash
+   - Fix: Add null check before access
+
+2. [file.py:100] Add tests for new functionality
+   - Issue: No test coverage
+   - Why: Risk of regressions
+   - Fix: Add unit tests
+
+### Minor (Nice to Have)
+
+## Good Patterns
+
+- [file.py:10] Good use of type hints
+
+## Verdict
+
+Ready: No
+Rationale: Two major issues need to be fixed first.
+"""
         messages = [
             AgenticMessage(
                 type=AgenticMessageType.RESULT,
-                content='Some analysis text\n\n```json\n{"approved": false, "comments": ["Fix bug in line 42", "Add tests"], "severity": "high"}\n```\n\nEnd of review.',
+                content=beagle_review_output,
                 session_id="session-123",
             ),
         ]
@@ -617,36 +669,66 @@ class TestAgenticReview:
 
         assert result.approved is False
         assert len(result.comments) == 2
-        assert "Fix bug in line 42" in result.comments
-        assert "Add tests" in result.comments
-        assert result.severity == "high"
+        assert "[major]" in result.comments[0].lower()
+        assert "file.py:42" in result.comments[0]
+        assert result.severity == "high"  # major maps to high
 
-    async def test_agentic_review_handles_invalid_severity_from_llm(
+    async def test_agentic_review_determines_severity_from_highest_issue(
         self,
         mock_driver: MagicMock,
         mock_execution_state_factory: Callable[..., tuple[ExecutionState, Profile]],
     ) -> None:
-        """Test that agentic_review handles invalid severity values from LLM.
+        """Test that agentic_review determines overall severity from highest issue severity.
 
-        LLMs may return severity values like "none" that are not in the
-        Severity literal type. The parser should normalize these to valid values.
+        The parser should map issue severities to ReviewResult severity:
+        - critical → critical
+        - major → high
+        - minor → medium
         """
         state, profile = mock_execution_state_factory(
             goal="Implement feature",
         )
 
-        # Create mock AgenticMessage with invalid severity "none"
+        # Create mock AgenticMessage with critical issue
+        beagle_review_output = """## Review Summary
+
+Found a critical security issue.
+
+## Issues
+
+### Critical (Blocking)
+
+1. [auth.py:10] SQL Injection vulnerability
+   - Issue: User input not sanitized
+   - Why: Security vulnerability
+   - Fix: Use parameterized queries
+
+### Major (Should Fix)
+
+### Minor (Nice to Have)
+
+2. [utils.py:5] Typo in comment
+   - Issue: Minor typo
+   - Why: Code clarity
+   - Fix: Fix typo
+
+## Good Patterns
+
+## Verdict
+
+Ready: No
+Rationale: Critical security issue must be fixed.
+"""
         messages = [
             AgenticMessage(
                 type=AgenticMessageType.RESULT,
-                content='```json\n{"approved": true, "comments": ["LGTM"], "severity": "none"}\n```',
-                session_id="session-invalid",
+                content=beagle_review_output,
+                session_id="session-critical",
             ),
         ]
         mock_driver.execute_agentic = MagicMock(return_value=AsyncIteratorMock(messages))
 
         reviewer = Reviewer(driver=mock_driver)
-        # This should NOT raise ValidationError
         result, session_id = await reviewer.agentic_review(
             state,
             base_commit="abc123",
@@ -654,10 +736,11 @@ class TestAgenticReview:
             workflow_id="wf-123",
         )
 
-        # Invalid "none" should be normalized to "medium"
-        assert result.severity == "medium"
-        assert result.approved is True
-        assert session_id == "session-invalid"
+        # Overall severity should be critical (highest)
+        assert result.severity == "critical"
+        assert result.approved is False
+        assert len(result.comments) == 2
+        assert session_id == "session-critical"
 
     async def test_agentic_review_no_sdk_type_imports(self) -> None:
         """Verify agentic_review doesn't import SDK-specific types for message handling.
@@ -683,3 +766,87 @@ class TestAgenticReview:
                 f"agentic_review references SDK-specific type '{pattern}'. "
                 "Should use unified AgenticMessage types instead."
             )
+
+
+class TestParseReviewResult:
+    """Tests for Reviewer._parse_review_result method."""
+
+    def test_markdown_bold_ready_yes_with_needs_fixes_in_rationale(
+        self,
+        mock_driver: MagicMock,
+    ) -> None:
+        """Test that **Ready:** Yes is correctly parsed even when 'needs fixes' in rationale.
+
+        Regression test for bug where:
+        1. Regex r"Ready:\\s*(Yes|No|With fixes[^\\n]*)" doesn't match **Ready:** Yes
+        2. Fallback finds "needs fixes" in rationale and incorrectly sets approved=False
+        """
+        # Beagle markdown with bold formatting and "needs fixes" in rationale
+        beagle_output = """## Review Summary
+
+Code looks good overall with no issues found.
+
+## Issues
+
+### Critical (Blocking)
+
+### Major (Should Fix)
+
+### Minor (Nice to Have)
+
+## Good Patterns
+
+- [file.py:10] Good use of type hints
+
+## Verdict
+
+**Ready:** Yes
+Rationale: Code needs fixes for edge cases but they are out of scope.
+"""
+        reviewer = Reviewer(driver=mock_driver)
+        result = reviewer._parse_review_result(beagle_output, workflow_id="wf-test")
+
+        # Should be approved because verdict says "Ready: Yes"
+        assert result.approved is True, (
+            "Review should be approved when **Ready:** Yes is present, "
+            "even if 'needs fixes' appears elsewhere in the output"
+        )
+
+    def test_markdown_bold_only_on_ready_word(
+        self,
+        mock_driver: MagicMock,
+    ) -> None:
+        """Test that **Ready**: Yes is correctly parsed (bold only on 'Ready', not 'Ready:').
+
+        Regression test for bug where regex r"[*_]{0,2}Ready:[*_]{0,2}..." failed
+        when bold markers appear between 'Ready' and ':' like **Ready**: Yes.
+        The fix changes the pattern to allow markers between Ready and colon.
+        """
+        beagle_output = """## Review Summary
+
+Code looks good overall.
+
+## Issues
+
+### Critical (Blocking)
+
+### Major (Should Fix)
+
+### Minor (Nice to Have)
+
+## Good Patterns
+
+- [file.py:10] Good use of type hints
+
+## Verdict
+
+**Ready**: Yes
+Rationale: All checks pass.
+"""
+        reviewer = Reviewer(driver=mock_driver)
+        result = reviewer._parse_review_result(beagle_output, workflow_id="wf-test")
+
+        assert result.approved is True, (
+            "Review should be approved when **Ready**: Yes is present "
+            "(bold only on 'Ready' word, colon outside bold)"
+        )
