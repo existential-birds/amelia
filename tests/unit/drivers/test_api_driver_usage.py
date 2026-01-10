@@ -18,7 +18,7 @@ class TestApiDriverGetUsage:
         with patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-key"}):
             from amelia.drivers.api.deepagents import ApiDriver
 
-            driver = ApiDriver(model="openrouter:test/model")
+            driver = ApiDriver(model="test/model", provider="openrouter")
 
             result = driver.get_usage()
 
@@ -69,7 +69,7 @@ class TestApiDriverUsageAccumulation:
         mock_agent.astream = mock_astream
         mock_deepagents_for_usage.return_value = mock_agent
 
-        driver = ApiDriver(model="openrouter:test/model")
+        driver = ApiDriver(model="test/model", provider="openrouter")
 
         # Consume the generator
         messages = []
@@ -81,7 +81,7 @@ class TestApiDriverUsageAccumulation:
         assert usage is not None
         assert usage.input_tokens == 300  # 100 + 200
         assert usage.output_tokens == 150  # 50 + 100
-        assert usage.model == "openrouter:test/model"
+        assert usage.model == "test/model"
         assert usage.num_turns == 2
 
     async def test_extracts_cost_from_openrouter_metadata(
@@ -107,7 +107,7 @@ class TestApiDriverUsageAccumulation:
         mock_agent.astream = mock_astream
         mock_deepagents_for_usage.return_value = mock_agent
 
-        driver = ApiDriver(model="openrouter:test/model")
+        driver = ApiDriver(model="test/model", provider="openrouter")
 
         async for _ in driver.execute_agentic("test", "/tmp"):
             pass
@@ -147,7 +147,7 @@ class TestApiDriverUsageAccumulation:
         mock_agent.astream = mock_astream
         mock_deepagents_for_usage.return_value = mock_agent
 
-        driver = ApiDriver(model="openrouter:test/model")
+        driver = ApiDriver(model="test/model", provider="openrouter")
 
         async for _ in driver.execute_agentic("test", "/tmp"):
             pass
@@ -175,7 +175,7 @@ class TestApiDriverUsageAccumulation:
         mock_agent.astream = mock_astream
         mock_deepagents_for_usage.return_value = mock_agent
 
-        driver = ApiDriver(model="openrouter:test/model")
+        driver = ApiDriver(model="test/model", provider="openrouter")
 
         async for _ in driver.execute_agentic("test", "/tmp"):
             pass
@@ -215,7 +215,7 @@ class TestApiDriverUsageAccumulation:
         mock_agent.astream = mock_astream
         mock_deepagents_for_usage.return_value = mock_agent
 
-        driver = ApiDriver(model="openrouter:test/model")
+        driver = ApiDriver(model="test/model", provider="openrouter")
 
         # First execution
         async for _ in driver.execute_agentic("first", "/tmp"):

@@ -106,22 +106,23 @@ class LocalSandbox(FilesystemBackend, SandboxBackendProtocol):  # type: ignore[m
 def _create_chat_model(model: str, provider: str | None = None) -> BaseChatModel:
     """Create a LangChain chat model, handling provider configuration.
 
-    Provider can be specified explicitly via parameter, or legacy 'openrouter:' prefix.
-
     Args:
-        model: Model identifier (e.g., 'minimax/minimax-m2' or legacy 'openrouter:minimax/minimax-m2').
+        model: Model identifier (e.g., 'minimax/minimax-m2').
         provider: Optional provider name. If 'openrouter', configures OpenRouter API.
 
     Returns:
         Configured BaseChatModel instance.
 
     Raises:
+        ValueError: If model contains 'openrouter:' prefix (use provider param instead).
         ValueError: If OpenRouter is requested but OPENROUTER_API_KEY is not set.
     """
-    # Handle legacy prefix format for backwards compatibility during transition
     if model.startswith("openrouter:"):
-        model = model[len("openrouter:"):]
-        provider = "openrouter"
+        raise ValueError(
+            "The 'openrouter:' prefix in model names is no longer supported. "
+            "Use driver='api:openrouter' with the model name directly "
+            f"(e.g., model='{model[len('openrouter:'):]}')."
+        )
 
     if provider == "openrouter":
         api_key = os.environ.get("OPENROUTER_API_KEY")

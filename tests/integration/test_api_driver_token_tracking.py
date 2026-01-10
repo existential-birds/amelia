@@ -67,7 +67,7 @@ class TestApiDriverTokenTrackingIntegration:
         mock_agent.astream = mock_astream
         mock_http_boundary["create_deep_agent"].return_value = mock_agent
 
-        driver = ApiDriver(model="openrouter:anthropic/claude-3.5-sonnet")
+        driver = ApiDriver(model="anthropic/claude-3.5-sonnet", provider="openrouter")
 
         # Run full execution
         messages = []
@@ -82,7 +82,7 @@ class TestApiDriverTokenTrackingIntegration:
         assert usage.output_tokens == 300  # 100 + 200
         assert usage.cost_usd == 0.003  # 0.001 + 0.002
         assert usage.num_turns == 2
-        assert usage.model == "openrouter:anthropic/claude-3.5-sonnet"
+        assert usage.model == "anthropic/claude-3.5-sonnet"
         # duration_ms may be None for mocked execution, or 0+ if tracked
         assert usage.duration_ms is None or usage.duration_ms >= 0
 
@@ -102,14 +102,14 @@ class TestApiDriverTokenTrackingIntegration:
         mock_agent.astream = mock_astream
         mock_http_boundary["create_deep_agent"].return_value = mock_agent
 
-        driver = ApiDriver(model="openrouter:minimax/minimax-m2")
+        driver = ApiDriver(model="minimax/minimax-m2", provider="openrouter")
 
         async for _ in driver.execute_agentic("test", "/tmp"):
             pass
 
         usage = driver.get_usage()
         assert usage is not None
-        assert usage.model == "openrouter:minimax/minimax-m2"
+        assert usage.model == "minimax/minimax-m2"
 
     async def test_generate_does_not_track_usage(
         self, mock_http_boundary: dict[str, MagicMock]
@@ -124,7 +124,7 @@ class TestApiDriverTokenTrackingIntegration:
         mock_agent.ainvoke = mock_ainvoke
         mock_http_boundary["create_deep_agent"].return_value = mock_agent
 
-        driver = ApiDriver(model="openrouter:test/model")
+        driver = ApiDriver(model="test/model", provider="openrouter")
 
         # Call generate (not execute_agentic)
         await driver.generate("test prompt")
