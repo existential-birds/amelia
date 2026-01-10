@@ -179,7 +179,6 @@ class TestQueueWorkflow:
                 id="wf-1",
                 issue_id="ISSUE-1",
                 worktree_path=str(git_dir),
-                worktree_name="repo",
                 workflow_status="pending",
             )
         ]
@@ -254,7 +253,6 @@ class TestStartPendingWorkflow:
             id="wf-pending-test",
             issue_id="ISSUE-123",
             worktree_path=str(git_dir),
-            worktree_name="repo",
             workflow_status="pending",
             execution_state=ExecutionState(profile_id="test"),
         )

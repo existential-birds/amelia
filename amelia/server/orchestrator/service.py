@@ -1083,9 +1083,11 @@ class OrchestratorService:
                     retry_config.max_delay,
                 )
                 logger.warning(
-                    f"Transient error (attempt {attempt}/{retry_config.max_retries}), "
-                    f"retrying in {delay}s",
+                    "Transient error, retrying",
                     workflow_id=workflow_id,
+                    attempt=attempt,
+                    max_retries=retry_config.max_retries,
+                    delay=delay,
                     error=str(e),
                 )
                 await asyncio.sleep(delay)
