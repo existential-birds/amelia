@@ -209,7 +209,7 @@ class ApiDriver(DriverInterface):
             raise ValueError("Prompt cannot be empty")
 
         try:
-            chat_model = _create_chat_model(self.model)
+            chat_model = _create_chat_model(self.model, provider=self.provider)
             # Use FilesystemBackend for non-agentic generation - no shell execution needed
             backend = FilesystemBackend(root_dir=self.cwd or ".")
 
@@ -326,7 +326,7 @@ class ApiDriver(DriverInterface):
         seen_message_ids: set[int] = set()
 
         try:
-            chat_model = _create_chat_model(self.model)
+            chat_model = _create_chat_model(self.model, provider=self.provider)
             backend = LocalSandbox(root_dir=cwd)
             agent = create_deep_agent(
                 model=chat_model,

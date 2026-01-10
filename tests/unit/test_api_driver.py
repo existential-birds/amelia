@@ -163,6 +163,19 @@ class TestGenerate:
         call_kwargs = mock_deepagents.create_deep_agent.call_args.kwargs
         assert call_kwargs["system_prompt"] == ""
 
+    async def test_passes_provider_to_create_chat_model(
+        self, mock_deepagents: MagicMock
+    ) -> None:
+        """Should pass provider to _create_chat_model."""
+        driver = ApiDriver(model="test/model", cwd="/test", provider="openrouter")
+        mock_deepagents.agent_result["messages"] = [AIMessage(content="response")]
+
+        with patch("amelia.drivers.api.deepagents._create_chat_model") as mock_create:
+            mock_create.return_value = MagicMock()
+            await driver.generate(prompt="test")
+
+            mock_create.assert_called_once_with("test/model", provider="openrouter")
+
 
 class TestExecuteAgentic:
     """Test execute_agentic() method."""
@@ -174,6 +187,22 @@ class TestExecuteAgentic:
         with pytest.raises(ValueError, match="Prompt cannot be empty"):
             async for _ in driver.execute_agentic(prompt="", cwd="/some/path"):
                 pass
+
+    async def test_passes_provider_to_create_chat_model(
+        self, mock_deepagents: MagicMock
+    ) -> None:
+        """Should pass provider to _create_chat_model in execute_agentic."""
+        driver = ApiDriver(model="test/model", cwd="/test", provider="openrouter")
+        mock_deepagents.stream_chunks = [
+            {"messages": [AIMessage(content="done")]},
+        ]
+
+        with patch("amelia.drivers.api.deepagents._create_chat_model") as mock_create:
+            mock_create.return_value = MagicMock()
+            async for _ in driver.execute_agentic(prompt="test", cwd="/test"):
+                pass
+
+            mock_create.assert_called_once_with("test/model", provider="openrouter")
 
     async def test_yields_agentic_messages_from_stream(
         self, mock_deepagents: MagicMock
