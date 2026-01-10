@@ -41,7 +41,8 @@ from amelia.server.exceptions import (
 )
 from amelia.server.models import ServerExecutionState
 from amelia.server.models.events import EventType, WorkflowEvent
-from amelia.server.models.requests import CreateWorkflowRequest
+from amelia.server.models.requests import BatchStartRequest, CreateWorkflowRequest
+from amelia.server.models.responses import BatchStartResponse
 from amelia.trackers.factory import create_tracker
 
 
@@ -2241,3 +2242,60 @@ class OrchestratorService:
             )
 
         task.add_done_callback(cleanup_task)
+
+    async def start_batch_workflows(
+        self,
+        request: BatchStartRequest,
+    ) -> BatchStartResponse:
+        """Start multiple pending workflows.
+
+        Args:
+            request: Batch start request with optional filters:
+                - workflow_ids: Specific IDs to start (None = all pending)
+                - worktree_path: Filter by worktree path
+
+        Returns:
+            BatchStartResponse with:
+                - started: List of workflow IDs successfully started
+                - errors: Map of workflow_id to error message for failures
+        """
+        started: list[str] = []
+        errors: dict[str, str] = {}
+
+        # Determine which workflows to start
+        if request.workflow_ids:
+            # Start specific workflow IDs
+            workflow_ids = request.workflow_ids
+        else:
+            # Get all pending workflows
+            pending_workflows = await self._repository.find_by_status(["pending"])
+
+            # Filter by worktree_path if specified
+            if request.worktree_path:
+                pending_workflows = [
+                    w for w in pending_workflows
+                    if w.worktree_path == request.worktree_path
+                ]
+
+            workflow_ids = [w.id for w in pending_workflows]
+
+        # Attempt to start each workflow
+        for workflow_id in workflow_ids:
+            try:
+                await self.start_pending_workflow(workflow_id)
+                started.append(workflow_id)
+            except Exception as e:
+                errors[workflow_id] = str(e)
+                logger.warning(
+                    "Failed to start workflow in batch",
+                    workflow_id=workflow_id,
+                    error=str(e),
+                )
+
+        logger.info(
+            "Batch start completed",
+            started_count=len(started),
+            error_count=len(errors),
+        )
+
+        return BatchStartResponse(started=started, errors=errors)
