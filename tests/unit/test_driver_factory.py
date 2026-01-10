@@ -15,7 +15,7 @@ class TestDriverFactory:
         [
             ("cli:claude", ClaudeCliDriver, None, None),
             ("cli", ClaudeCliDriver, None, None),
-            ("api:openrouter", ApiDriver, "openrouter:anthropic/claude-sonnet-4-20250514", "openrouter:anthropic/claude-sonnet-4-20250514"),
+            ("api:openrouter", ApiDriver, "anthropic/claude-sonnet-4-20250514", "anthropic/claude-sonnet-4-20250514"),
             ("api", ApiDriver, None, None),
         ],
     )

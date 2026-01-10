@@ -25,7 +25,7 @@ def api_driver() -> ApiDriver:
     This fixture provides a standard ApiDriver with test configuration.
     Used by TestGenerate and TestExecuteAgenticYieldsAgenticMessage.
     """
-    return ApiDriver(model="openrouter:test/model", cwd="/test/path")
+    return ApiDriver(model="test/model", cwd="/test/path", provider="openrouter")
 
 
 class TestApiDriverInit:
@@ -33,8 +33,8 @@ class TestApiDriverInit:
 
     def test_uses_provided_model(self) -> None:
         """Should use the provided model name."""
-        driver = ApiDriver(model="openrouter:anthropic/claude-sonnet-4-20250514")
-        assert driver.model == "openrouter:anthropic/claude-sonnet-4-20250514"
+        driver = ApiDriver(model="anthropic/claude-sonnet-4-20250514", provider="openrouter")
+        assert driver.model == "anthropic/claude-sonnet-4-20250514"
 
     def test_defaults_to_minimax_m2(self) -> None:
         """Should default to MiniMax M2 when no model provided."""
