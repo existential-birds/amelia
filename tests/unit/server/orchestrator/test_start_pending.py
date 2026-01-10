@@ -174,3 +174,28 @@ class TestStartPendingWorkflow:
 
         # Task should be tracked
         assert "/path/to/repo" in orchestrator._active_tasks
+
+    @pytest.mark.asyncio
+    async def test_start_pending_allows_another_pending_on_same_worktree(
+        self,
+        orchestrator: OrchestratorService,
+        mock_repository: MagicMock,
+        pending_workflow: ServerExecutionState,
+    ) -> None:
+        """Starting pending workflow succeeds when another pending workflow exists on same worktree.
+
+        Multiple pending workflows on the same worktree are allowed by design.
+        Only in_progress or blocked workflows should block starting a new one.
+        """
+        mock_repository.get.return_value = pending_workflow
+        # get_by_worktree returns None because it excludes pending by default
+        mock_repository.get_by_worktree.return_value = None
+
+        with patch.object(
+            orchestrator, "_run_workflow_with_retry", new_callable=AsyncMock
+        ):
+            # Should succeed - no active (in_progress/blocked) workflow on worktree
+            await orchestrator.start_pending_workflow("wf-pending123")
+
+        # Workflow should have started
+        assert "/path/to/repo" in orchestrator._active_tasks

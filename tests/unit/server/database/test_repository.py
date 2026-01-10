@@ -63,6 +63,73 @@ class TestWorkflowRepository:
         result = await repository.get_by_worktree("/path/to/repo")
         assert result is None
 
+    async def test_get_by_worktree_excludes_pending_by_default(self, repository) -> None:
+        """get_by_worktree excludes pending workflows by default.
+
+        This is important for start_pending_workflow: multiple pending workflows
+        on the same worktree are allowed, so we should only block if there's an
+        in_progress or blocked workflow.
+        """
+        # Create a pending workflow
+        pending = ServerExecutionState(
+            id=str(uuid4()),
+            issue_id="ISSUE-PENDING",
+            worktree_path="/path/to/repo",
+            workflow_status="pending",
+        )
+        await repository.create(pending)
+
+        # get_by_worktree should NOT find pending workflows
+        result = await repository.get_by_worktree("/path/to/repo")
+        assert result is None
+
+    async def test_get_by_worktree_finds_in_progress(self, repository) -> None:
+        """get_by_worktree finds in_progress workflows."""
+        in_progress = ServerExecutionState(
+            id=str(uuid4()),
+            issue_id="ISSUE-IP",
+            worktree_path="/path/to/repo",
+            workflow_status="in_progress",
+        )
+        await repository.create(in_progress)
+
+        result = await repository.get_by_worktree("/path/to/repo")
+        assert result is not None
+        assert result.id == in_progress.id
+
+    async def test_get_by_worktree_finds_blocked(self, repository) -> None:
+        """get_by_worktree finds blocked workflows."""
+        blocked = ServerExecutionState(
+            id=str(uuid4()),
+            issue_id="ISSUE-BLOCKED",
+            worktree_path="/path/to/repo",
+            workflow_status="blocked",
+        )
+        await repository.create(blocked)
+
+        result = await repository.get_by_worktree("/path/to/repo")
+        assert result is not None
+        assert result.id == blocked.id
+
+    async def test_get_by_worktree_with_custom_statuses(self, repository) -> None:
+        """get_by_worktree can accept custom statuses parameter."""
+        # Create a pending workflow
+        pending = ServerExecutionState(
+            id=str(uuid4()),
+            issue_id="ISSUE-PENDING",
+            worktree_path="/path/to/repo",
+            workflow_status="pending",
+        )
+        await repository.create(pending)
+
+        # With custom statuses including pending, it should find the workflow
+        result = await repository.get_by_worktree(
+            "/path/to/repo",
+            statuses=("pending", "in_progress", "blocked"),
+        )
+        assert result is not None
+        assert result.id == pending.id
+
     async def test_update_workflow(self, repository) -> None:
         """Can update workflow state."""
         state = ServerExecutionState(
