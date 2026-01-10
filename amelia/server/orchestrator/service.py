@@ -520,28 +520,91 @@ class OrchestratorService:
     async def queue_workflow(self, request: CreateWorkflowRequest) -> str:
         """Queue a workflow without starting it.
 
-        Creates a workflow in pending state. Multiple pending workflows
-        can exist for the same worktree (unlike running workflows).
+        Creates a workflow in pending state with execution_state populated
+        so it can be started later. Multiple pending workflows can exist
+        for the same worktree (unlike running workflows).
 
         Args:
             request: Workflow creation request with start=False.
 
         Returns:
             The workflow ID (prefixed with "wf-").
+
+        Raises:
+            InvalidWorktreeError: If worktree doesn't exist or isn't a git repo.
+            ValueError: If settings are invalid or profile not found.
         """
+        # Validate worktree before proceeding
+        worktree = Path(request.worktree_path)
+        if not worktree.exists():
+            raise InvalidWorktreeError(request.worktree_path, "directory does not exist")
+        if not worktree.is_dir():
+            raise InvalidWorktreeError(request.worktree_path, "path is not a directory")
+        git_path = worktree / ".git"
+        if not git_path.exists():
+            raise InvalidWorktreeError(request.worktree_path, "not a git repository (.git missing)")
+
+        # Load settings from worktree (required - no fallback)
+        try:
+            settings = self._load_settings_for_worktree(request.worktree_path)
+        except ValidationError as e:
+            raise ValueError(
+                f"Invalid settings.amelia.yaml in {request.worktree_path}: {e}"
+            ) from e
+        if settings is None:
+            raise ValueError(
+                f"No settings.amelia.yaml found in {request.worktree_path}. "
+                "Each worktree must have its own settings file."
+            )
+
+        # Load the profile (use provided profile name or active profile as fallback)
+        profile_name = request.profile or settings.active_profile
+        if profile_name not in settings.profiles:
+            raise ValueError(f"Profile '{profile_name}' not found in settings")
+        profile = settings.profiles[profile_name]
+
+        # ALWAYS set working_dir to worktree_path for agent execution
+        profile = profile.model_copy(update={"working_dir": request.worktree_path})
+
         # Generate workflow ID with wf- prefix
         workflow_id = f"wf-{uuid4().hex[:12]}"
+        worktree_name = request.worktree_name or worktree.name
 
-        # Determine worktree name
-        worktree_path = Path(request.worktree_path)
-        worktree_name = request.worktree_name or worktree_path.name
+        # Fetch issue from tracker (or construct from task_title)
+        if request.task_title is not None:
+            # Validate that tracker is noop when using task_title
+            if profile.tracker not in ("noop", "none"):
+                raise ValueError(
+                    f"task_title can only be used with noop tracker, "
+                    f"but profile '{profile.name}' uses tracker '{profile.tracker}'"
+                )
+            issue = Issue(
+                id=request.issue_id,
+                title=request.task_title,
+                description=request.task_description or request.task_title,
+            )
+        else:
+            # Fetch issue from tracker
+            tracker = create_tracker(profile)
+            issue = tracker.get_issue(request.issue_id, cwd=request.worktree_path)
 
-        # Create state in pending without starting
+        # Get current HEAD to track changes
+        base_commit = await get_git_head(request.worktree_path)
+
+        # Create ExecutionState with all required fields
+        execution_state = ExecutionState(
+            profile_id=profile.name,
+            issue=issue,
+            base_commit=base_commit,
+        )
+
+        # Create ServerExecutionState in pending status (not started)
         state = ServerExecutionState(
             id=workflow_id,
             issue_id=request.issue_id,
-            worktree_path=str(worktree_path.resolve()),
+            worktree_path=str(worktree.resolve()),
             worktree_name=worktree_name,
+            execution_state=execution_state,
             workflow_status="pending",
             # No started_at - workflow hasn't started
             # No planned_at - not planned yet
@@ -2206,8 +2269,9 @@ class OrchestratorService:
             if current_count >= self._max_concurrent:
                 raise ConcurrencyLimitError(self._max_concurrent, current_count)
 
-            # Update workflow state to in_progress
-            workflow.workflow_status = "in_progress"
+            # Set started_at timestamp (status transition happens in _run_workflow)
+            # NOTE: We don't set workflow_status here - _run_workflow handles
+            # the pending -> in_progress transition, consistent with start_workflow
             workflow.started_at = datetime.now(UTC)
             await self._repository.update(workflow)
 

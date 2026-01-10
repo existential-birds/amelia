@@ -34,6 +34,7 @@ class TestStateTransitions:
         [
             ("pending", "in_progress"),
             ("pending", "cancelled"),
+            ("pending", "failed"),  # Workflows can fail during startup
             ("in_progress", "blocked"),
             ("in_progress", "completed"),
             ("in_progress", "failed"),
@@ -53,7 +54,7 @@ class TestStateTransitions:
         "current,target",
         [
             ("pending", "completed"),
-            ("pending", "failed"),
+            # ("pending", "failed") is now valid - workflows can fail during startup
             ("pending", "blocked"),
             ("in_progress", "pending"),
             ("in_progress", "in_progress"),

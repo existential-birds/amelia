@@ -166,4 +166,34 @@ describe('QuickShotModal queue buttons', () => {
     expect(planQueueButton).not.toBeDisabled();
     expect(startButton).not.toBeDisabled();
   });
+
+  it('should close modal after successful Plan & Queue submission', async () => {
+    const onOpenChange = vi.fn();
+    render(<QuickShotModal open={true} onOpenChange={onOpenChange} />);
+
+    await fillRequiredFields();
+
+    const planQueueButton = screen.getByRole('button', { name: /plan.*queue/i });
+    fireEvent.click(planQueueButton);
+
+    await waitFor(() => {
+      expect(api.createWorkflow).toHaveBeenCalled();
+      expect(onOpenChange).toHaveBeenCalledWith(false);
+    });
+  });
+
+  it('should close modal after successful Queue submission', async () => {
+    const onOpenChange = vi.fn();
+    render(<QuickShotModal open={true} onOpenChange={onOpenChange} />);
+
+    await fillRequiredFields();
+
+    const queueButton = screen.getByRole('button', { name: /^queue$/i });
+    fireEvent.click(queueButton);
+
+    await waitFor(() => {
+      expect(api.createWorkflow).toHaveBeenCalled();
+      expect(onOpenChange).toHaveBeenCalledWith(false);
+    });
+  });
 });

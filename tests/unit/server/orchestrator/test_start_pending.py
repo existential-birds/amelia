@@ -70,16 +70,22 @@ class TestStartPendingWorkflow:
         mock_repository: MagicMock,
         pending_workflow: ServerExecutionState,
     ) -> None:
-        """Successfully start a pending workflow."""
+        """Successfully start a pending workflow.
+
+        Note: start_pending_workflow only sets started_at, not workflow_status.
+        The status transition (pending -> in_progress) happens in _run_workflow
+        to prevent double transition errors (bug #84).
+        """
         mock_repository.get.return_value = pending_workflow
 
         with patch.object(orchestrator, "_run_workflow_with_retry", new_callable=AsyncMock):
             await orchestrator.start_pending_workflow("wf-pending123")
 
-        # Workflow should be updated to in_progress
+        # Workflow should have started_at set but status unchanged
+        # (status transition happens in _run_workflow, not start_pending_workflow)
         update_call = mock_repository.update.call_args
         updated_state = update_call[0][0]
-        assert updated_state.workflow_status == "in_progress"
+        assert updated_state.workflow_status == "pending"  # Not changed here
         assert updated_state.started_at is not None
 
     @pytest.mark.asyncio

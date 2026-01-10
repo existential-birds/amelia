@@ -21,7 +21,7 @@ WorkflowStatus = Literal[
 
 # State machine validation - prevents invalid transitions
 VALID_TRANSITIONS: dict[WorkflowStatus, set[WorkflowStatus]] = {
-    "pending": {"in_progress", "cancelled"},
+    "pending": {"in_progress", "cancelled", "failed"},  # Can fail during startup
     "in_progress": {"blocked", "completed", "failed", "cancelled"},
     "blocked": {"in_progress", "failed", "cancelled"},
     "completed": set(),  # Terminal state
