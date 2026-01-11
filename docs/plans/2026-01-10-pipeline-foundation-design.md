@@ -48,6 +48,8 @@ class Pipeline(Protocol[StateT]):
     def get_state_class(self) -> type[StateT]: ...
 ```
 
+**Note:** `interrupt_before` is handled internally by each pipeline in `create_graph()`, not exposed in the protocol.
+
 ---
 
 ## Pipeline Registry
@@ -66,6 +68,17 @@ def get_pipeline(name: str) -> Pipeline:
     if name not in PIPELINES:
         raise ValueError(f"Unknown pipeline: {name}")
     return PIPELINES[name]()
+
+def list_pipelines() -> list[dict[str, str]]:
+    """List available pipelines for dashboard."""
+    return [
+        {
+            "name": p.name,
+            "display_name": p.display_name,
+            "description": p.description,
+        }
+        for p in (cls() for cls in PIPELINES.values())
+    ]
 ```
 
 Phase 1 includes only the Implementation pipeline. Future phases add entries here.
@@ -87,18 +100,26 @@ class BasePipelineState(BaseModel):
     pipeline_type: str
     profile_id: str
 
-    # Lifecycle
-    status: Literal["pending", "running", "paused", "completed", "failed"]
-    created_at: datetime
-    updated_at: datetime
-
     # Observability
     history: Annotated[list[HistoryEntry], add] = Field(default_factory=list)
 
     # Human interaction
     pending_user_input: bool = False
     user_message: str | None = None
+
+    # Agentic execution (shared across all pipelines)
+    tool_calls: Annotated[list[ToolCall], add] = Field(default_factory=list)
+    tool_results: Annotated[list[ToolResult], add] = Field(default_factory=list)
+    agentic_status: AgenticStatus = "running"
+    driver_session_id: str | None = None
+    final_response: str | None = None
+    error: str | None = None
 ```
+
+**Notes:**
+- `HistoryEntry` is defined in the [stateless-reducer-pattern.md](./stateless-reducer-pattern.md) design doc
+- Removed `status` (dead code - use `agentic_status` for graph, `WorkflowStatus` for server)
+- Removed `created_at` / `updated_at` (database concern, not state)
 
 ---
 
@@ -146,10 +167,14 @@ class ImplementationState(BasePipelineState):
     """State for implementation pipeline."""
     pipeline_type: Literal["implementation"] = "implementation"
 
+    # Pipeline-specific fields (all current ExecutionState fields not in base)
     issue: Issue | None = None
     design: Design | None = None
     plan_markdown: str | None = None
+    plan_path: Path | None = None
     goal: str | None = None
+    base_commit: str | None = None
+    # ... remaining fields from current ExecutionState
     last_review: ReviewResult | None = None
     review_iteration: int = 0
 ```
@@ -160,10 +185,11 @@ class ImplementationState(BasePipelineState):
 
 1. Create `amelia/pipelines/` directory structure
 2. Define `BasePipelineState` and `Pipeline` protocol in `base.py`
-3. Create registry with Implementation pipeline only
-4. Move `ExecutionState` to `ImplementationState` extending `BasePipelineState`
+3. Create registry with `list_pipelines()` and `get_pipeline()`
+4. Create `ImplementationState` extending `BasePipelineState` with remaining fields
 5. Move orchestrator graph code to `pipelines/implementation/graph.py`
-6. Keep `amelia/core/orchestrator.py` as thin wrapper for backward compatibility
+6. Update all imports to use new locations
+7. Delete `amelia/core/state.py` and `amelia/core/orchestrator.py`
 
 ---
 
@@ -174,15 +200,12 @@ amelia/
 ├── pipelines/
 │   ├── __init__.py
 │   ├── base.py                    # BasePipelineState, Pipeline protocol
-│   ├── registry.py                # PIPELINES dict, get_pipeline()
+│   ├── registry.py                # PIPELINES dict, get_pipeline(), list_pipelines()
 │   │
 │   └── implementation/
 │       ├── __init__.py            # ImplementationPipeline class
 │       ├── state.py               # ImplementationState
 │       └── graph.py               # create_implementation_graph()
-│
-├── core/
-│   └── orchestrator.py            # Thin wrapper, delegates to pipelines
 ```
 
 ---
@@ -190,11 +213,14 @@ amelia/
 ## Success Criteria
 
 1. **Protocol defined** - `Pipeline` protocol and `BasePipelineState` exist in `amelia/pipelines/base.py`
-2. **Registry works** - `get_pipeline("implementation")` returns a valid `ImplementationPipeline`
+2. **Registry works** - `get_pipeline()` and `list_pipelines()` return valid pipelines
 3. **State hierarchy** - `ImplementationState` extends `BasePipelineState` with all current fields
 4. **Graph relocated** - Implementation graph code lives in `pipelines/implementation/graph.py`
-5. **Backward compatible** - All existing tests pass without modification
-6. **CLI unchanged** - `amelia start`, `amelia review`, and server commands work as before
+5. **CLI unchanged** - `amelia start`, `amelia review`, and server commands work as before
+
+**Testing (TDD):**
+- Integration tests cover full orchestrator flow, mocking only external LLM API boundary
+- Unit tests fill gaps for registry functions, state validation, protocol compliance
 
 ---
 
