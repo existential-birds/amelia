@@ -63,7 +63,6 @@ class ExecutionState(BaseModel):
         last_review: Most recent review result (only latest matters for decisions).
         code_changes_for_review: Staged code changes for review.
         driver_session_id: Session ID for driver session continuity.
-        workflow_status: Status of the workflow (running, completed, failed).
         agent_history: History of agent actions/messages for context tracking.
             Uses operator.add reducer - new entries are appended across state updates.
         tool_calls: History of tool calls made during agentic execution.
@@ -102,7 +101,6 @@ class ExecutionState(BaseModel):
     last_review: ReviewResult | None = None
     code_changes_for_review: str | None = None
     driver_session_id: str | None = None
-    workflow_status: Literal["running", "completed", "failed", "aborted"] = "running"
     agent_history: Annotated[list[str], operator.add] = Field(default_factory=list)
 
     # Agentic execution tracking

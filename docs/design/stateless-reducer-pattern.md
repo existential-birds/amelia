@@ -214,7 +214,6 @@ class ExecutionState(BaseModel):
     last_review: ReviewResult | None = None
     human_approved: bool | None = None
     human_feedback: str | None = None
-    workflow_status: Literal["running", "completed", "failed", "aborted"] = "running"
     status: AgenticStatus = "running"
     final_response: str | None = None
     error: str | None = None

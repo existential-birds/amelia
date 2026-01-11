@@ -164,7 +164,8 @@ class ExecutionState(BaseModel):
     pending_approval_for: AgentType | None = None  # Set when waiting for human
     human_approved: bool | None = None
     last_review: ReviewResult | None = None
-    workflow_status: Literal["planning", "running", "awaiting_approval", "completed", "failed"] = "planning"
+    # Note: Workflow status is tracked server-side via WorkflowState.workflow_status
+    # with values: pending, planning, in_progress, blocked, completed, failed, cancelled
 
     # --- Helpers ---
     def get_current_step(self) -> WorkflowStep | None:
@@ -384,7 +385,6 @@ async def planner_node(state: ExecutionState, config: RunnableConfig) -> dict:
             replanned_count=replanned_count,
         ),
         "replan_request": None,  # Clear the replan request
-        "workflow_status": "running",
         "history": [HistoryEntry(
             actor="planner",
             event="workflow_planned",
@@ -409,7 +409,7 @@ def dispatcher_node(state: ExecutionState, config: RunnableConfig) -> Command:
 
     # Check if workflow complete
     if not state.workflow or state.workflow.current_step_index >= len(state.workflow.steps):
-        return Command(goto=END, update={"workflow_status": "completed"})
+        return Command(goto=END)
 
     current_step = state.workflow.steps[state.workflow.current_step_index]
 
@@ -424,7 +424,6 @@ def dispatcher_node(state: ExecutionState, config: RunnableConfig) -> Command:
             goto="human_approval",
             update={
                 "pending_approval_for": current_step.agent,
-                "workflow_status": "awaiting_approval",
             },
         )
 
@@ -436,7 +435,6 @@ def dispatcher_node(state: ExecutionState, config: RunnableConfig) -> Command:
                 goto="human_approval",
                 update={
                     "pending_approval_for": current_step.agent,
-                    "workflow_status": "awaiting_approval",
                     "history": [HistoryEntry(
                         actor="dispatcher",
                         event="confidence_escalation",
@@ -476,7 +474,7 @@ def reducer_node(state: ExecutionState) -> Command:
                     ),
                 },
             )
-        return Command(goto=END, update={"workflow_status": "failed"})
+        return Command(goto=END)
 
     # Advance to next step
     if state.workflow:
@@ -576,9 +574,9 @@ Human approval node with `interrupt_before`:
 async def human_approval_node(state: ExecutionState) -> dict:
     """Human approval checkpoint. Graph interrupts before this node."""
     # When resumed, human_approved will be set via state update
+    # Note: Workflow status is tracked server-side via WorkflowState
     if state.human_approved:
         return {
-            "workflow_status": "running",
             "history": [HistoryEntry(
                 actor="human",
                 event="approved",
@@ -587,7 +585,6 @@ async def human_approval_node(state: ExecutionState) -> dict:
         }
     else:
         return {
-            "workflow_status": "failed",
             "history": [HistoryEntry(
                 actor="human",
                 event="rejected",

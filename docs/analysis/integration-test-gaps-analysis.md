@@ -323,7 +323,7 @@ async def test_happy_path_completes(orchestrator_graph, initial_state):
 
     # Verify completion
     final = await orchestrator_graph.aget_state(config)
-    assert final.values.get("workflow_status") == "completed"
+    assert final.values.get("agentic_status") == "completed"
 
 
 async def test_blocker_skip_continues(orchestrator_graph, initial_state):

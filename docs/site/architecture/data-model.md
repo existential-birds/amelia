@@ -181,7 +181,6 @@ The central state object for the LangGraph orchestrator. This model is frozen (i
 | `last_review` | `ReviewResult \| None` | `None` | Most recent review result (only latest matters for decisions). |
 | `code_changes_for_review` | `str \| None` | `None` | Staged code changes for review. |
 | `driver_session_id` | `str \| None` | `None` | Session ID for driver session continuity. |
-| `workflow_status` | `"running" \| "completed" \| "failed" \| "aborted"` | `"running"` | Status of the workflow. |
 | `agent_history` | `Annotated[list[str], operator.add]` | `[]` | History of agent actions/messages for context tracking. Uses reducer. |
 | `tool_calls` | `Annotated[list[ToolCall], operator.add]` | `[]` | History of tool calls made during agentic execution. Uses reducer. |
 | `tool_results` | `Annotated[list[ToolResult], operator.add]` | `[]` | History of tool results from agentic execution. Uses reducer. |

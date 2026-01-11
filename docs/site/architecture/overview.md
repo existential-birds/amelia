@@ -361,7 +361,6 @@ class ExecutionState(BaseModel):
     last_review: ReviewResult | None = None        # Most recent review result
     code_changes_for_review: str | None = None
     driver_session_id: str | None = None           # For driver session continuity
-    workflow_status: Literal["running", "completed", "failed", "aborted"] = "running"
     agent_history: Annotated[list[str], operator.add] = Field(default_factory=list)
 
     # Agentic execution tracking
