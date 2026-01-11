@@ -8,7 +8,6 @@ This document describes the core data structures used throughout the Amelia orch
 |------|------------|-------------|
 | `DriverType` | `"cli:claude" \| "api:openai" \| "api:openrouter" \| "cli" \| "api"` | LLM driver type. |
 | `TrackerType` | `"jira" \| "github" \| "none" \| "noop"` | Issue tracker type. |
-| `StrategyType` | `"single" \| "competitive"` | Review strategy. |
 | `AgenticStatus` | `"running" \| "awaiting_approval" \| "completed" \| "failed" \| "cancelled"` | Agentic execution status. |
 | `Severity` | `"low" \| "medium" \| "high" \| "critical"` | Review issue severity. |
 
@@ -36,7 +35,6 @@ Defines the runtime environment and constraints.
 | `driver` | `DriverType` | — | LLM driver type (e.g., "api:openrouter", "cli:claude"). |
 | `model` | `str \| None` | `None` | LLM model identifier. Required for API drivers (e.g., "minimax/minimax-m2"). |
 | `tracker` | `TrackerType` | `"none"` | Issue tracker type. |
-| `strategy` | `StrategyType` | `"single"` | Review strategy (single or competitive). |
 | `working_dir` | `str \| None` | `None` | Working directory for agentic execution. |
 | `plan_output_dir` | `str` | `"docs/plans"` | Directory for saving implementation plans. |
 | `retry` | `RetryConfig` | `RetryConfig()` | Retry configuration for transient failures. |

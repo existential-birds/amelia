@@ -16,7 +16,6 @@ profiles:
     driver: api:openrouter
     model: "minimax/minimax-m2"
     tracker: github
-    strategy: single
 ```
 
 ## Configuration
@@ -31,7 +30,6 @@ Amelia uses profile-based configuration in `settings.amelia.yaml`. See [Configur
 | `driver` | Yes | - | LLM driver: `api:openrouter`, `api`, `cli:claude`, or `cli` |
 | `model` | API only | - | LLM model identifier (required for API drivers) |
 | `tracker` | No | `none` | Issue source: `github`, `jira`, `none`, or `noop` |
-| `strategy` | No | `single` | Review strategy: `single` or `competitive` |
 | `plan_output_dir` | No | `docs/plans` | Directory for generated plans |
 | `working_dir` | No | `null` | Working directory for agentic execution |
 | `max_review_iterations` | No | `3` | Maximum review-fix loop iterations |
@@ -78,7 +76,6 @@ profiles:
     driver: api:openrouter
     model: "minimax/minimax-m2"
     tracker: github
-    strategy: single
     plan_output_dir: "docs/plans"
     max_review_iterations: 3
     retry:
@@ -90,7 +87,6 @@ profiles:
     name: enterprise
     driver: cli:claude
     tracker: jira
-    strategy: competitive
     max_review_iterations: 5
     retry:
       max_retries: 5

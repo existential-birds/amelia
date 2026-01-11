@@ -68,15 +68,13 @@ The Developer uses an agentic execution model where the LLM autonomously decides
 
 **Role**: Reviews code changes, provides feedback, approves or requests fixes.
 
-**Strategies**:
-- `single`: One general review covering all aspects
-- `competitive`: Parallel reviews from Security, Performance, and Usability personas, then aggregated into final feedback
+The Reviewer uses agentic execution to auto-detect technologies, load appropriate review skills, and fetch the diff via git. It produces structured feedback with issues categorized by severity (critical, major, minor).
 
 | Output | Description |
 |--------|-------------|
 | `approved` | Boolean - whether changes are acceptable |
-| `comments` | Detailed feedback on the changes |
-| `severity` | Issue severity (low, medium, high, critical) |
+| `issues` | List of issues with severity (critical, major, minor) and descriptions |
+| `summary` | High-level summary of the review findings |
 
 The Reviewer examines code changes and either approves them or provides feedback. If changes are not approved, the Developer receives the feedback and attempts fixes. This review-fix loop continues until approved or the maximum iterations (`max_review_iterations`) is reached.
 

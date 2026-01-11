@@ -219,10 +219,9 @@ async for event in developer.execute_agentic(
 # Get code changes
 code_changes = state.code_changes_for_review or get_git_diff("HEAD")
 
-# Run review (single or competitive strategy)
+# Run review
 reviewer = Reviewer(driver)
 review_result = await reviewer.review(state, code_changes)
-# Competitive: parallel Security/Performance/Usability reviews, aggregated
 
 state.last_review = review_result
 
@@ -242,7 +241,6 @@ class Profile(BaseModel):
     driver: DriverType                             # "api:openrouter" | "cli:claude" | "cli" | "api"
     model: str | None = None                       # Model identifier for API drivers
     tracker: TrackerType = "none"                  # "jira" | "github" | "none" | "noop"
-    strategy: StrategyType = "single"              # "single" | "competitive"
     working_dir: str | None = None
     plan_output_dir: str = "docs/plans"
     retry: RetryConfig = Field(default_factory=RetryConfig)
@@ -713,7 +711,7 @@ amelia/
 │   ├── __init__.py
 │   ├── architect.py          # Markdown plan generation with goal extraction
 │   ├── developer.py          # Agentic execution with streaming tool calls
-│   └── reviewer.py           # Code review (single/competitive strategies)
+│   └── reviewer.py           # Code review
 ├── client/
 │   ├── __init__.py
 │   ├── api.py                # AmeliaClient REST client

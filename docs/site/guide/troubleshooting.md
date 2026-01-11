@@ -150,7 +150,7 @@ InvalidStateError: Cannot approve workflow in status 'executing'
 
 **Valid state transitions:**
 - `pending` → `in_progress` (workflow started via `amelia run`)
-- `pending` → `planning` (workflow started with immediate execution)
+- `pending` → `planning` (workflow started with `--plan` flag for immediate planning)
 - `planning` → `pending_approval` (after Architect generates plan)
 - `pending_approval` → `executing` (after approval)
 - `pending_approval` → `planning` (after rejection with feedback)
@@ -198,7 +198,7 @@ curl http://127.0.0.1:8420/api/workflows/<workflow-id>
 WorkflowConflictError: Cannot start workflow - another workflow is active on this worktree
 ```
 
-**Cause:** Only one workflow can be active (in_progress or blocked) per worktree at a time.
+**Cause:** Only one workflow can be active (in_progress or blocked) per worktree at a time. Note: `planning` status does NOT block the worktree.
 
 **Solutions:**
 
@@ -208,6 +208,29 @@ WorkflowConflictError: Cannot start workflow - another workflow is active on thi
    amelia cancel <active-workflow-id>
    ```
 3. Start the queued workflow after the active one completes
+
+#### Workflow stuck in planning state
+
+**Cause:** Workflow entered `planning` status but the Architect hasn't completed. This can happen if:
+- The Architect is still generating the plan (normal)
+- The Architect encountered an error during planning
+- The LLM API is slow or unresponsive
+
+**Solutions:**
+
+1. Check server logs for Architect errors:
+   ```bash
+   export LOGURU_LEVEL=DEBUG
+   amelia dev
+   ```
+
+2. Cancel and retry the workflow:
+   ```bash
+   amelia cancel <workflow-id>
+   amelia start <issue-id> --plan
+   ```
+
+3. Note: Workflows in `planning` status can be cancelled and do NOT block the worktree.
 
 #### Plan not generating
 
@@ -227,7 +250,7 @@ WorkflowConflictError: Cannot start workflow - another workflow is active on thi
    gh issue view <issue-id>
    ```
 
-3. Note: The workflow remains in `pending` state even if planning fails. The `planned_at` field will be null.
+3. Note: If planning fails, the workflow transitions back to `pending` state (or fails). Check the `planned_at` field to see if planning completed.
 
 ### Invalid worktree (400)
 
@@ -308,7 +331,6 @@ Error: Profile 'production' not found in settings.
        name: dev
        driver: cli:claude
        tracker: github
-       strategy: single
    ```
 
 3. Use explicit profile flag:
@@ -336,7 +358,6 @@ FileNotFoundError: Configuration file not found at settings.amelia.yaml
        name: dev
        driver: cli:claude
        tracker: noop
-       strategy: single
    EOF
    ```
 

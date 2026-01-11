@@ -18,7 +18,6 @@ profiles:
     name: work
     driver: cli:claude        # LLM via claude CLI
     tracker: jira             # Issues from Jira
-    strategy: competitive     # Multiple parallel reviewers
     plan_output_dir: "docs/plans"
     max_review_iterations: 5  # More iterations for complex reviews
     retry:
@@ -32,7 +31,6 @@ profiles:
     driver: api:openrouter    # LLM via OpenRouter API
     model: "minimax/minimax-m2"  # Required for API drivers
     tracker: github           # Issues from GitHub
-    strategy: single          # Single reviewer
     plan_output_dir: "docs/plans"
 
   # Testing profile
@@ -41,7 +39,6 @@ profiles:
     driver: api:openrouter
     model: "minimax/minimax-m2"
     tracker: noop             # No real tracker
-    strategy: single
 ```
 
 ## Profile Structure
@@ -102,17 +99,6 @@ Default: `"none"`
 | `github` | GitHub issues | `gh` CLI authenticated (`gh auth login`) |
 | `none` | No tracker | None |
 | `noop` | Alias for `none` | None |
-
-### `profiles.<name>.strategy` (optional)
-
-How code review is performed.
-
-Default: `"single"`
-
-| Value | Description | Behavior |
-|-------|-------------|----------|
-| `single` | One reviewer pass | General review from single LLM call |
-| `competitive` | Multiple parallel reviews | Security, Performance, Usability reviews run concurrently, results aggregated |
 
 ### `profiles.<name>.plan_output_dir` (optional)
 
@@ -237,7 +223,6 @@ Amelia validates profiles on startup:
 - Required fields (`name`, `driver`) must be present
 - Driver values must be one of: `api`, `api:openrouter`, `cli`, `cli:claude`
 - Tracker values must be one of: `jira`, `github`, `none`, `noop`
-- Strategy must be `single` or `competitive`
 - API drivers require the `model` field
 - Retry values must be within allowed ranges
 
@@ -268,7 +253,7 @@ profiles:
     model: "minimax/minimax-m2"
 ```
 
-This uses: `tracker: none`, `strategy: single`, default retry settings.
+This uses: `tracker: none`, default retry settings.
 
 ### Enterprise (CLI + Jira)
 
@@ -281,7 +266,6 @@ profiles:
     name: work
     driver: cli:claude
     tracker: jira
-    strategy: competitive
     max_review_iterations: 5
 ```
 
@@ -297,21 +281,18 @@ profiles:
     name: work
     driver: cli:claude
     tracker: jira
-    strategy: competitive
 
   home:
     name: home
     driver: api:openrouter
     model: "minimax/minimax-m2"
     tracker: github
-    strategy: single
 
   test:
     name: test
     driver: api:openrouter
     model: "minimax/minimax-m2"
     tracker: noop
-    strategy: single
 ```
 
 Usage:
