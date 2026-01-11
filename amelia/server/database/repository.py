@@ -204,13 +204,13 @@ class WorkflowRepository:
             worktree_path: Optional filter by worktree path.
 
         Returns:
-            List of active workflows (pending, in_progress, blocked).
+            List of active workflows (pending, planning, in_progress, blocked).
         """
         if worktree_path:
             rows = await self._db.fetch_all(
                 """
                 SELECT state_json FROM workflows
-                WHERE status IN ('pending', 'in_progress', 'blocked')
+                WHERE status IN ('pending', 'planning', 'in_progress', 'blocked')
                 AND worktree_path = ?
                 ORDER BY started_at DESC
                 """,
@@ -220,7 +220,7 @@ class WorkflowRepository:
             rows = await self._db.fetch_all(
                 """
                 SELECT state_json FROM workflows
-                WHERE status IN ('pending', 'in_progress', 'blocked')
+                WHERE status IN ('pending', 'planning', 'in_progress', 'blocked')
                 ORDER BY started_at DESC
                 """
             )
@@ -235,7 +235,7 @@ class WorkflowRepository:
         result = await self._db.fetch_scalar(
             """
             SELECT COUNT(*) FROM workflows
-            WHERE status IN ('pending', 'in_progress', 'blocked')
+            WHERE status IN ('pending', 'planning', 'in_progress', 'blocked')
             """
         )
         # COUNT(*) always returns int; use isinstance for type narrowing

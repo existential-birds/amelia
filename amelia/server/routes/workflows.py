@@ -230,7 +230,7 @@ async def list_active_workflows(
 ) -> WorkflowListResponse:
     """List all active workflows.
 
-    Active workflows are those in pending, in_progress, or blocked status.
+    Active workflows are those in pending, planning, in_progress, or blocked status.
 
     Args:
         worktree: Filter by worktree path.
