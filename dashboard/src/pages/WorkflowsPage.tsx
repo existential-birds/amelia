@@ -168,7 +168,7 @@ export default function WorkflowsPage() {
       )}
 
       {/* Bottom: Queue + Activity (split) - ScrollArea provides overflow handling */}
-      <div className="flex-1 grid grid-cols-[320px_1fr] grid-rows-[1fr] gap-4 p-4 overflow-hidden relative z-10 min-h-[300px]">
+      <div className="flex-1 grid grid-cols-[360px_1fr] grid-rows-[1fr] gap-4 p-4 overflow-hidden relative z-10 min-h-[300px]">
         <ScrollArea className="h-full overflow-hidden">
           <JobQueue
             workflows={workflows}
