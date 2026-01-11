@@ -2,16 +2,13 @@
 
 import asyncio
 from collections.abc import AsyncGenerator
-from datetime import UTC, datetime
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from amelia.core.state import ExecutionState
-from amelia.core.types import Issue
-from amelia.server.models.events import WorkflowEvent
 from amelia.server.models.requests import CreateWorkflowRequest
 from amelia.server.orchestrator.service import OrchestratorService
 
@@ -91,6 +88,91 @@ profiles:
     return str(worktree)
 
 
+def create_mock_graph(
+    *,
+    interrupt_immediately: bool = True,
+    fail_with: Exception | None = None,
+    planning_started_event: asyncio.Event | None = None,
+    planning_complete_event: asyncio.Event | None = None,
+    goal: str = "Implement the test feature",
+    plan_markdown: str = "# Plan\n\n1. Do thing",
+) -> MagicMock:
+    """Create a mock LangGraph that simulates planning behavior.
+
+    Args:
+        interrupt_immediately: If True, yields interrupt chunk immediately.
+        fail_with: If set, raise this exception during astream.
+        planning_started_event: Event to set when planning starts.
+        planning_complete_event: Event to wait for before completing.
+        goal: The goal to include in checkpoint state.
+        plan_markdown: The plan markdown to include in checkpoint state.
+
+    Returns:
+        Mock graph with astream and aget_state configured.
+    """
+    mock_graph = MagicMock()
+
+    async def mock_astream(
+        input_state: dict[str, Any] | None,
+        config: dict[str, Any],
+        stream_mode: list[str],
+    ) -> AsyncGenerator[tuple[str, Any], None]:
+        """Mock astream that simulates LangGraph behavior."""
+        if planning_started_event:
+            planning_started_event.set()
+
+        if planning_complete_event:
+            await planning_complete_event.wait()
+
+        if fail_with:
+            raise fail_with
+
+        # Yield architect_node update
+        yield ("updates", {"architect_node": {"goal": goal, "plan_markdown": plan_markdown}})
+
+        if interrupt_immediately:
+            # Yield interrupt chunk to signal waiting at human_approval_node
+            yield ("updates", {"__interrupt__": [{"value": "Plan ready", "resumable": True}]})
+
+    mock_graph.astream = mock_astream
+
+    # Mock aget_state to return checkpoint with plan
+    mock_state = MagicMock()
+    mock_state.values = {
+        "goal": goal,
+        "plan_markdown": plan_markdown,
+    }
+    mock_graph.aget_state = AsyncMock(return_value=mock_state)
+
+    return mock_graph
+
+
+@asynccontextmanager
+async def mock_checkpointer_and_graph(
+    mock_graph: MagicMock,
+) -> AsyncGenerator[MagicMock, None]:
+    """Context manager that patches AsyncSqliteSaver and graph creation."""
+    # Create a mock checkpointer context manager
+    mock_checkpointer = MagicMock()
+
+    @asynccontextmanager
+    async def mock_from_conn_string(path: str) -> AsyncGenerator[MagicMock, None]:
+        yield mock_checkpointer
+
+    with (
+        patch(
+            "amelia.server.orchestrator.service.AsyncSqliteSaver.from_conn_string",
+            mock_from_conn_string,
+        ),
+        patch.object(
+            OrchestratorService,
+            "_create_server_graph",
+            return_value=mock_graph,
+        ),
+    ):
+        yield mock_checkpointer
+
+
 class TestQueueAndPlanWorkflow:
     """Tests for queue_and_plan_workflow method."""
 
@@ -101,7 +183,7 @@ class TestQueueAndPlanWorkflow:
         mock_repository: MagicMock,
         valid_worktree: str,
     ) -> None:
-        """queue_and_plan_workflow runs Architect and stores plan."""
+        """queue_and_plan_workflow runs Architect via LangGraph and stores plan."""
         request = CreateWorkflowRequest(
             issue_id="ISSUE-123",
             worktree_path=valid_worktree,
@@ -109,50 +191,12 @@ class TestQueueAndPlanWorkflow:
             plan_now=True,
         )
 
-        # Mock the architect to return an execution state with a plan
-        mock_architect = MagicMock()
+        mock_graph = create_mock_graph(
+            goal="Implement the test feature",
+            plan_markdown="# Plan\n\n1. Do thing\n2. Do other thing",
+        )
 
-        async def mock_plan_gen(
-            *args: Any, **kwargs: Any
-        ) -> AsyncGenerator[tuple[ExecutionState, WorkflowEvent], None]:
-            """Mock async generator that yields plan result."""
-            state = ExecutionState(
-                profile_id="test",
-                issue=Issue(id="ISSUE-123", title="Test", description="Test desc"),
-                goal="Implement the test feature",
-                plan_markdown="# Plan\n\n1. Do thing\n2. Do other thing",
-            )
-            from amelia.server.models.events import EventType
-
-            event = WorkflowEvent(
-                id="evt-1",
-                workflow_id="wf-test",
-                sequence=1,
-                timestamp=datetime.now(UTC),
-                agent="architect",
-                event_type=EventType.AGENT_OUTPUT,
-                message="Plan generated",
-            )
-            yield state, event
-
-        mock_architect.plan = mock_plan_gen
-
-        # Patch architect creation and tracker
-        with (
-            patch.object(
-                orchestrator, "_create_architect_for_planning", return_value=mock_architect
-            ),
-            patch(
-                "amelia.server.orchestrator.service.create_tracker"
-            ) as mock_create_tracker,
-        ):
-            # Setup mock tracker
-            mock_tracker = MagicMock()
-            mock_tracker.get_issue = MagicMock(
-                return_value=Issue(id="ISSUE-123", title="Test", description="Test desc")
-            )
-            mock_create_tracker.return_value = mock_tracker
-
+        async with mock_checkpointer_and_graph(mock_graph):
             workflow_id = await orchestrator.queue_and_plan_workflow(request)
 
             # Wait for the background planning task to complete
@@ -162,15 +206,17 @@ class TestQueueAndPlanWorkflow:
         assert workflow_id is not None
 
         # Check state was saved with plan and planned_at
-        # First call should be create(), second should be update()
+        # create() is called once for initial workflow creation
+        # update() may be called multiple times (_sync_plan_from_checkpoint + status update)
         mock_repository.create.assert_called_once()
-        mock_repository.update.assert_called_once()
+        assert mock_repository.update.call_count >= 1
 
+        # Check the final updated state (last call to update)
         updated_state = mock_repository.update.call_args[0][0]
         assert updated_state.workflow_status == "blocked"
         assert updated_state.planned_at is not None
+        # execution_state is synced from checkpoint via _sync_plan_from_checkpoint
         assert updated_state.execution_state is not None
-        assert updated_state.execution_state.goal is not None
 
     @pytest.mark.asyncio
     async def test_queue_and_plan_transitions_to_blocked(
@@ -187,48 +233,9 @@ class TestQueueAndPlanWorkflow:
             plan_now=True,
         )
 
-        # Mock the architect
-        mock_architect = MagicMock()
+        mock_graph = create_mock_graph()
 
-        async def mock_plan_gen(
-            *args: Any, **kwargs: Any
-        ) -> AsyncGenerator[tuple[ExecutionState, WorkflowEvent], None]:
-            """Mock async generator that yields plan result."""
-            state = ExecutionState(
-                profile_id="test",
-                issue=Issue(id="ISSUE-123", title="Test", description="Test desc"),
-                goal="Implement the test feature",
-                plan_markdown="# Plan",
-            )
-            from amelia.server.models.events import EventType
-
-            event = WorkflowEvent(
-                id="evt-1",
-                workflow_id="wf-test",
-                sequence=1,
-                timestamp=datetime.now(UTC),
-                agent="architect",
-                event_type=EventType.AGENT_OUTPUT,
-                message="Plan generated",
-            )
-            yield state, event
-
-        mock_architect.plan = mock_plan_gen
-
-        with (
-            patch.object(
-                orchestrator, "_create_architect_for_planning", return_value=mock_architect
-            ),
-            patch(
-                "amelia.server.orchestrator.service.create_tracker"
-            ) as mock_create_tracker,
-        ):
-            mock_tracker = MagicMock()
-            mock_tracker.get_issue = MagicMock(
-                return_value=Issue(id="ISSUE-123", title="Test", description="Test desc")
-            )
-            mock_create_tracker.return_value = mock_tracker
-
+        async with mock_checkpointer_and_graph(mock_graph):
             workflow_id = await orchestrator.queue_and_plan_workflow(request)
 
             # Wait for the background planning task to complete
@@ -245,7 +252,7 @@ class TestQueueAndPlanWorkflow:
         mock_repository: MagicMock,
         valid_worktree: str,
     ) -> None:
-        """If Architect fails, workflow is marked failed."""
+        """If LangGraph fails during planning, workflow is marked failed."""
         request = CreateWorkflowRequest(
             issue_id="ISSUE-123",
             worktree_path=valid_worktree,
@@ -253,32 +260,9 @@ class TestQueueAndPlanWorkflow:
             plan_now=True,
         )
 
-        # Mock architect that raises an exception
-        mock_architect = MagicMock()
+        mock_graph = create_mock_graph(fail_with=Exception("LLM API error"))
 
-        async def mock_plan_gen_fail(
-            *args: Any, **kwargs: Any
-        ) -> AsyncGenerator[tuple[ExecutionState, WorkflowEvent | None], None]:
-            """Mock async generator that raises."""
-            raise Exception("LLM API error")
-            yield  # Make it an async generator  # noqa: B901
-
-        mock_architect.plan = mock_plan_gen_fail
-
-        with (
-            patch.object(
-                orchestrator, "_create_architect_for_planning", return_value=mock_architect
-            ),
-            patch(
-                "amelia.server.orchestrator.service.create_tracker"
-            ) as mock_create_tracker,
-        ):
-            mock_tracker = MagicMock()
-            mock_tracker.get_issue = MagicMock(
-                return_value=Issue(id="ISSUE-123", title="Test", description="Test desc")
-            )
-            mock_create_tracker.return_value = mock_tracker
-
+        async with mock_checkpointer_and_graph(mock_graph):
             workflow_id = await orchestrator.queue_and_plan_workflow(request)
 
             # Wait for the background planning task to complete
@@ -310,54 +294,16 @@ class TestQueueAndPlanWorkflow:
             plan_now=True,
         )
 
-        mock_architect = MagicMock()
+        mock_graph = create_mock_graph()
 
-        async def mock_plan_gen(
-            *args: Any, **kwargs: Any
-        ) -> AsyncGenerator[tuple[ExecutionState, WorkflowEvent], None]:
-            """Mock async generator that yields plan result."""
-            state = ExecutionState(
-                profile_id="test",
-                issue=Issue(id="ISSUE-123", title="Test", description="Test desc"),
-                goal="Implement the test feature",
-                plan_markdown="# Plan",
-            )
-            from amelia.server.models.events import EventType
-
-            event = WorkflowEvent(
-                id="evt-1",
-                workflow_id="wf-test",
-                sequence=1,
-                timestamp=datetime.now(UTC),
-                agent="architect",
-                event_type=EventType.AGENT_OUTPUT,
-                message="Plan generated",
-            )
-            yield state, event
-
-        mock_architect.plan = mock_plan_gen
-
-        with (
-            patch.object(
-                orchestrator, "_create_architect_for_planning", return_value=mock_architect
-            ),
-            patch(
-                "amelia.server.orchestrator.service.create_tracker"
-            ) as mock_create_tracker,
-        ):
-            mock_tracker = MagicMock()
-            mock_tracker.get_issue = MagicMock(
-                return_value=Issue(id="ISSUE-123", title="Test", description="Test desc")
-            )
-            mock_create_tracker.return_value = mock_tracker
-
+        async with mock_checkpointer_and_graph(mock_graph):
             workflow_id = await orchestrator.queue_and_plan_workflow(request)
 
             # Wait for the background planning task to complete
             if workflow_id in orchestrator._planning_tasks:
                 await orchestrator._planning_tasks[workflow_id]
 
-        # Should have emitted events (workflow_created, plan events, etc.)
+        # Should have emitted events (workflow_created, stage events, approval_required)
         assert mock_event_bus.emit.called
 
     @pytest.mark.asyncio
@@ -394,32 +340,16 @@ class TestQueueAndPlanWorkflow:
             plan_now=True,
         )
 
-        # Use an event to track when planning starts
+        # Use events to track when planning starts and control when it completes
         planning_started = asyncio.Event()
         planning_complete = asyncio.Event()
 
-        mock_architect = MagicMock()
+        mock_graph = create_mock_graph(
+            planning_started_event=planning_started,
+            planning_complete_event=planning_complete,
+        )
 
-        async def slow_plan_gen(
-            *args: Any, **kwargs: Any
-        ) -> AsyncGenerator[tuple[ExecutionState, None], None]:
-            """Mock async generator that signals when planning starts."""
-            planning_started.set()
-            # Wait to simulate slow planning
-            await planning_complete.wait()
-            state = ExecutionState(
-                profile_id="test",
-                issue=Issue(id="ISSUE-123", title="Test", description="Test desc"),
-                goal="Implement the test feature",
-                plan_markdown="# Plan",
-            )
-            yield state, None
-
-        mock_architect.plan = slow_plan_gen
-
-        with patch.object(
-            orchestrator, "_create_architect_for_planning", return_value=mock_architect
-        ):
+        async with mock_checkpointer_and_graph(mock_graph):
             # This should return immediately before planning completes
             workflow_id = await orchestrator.queue_and_plan_workflow(request)
 
@@ -440,8 +370,8 @@ class TestQueueAndPlanWorkflow:
             if workflow_id in orchestrator._planning_tasks:
                 await orchestrator._planning_tasks[workflow_id]
 
-            # Now update should have been called
-            mock_repository.update.assert_called_once()
+            # Now update should have been called (at least once)
+            assert mock_repository.update.call_count >= 1
 
     @pytest.mark.asyncio
     async def test_queue_and_plan_sets_planning_status_immediately(
@@ -461,21 +391,12 @@ class TestQueueAndPlanWorkflow:
         # Use an event to block planning indefinitely
         planning_started = asyncio.Event()
 
-        mock_architect = MagicMock()
+        mock_graph = create_mock_graph(
+            planning_started_event=planning_started,
+            planning_complete_event=asyncio.Event(),  # Never set - blocks forever
+        )
 
-        async def blocking_plan_gen(
-            *args: Any, **kwargs: Any
-        ) -> AsyncGenerator[tuple[None, None], None]:
-            """Mock async generator that blocks forever."""
-            planning_started.set()
-            await asyncio.sleep(1000)  # Block indefinitely
-            yield None, None
-
-        mock_architect.plan = blocking_plan_gen
-
-        with patch.object(
-            orchestrator, "_create_architect_for_planning", return_value=mock_architect
-        ):
+        async with mock_checkpointer_and_graph(mock_graph):
             workflow_id = await orchestrator.queue_and_plan_workflow(request)
 
             # Wait for planning to start

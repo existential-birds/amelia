@@ -100,13 +100,17 @@ class ReviewResponse(BaseModel):
 
     Attributes:
         approved: Whether the code changes are acceptable and meet requirements.
-        comments: List of specific feedback items and suggestions.
+        comments: List of issues that need to be fixed. Do NOT include positive
+            observations or things done well - only actionable issues.
         severity: Overall severity of review findings (low, medium, high).
 
     """
 
     approved: bool = Field(description="Whether the changes are acceptable.")
-    comments: list[str] = Field(description="Specific feedback items.")
+    comments: list[str] = Field(
+        description="Issues that need to be fixed. Only include problems, bugs, "
+        "or required changes. Do NOT include positive observations or praise."
+    )
     severity: Severity = Field(description="Overall severity of the review findings.")
 
 
@@ -126,8 +130,36 @@ class Reviewer:
 
     """
 
+    # Indicators that a comment is an actionable issue (not a positive observation)
+    _ISSUE_INDICATORS: tuple[str, ...] = (
+        "[critical]", "[major]", "[minor]", "[high]", "[medium]", "[low]",
+        "fix:", "issue:", "should ", "must ", "error", "bug", "missing",
+        "incorrect", "wrong", "needs ", "required", "todo", "fixme",
+    )
+
+    @staticmethod
+    def _filter_actionable_comments(comments: list[str]) -> list[str]:
+        """Filter comments to only include actionable issues.
+
+        Removes positive observations and praise, keeping only comments that
+        indicate something needs to be fixed.
+
+        Args:
+            comments: Raw list of review comments from LLM.
+
+        Returns:
+            Filtered list containing only actionable issues.
+        """
+        actionable = [
+            c for c in comments
+            if any(ind in c.lower() for ind in Reviewer._ISSUE_INDICATORS)
+            or c.startswith("[")  # [FILE:LINE] format
+        ]
+        return actionable
+
     SYSTEM_PROMPT_TEMPLATE = """You are an expert code reviewer with a focus on {persona} aspects.
-Analyze the provided code changes and provide a comprehensive review."""
+Analyze the provided code changes and identify issues that need to be fixed.
+Only report problems - do not include positive observations or praise."""
 
     STRUCTURED_SYSTEM_PROMPT = """You are an expert code reviewer. Review the provided code changes and produce structured feedback.
 
@@ -345,7 +377,13 @@ Rationale: [1-2 sentences]
             status = "Approved" if approved else "Changes requested"
 
         content_parts = [f"**Review completed:** {status} (severity: {severity})"]
-        if comments:
+
+        # Comments are already filtered to actionable issues at the source
+        if not approved and comments:
+            content_parts.append("\n**Issues to fix:**")
+            for comment in comments:
+                content_parts.append(f"- {comment}")
+        elif comments:
             content_parts.append("\n**Comments:**")
             for comment in comments:
                 content_parts.append(f"- {comment}")
@@ -490,18 +528,21 @@ Rationale: [1-2 sentences]
             session_id=state.driver_session_id,
         )
 
+        # Filter to actionable issues only (LLMs sometimes include positive observations)
+        filtered_comments = self._filter_actionable_comments(response.comments)
+
         # Emit completion event before return
         self._emit_review_completion(
             workflow_id,
             response.approved,
             response.severity,
-            response.comments,
+            filtered_comments,
         )
 
         result = ReviewResult(
             reviewer_persona=persona,
             approved=response.approved,
-            comments=response.comments,
+            comments=filtered_comments,
             severity=response.severity
         )
         return result, new_session_id
@@ -849,16 +890,24 @@ The changes are in git - diff against commit: {base_commit}"""
         else:
             # Fallback: check for approval keywords
             output_lower = output.lower()
-            approved = any(
-                word in output_lower
-                for word in ["ready: yes", "approved", "lgtm", "looks good"]
-            )
-            not_approved = any(
-                word in output_lower
-                for word in ["ready: no", "not approved", "needs fixes", "blocked"]
-            )
-            if not_approved:
+            approval_keywords_found = [
+                word for word in ["ready: yes", "approved", "lgtm", "looks good"]
+                if word in output_lower
+            ]
+            rejection_keywords_found = [
+                word for word in ["ready: no", "not approved", "needs fixes", "blocked"]
+                if word in output_lower
+            ]
+            approved = bool(approval_keywords_found)
+            if rejection_keywords_found:
                 approved = False
+            logger.debug(
+                "Verdict parsed from fallback keywords",
+                approval_keywords_found=approval_keywords_found,
+                rejection_keywords_found=rejection_keywords_found,
+                approved=approved,
+                workflow_id=workflow_id,
+            )
 
         # Parse issues from each severity section
         issues: list[tuple[str, str]] = []  # (severity, issue_text)

@@ -105,13 +105,14 @@ class TestPlanValidatorNode:
             plan_markdown=plan_content,
             key_files=["src/auth/handler.py", "src/models/user.py", "tests/test_auth.py"],
         )
-        mock_driver = MagicMock()
-        mock_driver.generate = AsyncMock(return_value=(mock_output, "session-123"))
 
         config = make_config(mock_profile)
 
-        with patch("amelia.core.orchestrator.DriverFactory") as mock_factory:
-            mock_factory.get_driver.return_value = mock_driver
+        with patch(
+            "amelia.core.orchestrator._extract_structured",
+            new_callable=AsyncMock,
+            return_value=mock_output,
+        ):
             result = await plan_validator_node(mock_state, config)
 
         assert result["goal"] == "Add user authentication with JWT tokens"
@@ -189,19 +190,21 @@ class TestPlanValidatorNode:
             plan_markdown=plan_content,
             key_files=[],
         )
-        mock_driver = MagicMock()
-        mock_driver.generate = AsyncMock(return_value=(mock_output, "session-123"))
 
         config = make_config(profile)
 
-        with patch("amelia.core.orchestrator.DriverFactory") as mock_factory:
-            mock_factory.get_driver.return_value = mock_driver
+        with patch(
+            "amelia.core.orchestrator._extract_structured",
+            new_callable=AsyncMock,
+            return_value=mock_output,
+        ) as mock_extract:
             await plan_validator_node(mock_state, config)
 
-        mock_factory.get_driver.assert_called_once_with(
-            "api:openrouter",
-            model=expected_model,
-        )
+        # Verify _extract_structured was called with the correct model
+        mock_extract.assert_called_once()
+        call_kwargs = mock_extract.call_args.kwargs
+        assert call_kwargs["model"] == expected_model
+        assert call_kwargs["driver_type"] == "api:openrouter"
 
 
 class TestExtractTaskCount:
@@ -359,9 +362,6 @@ Do second thing.
         mock_output.key_files = ["file1.py"]
         mock_output.plan_markdown = plan_path.read_text()
 
-        mock_driver = MagicMock()
-        mock_driver.generate = AsyncMock(return_value=(mock_output, "session-123"))
-
         profile = Profile(
             name="test",
             driver="api:openrouter",
@@ -376,8 +376,11 @@ Do second thing.
             }
         }
 
-        with patch("amelia.core.orchestrator.DriverFactory") as mock_factory:
-            mock_factory.get_driver.return_value = mock_driver
+        with patch(
+            "amelia.core.orchestrator._extract_structured",
+            new_callable=AsyncMock,
+            return_value=mock_output,
+        ):
             result = await plan_validator_node(state, config)
 
         assert result["total_tasks"] == 2
@@ -416,9 +419,6 @@ Do implementation.
         mock_output.key_files = []
         mock_output.plan_markdown = plan_content
 
-        mock_driver = MagicMock()
-        mock_driver.generate = AsyncMock(return_value=(mock_output, "session-123"))
-
         profile = Profile(
             name="test",
             driver="api:openrouter",
@@ -433,8 +433,11 @@ Do implementation.
             }
         }
 
-        with patch("amelia.core.orchestrator.DriverFactory") as mock_factory:
-            mock_factory.get_driver.return_value = mock_driver
+        with patch(
+            "amelia.core.orchestrator._extract_structured",
+            new_callable=AsyncMock,
+            return_value=mock_output,
+        ):
             result = await plan_validator_node(state, config)
 
         assert result["total_tasks"] is None

@@ -72,7 +72,7 @@ curl http://localhost:8420/api/health
 **Verification Commands:**
 ```bash
 # Check workflow status via API
-curl http://localhost:8420/api/workflows | jq '.[] | select(.issue_id == "TEST-001") | .status'
+curl http://localhost:8420/api/workflows | jq '.workflows[] | select(.issue_id == "TEST-001") | .status'
 # Should return "planning"
 ```
 
@@ -132,7 +132,7 @@ curl http://localhost:8420/api/workflows | jq '.[] | select(.issue_id == "TEST-0
 **Verification Commands:**
 ```bash
 # Check workflow was cancelled
-curl http://localhost:8420/api/workflows | jq '.[] | select(.issue_id == "TEST-001") | .status'
+curl http://localhost:8420/api/workflows | jq '.workflows[] | select(.issue_id == "TEST-001") | .status'
 # Should return "cancelled"
 ```
 
@@ -251,7 +251,7 @@ curl http://localhost:8420/api/workflows/WORKFLOW_ID | jq '{status, planned_at, 
 After testing:
 ```bash
 # Cancel any running workflows
-curl http://localhost:8420/api/workflows | jq -r '.[].id' | xargs -I {} curl -X DELETE http://localhost:8420/api/workflows/{}
+curl http://localhost:8420/api/workflows | jq -r '.workflows[].id' | xargs -I {} curl -X POST http://localhost:8420/api/workflows/{}/cancel
 
 # Stop the server
 # Ctrl+C in the server terminal
@@ -310,7 +310,7 @@ async def test_planning_status():
         assert resp.json()["status"] == "planning"
 
         # Cancel it
-        await client.delete(f"/api/workflows/{workflow_id}")
+        await client.post(f"/api/workflows/{workflow_id}/cancel")
 
         resp = await client.get(f"/api/workflows/{workflow_id}")
         assert resp.json()["status"] == "cancelled"

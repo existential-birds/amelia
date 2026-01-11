@@ -4,7 +4,7 @@ import asyncio
 import contextlib
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, cast
+from typing import Any, cast
 from uuid import uuid4
 
 import yaml
@@ -16,6 +16,7 @@ from langgraph.graph.state import CompiledStateGraph
 from loguru import logger
 from pydantic import ValidationError
 
+from amelia.core.constants import ToolName
 from amelia.core.orchestrator import create_orchestrator_graph, create_review_graph
 from amelia.core.state import ExecutionState
 from amelia.core.types import (
@@ -44,10 +45,6 @@ from amelia.server.models.events import EventType, WorkflowEvent
 from amelia.server.models.requests import BatchStartRequest, CreateWorkflowRequest
 from amelia.server.models.responses import BatchStartResponse
 from amelia.trackers.factory import create_tracker
-
-
-if TYPE_CHECKING:
-    from amelia.agents.architect import Architect
 
 
 # Nodes that emit stage events
@@ -124,7 +121,6 @@ class OrchestratorService:
         self._checkpoint_path = str(expanded_path)
         self._active_tasks: dict[str, tuple[str, asyncio.Task[None]]] = {}  # worktree_path -> (workflow_id, task)
         self._planning_tasks: dict[str, asyncio.Task[None]] = {}  # workflow_id -> planning task
-        self._approval_events: dict[str, asyncio.Event] = {}  # workflow_id -> event
         self._approval_lock = asyncio.Lock()  # Prevents race conditions on approvals
         self._start_lock = asyncio.Lock()  # Prevents race conditions on workflow start
         self._sequence_counters: dict[str, int] = {}  # workflow_id -> next sequence
@@ -589,7 +585,6 @@ class OrchestratorService:
             self._active_tasks.pop(resolved_path, None)
             self._sequence_counters.pop(workflow_id, None)
             self._sequence_locks.pop(workflow_id, None)
-            self._approval_events.pop(workflow_id, None)
             logger.debug(
                 "Workflow task completed",
                 workflow_id=workflow_id,
@@ -772,7 +767,6 @@ class OrchestratorService:
             self._active_tasks.pop(resolved_path, None)
             self._sequence_counters.pop(workflow_id, None)
             self._sequence_locks.pop(workflow_id, None)
-            self._approval_events.pop(workflow_id, None)
             logger.debug(
                 "Workflow task completed",
                 workflow_id=workflow_id,
@@ -924,7 +918,10 @@ class OrchestratorService:
             graph = self._create_server_graph(checkpointer)
 
             # Pass event_bus via config
+            # Recursion limit: 4 base steps + 3 per task + buffer
+            # Default 100 handles up to ~30 tasks
             config: RunnableConfig = {
+                "recursion_limit": 100,
                 "configurable": {
                     "thread_id": workflow_id,
                     "execution_mode": "server",
@@ -932,7 +929,7 @@ class OrchestratorService:
                     "profile": profile,
                     "repository": self._repository,
                     "prompts": prompts,
-                }
+                },
             }
 
             await self._emit(
@@ -1207,7 +1204,9 @@ class OrchestratorService:
             )
 
             # Pass event_bus via config
+            # Step limit: 4 base + 3 per task + buffer (default 100 handles ~30 tasks)
             config: RunnableConfig = {
+                "recursion_limit": 100,
                 "configurable": {
                     "thread_id": workflow_id,
                     "execution_mode": "server",
@@ -1215,7 +1214,7 @@ class OrchestratorService:
                     "profile": profile,
                     "repository": self._repository,
                     "prompts": prompts,
-                }
+                },
             }
 
             await self._emit(
@@ -1369,12 +1368,6 @@ class OrchestratorService:
         )
 
         async with self._approval_lock:
-            # Signal the approval event if it exists (for legacy flow)
-            event = self._approval_events.get(workflow_id)
-            if event:
-                event.set()
-                self._approval_events.pop(workflow_id, None)
-
             await self._emit(
                 workflow_id,
                 EventType.APPROVAL_GRANTED,
@@ -1410,6 +1403,7 @@ class OrchestratorService:
 
             # Pass event_bus via config
             config: RunnableConfig = {
+                "recursion_limit": 100,
                 "configurable": {
                     "thread_id": workflow_id,
                     "execution_mode": "server",
@@ -1417,30 +1411,11 @@ class OrchestratorService:
                     "profile": profile,
                     "repository": self._repository,
                     "prompts": prompts,
-                }
+                },
             }
 
-            # Update state with approval decision
+            # Update checkpoint state with approval decision
             await graph.aupdate_state(config, {"human_approved": True})
-
-            # Diagnostic: Log checkpoint state before resuming
-            checkpoint_state = await graph.aget_state(config)
-            if checkpoint_state and checkpoint_state.values:
-                has_goal = checkpoint_state.values.get("goal") is not None
-                has_plan = checkpoint_state.values.get("plan_markdown") is not None
-                logger.debug(
-                    "Checkpoint state before resume",
-                    workflow_id=workflow_id,
-                    has_goal=has_goal,
-                    has_plan=has_plan,
-                    human_approved=checkpoint_state.values.get("human_approved"),
-                    next_nodes=checkpoint_state.next if checkpoint_state.next else None,
-                )
-            else:
-                logger.warning(
-                    "No checkpoint state available before resume",
-                    workflow_id=workflow_id,
-                )
 
             # Update status to in_progress before resuming
             await self._repository.set_status(workflow_id, "in_progress")
@@ -1531,9 +1506,6 @@ class OrchestratorService:
             )
 
         async with self._approval_lock:
-            # Remove approval event if it exists
-            self._approval_events.pop(workflow_id, None)
-
             # Update workflow status to failed with feedback
             await self._repository.set_status(
                 workflow_id, "failed", failure_reason=feedback
@@ -1578,42 +1550,16 @@ class OrchestratorService:
             graph = self._create_server_graph(checkpointer)
 
             config: RunnableConfig = {
+                "recursion_limit": 100,
                 "configurable": {
                     "thread_id": workflow_id,
                     "execution_mode": "server",
                     "profile": profile,
                     "repository": self._repository,
-                }
+                },
             }
 
             await graph.aupdate_state(config, {"human_approved": False})
-
-    async def _wait_for_approval(self, workflow_id: str) -> None:
-        """Block until workflow is approved or rejected.
-
-        Sets the workflow status to "blocked" and waits for approval/rejection.
-
-        Args:
-            workflow_id: The workflow awaiting approval.
-        """
-        # Set status to blocked before waiting - required for approve/reject validation
-        await self._repository.set_status(workflow_id, "blocked")
-
-        event = asyncio.Event()
-        self._approval_events[workflow_id] = event
-        await self._emit(
-            workflow_id,
-            EventType.APPROVAL_REQUIRED,
-            "Awaiting plan approval",
-        )
-
-        logger.info("Workflow awaiting approval", workflow_id=workflow_id)
-
-        try:
-            await event.wait()
-        finally:
-            # Cleanup - event should already be removed by approve/reject
-            self._approval_events.pop(workflow_id, None)
 
     async def _handle_graph_event(
         self,
@@ -1990,6 +1936,8 @@ class OrchestratorService:
             goal = checkpoint_state.values.get("goal")
             plan_markdown = checkpoint_state.values.get("plan_markdown")
             raw_architect_output = checkpoint_state.values.get("raw_architect_output")
+            tool_calls = checkpoint_state.values.get("tool_calls", [])
+            tool_results = checkpoint_state.values.get("tool_results", [])
 
             # Log checkpoint values for debugging
             logger.info(
@@ -2000,6 +1948,7 @@ class OrchestratorService:
                 has_plan_markdown=plan_markdown is not None,
                 plan_markdown_length=len(plan_markdown) if plan_markdown else 0,
                 has_raw_output=raw_architect_output is not None,
+                tool_calls_count=len(tool_calls),
             )
 
             if goal is None and plan_markdown is None:
@@ -2019,12 +1968,28 @@ class OrchestratorService:
                 )
                 return
 
-            # Build update dict with goal and plan_markdown
+            # Build update dict with goal, plan_markdown, and tool_calls
             update_dict: dict[str, Any] = {}
             if goal is not None:
                 update_dict["goal"] = goal
             if plan_markdown is not None:
                 update_dict["plan_markdown"] = plan_markdown
+            if tool_calls:
+                update_dict["tool_calls"] = tool_calls
+            if tool_results:
+                update_dict["tool_results"] = tool_results
+
+            # Extract plan_path from Write tool calls
+            for tc in tool_calls:
+                tool_name = getattr(tc, "tool_name", None) or tc.get("tool_name")
+                tool_input = getattr(tc, "tool_input", None) or tc.get("tool_input", {})
+                if tool_name == ToolName.WRITE_FILE and "file_path" in tool_input:
+                    update_dict["plan_path"] = Path(tool_input["file_path"])
+                    logger.debug(
+                        "Extracted plan_path from tool calls",
+                        plan_path=str(update_dict["plan_path"]),
+                    )
+                    break
 
             if not update_dict:
                 return
@@ -2035,7 +2000,12 @@ class OrchestratorService:
 
             # Save back to repository
             await self._repository.update(state)
-            logger.debug("Synced plan to ServerExecutionState", workflow_id=workflow_id)
+            logger.debug(
+                "Synced plan to ServerExecutionState",
+                workflow_id=workflow_id,
+                tool_calls_count=len(tool_calls),
+                has_plan_path="plan_path" in update_dict,
+            )
 
         except Exception as e:
             # Log but don't fail the workflow - plan sync is best-effort
@@ -2062,26 +2032,6 @@ class OrchestratorService:
         # and mark them as failed with appropriate reason
         logger.info("No interrupted workflows to recover")
 
-    def _create_architect_for_planning(
-        self,
-        profile: Profile,
-        prompts: dict[str, str] | None = None,
-    ) -> "Architect":
-        """Create an Architect instance for plan generation.
-
-        Args:
-            profile: Profile with driver configuration.
-            prompts: Optional custom prompts for the architect.
-
-        Returns:
-            Configured Architect instance.
-        """
-        from amelia.agents.architect import Architect  # noqa: PLC0415
-        from amelia.drivers.factory import get_driver  # noqa: PLC0415
-
-        driver = get_driver(profile.driver, model=profile.model)
-        return Architect(driver=driver, event_bus=self._event_bus, prompts=prompts)
-
     async def _run_planning_task(
         self,
         workflow_id: str,
@@ -2089,10 +2039,10 @@ class OrchestratorService:
         execution_state: ExecutionState,
         profile: Profile,
     ) -> None:
-        """Background task to run Architect and generate plan.
+        """Background task to run planning via LangGraph.
 
-        Updates the workflow with the generated plan or marks it as failed
-        if planning fails.
+        Runs the orchestrator graph until it interrupts at human_approval_node,
+        creating a checkpoint that can be resumed by approve_workflow().
 
         Args:
             workflow_id: The workflow ID being planned.
@@ -2112,105 +2062,128 @@ class OrchestratorService:
             data={"stage": "architect_node"},
         )
 
-        try:
-            architect = self._create_architect_for_planning(profile, prompts)
+        async with AsyncSqliteSaver.from_conn_string(
+            str(self._checkpoint_path)
+        ) as checkpointer:
+            graph = self._create_server_graph(checkpointer)
 
-            # Run architect and collect the final state
-            final_state: ExecutionState | None = None
-            async for updated_state, event in architect.plan(
-                state=execution_state,
-                profile=profile,
-                workflow_id=workflow_id,
-            ):
-                final_state = updated_state
-                # Emit events from architect as they come
-                if event:
-                    self._event_bus.emit(event)
+            config: RunnableConfig = {
+                "recursion_limit": 100,
+                "configurable": {
+                    "thread_id": workflow_id,
+                    "execution_mode": "server",
+                    "event_bus": self._event_bus,
+                    "profile": profile,
+                    "repository": self._repository,
+                    "prompts": prompts,
+                },
+            }
 
-            if final_state is not None:
-                # Re-fetch the latest state to avoid clobbering concurrent updates
-                # (e.g., if start_pending_workflow set started_at)
-                fresh = await self._repository.get(workflow_id)
-                if fresh is None:
+            try:
+                # Convert Pydantic model to JSON-serializable dict for checkpointing
+                input_state = execution_state.model_dump(mode="json")
+
+                was_interrupted = False
+                async for chunk in graph.astream(
+                    input_state,
+                    config=config,
+                    stream_mode=["updates", "tasks"],
+                ):
+                    chunk_tuple = cast(tuple[str, Any], chunk)
+                    if self._is_interrupt_chunk(chunk_tuple):
+                        was_interrupted = True
+                        mode, data = chunk_tuple
+                        interrupt_data = (
+                            data.get("__interrupt__") if isinstance(data, dict) else None
+                        )
+                        logger.info(
+                            "Planning paused for human approval",
+                            workflow_id=workflow_id,
+                            interrupt_data=interrupt_data,
+                        )
+                        # Sync plan from LangGraph checkpoint to ServerExecutionState
+                        await self._sync_plan_from_checkpoint(workflow_id, graph, config)
+
+                        # Re-fetch to avoid clobbering concurrent updates
+                        fresh = await self._repository.get(workflow_id)
+                        if fresh is None:
+                            logger.warning(
+                                "Workflow deleted during planning",
+                                workflow_id=workflow_id,
+                            )
+                            return
+
+                        # Only update if still planning
+                        if fresh.workflow_status != "planning":
+                            logger.info(
+                                "Planning finished but workflow status changed",
+                                workflow_id=workflow_id,
+                                workflow_status=fresh.workflow_status,
+                            )
+                            return
+
+                        # Set planned_at and status to blocked
+                        fresh.planned_at = datetime.now(UTC)
+                        fresh.workflow_status = "blocked"
+                        fresh.current_stage = None  # Clear stage, waiting for approval
+                        await self._repository.update(fresh)
+
+                        await self._emit(
+                            workflow_id,
+                            EventType.APPROVAL_REQUIRED,
+                            "Plan ready for review - awaiting human approval",
+                            agent="human_approval",
+                            data={"paused_at": "human_approval_node"},
+                        )
+
+                        logger.info(
+                            "Workflow queued with plan",
+                            workflow_id=workflow_id,
+                            issue_id=fresh.issue_id,
+                        )
+                        break
+
+                    # Handle combined mode chunk (updates, tasks)
+                    await self._handle_combined_stream_chunk(workflow_id, chunk_tuple)
+
+                if not was_interrupted:
+                    # Graph completed without interrupting - unexpected for planning
                     logger.warning(
-                        "Workflow deleted during planning",
+                        "Planning completed without interrupt at human_approval_node",
                         workflow_id=workflow_id,
                     )
-                    return
 
-                # Only update if workflow is still planning - avoid overwriting
-                # status/started_at if the workflow was started concurrently
-                if fresh.workflow_status != "planning":
-                    logger.info(
-                        "Planning finished but workflow is no longer planning; skipping plan write",
+            except asyncio.CancelledError:
+                # Don't treat cancellation (e.g., during shutdown) as a failure
+                logger.info("Planning task cancelled", workflow_id=workflow_id)
+                raise
+            except Exception as e:
+                # Mark workflow as failed using fresh state
+                try:
+                    fresh = await self._repository.get(workflow_id)
+                    if fresh is not None and fresh.workflow_status == "planning":
+                        fresh.workflow_status = "failed"
+                        fresh.failure_reason = f"Planning failed: {e}"
+                        await self._repository.update(fresh)
+                except Exception as update_err:
+                    logger.error(
+                        "Failed to mark workflow as failed",
                         workflow_id=workflow_id,
-                        workflow_status=fresh.workflow_status,
+                        error=str(update_err),
                     )
-                    return
-
-                # Update state with plan on the fresh snapshot
-                fresh.execution_state = final_state
-                fresh.planned_at = datetime.now(UTC)
-                fresh.workflow_status = "blocked"
-                fresh.current_stage = None  # Clear stage, waiting for approval
-                await self._repository.update(fresh)
 
                 await self._emit(
                     workflow_id,
-                    EventType.STAGE_COMPLETED,
-                    "Plan generated, workflow queued for execution",
-                    agent="architect",
-                    data={
-                        "stage": "architect_node",
-                        "plan_ready": True,
-                        "goal": final_state.goal,
-                    },
+                    EventType.WORKFLOW_FAILED,
+                    f"Planning failed: {e}",
+                    data={"error": str(e)},
                 )
 
-                logger.info(
-                    "Workflow queued with plan",
-                    workflow_id=workflow_id,
-                    issue_id=fresh.issue_id,
-                    goal=final_state.goal[:100] if final_state.goal else None,
-                )
-            else:
-                # Architect didn't yield any state (shouldn't happen)
-                logger.warning(
-                    "Architect completed without yielding state",
-                    workflow_id=workflow_id,
-                )
-
-        except asyncio.CancelledError:
-            # Don't treat cancellation (e.g., during shutdown) as a failure
-            logger.info("Planning task cancelled", workflow_id=workflow_id)
-            raise
-        except Exception as e:
-            # Mark workflow as failed using fresh state
-            try:
-                fresh = await self._repository.get(workflow_id)
-                if fresh is not None and fresh.workflow_status == "planning":
-                    fresh.workflow_status = "failed"
-                    fresh.failure_reason = f"Planning failed: {e}"
-                    await self._repository.update(fresh)
-            except Exception as update_err:
                 logger.error(
-                    "Failed to mark workflow as failed",
+                    "Planning task failed",
                     workflow_id=workflow_id,
-                    error=str(update_err),
+                    error=str(e),
                 )
-
-            await self._emit(
-                workflow_id,
-                EventType.WORKFLOW_FAILED,
-                f"Planning failed: {e}",
-                data={"error": str(e)},
-            )
-
-            logger.error(
-                "Planning task failed",
-                workflow_id=workflow_id,
-                error=str(e),
-            )
 
     async def queue_and_plan_workflow(
         self,
@@ -2368,7 +2341,6 @@ class OrchestratorService:
             self._active_tasks.pop(workflow.worktree_path, None)
             self._sequence_counters.pop(workflow_id, None)
             self._sequence_locks.pop(workflow_id, None)
-            self._approval_events.pop(workflow_id, None)
             logger.debug(
                 "Workflow task completed",
                 workflow_id=workflow_id,

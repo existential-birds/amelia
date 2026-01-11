@@ -180,6 +180,7 @@ progress/summary markdown files. Only create files explicitly required for the t
         parts.append(f"\n\nPlease complete the following task:\n\n{state.goal}")
 
         # Review feedback (if this is a review-fix iteration)
+        # Comments are already filtered to actionable issues by the reviewer
         if state.last_review and not state.last_review.approved:
             feedback = "\n".join(f"- {c}" for c in state.last_review.comments)
             parts.append(f"\n\nThe reviewer requested the following changes:\n{feedback}")

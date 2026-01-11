@@ -29,7 +29,8 @@ class ReviewResult(BaseModel):
     Attributes:
         reviewer_persona: The persona or role of the reviewer.
         approved: Whether the review approved the changes.
-        comments: List of review comments or feedback.
+        comments: List of actionable issues to fix. Filtered at creation time
+            to exclude positive observations.
         severity: Severity level of issues found (low, medium, high, critical).
     """
     model_config = ConfigDict(frozen=True)

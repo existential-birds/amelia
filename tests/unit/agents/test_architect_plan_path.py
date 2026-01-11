@@ -43,7 +43,8 @@ class TestArchitectPlanPath:
         # Check path components
         assert "docs/plans/" in prompt
         assert "test-123" in prompt.lower()
-        assert "Write your plan to" in prompt
+        # Explicit Write tool instruction to prevent LLM from just outputting plan text
+        assert "MUST use the Write tool" in prompt
 
     def test_architect_agentic_prompt_uses_todays_date(
         self,

@@ -343,6 +343,7 @@ class ApiDriver(DriverInterface):
             )
 
             last_message: AIMessage | None = None
+            tool_call_count = 0  # DEBUG: Track tool calls
 
             async for chunk in agent.astream(
                 {"messages": [HumanMessage(content=prompt)]},
@@ -394,6 +395,15 @@ class ApiDriver(DriverInterface):
                         tool_raw_name = tool_call["name"]
                         # Normalize tool name to standard format
                         tool_normalized = normalize_tool_name(tool_raw_name)
+                        tool_call_count += 1  # DEBUG: Increment counter
+                        # DEBUG: Log tool call normalization
+                        logger.debug(
+                            "DEBUG: API driver yielding tool call",
+                            raw_name=tool_raw_name,
+                            normalized_name=tool_normalized,
+                            input_keys=list(tool_call.get("args", {}).keys()),
+                            tool_call_number=tool_call_count,
+                        )
                         yield AgenticMessage(
                             type=AgenticMessageType.TOOL_CALL,
                             tool_name=tool_normalized,
@@ -431,6 +441,14 @@ class ApiDriver(DriverInterface):
             )
 
             # Final result from last AI message
+            # DEBUG: Log summary before yielding result
+            logger.debug(
+                "DEBUG: API driver execution complete",
+                total_tool_calls=tool_call_count,
+                num_turns=num_turns,
+                has_last_message=last_message is not None,
+            )
+
             if last_message:
                 final_content = ""
                 if isinstance(last_message.content, str):

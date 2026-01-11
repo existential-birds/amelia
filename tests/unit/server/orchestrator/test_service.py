@@ -374,41 +374,6 @@ def test_get_active_workflows(orchestrator: OrchestratorService) -> None:
 # =============================================================================
 
 
-async def test_wait_for_approval(
-    orchestrator: OrchestratorService,
-    mock_repository: AsyncMock,
-    mock_event_bus: EventBus,
-) -> None:
-    """Should block until approval is granted."""
-    received_events = []
-    mock_event_bus.subscribe(lambda e: received_events.append(e))
-
-    # Start waiting in background
-    wait_task = asyncio.create_task(
-        orchestrator._wait_for_approval("wf-1")
-    )
-
-    # Give it a moment to start waiting
-    await asyncio.sleep(0.01)
-
-    # Should be blocked
-    assert not wait_task.done()
-
-    # Should have created approval event
-    assert "wf-1" in orchestrator._approval_events
-
-    # Should have emitted APPROVAL_REQUIRED
-    approval_required = [e for e in received_events if e.event_type == EventType.APPROVAL_REQUIRED]
-    assert len(approval_required) == 1
-
-    # Simulate approval
-    orchestrator._approval_events["wf-1"].set()
-
-    # Should complete
-    await asyncio.wait_for(wait_task, timeout=1.0)
-    assert wait_task.done()
-
-
 @patch("amelia.server.orchestrator.service.AsyncSqliteSaver")
 @patch("amelia.server.orchestrator.service.create_orchestrator_graph")
 async def test_approve_workflow_success(
@@ -444,14 +409,8 @@ async def test_approve_workflow_success(
 
     # Mock settings loading to return valid settings
     with patch.object(orchestrator, "_load_settings_for_worktree", return_value=mock_settings):
-        # Simulate workflow waiting for approval
-        orchestrator._approval_events["wf-1"] = asyncio.Event()
-
         # New API returns None, raises on error
         await orchestrator.approve_workflow("wf-1")
-
-        # Should remove the approval event after setting it
-        assert "wf-1" not in orchestrator._approval_events
 
         # Should update status - now called twice: once for in_progress, once for completed
         assert mock_repository.set_status.call_count == 2
@@ -501,7 +460,6 @@ async def test_reject_workflow_success(
         # Create fake task
         task = asyncio.create_task(asyncio.sleep(100))
         orchestrator._active_tasks["/path/to/worktree"] = ("wf-1", task)
-        orchestrator._approval_events["wf-1"] = asyncio.Event()
 
         # New API returns None, raises on error
         await orchestrator.reject_workflow("wf-1", feedback="Plan too complex")
@@ -1537,57 +1495,3 @@ profiles:
             state = call_args[0][0]
             # Description should default to title
             assert state.execution_state.issue.description == "Fix typo in README"
-
-
-# =============================================================================
-# Approval Event Cleanup Tests
-# =============================================================================
-
-
-class TestApprovalEventCleanup:
-    """Tests for approval event cleanup when workflow completes."""
-
-    async def test_approval_events_cleaned_via_start_workflow(
-        self,
-        orchestrator: OrchestratorService,
-        mock_repository: AsyncMock,
-        valid_worktree: str,
-    ) -> None:
-        """Verify start_workflow's cleanup callback cleans approval events.
-
-        This tests the actual cleanup_task callback that start_workflow creates,
-        which should include approval event cleanup.
-        """
-        # Create a mock that completes immediately to trigger cleanup
-        run_completed = asyncio.Event()
-
-        async def mock_run_workflow_with_retry(
-            workflow_id: str, state: ServerExecutionState
-        ) -> None:
-            # Simulate an approval event being created during workflow
-            orchestrator._approval_events[workflow_id] = asyncio.Event()
-            run_completed.set()
-
-        with patch.object(
-            orchestrator, "_run_workflow_with_retry", new=mock_run_workflow_with_retry
-        ):
-            workflow_id = await orchestrator.start_workflow(
-                issue_id="ISSUE-123",
-                worktree_path=valid_worktree,
-            )
-
-            # Wait for workflow to complete
-            await run_completed.wait()
-
-            # Get the task and wait for it to fully complete
-            _, task = orchestrator._active_tasks.get(valid_worktree, (None, None))
-            if task:
-                await task
-
-            # Give done callbacks a moment to run
-            await asyncio.sleep(0.01)
-
-            # Approval event should be cleaned up
-            assert workflow_id not in orchestrator._approval_events, (
-                "start_workflow's cleanup callback should remove _approval_events entry"
-            )

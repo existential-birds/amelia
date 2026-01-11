@@ -294,10 +294,14 @@ Before planning, discover:
                     tool_input=message.tool_input or {},
                 )
                 tool_calls.append(call)
+                # DEBUG: Log tool call details including input keys
                 logger.debug(
                     "Architect tool call recorded",
                     tool_name=message.tool_name,
+                    tool_name_repr=repr(message.tool_name),
                     call_id=call.id,
+                    input_keys=list(message.tool_input.keys()) if message.tool_input else [],
+                    is_write_file=(message.tool_name == ToolName.WRITE_FILE),
                 )
                 event = message.to_workflow_event(workflow_id=workflow_id, agent="architect")
 
@@ -328,6 +332,16 @@ Before planning, discover:
                     agent="architect",
                     raw_output_length=len(raw_output),
                     tool_calls_count=len(tool_calls),
+                )
+
+                # DEBUG: Log all tool calls at completion
+                logger.debug(
+                    "DEBUG: Architect completed - all tool calls",
+                    tool_calls_summary=[
+                        {"name": tc.tool_name, "input_keys": list(tc.tool_input.keys())}
+                        for tc in tool_calls
+                    ],
+                    raw_output_preview=raw_output[:300] if raw_output else "EMPTY",
                 )
 
                 # Extract plan_path from Write tool calls
@@ -392,9 +406,14 @@ Before planning, discover:
         )
 
         # Add output instruction with resolved plan path
+        # IMPORTANT: Explicitly require Write tool usage - without this, Claude
+        # may just output the plan as text instead of writing to the file.
         plan_path = resolve_plan_path(profile.plan_path_pattern, state.issue.id)
         parts.append("\n## Output")
-        parts.append(f"Write your plan to `{plan_path}`.")
+        parts.append(
+            f"You MUST use the Write tool to save your plan to `{plan_path}`. "
+            "Do not output the full plan in your response - use the Write tool."
+        )
 
         # Task-specific formatting templates
         parts.append("""

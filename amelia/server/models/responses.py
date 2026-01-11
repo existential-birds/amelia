@@ -116,6 +116,7 @@ class WorkflowDetailResponse(BaseModel):
         current_stage: Current agent stage (optional)
         goal: High-level goal for agentic execution (optional)
         plan_markdown: Full plan markdown content from Architect (optional)
+        plan_path: Path where the plan markdown was saved (optional)
         token_usage: Token usage summary (optional)
         recent_events: Recent workflow events
         tool_calls: History of tool calls made during agentic execution
@@ -154,6 +155,10 @@ class WorkflowDetailResponse(BaseModel):
     plan_markdown: Annotated[
         str | None,
         Field(default=None, description="Full plan markdown content from Architect"),
+    ] = None
+    plan_path: Annotated[
+        str | None,
+        Field(default=None, description="Path where the plan markdown was saved"),
     ] = None
     token_usage: Annotated[
         TokenSummary | None,

@@ -531,10 +531,28 @@ class TestDeveloperTaskBasedExecution:
     @pytest.fixture
     def multi_task_state(self, tmp_path: Any) -> ExecutionState:
         plan_path = tmp_path / "docs" / "plans" / "plan.md"
+        # Plan with proper structure for task extraction
+        plan_markdown = """# Implementation Plan
+
+**Goal:** Implement feature
+
+---
+
+## Phase 1: Setup
+
+### Task 1: Initial Setup
+
+Step 1: Create files
+Step 2: Configure
+
+### Task 2: Build Components
+
+Step 1: Build the thing
+"""
         return ExecutionState(
             profile_id="test",
             goal="Implement feature",
-            plan_markdown="### Task 1: Setup\n\n### Task 2: Build",
+            plan_markdown=plan_markdown,
             plan_path=plan_path,
             total_tasks=2,
             current_task_index=0,
@@ -575,12 +593,12 @@ class TestDeveloperTaskBasedExecution:
         # Should have cleared session_id before calling developer
         assert captured_session_id is None
 
-    async def test_developer_node_injects_task_scoped_prompt(
+    async def test_developer_node_extracts_current_task_from_plan(
         self,
         multi_task_state: ExecutionState,
         mock_profile_with_working_dir: Profile,
     ) -> None:
-        """Developer node should inject task-specific prompt for multi-task execution."""
+        """Developer node should extract only the current task section from plan."""
         config: RunnableConfig = {
             "configurable": {
                 "thread_id": "wf-test",
@@ -588,13 +606,13 @@ class TestDeveloperTaskBasedExecution:
             }
         }
 
-        captured_goal: str | None = None
+        captured_plan: str | None = None
 
         async def mock_run(
             state: ExecutionState, profile: Profile, workflow_id: str = ""
         ) -> Any:
-            nonlocal captured_goal
-            captured_goal = state.goal
+            nonlocal captured_plan
+            captured_plan = state.plan_markdown
             yield (state.model_copy(update={"agentic_status": "completed"}), MagicMock())
 
         with patch("amelia.core.orchestrator.Developer") as mock_developer_class:
@@ -604,10 +622,13 @@ class TestDeveloperTaskBasedExecution:
 
             await call_developer_node(multi_task_state, config)
 
-        # Should include task pointer in goal
-        assert captured_goal is not None
-        assert "Task 1" in captured_goal
-        assert str(multi_task_state.plan_path) in captured_goal
+        # Should include only Task 1, not Task 2
+        assert captured_plan is not None
+        assert "### Task 1:" in captured_plan
+        assert "### Task 2:" not in captured_plan
+        # Should preserve header context
+        assert "**Goal:**" in captured_plan
+        assert "## Phase 1:" in captured_plan
 
     async def test_developer_node_preserves_session_for_legacy_mode(
         self,

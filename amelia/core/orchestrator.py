@@ -5,6 +5,7 @@ Developer (execute agentically) <-> Reviewer (review) -> Done. Provides node fun
 the state machine and the create_orchestrator_graph() factory.
 """
 import asyncio
+import json
 import os
 import re
 from datetime import UTC, datetime
@@ -12,11 +13,13 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 import typer
+from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.runnables.config import RunnableConfig
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from loguru import logger
+from pydantic import BaseModel
 
 from amelia.agents.architect import Architect, MarkdownPlanOutput
 from amelia.agents.developer import Developer
@@ -53,7 +56,165 @@ def extract_task_count(plan_markdown: str) -> int | None:
     """
     pattern = r"^### Task \d+(\.\d+)?:"
     matches = re.findall(pattern, plan_markdown, re.MULTILINE)
-    return len(matches) if matches else None
+    count = len(matches) if matches else None
+
+    # Debug: Log task extraction details
+    task_lines = [
+        line for line in plan_markdown.split("\n")
+        if line.strip().startswith("### Task") or line.strip().startswith("## Task")
+    ]
+    logger.debug(
+        "extract_task_count analysis",
+        pattern=pattern,
+        match_count=len(matches) if matches else 0,
+        result_count=count,
+        sample_task_lines=task_lines[:5],  # First 5 task-like lines for debugging
+        plan_length=len(plan_markdown),
+    )
+
+    return count
+
+
+async def _extract_structured[T: BaseModel](
+    prompt: str,
+    schema: type[T],
+    model: str,
+    driver_type: str,
+    system_prompt: str | None = None,
+) -> T:
+    """Extract structured output from text using direct model call.
+
+    This is a lightweight extraction function for parsing text into structured
+    data WITHOUT using the full agent framework. Use this when you just need
+    to parse/extract data and don't need filesystem tools.
+
+    For agentic tasks that need codebase exploration, use the driver's
+    generate() or execute_agentic() methods instead.
+
+    Args:
+        prompt: The text prompt to process.
+        schema: Pydantic model class to parse output into.
+        model: Model identifier (e.g., 'gpt-4o-mini').
+        driver_type: Driver type string (e.g., 'api:openrouter') for provider config.
+        system_prompt: Optional system prompt.
+
+    Returns:
+        Instance of the schema class with extracted data.
+
+    Raises:
+        RuntimeError: If extraction fails.
+    """
+    # Import here to avoid circular dependency
+    from amelia.drivers.api.deepagents import (  # noqa: PLC0415
+        _create_chat_model,
+    )
+
+    # Determine provider from driver type
+    provider: str | None = None
+    if driver_type.startswith("api:"):
+        provider = driver_type.split(":", 1)[1]  # e.g., "openrouter"
+
+    try:
+        chat_model = _create_chat_model(model, provider=provider)
+        structured_model = chat_model.with_structured_output(schema)
+
+        messages: list[HumanMessage | SystemMessage] = []
+        if system_prompt:
+            messages.append(SystemMessage(content=system_prompt))
+        messages.append(HumanMessage(content=prompt))
+
+        result = await structured_model.ainvoke(messages)
+        logger.debug(
+            "Structured extraction completed",
+            schema=schema.__name__,
+            model=model,
+        )
+        return result  # type: ignore[return-value]
+    except Exception as e:
+        raise RuntimeError(f"Structured extraction failed: {e}") from e
+
+
+def extract_task_section(plan_markdown: str, task_index: int) -> str:
+    """Extract a specific task section with context from plan markdown.
+
+    Returns the plan header (Goal, Architecture, Tech Stack) plus the current
+    Phase header and the specific Task section. This prevents the developer
+    from implementing the entire plan when only one task should be executed.
+
+    Args:
+        plan_markdown: The full markdown content of the plan.
+        task_index: 0-indexed task number to extract.
+
+    Returns:
+        Markdown containing header context plus the specific task section.
+        Falls back to full plan if extraction fails.
+    """
+    # Split into lines for processing
+    lines = plan_markdown.split("\n")
+
+    # Find header section (before first ## Phase or ---)
+    header_end = 0
+    for i, line in enumerate(lines):
+        if line.startswith("## Phase") or line.strip() == "---":
+            header_end = i
+            break
+    else:
+        # No phase marker found, return full plan
+        return plan_markdown
+
+    header_lines = lines[:header_end]
+
+    # Find all task boundaries using regex
+    task_pattern = re.compile(r"^### Task \d+(\.\d+)?:")
+    phase_pattern = re.compile(r"^## Phase \d+:")
+
+    task_starts: list[int] = []
+    phase_for_task: list[tuple[int, str]] = []  # (task_idx, phase_header)
+    current_phase_header = ""
+
+    for i, line in enumerate(lines):
+        if phase_pattern.match(line):
+            current_phase_header = line
+        if task_pattern.match(line):
+            task_starts.append(i)
+            phase_for_task.append((len(task_starts) - 1, current_phase_header))
+
+    if not task_starts or task_index >= len(task_starts):
+        # No tasks found or index out of range, return full plan
+        return plan_markdown
+
+    # Get the task section boundaries
+    task_start = task_starts[task_index]
+    task_end = (
+        task_starts[task_index + 1]
+        if task_index + 1 < len(task_starts)
+        else len(lines)
+    )
+
+    # Get the phase header for this task
+    phase_header = ""
+    for idx, header in phase_for_task:
+        if idx == task_index:
+            phase_header = header
+            break
+
+    # Build the extracted section
+    result_parts = []
+
+    # Add header context
+    result_parts.append("\n".join(header_lines).strip())
+    result_parts.append("\n---\n")
+
+    # Add phase header if available
+    if phase_header:
+        result_parts.append(phase_header)
+        result_parts.append("\n\n")
+
+    # Add the task section
+    task_section = "\n".join(lines[task_start:task_end]).strip()
+    result_parts.append(task_section)
+
+    return "".join(result_parts)
 
 
 def _extract_config_params(
@@ -189,11 +350,9 @@ async def plan_validator_node(
     if not plan_content.strip():
         raise ValueError(f"Plan file is empty at {plan_path}")
 
-    # Get validator driver
+    # Extract structured fields using lightweight extraction (no tools needed)
+    # The plan already exists - we just need to parse it into structured format
     model = profile.validator_model or profile.model
-    driver = DriverFactory.get_driver(profile.driver, model=model)
-
-    # Extract structured fields using LLM
     prompt = f"""Extract the implementation plan structure from the following markdown plan.
 
 <plan>
@@ -205,9 +364,11 @@ Return:
 - plan_markdown: The full plan content (preserve as-is)
 - key_files: List of files that will be created or modified"""
 
-    output, _session_id = await driver.generate(
+    output = await _extract_structured(
         prompt=prompt,
         schema=MarkdownPlanOutput,
+        model=model,
+        driver_type=profile.driver,
     )
 
     # Parse task count from plan markdown
@@ -294,8 +455,34 @@ async def call_architect_node(
             plan_path=str(plan_path),
             tool_calls_count=len(final_state.tool_calls),
         )
+
+        # DEBUG: Log all tool calls for diagnosis
+        logger.debug(
+            "DEBUG: All tool calls from architect",
+            tool_calls_detail=[
+                {
+                    "tool_name": tc.tool_name,
+                    "tool_name_type": type(tc.tool_name).__name__,
+                    "input_keys": list(tc.tool_input.keys()) if tc.tool_input else [],
+                    "has_content": "content" in tc.tool_input if tc.tool_input else False,
+                    "has_file_path": "file_path" in tc.tool_input if tc.tool_input else False,
+                }
+                for tc in final_state.tool_calls
+            ],
+            expected_write_file=ToolName.WRITE_FILE,
+            expected_write_file_value=str(ToolName.WRITE_FILE),
+        )
+
         # Look for Write tool call with plan content
         for tc in final_state.tool_calls:
+            logger.debug(
+                "DEBUG: Checking tool call",
+                tool_name=tc.tool_name,
+                tool_name_repr=repr(tc.tool_name),
+                is_write_file=(tc.tool_name == ToolName.WRITE_FILE),
+                write_file_value=ToolName.WRITE_FILE,
+                input_keys=list(tc.tool_input.keys()) if tc.tool_input else [],
+            )
             if tc.tool_name == ToolName.WRITE_FILE and "content" in tc.tool_input:
                 plan_content = tc.tool_input.get("content", "")
                 if plan_content:
@@ -312,6 +499,8 @@ async def call_architect_node(
                 "No Write tool call found for plan file",
                 plan_path=str(plan_path),
                 tool_calls=[tc.tool_name for tc in final_state.tool_calls],
+                tool_calls_count=len(final_state.tool_calls),
+                raw_output_preview=final_state.raw_architect_output[:500] if final_state.raw_architect_output else "EMPTY",
             )
 
     logger.info(
@@ -562,19 +751,24 @@ async def call_developer_node(
     # Extract event_bus, workflow_id, and profile from config
     event_bus, workflow_id, profile = _extract_config_params(config)
 
-    # Task-based execution: clear session and inject task-scoped prompt
+    # Task-based execution: clear session and inject task-scoped context
     if state.total_tasks is not None:
         task_number = state.current_task_index + 1  # 1-indexed for display
-        task_prompt = f"Execute Task {task_number} from plan at {state.plan_path}"
         logger.info(
             "Starting task execution",
             task=task_number,
             total_tasks=state.total_tasks,
             fresh_session=True,
         )
+        # Extract only the current task section from the full plan
+        task_plan = (
+            extract_task_section(state.plan_markdown, state.current_task_index)
+            if state.plan_markdown
+            else None
+        )
         state = state.model_copy(update={
             "driver_session_id": None,  # Fresh session for each task
-            "goal": f"{state.goal}\n\n**Current Task:** {task_prompt}",
+            "plan_markdown": task_plan,  # Only current task, not full plan
         })
 
     config = config or {}
@@ -690,6 +884,19 @@ async def call_reviewer_node(
     # Increment task review iteration for task-based execution
     if state.total_tasks is not None:
         result_dict["task_review_iteration"] = state.task_review_iteration + 1
+
+    # Debug: Log the full state update being returned
+    logger.debug(
+        "call_reviewer_node returning state update",
+        last_review_approved=review_result.approved,
+        last_review_severity=review_result.severity,
+        last_review_persona=review_result.reviewer_persona,
+        last_review_comment_count=len(review_result.comments),
+        review_iteration=next_iteration,
+        task_review_iteration=result_dict.get("task_review_iteration"),
+        total_tasks=state.total_tasks,
+        current_task_index=state.current_task_index,
+    )
 
     return result_dict
 
@@ -840,8 +1047,20 @@ async def next_task_node(
     """
     completed_task = state.current_task_index + 1
     next_task = state.current_task_index + 2
-    logger.info(
-        "Transitioning to next task",
+
+    # Debug: Log to file to track if next_task_node is being called
+    debug_file = Path.home() / ".amelia" / "routing_debug.jsonl"
+    with open(debug_file, "a") as f:
+        f.write(json.dumps({
+            "event": "NEXT_TASK_NODE_CALLED",
+            "timestamp": str(datetime.now()),
+            "current_task_index_before": state.current_task_index,
+            "will_increment_to": state.current_task_index + 1,
+            "total_tasks": state.total_tasks,
+        }) + "\n")
+
+    logger.warning(
+        "NEXT_TASK_NODE: Transitioning to next task",
         completed=completed_task,
         next=next_task,
         total_tasks=state.total_tasks,
@@ -1043,11 +1262,57 @@ def route_after_review_or_task(
         Routing target: developer_node (legacy), developer (task retry),
         next_task_node (task approved), or __end__.
     """
+    # Debug: Log full routing context at WARNING level for visibility
+    debug_data = {
+        "timestamp": str(datetime.now()),
+        "total_tasks": state.total_tasks,
+        "current_task_index": state.current_task_index,
+        "review_iteration": state.review_iteration,
+        "task_review_iteration": state.task_review_iteration,
+        "has_last_review": state.last_review is not None,
+        "last_review_approved": state.last_review.approved if state.last_review else None,
+        "should_end": (state.current_task_index + 1 >= state.total_tasks) if state.total_tasks else None,
+    }
+    debug_file = Path.home() / ".amelia" / "routing_debug.jsonl"
+    with open(debug_file, "a") as f:
+        f.write(json.dumps(debug_data) + "\n")
+
+    logger.warning(
+        "ROUTING_DEBUG: route_after_review_or_task entry",
+        total_tasks=state.total_tasks,
+        current_task_index=state.current_task_index,
+        review_iteration=state.review_iteration,
+        task_review_iteration=state.task_review_iteration,
+        has_last_review=state.last_review is not None,
+        last_review_approved=state.last_review.approved if state.last_review else None,
+        last_review_severity=state.last_review.severity if state.last_review else None,
+        last_review_persona=state.last_review.reviewer_persona if state.last_review else None,
+    )
+
     if state.total_tasks is not None:
-        return route_after_task_review(state, config)
+        result = route_after_task_review(state, config)
+        # Log result to file
+        with open(debug_file, "a") as f:
+            f.write(json.dumps({"result": result, "mode": "task"}) + "\n")
+        logger.warning(
+            "ROUTING_DEBUG: route_after_review_or_task decision (task mode)",
+            route=result,
+            total_tasks=state.total_tasks,
+            current_task_index=state.current_task_index,
+            should_end=state.current_task_index + 1 >= state.total_tasks if state.total_tasks else False,
+        )
+        return result
     # Legacy mode: route_after_review returns "developer" but graph uses "developer_node"
     result = route_after_review(state, config)
-    return "developer_node" if result == "developer" else result
+    final_result: Literal["developer_node", "__end__"] = (
+        "developer_node" if result == "developer" else "__end__"
+    )
+    logger.warning(
+        "ROUTING_DEBUG: route_after_review_or_task decision (legacy mode)",
+        inner_result=result,
+        final_route=final_result,
+    )
+    return final_result
 
 
 def route_after_evaluation(state: ExecutionState) -> str:
