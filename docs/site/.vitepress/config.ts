@@ -1,7 +1,7 @@
 import { defineConfig } from 'vitepress'
 
 /**
- * Shared sidebar configuration for Ideas, Reference, and Design System sections.
+ * Shared sidebar configuration for Ideas and Reference sections.
  * Used across multiple URL prefixes to maintain consistent navigation.
  */
 const sharedSidebar = [
@@ -22,15 +22,6 @@ const sharedSidebar = [
     items: [
       { text: 'Roadmap', link: '/reference/roadmap' }
     ]
-  },
-  {
-    text: 'Design System',
-    collapsed: true,
-    items: [
-      { text: 'Getting Started', link: '/design-system/' },
-      { text: 'Typography', link: '/design-system/typography' },
-      { text: 'Design Tokens', link: '/design-system/tokens' }
-    ]
   }
 ]
 
@@ -39,7 +30,6 @@ const sharedSidebar = [
  *
  * Configures the Amelia documentation site with:
  * - Project-wide documentation
- * - Design system reference
  * - Ideas/brainstorming section
  * - Dark/light mode support
  */
@@ -87,7 +77,6 @@ export default defineConfig({
           ]
         }
       ],
-      '/design-system/': sharedSidebar,
       '/reference/': sharedSidebar,
       '/ideas/': sharedSidebar
     },
