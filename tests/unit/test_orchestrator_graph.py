@@ -389,7 +389,7 @@ class TestReviewerNodeTaskIteration:
             total_tasks=2,  # Task-based mode
             current_task_index=0,
             task_review_iteration=1,
-            code_changes_for_review="diff --git a/test.py\n+# test",
+            base_commit="abc123",  # Required for agentic_review
         )
         profile = Profile(name="test", driver="cli:claude", model="sonnet")
         config = {"configurable": {"profile": profile, "thread_id": "test-wf"}}
@@ -404,7 +404,8 @@ class TestReviewerNodeTaskIteration:
 
         with patch("amelia.core.orchestrator.Reviewer") as mock_reviewer_class:
             mock_reviewer = MagicMock()
-            mock_reviewer.review = AsyncMock(return_value=(mock_review, "session-123"))
+            # Use agentic_review instead of review (legacy method removed)
+            mock_reviewer.agentic_review = AsyncMock(return_value=(mock_review, "session-123"))
             mock_reviewer_class.return_value = mock_reviewer
 
             result = await call_reviewer_node(state, config)

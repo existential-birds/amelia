@@ -10,7 +10,6 @@ import pytest
 from langchain_core.runnables.config import RunnableConfig
 
 from amelia.agents.evaluator import Disposition, EvaluatedItem, EvaluationOutput
-from amelia.agents.reviewer import ReviewResponse
 from amelia.core.orchestrator import call_architect_node, call_evaluation_node, call_reviewer_node
 from amelia.core.state import ReviewResult
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
@@ -20,6 +19,7 @@ from tests.integration.conftest import (
     make_execution_state,
     make_issue,
     make_profile,
+    make_reviewer_agentic_messages,
 )
 
 
@@ -77,36 +77,36 @@ class TestOrchestratorPromptInjection:
         """Verify Reviewer uses injected prompt when calling driver.
 
         This test patches at the driver level to verify the prompt flows through.
-        The reviewer node uses review() -> _single_review() which uses template_prompt.
+        The reviewer node uses agentic_review() which uses execute_agentic with instructions.
         """
-        # Template prompt has {persona} placeholder that gets formatted
-        custom_template_prompt = "Custom {persona} review prompt..."
-        prompts = {"reviewer.template": custom_template_prompt}
+        custom_agentic_prompt = "Custom agentic review prompt with {base_commit}..."
+        prompts = {"reviewer.agentic": custom_agentic_prompt}
 
         profile = make_profile(working_dir=str(tmp_path))
         state = make_execution_state(
             profile=profile,
             goal="Test goal",
             code_changes_for_review="diff content",
+            base_commit="abc123",
         )
         config = make_config(thread_id="test-wf-2", profile=profile, prompts=prompts)
 
-        mock_llm_response = ReviewResponse(
-            approved=True,
-            comments=["LGTM"],
-            severity="low",
-        )
+        mock_messages = make_reviewer_agentic_messages(approved=True)
+        captured_kwargs: list[dict[str, Any]] = []
 
-        # Patch at driver.generate level to check system_prompt
-        with patch("amelia.drivers.api.deepagents.ApiDriver.generate", new_callable=AsyncMock) as mock_generate:
-            mock_generate.return_value = (mock_llm_response, "session-1")
+        async def mock_execute_agentic(*args: Any, **kwargs: Any) -> Any:
+            captured_kwargs.append(kwargs)
+            for msg in mock_messages:
+                yield msg
 
+        # Patch at driver.execute_agentic level to check instructions
+        with patch("amelia.drivers.api.deepagents.ApiDriver.execute_agentic", mock_execute_agentic):
             await call_reviewer_node(state, cast(RunnableConfig, config))
 
-            # Verify the custom prompt was used (formatted with "General" persona)
-            mock_generate.assert_called_once()
-            call_kwargs = mock_generate.call_args.kwargs
-            assert call_kwargs["system_prompt"] == "Custom General review prompt..."
+            # Verify the custom prompt was used (formatted with base_commit)
+            assert len(captured_kwargs) == 1
+            # The prompt should be formatted with base_commit
+            assert captured_kwargs[0]["instructions"] == "Custom agentic review prompt with abc123..."
 
     async def test_prompts_not_in_config_uses_defaults(self, tmp_path: Path) -> None:
         """When prompts not in config, agents should use class defaults.

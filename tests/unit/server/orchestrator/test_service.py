@@ -80,7 +80,6 @@ profiles:
     driver: cli:claude
     model: sonnet
     tracker: noop
-    strategy: single
 """
     (worktree / "settings.amelia.yaml").write_text(settings_content)
     return str(worktree)
@@ -1114,7 +1113,6 @@ profiles:
     driver: cli:claude
     model: sonnet
     tracker: github
-    strategy: single
 """
         settings_file = tmp_path / "settings.amelia.yaml"
         settings_file.write_text(settings_content)
@@ -1182,7 +1180,6 @@ profiles:
     driver: cli:claude
     model: sonnet
     tracker: noop
-    strategy: single
 """
         (worktree / "settings.amelia.yaml").write_text(settings_content)
 
@@ -1262,7 +1259,6 @@ profiles:
     driver: cli:claude
     model: sonnet
     tracker: noop
-    strategy: single
 """
         (worktree / "settings.amelia.yaml").write_text(settings_content)
 
@@ -1450,7 +1446,6 @@ profiles:
     driver: cli:claude
     model: sonnet
     tracker: noop
-    strategy: single
 """
         (worktree / "settings.amelia.yaml").write_text(settings_content)
 
@@ -1488,7 +1483,6 @@ profiles:
     driver: cli:claude
     model: sonnet
     tracker: github
-    strategy: single
 """
         (worktree / "settings.amelia.yaml").write_text(settings_content)
 
@@ -1521,7 +1515,6 @@ profiles:
     driver: cli:claude
     model: sonnet
     tracker: noop
-    strategy: single
 """
         (worktree / "settings.amelia.yaml").write_text(settings_content)
 

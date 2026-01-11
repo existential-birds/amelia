@@ -7,6 +7,7 @@ import asyncio
 import shlex
 from pathlib import Path
 
+from loguru import logger
 from pydantic import BaseModel
 
 
@@ -205,3 +206,25 @@ async def revert_to_git_snapshot(
             # File didn't exist in snapshot - it's a new file, remove it
             if file_path.exists():
                 file_path.unlink()
+
+
+async def get_current_commit(cwd: str | None = None) -> str | None:
+    """Get the current HEAD commit SHA.
+
+    Args:
+        cwd: Working directory for git command.
+
+    Returns:
+        The current commit SHA, or None if not in a git repo.
+    """
+    try:
+        repo_path = Path(cwd) if cwd else None
+        result = await _run_git_command(
+            "git rev-parse HEAD",
+            repo_path=repo_path,
+            check=True,
+        )
+        return result if result else None
+    except RuntimeError:
+        logger.warning("Failed to get current commit", cwd=cwd)
+        return None

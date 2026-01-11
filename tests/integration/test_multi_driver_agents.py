@@ -8,12 +8,11 @@ by actually verifying the driver abstraction works at runtime.
 
 from pathlib import Path
 from typing import Any, cast
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import pytest
 from langchain_core.runnables.config import RunnableConfig
 
-from amelia.agents.reviewer import ReviewResponse
 from amelia.core.orchestrator import call_developer_node, call_reviewer_node
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
 from tests.integration.conftest import (
@@ -21,6 +20,7 @@ from tests.integration.conftest import (
     make_config,
     make_execution_state,
     make_profile,
+    make_reviewer_agentic_messages,
 )
 
 
@@ -166,9 +166,9 @@ class TestReviewerMultiDriver:
     ) -> None:
         """Reviewer should return ReviewResult regardless of driver type.
 
-        The Reviewer uses driver.generate() with a schema.
-        Both drivers should return the same structured ReviewResponse.
-        Mock at driver.generate() level - the correct integration boundary.
+        The Reviewer uses driver.execute_agentic() for agentic review.
+        Both drivers should process AgenticMessages and return parsed results.
+        Mock at driver.execute_agentic() level - the correct integration boundary.
         """
         profile = make_profile(
             driver=driver_key,
@@ -182,25 +182,23 @@ class TestReviewerMultiDriver:
         )
         config = make_config(thread_id=f"test-review-{driver_key}", profile=profile)
 
-        mock_response = ReviewResponse(
-            approved=True,
-            comments=["LGTM! Good use of standard logging module."],
-            severity="low",
-        )
+        mock_messages = make_reviewer_agentic_messages(approved=True)
 
-        # Mock at driver.generate() level - returns (output, session_id)
+        async def mock_execute_agentic(*_args: Any, **_kwargs: Any) -> Any:
+            for msg in mock_messages:
+                yield msg
+
+        # Mock at driver.execute_agentic() level
         if driver_key.startswith("api:"):
-            patch_target = "amelia.drivers.api.deepagents.ApiDriver.generate"
+            patch_target = "amelia.drivers.api.deepagents.ApiDriver.execute_agentic"
         else:
-            patch_target = "amelia.drivers.cli.claude.ClaudeCliDriver.generate"
+            patch_target = "amelia.drivers.cli.claude.ClaudeCliDriver.execute_agentic"
 
-        with patch(patch_target, new_callable=AsyncMock) as mock_generate:
-            mock_generate.return_value = (mock_response, "session-123")
+        with patch(patch_target, mock_execute_agentic):
             result = await call_reviewer_node(state, cast(RunnableConfig, config))
 
         assert result["last_review"] is not None
         assert result["last_review"].approved is True
-        assert "LGTM" in result["last_review"].comments[0]
 
     @pytest.mark.parametrize("driver_key,model", DRIVER_CONFIGS)
     async def test_reviewer_rejection_from_any_driver(
@@ -222,20 +220,23 @@ class TestReviewerMultiDriver:
         )
         config = make_config(thread_id=f"test-reject-{driver_key}", profile=profile)
 
-        mock_response = ReviewResponse(
+        mock_messages = make_reviewer_agentic_messages(
             approved=False,
-            comments=["Critical: Hardcoded password. Use environment variables."],
+            comments=["Hardcoded password found"],
             severity="critical",
         )
 
-        # Mock at driver.generate() level
-        if driver_key.startswith("api:"):
-            patch_target = "amelia.drivers.api.deepagents.ApiDriver.generate"
-        else:
-            patch_target = "amelia.drivers.cli.claude.ClaudeCliDriver.generate"
+        async def mock_execute_agentic(*_args: Any, **_kwargs: Any) -> Any:
+            for msg in mock_messages:
+                yield msg
 
-        with patch(patch_target, new_callable=AsyncMock) as mock_generate:
-            mock_generate.return_value = (mock_response, "session-456")
+        # Mock at driver.execute_agentic() level
+        if driver_key.startswith("api:"):
+            patch_target = "amelia.drivers.api.deepagents.ApiDriver.execute_agentic"
+        else:
+            patch_target = "amelia.drivers.cli.claude.ClaudeCliDriver.execute_agentic"
+
+        with patch(patch_target, mock_execute_agentic):
             result = await call_reviewer_node(state, cast(RunnableConfig, config))
 
         assert result["last_review"] is not None
