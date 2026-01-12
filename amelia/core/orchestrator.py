@@ -601,14 +601,14 @@ async def call_architect_node(
         # Look for Write tool call with plan content
         # Log all tool names explicitly for debugging
         tool_names = [tc.tool_name for tc in final_state.tool_calls]
-        logger.warning(
-            f"DEBUG: Looking for write_file in tool calls: {tool_names}"
+        logger.debug(
+            f"Looking for write_file in tool calls: {tool_names}"
         )
         for tc in final_state.tool_calls:
             input_keys = list(tc.tool_input.keys()) if tc.tool_input else []
             is_match = tc.tool_name == ToolName.WRITE_FILE and "content" in tc.tool_input
-            logger.warning(
-                f"DEBUG: tool_name={tc.tool_name!r}, input_keys={input_keys}, is_write_file={is_match}"
+            logger.debug(
+                f"tool_name={tc.tool_name!r}, input_keys={input_keys}, is_write_file={is_match}"
             )
             if tc.tool_name == ToolName.WRITE_FILE and "content" in tc.tool_input:
                 plan_content = tc.tool_input.get("content", "")

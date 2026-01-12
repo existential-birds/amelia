@@ -126,13 +126,13 @@ class TestArchitectPlanPath:
                 type=AgenticMessageType.TOOL_CALL,
                 tool_name=ToolName.WRITE_FILE,
                 tool_input={"file_path": "/repo/docs/plans/2026-01-07-test-123.md", "content": "# Plan"},
-                tool_use_id="write-1",
+                tool_call_id="write-1",
                 session_id="session-1",
             )
             yield AgenticMessage(
                 type=AgenticMessageType.TOOL_RESULT,
                 tool_output="File written successfully",
-                tool_use_id="write-1",
+                tool_call_id="write-1",
                 session_id="session-1",
             )
             yield AgenticMessage(

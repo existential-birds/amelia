@@ -295,9 +295,9 @@ Before planning, discover:
                     tool_input=message.tool_input or {},
                 )
                 tool_calls.append(call)
-                # DEBUG: Log tool call details with explicit tool name in message
+                # Log tool call details with explicit tool name in message
                 input_keys = list(message.tool_input.keys()) if message.tool_input else []
-                logger.warning(
+                logger.debug(
                     f"TOOL_CALL: name={message.tool_name!r} keys={input_keys}"
                 )
                 event = message.to_workflow_event(workflow_id=workflow_id, agent="architect")
