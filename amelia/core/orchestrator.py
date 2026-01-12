@@ -75,6 +75,113 @@ def extract_task_count(plan_markdown: str) -> int | None:
     return count
 
 
+def _looks_like_plan(text: str) -> bool:
+    """Check if text looks like a plan document.
+
+    Used as a fallback when the LLM doesn't use the write tool but outputs
+    the plan as text instead.
+
+    Args:
+        text: The text to check.
+
+    Returns:
+        True if the text contains plan-like indicators.
+    """
+    if not text or len(text) < 100:
+        return False
+
+    # Count plan indicators
+    indicators = 0
+    lower_text = text.lower()
+
+    # Check for common plan headers/sections
+    plan_markers = [
+        "# ",  # Markdown headers
+        "## ",
+        "### task",
+        "### step",
+        "## phase",
+        "**goal:**",
+        "**architecture:**",
+        "**tech stack:**",
+        "implementation plan",
+        "```",  # Code blocks
+    ]
+    for marker in plan_markers:
+        if marker in lower_text:
+            indicators += 1
+
+    # Need at least 3 indicators to consider it a plan
+    return indicators >= 3
+
+
+def _extract_goal_from_plan(plan_content: str) -> str:
+    """Extract goal from plan content using simple pattern matching.
+
+    Looks for common goal patterns in the plan markdown:
+    - **Goal:** <text>
+    - # <Title> (first h1 header)
+
+    Args:
+        plan_content: The markdown plan content.
+
+    Returns:
+        Extracted goal or a default placeholder.
+    """
+    # Try to find **Goal:** pattern
+    goal_match = re.search(r"\*\*Goal:\*\*\s*(.+?)(?:\n|$)", plan_content)
+    if goal_match:
+        return goal_match.group(1).strip()
+
+    # Try to find first # header as title
+    title_match = re.search(r"^#\s+(.+?)(?:\n|$)", plan_content, re.MULTILINE)
+    if title_match:
+        title = title_match.group(1).strip()
+        # Remove "Implementation Plan" suffix if present
+        title = re.sub(r"\s*Implementation Plan\s*$", "", title, flags=re.IGNORECASE)
+        return f"Implement {title}" if title else "Implementation plan"
+
+    return "Implementation plan"
+
+
+def _extract_key_files_from_plan(plan_content: str) -> list[str]:
+    """Extract key files from plan content using pattern matching.
+
+    Looks for file paths in the plan, typically in **Files:** sections
+    or code blocks with file paths.
+
+    Args:
+        plan_content: The markdown plan content.
+
+    Returns:
+        List of file paths found, or empty list.
+    """
+    key_files: list[str] = []
+
+    # Look for patterns like:
+    # - Create: `path/to/file.py`
+    # - Modify: `path/to/file.py`
+    # - Test: `tests/path/test.py`
+    file_patterns = [
+        r"(?:Create|Modify|Test|Edit|Update|Delete):\s*`([^`]+)`",
+        r"(?:Create|Modify|Test|Edit|Update|Delete):\s*(\S+\.(?:py|ts|tsx|js|jsx|go|rs|md))",
+    ]
+
+    for pattern in file_patterns:
+        matches = re.findall(pattern, plan_content, re.IGNORECASE)
+        key_files.extend(matches)
+
+    # Deduplicate while preserving order
+    seen: set[str] = set()
+    unique_files: list[str] = []
+    for f in key_files:
+        if f not in seen:
+            seen.add(f)
+            unique_files.append(f)
+
+    return unique_files
+
+
 async def _extract_structured[T: BaseModel](
     prompt: str,
     schema: type[T],
@@ -368,29 +475,43 @@ Return:
 - plan_markdown: The full plan content (preserve as-is)
 - key_files: List of files that will be created or modified"""
 
-    output = await _extract_structured(
-        prompt=prompt,
-        schema=MarkdownPlanOutput,
-        model=model,
-        driver_type=profile.driver,
-    )
+    try:
+        output = await _extract_structured(
+            prompt=prompt,
+            schema=MarkdownPlanOutput,
+            model=model,
+            driver_type=profile.driver,
+        )
+        goal = output.goal
+        plan_markdown = output.plan_markdown
+        key_files = output.key_files
+    except RuntimeError as e:
+        # Fallback: extract what we can from the plan content directly
+        logger.warning(
+            "Structured extraction failed, using fallback",
+            error=str(e),
+            workflow_id=workflow_id,
+        )
+        goal = _extract_goal_from_plan(plan_content)
+        plan_markdown = plan_content
+        key_files = _extract_key_files_from_plan(plan_content)
 
     # Parse task count from plan markdown
     total_tasks = extract_task_count(plan_content)
 
     logger.info(
         "Plan validated",
-        goal=output.goal,
-        key_files_count=len(output.key_files),
+        goal=goal,
+        key_files_count=len(key_files),
         total_tasks=total_tasks,
         workflow_id=workflow_id,
     )
 
     return {
-        "goal": output.goal,
-        "plan_markdown": output.plan_markdown,
+        "goal": goal,
+        "plan_markdown": plan_markdown,
         "plan_path": plan_path,
-        "key_files": output.key_files,
+        "key_files": key_files,
         "total_tasks": total_tasks,
     }
 
@@ -478,14 +599,16 @@ async def call_architect_node(
         )
 
         # Look for Write tool call with plan content
+        # Log all tool names explicitly for debugging
+        tool_names = [tc.tool_name for tc in final_state.tool_calls]
+        logger.warning(
+            f"DEBUG: Looking for write_file in tool calls: {tool_names}"
+        )
         for tc in final_state.tool_calls:
-            logger.debug(
-                "DEBUG: Checking tool call",
-                tool_name=tc.tool_name,
-                tool_name_repr=repr(tc.tool_name),
-                is_write_file=(tc.tool_name == ToolName.WRITE_FILE),
-                write_file_value=ToolName.WRITE_FILE,
-                input_keys=list(tc.tool_input.keys()) if tc.tool_input else [],
+            input_keys = list(tc.tool_input.keys()) if tc.tool_input else []
+            is_match = tc.tool_name == ToolName.WRITE_FILE and "content" in tc.tool_input
+            logger.warning(
+                f"DEBUG: tool_name={tc.tool_name!r}, input_keys={input_keys}, is_write_file={is_match}"
             )
             if tc.tool_name == ToolName.WRITE_FILE and "content" in tc.tool_input:
                 plan_content = tc.tool_input.get("content", "")
@@ -498,14 +621,24 @@ async def call_architect_node(
                     )
                     break
         else:
-            # No Write tool call found - this is a critical error
-            logger.error(
-                "No Write tool call found for plan file",
-                plan_path=str(plan_path),
-                tool_calls=[tc.tool_name for tc in final_state.tool_calls],
-                tool_calls_count=len(final_state.tool_calls),
-                raw_output_preview=final_state.raw_architect_output[:500] if final_state.raw_architect_output else "EMPTY",
-            )
+            # No Write tool call found - try to salvage plan from raw output
+            # Some models output the plan as text instead of using the write tool
+            raw_output = final_state.raw_architect_output or ""
+            if raw_output and _looks_like_plan(raw_output):
+                plan_path.write_text(raw_output)
+                logger.warning(
+                    "Wrote plan file from raw output (model didn't use write tool)",
+                    plan_path=str(plan_path),
+                    content_length=len(raw_output),
+                )
+            else:
+                logger.error(
+                    "No Write tool call found and raw output doesn't look like a plan",
+                    plan_path=str(plan_path),
+                    tool_calls=[tc.tool_name for tc in final_state.tool_calls],
+                    tool_calls_count=len(final_state.tool_calls),
+                    raw_output_preview=raw_output[:500] if raw_output else "EMPTY",
+                )
 
     logger.info(
         "Agent action completed",

@@ -60,7 +60,7 @@ class Developer:
             raise ValueError("ExecutionState must have a goal set")
 
         cwd = profile.working_dir or "."
-        prompt = self._build_prompt(state, profile)
+        prompt = self._build_prompt(state)
 
         tool_calls: list[ToolCall] = list(state.tool_calls)
         tool_results: list[ToolResult] = list(state.tool_results)
@@ -133,12 +133,9 @@ class Developer:
                 })
                 yield current_state, event
 
-    def _build_prompt(self, state: ExecutionState, profile: Profile) -> str:
+    def _build_prompt(self, state: ExecutionState) -> str:
         """Build prompt combining goal, review feedback, and context."""
         parts = []
-
-        # Context section
-        parts.append(f"Working directory: {profile.working_dir or '.'}")
 
         # Plan context (from Architect)
         if state.plan_markdown:

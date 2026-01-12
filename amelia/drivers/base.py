@@ -172,6 +172,7 @@ class DriverInterface(Protocol):
         session_id: str | None = None,
         instructions: str | None = None,
         schema: type[BaseModel] | None = None,
+        **kwargs: Any,
     ) -> AsyncIterator["AgenticMessage"]:
         """Execute prompt with autonomous tool use, yielding messages.
 
@@ -181,6 +182,7 @@ class DriverInterface(Protocol):
             session_id: Optional session ID for conversation continuity.
             instructions: Optional system instructions.
             schema: Optional schema for structured output.
+            **kwargs: Driver-specific options (e.g., required_tool, max_continuations).
 
         Yields:
             AgenticMessage for each event during execution.
