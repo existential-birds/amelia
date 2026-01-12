@@ -22,7 +22,7 @@ async def run_shell_command(
         Command stdout as string
 
     Raises:
-        ValueError: If command is empty
+        ValueError: If command is empty or malformed (e.g., unclosed quotes)
         RuntimeError: If command fails or times out
     """
     if not command or not command.strip():
