@@ -224,8 +224,7 @@ export function WorktreePathField({
   const handleSelectPath = (path: string) => {
     onChange(path);
     setIsDropdownOpen(false);
-    // Immediately validate the selected path
-    validatePath(path);
+    // Validation handled by useEffect with proper AbortSignal
   };
 
   // Get the status icon from the pre-defined lookup

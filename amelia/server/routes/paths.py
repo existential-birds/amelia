@@ -1,5 +1,6 @@
 """Path validation endpoints for worktree path verification."""
 
+import asyncio
 import subprocess
 from pathlib import Path
 
@@ -29,8 +30,8 @@ class PathValidationResponse(BaseModel):
     message: str = Field(description="Human-readable status message")
 
 
-def _get_git_branch(path: Path) -> str | None:
-    """Get the current git branch name.
+def _get_git_branch_sync(path: Path) -> str | None:
+    """Get the current git branch name (sync implementation).
 
     Args:
         path: Path to the git repository.
@@ -53,8 +54,20 @@ def _get_git_branch(path: Path) -> str | None:
     return None
 
 
-def _has_uncommitted_changes(path: Path) -> bool:
-    """Check if the repository has uncommitted changes.
+async def _get_git_branch(path: Path) -> str | None:
+    """Get the current git branch name.
+
+    Args:
+        path: Path to the git repository.
+
+    Returns:
+        Branch name or None if not determinable.
+    """
+    return await asyncio.to_thread(_get_git_branch_sync, path)
+
+
+def _has_uncommitted_changes_sync(path: Path) -> bool:
+    """Check if the repository has uncommitted changes (sync implementation).
 
     Args:
         path: Path to the git repository.
@@ -75,6 +88,18 @@ def _has_uncommitted_changes(path: Path) -> bool:
     except (subprocess.TimeoutExpired, OSError):
         pass
     return False
+
+
+async def _has_uncommitted_changes(path: Path) -> bool:
+    """Check if the repository has uncommitted changes.
+
+    Args:
+        path: Path to the git repository.
+
+    Returns:
+        True if there are uncommitted changes.
+    """
+    return await asyncio.to_thread(_has_uncommitted_changes_sync, path)
 
 
 @router.post("/validate", response_model=PathValidationResponse)
@@ -138,9 +163,9 @@ async def validate_path(request: PathValidationRequest) -> PathValidationRespons
             message="Directory exists but is not a git repository",
         )
 
-    # Get git info
-    branch = _get_git_branch(resolved_path)
-    has_changes = _has_uncommitted_changes(resolved_path)
+    # Get git info (run in thread pool to avoid blocking event loop)
+    branch = await _get_git_branch(resolved_path)
+    has_changes = await _has_uncommitted_changes(resolved_path)
 
     # Build message
     change_indicator = " with uncommitted changes" if has_changes else ""

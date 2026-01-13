@@ -256,7 +256,8 @@ describe('QuickShotModal Import Zone', () => {
     file.text = () => Promise.resolve(content);
 
     const dataTransfer = { files: [file], types: ['Files'] };
-    fireEvent.drop(dropZone!, { dataTransfer });
+    expect(dropZone).toBeInTheDocument();
+    fireEvent.drop(dropZone, { dataTransfer });
 
     // Check form fields are populated
     await waitFor(() => {
@@ -274,7 +275,8 @@ describe('QuickShotModal Import Zone', () => {
     const file = new File(['content'], 'test.txt', { type: 'text/plain' });
     const dataTransfer = { files: [file], types: ['Files'] };
 
-    fireEvent.drop(dropZone!, { dataTransfer });
+    expect(dropZone).toBeInTheDocument();
+    fireEvent.drop(dropZone, { dataTransfer });
 
     await waitFor(() => {
       expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('.md'));
@@ -299,7 +301,8 @@ describe('QuickShotModal Import Zone', () => {
     file.text = () => Promise.resolve(content);
 
     const dataTransfer = { files: [file], types: ['Files'] };
-    fireEvent.drop(dropZone!, { dataTransfer });
+    expect(dropZone).toBeInTheDocument();
+    fireEvent.drop(dropZone, { dataTransfer });
 
     // Filename is displayed in a span element, not an input
     await waitFor(() => {
