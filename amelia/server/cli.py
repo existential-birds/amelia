@@ -1,5 +1,6 @@
 """CLI commands for the Amelia server."""
 import os
+from pathlib import Path
 from typing import Annotated
 
 import typer
@@ -37,6 +38,14 @@ def server(
         bool,
         typer.Option("--reload", help="Enable auto-reload for development"),
     ] = False,
+    working_dir: Annotated[
+        str | None,
+        typer.Option(
+            "--working-dir",
+            "-w",
+            help="Working directory for file access. Pre-fills worktree path in Quick Shot.",
+        ),
+    ] = None,
 ) -> None:
     """Start the Amelia API server.
 
@@ -55,7 +64,8 @@ def server(
     configure_logging(level=log_level)
 
     # Load config (respects environment variables)
-    config = ServerConfig()
+    # CLI --working-dir overrides AMELIA_WORKING_DIR
+    config = ServerConfig(working_dir=Path(working_dir)) if working_dir else ServerConfig()
 
     # CLI flags override config
     effective_port = port if port is not None else config.port

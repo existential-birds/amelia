@@ -47,3 +47,29 @@ class TestServerCLI:
             result = runner.invoke(app, ["server", "--bind-all"])
 
             assert "Warning" in result.stdout or "warning" in result.stdout.lower()
+
+    def test_working_dir_option_sets_config(self, runner: CliRunner) -> None:
+        """--working-dir should set working_dir in ServerConfig."""
+        with patch("amelia.server.cli.uvicorn") as mock_uvicorn, \
+             patch("amelia.server.cli.ServerConfig") as MockConfig, \
+             patch("amelia.server.cli.configure_logging"), \
+             patch("amelia.server.cli.print_banner"):
+            from unittest.mock import MagicMock
+            mock_config = MagicMock()
+            mock_config.port = 8420
+            mock_config.host = "127.0.0.1"
+            mock_config.working_dir = None
+            MockConfig.return_value = mock_config
+            mock_uvicorn.run.side_effect = KeyboardInterrupt()
+
+            runner.invoke(
+                app,
+                ["server", "--working-dir", "/tmp/test-repo"],
+                catch_exceptions=False
+            )
+
+            # Verify working_dir was passed to config as a Path
+            from pathlib import Path
+            assert MockConfig.call_count == 1
+            call_kwargs = MockConfig.call_args[1]
+            assert call_kwargs.get("working_dir") == Path("/tmp/test-repo")
