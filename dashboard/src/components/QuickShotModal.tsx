@@ -5,13 +5,14 @@
  * quickly launch workflows directly from the dashboard UI.
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Zap } from 'lucide-react';
+import { Zap, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, ApiError } from '@/api/client';
+import { extractTitle, extractTitleFromFilename, generateDesignId } from '@/lib/design-doc';
 import {
   Dialog,
   DialogContent,
@@ -23,6 +24,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
 /**
@@ -136,12 +138,16 @@ const fields: FieldConfig[] = [
 export function QuickShotModal({ open, onOpenChange, defaults }: QuickShotModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLaunching, setIsLaunching] = useState(false);
+  const [importPath, setImportPath] = useState('');
+  const [isImporting, setIsImporting] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
 
   const {
     register,
     handleSubmit,
     formState: { errors, isValid },
     reset,
+    getValues,
   } = useForm<QuickShotFormData>({
     resolver: zodResolver(quickShotSchema),
     mode: 'all',
@@ -167,6 +173,105 @@ export function QuickShotModal({ open, onOpenChange, defaults }: QuickShotModalP
       );
     }
   }, [defaults, reset]);
+
+  // Fetch server config for working_dir pre-fill
+  useEffect(() => {
+    async function fetchConfig() {
+      try {
+        const config = await api.getConfig();
+        if (config.working_dir) {
+          reset(
+            (currentValues) => ({
+              ...currentValues,
+              worktree_path: currentValues.worktree_path || config.working_dir || '',
+            }),
+            { keepDirty: true }
+          );
+        }
+      } catch {
+        // Ignore config fetch errors - defaults will be used
+      }
+    }
+    if (open) {
+      fetchConfig();
+    }
+  }, [open, reset]);
+
+  /**
+   * Populates form fields from design document content.
+   */
+  const populateFromContent = useCallback((content: string, filename: string) => {
+    let title = extractTitle(content);
+    if (title === 'Untitled') {
+      title = extractTitleFromFilename(filename);
+    }
+
+    reset({
+      issue_id: generateDesignId(),
+      worktree_path: getValues('worktree_path'),
+      profile: getValues('profile'),
+      task_title: title,
+      task_description: content,
+    });
+  }, [reset, getValues]);
+
+  /**
+   * Handles importing a design doc from a file path.
+   */
+  const handleImportFromPath = useCallback(async () => {
+    if (!importPath.trim()) return;
+
+    setIsImporting(true);
+    try {
+      const file = await api.readFile(importPath);
+      populateFromContent(file.content, file.filename);
+      setImportPath('');
+    } catch (error) {
+      if (error instanceof ApiError) {
+        toast.error(error.message);
+      } else {
+        toast.error('Failed to read file');
+      }
+    } finally {
+      setIsImporting(false);
+    }
+  }, [importPath, populateFromContent]);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+  }, []);
+
+  /**
+   * Handles drag-drop of markdown files.
+   */
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+
+    const files = Array.from(e.dataTransfer.files);
+    const mdFile = files.find((f) => f.name.endsWith('.md'));
+
+    if (!mdFile) {
+      toast.error('Only .md files supported');
+      return;
+    }
+
+    setIsImporting(true);
+    try {
+      const content = await mdFile.text();
+      populateFromContent(content, mdFile.name);
+    } catch {
+      toast.error('Failed to read file');
+    } finally {
+      setIsImporting(false);
+    }
+  }, [populateFromContent]);
 
   /**
    * Submits the workflow with the specified action type.
@@ -244,6 +349,46 @@ export function QuickShotModal({ open, onOpenChange, defaults }: QuickShotModalP
         </DialogHeader>
 
         <div className="space-y-4 py-4">
+          {/* Import Zone */}
+          <Card
+            className={cn(
+              'border-2 border-dashed p-4 text-center transition-colors',
+              isDragOver ? 'border-primary bg-primary/5' : 'border-border',
+              isImporting && 'opacity-50'
+            )}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+          >
+            <div className="flex flex-col items-center gap-2">
+              <Upload className="h-6 w-6 text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">
+                Drop design doc here
+              </p>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <span>or</span>
+              </div>
+              <div className="flex w-full gap-2">
+                <Input
+                  placeholder="/path/to/design.md"
+                  value={importPath}
+                  onChange={(e) => setImportPath(e.target.value)}
+                  className="flex-1 font-mono text-xs"
+                  disabled={isImporting}
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleImportFromPath}
+                  disabled={isImporting || !importPath.trim()}
+                >
+                  Import
+                </Button>
+              </div>
+            </div>
+          </Card>
+
           {fields.map((field, index) => (
             <div
               key={field.name}

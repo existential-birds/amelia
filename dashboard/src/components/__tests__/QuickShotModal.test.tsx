@@ -1,5 +1,5 @@
 /**
- * @fileoverview Tests for QuickShotModal queue buttons functionality.
+ * @fileoverview Tests for QuickShotModal functionality.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
@@ -11,6 +11,11 @@ import { api } from '@/api/client';
 vi.mock('@/api/client', () => ({
   api: {
     createWorkflow: vi.fn(),
+    getConfig: vi.fn().mockResolvedValue({ working_dir: '/tmp/repo', max_concurrent: 5 }),
+    readFile: vi.fn().mockResolvedValue({
+      content: '# Test Design\n\n## Problem\n\nTest problem.',
+      filename: 'test-design.md',
+    }),
   },
   ApiError: class ApiError extends Error {
     constructor(
@@ -194,6 +199,97 @@ describe('QuickShotModal queue buttons', () => {
     await waitFor(() => {
       expect(api.createWorkflow).toHaveBeenCalled();
       expect(onOpenChange).toHaveBeenCalledWith(false);
+    });
+  });
+});
+
+describe('QuickShotModal Import Zone', () => {
+  const defaultProps = {
+    open: true,
+    onOpenChange: vi.fn(),
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(api.createWorkflow).mockResolvedValue({
+      id: 'wf-123',
+      status: 'pending',
+      message: 'Workflow created',
+    });
+    vi.mocked(api.getConfig).mockResolvedValue({ working_dir: '/tmp/repo', max_concurrent: 5 });
+    vi.mocked(api.readFile).mockResolvedValue({
+      content: '# Test Design\n\n## Problem\n\nTest problem.',
+      filename: 'test-design.md',
+    });
+  });
+
+  it('renders drop zone and path input', () => {
+    render(<QuickShotModal {...defaultProps} />);
+
+    expect(screen.getByText(/drop design doc here/i)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/\/path\/to\/design\.md/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /import/i })).toBeInTheDocument();
+  });
+
+  it('populates form fields when importing via path', async () => {
+    render(<QuickShotModal {...defaultProps} />);
+
+    const pathInput = screen.getByPlaceholderText(/\/path\/to\/design\.md/i);
+    await userEvent.type(pathInput, '/path/to/test-design.md');
+
+    const importButton = screen.getByRole('button', { name: /import/i });
+    await userEvent.click(importButton);
+
+    await waitFor(() => {
+      expect(api.readFile).toHaveBeenCalledWith('/path/to/test-design.md');
+    });
+
+    // Check form fields are populated
+    await waitFor(() => {
+      const titleInput = screen.getByLabelText(/task title/i);
+      expect(titleInput).toHaveValue('Test');
+    });
+  });
+
+  it('shows error toast for non-markdown files on drag-drop', async () => {
+    const { toast } = await import('sonner');
+    render(<QuickShotModal {...defaultProps} />);
+
+    const dropZone = screen.getByText(/drop design doc here/i).closest('div');
+
+    const file = new File(['content'], 'test.txt', { type: 'text/plain' });
+    const dataTransfer = { files: [file], types: ['Files'] };
+
+    fireEvent.drop(dropZone!, { dataTransfer });
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('.md'));
+    });
+  });
+});
+
+describe('QuickShotModal Config Integration', () => {
+  const defaultProps = {
+    open: true,
+    onOpenChange: vi.fn(),
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(api.createWorkflow).mockResolvedValue({
+      id: 'wf-123',
+      status: 'pending',
+      message: 'Workflow created',
+    });
+    vi.mocked(api.getConfig).mockResolvedValue({ working_dir: '/tmp/repo', max_concurrent: 5 });
+  });
+
+  it('pre-fills worktree path from server config', async () => {
+    render(<QuickShotModal {...defaultProps} />);
+
+    await waitFor(() => {
+      const worktreeInput = screen.getByLabelText(/worktree path/i);
+      expect(worktreeInput).toHaveValue('/tmp/repo');
     });
   });
 });
