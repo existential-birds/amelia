@@ -121,6 +121,8 @@ class TestValidatePath:
                 check=True,
                 env=isolated_env,
             )
+            # NOTE: Never use --no-verify here. If this commit fails due to hooks,
+            # the problem is git environment isolation, not hooks. Fix env instead.
             subprocess.run(
                 ["git", "commit", "-m", "Initial commit"],
                 cwd=tmpdir,
