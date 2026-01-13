@@ -5,9 +5,9 @@ from unittest.mock import patch
 
 import pytest
 
-import amelia.server.main as main_module
+import amelia.server.dependencies as deps_module
 from amelia.server.config import ServerConfig
-from amelia.server.main import get_config
+from amelia.server.dependencies import get_config
 
 
 class TestServerConfig:
@@ -76,10 +76,10 @@ class TestGetConfig:
     def test_get_config_raises_when_not_initialized(self) -> None:
         """get_config raises RuntimeError before server starts."""
         # Ensure _config is None (it should be by default, but be explicit)
-        original = main_module._config
-        main_module._config = None
+        original = deps_module._config
+        deps_module._config = None
         try:
             with pytest.raises(RuntimeError, match="Server config not initialized"):
                 get_config()
         finally:
-            main_module._config = original
+            deps_module._config = original

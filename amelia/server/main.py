@@ -54,8 +54,10 @@ from amelia.server.database import WorkflowRepository
 from amelia.server.database.connection import Database
 from amelia.server.database.prompt_repository import PromptRepository
 from amelia.server.dependencies import (
+    clear_config,
     clear_database,
     clear_orchestrator,
+    set_config,
     set_database,
     set_orchestrator,
 )
@@ -64,28 +66,10 @@ from amelia.server.lifecycle.health_checker import WorktreeHealthChecker
 from amelia.server.lifecycle.retention import LogRetentionService
 from amelia.server.lifecycle.server import ServerLifecycle
 from amelia.server.orchestrator.service import OrchestratorService
-from amelia.server.routes import health_router, websocket_router, workflows_router
+from amelia.server.routes import config_router, health_router, websocket_router, workflows_router
 from amelia.server.routes.prompts import get_prompt_repository, router as prompts_router
 from amelia.server.routes.websocket import connection_manager
 from amelia.server.routes.workflows import configure_exception_handlers
-
-
-# Module-level config storage for DI
-_config: ServerConfig | None = None
-
-
-def get_config() -> ServerConfig:
-    """FastAPI dependency that provides the server configuration.
-
-    Returns:
-        The current ServerConfig instance.
-
-    Raises:
-        RuntimeError: If config is not initialized (server not started).
-    """
-    if _config is None:
-        raise RuntimeError("Server config not initialized. Is the server running?")
-    return _config
 
 
 @asynccontextmanager
@@ -95,17 +79,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     Sets start_time on startup for uptime calculation.
     Initializes configuration, database, orchestrator, and lifecycle components.
     """
-    global _config
-
     # Configure logging (needed when uvicorn loads app directly, e.g. with --reload)
     log_level = os.environ.get("AMELIA_LOG_LEVEL", "INFO").upper()
     configure_logging(level=log_level)
 
     # Initialize configuration
-    _config = ServerConfig()
+    config = ServerConfig()
+    set_config(config)
 
     # Connect to database and ensure schema exists
-    database = Database(_config.database_path)
+    database = Database(config.database_path)
     await database.connect()
     await database.ensure_schema()
     await database.initialize_prompts()
@@ -126,16 +109,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     orchestrator = OrchestratorService(
         event_bus=event_bus,
         repository=repository,
-        max_concurrent=_config.max_concurrent,
-        checkpoint_path=str(_config.checkpoint_path),
+        max_concurrent=config.max_concurrent,
+        checkpoint_path=str(config.checkpoint_path),
     )
     set_orchestrator(orchestrator)
 
     # Create lifecycle components
     log_retention = LogRetentionService(
         db=database,
-        config=_config,
-        checkpoint_path=_config.checkpoint_path,
+        config=config,
+        checkpoint_path=config.checkpoint_path,
     )
     lifecycle = ServerLifecycle(
         orchestrator=orchestrator,
@@ -149,9 +132,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # Log server startup with styled banner
     log_server_startup(
-        host=_config.host,
-        port=_config.port,
-        database_path=str(_config.database_path),
+        host=config.host,
+        port=config.port,
+        database_path=str(config.database_path),
         version=__version__,
     )
 
@@ -169,7 +152,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     clear_orchestrator()
     await database.close()
     clear_database()
-    _config = None
+    clear_config()
 
 
 def create_app() -> FastAPI:
@@ -192,6 +175,7 @@ def create_app() -> FastAPI:
     configure_exception_handlers(application)
 
     # Mount routes
+    application.include_router(config_router, prefix="/api")
     application.include_router(health_router, prefix="/api")
     application.include_router(workflows_router, prefix="/api")
     application.include_router(websocket_router)  # No prefix - route is /ws/events
