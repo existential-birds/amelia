@@ -11,6 +11,16 @@ Users cannot use design documents as workflow inputs. The Quick Shot modal only 
 
 Add design document import to the Quick Shot modal with drag-drop and manual path input. Add server `--working-dir` flag to pre-fill worktree path and scope file access.
 
+## Existing Infrastructure
+
+The following already exists and will be extended:
+
+- **QuickShotModal.tsx**: Form with Task ID, Worktree Path, Profile, Task Title, Description fields
+- **`getWorkflowDefaults()`**: API method that pre-fills worktree_path and profile from most recent workflow
+- **Form validation**: Zod schema with required field and format validation
+- **Submit actions**: Cancel, Queue, Plan & Queue, Start buttons
+- **Toast notifications**: Success/error feedback
+
 ## User Flow
 
 ```
@@ -27,7 +37,7 @@ Add design document import to the Quick Shot modal with drag-drop and manual pat
 │  Worktree Path:  [/Users/ka/github/amelia   ]   │ ← pre-filled
 │  Profile:        [default                   ]   │
 │  Task Title:     [Queue Workflows           ]   │ ← from H1
-│  Description:    [Full markdown content...  ]   │ ← full doc
+│  Description:    [Implement the feature...  ]   │ ← path ref
 │                                                 │
 │         [Cancel]  [Queue]  [Plan & Queue]  [Start] │
 └─────────────────────────────────────────────────┘
@@ -35,7 +45,7 @@ Add design document import to the Quick Shot modal with drag-drop and manual pat
 
 1. User drags `.md` file OR enters path and clicks Import
 2. System reads file content
-3. Auto-populates: issue_id (`design-{timestamp}`), title (first H1 minus "Design"), description (full content)
+3. Auto-populates: issue_id (`design-{timestamp}`), title (first H1 minus "Design"), description (path reference)
 4. Worktree path pre-filled from server's `working_dir` config
 5. User can edit any field before submitting
 
@@ -60,6 +70,31 @@ design-{YYYYMMDDHHmmss}
 ```
 
 Example: `design-20260109143052`
+
+## Description as Path Reference
+
+Design documents can be up to 25KB, exceeding the 5000 character limit on `task_description`. Instead of embedding the full content, we reference the file path.
+
+**Format:**
+```
+Implement the feature described in docs/plans/{filename}
+```
+
+**Example:**
+```
+Implement the feature described in docs/plans/2026-01-09-design-doc-import-design.md
+```
+
+**Why path reference:**
+- Avoids 5000 char limit entirely
+- Design doc stays as single source of truth
+- Agent reads the file when it needs full context
+- No backend schema changes required
+
+**Path construction:**
+- Design docs live in `<worktree>/docs/plans/` by convention
+- On drag-drop: construct path as `docs/plans/{filename}`
+- On path import: extract relative path from worktree
 
 ## API Changes
 
@@ -154,6 +189,10 @@ function generateDesignId(): string {
   const ts = now.toISOString().replace(/[-:T]/g, '').slice(0, 14);
   return `design-${ts}`;
 }
+
+function buildDescriptionReference(filename: string): string {
+  return `Implement the feature described in docs/plans/${filename}`;
+}
 ```
 
 ### API client additions
@@ -187,19 +226,19 @@ readFile(path: string): Promise<{ content: string; filename: string }>
 
 ### Backend
 
-| File | Change |
-|------|--------|
-| `amelia/server/config.py` | Add `working_dir: str \| None` field |
-| `amelia/server/cli.py` | Add `--working-dir` option |
-| `amelia/server/routes/config.py` | New - `GET /api/config` |
-| `amelia/server/routes/files.py` | New - `POST /api/files/read` |
-| `amelia/server/main.py` | Register new routes |
+| File | Status | Change |
+|------|--------|--------|
+| `amelia/server/config.py` | Modify | Add `working_dir: Path \| None` field with `AMELIA_WORKING_DIR` env var |
+| `amelia/server/cli.py` | Modify | Add `--working-dir` option |
+| `amelia/server/routes/config.py` | **New** | `GET /api/config` endpoint |
+| `amelia/server/routes/files.py` | **New** | `POST /api/files/read` endpoint |
+| `amelia/server/main.py` | Modify | Register new routes |
 
 ### Frontend
 
-| File | Change |
-|------|--------|
-| `dashboard/src/api/client.ts` | Add `getConfig()`, `readFile()` |
-| `dashboard/src/types/index.ts` | Add config/file types |
-| `dashboard/src/components/QuickShotModal.tsx` | Add import area, fetch config |
-| `dashboard/src/lib/design-doc.ts` | New - title extraction, ID generation |
+| File | Status | Change |
+|------|--------|--------|
+| `dashboard/src/api/client.ts` | Modify | Add `getConfig()`, `readFile()` methods |
+| `dashboard/src/types/index.ts` | Modify | Add `ConfigResponse`, `FileReadRequest`, `FileReadResponse` types |
+| `dashboard/src/components/QuickShotModal.tsx` | Modify | Add import drop zone and path input at top of form |
+| `dashboard/src/lib/design-doc.ts` | **New** | `extractTitle()`, `generateDesignId()` utilities |
