@@ -83,6 +83,9 @@ Handle complex tasks with hundreds of tool calls across multiple agent runs.
   - OpenRouter API key (for `api:openrouter` driver)
   - Claude CLI installed (for `cli:claude` driver)
 
+> [!NOTE]
+> **Model selection matters.** The API driver requires models with reliable tool-calling capabilities. Models that don't consistently follow tool-calling instructions may fail to complete tasks. See [Troubleshooting](https://existential-birds.github.io/amelia/guide/troubleshooting#api-driver-agent-fails-to-create-plan-file) for details.
+
 ## Quick Start
 
 ### 1. Install

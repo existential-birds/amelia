@@ -77,6 +77,7 @@ section-order = ["future", "standard-library", "third-party", "first-party", "lo
 [tool.mypy]
 python_version = "3.12"
 strict = true
+mypy_path = "stubs"
 
 [[tool.mypy.overrides]]
 module = [
@@ -84,6 +85,5 @@ module = [
     "langgraph.checkpoint.sqlite.aio",
     "psutil",
     "claude_agent_sdk",
-    "deepagents",
 ]
 ignore_missing_imports = true

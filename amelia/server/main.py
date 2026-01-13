@@ -37,6 +37,7 @@ def _check_dependencies() -> None:
 
 _check_dependencies()
 
+import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
@@ -47,7 +48,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from amelia import __version__
-from amelia.logging import log_server_startup
+from amelia.logging import configure_logging, log_server_startup
 from amelia.server.config import ServerConfig
 from amelia.server.database import WorkflowRepository
 from amelia.server.database.connection import Database
@@ -95,6 +96,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     Initializes configuration, database, orchestrator, and lifecycle components.
     """
     global _config
+
+    # Configure logging (needed when uvicorn loads app directly, e.g. with --reload)
+    log_level = os.environ.get("AMELIA_LOG_LEVEL", "INFO").upper()
+    configure_logging(level=log_level)
 
     # Initialize configuration
     _config = ServerConfig()

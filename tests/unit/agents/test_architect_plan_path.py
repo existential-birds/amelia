@@ -43,8 +43,9 @@ class TestArchitectPlanPath:
         # Check path components
         assert "docs/plans/" in prompt
         assert "test-123" in prompt.lower()
-        # Explicit Write tool instruction to prevent LLM from just outputting plan text
-        assert "MUST use the Write tool" in prompt
+        # Explicit write instruction to prevent LLM from just outputting plan text
+        assert "MUST create the file" in prompt
+        assert "CRITICAL REQUIREMENT" in prompt
 
     def test_architect_agentic_prompt_uses_todays_date(
         self,
@@ -125,13 +126,13 @@ class TestArchitectPlanPath:
                 type=AgenticMessageType.TOOL_CALL,
                 tool_name=ToolName.WRITE_FILE,
                 tool_input={"file_path": "/repo/docs/plans/2026-01-07-test-123.md", "content": "# Plan"},
-                tool_use_id="write-1",
+                tool_call_id="write-1",
                 session_id="session-1",
             )
             yield AgenticMessage(
                 type=AgenticMessageType.TOOL_RESULT,
                 tool_output="File written successfully",
-                tool_use_id="write-1",
+                tool_call_id="write-1",
                 session_id="session-1",
             )
             yield AgenticMessage(

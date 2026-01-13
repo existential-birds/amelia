@@ -284,6 +284,62 @@ InvalidWorktreeError: Invalid worktree '/path/to/repo': not a git repository
 
 ---
 
+## Driver Issues
+
+### API driver: Agent fails to create plan file
+
+**Error:**
+```
+Plan file not found after architect completed
+```
+
+**Cause:** Some models have unreliable tool-calling capabilities. The Architect agent requires the LLM to call a `write_file` tool to create the plan, but weaker models may:
+- Output the plan as text instead of calling the tool
+- Call the tool with incorrect parameters
+- Terminate before completing the required tool call
+
+**Solutions:**
+
+1. Use a model with strong tool-calling capabilities:
+   ```yaml
+   profiles:
+     dev:
+       driver: api:openrouter
+       model: "anthropic/claude-sonnet-4"  # Reliable tool calling
+   ```
+
+2. Switch to the CLI driver (recommended for reliability):
+   ```yaml
+   profiles:
+     dev:
+       driver: cli:claude  # Uses Claude CLI with native tool support
+   ```
+
+**Models known to work well:**
+- `anthropic/claude-sonnet-4`
+- `anthropic/claude-haiku`
+- `openai/gpt-4o`
+
+**Models that may have issues:**
+- Smaller/cheaper models with limited instruction-following
+- Models without native tool-calling support
+- Models that tend to output markdown instead of using tools
+
+### API driver: Tool calls not executed
+
+**Error:**
+```
+Agent completed but required tool was never called
+```
+
+**Cause:** The model produced output text instead of tool calls. This is a model capability issue, not a configuration problem.
+
+**Solution:**
+
+The API driver includes retry logic (up to 3 attempts) and fallback extraction, but some models consistently fail. Use a different model or switch to `cli:claude`.
+
+---
+
 ## Configuration Issues
 
 ### No module named 'amelia'

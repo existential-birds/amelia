@@ -7,8 +7,8 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from deepagents import create_deep_agent
-from deepagents.backends import FilesystemBackend  # type: ignore[import-untyped]
-from deepagents.backends.protocol import (  # type: ignore[import-untyped]
+from deepagents.backends import FilesystemBackend
+from deepagents.backends.protocol import (
     ExecuteResponse,
     SandboxBackendProtocol,
 )
@@ -16,6 +16,7 @@ from langchain.agents.structured_output import ToolStrategy
 from langchain.chat_models import init_chat_model
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from langgraph.checkpoint.memory import MemorySaver
 from loguru import logger
 from pydantic import BaseModel
 
@@ -35,7 +36,7 @@ _MAX_OUTPUT_SIZE = 100_000
 _DEFAULT_TIMEOUT = 300
 
 
-class LocalSandbox(FilesystemBackend, SandboxBackendProtocol):  # type: ignore[misc]
+class LocalSandbox(FilesystemBackend, SandboxBackendProtocol):
     """FilesystemBackend with local shell execution support.
 
     Extends FilesystemBackend and implements SandboxBackendProtocol for shell
@@ -294,6 +295,7 @@ class ApiDriver(DriverInterface):
         session_id: str | None = None,
         instructions: str | None = None,
         schema: type[BaseModel] | None = None,
+        **kwargs: Any,
     ) -> AsyncIterator[AgenticMessage]:
         """Execute prompt with autonomous tool access using DeepAgents.
 
@@ -304,8 +306,12 @@ class ApiDriver(DriverInterface):
             prompt: The prompt to execute.
             cwd: Working directory for tool execution.
             session_id: Unused (API driver has no session support).
-            instructions: Unused (system prompt set at agent creation).
+            instructions: Optional system prompt for the agent.
             schema: Unused (structured output not supported in agentic mode).
+            required_tool: If set, agent will be prompted to continue if this
+                tool wasn't called. Use "write_file" to ensure file creation.
+            max_continuations: Maximum continuation attempts if required_tool
+                wasn't called. Default 3.
 
         Yields:
             AgenticMessage for each event (thinking, tool_call, tool_result, result).
@@ -318,6 +324,11 @@ class ApiDriver(DriverInterface):
         if not prompt or not prompt.strip():
             raise ValueError("Prompt cannot be empty")
 
+        # Extract optional parameters from kwargs
+        required_tool: str | None = kwargs.get("required_tool")
+        required_file_path: str | None = kwargs.get("required_file_path")
+        max_continuations: int = kwargs.get("max_continuations", 10)
+
         # Initialize usage tracking
         start_time = time.perf_counter()
         total_input = 0
@@ -328,11 +339,20 @@ class ApiDriver(DriverInterface):
 
         try:
             chat_model = _create_chat_model(self.model, provider=self.provider)
-            backend = LocalSandbox(root_dir=cwd)
+            # virtual_mode=True ensures paths like "docs/plans/..." resolve relative
+            # to cwd (e.g., /project/docs/plans/...) rather than being treated as
+            # absolute paths from filesystem root (e.g., /docs/plans/...)
+            backend = LocalSandbox(root_dir=cwd, virtual_mode=True)
+
+            # Use in-memory checkpointer to enable continuation
+            checkpointer = MemorySaver()
+            thread_id = f"exec-{id(self)}-{time.perf_counter()}"
+
             agent = create_deep_agent(
                 model=chat_model,
-                system_prompt="",
+                system_prompt=instructions or "",
                 backend=backend,
+                checkpointer=checkpointer,
             )
 
             logger.debug(
@@ -344,90 +364,195 @@ class ApiDriver(DriverInterface):
 
             last_message: AIMessage | None = None
             tool_call_count = 0  # DEBUG: Track tool calls
+            last_write_todos_input: dict[str, Any] | None = None  # Track incomplete tasks
+            all_tool_names: list[str] = []  # Track all tool calls for debugging
+            continuation_count = 0
 
-            async for chunk in agent.astream(
-                {"messages": [HumanMessage(content=prompt)]},
-                stream_mode="values",
-            ):
-                messages = chunk.get("messages", [])
-                if not messages:
-                    continue
+            # Config for checkpointing
+            config = {"configurable": {"thread_id": thread_id}}
 
-                message = messages[-1]
+            # Initial message
+            current_input: dict[str, Any] = {"messages": [HumanMessage(content=prompt)]}
 
-                if isinstance(message, AIMessage):
-                    last_message = message
+            # Continuation loop - keeps going until required file is created or max attempts
+            while True:
+                async for chunk in agent.astream(
+                    current_input,
+                    config=config,
+                    stream_mode="values",
+                ):
+                    messages = chunk.get("messages", [])
+                    if not messages:
+                        continue
 
-                    # Extract usage from new AIMessages (avoid double-counting)
-                    msg_id = id(message)
-                    if msg_id not in seen_message_ids:
-                        seen_message_ids.add(msg_id)
-                        num_turns += 1
+                    message = messages[-1]
 
-                        # Extract token usage from usage_metadata
-                        usage_meta = getattr(message, "usage_metadata", None)
-                        if usage_meta:
-                            total_input += usage_meta.get("input_tokens", 0)
-                            total_output += usage_meta.get("output_tokens", 0)
+                    if isinstance(message, AIMessage):
+                        last_message = message
 
-                        # Extract cost from OpenRouter response_metadata
-                        # OpenRouter returns cost in token_usage object
-                        resp_meta = getattr(message, "response_metadata", None)
-                        if resp_meta:
-                            token_usage = resp_meta.get("token_usage", {})
-                            total_cost += token_usage.get("cost", 0.0)
+                        # Extract usage from new AIMessages (avoid double-counting)
+                        msg_id = id(message)
+                        if msg_id not in seen_message_ids:
+                            seen_message_ids.add(msg_id)
+                            num_turns += 1
 
-                    # Text blocks in list content -> THINKING (intermediate text during tool use)
-                    # Plain string content is NOT yielded as THINKING - it will be yielded as RESULT
-                    # at the end to avoid duplicate content (same pattern as ClaudeCliDriver where
-                    # TextBlock -> THINKING and ResultMessage.result -> RESULT are distinct sources)
-                    if isinstance(message.content, list):
-                        for block in message.content:
-                            if isinstance(block, dict) and block.get("type") == "text":
-                                yield AgenticMessage(
-                                    type=AgenticMessageType.THINKING,
-                                    content=block.get("text", ""),
-                                    model=self.model,
+                            # Extract token usage from usage_metadata
+                            usage_meta = getattr(message, "usage_metadata", None)
+                            if usage_meta:
+                                total_input += usage_meta.get("input_tokens", 0)
+                                total_output += usage_meta.get("output_tokens", 0)
+
+                            # Extract cost from OpenRouter response_metadata
+                            # OpenRouter returns cost in token_usage object
+                            resp_meta = getattr(message, "response_metadata", None)
+                            if resp_meta:
+                                token_usage = resp_meta.get("token_usage", {})
+                                total_cost += token_usage.get("cost", 0.0)
+
+                        # Text blocks in list content -> THINKING (intermediate text during tool use)
+                        # Plain string content is NOT yielded as THINKING - it will be yielded as RESULT
+                        # at the end to avoid duplicate content (same pattern as ClaudeCliDriver where
+                        # TextBlock -> THINKING and ResultMessage.result -> RESULT are distinct sources)
+                        if isinstance(message.content, list):
+                            for block in message.content:
+                                if isinstance(block, dict) and block.get("type") == "text":
+                                    thinking_text = block.get("text", "")
+                                    if thinking_text:
+                                        logger.debug(
+                                            "Streaming thinking content",
+                                            thinking_preview=thinking_text[:200],
+                                            model=self.model,
+                                        )
+                                    yield AgenticMessage(
+                                        type=AgenticMessageType.THINKING,
+                                        content=thinking_text,
+                                        model=self.model,
+                                    )
+                                # Also check for 'thinking' type blocks (some models use this)
+                                elif isinstance(block, dict) and block.get("type") == "thinking":
+                                    thinking_text = block.get("thinking", "") or block.get("text", "")
+                                    if thinking_text:
+                                        logger.debug(
+                                            "Streaming thinking block",
+                                            thinking_preview=thinking_text[:200],
+                                            model=self.model,
+                                        )
+                                    yield AgenticMessage(
+                                        type=AgenticMessageType.THINKING,
+                                        content=thinking_text,
+                                        model=self.model,
+                                    )
+
+                        # Tool calls
+                        for tool_call in message.tool_calls or []:
+                            tool_raw_name = tool_call["name"]
+                            # Normalize tool name to standard format
+                            tool_normalized = normalize_tool_name(tool_raw_name)
+                            tool_call_count += 1
+                            all_tool_names.append(tool_normalized)
+                            tool_args = tool_call.get("args", {})
+
+                            # Track write_todos calls to detect incomplete tasks
+                            if tool_raw_name == "write_todos":
+                                last_write_todos_input = tool_args
+                                logger.info(
+                                    "Agent called write_todos",
+                                    todos=tool_args.get("todos", []),
                                 )
 
-                    # Tool calls
-                    for tool_call in message.tool_calls or []:
-                        tool_raw_name = tool_call["name"]
+                            logger.debug(
+                                "Tool call",
+                                tool_name=tool_normalized,
+                                tool_call_number=tool_call_count,
+                                tool_args_keys=list(tool_args.keys()),
+                            )
+                            yield AgenticMessage(
+                                type=AgenticMessageType.TOOL_CALL,
+                                tool_name=tool_normalized,
+                                tool_input=tool_args,
+                                tool_call_id=tool_call.get("id"),
+                                model=self.model,
+                            )
+
+                    elif isinstance(message, ToolMessage):
                         # Normalize tool name to standard format
-                        tool_normalized = normalize_tool_name(tool_raw_name)
-                        tool_call_count += 1  # DEBUG: Increment counter
-                        # DEBUG: Log tool call normalization
-                        logger.debug(
-                            "DEBUG: API driver yielding tool call",
-                            raw_name=tool_raw_name,
-                            normalized_name=tool_normalized,
-                            input_keys=list(tool_call.get("args", {}).keys()),
-                            tool_call_number=tool_call_count,
+                        result_raw_name = message.name
+                        result_normalized: str | None = (
+                            normalize_tool_name(result_raw_name)
+                            if result_raw_name
+                            else None
                         )
                         yield AgenticMessage(
-                            type=AgenticMessageType.TOOL_CALL,
-                            tool_name=tool_normalized,
-                            tool_input=tool_call.get("args", {}),
-                            tool_call_id=tool_call.get("id"),
+                            type=AgenticMessageType.TOOL_RESULT,
+                            tool_name=result_normalized,
+                            tool_output=str(message.content),
+                            tool_call_id=message.tool_call_id,
+                            is_error=message.status == "error",
                             model=self.model,
                         )
 
-                elif isinstance(message, ToolMessage):
-                    # Normalize tool name to standard format
-                    result_raw_name = message.name
-                    result_normalized: str | None = (
-                        normalize_tool_name(result_raw_name)
-                        if result_raw_name
-                        else None
+                # After inner loop: check if we need to continue
+                needs_continuation = False
+                continuation_reason = ""
+
+                # Check if required tool was called
+                if required_tool and required_tool not in all_tool_names:
+                    needs_continuation = True
+                    continuation_reason = "required tool not called"
+
+                # If required_file_path is specified, verify file exists with content
+                if required_file_path and not needs_continuation:
+                    file_path = backend.cwd / required_file_path
+                    if not file_path.exists():
+                        needs_continuation = True
+                        continuation_reason = "file not created"
+                    elif file_path.stat().st_size == 0:
+                        needs_continuation = True
+                        continuation_reason = "file is empty"
+
+                if needs_continuation:
+                    continuation_count += 1
+
+                    if continuation_count > max_continuations:
+                        logger.warning(
+                            "Max continuations reached",
+                            reason=continuation_reason,
+                            required_file_path=required_file_path,
+                            attempts=continuation_count,
+                            tool_sequence=all_tool_names,
+                        )
+                        break
+
+                    # Extract agent's final response for debugging
+                    agent_response = ""
+                    if last_message:
+                        if isinstance(last_message.content, str):
+                            agent_response = last_message.content
+                        elif isinstance(last_message.content, list):
+                            for block in last_message.content:
+                                if isinstance(block, dict) and block.get("type") == "text":
+                                    agent_response += block.get("text", "")
+
+                    response_preview = agent_response[:500] if agent_response else "EMPTY"
+                    logger.info(
+                        f"Agent stopped before completing task ({continuation_reason}), "
+                        f"continuing ({continuation_count}/{max_continuations}). "
+                        f"Agent said: {response_preview}",
                     )
-                    yield AgenticMessage(
-                        type=AgenticMessageType.TOOL_RESULT,
-                        tool_name=result_normalized,
-                        tool_output=str(message.content),
-                        tool_call_id=message.tool_call_id,
-                        is_error=message.status == "error",
-                        model=self.model,
-                    )
+
+                    # Build continuation message - focus on the file, not the tool
+                    if required_file_path:
+                        continuation_msg = (
+                            f"You haven't completed the task yet. "
+                            f"Please create the file `{required_file_path}` with the required content."
+                        )
+                    else:
+                        continuation_msg = (
+                            "You haven't completed the task yet. Please continue."
+                        )
+                    current_input = {"messages": [HumanMessage(content=continuation_msg)]}
+                else:
+                    break  # Done - required tool was called and file exists
 
             # Store accumulated usage before yielding result
             duration_ms = int((time.perf_counter() - start_time) * 1000)
@@ -441,13 +566,40 @@ class ApiDriver(DriverInterface):
             )
 
             # Final result from last AI message
-            # DEBUG: Log summary before yielding result
-            logger.debug(
-                "DEBUG: API driver execution complete",
+            # Check for incomplete tasks in write_todos
+            incomplete_tasks: list[str] = []
+            if last_write_todos_input:
+                todos = last_write_todos_input.get("todos", [])
+                for todo in todos:
+                    if isinstance(todo, dict) and todo.get("status") == "in_progress":
+                        incomplete_tasks.append(todo.get("content", "unknown task"))
+
+            # Log comprehensive summary
+            logger.info(
+                "API driver execution complete",
                 total_tool_calls=tool_call_count,
                 num_turns=num_turns,
+                all_tool_names=all_tool_names,
                 has_last_message=last_message is not None,
+                incomplete_tasks_count=len(incomplete_tasks),
             )
+
+            # Warn if agent terminated with incomplete tasks
+            if incomplete_tasks:
+                logger.warning(
+                    "Agent terminated with in_progress tasks - possible premature termination",
+                    incomplete_tasks=incomplete_tasks,
+                    tool_sequence=all_tool_names[-10:] if len(all_tool_names) > 10 else all_tool_names,
+                    model=self.model,
+                )
+
+            # Warn if no write_file call was made (common failure mode)
+            if "write_file" not in all_tool_names:
+                logger.warning(
+                    "Agent completed without calling write_file - plan may not have been saved",
+                    tool_sequence=all_tool_names,
+                    model=self.model,
+                )
 
             if last_message:
                 final_content = ""
@@ -457,6 +609,14 @@ class ApiDriver(DriverInterface):
                     for block in last_message.content:
                         if isinstance(block, dict) and block.get("type") == "text":
                             final_content += block.get("text", "")
+
+                # Log the model's final response to understand why it stopped
+                preview = final_content[:500] if final_content else "EMPTY"
+                logger.info(
+                    "Agent final response",
+                    length=len(final_content),
+                    preview=preview,
+                )
 
                 yield AgenticMessage(
                     type=AgenticMessageType.RESULT,

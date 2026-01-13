@@ -348,6 +348,7 @@ class ClaudeCliDriver:
         session_id: str | None = None,
         instructions: str | None = None,
         schema: type[BaseModel] | None = None,
+        **kwargs: Any,
     ) -> AsyncIterator[AgenticMessage]:
         """Execute prompt with full autonomous tool access using ClaudeSDKClient.
 

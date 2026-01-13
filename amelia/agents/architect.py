@@ -267,6 +267,7 @@ Before planning, discover:
         user_prompt = self._build_agentic_prompt(state, profile)
 
         cwd = profile.working_dir or "."
+        plan_path = resolve_plan_path(profile.plan_path_pattern, state.issue.id)
         tool_calls: list[ToolCall] = list(state.tool_calls)
         tool_results: list[ToolResult] = list(state.tool_results)
         raw_output = ""
@@ -275,12 +276,15 @@ Before planning, discover:
         logger.info(
             "Architect starting agentic execution",
             cwd=cwd,
+            plan_path=plan_path,
         )
 
         async for message in self.driver.execute_agentic(
             prompt=user_prompt,
             cwd=cwd,
             instructions=self.plan_prompt,
+            required_tool="write_file",
+            required_file_path=plan_path,
         ):
             event: WorkflowEvent | None = None
 
@@ -294,14 +298,10 @@ Before planning, discover:
                     tool_input=message.tool_input or {},
                 )
                 tool_calls.append(call)
-                # DEBUG: Log tool call details including input keys
+                # Log tool call details with explicit tool name in message
+                input_keys = list(message.tool_input.keys()) if message.tool_input else []
                 logger.debug(
-                    "Architect tool call recorded",
-                    tool_name=message.tool_name,
-                    tool_name_repr=repr(message.tool_name),
-                    call_id=call.id,
-                    input_keys=list(message.tool_input.keys()) if message.tool_input else [],
-                    is_write_file=(message.tool_name == ToolName.WRITE_FILE),
+                    f"TOOL_CALL: name={message.tool_name!r} keys={input_keys}"
                 )
                 event = message.to_workflow_event(workflow_id=workflow_id, agent="architect")
 
@@ -406,13 +406,20 @@ Before planning, discover:
         )
 
         # Add output instruction with resolved plan path
-        # IMPORTANT: Explicitly require Write tool usage - without this, Claude
-        # may just output the plan as text instead of writing to the file.
+        # IMPORTANT: Explicitly require writing to file - without this,
+        # the LLM may just output the plan as text instead of writing to the file.
         plan_path = resolve_plan_path(profile.plan_path_pattern, state.issue.id)
-        parts.append("\n## Output")
+        parts.append("\n## Output (CRITICAL)")
         parts.append(
-            f"You MUST use the Write tool to save your plan to `{plan_path}`. "
-            "Do not output the full plan in your response - use the Write tool."
+            f"**CRITICAL REQUIREMENT**: Create a markdown file at `{plan_path}` containing your implementation plan. "
+            "This is NOT optional.\n\n"
+            "Steps:\n"
+            "1. Explore the codebase to understand patterns\n"
+            "2. Create your implementation plan\n"
+            f"3. Create the markdown file `{plan_path}` with the plan content\n"
+            "4. Confirm the file was created\n\n"
+            "Do NOT just output the plan as text - you MUST create the file. "
+            "The workflow will fail if you don't create the plan file."
         )
 
         # Task-specific formatting templates

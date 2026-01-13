@@ -314,9 +314,7 @@ class TestLocalSandbox:
         whether to enable the 'execute' tool. Without explicit inheritance,
         the check fails since SandboxBackendProtocol is not @runtime_checkable.
         """
-        from deepagents.backends.protocol import (
-            SandboxBackendProtocol,  # type: ignore[import-untyped]
-        )
+        from deepagents.backends.protocol import SandboxBackendProtocol
 
         assert isinstance(sandbox, SandboxBackendProtocol)
 
@@ -373,6 +371,42 @@ class TestLocalSandbox:
 
         assert sync_result.output == async_result.output
         assert sync_result.exit_code == async_result.exit_code
+
+    def test_virtual_mode_resolves_virtual_paths_under_cwd(self, tmp_path: Path) -> None:
+        """virtual_mode=True should resolve /path/to/file as {cwd}/path/to/file.
+
+        This is critical for deepagents integration: _validate_path() adds a leading /
+        to all paths (e.g., "docs/plans/plan.md" becomes "/docs/plans/plan.md").
+        Without virtual_mode, this would be treated as an absolute filesystem path.
+        With virtual_mode=True, the leading / is stripped and the path is joined with cwd.
+        """
+        sandbox = LocalSandbox(root_dir=str(tmp_path), virtual_mode=True)
+
+        # Test that write() puts file under cwd, not at filesystem root
+        result = sandbox.write("/docs/plans/test.md", "# Test Plan")
+        assert result.error is None
+        assert result.path == "/docs/plans/test.md"
+
+        # Verify file exists under cwd, not at filesystem root
+        expected_path = tmp_path / "docs" / "plans" / "test.md"
+        assert expected_path.exists()
+        assert expected_path.read_text() == "# Test Plan"
+
+        # Verify we didn't write to filesystem root
+        root_path = Path("/docs/plans/test.md")
+        assert not root_path.exists()
+
+    def test_virtual_mode_read_file_under_cwd(self, tmp_path: Path) -> None:
+        """virtual_mode=True should read files relative to cwd."""
+        sandbox = LocalSandbox(root_dir=str(tmp_path), virtual_mode=True)
+
+        # Create a file under cwd
+        (tmp_path / "subdir").mkdir()
+        (tmp_path / "subdir" / "file.txt").write_text("content here")
+
+        # Read using virtual path (with leading /)
+        content = sandbox.read("/subdir/file.txt")
+        assert "content here" in content
 
 
 class TestExecuteAgenticYieldsAgenticMessage:
@@ -504,3 +538,131 @@ class TestExecuteAgenticYieldsAgenticMessage:
 
         # All should be AgenticMessage instances
         assert all(isinstance(m, AgenticMessage) for m in results)
+
+
+class TestIncompleteTaskDetection:
+    """Test incomplete task detection for premature agent termination."""
+
+    async def test_logs_warning_for_incomplete_write_todos(
+        self, api_driver: ApiDriver, mock_deepagents: MagicMock
+    ) -> None:
+        """Should log warning when write_todos has in_progress tasks at completion."""
+        # Simulate agent calling write_todos with in_progress task, then completing
+        ai_msg_with_todos = AIMessage(
+            content="",
+            tool_calls=[{
+                "name": "write_todos",
+                "args": {
+                    "todos": [
+                        {"content": "Create implementation plan", "status": "in_progress"}
+                    ]
+                },
+                "id": "call_todos"
+            }]
+        )
+        tool_result = ToolMessage(
+            content="Todos updated",
+            tool_call_id="call_todos",
+            name="write_todos"
+        )
+        final_msg = AIMessage(content="I've started planning the implementation.")
+
+        mock_deepagents.stream_chunks = [
+            {"messages": [ai_msg_with_todos]},
+            {"messages": [tool_result]},
+            {"messages": [final_msg]},
+        ]
+
+        # Patch logger to capture warning calls
+        with patch("amelia.drivers.api.deepagents.logger") as mock_logger:
+            results = [msg async for msg in api_driver.execute_agentic("test prompt", cwd="/test/path")]
+
+        # Should have yielded the result
+        result_msgs = [m for m in results if m.type == AgenticMessageType.RESULT]
+        assert len(result_msgs) == 1
+
+        # Should have logged warning about incomplete tasks
+        warning_calls = mock_logger.warning.call_args_list
+        assert len(warning_calls) >= 1
+        # Check that at least one warning mentions premature termination
+        # Access the actual message from the call args (first positional argument)
+        warning_messages = [call.args[0] if call.args else "" for call in warning_calls]
+        assert any("premature termination" in msg for msg in warning_messages)
+
+    async def test_no_warning_when_all_tasks_completed(
+        self, api_driver: ApiDriver, mock_deepagents: MagicMock
+    ) -> None:
+        """Should not log warning when all write_todos tasks are completed."""
+        # Simulate agent completing all tasks properly
+        ai_msg_with_todos = AIMessage(
+            content="",
+            tool_calls=[{
+                "name": "write_todos",
+                "args": {
+                    "todos": [
+                        {"content": "Create implementation plan", "status": "completed"}
+                    ]
+                },
+                "id": "call_todos"
+            }]
+        )
+        final_msg = AIMessage(content="All tasks completed.")
+
+        mock_deepagents.stream_chunks = [
+            {"messages": [ai_msg_with_todos]},
+            {"messages": [final_msg]},
+        ]
+
+        # Patch logger to capture warning calls
+        with patch("amelia.drivers.api.deepagents.logger") as mock_logger:
+            results = [msg async for msg in api_driver.execute_agentic("test prompt", cwd="/test/path")]
+
+        # Should have yielded the result
+        result_msgs = [m for m in results if m.type == AgenticMessageType.RESULT]
+        assert len(result_msgs) == 1
+
+        # Should NOT have logged warning about incomplete tasks (no premature termination warning)
+        warning_calls = mock_logger.warning.call_args_list
+        # Access the actual message from the call args (first positional argument)
+        warning_messages = [call.args[0] if call.args else "" for call in warning_calls]
+        assert not any("premature termination" in msg for msg in warning_messages)
+
+    async def test_logs_warning_when_no_write_file_called(
+        self, api_driver: ApiDriver, mock_deepagents: MagicMock
+    ) -> None:
+        """Should log warning when agent completes without calling write_file."""
+        # Simulate agent doing only exploration (no write_file)
+        ai_msg_exploration = AIMessage(
+            content="",
+            tool_calls=[{
+                "name": "read_file",
+                "args": {"file_path": "/test.py"},
+                "id": "call_read"
+            }]
+        )
+        tool_result = ToolMessage(
+            content="file contents",
+            tool_call_id="call_read",
+            name="read_file"
+        )
+        final_msg = AIMessage(content="I've analyzed the codebase.")
+
+        mock_deepagents.stream_chunks = [
+            {"messages": [ai_msg_exploration]},
+            {"messages": [tool_result]},
+            {"messages": [final_msg]},
+        ]
+
+        # Patch logger to capture warning calls
+        with patch("amelia.drivers.api.deepagents.logger") as mock_logger:
+            results = [msg async for msg in api_driver.execute_agentic("test prompt", cwd="/test/path")]
+
+        # Should have yielded the result
+        result_msgs = [m for m in results if m.type == AgenticMessageType.RESULT]
+        assert len(result_msgs) == 1
+
+        # Should have logged warning about no write_file
+        warning_calls = mock_logger.warning.call_args_list
+        # Access the actual message from the call args (first positional argument)
+        warning_messages = [call.args[0] if call.args else "" for call in warning_calls]
+        assert any("without calling write_file" in msg for msg in warning_messages)
