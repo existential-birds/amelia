@@ -688,3 +688,44 @@ export interface DefaultContent {
   /** Description explaining the prompt's purpose. */
   description: string;
 }
+
+// ============================================================================
+// Config API Types
+// ============================================================================
+
+/**
+ * Response from GET /api/config endpoint.
+ * Provides server configuration for dashboard.
+ */
+export interface ConfigResponse {
+  /** Working directory for file access, or null if not configured. */
+  working_dir: string | null;
+
+  /** Maximum concurrent workflows. */
+  max_concurrent: number;
+}
+
+// ============================================================================
+// Files API Types
+// ============================================================================
+
+/**
+ * Request payload for reading a file.
+ * Used by POST /api/files/read endpoint.
+ */
+export interface FileReadRequest {
+  /** Absolute path to the file to read. */
+  path: string;
+}
+
+/**
+ * Response from POST /api/files/read endpoint.
+ * Returns file content for design document import.
+ */
+export interface FileReadResponse {
+  /** File content as text. */
+  content: string;
+
+  /** Filename without path. */
+  filename: string;
+}
