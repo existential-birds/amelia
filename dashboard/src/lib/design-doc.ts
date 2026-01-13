@@ -60,3 +60,17 @@ export function generateDesignId(): string {
 
   return `design-${year}${month}${day}${hours}${minutes}${seconds}`;
 }
+
+/**
+ * Build a description reference string for a design document.
+ *
+ * @param filename - The design document filename.
+ * @returns Reference string pointing to the design document in docs/plans/.
+ *
+ * @example
+ * buildDescriptionReference('2026-01-09-queue-workflows-design.md')
+ * // Returns: 'Implement the feature described in docs/plans/2026-01-09-queue-workflows-design.md'
+ */
+export function buildDescriptionReference(filename: string): string {
+  return `Implement the feature described in docs/plans/${filename}`;
+}

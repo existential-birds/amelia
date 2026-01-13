@@ -12,7 +12,7 @@ import { z } from 'zod';
 import { Zap, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, ApiError } from '@/api/client';
-import { extractTitle, extractTitleFromFilename, generateDesignId } from '@/lib/design-doc';
+import { extractTitle, extractTitleFromFilename, generateDesignId, buildDescriptionReference } from '@/lib/design-doc';
 import {
   Dialog,
   DialogContent,
@@ -211,7 +211,7 @@ export function QuickShotModal({ open, onOpenChange, defaults }: QuickShotModalP
       worktree_path: getValues('worktree_path'),
       profile: getValues('profile'),
       task_title: title,
-      task_description: content,
+      task_description: buildDescriptionReference(filename),
     });
   }, [reset, getValues]);
 
