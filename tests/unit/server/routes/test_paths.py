@@ -122,7 +122,7 @@ class TestValidatePath:
                 env=isolated_env,
             )
             subprocess.run(
-                ["git", "commit", "--no-verify", "-m", "Initial commit"],
+                ["git", "commit", "-m", "Initial commit"],
                 cwd=tmpdir,
                 capture_output=True,
                 check=True,
