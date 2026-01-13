@@ -24,6 +24,9 @@ dependencies = [
     "langgraph-checkpoint-sqlite>=3.0.0",
     "pyjwt[crypto]>=2.9.0",
     "websockets>=15.0",
+     "tiktoken>=0.7.0",
+      "gitignore-parser>=0.1.0",
+       "aiofiles>=23.2.0",
 ]
 
 [project.scripts]
