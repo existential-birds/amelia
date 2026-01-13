@@ -266,6 +266,7 @@ export function QuickShotModal({ open, onOpenChange, defaults }: QuickShotModalP
     try {
       const content = await mdFile.text();
       populateFromContent(content, mdFile.name);
+      setImportPath(mdFile.name);
     } catch {
       toast.error('Failed to read file');
     } finally {

@@ -266,6 +266,32 @@ describe('QuickShotModal Import Zone', () => {
       expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('.md'));
     });
   });
+
+  it('shows filename in import input after successful drag-drop', async () => {
+    render(<QuickShotModal {...defaultProps} />);
+
+    // Get the Card element with the drop handler (parent of the inner content)
+    const dropZone = screen
+      .getByText(/drop design doc here/i)
+      .closest('[data-slot="card"]');
+    const importInput = screen.getByPlaceholderText('/path/to/design.md');
+
+    // Create file with content that can be read
+    const content = '# My Design Doc\n\nContent here.';
+    const file = new File([content], 'my-design.md', {
+      type: 'text/markdown',
+    });
+
+    // Define text() method on the file (not available in jsdom by default)
+    file.text = () => Promise.resolve(content);
+
+    const dataTransfer = { files: [file], types: ['Files'] };
+    fireEvent.drop(dropZone!, { dataTransfer });
+
+    await waitFor(() => {
+      expect(importInput).toHaveValue('my-design.md');
+    });
+  });
 });
 
 describe('QuickShotModal Config Integration', () => {
