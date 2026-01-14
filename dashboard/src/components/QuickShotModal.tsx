@@ -175,18 +175,24 @@ export function QuickShotModal({ open, onOpenChange, defaults }: QuickShotModalP
   useEffect(() => {
     if (!open) return;
 
+    let mounted = true;
+
     async function initializeForm() {
       // Fetch server config first
       let serverDir: string | undefined;
       try {
         const config = await api.getConfig();
+        if (!mounted) return;
         serverDir = config.working_dir;
         if (serverDir) {
           setServerWorkingDir(serverDir);
         }
       } catch (error) {
+        if (!mounted) return;
         console.debug('Config fetch failed, using defaults', error);
       }
+
+      if (!mounted) return;
 
       // Apply values with clear priority: current value > props defaults > server config
       reset(
@@ -204,6 +210,10 @@ export function QuickShotModal({ open, onOpenChange, defaults }: QuickShotModalP
     }
 
     initializeForm();
+
+    return () => {
+      mounted = false;
+    };
   }, [open, defaults, reset]);
 
   /**

@@ -1,44 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { buildPipelineFromEvents } from '../pipeline';
-import type { AgentIteration, AgentNodeData } from '../pipeline';
 import type { WorkflowEvent } from '@/types';
-
-describe('AgentIteration type', () => {
-  it('should have required fields', () => {
-    const iteration: AgentIteration = {
-      id: 'iter-1',
-      startedAt: '2026-01-06T10:00:00Z',
-      status: 'running',
-    };
-    expect(iteration.id).toBe('iter-1');
-    expect(iteration.status).toBe('running');
-  });
-
-  it('should support optional completedAt and message', () => {
-    const iteration: AgentIteration = {
-      id: 'iter-2',
-      startedAt: '2026-01-06T10:00:00Z',
-      completedAt: '2026-01-06T10:05:00Z',
-      status: 'completed',
-      message: 'Approved',
-    };
-    expect(iteration.completedAt).toBe('2026-01-06T10:05:00Z');
-    expect(iteration.message).toBe('Approved');
-  });
-});
-
-describe('AgentNodeData type', () => {
-  it('should have required fields', () => {
-    const nodeData: AgentNodeData = {
-      agentType: 'architect',
-      status: 'active',
-      iterations: [],
-      isExpanded: false,
-    };
-    expect(nodeData.agentType).toBe('architect');
-    expect(nodeData.status).toBe('active');
-  });
-});
 
 describe('buildPipelineFromEvents', () => {
   /**
