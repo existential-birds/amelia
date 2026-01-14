@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 vi.mock('@/api/client', () => ({
   api: {
     createWorkflow: vi.fn(),
+    getConfig: vi.fn().mockResolvedValue({ working_dir: '' }),
   },
   ApiError: class ApiError extends Error {
     constructor(

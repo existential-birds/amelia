@@ -5,7 +5,7 @@
  * quickly launch workflows directly from the dashboard UI.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -167,43 +167,44 @@ export function QuickShotModal({ open, onOpenChange, defaults }: QuickShotModalP
   // Watch worktree_path for controlled input
   const worktreePath = watch('worktree_path');
 
-  // Update form when defaults change (e.g., after initial fetch completes)
+  // Ref for hidden file input (keyboard accessibility)
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Initialize form when modal opens: fetch server config and apply defaults with priority
+  // Priority: user-typed value > props defaults > server config
   useEffect(() => {
-    if (defaults) {
+    if (!open) return;
+
+    async function initializeForm() {
+      // Fetch server config first
+      let serverDir: string | undefined;
+      try {
+        const config = await api.getConfig();
+        serverDir = config.working_dir;
+        if (serverDir) {
+          setServerWorkingDir(serverDir);
+        }
+      } catch (error) {
+        console.debug('Config fetch failed, using defaults', error);
+      }
+
+      // Apply values with clear priority: current value > props defaults > server config
       reset(
         (currentValues) => ({
           ...currentValues,
-          worktree_path: currentValues.worktree_path || defaults.worktree_path || '',
-          profile: currentValues.profile || defaults.profile || '',
+          worktree_path:
+            currentValues.worktree_path ||
+            defaults?.worktree_path ||
+            serverDir ||
+            '',
+          profile: currentValues.profile || defaults?.profile || '',
         }),
         { keepDirty: true }
       );
     }
-  }, [defaults, reset]);
 
-  // Fetch server config for working_dir pre-fill
-  useEffect(() => {
-    async function fetchConfig() {
-      try {
-        const config = await api.getConfig();
-        if (config.working_dir) {
-          setServerWorkingDir(config.working_dir);
-          reset(
-            (currentValues) => ({
-              ...currentValues,
-              worktree_path: currentValues.worktree_path || config.working_dir || '',
-            }),
-            { keepDirty: true }
-          );
-        }
-      } catch {
-        // Ignore config fetch errors - defaults will be used
-      }
-    }
-    if (open) {
-      fetchConfig();
-    }
-  }, [open, reset]);
+    initializeForm();
+  }, [open, defaults, reset]);
 
   /**
    * Populates form fields from design document content.
@@ -234,6 +235,27 @@ export function QuickShotModal({ open, onOpenChange, defaults }: QuickShotModalP
   }, []);
 
   /**
+   * Processes a markdown file and populates the form.
+   */
+  const processFile = useCallback(async (file: File) => {
+    if (!file.name.endsWith('.md')) {
+      toast.error('Only .md files supported');
+      return;
+    }
+
+    setIsImporting(true);
+    try {
+      const content = await file.text();
+      populateFromContent(content, file.name);
+      setImportPath(file.name);
+    } catch {
+      toast.error('Failed to read file');
+    } finally {
+      setIsImporting(false);
+    }
+  }, [populateFromContent]);
+
+  /**
    * Handles drag-drop of markdown files.
    */
   const handleDrop = useCallback(async (e: React.DragEvent) => {
@@ -248,17 +270,27 @@ export function QuickShotModal({ open, onOpenChange, defaults }: QuickShotModalP
       return;
     }
 
-    setIsImporting(true);
-    try {
-      const content = await mdFile.text();
-      populateFromContent(content, mdFile.name);
-      setImportPath(mdFile.name);
-    } catch {
-      toast.error('Failed to read file');
-    } finally {
-      setIsImporting(false);
+    await processFile(mdFile);
+  }, [processFile]);
+
+  /**
+   * Handles file input change (keyboard accessible file selection).
+   */
+  const handleFileInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      processFile(file);
     }
-  }, [populateFromContent]);
+    // Reset input so the same file can be selected again
+    e.target.value = '';
+  }, [processFile]);
+
+  /**
+   * Opens file picker when import zone is clicked.
+   */
+  const handleImportZoneClick = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
 
   /**
    * Submits the workflow with the specified action type.
@@ -339,21 +371,39 @@ export function QuickShotModal({ open, onOpenChange, defaults }: QuickShotModalP
           {/* Import Zone */}
           <Card
             data-testid="import-zone"
+            role="button"
+            tabIndex={0}
             className={cn(
-              'border-2 border-dashed p-3 text-center transition-colors',
+              'border-2 border-dashed p-3 text-center transition-colors cursor-pointer',
               isDragOver ? 'border-primary bg-primary/5' : 'border-border',
-              isImporting && 'opacity-50'
+              isImporting && 'opacity-50',
+              'hover:border-primary/50 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20'
             )}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
+            onClick={handleImportZoneClick}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                handleImportZoneClick();
+              }
+            }}
           >
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".md"
+              className="sr-only"
+              onChange={handleFileInputChange}
+              aria-label="Import design document"
+            />
             <div className="flex items-center justify-center gap-2">
               <Upload className="h-4 w-4 text-muted-foreground" />
               {importPath ? (
                 <span className="text-sm font-mono text-foreground">{importPath}</span>
               ) : (
-                <span className="text-sm text-muted-foreground">Drop design doc here</span>
+                <span className="text-sm text-muted-foreground">Drop or click to import design doc</span>
               )}
             </div>
           </Card>
@@ -392,6 +442,7 @@ export function QuickShotModal({ open, onOpenChange, defaults }: QuickShotModalP
                     id={field.name}
                     placeholder={field.placeholder}
                     aria-invalid={!!errors[field.name]}
+                    aria-required={field.required}
                     aria-describedby={errors[field.name] ? `${field.name}-error` : undefined}
                     className={cn(
                       'mt-1 font-mono text-sm bg-background border-input',
@@ -406,6 +457,7 @@ export function QuickShotModal({ open, onOpenChange, defaults }: QuickShotModalP
                     id={field.name}
                     placeholder={field.placeholder}
                     aria-invalid={!!errors[field.name]}
+                    aria-required={field.required}
                     aria-describedby={errors[field.name] ? `${field.name}-error` : undefined}
                     className={cn(
                       'mt-1 font-mono text-sm bg-background border-input',

@@ -167,7 +167,7 @@ export function WorktreePathField({
     setStatus('validating');
 
     try {
-      const result = await api.validatePath(pathToValidate);
+      const result = await api.validatePath(pathToValidate, signal);
       // Check if aborted before updating state
       if (signal?.aborted) return;
       setValidation(result);

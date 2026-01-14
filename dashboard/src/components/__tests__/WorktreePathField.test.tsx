@@ -112,7 +112,7 @@ describe('WorktreePathField', () => {
       // Wait for validation to complete
       await waitFor(
         () => {
-          expect(api.validatePath).toHaveBeenCalledWith('/valid/git/repo');
+          expect(api.validatePath).toHaveBeenCalledWith('/valid/git/repo', expect.any(AbortSignal));
         },
         { timeout: 1000 }
       );

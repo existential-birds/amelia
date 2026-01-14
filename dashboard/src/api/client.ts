@@ -46,19 +46,30 @@ function createTimeoutSignal(timeoutMs: number = DEFAULT_TIMEOUT_MS): AbortSigna
  *
  * @param url - The URL to fetch.
  * @param options - Fetch options (method, headers, body, etc.).
+ * @param abortSignal - Optional AbortSignal to cancel the request externally.
  * @returns The fetch Response.
  * @throws {ApiError} When the request times out or fails.
  */
 async function fetchWithTimeout(
   url: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  abortSignal?: AbortSignal
 ): Promise<Response> {
-  const signal = createTimeoutSignal();
+  const timeoutSignal = createTimeoutSignal();
+
+  // Combine timeout signal with optional abort signal
+  const signal = abortSignal
+    ? AbortSignal.any([timeoutSignal, abortSignal])
+    : timeoutSignal;
 
   try {
     return await fetch(url, { ...options, signal });
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
+      // Check if it was an external abort (not timeout)
+      if (abortSignal?.aborted) {
+        throw new ApiError('Request aborted', 'ABORTED', 0);
+      }
       throw new ApiError('Request timeout', 'TIMEOUT', 408);
     }
     throw error;
@@ -621,6 +632,7 @@ export const api = {
    * Validates a filesystem path and returns git repository info.
    *
    * @param path - Absolute path to validate.
+   * @param signal - Optional AbortSignal to cancel the request.
    * @returns Validation result with exists, is_git_repo, branch info.
    * @throws {ApiError} When API request fails.
    *
@@ -632,12 +644,16 @@ export const api = {
    * }
    * ```
    */
-  async validatePath(path: string): Promise<PathValidationResponse> {
-    const response = await fetchWithTimeout(`${API_BASE_URL}/paths/validate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path }),
-    });
+  async validatePath(path: string, signal?: AbortSignal): Promise<PathValidationResponse> {
+    const response = await fetchWithTimeout(
+      `${API_BASE_URL}/paths/validate`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path }),
+      },
+      signal
+    );
     return handleResponse<PathValidationResponse>(response);
   },
 };

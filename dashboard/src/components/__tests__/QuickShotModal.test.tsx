@@ -239,7 +239,7 @@ describe('QuickShotModal Import Zone', () => {
   it('renders drop zone for design doc import', () => {
     render(<QuickShotModal {...defaultProps} />);
 
-    expect(screen.getByText(/drop design doc here/i)).toBeInTheDocument();
+    expect(screen.getByText(/drop or click to import design doc/i)).toBeInTheDocument();
   });
 
   it('populates form fields when importing via drag-drop', async () => {
@@ -268,7 +268,7 @@ describe('QuickShotModal Import Zone', () => {
     const { toast } = await import('sonner');
     render(<QuickShotModal {...defaultProps} />);
 
-    const dropZone = screen.getByText(/drop design doc here/i).closest('div');
+    const dropZone = screen.getByTestId('import-zone');
 
     const file = new File(['content'], 'test.txt', { type: 'text/plain' });
     const dataTransfer = { files: [file], types: ['Files'] };
