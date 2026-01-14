@@ -2,6 +2,7 @@
 import asyncio
 import os
 import tempfile
+from collections.abc import AsyncIterator, Callable
 from pathlib import Path
 from unittest.mock import patch
 
@@ -10,6 +11,7 @@ import pytest
 import uvicorn
 from fastapi import FastAPI
 
+import amelia.server.dependencies as deps_module
 import amelia.server.main as main_module
 from amelia.server.dependencies import get_config
 from amelia.server.main import app, lifespan
@@ -19,7 +21,7 @@ class TestServerStartup:
     """Integration tests for full server startup."""
 
     @pytest.fixture
-    async def server(self, find_free_port):
+    async def server(self, find_free_port: Callable[[], int]) -> AsyncIterator[str]:
         """Start server in background for testing."""
         port = find_free_port()
         config = uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning")
@@ -46,7 +48,7 @@ class TestServerStartup:
         server.should_exit = True
         await task
 
-    async def test_server_starts_and_responds(self, server) -> None:
+    async def test_server_starts_and_responds(self, server: str) -> None:
         """Server starts and responds to health checks."""
         async with httpx.AsyncClient() as client:
             response = await client.get(f"{server}/api/health/live")
@@ -54,7 +56,7 @@ class TestServerStartup:
             assert response.status_code == 200
             assert response.json()["status"] == "alive"
 
-    async def test_health_endpoint_returns_metrics(self, server) -> None:
+    async def test_health_endpoint_returns_metrics(self, server: str) -> None:
         """Health endpoint returns system metrics."""
         async with httpx.AsyncClient() as client:
             response = await client.get(f"{server}/api/health")
@@ -65,7 +67,7 @@ class TestServerStartup:
             assert "memory_mb" in data
             assert "uptime_seconds" in data
 
-    async def test_docs_endpoint_available(self, server) -> None:
+    async def test_docs_endpoint_available(self, server: str) -> None:
         """Swagger docs are accessible."""
         async with httpx.AsyncClient() as client:
             response = await client.get(f"{server}/api/docs")
@@ -73,7 +75,7 @@ class TestServerStartup:
             assert response.status_code == 200
             assert "swagger" in response.text.lower() or "openapi" in response.text.lower()
 
-    async def test_openapi_schema_available(self, server) -> None:
+    async def test_openapi_schema_available(self, server: str) -> None:
         """OpenAPI schema is accessible."""
         async with httpx.AsyncClient() as client:
             response = await client.get(f"{server}/api/openapi.json")
@@ -106,7 +108,7 @@ class TestLifespanStartup:
     async def test_lifespan_initializes_config(self) -> None:
         """Lifespan initializes config so get_config works."""
         # Ensure config is None before test
-        main_module._config = None
+        deps_module._config = None
 
         test_app = FastAPI(lifespan=lifespan)
 
@@ -117,4 +119,4 @@ class TestLifespanStartup:
             assert config.host == "127.0.0.1"
 
         # Config should be None after lifespan exits
-        assert main_module._config is None
+        assert deps_module._config is None

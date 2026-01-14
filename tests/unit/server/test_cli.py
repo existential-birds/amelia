@@ -12,11 +12,11 @@ class TestServerCLI:
     """Tests for 'amelia server' command."""
 
     @pytest.fixture
-    def runner(self):
+    def runner(self) -> CliRunner:
         """Typer CLI test runner."""
         return CliRunner()
 
-    def test_server_command_exists(self, runner):
+    def test_server_command_exists(self, runner: CliRunner) -> None:
         """'amelia server' command is registered."""
         result = runner.invoke(app, ["server", "--help"])
         assert result.exit_code == 0
@@ -40,7 +40,7 @@ class TestServerCLI:
             assert call_kwargs["port"] == expected_port
             assert call_kwargs["host"] == expected_host
 
-    def test_server_bind_all_shows_warning(self, runner):
+    def test_server_bind_all_shows_warning(self, runner: CliRunner) -> None:
         """--bind-all shows security warning."""
         with patch("uvicorn.run") as mock_run:
             mock_run.side_effect = KeyboardInterrupt()

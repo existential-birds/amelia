@@ -195,10 +195,22 @@ describe('WorktreePathField', () => {
 
       render(<WorktreePathField {...defaultProps} value="/some/path" />);
 
-      // Should not crash - validation falls back to idle state
+      // Wait for validation to be called
       await waitFor(() => {
         expect(api.validatePath).toHaveBeenCalled();
       });
+
+      // Should fall back to idle state - no validation status message shown
+      // The help text is shown when status is idle and no validation/error
+      await waitFor(() => {
+        expect(
+          screen.getByText('Absolute path to git repository where agents will operate')
+        ).toBeInTheDocument();
+      });
+
+      // No error message should be displayed for 404 (endpoint doesn't exist case)
+      expect(screen.queryByText(/could not validate path/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/does not exist/i)).not.toBeInTheDocument();
     });
 
     it('does not validate relative paths', async () => {

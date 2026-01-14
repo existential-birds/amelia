@@ -1,4 +1,5 @@
 """File access endpoints for design document import."""
+import asyncio
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -87,9 +88,9 @@ async def read_file(
             detail={"error": "Path is not a file", "code": "NOT_A_FILE"},
         )
 
-    # Read content
+    # Read content (use thread pool to avoid blocking event loop)
     try:
-        content = resolved_path.read_text(encoding="utf-8")
+        content = await asyncio.to_thread(resolved_path.read_text, encoding="utf-8")
     except (OSError, UnicodeDecodeError) as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
