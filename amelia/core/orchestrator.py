@@ -463,7 +463,7 @@ async def plan_validator_node(
 
     # Extract structured fields using lightweight extraction (no tools needed)
     # The plan already exists - we just need to parse it into structured format
-    model = profile.validator_model or profile.model
+    model = profile.validator_model
     prompt = f"""Extract the implementation plan structure from the following markdown plan.
 
 <plan>

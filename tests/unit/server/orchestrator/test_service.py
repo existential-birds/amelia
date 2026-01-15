@@ -79,6 +79,7 @@ profiles:
     name: test
     driver: cli:claude
     model: sonnet
+    validator_model: sonnet
     tracker: noop
     working_dir: {worktree}
 """
@@ -1071,6 +1072,7 @@ profiles:
     name: local
     driver: cli:claude
     model: sonnet
+    validator_model: sonnet
     tracker: github
     working_dir: {tmp_path}
 """
@@ -1139,6 +1141,7 @@ profiles:
     name: worktree_profile
     driver: cli:claude
     model: sonnet
+    validator_model: sonnet
     tracker: noop
     working_dir: {worktree}
 """
@@ -1219,6 +1222,7 @@ profiles:
     name: review_profile
     driver: cli:claude
     model: sonnet
+    validator_model: sonnet
     tracker: noop
     working_dir: {worktree}
 """
@@ -1301,7 +1305,7 @@ class TestRunWorkflowCheckpointResume:
         # Create mock profile
         from amelia.core.types import Profile
 
-        mock_profile = Profile(name="test", driver="cli:claude", model="sonnet", working_dir="/tmp/test")
+        mock_profile = Profile(name="test", driver="cli:claude", model="sonnet", validator_model="sonnet", working_dir="/tmp/test")
 
         # Patch to use our mock graph
         with (
@@ -1354,7 +1358,7 @@ class TestRunWorkflowCheckpointResume:
 
         from amelia.core.types import Profile
 
-        mock_profile = Profile(name="test", driver="cli:claude", model="sonnet", working_dir="/tmp/test")
+        mock_profile = Profile(name="test", driver="cli:claude", model="sonnet", validator_model="sonnet", working_dir="/tmp/test")
 
         with (
             patch.object(orchestrator, "_create_server_graph", return_value=mock_graph),
@@ -1407,6 +1411,7 @@ profiles:
     name: noop
     driver: cli:claude
     model: sonnet
+    validator_model: sonnet
     tracker: noop
     working_dir: {worktree}
 """
@@ -1445,6 +1450,7 @@ profiles:
     name: github
     driver: cli:claude
     model: sonnet
+    validator_model: sonnet
     tracker: github
     working_dir: {worktree}
 """
@@ -1478,6 +1484,7 @@ profiles:
     name: noop
     driver: cli:claude
     model: sonnet
+    validator_model: sonnet
     tracker: noop
     working_dir: {worktree}
 """

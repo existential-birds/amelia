@@ -310,9 +310,16 @@ def mock_profile_factory(tmp_path_factory: TempPathFactory) -> Callable[..., Pro
         if "working_dir" not in kwargs:
             kwargs["working_dir"] = str(base_tmp)
 
+        # Default validator_model to the same as model unless explicitly overridden
+        if "validator_model" not in kwargs:
+            kwargs["validator_model"] = model
         if preset == "cli_single":
+            if "validator_model" not in kwargs or kwargs["validator_model"] == model:
+                kwargs["validator_model"] = "sonnet"
             return Profile(name="test_cli", driver="cli:claude", model="sonnet", tracker="noop", **kwargs)
         elif preset == "api_single":
+            if "validator_model" not in kwargs or kwargs["validator_model"] == model:
+                kwargs["validator_model"] = "anthropic/claude-sonnet-4-20250514"
             return Profile(name="test_api", driver="api:openrouter", model="anthropic/claude-sonnet-4-20250514", tracker="noop", **kwargs)
         return Profile(name=name, driver=driver, model=model, tracker=tracker, **kwargs)
     return _create

@@ -74,6 +74,7 @@ def mock_profile() -> Profile:
         driver="cli:claude",
         model="sonnet",
         tracker="noop",
+        validator_model="sonnet",
         working_dir="/tmp/test",
     )
 

@@ -9,6 +9,7 @@ def test_profile_max_task_review_iterations_default():
         name="test",
         driver="cli:claude",
         model="sonnet",
+        validator_model="sonnet",
         working_dir="/tmp/test",
     )
 
@@ -21,6 +22,7 @@ def test_profile_max_task_review_iterations_override():
         name="test",
         driver="cli:claude",
         model="sonnet",
+        validator_model="sonnet",
         working_dir="/tmp/test",
         max_task_review_iterations=10,
     )

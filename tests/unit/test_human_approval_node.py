@@ -12,7 +12,7 @@ from amelia.core.types import Profile
 @pytest.fixture
 def base_state():
     """Create a base ExecutionState for testing."""
-    profile = Profile(name="test", driver="cli:claude", model="sonnet", working_dir="/tmp/test")
+    profile = Profile(name="test", driver="cli:claude", model="sonnet", validator_model="sonnet", working_dir="/tmp/test")
     return ExecutionState(
         profile_id=profile.name,
         human_approved=None,

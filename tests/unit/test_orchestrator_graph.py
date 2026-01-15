@@ -177,6 +177,7 @@ class TestRouteAfterTaskReview:
             name="test",
             driver="cli:claude",
             model="sonnet",
+            validator_model="sonnet",
             working_dir="/tmp/test",
             max_task_review_iterations=3,
         )
@@ -267,6 +268,7 @@ class TestRouteAfterTaskReview:
             name="test",
             driver="cli:claude",
             model="sonnet",
+            validator_model="sonnet",
             working_dir="/tmp/test",
             max_task_review_iterations=10,
         )
@@ -393,7 +395,7 @@ class TestReviewerNodeTaskIteration:
             task_review_iteration=1,
             base_commit="abc123",  # Required for agentic_review
         )
-        profile = Profile(name="test", driver="cli:claude", model="sonnet", working_dir="/tmp/test")
+        profile = Profile(name="test", driver="cli:claude", model="sonnet", validator_model="sonnet", working_dir="/tmp/test")
         config = {"configurable": {"profile": profile, "thread_id": "test-wf"}}
 
         # Mock reviewer to return a review result

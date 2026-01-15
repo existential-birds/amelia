@@ -45,6 +45,7 @@ def mock_profile(tmp_path: Path) -> Profile:
         driver="api:openrouter",
         model="gpt-4",
         tracker="github",
+        validator_model="gpt-4o-mini",
         working_dir=str(tmp_path),
         plan_path_pattern="{date}-{issue_key}.md",
     )
@@ -154,23 +155,13 @@ class TestPlanValidatorNode:
         with pytest.raises(ValueError, match="Plan file is empty"):
             await plan_validator_node(mock_state, config)
 
-    @pytest.mark.parametrize(
-        "validator_model,expected_model",
-        [
-            ("gpt-4o-mini", "gpt-4o-mini"),  # Uses validator_model when set
-            (None, "gpt-4"),  # Falls back to profile.model
-        ],
-        ids=["uses_validator_model", "fallback_to_profile_model"],
-    )
     async def test_validator_model_selection(
         self,
         mock_state: ExecutionState,
         plan_content: str,
         tmp_path: Path,
-        validator_model: str | None,
-        expected_model: str,
     ) -> None:
-        """Validator uses correct model based on profile configuration."""
+        """Validator uses the configured validator_model."""
         from amelia.core.orchestrator import plan_validator_node
 
         profile = Profile(
@@ -178,7 +169,7 @@ class TestPlanValidatorNode:
             driver="api:openrouter",
             model="gpt-4",
             tracker="github",
-            validator_model=validator_model,
+            validator_model="gpt-4o-mini",
             working_dir=str(tmp_path),
             plan_path_pattern="{date}-{issue_key}.md",
         )
@@ -203,7 +194,7 @@ class TestPlanValidatorNode:
         # Verify _extract_structured was called with the correct model
         mock_extract.assert_called_once()
         call_kwargs = mock_extract.call_args.kwargs
-        assert call_kwargs["model"] == expected_model
+        assert call_kwargs["model"] == "gpt-4o-mini"
         assert call_kwargs["driver_type"] == "api:openrouter"
 
 
@@ -323,6 +314,7 @@ class TestPlanValidatorNodeTotalTasks:
             name="test",
             driver="api:openrouter",
             model="anthropic/claude-3.5-sonnet",
+            validator_model="anthropic/claude-3.5-sonnet",
             working_dir="/tmp/test",
         )
 
@@ -367,6 +359,7 @@ Do second thing.
             name="test",
             driver="api:openrouter",
             model="anthropic/claude-3.5-sonnet",
+            validator_model="anthropic/claude-3.5-sonnet",
             working_dir=str(tmp_path),
             plan_path_pattern="docs/plans/test-plan.md",
         )
@@ -424,6 +417,7 @@ Do implementation.
             name="test",
             driver="api:openrouter",
             model="anthropic/claude-3.5-sonnet",
+            validator_model="anthropic/claude-3.5-sonnet",
             working_dir=str(tmp_path),
             plan_path_pattern="docs/plans/legacy-plan.md",
         )

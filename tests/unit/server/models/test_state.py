@@ -128,7 +128,7 @@ class TestServerExecutionStateComposition:
 
     def test_server_state_accepts_execution_state(self) -> None:
         """ServerExecutionState can hold an ExecutionState."""
-        profile = Profile(name="test", driver="cli:claude", model="sonnet", working_dir="/tmp/test")
+        profile = Profile(name="test", driver="cli:claude", model="sonnet", validator_model="sonnet", working_dir="/tmp/test")
         core_state = ExecutionState(
             profile_id=profile.name,
         )

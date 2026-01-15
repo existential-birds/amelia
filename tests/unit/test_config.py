@@ -15,6 +15,7 @@ def test_load_settings_valid(tmp_path):
                 "name": "work",
                 "driver": "cli:claude",
                 "model": "sonnet",
+                "validator_model": "sonnet",
                 "tracker": "jira",
                 "working_dir": str(tmp_path)
                 },
@@ -22,6 +23,7 @@ def test_load_settings_valid(tmp_path):
                 "name": "home",
                 "driver": "api:openrouter",
                 "model": "anthropic/claude-3.5-sonnet",
+                "validator_model": "anthropic/claude-3.5-sonnet",
                 "tracker": "github",
                 "working_dir": str(tmp_path)
                 }
@@ -53,6 +55,7 @@ def test_load_settings_from_amelia_settings_env_var(tmp_path, monkeypatch):
                 "name": "env_test",
                 "driver": "cli:claude",
                 "model": "sonnet",
+                "validator_model": "sonnet",
                 "tracker": "noop",
                 "working_dir": str(tmp_path)
                 }
@@ -83,6 +86,7 @@ def test_load_settings_explicit_path_overrides_env_var(tmp_path, monkeypatch):
                 "name": "from_env",
                 "driver": "cli:claude",
                 "model": "sonnet",
+                "validator_model": "sonnet",
                 "tracker": "noop",
                 "working_dir": str(tmp_path)
                 }
@@ -96,6 +100,7 @@ def test_load_settings_explicit_path_overrides_env_var(tmp_path, monkeypatch):
                 "name": "from_explicit",
                 "driver": "api:openrouter",
                 "model": "anthropic/claude-3.5-sonnet",
+                "validator_model": "anthropic/claude-3.5-sonnet",
                 "tracker": "github",
                 "working_dir": str(tmp_path)
                 }

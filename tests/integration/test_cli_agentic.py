@@ -52,6 +52,7 @@ def mock_settings(tmp_path: Path) -> Settings:
         name="test",
         driver="api:openrouter",
         model="openrouter:anthropic/claude-sonnet-4",
+        validator_model="openrouter:anthropic/claude-sonnet-4",
         tracker="noop",
         working_dir=str(tmp_path),
         plan_output_dir=str(tmp_path / "plans"),
@@ -122,12 +123,14 @@ class TestPlanCommand:
             name="test",
             driver="cli:claude",
             model="sonnet",
+            validator_model="sonnet",
             tracker="noop",
         )
         work_profile = Profile(
             name="work",
             driver="api:openrouter",
             model="openrouter:anthropic/claude-sonnet-4",
+            validator_model="openrouter:anthropic/claude-sonnet-4",
             tracker="jira",
             working_dir=str(tmp_path),
             plan_output_dir=str(plans_dir),
