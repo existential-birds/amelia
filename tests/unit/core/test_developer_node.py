@@ -534,6 +534,7 @@ class TestDeveloperTaskBasedExecution:
             name="test",
             driver="api:openrouter",
             model="anthropic/claude-3.5-sonnet",
+            validator_model="anthropic/claude-3.5-sonnet",
             working_dir=str(tmp_path),
         )
 

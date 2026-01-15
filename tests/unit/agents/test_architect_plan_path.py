@@ -25,7 +25,7 @@ class TestArchitectPlanPath:
     def state_and_profile(self) -> tuple[ExecutionState, Profile]:
         """Create state and profile for testing."""
         issue = Issue(id="TEST-123", title="Test Issue", description="Test description")
-        profile = Profile(name="test", driver="cli:claude", model="sonnet", working_dir="/tmp/test")
+        profile = Profile(name="test", driver="cli:claude", model="sonnet", validator_model="sonnet", working_dir="/tmp/test")
         state = ExecutionState(profile_id="test", issue=issue)
         return state, profile
 
@@ -71,6 +71,7 @@ class TestArchitectPlanPath:
             name="test",
             driver="cli:claude",
             model="sonnet",
+            validator_model="sonnet",
             working_dir="/tmp/test",
             plan_path_pattern=".amelia/plans/{issue_key}.md",
         )

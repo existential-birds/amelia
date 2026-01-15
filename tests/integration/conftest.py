@@ -61,6 +61,7 @@ def make_profile(
     model: str = "openrouter:anthropic/claude-sonnet-4-20250514",
     tracker: TrackerType = "noop",
     plan_output_dir: str | None = None,
+    validator_model: str | None = None,
     **kwargs: Any,
 ) -> Profile:
     """Create a Profile with sensible defaults for testing."""
@@ -70,6 +71,7 @@ def make_profile(
         model=model,
         tracker=tracker,
         plan_output_dir=plan_output_dir or "/tmp/test-plans",
+        validator_model=validator_model or model,
         **kwargs,
     )
 

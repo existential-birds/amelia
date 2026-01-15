@@ -155,7 +155,7 @@ class TestExtractConfigParams:
 
     def test_extracts_profile_from_config(self) -> None:
         """Should extract profile from config.configurable.profile."""
-        profile = Profile(name="test", driver="cli:claude", model="sonnet", working_dir="/tmp/test")
+        profile = Profile(name="test", driver="cli:claude", model="sonnet", validator_model="sonnet", working_dir="/tmp/test")
         config: RunnableConfig = {
             "configurable": {
                 "thread_id": "wf-123",
@@ -171,7 +171,7 @@ class TestExtractConfigParams:
         """Should extract event_bus when provided."""
         mock_event_bus = MagicMock()
 
-        profile = Profile(name="test", driver="cli:claude", model="sonnet", working_dir="/tmp/test")
+        profile = Profile(name="test", driver="cli:claude", model="sonnet", validator_model="sonnet", working_dir="/tmp/test")
         config: RunnableConfig = {
             "configurable": {
                 "thread_id": "wf-123",

@@ -285,7 +285,7 @@ class TestWorkflowRepository:
         await repository.create(state)
 
         # Create event with Pydantic model in data
-        profile = Profile(name="test", driver="cli:claude", model="sonnet", working_dir="/tmp/test")
+        profile = Profile(name="test", driver="cli:claude", model="sonnet", validator_model="sonnet", working_dir="/tmp/test")
         event = make_event(
             id="evt-pydantic",
             workflow_id="wf-pydantic",

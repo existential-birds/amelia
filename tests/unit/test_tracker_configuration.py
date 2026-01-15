@@ -12,6 +12,7 @@ def test_tracker_factory_creates_noop_tracker():
         name="test",
         driver="cli:claude",
         model="sonnet",
+        validator_model="sonnet",
         tracker="noop",
         working_dir="/tmp/test",
     )
@@ -32,6 +33,7 @@ def test_tracker_factory_creates_github_tracker():
             name="test",
             driver="cli:claude",
             model="sonnet",
+            validator_model="sonnet",
             tracker="github",
             working_dir="/tmp/test",
         )
@@ -46,6 +48,7 @@ def test_tracker_factory_creates_none_tracker():
         name="test",
         driver="cli:claude",
         model="sonnet",
+        validator_model="sonnet",
         tracker="none",
         working_dir="/tmp/test",
     )

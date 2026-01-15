@@ -117,6 +117,7 @@ profiles:
     name: noop
     driver: cli:claude
     model: sonnet
+    validator_model: sonnet
     tracker: noop
     working_dir: {worktree}
 """

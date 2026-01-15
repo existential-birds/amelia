@@ -191,6 +191,7 @@ profiles:
     name: test
     driver: cli:claude
     model: sonnet
+    validator_model: sonnet
     tracker: noop
     strategy: single
 """

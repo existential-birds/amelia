@@ -29,6 +29,7 @@ profiles:
     name: noop
     driver: cli:claude
     model: sonnet
+    validator_model: sonnet
     tracker: noop
 """
         (worktree / "settings.amelia.yaml").write_text(settings_content)
@@ -47,6 +48,7 @@ profiles:
     name: github
     driver: cli:claude
     model: sonnet
+    validator_model: sonnet
     tracker: github
 """
         (worktree / "settings.amelia.yaml").write_text(settings_content)
