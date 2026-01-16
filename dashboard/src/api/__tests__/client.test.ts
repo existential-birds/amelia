@@ -438,4 +438,69 @@ describe('API Client', () => {
       });
     });
   });
+
+  // ==========================================================================
+  // Config and Files API Methods
+  // ==========================================================================
+
+  describe('getConfig', () => {
+    it('returns config with working_dir', async () => {
+      const mockResponse = {
+        working_dir: '/tmp/test-repo',
+        max_concurrent: 5,
+      };
+
+      mockFetchSuccess(mockResponse);
+
+      const result = await api.getConfig();
+
+      expect(result).toEqual(mockResponse);
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/config',
+        expect.objectContaining({ signal: expect.any(AbortSignal) })
+      );
+    });
+
+    it('should handle HTTP errors', async () => {
+      mockFetchError(500, 'Internal server error', 'INTERNAL_ERROR');
+
+      await expect(api.getConfig()).rejects.toThrow('Internal server error');
+    });
+  });
+
+  describe('readFile', () => {
+    it('returns file content and filename', async () => {
+      const mockResponse = {
+        content: '# Test Design\n\nContent here.',
+        filename: 'test-design.md',
+      };
+
+      mockFetchSuccess(mockResponse);
+
+      const result = await api.readFile('/path/to/test-design.md');
+
+      expect(result).toEqual(mockResponse);
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/files/read',
+        expect.objectContaining({
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path: '/path/to/test-design.md' }),
+          signal: expect.any(AbortSignal),
+        })
+      );
+    });
+
+    it('should handle file not found errors', async () => {
+      mockFetchError(404, 'File not found', 'NOT_FOUND');
+
+      await expect(api.readFile('/path/to/nonexistent.md')).rejects.toThrow('File not found');
+    });
+
+    it('should handle path validation errors', async () => {
+      mockFetchError(400, 'Invalid path', 'VALIDATION_ERROR');
+
+      await expect(api.readFile('../relative/path.md')).rejects.toThrow('Invalid path');
+    });
+  });
 });

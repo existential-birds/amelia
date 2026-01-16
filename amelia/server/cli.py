@@ -37,6 +37,14 @@ def server(
         bool,
         typer.Option("--reload", help="Enable auto-reload for development"),
     ] = False,
+    working_dir: Annotated[
+        str | None,
+        typer.Option(
+            "--working-dir",
+            "-w",
+            help="Working directory for file access. Pre-fills worktree path in Quick Shot.",
+        ),
+    ] = None,
 ) -> None:
     """Start the Amelia API server.
 
@@ -53,6 +61,11 @@ def server(
     # Read log level from environment variable (default to INFO)
     log_level = os.environ.get("AMELIA_LOG_LEVEL", "INFO").upper()
     configure_logging(level=log_level)
+
+    # Set working_dir in environment so it propagates to uvicorn's reimported module
+    # (uvicorn uses string reference "amelia.server.main:app" which reimports the module)
+    if working_dir:
+        os.environ["AMELIA_WORKING_DIR"] = str(working_dir)
 
     # Load config (respects environment variables)
     config = ServerConfig()

@@ -110,7 +110,7 @@ class TestPlanCommandTaskFlags:
         worktree = tmp_path / "repo"
         worktree.mkdir()
         (worktree / ".git").touch()
-        settings_content = """
+        settings_content = f"""
 active_profile: noop
 profiles:
   noop:
@@ -118,6 +118,7 @@ profiles:
     driver: cli:claude
     model: sonnet
     tracker: noop
+    working_dir: {worktree}
 """
         (worktree / "settings.amelia.yaml").write_text(settings_content)
 

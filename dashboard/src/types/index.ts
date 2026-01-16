@@ -688,3 +688,81 @@ export interface DefaultContent {
   /** Description explaining the prompt's purpose. */
   description: string;
 }
+
+// ============================================================================
+// Config API Types
+// ============================================================================
+
+/**
+ * Response from GET /api/config endpoint.
+ * Provides server configuration for dashboard.
+ */
+export interface ConfigResponse {
+  /** Working directory for file access. */
+  working_dir: string;
+
+  /** Maximum concurrent workflows. */
+  max_concurrent: number;
+}
+
+// ============================================================================
+// Files API Types
+// ============================================================================
+
+/**
+ * Request payload for reading a file.
+ * Used by POST /api/files/read endpoint.
+ */
+export interface FileReadRequest {
+  /** Absolute path to the file to read. */
+  path: string;
+}
+
+/**
+ * Response from POST /api/files/read endpoint.
+ * Returns file content for design document import.
+ */
+export interface FileReadResponse {
+  /** File content as text. */
+  content: string;
+
+  /** Filename without path. */
+  filename: string;
+}
+
+// ============================================================================
+// Path Validation API Types
+// ============================================================================
+
+/**
+ * Request payload for validating a worktree path.
+ * Used by POST /api/paths/validate endpoint.
+ */
+export interface PathValidationRequest {
+  /** Absolute path to validate. */
+  path: string;
+}
+
+/**
+ * Response from POST /api/paths/validate endpoint.
+ * Provides detailed information about a filesystem path.
+ */
+export interface PathValidationResponse {
+  /** Whether the path exists on disk. */
+  exists: boolean;
+
+  /** Whether the path is a git repository. */
+  is_git_repo: boolean;
+
+  /** Current branch name if git repo. */
+  branch?: string;
+
+  /** Repository name (directory name). */
+  repo_name?: string;
+
+  /** Whether there are uncommitted changes. */
+  has_changes?: boolean;
+
+  /** Human-readable status message. */
+  message: string;
+}

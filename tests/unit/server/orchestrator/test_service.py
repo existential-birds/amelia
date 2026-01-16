@@ -72,7 +72,7 @@ def valid_worktree(tmp_path: Path) -> str:
     worktree.mkdir()
     (worktree / ".git").touch()  # Git worktrees have a .git file
     # Worktree settings are required (no fallback to server settings)
-    settings_content = """
+    settings_content = f"""
 active_profile: test
 profiles:
   test:
@@ -80,6 +80,7 @@ profiles:
     driver: cli:claude
     model: sonnet
     tracker: noop
+    working_dir: {worktree}
 """
     (worktree / "settings.amelia.yaml").write_text(settings_content)
     return str(worktree)
@@ -1063,7 +1064,7 @@ class TestLoadSettingsForWorktree:
     ) -> None:
         """_load_settings_for_worktree loads settings from worktree directory."""
         # Create settings file in worktree
-        settings_content = """
+        settings_content = f"""
 active_profile: local
 profiles:
   local:
@@ -1071,6 +1072,7 @@ profiles:
     driver: cli:claude
     model: sonnet
     tracker: github
+    working_dir: {tmp_path}
 """
         settings_file = tmp_path / "settings.amelia.yaml"
         settings_file.write_text(settings_content)
@@ -1130,7 +1132,7 @@ profiles:
 
         # Create worktree-specific settings with different profile name
         # Use noop tracker to avoid gh CLI calls
-        settings_content = """
+        settings_content = f"""
 active_profile: worktree_profile
 profiles:
   worktree_profile:
@@ -1138,6 +1140,7 @@ profiles:
     driver: cli:claude
     model: sonnet
     tracker: noop
+    working_dir: {worktree}
 """
         (worktree / "settings.amelia.yaml").write_text(settings_content)
 
@@ -1209,7 +1212,7 @@ profiles:
         worktree.mkdir()
 
         # Create worktree-specific settings
-        settings_content = """
+        settings_content = f"""
 active_profile: review_profile
 profiles:
   review_profile:
@@ -1217,6 +1220,7 @@ profiles:
     driver: cli:claude
     model: sonnet
     tracker: noop
+    working_dir: {worktree}
 """
         (worktree / "settings.amelia.yaml").write_text(settings_content)
 
@@ -1297,7 +1301,7 @@ class TestRunWorkflowCheckpointResume:
         # Create mock profile
         from amelia.core.types import Profile
 
-        mock_profile = Profile(name="test", driver="cli:claude", model="sonnet")
+        mock_profile = Profile(name="test", driver="cli:claude", model="sonnet", working_dir="/tmp/test")
 
         # Patch to use our mock graph
         with (
@@ -1350,7 +1354,7 @@ class TestRunWorkflowCheckpointResume:
 
         from amelia.core.types import Profile
 
-        mock_profile = Profile(name="test", driver="cli:claude", model="sonnet")
+        mock_profile = Profile(name="test", driver="cli:claude", model="sonnet", working_dir="/tmp/test")
 
         with (
             patch.object(orchestrator, "_create_server_graph", return_value=mock_graph),
@@ -1396,7 +1400,7 @@ class TestStartWorkflowWithTaskFields:
         worktree = tmp_path / "worktree"
         worktree.mkdir()
         (worktree / ".git").touch()
-        settings_content = """
+        settings_content = f"""
 active_profile: noop
 profiles:
   noop:
@@ -1404,6 +1408,7 @@ profiles:
     driver: cli:claude
     model: sonnet
     tracker: noop
+    working_dir: {worktree}
 """
         (worktree / "settings.amelia.yaml").write_text(settings_content)
 
@@ -1433,7 +1438,7 @@ profiles:
         worktree = tmp_path / "worktree"
         worktree.mkdir()
         (worktree / ".git").touch()
-        settings_content = """
+        settings_content = f"""
 active_profile: github
 profiles:
   github:
@@ -1441,6 +1446,7 @@ profiles:
     driver: cli:claude
     model: sonnet
     tracker: github
+    working_dir: {worktree}
 """
         (worktree / "settings.amelia.yaml").write_text(settings_content)
 
@@ -1465,7 +1471,7 @@ profiles:
         worktree = tmp_path / "worktree"
         worktree.mkdir()
         (worktree / ".git").touch()
-        settings_content = """
+        settings_content = f"""
 active_profile: noop
 profiles:
   noop:
@@ -1473,6 +1479,7 @@ profiles:
     driver: cli:claude
     model: sonnet
     tracker: noop
+    working_dir: {worktree}
 """
         (worktree / "settings.amelia.yaml").write_text(settings_content)
 

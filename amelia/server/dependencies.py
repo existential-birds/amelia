@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+from amelia.server.config import ServerConfig
 from amelia.server.database import WorkflowRepository
 from amelia.server.database.connection import Database
 from amelia.server.orchestrator.service import OrchestratorService
 
+
+# Module-level config instance
+_config: ServerConfig | None = None
 
 # Module-level database instance
 _database: Database | None = None
@@ -95,3 +99,38 @@ def get_orchestrator() -> OrchestratorService:
     if _orchestrator is None:
         raise RuntimeError("Orchestrator not initialized. Is the server running?")
     return _orchestrator
+
+
+def set_config(config: ServerConfig) -> None:
+    """Set the global config instance.
+
+    This should be called during application startup.
+
+    Args:
+        config: ServerConfig instance to set.
+    """
+    global _config
+    _config = config
+
+
+def clear_config() -> None:
+    """Clear the global config instance.
+
+    This should be called during application shutdown.
+    """
+    global _config
+    _config = None
+
+
+def get_config() -> ServerConfig:
+    """Get the config instance.
+
+    Returns:
+        The current ServerConfig instance.
+
+    Raises:
+        RuntimeError: If config not initialized.
+    """
+    if _config is None:
+        raise RuntimeError("Server config not initialized. Is the server running?")
+    return _config

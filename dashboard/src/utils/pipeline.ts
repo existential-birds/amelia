@@ -104,6 +104,12 @@ export function buildPipelineFromEvents(
       }
       const iterations = agentMap.get(agent);
       if (iterations) {
+        // Mark any previous running iterations as superseded (retry scenario)
+        for (const iter of iterations) {
+          if (iter.status === 'running') {
+            iter.status = 'completed';
+          }
+        }
         iterations.push({
           id: `${agent}-${id}`,
           startedAt: timestamp,
@@ -143,7 +149,7 @@ export function buildPipelineFromEvents(
   }
 
   // Build nodes
-  const nodes: Node<AgentNodeData>[] = agentOrder.map((agentType) => {
+  const nodes: Node<AgentNodeData>[] = agentOrder.map((agentType, index) => {
     const iterations = agentMap.get(agentType) || [];
     const hasRunningIteration = iterations.some(i => i.status === 'running');
     const hasFailedIteration = iterations.some(i => i.status === 'failed');
@@ -163,7 +169,7 @@ export function buildPipelineFromEvents(
     return {
       id: agentType,
       type: 'agent',
-      position: { x: 0, y: 0 },  // Will be set by layout
+      position: { x: index * 250, y: 0 },  // Fallback horizontal layout; layout function overrides
       data: {
         agentType,
         status,

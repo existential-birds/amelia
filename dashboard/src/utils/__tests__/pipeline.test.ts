@@ -1,44 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { buildPipelineFromEvents } from '../pipeline';
-import type { AgentIteration, AgentNodeData } from '../pipeline';
 import type { WorkflowEvent } from '@/types';
-
-describe('AgentIteration type', () => {
-  it('should have required fields', () => {
-    const iteration: AgentIteration = {
-      id: 'iter-1',
-      startedAt: '2026-01-06T10:00:00Z',
-      status: 'running',
-    };
-    expect(iteration.id).toBe('iter-1');
-    expect(iteration.status).toBe('running');
-  });
-
-  it('should support optional completedAt and message', () => {
-    const iteration: AgentIteration = {
-      id: 'iter-2',
-      startedAt: '2026-01-06T10:00:00Z',
-      completedAt: '2026-01-06T10:05:00Z',
-      status: 'completed',
-      message: 'Approved',
-    };
-    expect(iteration.completedAt).toBe('2026-01-06T10:05:00Z');
-    expect(iteration.message).toBe('Approved');
-  });
-});
-
-describe('AgentNodeData type', () => {
-  it('should have required fields', () => {
-    const nodeData: AgentNodeData = {
-      agentType: 'architect',
-      status: 'active',
-      iterations: [],
-      isExpanded: false,
-    };
-    expect(nodeData.agentType).toBe('architect');
-    expect(nodeData.status).toBe('active');
-  });
-});
 
 describe('buildPipelineFromEvents', () => {
   /**
@@ -131,6 +93,29 @@ describe('buildPipelineFromEvents', () => {
     expect(devNode.data.iterations[0]!.status).toBe('completed');
     expect(devNode.data.iterations[1]!.status).toBe('running');
     expect(devNode.data.status).toBe('active');  // Currently running
+  });
+
+  it('should mark previous running iterations as superseded when retry occurs', () => {
+    // Scenario: Architect starts, fails mid-execution (no stage_completed emitted),
+    // workflow retries, architect starts again, then completes successfully.
+    // The first iteration should be marked as completed (superseded) when the retry starts.
+    const events = [
+      makeStageEvent('architect', 'stage_started', 1, '2026-01-06T10:00:00Z'),  // First attempt
+      // No stage_completed - transient failure occurred
+      makeStageEvent('architect', 'stage_started', 2, '2026-01-06T10:01:00Z'),  // Retry attempt
+      makeStageEvent('architect', 'stage_completed', 3, '2026-01-06T10:02:00Z'),  // Retry succeeds
+    ];
+    const result = buildPipelineFromEvents(events);
+
+    const archNode = result.nodes.find(n => n.id === 'architect')!;
+    // Should have 2 iterations
+    expect(archNode.data.iterations).toHaveLength(2);
+    // First iteration should be marked as completed (superseded by retry)
+    expect(archNode.data.iterations[0]!.status).toBe('completed');
+    // Second iteration should be completed (actually finished)
+    expect(archNode.data.iterations[1]!.status).toBe('completed');
+    // Node status should be 'completed', not 'active'
+    expect(archNode.data.status).toBe('completed');
   });
 
   it('should create edges between adjacent agents in order of first appearance', () => {

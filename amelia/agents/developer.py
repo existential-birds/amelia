@@ -160,15 +160,6 @@ IMPLEMENTATION PLAN:
 """)
             parts.append(state.plan_markdown)
 
-        # Design context (fallback if no plan)
-        elif state.design:
-            parts.append(f"\nDesign Context:\n{state.design.raw_content}")
-            parts.append("""
-## CRITICAL: No Summary Files
-
-DO NOT create TASK_*_COMPLETION.md, CODE_REVIEW*.md, IMPLEMENTATION_*.md, or any
-progress/summary markdown files. Only create files explicitly required for the task.""")
-
         # Issue context (fallback if no plan)
         if state.issue and not state.plan_markdown:
             parts.append(f"\nIssue: {state.issue.title}\n{state.issue.description}")

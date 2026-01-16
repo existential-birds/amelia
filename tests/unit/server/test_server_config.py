@@ -5,9 +5,9 @@ from unittest.mock import patch
 
 import pytest
 
-import amelia.server.main as main_module
+import amelia.server.dependencies as deps_module
 from amelia.server.config import ServerConfig
-from amelia.server.main import get_config
+from amelia.server.dependencies import get_config
 
 
 class TestServerConfig:
@@ -69,6 +69,26 @@ class TestServerConfig:
         config = ServerConfig(trace_retention_days=0)
         assert config.trace_retention_days == 0
 
+    def test_working_dir_defaults_to_cwd(self) -> None:
+        """working_dir should default to current working directory."""
+        # Explicitly clear env var in case it's set by another test
+        env = {k: v for k, v in os.environ.items() if k != "AMELIA_WORKING_DIR"}
+        with patch.dict(os.environ, env, clear=True):
+            config = ServerConfig()
+            assert config.working_dir == Path.cwd()
+
+    def test_working_dir_from_env_var(self) -> None:
+        """working_dir should be set from AMELIA_WORKING_DIR env var."""
+        with patch.dict(os.environ, {"AMELIA_WORKING_DIR": "/tmp/test-repo"}):
+            config = ServerConfig()
+            assert config.working_dir == Path("/tmp/test-repo")
+
+    def test_working_dir_expands_user(self) -> None:
+        """working_dir should expand ~ to home directory."""
+        with patch.dict(os.environ, {"AMELIA_WORKING_DIR": "~/projects/repo"}):
+            config = ServerConfig()
+            assert config.working_dir == Path.home() / "projects" / "repo"
+
 
 class TestGetConfig:
     """Tests for get_config dependency."""
@@ -76,10 +96,10 @@ class TestGetConfig:
     def test_get_config_raises_when_not_initialized(self) -> None:
         """get_config raises RuntimeError before server starts."""
         # Ensure _config is None (it should be by default, but be explicit)
-        original = main_module._config
-        main_module._config = None
+        original = deps_module._config
+        deps_module._config = None
         try:
             with pytest.raises(RuntimeError, match="Server config not initialized"):
                 get_config()
         finally:
-            main_module._config = original
+            deps_module._config = original
