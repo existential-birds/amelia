@@ -323,6 +323,7 @@ class TestPlanValidatorNodeTotalTasks:
             name="test",
             driver="api:openrouter",
             model="anthropic/claude-3.5-sonnet",
+            working_dir="/tmp/test",
         )
 
     @pytest.fixture

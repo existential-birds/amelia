@@ -62,18 +62,17 @@ async def read_file(
         ) from e
 
     # Check working_dir restriction
-    if config.working_dir is not None:
-        working_dir_resolved = config.working_dir.resolve()
-        try:
-            resolved_path.relative_to(working_dir_resolved)
-        except ValueError as e:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail={
-                    "error": "Path not accessible (outside working directory)",
-                    "code": "PATH_NOT_ACCESSIBLE",
-                },
-            ) from e
+    working_dir_resolved = config.working_dir.resolve()
+    try:
+        resolved_path.relative_to(working_dir_resolved)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "error": "Path not accessible (outside working directory)",
+                "code": "PATH_NOT_ACCESSIBLE",
+            },
+        ) from e
 
     # Check file exists
     if not resolved_path.exists():

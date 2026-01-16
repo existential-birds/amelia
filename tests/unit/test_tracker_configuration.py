@@ -13,6 +13,7 @@ def test_tracker_factory_creates_noop_tracker():
         driver="cli:claude",
         model="sonnet",
         tracker="noop",
+        working_dir="/tmp/test",
     )
     tracker = create_tracker(profile)
     assert tracker is not None
@@ -32,6 +33,7 @@ def test_tracker_factory_creates_github_tracker():
             driver="cli:claude",
             model="sonnet",
             tracker="github",
+            working_dir="/tmp/test",
         )
         tracker = create_tracker(profile)
         assert tracker is not None
@@ -45,6 +47,7 @@ def test_tracker_factory_creates_none_tracker():
         driver="cli:claude",
         model="sonnet",
         tracker="none",
+        working_dir="/tmp/test",
     )
     tracker = create_tracker(profile)
     assert tracker is not None

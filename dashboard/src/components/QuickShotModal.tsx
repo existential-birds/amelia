@@ -142,7 +142,7 @@ export function QuickShotModal({ open, onOpenChange, defaults }: QuickShotModalP
   const [importPath, setImportPath] = useState('');
   const [isImporting, setIsImporting] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
-  const [serverWorkingDir, setServerWorkingDir] = useState<string | undefined>();
+  const [serverWorkingDir, setServerWorkingDir] = useState<string>('');
 
   const {
     register,
@@ -179,14 +179,12 @@ export function QuickShotModal({ open, onOpenChange, defaults }: QuickShotModalP
 
     async function initializeForm() {
       // Fetch server config first
-      let serverDir: string | undefined;
+      let serverDir: string = '';
       try {
         const config = await api.getConfig();
         if (!mounted) return;
         serverDir = config.working_dir;
-        if (serverDir) {
-          setServerWorkingDir(serverDir);
-        }
+        setServerWorkingDir(serverDir);
       } catch (error) {
         if (!mounted) return;
         console.debug('Config fetch failed, using defaults', error);

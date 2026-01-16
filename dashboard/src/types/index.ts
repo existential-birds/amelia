@@ -698,8 +698,8 @@ export interface DefaultContent {
  * Provides server configuration for dashboard.
  */
 export interface ConfigResponse {
-  /** Working directory for file access, or null if not configured. */
-  working_dir: string | null;
+  /** Working directory for file access. */
+  working_dir: string;
 
   /** Maximum concurrent workflows. */
   max_concurrent: number;

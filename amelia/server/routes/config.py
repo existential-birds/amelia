@@ -12,8 +12,8 @@ router = APIRouter(prefix="/config", tags=["config"])
 class ConfigResponse(BaseModel):
     """Response model for server configuration."""
 
-    working_dir: str | None = Field(
-        description="Working directory for file access, or null if not set"
+    working_dir: str = Field(
+        description="Working directory for file access"
     )
     max_concurrent: int = Field(
         description="Maximum concurrent workflows"
@@ -30,6 +30,6 @@ async def get_server_config(
         Server configuration including working_dir and max_concurrent.
     """
     return ConfigResponse(
-        working_dir=str(config.working_dir) if config.working_dir else None,
+        working_dir=str(config.working_dir),
         max_concurrent=config.max_concurrent,
     )

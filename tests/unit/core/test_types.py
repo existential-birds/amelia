@@ -9,6 +9,7 @@ def test_profile_max_task_review_iterations_default():
         name="test",
         driver="cli:claude",
         model="sonnet",
+        working_dir="/tmp/test",
     )
 
     assert profile.max_task_review_iterations == 5
@@ -20,6 +21,7 @@ def test_profile_max_task_review_iterations_override():
         name="test",
         driver="cli:claude",
         model="sonnet",
+        working_dir="/tmp/test",
         max_task_review_iterations=10,
     )
 

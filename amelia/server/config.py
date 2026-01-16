@@ -97,16 +97,16 @@ class ServerConfig(BaseSettings):
     )
 
     # Working directory
-    working_dir: Path | None = Field(
-        default=None,
+    working_dir: Path = Field(
+        default_factory=Path.cwd,
         description="Working directory for file access. Pre-fills worktree path in Quick Shot modal.",
     )
 
     @field_validator("working_dir", mode="before")
     @classmethod
-    def expand_working_dir(cls, v: str | Path | None) -> Path | None:
+    def expand_working_dir(cls, v: str | Path | None) -> Path:
         """Expand ~ in working_dir path."""
         if v is None:
-            return None
+            return Path.cwd()
         path = Path(v)
         return path.expanduser()

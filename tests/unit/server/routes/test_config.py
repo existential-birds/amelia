@@ -30,10 +30,10 @@ class TestGetConfig:
         assert data["working_dir"] == "/tmp/test-repo"
         assert data["max_concurrent"] == 5
 
-    def test_returns_null_working_dir_when_not_set(self) -> None:
-        """Should return null working_dir when not configured."""
+    def test_returns_working_dir_as_cwd_by_default(self) -> None:
+        """Should return current working directory when using default config."""
         mock_config = MagicMock()
-        mock_config.working_dir = None
+        mock_config.working_dir = Path.cwd()
         mock_config.max_concurrent = 5
 
         app = FastAPI()
@@ -45,5 +45,5 @@ class TestGetConfig:
 
         assert response.status_code == 200
         data = response.json()
-        assert data["working_dir"] is None
+        assert data["working_dir"] == str(Path.cwd())
         assert data["max_concurrent"] == 5

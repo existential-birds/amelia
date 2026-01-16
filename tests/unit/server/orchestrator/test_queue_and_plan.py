@@ -74,7 +74,7 @@ def valid_worktree(tmp_path: Path) -> str:
     worktree.mkdir()
     (worktree / ".git").touch()
     # Worktree settings are required (no fallback to server settings)
-    settings_content = """
+    settings_content = f"""
 active_profile: test
 profiles:
   test:
@@ -82,6 +82,7 @@ profiles:
     driver: cli:claude
     model: sonnet
     tracker: noop
+    working_dir: {worktree}
 """
     (worktree / "settings.amelia.yaml").write_text(settings_content)
     return str(worktree)

@@ -60,7 +60,7 @@ interface WorktreePathFieldProps {
   /** Whether the field is disabled. */
   disabled?: boolean;
   /** Server working_dir for default suggestion. */
-  serverWorkingDir?: string;
+  serverWorkingDir: string;
   /** Recent worktree paths from workflow history. */
   recentPaths?: string[];
   /** ID for accessibility. */
@@ -131,7 +131,7 @@ export function WorktreePathField({
   // Build the list of path suggestions
   const suggestions: RecentPath[] = [];
 
-  // Add server working_dir as primary suggestion
+  // Add server working_dir as primary suggestion (if not empty)
   if (serverWorkingDir) {
     suggestions.push({
       path: serverWorkingDir,

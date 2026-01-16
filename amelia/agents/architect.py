@@ -15,7 +15,7 @@ from pydantic import BaseModel, ConfigDict
 from amelia.core.agentic_state import ToolCall, ToolResult
 from amelia.core.constants import ToolName, resolve_plan_path
 from amelia.core.state import ExecutionState
-from amelia.core.types import Design, Profile
+from amelia.core.types import Profile
 from amelia.drivers.base import AgenticMessageType, DriverInterface
 from amelia.server.models.events import EventLevel, EventType, WorkflowEvent
 
@@ -157,16 +157,15 @@ Before planning, discover:
     def _build_prompt(self, state: ExecutionState, profile: Profile) -> str:
         """Build user prompt from execution state and profile.
 
-        Combines issue information and optional design context into a single
-        prompt string. Codebase structure is not included; the agent explores
-        via tools instead.
+        Combines issue information into a prompt string. Codebase structure
+        is not included; the agent explores via tools instead.
 
         Args:
             state: The current execution state.
             profile: The profile containing working directory settings.
 
         Returns:
-            Formatted prompt string with all context sections.
+            Formatted prompt string with issue context.
 
         Raises:
             ValueError: If no issue is present in the state.
@@ -186,52 +185,6 @@ Before planning, discover:
         issue_summary = "\n\n".join(issue_parts) if issue_parts else ""
         parts.append(f"## Issue\n\n{issue_summary}")
 
-        # Design section (optional)
-        if state.design:
-            design_content = self._format_design_section(state.design)
-            parts.append(f"## Design\n\n{design_content}")
-
-        return "\n\n".join(parts)
-
-    def _format_design_section(self, design: Design) -> str:
-        """Format Design into structured markdown for context.
-
-        Args:
-            design: The design to format.
-
-        Returns:
-            Formatted markdown string with design fields.
-
-        """
-        parts = []
-
-        parts.append(f"### Goal\n\n{design.goal}")
-        parts.append(f"### Architecture\n\n{design.architecture}")
-
-        if design.tech_stack:
-            tech_list = "\n".join(f"- {tech}" for tech in design.tech_stack)
-            parts.append(f"### Tech Stack\n\n{tech_list}")
-
-        if design.components:
-            comp_list = "\n".join(f"- {comp}" for comp in design.components)
-            parts.append(f"### Components\n\n{comp_list}")
-
-        if design.data_flow:
-            parts.append(f"### Data Flow\n\n{design.data_flow}")
-
-        if design.error_handling:
-            parts.append(f"### Error Handling\n\n{design.error_handling}")
-
-        if design.testing_strategy:
-            parts.append(f"### Testing Strategy\n\n{design.testing_strategy}")
-
-        if design.conventions:
-            parts.append(f"### Conventions\n\n{design.conventions}")
-
-        if design.relevant_files:
-            files_list = "\n".join(f"- `{f}`" for f in design.relevant_files)
-            parts.append(f"### Relevant Files\n\n{files_list}")
-
         return "\n\n".join(parts)
 
     async def plan(
@@ -248,7 +201,7 @@ Before planning, discover:
         the Write tool. Yields state/event tuples as execution progresses.
 
         Args:
-            state: The execution state containing the issue and optional design.
+            state: The execution state containing the issue.
             profile: The profile containing working directory settings.
             workflow_id: Workflow ID for stream events (required).
 
@@ -381,7 +334,7 @@ Before planning, discover:
             profile: The profile containing plan path pattern.
 
         Returns:
-            Formatted prompt string with issue and design context.
+            Formatted prompt string with issue context.
 
         Raises:
             ValueError: If no issue is present in the state.
@@ -394,10 +347,6 @@ Before planning, discover:
         parts.append("## Issue")
         parts.append(f"**Title:** {state.issue.title}")
         parts.append(f"**Description:**\n{state.issue.description}")
-
-        if state.design:
-            parts.append("\n## Design Context")
-            parts.append(state.design.raw_content)
 
         parts.append("\n## Your Task")
         parts.append(
@@ -515,7 +464,7 @@ git commit -m "feat: add specific feature"
         for quick analysis without full plan generation.
 
         Args:
-            state: The execution state containing the issue and optional design.
+            state: The execution state containing the issue.
             profile: The profile containing working directory settings.
             workflow_id: Workflow ID for stream events (required).
 

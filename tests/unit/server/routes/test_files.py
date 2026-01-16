@@ -17,10 +17,11 @@ class TestReadFile:
     """Tests for POST /api/files/read endpoint."""
 
     @pytest.fixture
-    def mock_config(self) -> MagicMock:
-        """Create a mock config with no working_dir restriction."""
+    def mock_config(self, tmp_path: Path) -> MagicMock:
+        """Create a mock config with working_dir set to tmp_path (allows all temp files)."""
         config = MagicMock()
-        config.working_dir = None
+        # Use /tmp (or platform equivalent) to allow access to temp files created by tests
+        config.working_dir = Path(tempfile.gettempdir())
         return config
 
     @pytest.fixture
@@ -58,8 +59,10 @@ class TestReadFile:
         assert data["filename"].endswith(".md")
 
     def test_returns_404_for_missing_file(self, client: TestClient) -> None:
-        """Should return 404 when file doesn't exist."""
-        response = client.post("/api/files/read", json={"path": "/nonexistent/file.md"})
+        """Should return 404 when file doesn't exist (within working_dir)."""
+        # Path must be inside working_dir (tempdir) to get 404 instead of 400
+        missing_file = Path(tempfile.gettempdir()) / "nonexistent_file_12345.md"
+        response = client.post("/api/files/read", json={"path": str(missing_file)})
 
         assert response.status_code == 404
         assert "not found" in response.json()["detail"]["error"].lower()

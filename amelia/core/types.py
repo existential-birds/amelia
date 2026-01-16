@@ -1,7 +1,7 @@
 """Configuration and shared type definitions for the Amelia orchestrator.
 
 Contains type aliases (DriverType, TrackerType) and
-Pydantic models (RetryConfig, Profile, Settings, Issue, Design) used throughout
+Pydantic models (RetryConfig, Profile, Settings, Issue) used throughout
 the Amelia agentic coding orchestrator.
 """
 from typing import Literal
@@ -60,7 +60,7 @@ class Profile(BaseModel):
     driver: DriverType
     model: str
     tracker: TrackerType = "none"
-    working_dir: str | None = None
+    working_dir: str
     plan_output_dir: str = "docs/plans"
     plan_path_pattern: str = "docs/plans/{date}-{issue_key}.md"
     validator_model: str | None = None
@@ -94,32 +94,3 @@ class Issue(BaseModel):
     title: str
     description: str
     status: str = "open"
-
-
-class Design(BaseModel):
-    """Structured design from brainstorming output.
-
-    Attributes:
-        title: Design title.
-        goal: Overall goal or objective.
-        architecture: Architectural approach and patterns.
-        tech_stack: List of technologies to be used.
-        components: List of components or modules.
-        data_flow: Optional description of data flow.
-        error_handling: Optional error handling strategy.
-        testing_strategy: Optional testing approach.
-        relevant_files: List of relevant files in the codebase.
-        conventions: Optional coding conventions to follow.
-        raw_content: Raw unprocessed design content.
-    """
-    title: str
-    goal: str
-    architecture: str
-    tech_stack: list[str]
-    components: list[str]
-    data_flow: str | None = None
-    error_handling: str | None = None
-    testing_strategy: str | None = None
-    relevant_files: list[str] = Field(default_factory=list)
-    conventions: str | None = None
-    raw_content: str

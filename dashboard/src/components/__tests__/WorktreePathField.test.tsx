@@ -27,6 +27,7 @@ describe('WorktreePathField', () => {
   const defaultProps = {
     value: '',
     onChange: vi.fn(),
+    serverWorkingDir: '',
   };
 
   beforeEach(() => {

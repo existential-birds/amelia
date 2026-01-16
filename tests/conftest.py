@@ -16,7 +16,6 @@ from pytest import TempPathFactory
 from amelia.core.agentic_state import ToolCall, ToolResult
 from amelia.core.state import ExecutionState, rebuild_execution_state
 from amelia.core.types import (
-    Design,
     DriverType,
     Issue,
     Profile,
@@ -347,7 +346,6 @@ def mock_execution_state_factory(
         issue: Issue | None = None,
         goal: str | None = None,
         code_changes_for_review: str | None = None,
-        design: Design | None = None,
         tool_calls: list[ToolCall] | None = None,
         tool_results: list[ToolResult] | None = None,
         **kwargs: Any
@@ -365,7 +363,6 @@ def mock_execution_state_factory(
             issue=issue,
             goal=goal,
             code_changes_for_review=code_changes_for_review,
-            design=design,
             tool_calls=tool_calls or [],
             tool_results=tool_results or [],
             **kwargs
