@@ -17,30 +17,6 @@ Informed by [Anthropic's research on effective agent harnesses](https://www.anth
 5. **Incremental Accountability** - Every change is committed, logged, recoverable
 6. **Environment as Truth** - Git history is the source of truth, not agent memory
 
-## Research Foundation
-
-| Research Finding | Impact |
-|------------------|--------|
-| Orchestrator-worker: 90.2% improvement (Anthropic) | Phase 1 architecture |
-| Reflexion: 91% vs 80% on coding (Shinn et al.) | Self-reflection protocol |
-| Multi-agent: ~15× token cost | Token budget enforcement |
-| Sectioning vs Voting patterns | Parallelization strategies |
-
-## Enterprise Readiness
-
-Amelia is designed for production deployment in enterprise environments. Key architectural decisions:
-
-| Requirement | Implementation | Phase |
-|-------------|---------------|-------|
-| **Security** | Layered guardrails, agent authorization, MCP security | 16, 19 |
-| **Observability** | Unified events, distributed tracing, metrics | 2, 20 |
-| **Scalability** | Stateless execution, cloud deployment, context management | 15, 17 |
-| **Quality Assurance** | Verification framework, evaluation CI/CD, quality gates | 4, 7, 18 |
-| **Compliance** | Audit logging, capitalization tracking, human approval gates | 1, 14, 19 |
-| **Recovery** | Checkpoint persistence, session continuity, idempotent execution | 3, 15 |
-
----
-
 ## Phase 1: Core Orchestration [Complete]
 
 *Multi-agent coordination with human oversight*
