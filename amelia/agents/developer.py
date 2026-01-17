@@ -166,7 +166,7 @@ IMPLEMENTATION PLAN:
 ---
 """)
 
-        from amelia.core.orchestrator import extract_task_section  # noqa: PLC0415
+        from amelia.pipelines.implementation.utils import extract_task_section  # noqa: PLC0415
 
         total = state.total_tasks or 1
         current = state.current_task_index

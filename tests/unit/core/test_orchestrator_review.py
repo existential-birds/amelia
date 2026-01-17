@@ -74,13 +74,13 @@ class TestCallReviewNodeBaseCommitFallback:
         config = mock_runnable_config(profile=profile)
 
         with patch(
-            "amelia.core.orchestrator.get_current_commit",
+            "amelia.pipelines.nodes.get_current_commit",
             new_callable=AsyncMock,
             return_value="abc123def456",
         ) as mock_get_commit, patch(
-            "amelia.core.orchestrator.DriverFactory"
+            "amelia.pipelines.nodes.DriverFactory"
         ) as mock_factory, patch(
-            "amelia.core.orchestrator.Reviewer"
+            "amelia.pipelines.nodes.Reviewer"
         ) as mock_reviewer_class:
             # Setup driver mock
             mock_driver = MagicMock()
@@ -142,12 +142,12 @@ class TestCallReviewNodeBaseCommitFallback:
         config = mock_runnable_config(profile=profile)
 
         with patch(
-            "amelia.core.orchestrator.get_current_commit",
+            "amelia.pipelines.nodes.get_current_commit",
             new_callable=AsyncMock,
         ) as mock_get_commit, patch(
-            "amelia.core.orchestrator.DriverFactory"
+            "amelia.pipelines.nodes.DriverFactory"
         ) as mock_factory, patch(
-            "amelia.core.orchestrator.Reviewer"
+            "amelia.pipelines.nodes.Reviewer"
         ) as mock_reviewer_class:
             # Setup driver mock
             mock_driver = MagicMock()
@@ -207,13 +207,13 @@ class TestCallReviewNodeBaseCommitFallback:
         config = mock_runnable_config(profile=profile)
 
         with patch(
-            "amelia.core.orchestrator.get_current_commit",
+            "amelia.pipelines.nodes.get_current_commit",
             new_callable=AsyncMock,
             return_value=None,  # Simulate failure to get commit
         ) as mock_get_commit, patch(
-            "amelia.core.orchestrator.DriverFactory"
+            "amelia.pipelines.nodes.DriverFactory"
         ) as mock_factory, patch(
-            "amelia.core.orchestrator.Reviewer"
+            "amelia.pipelines.nodes.Reviewer"
         ) as mock_reviewer_class:
             mock_driver = MagicMock()
             mock_factory.get_driver.return_value = mock_driver
@@ -253,9 +253,9 @@ class TestCallReviewNodeBaseCommitFallback:
         config = mock_runnable_config(profile=profile)
 
         with patch(
-            "amelia.core.orchestrator.DriverFactory"
+            "amelia.pipelines.nodes.DriverFactory"
         ) as mock_factory, patch(
-            "amelia.core.orchestrator.Reviewer"
+            "amelia.pipelines.nodes.Reviewer"
         ) as mock_reviewer_class:
             mock_driver = MagicMock()
             mock_factory.get_driver.return_value = mock_driver

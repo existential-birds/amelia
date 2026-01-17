@@ -107,8 +107,8 @@ class TestDeveloperNodeTokenUsage(TestTokenUsageExtraction):
             mock_event.type = "output"
             yield final_state, mock_event
 
-        with patch("amelia.core.orchestrator.Developer") as mock_dev_class, \
-             patch("amelia.core.orchestrator.DriverFactory") as mock_factory:
+        with patch("amelia.pipelines.nodes.Developer") as mock_dev_class, \
+             patch("amelia.pipelines.nodes.DriverFactory") as mock_factory:
             mock_dev_instance = MagicMock()
             mock_dev_instance.run = mock_run
             mock_dev_class.return_value = mock_dev_instance
@@ -166,8 +166,8 @@ class TestDeveloperNodeTokenUsage(TestTokenUsageExtraction):
             mock_event = MagicMock()
             yield final_state, mock_event
 
-        with patch("amelia.core.orchestrator.Developer") as mock_dev_class, \
-             patch("amelia.core.orchestrator.DriverFactory") as mock_factory:
+        with patch("amelia.pipelines.nodes.Developer") as mock_dev_class, \
+             patch("amelia.pipelines.nodes.DriverFactory") as mock_factory:
             mock_dev_instance = MagicMock()
             mock_dev_instance.run = mock_run
             mock_dev_class.return_value = mock_dev_instance
@@ -208,8 +208,8 @@ class TestDeveloperNodeTokenUsage(TestTokenUsageExtraction):
             mock_event = MagicMock()
             yield final_state, mock_event
 
-        with patch("amelia.core.orchestrator.Developer") as mock_dev_class, \
-             patch("amelia.core.orchestrator.DriverFactory") as mock_factory:
+        with patch("amelia.pipelines.nodes.Developer") as mock_dev_class, \
+             patch("amelia.pipelines.nodes.DriverFactory") as mock_factory:
             mock_dev_instance = MagicMock()
             mock_dev_instance.run = mock_run
             mock_dev_class.return_value = mock_dev_instance
@@ -255,8 +255,8 @@ class TestReviewerNodeTokenUsage(TestTokenUsageExtraction):
             severity="low",
         )
 
-        with patch("amelia.core.orchestrator.Reviewer") as mock_reviewer_class, \
-             patch("amelia.core.orchestrator.DriverFactory") as mock_factory:
+        with patch("amelia.pipelines.nodes.Reviewer") as mock_reviewer_class, \
+             patch("amelia.pipelines.nodes.DriverFactory") as mock_factory:
             mock_reviewer_instance = MagicMock()
             mock_reviewer_instance.agentic_review = AsyncMock(
                 return_value=(mock_review_result, "session-abc")
@@ -383,8 +383,8 @@ class TestTokenUsageEdgeCases(TestTokenUsageExtraction):
             mock_event = MagicMock()
             yield final_state, mock_event
 
-        with patch("amelia.core.orchestrator.Developer") as mock_dev_class, \
-             patch("amelia.core.orchestrator.DriverFactory") as mock_factory:
+        with patch("amelia.pipelines.nodes.Developer") as mock_dev_class, \
+             patch("amelia.pipelines.nodes.DriverFactory") as mock_factory:
             mock_dev_instance = MagicMock()
             mock_dev_instance.run = mock_run
             mock_dev_class.return_value = mock_dev_instance
@@ -440,8 +440,8 @@ class TestTokenUsageEdgeCases(TestTokenUsageExtraction):
             mock_event = MagicMock()
             yield final_state, mock_event
 
-        with patch("amelia.core.orchestrator.Developer") as mock_dev_class, \
-             patch("amelia.core.orchestrator.DriverFactory") as mock_factory:
+        with patch("amelia.pipelines.nodes.Developer") as mock_dev_class, \
+             patch("amelia.pipelines.nodes.DriverFactory") as mock_factory:
             mock_dev_instance = MagicMock()
             mock_dev_instance.run = mock_run
             mock_dev_class.return_value = mock_dev_instance
@@ -490,8 +490,8 @@ class TestTokenUsageEdgeCases(TestTokenUsageExtraction):
             mock_event = MagicMock()
             yield final_state, mock_event
 
-        with patch("amelia.core.orchestrator.Developer") as mock_dev_class, \
-             patch("amelia.core.orchestrator.DriverFactory") as mock_factory:
+        with patch("amelia.pipelines.nodes.Developer") as mock_dev_class, \
+             patch("amelia.pipelines.nodes.DriverFactory") as mock_factory:
             mock_dev_instance = MagicMock()
             mock_dev_instance.run = mock_run
             mock_dev_class.return_value = mock_dev_instance
@@ -531,8 +531,8 @@ class TestTokenUsageEdgeCases(TestTokenUsageExtraction):
             mock_event = MagicMock()
             yield final_state, mock_event
 
-        with patch("amelia.core.orchestrator.Developer") as mock_dev_class, \
-             patch("amelia.core.orchestrator.DriverFactory") as mock_factory:
+        with patch("amelia.pipelines.nodes.Developer") as mock_dev_class, \
+             patch("amelia.pipelines.nodes.DriverFactory") as mock_factory:
             mock_dev_instance = MagicMock()
             mock_dev_instance.run = mock_run
             mock_dev_class.return_value = mock_dev_instance

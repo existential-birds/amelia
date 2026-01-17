@@ -406,7 +406,11 @@ class TestReviewerNodeTaskIteration:
             severity="medium",
         )
 
-        with patch("amelia.core.orchestrator.Reviewer") as mock_reviewer_class:
+        with patch("amelia.pipelines.nodes.Reviewer") as mock_reviewer_class, \
+             patch("amelia.pipelines.nodes.DriverFactory") as mock_factory:
+            mock_driver = MagicMock()
+            mock_factory.get_driver.return_value = mock_driver
+
             mock_reviewer = MagicMock()
             # Use agentic_review instead of review (legacy method removed)
             mock_reviewer.agentic_review = AsyncMock(return_value=(mock_review, "session-123"))

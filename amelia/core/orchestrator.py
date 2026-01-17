@@ -5,414 +5,41 @@ Developer (execute agentically) <-> Reviewer (review) -> Done. Provides node fun
 the state machine and the create_orchestrator_graph() factory.
 """
 import asyncio
-import os
-import re
-from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal
+from typing import Any, Literal
 
 import typer
-from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.runnables.config import RunnableConfig
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from loguru import logger
-from pydantic import BaseModel
 
 from amelia.agents.architect import Architect, MarkdownPlanOutput
-from amelia.agents.developer import Developer
 from amelia.agents.evaluator import Evaluator
-from amelia.agents.reviewer import Reviewer
 from amelia.core.constants import ToolName, resolve_plan_path
+from amelia.core.extraction import extract_structured
 from amelia.core.state import ExecutionState, rebuild_execution_state
 from amelia.core.types import Profile
 from amelia.drivers.factory import DriverFactory
-from amelia.server.models.tokens import TokenUsage
-from amelia.tools.git_utils import get_current_commit
+from amelia.pipelines.implementation.utils import (
+    _extract_goal_from_plan,
+    _extract_key_files_from_plan,
+    _looks_like_plan,
+    commit_task_changes,
+    extract_task_count,
+)
+from amelia.pipelines.nodes import (
+    _save_token_usage,
+    call_developer_node,
+    call_reviewer_node,
+)
+from amelia.pipelines.utils import extract_config_params
 
 
 # Resolve forward references in ExecutionState. Must be done after importing
 # Reviewer and Evaluator since they define StructuredReviewResult and EvaluationResult.
 rebuild_execution_state()
-
-
-if TYPE_CHECKING:
-    from amelia.server.database.repository import WorkflowRepository
-    from amelia.server.events.bus import EventBus
-
-
-def extract_task_count(plan_markdown: str) -> int | None:
-    """Extract task count from plan markdown by counting ### Task N: patterns.
-
-    Supports both simple numbering (### Task 1:) and hierarchical numbering
-    (### Task 1.1:) formats.
-
-    Args:
-        plan_markdown: The markdown content of the plan.
-
-    Returns:
-        Number of tasks found, or None if no task patterns detected.
-    """
-    pattern = r"^### Task \d+(\.\d+)?:"
-    matches = re.findall(pattern, plan_markdown, re.MULTILINE)
-    count = len(matches) if matches else None
-
-    # Debug: Log task extraction details
-    task_lines = [
-        line for line in plan_markdown.split("\n")
-        if line.strip().startswith("### Task") or line.strip().startswith("## Task")
-    ]
-    logger.debug(
-        "extract_task_count analysis",
-        pattern=pattern,
-        match_count=len(matches) if matches else 0,
-        result_count=count,
-        sample_task_lines=task_lines[:5],  # First 5 task-like lines for debugging
-        plan_length=len(plan_markdown),
-    )
-
-    return count
-
-
-def _looks_like_plan(text: str) -> bool:
-    """Check if text looks like a plan document.
-
-    Used as a fallback when the LLM doesn't use the write tool but outputs
-    the plan as text instead.
-
-    Args:
-        text: The text to check.
-
-    Returns:
-        True if the text contains plan-like indicators.
-    """
-    if not text or len(text) < 100:
-        return False
-
-    # Count plan indicators
-    indicators = 0
-    lower_text = text.lower()
-
-    # Check for common plan headers/sections
-    plan_markers = [
-        "# ",  # Markdown headers
-        "## ",
-        "### task",
-        "### step",
-        "## phase",
-        "**goal:**",
-        "**architecture:**",
-        "**tech stack:**",
-        "implementation plan",
-        "```",  # Code blocks
-    ]
-    for marker in plan_markers:
-        if marker in lower_text:
-            indicators += 1
-
-    # Need at least 3 indicators to consider it a plan
-    return indicators >= 3
-
-
-def _extract_goal_from_plan(plan_content: str) -> str:
-    """Extract goal from plan content using simple pattern matching.
-
-    Looks for common goal patterns in the plan markdown:
-    - **Goal:** <text>
-    - # <Title> (first h1 header)
-
-    Args:
-        plan_content: The markdown plan content.
-
-    Returns:
-        Extracted goal or a default placeholder.
-    """
-    # Try to find **Goal:** pattern
-    goal_match = re.search(r"\*\*Goal:\*\*\s*(.+?)(?:\n|$)", plan_content)
-    if goal_match:
-        return goal_match.group(1).strip()
-
-    # Try to find first # header as title
-    title_match = re.search(r"^#\s+(.+?)(?:\n|$)", plan_content, re.MULTILINE)
-    if title_match:
-        title = title_match.group(1).strip()
-        # Remove "Implementation Plan" suffix if present
-        title = re.sub(r"\s*Implementation Plan\s*$", "", title, flags=re.IGNORECASE)
-        return f"Implement {title}" if title else "Implementation plan"
-
-    return "Implementation plan"
-
-
-def _extract_key_files_from_plan(plan_content: str) -> list[str]:
-    """Extract key files from plan content using pattern matching.
-
-    Looks for file paths in the plan, typically in **Files:** sections
-    or code blocks with file paths.
-
-    Args:
-        plan_content: The markdown plan content.
-
-    Returns:
-        List of file paths found, or empty list.
-    """
-    key_files: list[str] = []
-
-    # Look for patterns like:
-    # - Create: `path/to/file.py`
-    # - Modify: `path/to/file.py`
-    # - Test: `tests/path/test.py`
-    file_patterns = [
-        r"(?:Create|Modify|Test|Edit|Update|Delete):\s*`([^`]+)`",
-        r"(?:Create|Modify|Test|Edit|Update|Delete):\s*(\S+\.(?:py|ts|tsx|js|jsx|go|rs|md))",
-    ]
-
-    for pattern in file_patterns:
-        matches = re.findall(pattern, plan_content, re.IGNORECASE)
-        key_files.extend(matches)
-
-    # Deduplicate while preserving order
-    seen: set[str] = set()
-    unique_files: list[str] = []
-    for f in key_files:
-        if f not in seen:
-            seen.add(f)
-            unique_files.append(f)
-
-    return unique_files
-
-
-async def _extract_structured[T: BaseModel](
-    prompt: str,
-    schema: type[T],
-    model: str,
-    driver_type: str,
-    system_prompt: str | None = None,
-) -> T:
-    """Extract structured output from text using direct model call.
-
-    This is a lightweight extraction function for parsing text into structured
-    data WITHOUT using the full agent framework. Use this when you just need
-    to parse/extract data and don't need filesystem tools.
-
-    For agentic tasks that need codebase exploration, use the driver's
-    generate() or execute_agentic() methods instead.
-
-    Args:
-        prompt: The text prompt to process.
-        schema: Pydantic model class to parse output into.
-        model: Model identifier (e.g., 'gpt-4o-mini').
-        driver_type: Driver type string (e.g., 'api:openrouter') for provider config.
-        system_prompt: Optional system prompt.
-
-    Returns:
-        Instance of the schema class with extracted data.
-
-    Raises:
-        RuntimeError: If extraction fails.
-    """
-    # Import here to avoid circular dependency
-    from amelia.drivers.api.deepagents import (  # noqa: PLC0415
-        _create_chat_model,
-    )
-
-    # Determine provider from driver type
-    provider: str | None = None
-    if driver_type.startswith("api:"):
-        provider = driver_type.split(":", 1)[1]  # e.g., "openrouter"
-
-    try:
-        chat_model = _create_chat_model(model, provider=provider)
-        structured_model = chat_model.with_structured_output(schema)
-
-        messages: list[HumanMessage | SystemMessage] = []
-        if system_prompt:
-            messages.append(SystemMessage(content=system_prompt))
-        messages.append(HumanMessage(content=prompt))
-
-        result = await structured_model.ainvoke(messages)
-        if result is None:
-            raise RuntimeError(
-                f"Model returned output that could not be parsed into {schema.__name__}"
-            )
-        logger.debug(
-            "Structured extraction completed",
-            schema=schema.__name__,
-            model=model,
-        )
-        return result  # type: ignore[return-value]
-    except Exception as e:
-        raise RuntimeError(f"Structured extraction failed: {e}") from e
-
-
-def extract_task_section(plan_markdown: str, task_index: int) -> str:
-    """Extract a specific task section with context from plan markdown.
-
-    Returns the plan header (Goal, Architecture, Tech Stack) plus the current
-    Phase header and the specific Task section. This prevents the developer
-    from implementing the entire plan when only one task should be executed.
-
-    Args:
-        plan_markdown: The full markdown content of the plan.
-        task_index: 0-indexed task number to extract.
-
-    Returns:
-        Markdown containing header context plus the specific task section.
-        Falls back to full plan if extraction fails.
-    """
-    # Split into lines for processing
-    lines = plan_markdown.split("\n")
-
-    # Find header section (before first ## Phase or ---)
-    header_end = 0
-    for i, line in enumerate(lines):
-        if line.startswith("## Phase") or line.strip() == "---":
-            header_end = i
-            break
-    else:
-        # No phase marker found, return full plan
-        return plan_markdown
-
-    header_lines = lines[:header_end]
-
-    # Find all task boundaries using regex
-    task_pattern = re.compile(r"^### Task \d+(\.\d+)?:")
-    phase_pattern = re.compile(r"^## Phase \d+:")
-
-    task_starts: list[int] = []
-    phase_for_task: list[tuple[int, str]] = []  # (task_idx, phase_header)
-    current_phase_header = ""
-
-    for i, line in enumerate(lines):
-        if phase_pattern.match(line):
-            current_phase_header = line
-        if task_pattern.match(line):
-            task_starts.append(i)
-            phase_for_task.append((len(task_starts) - 1, current_phase_header))
-
-    if not task_starts or task_index >= len(task_starts):
-        # No tasks found or index out of range, return full plan
-        return plan_markdown
-
-    # Get the task section boundaries
-    task_start = task_starts[task_index]
-    task_end = (
-        task_starts[task_index + 1]
-        if task_index + 1 < len(task_starts)
-        else len(lines)
-    )
-
-    # Get the phase header for this task
-    phase_header = ""
-    for idx, header in phase_for_task:
-        if idx == task_index:
-            phase_header = header
-            break
-
-    # Build the extracted section
-    result_parts = []
-
-    # Add header context
-    result_parts.append("\n".join(header_lines).strip())
-    result_parts.append("\n---\n")
-
-    # Add phase header if available
-    if phase_header:
-        result_parts.append(phase_header)
-        result_parts.append("\n\n")
-
-    # Add the task section
-    task_section = "\n".join(lines[task_start:task_end]).strip()
-    result_parts.append(task_section)
-
-    return "".join(result_parts)
-
-
-def _extract_config_params(
-    config: RunnableConfig | None,
-) -> tuple["EventBus | None", str, Profile]:
-    """Extract event_bus, workflow_id, and profile from config.
-
-    Extracts values from config.configurable dictionary. workflow_id is required.
-
-    Args:
-        config: Optional RunnableConfig with configurable parameters.
-
-    Returns:
-        Tuple of (event_bus, workflow_id, profile).
-
-    Raises:
-        ValueError: If workflow_id (thread_id) or profile is not provided.
-    """
-    config = config or {}
-    configurable = config.get("configurable", {})
-    event_bus = configurable.get("event_bus")
-    workflow_id = configurable.get("thread_id")
-    profile = configurable.get("profile")
-
-    if not workflow_id:
-        raise ValueError("workflow_id (thread_id) is required in config.configurable")
-    if not profile:
-        raise ValueError("profile is required in config.configurable")
-
-    return event_bus, workflow_id, profile
-
-
-async def _save_token_usage(
-    driver: Any,
-    workflow_id: str,
-    agent: str,
-    repository: "WorkflowRepository | None",
-) -> None:
-    """Extract token usage from driver and save to repository.
-
-    This is a best-effort operation - failures are logged but don't fail the workflow.
-    Uses the driver-agnostic get_usage() method when available.
-
-    Args:
-        driver: The driver that was used for execution.
-        workflow_id: Current workflow ID.
-        agent: Agent name (architect, developer, reviewer).
-        repository: Repository to save usage to (may be None in CLI mode).
-    """
-    if repository is None:
-        return
-
-    # Get usage via the driver-agnostic get_usage() method
-    driver_usage = driver.get_usage() if hasattr(driver, "get_usage") else None
-    if driver_usage is None:
-        return
-
-    try:
-        usage = TokenUsage(
-            workflow_id=workflow_id,
-            agent=agent,
-            model=driver_usage.model or getattr(driver, "model", "unknown"),
-            input_tokens=driver_usage.input_tokens or 0,
-            output_tokens=driver_usage.output_tokens or 0,
-            cache_read_tokens=driver_usage.cache_read_tokens or 0,
-            cache_creation_tokens=driver_usage.cache_creation_tokens or 0,
-            cost_usd=driver_usage.cost_usd or 0.0,
-            duration_ms=driver_usage.duration_ms or 0,
-            num_turns=driver_usage.num_turns or 1,
-            timestamp=datetime.now(UTC),
-        )
-        await repository.save_token_usage(usage)
-        logger.debug(
-            "Token usage saved",
-            agent=agent,
-            workflow_id=workflow_id,
-            input_tokens=usage.input_tokens,
-            output_tokens=usage.output_tokens,
-            cost_usd=usage.cost_usd,
-        )
-    except Exception:
-        # Best-effort - don't fail workflow on token tracking errors
-        logger.exception(
-            "Failed to save token usage",
-            agent=agent,
-            workflow_id=workflow_id,
-        )
 
 
 async def plan_validator_node(
@@ -434,7 +61,7 @@ async def plan_validator_node(
     Raises:
         ValueError: If plan file not found or empty.
     """
-    event_bus, workflow_id, profile = _extract_config_params(config)
+    event_bus, workflow_id, profile = extract_config_params(config or {})
 
     if not state.issue:
         raise ValueError("Issue is required in state for plan validation")
@@ -476,7 +103,7 @@ Return:
 - key_files: List of files that will be created or modified"""
 
     try:
-        output = await _extract_structured(
+        output = await extract_structured(
             prompt=prompt,
             schema=MarkdownPlanOutput,
             model=model,
@@ -543,7 +170,7 @@ async def call_architect_node(
         raise ValueError("Cannot call Architect: no issue provided in state.")
 
     # Extract event_bus, workflow_id, and profile from config
-    event_bus, workflow_id, profile = _extract_config_params(config)
+    event_bus, workflow_id, profile = extract_config_params(config or {})
 
     config = config or {}
     configurable = config.get("configurable", {})
@@ -708,194 +335,6 @@ async def human_approval_node(
     return {"human_approved": approved}
 
 
-async def call_developer_node(
-    state: ExecutionState,
-    config: RunnableConfig | None = None,
-) -> dict[str, Any]:
-    """Orchestrator node for the Developer agent to execute agentically.
-
-    Uses the new agentic execution model where the Developer autonomously
-    decides what tools to use rather than following a step-by-step plan.
-
-    For task-based execution (when total_tasks is set), this node:
-    - Clears driver_session_id for fresh context per task
-    - Injects task-scoped prompt pointing to the current task in the plan
-
-    Args:
-        state: Current execution state containing the goal.
-        config: Optional RunnableConfig with stream_emitter in configurable.
-
-    Returns:
-        Partial state dict with tool_calls, tool_results, and status.
-    """
-    logger.info("Orchestrator: Calling Developer to execute agentically.")
-    logger.debug(
-        "Developer node state",
-        base_commit=state.base_commit,
-        goal_length=len(state.goal) if state.goal else 0,
-    )
-
-    if not state.goal:
-        raise ValueError("Developer node has no goal. The architect should have generated a goal first.")
-
-    # Extract event_bus, workflow_id, and profile from config
-    event_bus, workflow_id, profile = _extract_config_params(config)
-
-    # Task-based execution: clear session and inject task-scoped context
-    if state.total_tasks is not None:
-        task_number = state.current_task_index + 1  # 1-indexed for display
-        logger.info(
-            "Starting task execution",
-            task=task_number,
-            total_tasks=state.total_tasks,
-            fresh_session=True,
-        )
-        state = state.model_copy(update={
-            "driver_session_id": None,  # Fresh session for each task
-            # plan_markdown stays intact - extraction happens in Developer._build_prompt
-        })
-
-    config = config or {}
-    repository = config.get("configurable", {}).get("repository")
-
-    driver = DriverFactory.get_driver(profile.driver, model=profile.model)
-    developer = Developer(driver)
-
-    final_state = state
-    async for new_state, event in developer.run(state, profile):
-        final_state = new_state
-        # Stream events are emitted via event_bus if provided
-        if event_bus:
-            event_bus.emit(event)
-
-    await _save_token_usage(driver, workflow_id, "developer", repository)
-
-    logger.info(
-        "Agent action completed",
-        agent="developer",
-        action="agentic_execution",
-        details={
-            "tool_calls_count": len(final_state.tool_calls),
-            "agentic_status": final_state.agentic_status,
-        },
-    )
-
-    return {
-        "tool_calls": list(final_state.tool_calls),
-        "tool_results": list(final_state.tool_results),
-        "agentic_status": final_state.agentic_status,
-        "final_response": final_state.final_response,
-        "error": final_state.error,
-        "driver_session_id": final_state.driver_session_id,
-    }
-
-
-async def call_reviewer_node(
-    state: ExecutionState,
-    config: RunnableConfig | None = None,
-) -> dict[str, Any]:
-    """Orchestrator node for the Reviewer agent to review code changes.
-
-    Always uses agentic review which fetches the diff via git tools. This avoids
-    the "Argument list too long" error that can occur with large diffs.
-
-    If base_commit is not set in state, computes it using get_current_commit().
-
-    Args:
-        state: Current execution state containing issue and goal information.
-        config: Optional RunnableConfig with stream_emitter in configurable.
-
-    Returns:
-        Partial state dict with review results.
-    """
-    logger.info(f"Orchestrator: Calling Reviewer for issue {state.issue.id if state.issue else 'N/A'}")
-
-    # Extract event_bus, workflow_id, and profile from config
-    event_bus, workflow_id, profile = _extract_config_params(config)
-
-    config = config or {}
-    configurable = config.get("configurable", {})
-    repository = configurable.get("repository")
-    prompts = configurable.get("prompts", {})
-
-    driver = DriverFactory.get_driver(profile.driver, model=profile.model)
-    # Use "task_reviewer" only for non-final tasks in task-based execution
-    is_non_final_task = state.total_tasks is not None and state.current_task_index + 1 < state.total_tasks
-    agent_name = "task_reviewer" if is_non_final_task else "reviewer"
-    reviewer = Reviewer(driver, event_bus=event_bus, prompts=prompts, agent_name=agent_name)
-
-    # Compute base_commit if not in state
-    base_commit = state.base_commit
-    if not base_commit:
-        computed_commit = await get_current_commit(cwd=profile.working_dir)
-        if computed_commit:
-            base_commit = computed_commit
-            logger.info(
-                "Computed base_commit for agentic review",
-                agent=agent_name,
-                base_commit=base_commit,
-            )
-        else:
-            # Fallback to HEAD if get_current_commit fails
-            base_commit = "HEAD"
-            logger.warning(
-                "Could not compute base_commit, falling back to HEAD",
-                agent=agent_name,
-            )
-    else:
-        logger.debug(
-            "Using existing base_commit for agentic review",
-            agent=agent_name,
-            base_commit=base_commit,
-        )
-
-    # Always use agentic review - it fetches the diff via git tools
-    review_result, new_session_id = await reviewer.agentic_review(
-        state, base_commit, profile, workflow_id=workflow_id
-    )
-
-    await _save_token_usage(driver, workflow_id, agent_name, repository)
-
-    next_iteration = state.review_iteration + 1
-    logger.info(
-        "Agent action completed",
-        agent=agent_name,
-        action="review_completed",
-        details={
-            "severity": review_result.severity,
-            "approved": review_result.approved,
-            "issue_count": len(review_result.comments),
-            "review_iteration": next_iteration,
-        },
-    )
-
-    # Build return dict
-    result_dict = {
-        "last_review": review_result,
-        "driver_session_id": new_session_id,
-        "review_iteration": next_iteration,
-    }
-
-    # Increment task review iteration for task-based execution
-    if state.total_tasks is not None:
-        result_dict["task_review_iteration"] = state.task_review_iteration + 1
-
-    # Debug: Log the full state update being returned
-    logger.debug(
-        "call_reviewer_node returning state update",
-        last_review_approved=review_result.approved,
-        last_review_severity=review_result.severity,
-        last_review_persona=review_result.reviewer_persona,
-        last_review_comment_count=len(review_result.comments),
-        review_iteration=next_iteration,
-        task_review_iteration=result_dict.get("task_review_iteration"),
-        total_tasks=state.total_tasks,
-        current_task_index=state.current_task_index,
-    )
-
-    return result_dict
-
-
 async def call_evaluation_node(
     state: ExecutionState,
     config: RunnableConfig | None = None,
@@ -912,7 +351,7 @@ async def call_evaluation_node(
     Returns:
         Partial state dict with evaluation_result, approved_items, and driver_session_id.
     """
-    event_bus, workflow_id, profile = _extract_config_params(config)
+    event_bus, workflow_id, profile = extract_config_params(config or {})
 
     config = config or {}
     configurable = config.get("configurable", {})
@@ -1012,7 +451,7 @@ def route_after_review(
     if state.last_review and state.last_review.approved:
         return "__end__"
 
-    _, _, profile = _extract_config_params(config)
+    _, _, profile = extract_config_params(config or {})
     max_iterations = profile.max_review_iterations
 
     if state.review_iteration >= max_iterations:
@@ -1068,100 +507,6 @@ async def next_task_node(
         "task_review_iteration": 0,
         "driver_session_id": None,  # Fresh session for next task
     }
-
-
-async def commit_task_changes(state: ExecutionState, config: RunnableConfig) -> bool:
-    """Commit changes for completed task.
-
-    Args:
-        state: Current execution state.
-        config: Runnable config with profile.
-
-    Returns:
-        True if commit succeeded or no changes to commit, False if commit failed.
-    """
-    profile: Profile | None = config.get("configurable", {}).get("profile")
-    if not profile:
-        raise ValueError("profile is required in config.configurable")
-    working_dir = Path(profile.working_dir) if profile.working_dir else Path.cwd()
-
-    task_number = state.current_task_index + 1
-
-    # Disable git prompts to prevent hangs in headless/server contexts
-    git_env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
-    timeout_seconds = 60
-
-    # Stage all changes
-    proc = await asyncio.create_subprocess_exec(
-        "git", "add", "-A",
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-        cwd=working_dir,
-        env=git_env,
-    )
-    try:
-        _, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout_seconds)
-    except TimeoutError:
-        logger.warning("Timeout staging changes for task commit", task=task_number)
-        proc.kill()
-        return False
-    if proc.returncode != 0:
-        logger.warning(
-            "Failed to stage changes for task commit",
-            error=stderr.decode(),
-        )
-        return False
-
-    # Check if there are staged changes
-    proc = await asyncio.create_subprocess_exec(
-        "git", "diff", "--cached", "--quiet",
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-        cwd=working_dir,
-        env=git_env,
-    )
-    try:
-        await asyncio.wait_for(proc.communicate(), timeout=timeout_seconds)
-    except TimeoutError:
-        logger.warning("Timeout checking staged changes for task", task=task_number)
-        proc.kill()
-        return False
-    if proc.returncode == 0:
-        # Exit code 0 means no changes (diff is quiet/empty)
-        logger.info("No changes to commit for task", task=task_number)
-        return True
-    if proc.returncode != 1:
-        # Exit code 1 means changes exist; any other code is an error
-        logger.warning(
-            "Failed to check staged diff for task commit",
-            returncode=proc.returncode,
-            task=task_number,
-        )
-        return False
-
-    # Commit with task reference
-    issue_key = state.issue.id if state.issue else "unknown"
-    commit_msg = f"feat({issue_key}): complete task {task_number}"
-
-    proc = await asyncio.create_subprocess_exec(
-        "git", "commit", "-m", commit_msg,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-        cwd=working_dir,
-        env=git_env,
-    )
-    try:
-        _, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout_seconds)
-    except TimeoutError:
-        logger.warning("Timeout committing task changes", task=task_number)
-        proc.kill()
-        return False
-    if proc.returncode == 0:
-        logger.info("Committed task changes", task=task_number, message=commit_msg)
-        return True
-    else:
-        logger.warning("Failed to commit task changes", error=stderr.decode())
-        return False
 
 
 def route_after_task_review(

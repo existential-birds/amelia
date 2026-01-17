@@ -8,12 +8,12 @@ from unittest.mock import MagicMock
 import pytest
 from langchain_core.runnables.config import RunnableConfig
 
-from amelia.core.orchestrator import (
-    _extract_config_params,
+from amelia.core.types import Profile
+from amelia.pipelines.implementation.utils import (
     extract_task_count,
     extract_task_section,
 )
-from amelia.core.types import Profile
+from amelia.pipelines.utils import extract_config_params
 
 
 SAMPLE_PLAN = """# Model Selection Dropdown Implementation Plan
@@ -151,7 +151,7 @@ class TestExtractTaskSection:
 
 
 class TestExtractConfigParams:
-    """Tests for _extract_config_params helper."""
+    """Tests for extract_config_params helper."""
 
     def test_extracts_profile_from_config(self) -> None:
         """Should extract profile from config.configurable.profile."""
@@ -162,7 +162,7 @@ class TestExtractConfigParams:
                 "profile": profile,
             }
         }
-        event_bus, workflow_id, extracted_profile = _extract_config_params(config)
+        event_bus, workflow_id, extracted_profile = extract_config_params(config)
         assert extracted_profile == profile
         assert workflow_id == "wf-123"
         assert event_bus is None
@@ -179,7 +179,7 @@ class TestExtractConfigParams:
                 "event_bus": mock_event_bus,
             }
         }
-        event_bus, wf_id, prof = _extract_config_params(config)
+        event_bus, wf_id, prof = extract_config_params(config)
         assert event_bus is mock_event_bus
         assert wf_id == "wf-123"
         assert prof == profile
@@ -192,4 +192,4 @@ class TestExtractConfigParams:
             }
         }
         with pytest.raises(ValueError, match="profile is required"):
-            _extract_config_params(config)
+            extract_config_params(config)

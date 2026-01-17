@@ -110,7 +110,7 @@ class TestPlanValidatorNode:
         config = make_config(mock_profile)
 
         with patch(
-            "amelia.core.orchestrator._extract_structured",
+            "amelia.core.orchestrator.extract_structured",
             new_callable=AsyncMock,
             return_value=mock_output,
         ):
@@ -185,7 +185,7 @@ class TestPlanValidatorNode:
         config = make_config(profile)
 
         with patch(
-            "amelia.core.orchestrator._extract_structured",
+            "amelia.core.orchestrator.extract_structured",
             new_callable=AsyncMock,
             return_value=mock_output,
         ) as mock_extract:
@@ -371,7 +371,7 @@ Do second thing.
         }
 
         with patch(
-            "amelia.core.orchestrator._extract_structured",
+            "amelia.core.orchestrator.extract_structured",
             new_callable=AsyncMock,
             return_value=mock_output,
         ):
@@ -429,7 +429,7 @@ Do implementation.
         }
 
         with patch(
-            "amelia.core.orchestrator._extract_structured",
+            "amelia.core.orchestrator.extract_structured",
             new_callable=AsyncMock,
             return_value=mock_output,
         ):

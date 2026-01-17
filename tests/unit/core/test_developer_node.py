@@ -46,7 +46,7 @@ class TestDeveloperNodeProfileFromConfig:
         }
 
         # Mock the Developer to avoid actual execution
-        with patch("amelia.core.orchestrator.Developer") as mock_dev:
+        with patch("amelia.pipelines.nodes.Developer") as mock_dev:
             mock_dev_instance = MagicMock()
             # Developer.run is now an async generator
             async def mock_run(*args, **kwargs):
@@ -593,7 +593,7 @@ Step 1: Build the thing
             # Return minimal valid state updates
             yield (state.model_copy(update={"agentic_status": "completed"}), MagicMock())
 
-        with patch("amelia.core.orchestrator.Developer") as mock_developer_class:
+        with patch("amelia.pipelines.nodes.Developer") as mock_developer_class:
             mock_developer = MagicMock()
             mock_developer.run = mock_run
             mock_developer_class.return_value = mock_developer
@@ -629,7 +629,7 @@ Step 1: Build the thing
             captured_plan = state.plan_markdown
             yield (state.model_copy(update={"agentic_status": "completed"}), MagicMock())
 
-        with patch("amelia.core.orchestrator.Developer") as mock_developer_class:
+        with patch("amelia.pipelines.nodes.Developer") as mock_developer_class:
             mock_developer = MagicMock()
             mock_developer.run = mock_run
             mock_developer_class.return_value = mock_developer
@@ -672,7 +672,7 @@ Step 1: Build the thing
             captured_session_id = state.driver_session_id
             yield (state.model_copy(update={"agentic_status": "completed"}), MagicMock())
 
-        with patch("amelia.core.orchestrator.Developer") as mock_developer_class:
+        with patch("amelia.pipelines.nodes.Developer") as mock_developer_class:
             mock_developer = MagicMock()
             mock_developer.run = mock_run
             mock_developer_class.return_value = mock_developer
