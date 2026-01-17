@@ -101,4 +101,4 @@ class TestImplementationState:
             status="pending",
         )
         with pytest.raises(ValidationError):
-            state.status = "running"  # type: ignore[misc]
+            state.status = "running"

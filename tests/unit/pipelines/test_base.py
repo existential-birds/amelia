@@ -89,7 +89,7 @@ class TestBasePipelineState:
                 pipeline_type="test",
                 profile_id="p1",
                 created_at=datetime.now(UTC),
-                status=status,  # type: ignore[arg-type]
+                status=status,
             )
             assert state.status == status
 

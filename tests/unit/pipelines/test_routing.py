@@ -1,6 +1,7 @@
 """Unit tests for shared routing functions."""
 
 from datetime import UTC, datetime
+from typing import Any
 
 from amelia.core.state import ReviewResult
 from amelia.pipelines.implementation.state import (
@@ -16,9 +17,9 @@ rebuild_implementation_state()
 class TestRouteAfterReviewOrTask:
     """Tests for route_after_review_or_task function."""
 
-    def _make_state(self, **kwargs) -> ImplementationState:
+    def _make_state(self, **kwargs: Any) -> ImplementationState:
         """Create test state with defaults."""
-        defaults = {
+        defaults: dict[str, Any] = {
             "workflow_id": "wf-1",
             "profile_id": "default",
             "created_at": datetime.now(UTC),

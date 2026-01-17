@@ -125,6 +125,7 @@ class TestPlanCommand:
             model="sonnet",
             validator_model="sonnet",
             tracker="noop",
+            working_dir=str(tmp_path),
         )
         work_profile = Profile(
             name="work",
