@@ -107,7 +107,7 @@ Based on [Recursive Language Models](https://arxiv.org/abs/2503.09590) (Zhang, K
 
 **12-Factor Compliance:** F3 (Own Context Window)
 
-See [RLM Integration Design](docs/plans/2026-01-17-rlm-integration-design.md).
+See [RLM Integration Design](../plans/2026-01-17-rlm-integration-design.md).
 
 ---
 
