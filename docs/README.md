@@ -20,18 +20,10 @@ pnpm dev
 
 - [User Guide](./site/guide/) - CLI commands, configuration, troubleshooting
 - [Architecture](./site/architecture/) - Technical deep-dive into components and design
-- [Design System](./site/design-system/) - Colors, typography, and design tokens
 - [Ideas](./site/ideas/) - Exploratory designs and brainstorming
 - [Reference](./site/reference/) - Roadmap, benchmarking, compliance
 
 ## Other Resources
-
-### [Design](design/)
-
-Visual mockups and prototypes for the dashboard UI.
-
-- [Dashboard HTML Prototype](design/amelia-dashboard-dark.html) - Interactive dark-themed dashboard
-- [Dashboard JSX Component](design/amelia-dashboard-dark.jsx) - React implementation of the design
 
 ### [Plans](plans/)
 
