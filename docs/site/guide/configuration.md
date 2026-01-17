@@ -10,32 +10,33 @@ Amelia looks for `settings.amelia.yaml` in the current working directory.
 
 ```yaml
 # Which profile to use when --profile is not specified
-active_profile: home
+active_profile: api_minimax
 
 profiles:
-  # Enterprise profile - uses CLI tools for compliance
-  work:
-    name: work
+  # CLI profile - uses Claude CLI
+  cli_opus:
+    name: cli_opus
     driver: cli:claude        # LLM via claude CLI
+    model: "claude-opus-4"
     tracker: jira             # Issues from Jira
     plan_output_dir: "docs/plans"
     max_review_iterations: 5  # More iterations for complex reviews
     retry:
-      max_retries: 5          # More retries for enterprise API limits
+      max_retries: 5          # More retries for rate limits
       base_delay: 2.0
       max_delay: 120.0
 
-  # Personal profile - direct API access
-  home:
-    name: home
+  # API profile - direct OpenRouter API access
+  api_minimax:
+    name: api_minimax
     driver: api:openrouter    # LLM via OpenRouter API
     model: "minimax/minimax-m2"  # Required for API drivers
     tracker: github           # Issues from GitHub
     plan_output_dir: "docs/plans"
 
   # Testing profile
-  test:
-    name: test
+  api_minimax_test:
+    name: api_minimax_test
     driver: api:openrouter
     model: "minimax/minimax-m2"
     tracker: noop             # No real tracker
@@ -48,7 +49,7 @@ profiles:
 The default profile to use when `--profile` is not specified.
 
 ```yaml
-active_profile: home
+active_profile: api_minimax
 ```
 
 ### `profiles.<name>.name` (required)
@@ -57,8 +58,8 @@ Human-readable name for the profile. Should match the key.
 
 ```yaml
 profiles:
-  home:
-    name: home
+  api_minimax:
+    name: api_minimax
 ```
 
 ### `profiles.<name>.driver` (required)
@@ -85,7 +86,7 @@ Common models:
 - `google/gemini-2.5-flash` - Gemini 2.5 Flash (cost-effective)
 - `openai/gpt-4o` - GPT-4o
 
-Not required for CLI drivers (they use the CLI's configured model).
+For CLI drivers, specifying the model is optional but recommended for clarity.
 
 ### `profiles.<name>.tracker` (optional)
 
@@ -235,36 +236,37 @@ Invalid configuration results in exit code 1 with descriptive error message.
 Only `name` and `driver` are required. All other fields use sensible defaults:
 
 ```yaml
-active_profile: dev
+active_profile: cli_opus
 profiles:
-  dev:
-    name: dev
+  cli_opus:
+    name: cli_opus
     driver: cli:claude  # CLI driver doesn't require model field
 ```
 
 For API drivers, you must also specify the model:
 
 ```yaml
-active_profile: dev
+active_profile: api_minimax
 profiles:
-  dev:
-    name: dev
+  api_minimax:
+    name: api_minimax
     driver: api:openrouter
     model: "minimax/minimax-m2"
 ```
 
 This uses: `tracker: none`, default retry settings.
 
-### Enterprise (CLI + Jira)
+### CLI with Jira
 
-For corporate environments with existing tool approvals:
+CLI driver with Jira issue tracking:
 
 ```yaml
-active_profile: work
+active_profile: cli_opus
 profiles:
-  work:
-    name: work
+  cli_opus:
+    name: cli_opus
     driver: cli:claude
+    model: "claude-opus-4"
     tracker: jira
     max_review_iterations: 5
 ```
@@ -274,22 +276,23 @@ profiles:
 For developers working across different contexts:
 
 ```yaml
-active_profile: home
+active_profile: api_minimax
 
 profiles:
-  work:
-    name: work
+  cli_opus:
+    name: cli_opus
     driver: cli:claude
+    model: "claude-opus-4"
     tracker: jira
 
-  home:
-    name: home
+  api_minimax:
+    name: api_minimax
     driver: api:openrouter
     model: "minimax/minimax-m2"
     tracker: github
 
-  test:
-    name: test
+  api_minimax_test:
+    name: api_minimax_test
     driver: api:openrouter
     model: "minimax/minimax-m2"
     tracker: noop
@@ -298,9 +301,9 @@ profiles:
 Usage:
 
 ```bash
-amelia start PROJ-123              # Uses active_profile (home)
-amelia start PROJ-123 -p work      # Uses work profile
-amelia review --local -p test      # Uses test profile
+amelia start PROJ-123              # Uses active_profile: api_minimax
+amelia start PROJ-123 -p cli_opus  # Uses cli_opus profile
+amelia review --local -p api_minimax_test  # Uses api_minimax_test profile
 ```
 
 ## Troubleshooting
