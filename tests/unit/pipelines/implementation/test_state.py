@@ -7,7 +7,14 @@ from pydantic import ValidationError
 
 from amelia.core.types import Design, Issue
 from amelia.pipelines.base import BasePipelineState
-from amelia.pipelines.implementation.state import ImplementationState
+from amelia.pipelines.implementation.state import (
+    ImplementationState,
+    rebuild_implementation_state,
+)
+
+
+# Rebuild to resolve forward references for Pydantic
+rebuild_implementation_state()
 
 
 class TestImplementationState:
