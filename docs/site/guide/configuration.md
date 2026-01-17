@@ -17,7 +17,7 @@ profiles:
   cli_opus:
     name: cli_opus
     driver: cli:claude        # LLM via claude CLI
-    model: "claude-opus-4"
+    model: "opus"
     tracker: jira             # Issues from Jira
     plan_output_dir: "docs/plans"
     max_review_iterations: 5  # More iterations for complex reviews
@@ -266,7 +266,7 @@ profiles:
   cli_opus:
     name: cli_opus
     driver: cli:claude
-    model: "claude-opus-4"
+    model: "opus"
     tracker: jira
     max_review_iterations: 5
 ```
@@ -282,7 +282,7 @@ profiles:
   cli_opus:
     name: cli_opus
     driver: cli:claude
-    model: "claude-opus-4"
+    model: "opus"
     tracker: jira
 
   api_minimax:
