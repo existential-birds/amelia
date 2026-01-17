@@ -76,8 +76,8 @@ class TestDeveloperBuildPrompt:
         assert "Task 2" in prompt
         assert "Add validation" in prompt
         # Should NOT contain other tasks
-        assert "Task 1:" not in prompt or "### Task 1:" not in prompt
-        assert "Task 3:" not in prompt or "### Task 3:" not in prompt
+        assert "Task 1:" not in prompt and "### Task 1:" not in prompt
+        assert "Task 3:" not in prompt and "### Task 3:" not in prompt
 
     def test_multi_task_includes_breadcrumb(self, multi_task_plan: str) -> None:
         """Breadcrumb shows task progress for context."""
