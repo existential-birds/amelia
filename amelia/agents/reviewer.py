@@ -208,15 +208,27 @@ Rationale: [1-2 sentences]
     def _extract_task_context(self, state: ExecutionState) -> str | None:
         """Extract task context from execution state.
 
-        Prioritizes goal over issue for context extraction.
+        For multi-task execution, extracts only the current task section
+        from the full plan.
 
         Args:
-            state: Current execution state containing goal or issue context.
+            state: Current execution state containing plan or goal.
 
         Returns:
             Formatted task context string, or None if no context found.
-
         """
+        if state.plan_markdown:
+            from amelia.core.orchestrator import extract_task_section  # noqa: PLC0415
+
+            total = state.total_tasks or 1
+            current = state.current_task_index
+
+            if total == 1:
+                return f"**Task:**\n\n{state.plan_markdown}"
+
+            task_section = extract_task_section(state.plan_markdown, current)
+            return f"**Current Task ({current + 1}/{total}):**\n\n{task_section}"
+
         if state.goal:
             return f"**Task Goal:**\n\n{state.goal}"
 

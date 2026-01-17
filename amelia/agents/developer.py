@@ -134,12 +134,19 @@ class Developer:
                 yield current_state, event
 
     def _build_prompt(self, state: ExecutionState) -> str:
-        """Build prompt combining goal, review feedback, and context."""
+        """Build prompt combining goal, review feedback, and context.
+
+        For multi-task execution, extracts only the current task section
+        from the full plan and includes a progress breadcrumb.
+        """
         parts = []
 
-        # Plan context (from Architect)
-        if state.plan_markdown:
-            parts.append("""
+        if not state.plan_markdown:
+            raise ValueError(
+                "Developer requires plan_markdown. Architect must run first."
+            )
+
+        parts.append("""
 You have a detailed implementation plan to follow. Execute it using your tools.
 Use your judgment to handle unexpected situations - the plan is a guide, not rigid steps.
 
@@ -158,17 +165,30 @@ Only create files explicitly listed in the plan's "Create:" directives.
 IMPLEMENTATION PLAN:
 ---
 """)
-            parts.append(state.plan_markdown)
 
-        # Issue context (fallback if no plan)
-        if state.issue and not state.plan_markdown:
-            parts.append(f"\nIssue: {state.issue.title}\n{state.issue.description}")
+        from amelia.core.orchestrator import extract_task_section  # noqa: PLC0415
+
+        total = state.total_tasks or 1
+        current = state.current_task_index
+
+        if total == 1:
+            parts.append(state.plan_markdown)
+        else:
+            task_section = extract_task_section(state.plan_markdown, current)
+            task_num = current + 1
+            if current > 0:
+                parts.append(
+                    f"Tasks 1-{current} of {total} completed. "
+                    f"Now executing Task {task_num}:\n\n"
+                )
+            else:
+                parts.append(f"Executing Task 1 of {total}:\n\n")
+            parts.append(task_section)
 
         # Main task
         parts.append(f"\n\nPlease complete the following task:\n\n{state.goal}")
 
         # Review feedback (if this is a review-fix iteration)
-        # Comments are already filtered to actionable issues by the reviewer
         if state.last_review and not state.last_review.approved:
             feedback = "\n".join(f"- {c}" for c in state.last_review.comments)
             parts.append(f"\n\nThe reviewer requested the following changes:\n{feedback}")

@@ -88,6 +88,7 @@ class TestDeveloperUnifiedExecution:
             profile_id=profile.name,
             issue=issue,
             goal="Implement a feature",
+            plan_markdown="# Test Plan\n\nImplement the feature.",
         )
 
         # Create a mock driver that yields AgenticMessage
@@ -144,6 +145,7 @@ class TestDeveloperUnifiedExecution:
             profile_id=profile.name,
             issue=issue,
             goal="Test goal",
+            plan_markdown="# Test Plan\n\nTest task.",
         )
 
         mock_driver = MagicMock()
@@ -187,6 +189,7 @@ class TestDeveloperUnifiedExecution:
             profile_id=profile.name,
             issue=issue,
             goal="Test goal",
+            plan_markdown="# Test Plan\n\nTest task.",
         )
 
         mock_driver = MagicMock()
@@ -231,6 +234,7 @@ class TestDeveloperUnifiedExecution:
             profile_id=profile.name,
             issue=issue,
             goal="Test goal",
+            plan_markdown="# Test Plan\n\nTest task.",
         )
 
         mock_driver = MagicMock()
@@ -275,6 +279,7 @@ class TestDeveloperUnifiedExecution:
             profile_id=profile.name,
             issue=issue,
             goal="Test goal",
+            plan_markdown="# Test Plan\n\nTest task.",
         )
 
         mock_driver = MagicMock()
@@ -319,6 +324,7 @@ class TestDeveloperUnifiedExecution:
             profile_id=profile.name,
             issue=issue,
             goal="Test goal",
+            plan_markdown="# Test Plan\n\nTest task.",
         )
 
         mock_driver = MagicMock()
@@ -357,6 +363,7 @@ class TestDeveloperUnifiedExecution:
             profile_id=profile.name,
             issue=issue,
             goal="Test goal",
+            plan_markdown="# Test Plan\n\nTest task.",
         )
 
         mock_driver = MagicMock()
@@ -408,6 +415,7 @@ class TestDeveloperUnifiedExecution:
             profile_id=profile.name,
             issue=issue,
             goal="Test goal",
+            plan_markdown="# Test Plan\n\nTest task.",
         )
 
         mock_driver = MagicMock()
@@ -458,6 +466,7 @@ class TestDeveloperUnifiedExecution:
             profile_id=profile.name,
             issue=issue,
             goal="Test goal",
+            plan_markdown="# Test Plan\n\nTest task.",
         )
 
         mock_driver = MagicMock()
@@ -593,12 +602,16 @@ Step 1: Build the thing
         # Should have cleared session_id before calling developer
         assert captured_session_id is None
 
-    async def test_developer_node_extracts_current_task_from_plan(
+    async def test_developer_node_preserves_full_plan_markdown(
         self,
         multi_task_state: ExecutionState,
         mock_profile_with_working_dir: Profile,
     ) -> None:
-        """Developer node should extract only the current task section from plan."""
+        """Developer node should pass full plan_markdown to Developer.
+
+        Task extraction now happens in Developer._build_prompt, not in the
+        orchestrator node. The orchestrator must preserve plan_markdown intact.
+        """
         config: RunnableConfig = {
             "configurable": {
                 "thread_id": "wf-test",
@@ -622,10 +635,10 @@ Step 1: Build the thing
 
             await call_developer_node(multi_task_state, config)
 
-        # Should include only Task 1, not Task 2
+        # Should preserve full plan with ALL tasks
         assert captured_plan is not None
         assert "### Task 1:" in captured_plan
-        assert "### Task 2:" not in captured_plan
+        assert "### Task 2:" in captured_plan  # Full plan preserved
         # Should preserve header context
         assert "**Goal:**" in captured_plan
         assert "## Phase 1:" in captured_plan

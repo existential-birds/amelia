@@ -750,15 +750,9 @@ async def call_developer_node(
             total_tasks=state.total_tasks,
             fresh_session=True,
         )
-        # Extract only the current task section from the full plan
-        task_plan = (
-            extract_task_section(state.plan_markdown, state.current_task_index)
-            if state.plan_markdown
-            else None
-        )
         state = state.model_copy(update={
             "driver_session_id": None,  # Fresh session for each task
-            "plan_markdown": task_plan,  # Only current task, not full plan
+            # plan_markdown stays intact - extraction happens in Developer._build_prompt
         })
 
     config = config or {}

@@ -554,3 +554,74 @@ Rationale: All checks pass.
             "Review should be approved when **Ready**: Yes is present "
             "(bold only on 'Ready' word, colon outside bold)"
         )
+
+
+class TestExtractTaskContext:
+    """Tests for Reviewer._extract_task_context task extraction."""
+
+    @pytest.fixture
+    def multi_task_plan(self) -> str:
+        """A plan with 3 tasks."""
+        return """# Plan
+
+## Goal
+Multi-task feature.
+
+---
+
+### Task 1: Create module
+First task content.
+
+### Task 2: Add validation
+Second task content.
+
+### Task 3: Write tests
+Third task content.
+"""
+
+    def test_single_task_returns_full_plan(self) -> None:
+        """When total_tasks is None or 1, return full plan."""
+        state = ExecutionState(
+            profile_id="test",
+            goal="Implement feature",
+            plan_markdown="# Simple Plan\n\nJust do it.",
+            total_tasks=None,
+            current_task_index=0,
+        )
+        reviewer = Reviewer(driver=None)  # type: ignore[arg-type]
+        context = reviewer._extract_task_context(state)
+
+        assert context is not None
+        assert "**Task:**" in context
+        assert "Simple Plan" in context
+
+    def test_multi_task_extracts_current_section(
+        self, multi_task_plan: str
+    ) -> None:
+        """For multi-task, extract current task with index label."""
+        state = ExecutionState(
+            profile_id="test",
+            goal="Implement feature",
+            plan_markdown=multi_task_plan,
+            total_tasks=3,
+            current_task_index=1,  # Task 2
+        )
+        reviewer = Reviewer(driver=None)  # type: ignore[arg-type]
+        context = reviewer._extract_task_context(state)
+
+        assert context is not None
+        assert "Current Task (2/3)" in context
+        assert "Add validation" in context
+
+    def test_no_plan_returns_goal_fallback(self) -> None:
+        """Without plan, fall back to goal."""
+        state = ExecutionState(
+            profile_id="test",
+            goal="Just do the thing",
+            plan_markdown=None,
+        )
+        reviewer = Reviewer(driver=None)  # type: ignore[arg-type]
+        context = reviewer._extract_task_context(state)
+
+        assert context is not None
+        assert "Just do the thing" in context

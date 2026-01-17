@@ -41,17 +41,35 @@ def multi_task_plan_content() -> str:
 ## Goal
 Implement a feature with three distinct tasks.
 
+## Architecture
+Modular design with clear separation of concerns.
+
+## Tech Stack
+Python, pytest
+
+---
+
+## Phase 1: Foundation
+
 ### Task 1: Create module
 
 Create the new module file with basic structure.
+- Create src/feature.py with FeatureClass
+- Implement core logic
 
 ### Task 2: Add tests
 
 Add unit tests for the module.
+- Create tests/test_feature.py
+- Write test cases for all methods
+
+## Phase 2: Documentation
 
 ### Task 3: Update docs
 
 Update documentation to reflect the changes.
+- Update README.md
+- Add API documentation
 """
 
 
@@ -201,10 +219,10 @@ class TestDeveloperNodeTaskInjection:
             await call_developer_node(state, cast(RunnableConfig, config))
 
         assert len(captured_prompt) == 1
-        # The prompt should include the task pointer injected into the goal
-        # which then gets built into the prompt by Developer._build_prompt
+        # The prompt should include task progress indicator and task content
         assert "Task 2" in captured_prompt[0]
-        assert str(plan_path) in captured_prompt[0]
+        # Task 2 content should be present (extracted from plan_markdown)
+        assert "Add tests" in captured_prompt[0]
 
     async def test_developer_node_preserves_session_for_legacy_mode(
         self,
@@ -389,3 +407,106 @@ class TestNextTaskNodeTransition:
         commits = result.stdout.strip().split("\n")
         assert len(commits) == 2  # Initial + task commit
         assert "complete task 1" in commits[0].lower()
+
+
+@pytest.mark.integration
+class TestPlanMarkdownPreservation:
+    """Tests that plan_markdown stays intact across task transitions."""
+
+    async def test_plan_markdown_unchanged_after_developer_node(
+        self,
+        tmp_path: Path,
+        integration_profile: Profile,
+        integration_issue: Issue,
+        multi_task_plan_content: str,
+    ) -> None:
+        """Developer node should NOT mutate plan_markdown in returned state.
+
+        Real components: call_developer_node state handling
+        Mock boundary: ApiDriver.execute_agentic
+        """
+        plan_path = tmp_path / "plans" / "test-plan.md"
+        plan_path.parent.mkdir(parents=True, exist_ok=True)
+        plan_path.write_text(multi_task_plan_content)
+
+        original_plan = multi_task_plan_content
+
+        state = ExecutionState(
+            profile_id="test-preservation",
+            issue=integration_issue,
+            goal="Implement feature",
+            plan_markdown=original_plan,
+            plan_path=plan_path,
+            total_tasks=3,
+            current_task_index=0,
+        )
+
+        config = make_config(
+            thread_id="test-preservation",
+            profile=integration_profile,
+        )
+
+        async def mock_execute_agentic(*args: Any, **kwargs: Any) -> Any:
+            for msg in _create_developer_mock_messages(1):
+                yield msg
+
+        with patch.object(ApiDriver, "execute_agentic", mock_execute_agentic):
+            result = await call_developer_node(state, cast(RunnableConfig, config))
+
+        # The returned state dict should NOT contain plan_markdown
+        # (preserving immutability - orchestrator uses state.plan_markdown directly)
+        assert "plan_markdown" not in result, (
+            "call_developer_node should not return plan_markdown in updates"
+        )
+
+    async def test_developer_prompt_contains_task_section_not_full_plan(
+        self,
+        tmp_path: Path,
+        integration_profile: Profile,
+        integration_issue: Issue,
+        multi_task_plan_content: str,
+    ) -> None:
+        """Developer should receive extracted task section, not full plan.
+
+        Real components: Developer._build_prompt, extract_task_section
+        Mock boundary: ApiDriver.execute_agentic
+        """
+        plan_path = tmp_path / "plans" / "test-plan.md"
+        plan_path.parent.mkdir(parents=True, exist_ok=True)
+        plan_path.write_text(multi_task_plan_content)
+
+        state = ExecutionState(
+            profile_id="test-extraction",
+            issue=integration_issue,
+            goal="Implement feature",
+            plan_markdown=multi_task_plan_content,
+            plan_path=plan_path,
+            total_tasks=3,
+            current_task_index=1,  # Task 2
+        )
+
+        config = make_config(
+            thread_id="test-extraction",
+            profile=integration_profile,
+        )
+
+        captured_prompt: list[str] = []
+
+        async def mock_execute_agentic(*args: Any, **kwargs: Any) -> Any:
+            prompt = kwargs.get("prompt", "")
+            captured_prompt.append(prompt)
+            for msg in _create_developer_mock_messages(1):
+                yield msg
+
+        with patch.object(ApiDriver, "execute_agentic", mock_execute_agentic):
+            await call_developer_node(state, cast(RunnableConfig, config))
+
+        assert len(captured_prompt) == 1
+        prompt = captured_prompt[0]
+
+        # Should have Task 2 content
+        assert "Task 2" in prompt
+        assert "Add tests" in prompt
+        # Should NOT have Task 3 content (Task 3 is in Phase 2)
+        assert "### Task 3:" not in prompt
+        assert "Update docs" not in prompt
