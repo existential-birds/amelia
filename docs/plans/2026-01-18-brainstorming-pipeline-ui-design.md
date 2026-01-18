@@ -87,17 +87,17 @@ Slides from left edge using shadcn `Sheet`.
 │                         │
 │  ACTIVE                 │
 │  ┌───────────────────┐  │
-│  │ ● Caching design  │  │  ← Selected (highlighted)
+│  │ ● Caching design ⋮│  │  ← Selected (highlighted), overflow menu
 │  │   2 min ago       │  │
 │  └───────────────────┘  │
 │  ┌───────────────────┐  │
-│  │ ○ API refactor    │  │
+│  │ ○ API refactor   ⋮│  │
 │  │   1 hour ago      │  │
 │  └───────────────────┘  │
 │                         │
 │  COMPLETED              │
 │  ┌───────────────────┐  │
-│  │ ✓ Auth system     │  │
+│  │ ✓ Auth system    ⋮│  │
 │  │   Yesterday       │  │
 │  └───────────────────┘  │
 │                         │
@@ -111,10 +111,11 @@ Slides from left edge using shadcn `Sheet`.
 - Clicking a session loads it and closes drawer
 - Sessions grouped: Active, Ready for Handoff, Completed, Failed
 - Each item shows: status indicator, topic (or "Untitled"), relative time
-- Right-click reveals delete option
+- Overflow menu (⋮) on each item reveals delete option (keyboard accessible)
 
 **Components:**
 - shadcn `Sheet`, `SheetContent`, `SheetHeader`
+- shadcn `DropdownMenu` for overflow menu (Delete action)
 - Status indicators use `--status-*` CSS variables
 
 ---
