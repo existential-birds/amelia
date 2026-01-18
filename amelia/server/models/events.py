@@ -97,6 +97,16 @@ class EventType(StrEnum):
     CLAUDE_TOOL_RESULT = "claude_tool_result"
     AGENT_OUTPUT = "agent_output"
 
+    # Brainstorming (chat-based design sessions)
+    BRAINSTORM_SESSION_CREATED = "brainstorm_session_created"
+    BRAINSTORM_REASONING = "brainstorm_reasoning"
+    BRAINSTORM_TOOL_CALL = "brainstorm_tool_call"
+    BRAINSTORM_TOOL_RESULT = "brainstorm_tool_result"
+    BRAINSTORM_TEXT = "brainstorm_text"
+    BRAINSTORM_MESSAGE_COMPLETE = "brainstorm_message_complete"
+    BRAINSTORM_ARTIFACT_CREATED = "brainstorm_artifact_created"
+    BRAINSTORM_SESSION_COMPLETED = "brainstorm_session_completed"
+
 
 # Event type to level mapping
 _INFO_TYPES: frozenset[EventType] = frozenset({

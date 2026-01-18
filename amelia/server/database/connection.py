@@ -396,6 +396,63 @@ class Database:
             "CREATE INDEX IF NOT EXISTS idx_workflow_prompts_workflow ON workflow_prompt_versions(workflow_id)"
         )
 
+        # Brainstorming tables
+        await self.execute("""
+            CREATE TABLE IF NOT EXISTS brainstorm_sessions (
+                id TEXT PRIMARY KEY,
+                profile_id TEXT NOT NULL,
+                driver_session_id TEXT,
+                status TEXT NOT NULL DEFAULT 'active',
+                topic TEXT,
+                created_at TIMESTAMP NOT NULL,
+                updated_at TIMESTAMP NOT NULL
+            )
+        """)
+
+        await self.execute("""
+            CREATE INDEX IF NOT EXISTS idx_brainstorm_sessions_profile
+            ON brainstorm_sessions(profile_id)
+        """)
+
+        await self.execute("""
+            CREATE INDEX IF NOT EXISTS idx_brainstorm_sessions_status
+            ON brainstorm_sessions(status)
+        """)
+
+        await self.execute("""
+            CREATE TABLE IF NOT EXISTS brainstorm_messages (
+                id TEXT PRIMARY KEY,
+                session_id TEXT NOT NULL REFERENCES brainstorm_sessions(id) ON DELETE CASCADE,
+                sequence INTEGER NOT NULL,
+                role TEXT NOT NULL,
+                content TEXT NOT NULL,
+                parts_json TEXT,
+                created_at TIMESTAMP NOT NULL,
+                UNIQUE(session_id, sequence)
+            )
+        """)
+
+        await self.execute("""
+            CREATE INDEX IF NOT EXISTS idx_brainstorm_messages_session
+            ON brainstorm_messages(session_id, sequence)
+        """)
+
+        await self.execute("""
+            CREATE TABLE IF NOT EXISTS brainstorm_artifacts (
+                id TEXT PRIMARY KEY,
+                session_id TEXT NOT NULL REFERENCES brainstorm_sessions(id) ON DELETE CASCADE,
+                type TEXT NOT NULL,
+                path TEXT NOT NULL,
+                title TEXT,
+                created_at TIMESTAMP NOT NULL
+            )
+        """)
+
+        await self.execute("""
+            CREATE INDEX IF NOT EXISTS idx_brainstorm_artifacts_session
+            ON brainstorm_artifacts(session_id)
+        """)
+
     async def initialize_prompts(self) -> None:
         """Seed prompts table from defaults. Idempotent.
 

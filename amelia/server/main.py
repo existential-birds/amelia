@@ -48,10 +48,14 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from amelia import __version__
+from amelia.config import load_settings
+from amelia.drivers.base import DriverInterface
+from amelia.drivers.factory import get_driver as factory_get_driver
 from amelia.logging import configure_logging, log_server_startup
 from amelia.pipelines.implementation.state import rebuild_implementation_state
 from amelia.server.config import ServerConfig
 from amelia.server.database import WorkflowRepository
+from amelia.server.database.brainstorm_repository import BrainstormRepository
 from amelia.server.database.connection import Database
 from amelia.server.database.prompt_repository import PromptRepository
 from amelia.server.dependencies import (
@@ -76,9 +80,16 @@ from amelia.server.routes import (
     websocket_router,
     workflows_router,
 )
+from amelia.server.routes.brainstorm import (
+    get_brainstorm_service,
+    get_cwd,
+    get_driver,
+    router as brainstorm_router,
+)
 from amelia.server.routes.prompts import get_prompt_repository, router as prompts_router
 from amelia.server.routes.websocket import connection_manager
 from amelia.server.routes.workflows import configure_exception_handlers
+from amelia.server.services.brainstorm import BrainstormService
 
 
 @asynccontextmanager
@@ -128,6 +139,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         checkpoint_path=str(config.checkpoint_path),
     )
     set_orchestrator(orchestrator)
+
+    # Create brainstorm repository and service
+    brainstorm_repo = BrainstormRepository(database)
+    brainstorm_service = BrainstormService(brainstorm_repo, event_bus)
+    app.state.brainstorm_service = brainstorm_service
 
     # Create lifecycle components
     log_retention = LogRetentionService(
@@ -195,6 +211,7 @@ def create_app() -> FastAPI:
     application.include_router(health_router, prefix="/api")
     application.include_router(paths_router, prefix="/api")
     application.include_router(workflows_router, prefix="/api")
+    application.include_router(brainstorm_router, prefix="/api/brainstorm")
     application.include_router(websocket_router)  # No prefix - route is /ws/events
     application.include_router(prompts_router)  # Already has /api/prompts prefix
 
@@ -204,6 +221,34 @@ def create_app() -> FastAPI:
         return PromptRepository(get_database())
 
     application.dependency_overrides[get_prompt_repository] = get_prompt_repo
+
+    # Set up brainstorm service dependency
+    def get_brainstorm_svc() -> BrainstormService:
+        service: BrainstormService = application.state.brainstorm_service
+        return service
+
+    application.dependency_overrides[get_brainstorm_service] = get_brainstorm_svc
+
+    # Set up driver dependency for brainstorm routes
+    def get_brainstorm_driver() -> DriverInterface:
+        """Get driver for brainstorming using active profile from settings."""
+        try:
+            settings = load_settings()
+            profile = settings.profiles[settings.active_profile]
+            return factory_get_driver(profile.driver)
+        except FileNotFoundError:
+            # Settings file not found - use CLI driver as default
+            return factory_get_driver("cli:claude")
+
+    application.dependency_overrides[get_driver] = get_brainstorm_driver
+
+    # Set up cwd dependency for brainstorm routes
+    def get_brainstorm_cwd() -> str:
+        """Get working directory from server config."""
+        from amelia.server.dependencies import get_config
+        return str(get_config().working_dir)
+
+    application.dependency_overrides[get_cwd] = get_brainstorm_cwd
 
     # Serve dashboard static files
     # Priority: bundled static files (installed package) > dev build (dashboard/dist)
