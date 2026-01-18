@@ -23,7 +23,7 @@ from amelia.server.models.brainstorm import (
     Message,
     SessionStatus,
 )
-from amelia.server.models.events import EventType, WorkflowEvent
+from amelia.server.models.events import EventDomain, EventType, WorkflowEvent
 
 
 BRAINSTORMER_SYSTEM_PROMPT = """You are a collaborative design partner helping the user brainstorm and refine software designs.
@@ -358,6 +358,7 @@ class BrainstormService:
             event_type=EventType.BRAINSTORM_MESSAGE_COMPLETE,
             message="Message complete",
             data={"message_id": assistant_message.id},
+            domain=EventDomain.BRAINSTORM,
         )
         self._event_bus.emit(complete_event)
         yield complete_event
@@ -405,6 +406,7 @@ class BrainstormService:
             tool_input=agentic_msg.tool_input,
             is_error=agentic_msg.is_error,
             model=agentic_msg.model,
+            domain=EventDomain.BRAINSTORM,
         )
 
     async def _create_artifact_from_path(
