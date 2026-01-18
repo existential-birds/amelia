@@ -4,7 +4,7 @@ layout: home
 hero:
   name: "Amelia"
   text: "Agentic Coding Orchestrator"
-  tagline: Multi-agent orchestration for software development with human-in-the-loop approval gates, defense-in-depth security, and end-to-end observability. Local-first, open-source.
+  tagline: Multi-agent orchestration for software development with human-in-the-loop approval gates, defense-in-depth security, and end-to-end observability. Local-first.
   actions:
     - theme: brand
       text: Get Started
