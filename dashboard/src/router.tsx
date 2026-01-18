@@ -23,6 +23,7 @@ import { approveAction, rejectAction, cancelAction } from '@/actions/workflows';
  * - `/history` → Completed workflows history (lazy-loaded)
  * - `/logs` → System logs view (lazy-loaded)
  * - `/prompts` → Prompts configuration page (lazy-loaded)
+ * - `/specs` → Spec Builder page (lazy-loaded)
  * - `*` → Fallback redirect to `/workflows`
  *
  * All page components are lazy-loaded for optimal initial bundle size.
@@ -98,6 +99,13 @@ export const router = createBrowserRouter([
         loader: promptsLoader,
         lazy: async () => {
           const { default: Component } = await import('@/pages/PromptConfigPage');
+          return { Component };
+        },
+      },
+      {
+        path: 'specs',
+        lazy: async () => {
+          const { default: Component } = await import('@/pages/SpecBuilderPage');
           return { Component };
         },
       },
