@@ -149,4 +149,77 @@ describe("useBrainstormStore", () => {
       expect(useBrainstormStore.getState().drawerOpen).toBe(false);
     });
   });
+
+  describe("updateMessage", () => {
+    it("updates a message using updater function", () => {
+      const message: BrainstormMessage = {
+        id: "msg-1",
+        session_id: "session-1",
+        sequence: 1,
+        role: "assistant",
+        content: "Hello",
+        parts: null,
+        created_at: new Date().toISOString(),
+        status: "streaming",
+      };
+
+      useBrainstormStore.getState().addMessage(message);
+
+      useBrainstormStore.getState().updateMessage("msg-1", (m) => ({
+        ...m,
+        content: m.content + " world",
+        status: undefined,
+      }));
+
+      const updated = useBrainstormStore.getState().messages[0];
+      expect(updated!.content).toBe("Hello world");
+      expect(updated!.status).toBeUndefined();
+    });
+
+    it("does nothing if message not found", () => {
+      useBrainstormStore.getState().updateMessage("nonexistent", (m) => ({
+        ...m,
+        content: "changed",
+      }));
+
+      expect(useBrainstormStore.getState().messages).toHaveLength(0);
+    });
+
+    it("preserves other messages when updating one", () => {
+      const message1: BrainstormMessage = {
+        id: "msg-1",
+        session_id: "session-1",
+        sequence: 1,
+        role: "user",
+        content: "User message",
+        parts: null,
+        created_at: new Date().toISOString(),
+      };
+      const message2: BrainstormMessage = {
+        id: "msg-2",
+        session_id: "session-1",
+        sequence: 2,
+        role: "assistant",
+        content: "Assistant message",
+        parts: null,
+        created_at: new Date().toISOString(),
+        status: "streaming",
+      };
+
+      useBrainstormStore.getState().addMessage(message1);
+      useBrainstormStore.getState().addMessage(message2);
+
+      useBrainstormStore.getState().updateMessage("msg-2", (m) => ({
+        ...m,
+        content: "Updated assistant",
+        status: undefined,
+      }));
+
+      const messages = useBrainstormStore.getState().messages;
+      expect(messages).toHaveLength(2);
+      expect(messages[0]!.content).toBe("User message");
+      expect(messages[1]!.content).toBe("Updated assistant");
+      expect(messages[1]!.status).toBeUndefined();
+    });
+  });
 });

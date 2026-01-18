@@ -124,8 +124,13 @@ export interface BrainstormMessage {
   sequence: number;
   role: "user" | "assistant";
   content: string;
+  reasoning?: string;
   parts: MessagePart[] | null;
   created_at: string;
+  /** Streaming status: undefined = complete, 'streaming' = in progress, 'error' = failed */
+  status?: "streaming" | "error";
+  /** Human-readable error message when status is 'error' */
+  errorMessage?: string;
 }
 
 /** An artifact generated during a brainstorming session. */

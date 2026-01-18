@@ -33,6 +33,10 @@ interface BrainstormState {
   setMessages: (messages: BrainstormMessage[]) => void;
   addMessage: (message: BrainstormMessage) => void;
   removeMessage: (messageId: string) => void;
+  updateMessage: (
+    messageId: string,
+    updater: (message: BrainstormMessage) => BrainstormMessage
+  ) => void;
   updateMessageContent: (messageId: string, content: string) => void;
   appendMessageContent: (messageId: string, content: string) => void;
   clearMessages: () => void;
@@ -87,6 +91,13 @@ export const useBrainstormStore = create<BrainstormState>()((set) => ({
   removeMessage: (messageId) =>
     set((state) => ({
       messages: state.messages.filter((m) => m.id !== messageId),
+    })),
+
+  updateMessage: (messageId, updater) =>
+    set((state) => ({
+      messages: state.messages.map((m) =>
+        m.id === messageId ? updater(m) : m
+      ),
     })),
 
   updateMessageContent: (messageId, content) =>
