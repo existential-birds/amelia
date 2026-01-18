@@ -167,6 +167,8 @@ class BrainstormService:
             session_id: Session to delete.
         """
         await self._repository.delete_session(session_id)
+        # Clean up session lock to prevent memory leak
+        self._session_locks.pop(session_id, None)
 
     async def update_session_status(
         self, session_id: str, status: SessionStatus

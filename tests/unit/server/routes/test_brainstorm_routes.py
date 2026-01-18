@@ -192,8 +192,8 @@ class TestSendMessage(TestBrainstormRoutes):
         self, client: TestClient, mock_service: MagicMock
     ) -> None:
         """Should return message_id on success."""
-        from amelia.drivers.base import AgenticMessage, AgenticMessageType
         from amelia.server.models.brainstorm import BrainstormingSession
+        from amelia.server.models.events import EventType, WorkflowEvent
 
         now = datetime.now(UTC)
 
@@ -210,11 +210,16 @@ class TestSendMessage(TestBrainstormRoutes):
             "artifacts": [],
         }
 
-        # Mock send_message as async generator
+        # Mock send_message as async generator yielding WorkflowEvent (matches production type)
         async def mock_send_message(*args, **kwargs):
-            yield AgenticMessage(
-                type=AgenticMessageType.RESULT,
-                content="Response",
+            yield WorkflowEvent(
+                id="evt-1",
+                workflow_id="sess-123",
+                sequence=0,
+                timestamp=now,
+                agent="brainstormer",
+                event_type=EventType.BRAINSTORM_MESSAGE_COMPLETE,
+                message="Response",
             )
 
         mock_service.send_message = mock_send_message
