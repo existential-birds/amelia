@@ -16,8 +16,6 @@ Exports:
 """
 
 from amelia.config import load_settings
-from amelia.core.orchestrator import create_orchestrator_graph
-from amelia.core.state import ExecutionState
 from amelia.main import app
 from amelia.pipelines import get_pipeline
 from amelia.pipelines.implementation import (
@@ -26,9 +24,12 @@ from amelia.pipelines.implementation import (
 )
 
 
-# Backward compatibility alias (temporary)
-# ExecutionState from core.state is kept for backward compatibility
+# Backward compatibility aliases
+# ExecutionState is kept for backward compatibility with existing code
 # New code should use ImplementationState from pipelines.implementation
+ExecutionState = ImplementationState
+# create_orchestrator_graph is now create_implementation_graph
+create_orchestrator_graph = create_implementation_graph
 
 __version__ = "0.9.0"
 

@@ -19,7 +19,7 @@ import uvicorn
 
 from amelia.client.api import AmeliaClient
 from amelia.client.models import CreateWorkflowResponse, WorkflowResponse
-from amelia.core.state import ExecutionState
+from amelia.pipelines.implementation.state import ImplementationState
 from amelia.server.database.connection import Database
 from amelia.server.database.repository import WorkflowRepository
 from amelia.server.dependencies import get_orchestrator, get_repository
@@ -62,7 +62,12 @@ async def create_test_workflow(
     workflow_status: str = "pending",
 ) -> ServerExecutionState:
     """Create and persist a test workflow."""
-    execution_state = ExecutionState(profile_id="test")
+    execution_state = ImplementationState(
+        workflow_id=workflow_id,
+        profile_id="test",
+        created_at=datetime.now(UTC),
+        status="pending",
+    )
     workflow = ServerExecutionState(
         id=workflow_id,
         issue_id=issue_id,

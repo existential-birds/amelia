@@ -15,14 +15,11 @@ from unittest.mock import patch
 import pytest
 from langchain_core.runnables.config import RunnableConfig
 
-from amelia.core.orchestrator import (
-    call_developer_node,
-    call_reviewer_node,
-    next_task_node,
-)
 from amelia.core.types import Issue, Profile
 from amelia.drivers.api import ApiDriver
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
+from amelia.pipelines.implementation.nodes import next_task_node
+from amelia.pipelines.nodes import call_developer_node, call_reviewer_node
 from tests.integration.conftest import (
     make_config,
     make_execution_state,

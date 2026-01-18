@@ -13,8 +13,8 @@ from unittest.mock import patch
 import pytest
 from langchain_core.runnables.config import RunnableConfig
 
-from amelia.core.orchestrator import call_developer_node, call_reviewer_node
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
+from amelia.pipelines.nodes import call_developer_node, call_reviewer_node
 from tests.integration.conftest import (
     make_agentic_messages,
     make_config,

@@ -9,20 +9,22 @@ from langchain_core.runnables.config import RunnableConfig
 from langgraph.graph import END
 
 from amelia.agents.evaluator import Disposition, EvaluatedItem, EvaluationResult
-from amelia.core.orchestrator import (
-    create_orchestrator_graph,
-    create_review_graph,
-    route_after_task_review,
-)
 from amelia.core.types import Profile, ReviewResult
+from amelia.pipelines.implementation import create_implementation_graph
 from amelia.pipelines.implementation.nodes import next_task_node
+from amelia.pipelines.implementation.routing import route_after_task_review
 from amelia.pipelines.implementation.state import ImplementationState
 from amelia.pipelines.nodes import call_reviewer_node
+from amelia.pipelines.review import create_review_graph
 from amelia.pipelines.review.routing import (
     route_after_end_approval,
     route_after_evaluation,
     route_after_fixes,
 )
+
+
+# Backward compatibility alias
+create_orchestrator_graph = create_implementation_graph
 
 
 class TestGraphEdges:
@@ -47,13 +49,13 @@ class TestGraphEdges:
     def test_graph_with_checkpoint_saver(self) -> None:
         """Graph should accept checkpoint saver."""
         mock_saver = MagicMock()
-        graph = create_orchestrator_graph(checkpoint_saver=mock_saver)
+        graph = create_orchestrator_graph(checkpointer=mock_saver)
         assert graph.checkpointer is mock_saver
 
     def test_review_graph_with_checkpoint_saver(self) -> None:
         """Review graph should accept checkpoint saver."""
         mock_saver = MagicMock()
-        graph = create_review_graph(checkpoint_saver=mock_saver)
+        graph = create_review_graph(checkpointer=mock_saver)
         assert graph.checkpointer is mock_saver
 
     def test_review_graph_without_checkpoint_saver(self) -> None:
@@ -217,9 +219,8 @@ class TestRouteAfterTaskReview:
             current_task_index=1,  # On task 2 (0-indexed)
             last_review=approved_review,
         )
-        config: RunnableConfig = {"configurable": {"profile": mock_profile_task_review}}
 
-        result = route_after_task_review(state, config)
+        result = route_after_task_review(state, mock_profile_task_review)
         assert result == "__end__"
 
     def test_route_after_task_review_goes_to_next_task_when_approved(
@@ -235,9 +236,8 @@ class TestRouteAfterTaskReview:
             current_task_index=0,  # On task 1, more tasks remain
             last_review=approved_review,
         )
-        config: RunnableConfig = {"configurable": {"profile": mock_profile_task_review}}
 
-        result = route_after_task_review(state, config)
+        result = route_after_task_review(state, mock_profile_task_review)
         assert result == "next_task_node"
 
     def test_route_after_task_review_retries_developer_when_not_approved(
@@ -254,9 +254,8 @@ class TestRouteAfterTaskReview:
             task_review_iteration=1,  # Under limit of 3
             last_review=rejected_review,
         )
-        config: RunnableConfig = {"configurable": {"profile": mock_profile_task_review}}
 
-        result = route_after_task_review(state, config)
+        result = route_after_task_review(state, mock_profile_task_review)
         assert result == "developer"
 
     def test_route_after_task_review_ends_on_max_iterations(
@@ -273,9 +272,8 @@ class TestRouteAfterTaskReview:
             task_review_iteration=3,  # At limit
             last_review=rejected_review,
         )
-        config: RunnableConfig = {"configurable": {"profile": mock_profile_task_review}}
 
-        result = route_after_task_review(state, config)
+        result = route_after_task_review(state, mock_profile_task_review)
         assert result == "__end__"
 
     def test_route_after_task_review_uses_profile_max_iterations(self) -> None:
@@ -304,9 +302,8 @@ class TestRouteAfterTaskReview:
             task_review_iteration=5,  # Under custom limit of 10
             last_review=rejected_review,
         )
-        config: RunnableConfig = {"configurable": {"profile": profile}}
 
-        result = route_after_task_review(state, config)
+        result = route_after_task_review(state, profile)
         assert result == "developer"  # Should retry since under limit
 
 

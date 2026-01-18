@@ -28,7 +28,7 @@ import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
 
-from amelia.core.state import ExecutionState
+from amelia.pipelines.implementation.state import ImplementationState
 from amelia.server.database.connection import Database
 from amelia.server.database.repository import WorkflowRepository
 from amelia.server.dependencies import get_orchestrator, get_repository
@@ -126,7 +126,12 @@ async def create_test_workflow(
     Returns:
         Created ServerExecutionState.
     """
-    execution_state = ExecutionState(profile_id=profile_id)
+    execution_state = ImplementationState(
+        workflow_id=workflow_id,
+        profile_id=profile_id,
+        created_at=datetime.now(UTC),
+        status="pending",
+    )
     workflow = ServerExecutionState(
         id=workflow_id,
         issue_id=issue_id,

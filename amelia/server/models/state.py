@@ -7,8 +7,6 @@ from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, Field
 
-from amelia.core.state import ExecutionState
-
 
 if TYPE_CHECKING:
     from amelia.pipelines.implementation.state import ImplementationState
@@ -101,7 +99,7 @@ class ServerExecutionState(BaseModel):
         description="Type of workflow: 'full' for standard, 'review' for review-only",
     )
 
-    execution_state: ExecutionState | ImplementationState | None = Field(
+    execution_state: ImplementationState | None = Field(
         default=None,
         description="Core orchestration state",
     )

@@ -13,14 +13,13 @@ from langchain_core.runnables.config import RunnableConfig
 
 from amelia.agents.architect import MarkdownPlanOutput
 from amelia.core.constants import ToolName
-from amelia.core.orchestrator import (
-    call_architect_node,
-    call_developer_node,
-    call_reviewer_node,
-    plan_validator_node,
-)
 from amelia.drivers.api import ApiDriver
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
+from amelia.pipelines.implementation.nodes import (
+    call_architect_node,
+    plan_validator_node,
+)
+from amelia.pipelines.nodes import call_developer_node, call_reviewer_node
 from tests.integration.conftest import (
     make_agentic_messages,
     make_config,

@@ -19,7 +19,7 @@ async def test_call_architect_node_creates_plan_directory_if_missing(
     mock_execution_state_factory: Callable[..., tuple[ImplementationState, Profile]],
 ) -> None:
     """The docs/plans directory should be created if it doesn't exist."""
-    from amelia.core.orchestrator import call_architect_node
+    from amelia.pipelines.implementation.nodes import call_architect_node
 
     today = date.today().isoformat()
     plan_dir = tmp_path / "docs" / "plans"
@@ -64,9 +64,9 @@ async def test_call_architect_node_creates_plan_directory_if_missing(
 
     # Mock the driver factory and Architect
     with (
-        patch("amelia.core.orchestrator.DriverFactory") as mock_factory,
-        patch("amelia.core.orchestrator.Architect") as mock_architect_class,
-        patch("amelia.core.orchestrator._save_token_usage", new_callable=AsyncMock),
+        patch("amelia.pipelines.implementation.nodes.DriverFactory") as mock_factory,
+        patch("amelia.pipelines.implementation.nodes.Architect") as mock_architect_class,
+        patch("amelia.pipelines.nodes._save_token_usage", new_callable=AsyncMock),
     ):
         mock_driver = MagicMock()
         mock_factory.get_driver.return_value = mock_driver

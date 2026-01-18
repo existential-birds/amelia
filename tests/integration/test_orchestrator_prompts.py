@@ -10,9 +10,11 @@ import pytest
 from langchain_core.runnables.config import RunnableConfig
 
 from amelia.agents.evaluator import Disposition, EvaluatedItem, EvaluationOutput
-from amelia.core.orchestrator import call_architect_node, call_evaluation_node, call_reviewer_node
 from amelia.core.types import ReviewResult
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
+from amelia.pipelines.implementation.nodes import call_architect_node
+from amelia.pipelines.nodes import call_reviewer_node
+from amelia.pipelines.review.nodes import call_evaluation_node
 from tests.conftest import create_mock_execute_agentic
 from tests.integration.conftest import (
     make_config,

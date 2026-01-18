@@ -82,7 +82,7 @@ class TestDeveloperNodeTokenUsage(TestTokenUsageExtraction):
         config_with_repository: tuple[RunnableConfig, AsyncMock],
     ) -> None:
         """call_developer_node should extract usage from driver and save it."""
-        from amelia.core.orchestrator import call_developer_node
+        from amelia.pipelines.nodes import call_developer_node
 
         profile = config_with_repository[0]["configurable"]["profile"]
         mock_repository = config_with_repository[1]
@@ -148,7 +148,7 @@ class TestDeveloperNodeTokenUsage(TestTokenUsageExtraction):
         config_with_repository: tuple[RunnableConfig, AsyncMock],
     ) -> None:
         """call_developer_node should not call save when no usage data."""
-        from amelia.core.orchestrator import call_developer_node
+        from amelia.pipelines.nodes import call_developer_node
 
         profile = config_with_repository[0]["configurable"]["profile"]
         mock_repository = config_with_repository[1]
@@ -197,7 +197,7 @@ class TestDeveloperNodeTokenUsage(TestTokenUsageExtraction):
         base_config: RunnableConfig,
     ) -> None:
         """call_developer_node should work when repository is not in config."""
-        from amelia.core.orchestrator import call_developer_node
+        from amelia.pipelines.nodes import call_developer_node
 
         profile = base_config["configurable"]["profile"]
         issue = mock_issue_factory()
@@ -246,8 +246,8 @@ class TestReviewerNodeTokenUsage(TestTokenUsageExtraction):
         config_with_repository: tuple[RunnableConfig, AsyncMock],
     ) -> None:
         """call_reviewer_node should extract usage from driver and save it."""
-        from amelia.core.orchestrator import call_reviewer_node
         from amelia.core.types import ReviewResult
+        from amelia.pipelines.nodes import call_reviewer_node
 
         profile = config_with_repository[0]["configurable"]["profile"]
         mock_repository = config_with_repository[1]
@@ -307,7 +307,7 @@ class TestArchitectNodeTokenUsage(TestTokenUsageExtraction):
         """call_architect_node should extract usage from driver and save it."""
         from datetime import UTC, datetime
 
-        from amelia.core.orchestrator import call_architect_node
+        from amelia.pipelines.implementation.nodes import call_architect_node
         from amelia.server.models.events import EventType, WorkflowEvent
 
         profile = config_with_repository[0]["configurable"]["profile"]
@@ -346,8 +346,8 @@ class TestArchitectNodeTokenUsage(TestTokenUsageExtraction):
             """Mock async generator that yields (state, event) tuples."""
             yield (mock_final_state, mock_event)
 
-        with patch("amelia.core.orchestrator.Architect") as mock_architect_class, \
-             patch("amelia.core.orchestrator.DriverFactory") as mock_factory:
+        with patch("amelia.pipelines.implementation.nodes.Architect") as mock_architect_class, \
+             patch("amelia.pipelines.implementation.nodes.DriverFactory") as mock_factory:
             mock_architect_instance = MagicMock()
             mock_architect_instance.plan = mock_plan_generator
             mock_architect_class.return_value = mock_architect_instance
@@ -376,7 +376,7 @@ class TestTokenUsageEdgeCases(TestTokenUsageExtraction):
         config_with_repository: tuple[RunnableConfig, AsyncMock],
     ) -> None:
         """Should handle DriverUsage with partial usage data."""
-        from amelia.core.orchestrator import call_developer_node
+        from amelia.pipelines.nodes import call_developer_node
 
         profile = config_with_repository[0]["configurable"]["profile"]
         mock_repository = config_with_repository[1]
@@ -437,7 +437,7 @@ class TestTokenUsageEdgeCases(TestTokenUsageExtraction):
         config_with_repository: tuple[RunnableConfig, AsyncMock],
     ) -> None:
         """Should use 'unknown' when model is missing from both usage and driver."""
-        from amelia.core.orchestrator import call_developer_node
+        from amelia.pipelines.nodes import call_developer_node
 
         profile = config_with_repository[0]["configurable"]["profile"]
         mock_repository = config_with_repository[1]
@@ -495,7 +495,7 @@ class TestTokenUsageEdgeCases(TestTokenUsageExtraction):
         config_with_repository: tuple[RunnableConfig, AsyncMock],
     ) -> None:
         """Should log error but not fail workflow when repository save fails."""
-        from amelia.core.orchestrator import call_developer_node
+        from amelia.pipelines.nodes import call_developer_node
 
         profile = config_with_repository[0]["configurable"]["profile"]
         mock_repository = config_with_repository[1]
@@ -543,7 +543,7 @@ class TestTokenUsageEdgeCases(TestTokenUsageExtraction):
         config_with_repository: tuple[RunnableConfig, AsyncMock],
     ) -> None:
         """Should handle gracefully when driver has no get_usage method."""
-        from amelia.core.orchestrator import call_developer_node
+        from amelia.pipelines.nodes import call_developer_node
 
         profile = config_with_repository[0]["configurable"]["profile"]
         mock_repository = config_with_repository[1]

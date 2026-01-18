@@ -103,7 +103,7 @@ class TestPlanValidatorNode:
         tmp_path: Path,
     ) -> None:
         """Happy path - validator extracts goal, markdown, and key_files from plan."""
-        from amelia.core.orchestrator import plan_validator_node
+        from amelia.pipelines.implementation.nodes import plan_validator_node
 
         plan_path = create_plan_file(tmp_path, plan_content)
 
@@ -116,7 +116,7 @@ class TestPlanValidatorNode:
         config = make_config(mock_profile)
 
         with patch(
-            "amelia.core.orchestrator.extract_structured",
+            "amelia.pipelines.implementation.nodes.extract_structured",
             new_callable=AsyncMock,
             return_value=mock_output,
         ):
@@ -138,7 +138,7 @@ class TestPlanValidatorNode:
         tmp_path: Path,
     ) -> None:
         """Validator raises ValueError when plan file doesn't exist."""
-        from amelia.core.orchestrator import plan_validator_node
+        from amelia.pipelines.implementation.nodes import plan_validator_node
 
         # Don't create the plan file - it should be missing
         config = make_config(mock_profile)
@@ -153,7 +153,7 @@ class TestPlanValidatorNode:
         tmp_path: Path,
     ) -> None:
         """Validator raises ValueError when plan file is empty."""
-        from amelia.core.orchestrator import plan_validator_node
+        from amelia.pipelines.implementation.nodes import plan_validator_node
 
         create_plan_file(tmp_path, "")  # Create empty file
         config = make_config(mock_profile)
@@ -168,7 +168,7 @@ class TestPlanValidatorNode:
         tmp_path: Path,
     ) -> None:
         """Validator uses the configured validator_model."""
-        from amelia.core.orchestrator import plan_validator_node
+        from amelia.pipelines.implementation.nodes import plan_validator_node
 
         profile = Profile(
             name="test",
@@ -191,7 +191,7 @@ class TestPlanValidatorNode:
         config = make_config(profile)
 
         with patch(
-            "amelia.core.orchestrator.extract_structured",
+            "amelia.pipelines.implementation.nodes.extract_structured",
             new_callable=AsyncMock,
             return_value=mock_output,
         ) as mock_extract:
@@ -209,7 +209,7 @@ class TestExtractTaskCount:
 
     def test_extract_task_count_returns_count_for_valid_tasks(self) -> None:
         """Should count ### Task N: patterns in plan markdown."""
-        from amelia.core.orchestrator import extract_task_count
+        from amelia.pipelines.implementation.utils import extract_task_count
 
         plan = """
 # Implementation Plan
@@ -230,7 +230,7 @@ Run tests.
 
     def test_extract_task_count_returns_none_for_no_tasks(self) -> None:
         """Should return None when no ### Task N: patterns found."""
-        from amelia.core.orchestrator import extract_task_count
+        from amelia.pipelines.implementation.utils import extract_task_count
 
         plan = """
 # Implementation Plan
@@ -245,7 +245,7 @@ More content.
 
     def test_extract_task_count_ignores_malformed_patterns(self) -> None:
         """Should only match exact ### Task N: pattern."""
-        from amelia.core.orchestrator import extract_task_count
+        from amelia.pipelines.implementation.utils import extract_task_count
 
         plan = """
 ### Task 1: Valid
@@ -264,7 +264,7 @@ Content.
 
     def test_extract_task_count_supports_hierarchical_numbering(self) -> None:
         """Should count ### Task N.M: patterns (hierarchical/phased format)."""
-        from amelia.core.orchestrator import extract_task_count
+        from amelia.pipelines.implementation.utils import extract_task_count
 
         plan = """
 # Implementation Plan
@@ -293,7 +293,7 @@ Test work.
 
     def test_extract_task_count_supports_mixed_numbering(self) -> None:
         """Should count both simple and hierarchical task patterns."""
-        from amelia.core.orchestrator import extract_task_count
+        from amelia.pipelines.implementation.utils import extract_task_count
 
         plan = """
 ### Task 1: Simple task
@@ -355,7 +355,7 @@ Do second thing.
         self, state_with_plan: tuple[ImplementationState, Path], tmp_path: Path
     ) -> None:
         """plan_validator_node should extract and return total_tasks from plan."""
-        from amelia.core.orchestrator import plan_validator_node
+        from amelia.pipelines.implementation.nodes import plan_validator_node
 
         state, plan_path = state_with_plan
 
@@ -380,7 +380,7 @@ Do second thing.
         }
 
         with patch(
-            "amelia.core.orchestrator.extract_structured",
+            "amelia.pipelines.implementation.nodes.extract_structured",
             new_callable=AsyncMock,
             return_value=mock_output,
         ):
@@ -392,7 +392,7 @@ Do second thing.
         self, tmp_path: Path
     ) -> None:
         """plan_validator_node should set total_tasks=None for plans without task markers."""
-        from amelia.core.orchestrator import plan_validator_node
+        from amelia.pipelines.implementation.nodes import plan_validator_node
 
         plan_content = """
 # Legacy Plan
@@ -441,7 +441,7 @@ Do implementation.
         }
 
         with patch(
-            "amelia.core.orchestrator.extract_structured",
+            "amelia.pipelines.implementation.nodes.extract_structured",
             new_callable=AsyncMock,
             return_value=mock_output,
         ):

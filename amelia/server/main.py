@@ -48,8 +48,8 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from amelia import __version__
-from amelia.core.state import rebuild_execution_state
 from amelia.logging import configure_logging, log_server_startup
+from amelia.pipelines.implementation.state import rebuild_implementation_state
 from amelia.server.config import ServerConfig
 from amelia.server.database import WorkflowRepository
 from amelia.server.database.connection import Database
@@ -89,9 +89,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     Initializes configuration, database, orchestrator, and lifecycle components.
     """
     # Rebuild Pydantic models with forward references before any instantiation.
-    # ExecutionState is still used by the orchestrator service.
+    # ImplementationState is used by the orchestrator service.
     # ServerExecutionState has ImplementationState in its union type.
-    rebuild_execution_state()
+    rebuild_implementation_state()
     rebuild_server_execution_state()
 
     # Configure logging (needed when uvicorn loads app directly, e.g. with --reload)

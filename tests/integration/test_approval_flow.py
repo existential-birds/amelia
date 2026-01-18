@@ -15,7 +15,7 @@ from unittest.mock import patch
 
 import pytest
 
-from amelia.core.state import ExecutionState
+from amelia.pipelines.implementation.state import ImplementationState
 from amelia.server.models.events import EventType, WorkflowEvent
 from amelia.server.models.state import ServerExecutionState
 from amelia.server.orchestrator.service import OrchestratorService
@@ -108,8 +108,11 @@ class TestLifecycleEvents:
             checkpoint_path=temp_checkpoint_db,
         )
 
-        core_state = ExecutionState(
+        core_state = ImplementationState(
+            workflow_id="wf-lifecycle-test",
             profile_id="test",
+            created_at=datetime.now(UTC),
+            status="pending",
         )
         server_state = ServerExecutionState(
             id="wf-lifecycle-test",
@@ -163,8 +166,11 @@ class TestGraphInterruptHandling:
             checkpoint_path=temp_checkpoint_db,
         )
 
-        core_state = ExecutionState(
+        core_state = ImplementationState(
+            workflow_id="wf-interrupt-test",
             profile_id="test",
+            created_at=datetime.now(UTC),
+            status="pending",
         )
         server_state = ServerExecutionState(
             id="wf-interrupt-test",
