@@ -8,13 +8,13 @@ from uuid import uuid4
 from loguru import logger
 from pydantic import BaseModel, ConfigDict, Field
 
-from amelia.core.state import ExecutionState
 from amelia.core.types import Profile, ReviewResult, Severity
 from amelia.drivers.base import DriverInterface
 from amelia.server.models.events import EventLevel, EventType, WorkflowEvent
 
 
 if TYPE_CHECKING:
+    from amelia.pipelines.implementation.state import ImplementationState
     from amelia.server.events.bus import EventBus
 
 
@@ -205,7 +205,7 @@ Rationale: [1-2 sentences]
     def agentic_prompt(self) -> str:
         return self._prompts.get("reviewer.agentic", self.AGENTIC_REVIEW_PROMPT)
 
-    def _extract_task_context(self, state: ExecutionState) -> str | None:
+    def _extract_task_context(self, state: "ImplementationState") -> str | None:
         """Extract task context from execution state.
 
         For multi-task execution, extracts only the current task section
@@ -290,7 +290,7 @@ Rationale: [1-2 sentences]
 
     async def agentic_review(
         self,
-        state: ExecutionState,
+        state: "ImplementationState",
         base_commit: str,
         profile: Profile,
         *,

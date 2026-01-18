@@ -18,7 +18,7 @@ from amelia.server.models.events import EventLevel, EventType, WorkflowEvent
 
 
 if TYPE_CHECKING:
-    from amelia.core.state import ExecutionState
+    from amelia.pipelines.implementation.state import ImplementationState
     from amelia.server.events.bus import EventBus
 
 
@@ -169,11 +169,11 @@ Provide clear evidence for each disposition decision."""
         """
         return self._prompts.get("evaluator.system", self.SYSTEM_PROMPT)
 
-    def _build_prompt(self, state: "ExecutionState") -> str:
+    def _build_prompt(self, state: "ImplementationState") -> str:
         """Build the user prompt for evaluation from state.
 
         Args:
-            state: Current execution state containing review feedback.
+            state: Current implementation state containing review feedback.
 
         Returns:
             Formatted user prompt string for the evaluator.
@@ -223,7 +223,7 @@ Return your evaluation as an EvaluationOutput with all items and a summary.""")
 
     async def evaluate(
         self,
-        state: "ExecutionState",
+        state: "ImplementationState",
         profile: Profile,
         *,
         workflow_id: str,
@@ -234,7 +234,7 @@ Return your evaluation as an EvaluationOutput with all items and a summary.""")
         and assigns a disposition based on the decision matrix.
 
         Args:
-            state: Current execution state with last_review containing feedback.
+            state: Current implementation state with last_review containing feedback.
             profile: Active profile with driver settings.
             workflow_id: Workflow identifier for streaming events.
 
@@ -246,7 +246,7 @@ Return your evaluation as an EvaluationOutput with all items and a summary.""")
 
         """
         if not state.last_review:
-            raise ValueError("ExecutionState must have last_review set for evaluation")
+            raise ValueError("ImplementationState must have last_review set for evaluation")
 
         # Handle empty review comments
         if not state.last_review.comments:

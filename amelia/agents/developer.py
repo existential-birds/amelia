@@ -4,14 +4,18 @@ This module provides the Developer agent that executes code changes using
 autonomous tool-calling LLM execution rather than structured step-by-step plans.
 """
 from collections.abc import AsyncIterator
+from typing import TYPE_CHECKING
 
 from loguru import logger
 
 from amelia.core.agentic_state import ToolCall, ToolResult
-from amelia.core.state import ExecutionState
 from amelia.core.types import Profile
 from amelia.drivers.base import AgenticMessageType, DriverInterface
 from amelia.server.models.events import WorkflowEvent
+
+
+if TYPE_CHECKING:
+    from amelia.pipelines.implementation.state import ImplementationState
 
 
 class Developer:
@@ -31,10 +35,10 @@ class Developer:
 
     async def run(
         self,
-        state: ExecutionState,
+        state: "ImplementationState",
         profile: Profile,
         workflow_id: str = "developer",
-    ) -> AsyncIterator[tuple[ExecutionState, WorkflowEvent]]:
+    ) -> AsyncIterator[tuple["ImplementationState", WorkflowEvent]]:
         """Execute development task agentically.
 
         Uses the driver's execute_agentic method to let the LLM autonomously
@@ -53,11 +57,11 @@ class Developer:
             Tuples of (updated_state, event) as execution progresses.
 
         Raises:
-            ValueError: If ExecutionState has no goal set.
+            ValueError: If ImplementationState has no goal set.
 
         """
         if not state.goal:
-            raise ValueError("ExecutionState must have a goal set")
+            raise ValueError("ImplementationState must have a goal set")
 
         cwd = profile.working_dir or "."
         prompt = self._build_prompt(state)
@@ -133,7 +137,7 @@ class Developer:
                 })
                 yield current_state, event
 
-    def _build_prompt(self, state: ExecutionState) -> str:
+    def _build_prompt(self, state: "ImplementationState") -> str:
         """Build prompt combining goal, review feedback, and context.
 
         For multi-task execution, extracts only the current task section

@@ -14,13 +14,13 @@ from pydantic import BaseModel, ConfigDict
 
 from amelia.core.agentic_state import ToolCall, ToolResult
 from amelia.core.constants import ToolName, resolve_plan_path
-from amelia.core.state import ExecutionState
 from amelia.core.types import Profile
 from amelia.drivers.base import AgenticMessageType, DriverInterface
 from amelia.server.models.events import EventLevel, EventType, WorkflowEvent
 
 
 if TYPE_CHECKING:
+    from amelia.pipelines.implementation.state import ImplementationState
     from amelia.server.events.bus import EventBus
 
 
@@ -154,7 +154,7 @@ Before planning, discover:
         """
         return self._prompts.get("architect.plan", self.SYSTEM_PROMPT_PLAN)
 
-    def _build_prompt(self, state: ExecutionState, profile: Profile) -> str:
+    def _build_prompt(self, state: "ImplementationState", profile: Profile) -> str:
         """Build user prompt from execution state and profile.
 
         Combines issue information into a prompt string. Codebase structure
@@ -189,11 +189,11 @@ Before planning, discover:
 
     async def plan(
         self,
-        state: ExecutionState,
+        state: "ImplementationState",
         profile: Profile,
         *,
         workflow_id: str,
-    ) -> AsyncIterator[tuple[ExecutionState, WorkflowEvent]]:
+    ) -> AsyncIterator[tuple["ImplementationState", WorkflowEvent]]:
         """Generate a markdown implementation plan from an issue using agentic execution.
 
         Creates a rich markdown plan by exploring the codebase with read-only tools,
@@ -206,7 +206,7 @@ Before planning, discover:
             workflow_id: Workflow ID for stream events (required).
 
         Yields:
-            Tuples of (updated ExecutionState, WorkflowEvent) as exploration and
+            Tuples of (updated ImplementationState, WorkflowEvent) as exploration and
             planning progresses.
 
         Raises:
@@ -214,7 +214,7 @@ Before planning, discover:
 
         """
         if not state.issue:
-            raise ValueError("Cannot generate plan: no issue in ExecutionState")
+            raise ValueError("Cannot generate plan: no issue in ImplementationState")
 
         # Build user prompt from state (simplified - no codebase scan)
         user_prompt = self._build_agentic_prompt(state, profile)
@@ -323,14 +323,14 @@ Before planning, discover:
                 })
                 yield current_state, event
 
-    def _build_agentic_prompt(self, state: ExecutionState, profile: Profile) -> str:
+    def _build_agentic_prompt(self, state: "ImplementationState", profile: Profile) -> str:
         """Build user prompt for agentic plan generation.
 
         Simplified prompt that doesn't include codebase scan - the agent
         will explore using tools.
 
         Args:
-            state: The current execution state.
+            state: The current implementation state.
             profile: The profile containing plan path pattern.
 
         Returns:
@@ -341,7 +341,7 @@ Before planning, discover:
 
         """
         if state.issue is None:
-            raise ValueError("ExecutionState must have an issue")
+            raise ValueError("ImplementationState must have an issue")
 
         parts = []
         parts.append("## Issue")
@@ -453,7 +453,7 @@ git commit -m "feat: add specific feature"
 
     async def analyze(
         self,
-        state: ExecutionState,
+        state: "ImplementationState",
         profile: Profile,
         *,
         workflow_id: str,
@@ -476,7 +476,7 @@ git commit -m "feat: add specific feature"
 
         """
         if not state.issue:
-            raise ValueError("Cannot analyze: no issue in ExecutionState")
+            raise ValueError("Cannot analyze: no issue in ImplementationState")
 
         # Build prompt from state
         context_prompt = self._build_prompt(state, profile)
