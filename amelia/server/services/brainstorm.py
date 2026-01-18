@@ -17,6 +17,7 @@ from amelia.drivers.base import (
 from amelia.server.database.brainstorm_repository import BrainstormRepository
 from amelia.server.events.bus import EventBus
 from amelia.server.models.brainstorm import (
+    Artifact,
     BrainstormingSession,
     Message,
     SessionStatus,
@@ -244,6 +245,7 @@ class BrainstormService:
         # Invoke driver and stream events
         assistant_content_parts: list[str] = []
         driver_session_id: str | None = None
+        pending_write_files: dict[str, str] = {}  # tool_call_id -> path
 
         async for agentic_msg in driver.execute_agentic(
             prompt=content,
@@ -255,6 +257,27 @@ class BrainstormService:
             event = self._agentic_message_to_event(agentic_msg, session_id)
             self._event_bus.emit(event)
             yield event
+
+            # Track write_file tool calls for artifact detection
+            if (
+                agentic_msg.type == AgenticMessageType.TOOL_CALL
+                and agentic_msg.tool_name == "write_file"
+                and agentic_msg.tool_call_id
+                and agentic_msg.tool_input
+            ):
+                path = agentic_msg.tool_input.get("path")
+                if path:
+                    pending_write_files[agentic_msg.tool_call_id] = path
+
+            # Detect successful write_file completions and create artifacts
+            if (
+                agentic_msg.type == AgenticMessageType.TOOL_RESULT
+                and agentic_msg.tool_call_id in pending_write_files
+                and not agentic_msg.is_error
+            ):
+                path = pending_write_files.pop(agentic_msg.tool_call_id)
+                artifact_event = await self._create_artifact_from_path(session_id, path)
+                yield artifact_event
 
             # Collect result content and session ID
             if agentic_msg.type == AgenticMessageType.RESULT:
@@ -340,3 +363,76 @@ class BrainstormService:
             is_error=agentic_msg.is_error,
             model=agentic_msg.model,
         )
+
+    async def _create_artifact_from_path(
+        self, session_id: str, path: str
+    ) -> WorkflowEvent:
+        """Create and save an artifact from a file path.
+
+        Args:
+            session_id: Session that produced the artifact.
+            path: File path of the artifact.
+
+        Returns:
+            WorkflowEvent for artifact creation.
+        """
+        artifact_type = self._infer_artifact_type(path)
+        now = datetime.now(UTC)
+
+        artifact = Artifact(
+            id=str(uuid4()),
+            session_id=session_id,
+            type=artifact_type,
+            path=path,
+            created_at=now,
+        )
+        await self._repository.save_artifact(artifact)
+
+        # Emit artifact created event
+        event = WorkflowEvent(
+            id=str(uuid4()),
+            workflow_id=session_id,
+            sequence=0,
+            timestamp=now,
+            agent="brainstormer",
+            event_type=EventType.BRAINSTORM_ARTIFACT_CREATED,
+            message=f"Created artifact: {path}",
+            data={"artifact_id": artifact.id, "path": path, "type": artifact_type},
+        )
+        self._event_bus.emit(event)
+        return event
+
+    def _infer_artifact_type(self, path: str) -> str:
+        """Infer artifact type from file path.
+
+        Args:
+            path: File path to analyze.
+
+        Returns:
+            Artifact type (design, adr, spec, readme, document).
+        """
+        path_lower = path.lower()
+
+        # Check for ADR pattern
+        if "/adr/" in path_lower or "adr-" in path_lower:
+            return "adr"
+
+        # Check for spec pattern
+        if "/spec/" in path_lower or "-spec" in path_lower or "_spec" in path_lower:
+            return "spec"
+
+        # Check for readme pattern
+        if "readme" in path_lower:
+            return "readme"
+
+        # Check for design/plan pattern
+        if (
+            "/design/" in path_lower
+            or "/plans/" in path_lower
+            or "-design" in path_lower
+            or "_design" in path_lower
+        ):
+            return "design"
+
+        # Default to document
+        return "document"

@@ -301,3 +301,109 @@ class TestSendMessage(TestBrainstormService):
                 cwd="/tmp/project",
             ):
                 pass
+
+
+class TestArtifactDetection(TestBrainstormService):
+    """Test artifact detection from tool results."""
+
+    @pytest.fixture
+    def mock_driver_with_write(self) -> MagicMock:
+        """Create mock driver that writes a file."""
+        driver = MagicMock()
+
+        async def mock_execute_agentic(*args, **kwargs):
+            from amelia.drivers.base import AgenticMessage, AgenticMessageType
+
+            yield AgenticMessage(
+                type=AgenticMessageType.TOOL_CALL,
+                tool_name="write_file",
+                tool_input={"path": "docs/plans/2026-01-18-cache-design.md"},
+                tool_call_id="call-1",
+            )
+            yield AgenticMessage(
+                type=AgenticMessageType.TOOL_RESULT,
+                tool_name="write_file",
+                tool_output="File written successfully",
+                tool_call_id="call-1",
+            )
+            yield AgenticMessage(
+                type=AgenticMessageType.RESULT,
+                content="I've written the design document.",
+                session_id="claude-sess-789",
+            )
+
+        driver.execute_agentic = mock_execute_agentic
+        return driver
+
+    async def test_detects_artifact_from_write_file(
+        self,
+        service: BrainstormService,
+        mock_repository: MagicMock,
+        mock_event_bus: MagicMock,
+        mock_driver_with_write: MagicMock,
+    ) -> None:
+        """Should save artifact when write_file tool is used."""
+        now = datetime.now(UTC)
+        mock_session = BrainstormingSession(
+            id="sess-1",
+            profile_id="work",
+            status="active",
+            created_at=now,
+            updated_at=now,
+        )
+        mock_repository.get_session.return_value = mock_session
+        mock_repository.get_max_sequence.return_value = 0
+
+        messages = []
+        async for msg in service.send_message(
+            session_id="sess-1",
+            content="Write the design doc",
+            driver=mock_driver_with_write,
+            cwd="/tmp/project",
+        ):
+            messages.append(msg)
+
+        # Verify artifact was saved
+        mock_repository.save_artifact.assert_called_once()
+        artifact = mock_repository.save_artifact.call_args[0][0]
+        assert artifact.path == "docs/plans/2026-01-18-cache-design.md"
+        assert artifact.type == "design"  # Inferred from path
+
+    async def test_emits_artifact_created_event(
+        self,
+        service: BrainstormService,
+        mock_repository: MagicMock,
+        mock_event_bus: MagicMock,
+        mock_driver_with_write: MagicMock,
+    ) -> None:
+        """Should emit BRAINSTORM_ARTIFACT_CREATED event."""
+        from amelia.server.models.events import EventType
+
+        now = datetime.now(UTC)
+        mock_session = BrainstormingSession(
+            id="sess-1",
+            profile_id="work",
+            status="active",
+            created_at=now,
+            updated_at=now,
+        )
+        mock_repository.get_session.return_value = mock_session
+        mock_repository.get_max_sequence.return_value = 0
+
+        messages = []
+        async for msg in service.send_message(
+            session_id="sess-1",
+            content="Write the design doc",
+            driver=mock_driver_with_write,
+            cwd="/tmp/project",
+        ):
+            messages.append(msg)
+
+        # Find artifact created event
+        artifact_events = [
+            call[0][0]
+            for call in mock_event_bus.emit.call_args_list
+            if call[0][0].event_type == EventType.BRAINSTORM_ARTIFACT_CREATED
+        ]
+        assert len(artifact_events) == 1
+        assert artifact_events[0].data["path"] == "docs/plans/2026-01-18-cache-design.md"
