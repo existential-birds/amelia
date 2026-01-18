@@ -148,7 +148,7 @@ The most referenced external influence in Amelia's GitHub issues. Key factors im
 3. **Human-in-the-Loop**: Checkpoints, approval gates, blocker resolution
 4. **Fresh Context per Session**: Avoid degradation through phase isolation
 5. **Verification Before Claims**: Run verification commands before declaring success
-6. **Driver Abstraction**: API and CLI backends for enterprise compliance
+6. **Driver Abstraction**: API and CLI backends for policy compliance
 
 ---
 

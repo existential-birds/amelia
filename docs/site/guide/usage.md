@@ -83,8 +83,8 @@ profiles:
       base_delay: 1.0
       max_delay: 60.0
 
-  enterprise:
-    name: enterprise
+  work:
+    name: work
     driver: cli:claude
     tracker: jira
     max_review_iterations: 5

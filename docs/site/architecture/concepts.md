@@ -222,7 +222,7 @@ Drivers abstract how Amelia communicates with LLMs. This separation enables flex
 | Driver | Use Case | Requirements |
 |--------|----------|--------------|
 | `api:openrouter` | Direct API calls, simple setup, fast prototyping | `OPENROUTER_API_KEY` env var |
-| `cli:claude` | Enterprise-friendly, wraps authenticated CLI tools, policy-compliant | `claude` CLI installed |
+| `cli:claude` | Wraps authenticated CLI tools, policy-compliant | `claude` CLI installed |
 
 ### Driver Interface
 
@@ -251,7 +251,7 @@ class DriverInterface(Protocol):
 
 ### Why This Matters
 
-Enterprise environments often prohibit direct API calls due to data retention policies. The CLI driver wraps existing approved tools (like `claude` CLI) that:
+Some environments prohibit direct API calls due to data retention policies. The CLI driver wraps existing approved tools (like `claude` CLI) that:
 - Inherit SSO authentication
 - Comply with data policies
 - Use existing security approvals
@@ -285,6 +285,6 @@ This abstraction means Amelia works with any issue source without changing the c
 2. **Trajectory is truth**: Full execution trace persisted for debugging, not just final outputs
 3. **Human-in-the-loop**: Approval gates at critical decision points prevent runaway execution
 4. **Defense in depth**: Multiple security layers (metacharacters → blocklist → patterns → allowlist)
-5. **Abstractions enable flexibility**: Drivers and trackers adapt to enterprise constraints without code changes
+5. **Abstractions enable flexibility**: Drivers and trackers adapt to organizational constraints without code changes
 6. **Observability by design**: Events, correlation IDs, and token tracking from day one
 7. **Iterative refinement**: Developer ↔ Reviewer loop with configurable iteration limits

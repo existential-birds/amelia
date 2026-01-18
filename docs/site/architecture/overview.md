@@ -28,7 +28,7 @@ Amelia follows the four-layer agent architecture pattern established in industry
 | **Orchestration** | LangGraph state machine with human approval gates |
 | **Deployment** | Local-first server with SQLite persistence |
 
-The [roadmap](/reference/roadmap) extends this foundation toward enterprise-grade deployment with evaluation-gated releases, distributed tracing, and agent authorization controls. See [Design Principles](/reference/roadmap#design-principles) for the guiding philosophy.
+The [roadmap](/reference/roadmap) extends this foundation with evaluation-gated releases, distributed tracing, and agent authorization controls. See [Design Principles](/reference/roadmap#design-principles) for the guiding philosophy.
 
 ## Research Foundation
 
@@ -582,7 +582,7 @@ The `LogRetentionService` runs during graceful shutdown:
 
 ### Why the Driver Abstraction?
 
-Enterprise environments often prohibit direct API calls due to data retention policies. The CLI driver wraps existing approved tools (like `claude` CLI) that inherit SSO authentication and comply with policies. Users can switch between API (fast prototyping) and CLI (enterprise compliance) without code changes.
+Some environments prohibit direct API calls due to data retention policies. The CLI driver wraps existing approved tools (like `claude` CLI) that inherit SSO authentication and comply with policies. Users can switch between API (fast prototyping) and CLI (policy compliance) without code changes.
 
 ### Why Separate Agents Instead of One Big Prompt?
 
