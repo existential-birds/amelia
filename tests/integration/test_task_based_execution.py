@@ -20,11 +20,15 @@ from amelia.core.orchestrator import (
     call_reviewer_node,
     next_task_node,
 )
-from amelia.core.state import ExecutionState
 from amelia.core.types import Issue, Profile
 from amelia.drivers.api import ApiDriver
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
-from tests.integration.conftest import make_config, make_profile, make_reviewer_agentic_messages
+from tests.integration.conftest import (
+    make_config,
+    make_execution_state,
+    make_profile,
+    make_reviewer_agentic_messages,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -144,8 +148,8 @@ class TestDeveloperNodeTaskInjection:
         plan_path.write_text(multi_task_plan_content)
 
         # State with existing session that should be cleared
-        state = ExecutionState(
-            profile_id="test-task-execution",
+        state = make_execution_state(
+            profile=integration_profile,
             issue=integration_issue,
             goal="Implement feature",
             plan_markdown=multi_task_plan_content,
@@ -191,8 +195,8 @@ class TestDeveloperNodeTaskInjection:
         plan_path.parent.mkdir(parents=True, exist_ok=True)
         plan_path.write_text(multi_task_plan_content)
 
-        state = ExecutionState(
-            profile_id="test-task-execution",
+        state = make_execution_state(
+            profile=integration_profile,
             issue=integration_issue,
             goal="Implement feature",
             plan_markdown=multi_task_plan_content,
@@ -235,8 +239,8 @@ class TestDeveloperNodeTaskInjection:
         Real components: call_developer_node legacy mode handling
         Mock boundary: ApiDriver.execute_agentic
         """
-        state = ExecutionState(
-            profile_id="test-task-execution",
+        state = make_execution_state(
+            profile=integration_profile,
             issue=integration_issue,
             goal="Legacy goal",
             plan_markdown="Do stuff",
@@ -279,8 +283,8 @@ class TestReviewerNodeTaskIteration:
         Real components: call_reviewer_node iteration tracking
         Mock boundary: ApiDriver.execute_agentic
         """
-        state = ExecutionState(
-            profile_id="test-task-execution",
+        state = make_execution_state(
+            profile=integration_profile,
             issue=integration_issue,
             goal="Implement feature",
             total_tasks=2,  # Task-based mode
@@ -338,8 +342,8 @@ class TestNextTaskNodeTransition:
         # Create a change to commit
         (git_repo / "task_0.py").write_text("# Task 0 code")
 
-        state = ExecutionState(
-            profile_id="test-task-execution",
+        state = make_execution_state(
+            profile=profile,
             issue=integration_issue,
             total_tasks=3,
             current_task_index=0,
@@ -383,8 +387,8 @@ class TestNextTaskNodeTransition:
         # Create a change that will be committed
         (git_repo / "new_file.py").write_text("# New code")
 
-        state = ExecutionState(
-            profile_id="test-task-execution",
+        state = make_execution_state(
+            profile=profile,
             issue=integration_issue,
             total_tasks=3,
             current_task_index=0,
@@ -431,8 +435,8 @@ class TestPlanMarkdownPreservation:
 
         original_plan = multi_task_plan_content
 
-        state = ExecutionState(
-            profile_id="test-preservation",
+        state = make_execution_state(
+            profile=integration_profile,
             issue=integration_issue,
             goal="Implement feature",
             plan_markdown=original_plan,
@@ -475,8 +479,8 @@ class TestPlanMarkdownPreservation:
         plan_path.parent.mkdir(parents=True, exist_ok=True)
         plan_path.write_text(multi_task_plan_content)
 
-        state = ExecutionState(
-            profile_id="test-extraction",
+        state = make_execution_state(
+            profile=integration_profile,
             issue=integration_issue,
             goal="Implement feature",
             plan_markdown=multi_task_plan_content,

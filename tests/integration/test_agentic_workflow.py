@@ -1,6 +1,6 @@
 """Integration tests for agentic workflow.
 
-Tests the LangGraph orchestrator graph structure, ExecutionState fields,
+Tests the LangGraph orchestrator graph structure, ImplementationState fields,
 and workflow invocation with real components (mocking only at HTTP/LLM boundary).
 """
 
@@ -19,7 +19,6 @@ from amelia.core.orchestrator import (
     call_reviewer_node,
     plan_validator_node,
 )
-from amelia.core.state import ExecutionState
 from amelia.drivers.api import ApiDriver
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
 from tests.integration.conftest import (
@@ -90,10 +89,10 @@ class TestArchitectNodeIntegration:
         assert "goal" not in result
         assert "plan_markdown" not in result
 
-    async def test_architect_node_requires_issue(self) -> None:
+    async def test_architect_node_requires_issue(self, tmp_path: Path) -> None:
         """Architect node should raise error if no issue provided."""
-        profile = make_profile()
-        state = ExecutionState(profile_id="test", issue=None)
+        profile = make_profile(working_dir=str(tmp_path))
+        state = make_execution_state(issue=None, profile=profile)
         config = make_config(thread_id="test-wf-1", profile=profile)
 
         with pytest.raises(ValueError, match="no issue provided"):
@@ -114,6 +113,7 @@ class TestDeveloperNodeIntegration:
         state = make_execution_state(
             profile=profile,
             goal="Create a hello.txt file with 'Hello World'",
+            plan_markdown="# Plan\n\nCreate hello.txt with content 'Hello World'",
         )
         config = make_config(thread_id="test-wf-2", profile=profile)
 
@@ -139,7 +139,7 @@ class TestDeveloperNodeIntegration:
     async def test_developer_node_requires_goal(self, tmp_path: Path) -> None:
         """Developer node should raise error if no goal set."""
         profile = make_profile(working_dir=str(tmp_path))
-        state = ExecutionState(profile_id="test", goal=None)
+        state = make_execution_state(profile=profile, goal=None)
         config = make_config(thread_id="test-wf-3", profile=profile)
 
         with pytest.raises(ValueError, match="no goal"):
