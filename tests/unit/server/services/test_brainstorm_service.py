@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from amelia.server.models.brainstorm import BrainstormingSession, Message
+from amelia.server.models.brainstorm import Artifact, BrainstormingSession, Message
 from amelia.server.services.brainstorm import BrainstormService
 
 
@@ -407,3 +407,98 @@ class TestArtifactDetection(TestBrainstormService):
         ]
         assert len(artifact_events) == 1
         assert artifact_events[0].data["path"] == "docs/plans/2026-01-18-cache-design.md"
+
+
+class TestHandoff(TestBrainstormService):
+    """Test handoff to implementation pipeline."""
+
+    async def test_handoff_updates_session_status(
+        self,
+        service: BrainstormService,
+        mock_repository: MagicMock,
+    ) -> None:
+        """Should update session status to completed."""
+        now = datetime.now(UTC)
+        mock_session = BrainstormingSession(
+            id="sess-1", profile_id="work", status="ready_for_handoff",
+            created_at=now, updated_at=now,
+        )
+        mock_repository.get_session.return_value = mock_session
+        mock_repository.get_artifacts.return_value = [
+            Artifact(
+                id="art-1", session_id="sess-1", type="design",
+                path="docs/plans/design.md", created_at=now,
+            )
+        ]
+
+        result = await service.handoff_to_implementation(
+            session_id="sess-1",
+            artifact_path="docs/plans/design.md",
+        )
+
+        assert result is not None
+        # Session should be updated to completed
+        update_calls = mock_repository.update_session.call_args_list
+        updated_session = update_calls[-1][0][0]
+        assert updated_session.status == "completed"
+
+    async def test_handoff_returns_workflow_id(
+        self,
+        service: BrainstormService,
+        mock_repository: MagicMock,
+    ) -> None:
+        """Should return a new workflow ID."""
+        now = datetime.now(UTC)
+        mock_session = BrainstormingSession(
+            id="sess-1", profile_id="work", status="ready_for_handoff",
+            created_at=now, updated_at=now,
+        )
+        mock_repository.get_session.return_value = mock_session
+        mock_repository.get_artifacts.return_value = [
+            Artifact(
+                id="art-1", session_id="sess-1", type="design",
+                path="docs/plans/design.md", created_at=now,
+            )
+        ]
+
+        result = await service.handoff_to_implementation(
+            session_id="sess-1",
+            artifact_path="docs/plans/design.md",
+        )
+
+        assert "workflow_id" in result
+        assert len(result["workflow_id"]) == 36  # UUID
+
+    async def test_handoff_artifact_not_found(
+        self,
+        service: BrainstormService,
+        mock_repository: MagicMock,
+    ) -> None:
+        """Should raise error if artifact not found."""
+        now = datetime.now(UTC)
+        mock_session = BrainstormingSession(
+            id="sess-1", profile_id="work", status="ready_for_handoff",
+            created_at=now, updated_at=now,
+        )
+        mock_repository.get_session.return_value = mock_session
+        mock_repository.get_artifacts.return_value = []  # No artifacts
+
+        with pytest.raises(ValueError, match="Artifact not found"):
+            await service.handoff_to_implementation(
+                session_id="sess-1",
+                artifact_path="docs/plans/design.md",
+            )
+
+    async def test_handoff_session_not_found(
+        self,
+        service: BrainstormService,
+        mock_repository: MagicMock,
+    ) -> None:
+        """Should raise error if session not found."""
+        mock_repository.get_session.return_value = None
+
+        with pytest.raises(ValueError, match="Session not found"):
+            await service.handoff_to_implementation(
+                session_id="nonexistent",
+                artifact_path="docs/plans/design.md",
+            )

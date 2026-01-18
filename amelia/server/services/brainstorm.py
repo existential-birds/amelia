@@ -436,3 +436,62 @@ class BrainstormService:
 
         # Default to document
         return "document"
+
+    async def handoff_to_implementation(
+        self,
+        session_id: str,
+        artifact_path: str,
+        issue_title: str | None = None,
+        issue_description: str | None = None,
+    ) -> dict[str, str]:
+        """Hand off brainstorming session to implementation pipeline.
+
+        Args:
+            session_id: Session to hand off.
+            artifact_path: Path to the design artifact.
+            issue_title: Optional title for the implementation issue.
+            issue_description: Optional description for the implementation issue.
+
+        Returns:
+            Dict with workflow_id for the implementation pipeline.
+
+        Raises:
+            ValueError: If session or artifact not found.
+        """
+        session = await self._repository.get_session(session_id)
+        if session is None:
+            raise ValueError(f"Session not found: {session_id}")
+
+        # Validate artifact exists
+        artifacts = await self._repository.get_artifacts(session_id)
+        artifact = next((a for a in artifacts if a.path == artifact_path), None)
+        if artifact is None:
+            raise ValueError(f"Artifact not found: {artifact_path}")
+
+        # Generate a workflow ID for the implementation
+        # In the full implementation, this would create an actual workflow
+        workflow_id = str(uuid4())
+
+        # Update session status to completed
+        session.status = "completed"
+        session.updated_at = datetime.now(UTC)
+        await self._repository.update_session(session)
+
+        # Emit session completed event
+        event = WorkflowEvent(
+            id=str(uuid4()),
+            workflow_id=session_id,
+            sequence=0,
+            timestamp=datetime.now(UTC),
+            agent="brainstormer",
+            event_type=EventType.BRAINSTORM_SESSION_COMPLETED,
+            message=f"Session completed, handed off to implementation {workflow_id}",
+            data={
+                "session_id": session_id,
+                "workflow_id": workflow_id,
+                "artifact_path": artifact_path,
+            },
+        )
+        self._event_bus.emit(event)
+
+        return {"workflow_id": workflow_id, "status": "created"}
