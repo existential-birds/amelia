@@ -17,7 +17,6 @@ from loguru import logger
 from pydantic import ValidationError
 
 from amelia.core.constants import ToolName
-from amelia.core.state import ExecutionState
 from amelia.core.types import (
     Issue,
     Profile,
