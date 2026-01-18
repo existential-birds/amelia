@@ -89,3 +89,58 @@ export interface ActionResult {
   /** Error message if the action failed, otherwise undefined. */
   error?: string;
 }
+
+// ============================================================================
+// Brainstorming Types
+// ============================================================================
+
+/** Status of a brainstorming session. */
+export type SessionStatus = "active" | "ready_for_handoff" | "completed" | "failed";
+
+/** A brainstorming session for exploring ideas before workflow execution. */
+export interface BrainstormingSession {
+  id: string;
+  profile_id: string;
+  driver_session_id: string | null;
+  status: SessionStatus;
+  topic: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** A part of a brainstorm message (text, reasoning, tool call, or tool result). */
+export interface MessagePart {
+  type: "text" | "reasoning" | "tool_call" | "tool_result";
+  text?: string;
+  tool_name?: string;
+  tool_call_id?: string;
+  result?: unknown;
+}
+
+/** A message in a brainstorming session. */
+export interface BrainstormMessage {
+  id: string;
+  session_id: string;
+  sequence: number;
+  role: "user" | "assistant";
+  content: string;
+  parts: MessagePart[] | null;
+  created_at: string;
+}
+
+/** An artifact generated during a brainstorming session. */
+export interface BrainstormArtifact {
+  id: string;
+  session_id: string;
+  type: string;
+  path: string;
+  title: string | null;
+  created_at: string;
+}
+
+/** A complete brainstorming session with its message history and artifacts. */
+export interface SessionWithHistory {
+  session: BrainstormingSession;
+  messages: BrainstormMessage[];
+  artifacts: BrainstormArtifact[];
+}
