@@ -25,8 +25,13 @@ def test_agentic_message_to_event_sets_brainstorm_domain(brainstorm_service):
         content="Hello world",
     )
 
-    event = brainstorm_service._agentic_message_to_event(msg, "session-123")
+    event = brainstorm_service._agentic_message_to_event(
+        msg, "session-123", "message-456"
+    )
 
     assert event.domain == EventDomain.BRAINSTORM
     assert event.event_type == EventType.BRAINSTORM_TEXT
     assert event.workflow_id == "session-123"
+    assert event.data is not None
+    assert event.data["session_id"] == "session-123"
+    assert event.data["message_id"] == "message-456"

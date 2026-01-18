@@ -492,6 +492,112 @@ class TestBrainstormWebSocketBroadcast:
 
 
 @pytest.mark.integration
+class TestBrainstormEventDataField:
+    """Test that BrainstormService emits events with correct data for wire format.
+
+    These tests verify that _agentic_message_to_event includes session_id and
+    message_id in the data field, which is required for the WebSocket wire format.
+    """
+
+    def test_text_event_has_session_id_in_data(
+        self,
+        test_client: TestClient,
+        captured_events: list[WorkflowEvent],
+    ) -> None:
+        """BRAINSTORM_TEXT events must have session_id in data for wire format."""
+        # Create session
+        create_resp = test_client.post(
+            "/api/brainstorm/sessions",
+            json={"profile_id": "test"},
+        )
+        session_id = create_resp.json()["id"]
+
+        # Send message
+        test_client.post(
+            f"/api/brainstorm/sessions/{session_id}/message",
+            json={"content": "Test message"},
+        )
+
+        # Find text events
+        text_events = [
+            e for e in captured_events
+            if e.event_type == EventType.BRAINSTORM_TEXT
+        ]
+        assert len(text_events) >= 1
+
+        # Verify wire format data is present
+        event = text_events[0]
+        assert event.data is not None, "Event data field must not be None"
+        assert "session_id" in event.data, "Event must have session_id in data"
+        assert event.data["session_id"] == session_id
+
+    def test_reasoning_event_has_session_id_in_data(
+        self,
+        test_client: TestClient,
+        captured_events: list[WorkflowEvent],
+    ) -> None:
+        """BRAINSTORM_REASONING events must have session_id in data for wire format."""
+        # Create session
+        create_resp = test_client.post(
+            "/api/brainstorm/sessions",
+            json={"profile_id": "test"},
+        )
+        session_id = create_resp.json()["id"]
+
+        # Send message
+        test_client.post(
+            f"/api/brainstorm/sessions/{session_id}/message",
+            json={"content": "Test message"},
+        )
+
+        # Find reasoning events
+        reasoning_events = [
+            e for e in captured_events
+            if e.event_type == EventType.BRAINSTORM_REASONING
+        ]
+        assert len(reasoning_events) >= 1
+
+        # Verify wire format data is present
+        event = reasoning_events[0]
+        assert event.data is not None, "Event data field must not be None"
+        assert "session_id" in event.data, "Event must have session_id in data"
+        assert event.data["session_id"] == session_id
+
+    def test_message_complete_event_has_session_id_and_message_id(
+        self,
+        test_client: TestClient,
+        captured_events: list[WorkflowEvent],
+    ) -> None:
+        """BRAINSTORM_MESSAGE_COMPLETE must have session_id and message_id in data."""
+        # Create session
+        create_resp = test_client.post(
+            "/api/brainstorm/sessions",
+            json={"profile_id": "test"},
+        )
+        session_id = create_resp.json()["id"]
+
+        # Send message
+        test_client.post(
+            f"/api/brainstorm/sessions/{session_id}/message",
+            json={"content": "Test message"},
+        )
+
+        # Find complete event
+        complete_events = [
+            e for e in captured_events
+            if e.event_type == EventType.BRAINSTORM_MESSAGE_COMPLETE
+        ]
+        assert len(complete_events) == 1
+
+        # Verify wire format data is present
+        event = complete_events[0]
+        assert event.data is not None, "Event data field must not be None"
+        assert "session_id" in event.data, "Event must have session_id in data"
+        assert event.data["session_id"] == session_id
+        assert "message_id" in event.data, "Event must have message_id in data"
+
+
+@pytest.mark.integration
 class TestBrainstormWireFormat:
     """Test that brainstorm events use the dedicated wire format over WebSocket."""
 

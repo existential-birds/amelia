@@ -281,6 +281,9 @@ class BrainstormService:
             )
             await self._repository.save_message(user_message)
 
+            # Generate assistant message ID before streaming so events can reference it
+            resolved_message_id = assistant_message_id or str(uuid4())
+
             # Invoke driver and stream events
             assistant_content_parts: list[str] = []
             driver_session_id: str | None = None
@@ -293,7 +296,9 @@ class BrainstormService:
                 instructions=BRAINSTORMER_SYSTEM_PROMPT,
             ):
                 # Convert to event and emit
-                event = self._agentic_message_to_event(agentic_msg, session_id)
+                event = self._agentic_message_to_event(
+                    agentic_msg, session_id, resolved_message_id
+                )
                 self._event_bus.emit(event)
                 yield event
 
@@ -337,7 +342,7 @@ class BrainstormService:
             assistant_sequence = user_sequence + 1
             assistant_content = "\n".join(assistant_content_parts)
             assistant_message = Message(
-                id=assistant_message_id or str(uuid4()),
+                id=resolved_message_id,
                 session_id=session_id,
                 sequence=assistant_sequence,
                 role="assistant",
@@ -357,7 +362,10 @@ class BrainstormService:
             agent="brainstormer",
             event_type=EventType.BRAINSTORM_MESSAGE_COMPLETE,
             message="Message complete",
-            data={"message_id": assistant_message.id},
+            data={
+                "session_id": session_id,
+                "message_id": assistant_message.id,
+            },
             domain=EventDomain.BRAINSTORM,
         )
         self._event_bus.emit(complete_event)
@@ -367,12 +375,14 @@ class BrainstormService:
         self,
         agentic_msg: AgenticMessage,
         session_id: str,
+        message_id: str,
     ) -> WorkflowEvent:
         """Convert an AgenticMessage to a WorkflowEvent.
 
         Args:
             agentic_msg: The agentic message from the driver.
             session_id: Session ID for the event.
+            message_id: Assistant message ID for the event.
 
         Returns:
             WorkflowEvent for the agentic message.
@@ -407,6 +417,10 @@ class BrainstormService:
             is_error=agentic_msg.is_error,
             model=agentic_msg.model,
             domain=EventDomain.BRAINSTORM,
+            data={
+                "session_id": session_id,
+                "message_id": message_id,
+            },
         )
 
     async def _create_artifact_from_path(
