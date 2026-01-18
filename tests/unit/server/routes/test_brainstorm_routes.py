@@ -25,14 +25,25 @@ class TestBrainstormRoutes:
         return service
 
     @pytest.fixture
-    def app(self, mock_service: MagicMock) -> FastAPI:
+    def mock_driver(self) -> MagicMock:
+        """Create mock driver."""
+        return MagicMock()
+
+    @pytest.fixture
+    def app(self, mock_service: MagicMock, mock_driver: MagicMock) -> FastAPI:
         """Create test app with mocked dependencies."""
         app = FastAPI()
         app.include_router(router, prefix="/api/brainstorm")
 
-        # Override dependency
-        from amelia.server.routes.brainstorm import get_brainstorm_service
+        # Override dependencies
+        from amelia.server.routes.brainstorm import (
+            get_brainstorm_service,
+            get_cwd,
+            get_driver,
+        )
         app.dependency_overrides[get_brainstorm_service] = lambda: mock_service
+        app.dependency_overrides[get_driver] = lambda: mock_driver
+        app.dependency_overrides[get_cwd] = lambda: "/test/cwd"
 
         return app
 
@@ -172,3 +183,50 @@ class TestDeleteSession(TestBrainstormRoutes):
 
         assert response.status_code == 204
         mock_service.delete_session.assert_called_once_with("sess-123")
+
+
+class TestSendMessage(TestBrainstormRoutes):
+    """Test POST /api/brainstorm/sessions/{id}/message."""
+
+    def test_send_message_returns_message_id(
+        self, client: TestClient, mock_service: MagicMock
+    ) -> None:
+        """Should return message_id on success."""
+        from amelia.drivers.base import AgenticMessage, AgenticMessageType
+
+        # Mock send_message as async generator
+        async def mock_send_message(*args, **kwargs):
+            yield AgenticMessage(
+                type=AgenticMessageType.RESULT,
+                content="Response",
+            )
+
+        mock_service.send_message = mock_send_message
+
+        response = client.post(
+            "/api/brainstorm/sessions/sess-123/message",
+            json={"content": "Design a cache"},
+        )
+
+        assert response.status_code == 202
+        data = response.json()
+        assert "message_id" in data
+
+    def test_send_message_session_not_found(
+        self, client: TestClient, mock_service: MagicMock
+    ) -> None:
+        """Should return 404 when session not found."""
+        # Mock send_message to raise ValueError (session not found)
+        async def mock_send_message(*args, **kwargs):
+            raise ValueError("Session not found: nonexistent")
+            # Make it an async generator by yielding (unreachable)
+            yield  # noqa: B901
+
+        mock_service.send_message = mock_send_message
+
+        response = client.post(
+            "/api/brainstorm/sessions/nonexistent/message",
+            json={"content": "Design a cache"},
+        )
+
+        assert response.status_code == 404

@@ -3,7 +3,9 @@
 Provides endpoints for session lifecycle management and chat functionality.
 """
 
-from typing import Annotated
+import os
+from typing import TYPE_CHECKING, Annotated
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
@@ -15,6 +17,10 @@ from amelia.server.models.brainstorm import (
     SessionStatus,
 )
 from amelia.server.services.brainstorm import BrainstormService
+
+
+if TYPE_CHECKING:
+    from amelia.drivers.base import DriverInterface
 
 
 router = APIRouter(tags=["brainstorm"])
@@ -33,6 +39,27 @@ def get_brainstorm_service() -> BrainstormService:
     raise RuntimeError("BrainstormService not initialized")
 
 
+def get_driver() -> "DriverInterface":
+    """Get driver dependency.
+
+    Returns:
+        DriverInterface instance.
+
+    Raises:
+        RuntimeError: If driver not initialized.
+    """
+    raise RuntimeError("Driver not initialized")
+
+
+def get_cwd() -> str:
+    """Get current working directory.
+
+    Returns:
+        Current working directory path.
+    """
+    return os.getcwd()
+
+
 # Request/Response Models
 class CreateSessionRequest(BaseModel):
     """Request to create a new brainstorming session."""
@@ -47,6 +74,18 @@ class SessionWithHistoryResponse(BaseModel):
     session: BrainstormingSession
     messages: list[Message]
     artifacts: list[Artifact]
+
+
+class SendMessageRequest(BaseModel):
+    """Request to send a message in a session."""
+
+    content: str
+
+
+class SendMessageResponse(BaseModel):
+    """Response after sending a message."""
+
+    message_id: str
 
 
 # Session Lifecycle Endpoints
@@ -135,3 +174,57 @@ async def delete_session(
         service: Brainstorm service dependency.
     """
     await service.delete_session(session_id)
+
+
+# Chat Endpoints
+@router.post(
+    "/sessions/{session_id}/message",
+    status_code=status.HTTP_202_ACCEPTED,
+    response_model=SendMessageResponse,
+)
+async def send_message(
+    session_id: str,
+    request: SendMessageRequest,
+    service: BrainstormService = Depends(get_brainstorm_service),
+    driver: "DriverInterface" = Depends(get_driver),
+    cwd: str = Depends(get_cwd),
+) -> SendMessageResponse:
+    """Send a message in a brainstorming session.
+
+    Triggers async processing - returns immediately with message_id.
+    Updates streamed via WebSocket.
+
+    Args:
+        session_id: Session to send message to.
+        request: Message content.
+        service: Brainstorm service dependency.
+        driver: LLM driver dependency.
+        cwd: Current working directory.
+
+    Returns:
+        Response with message_id for tracking.
+
+    Raises:
+        HTTPException: 404 if session not found.
+    """
+    # Generate message ID upfront for tracking
+    message_id = str(uuid4())
+
+    # Start async processing (consume generator to trigger execution)
+    # In real implementation, this would be a background task
+    try:
+        async for _ in service.send_message(
+            session_id=session_id,
+            content=request.content,
+            driver=driver,
+            cwd=cwd,
+        ):
+            pass
+    except ValueError as e:
+        # Service raises ValueError if session not found
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e),
+        ) from e
+
+    return SendMessageResponse(message_id=message_id)
