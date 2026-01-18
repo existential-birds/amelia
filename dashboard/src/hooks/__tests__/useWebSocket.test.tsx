@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook } from '@testing-library/react';
-import { useWebSocket } from '../useWebSocket';
+import { useWebSocket, handleBrainstormMessage } from '../useWebSocket';
 import { useWorkflowStore } from '../../store/workflowStore';
+import { useBrainstormStore } from '../../store/brainstormStore';
 import { createMockEvent } from '../../__tests__/fixtures';
 import { suppressConsoleLogs } from '@/test/helpers';
 import type { WebSocketMessage } from '../../types';
@@ -290,5 +291,165 @@ describe('useWebSocket', () => {
     ws.triggerMessage({ type: 'backfill_complete', count: 42 });
 
     expect(useWorkflowStore.getState().isConnected).toBe(true);
+  });
+});
+
+describe('handleBrainstormMessage', () => {
+  beforeEach(() => {
+    useBrainstormStore.setState({
+      messages: [
+        {
+          id: 'msg-1',
+          session_id: 'session-1',
+          sequence: 1,
+          role: 'assistant',
+          content: '',
+          parts: null,
+          created_at: new Date().toISOString(),
+          status: 'streaming',
+        },
+      ],
+      activeSessionId: 'session-1',
+      isStreaming: true,
+      streamingMessageId: 'msg-1',
+      sessions: [],
+      artifacts: [],
+      drawerOpen: false,
+    });
+  });
+
+  it('handles brainstorm text event by appending content', () => {
+    handleBrainstormMessage({
+      type: 'brainstorm',
+      event_type: 'text',
+      session_id: 'session-1',
+      message_id: 'msg-1',
+      data: { text: 'Hello' },
+      timestamp: new Date().toISOString(),
+    });
+
+    const msg = useBrainstormStore.getState().messages[0];
+    expect(msg!.content).toBe('Hello');
+  });
+
+  it('handles multiple text events by accumulating content', () => {
+    handleBrainstormMessage({
+      type: 'brainstorm',
+      event_type: 'text',
+      session_id: 'session-1',
+      message_id: 'msg-1',
+      data: { text: 'Hello' },
+      timestamp: new Date().toISOString(),
+    });
+
+    handleBrainstormMessage({
+      type: 'brainstorm',
+      event_type: 'text',
+      session_id: 'session-1',
+      message_id: 'msg-1',
+      data: { text: ' world' },
+      timestamp: new Date().toISOString(),
+    });
+
+    const msg = useBrainstormStore.getState().messages[0];
+    expect(msg!.content).toBe('Hello world');
+  });
+
+  it('handles brainstorm reasoning event by appending reasoning', () => {
+    handleBrainstormMessage({
+      type: 'brainstorm',
+      event_type: 'reasoning',
+      session_id: 'session-1',
+      message_id: 'msg-1',
+      data: { text: 'Thinking...' },
+      timestamp: new Date().toISOString(),
+    });
+
+    const msg = useBrainstormStore.getState().messages[0];
+    expect(msg!.reasoning).toBe('Thinking...');
+  });
+
+  it('handles brainstorm message_complete by clearing streaming status', () => {
+    handleBrainstormMessage({
+      type: 'brainstorm',
+      event_type: 'message_complete',
+      session_id: 'session-1',
+      message_id: 'msg-1',
+      data: {},
+      timestamp: new Date().toISOString(),
+    });
+
+    const msg = useBrainstormStore.getState().messages[0];
+    expect(msg!.status).toBeUndefined();
+    expect(useBrainstormStore.getState().isStreaming).toBe(false);
+  });
+
+  it('handles brainstorm message_complete with error', () => {
+    handleBrainstormMessage({
+      type: 'brainstorm',
+      event_type: 'message_complete',
+      session_id: 'session-1',
+      message_id: 'msg-1',
+      data: { error: 'Connection failed' },
+      timestamp: new Date().toISOString(),
+    });
+
+    const msg = useBrainstormStore.getState().messages[0];
+    expect(msg!.status).toBe('error');
+    expect(msg!.errorMessage).toBe('Connection failed');
+  });
+
+  it('ignores events for different session', () => {
+    handleBrainstormMessage({
+      type: 'brainstorm',
+      event_type: 'text',
+      session_id: 'other-session',
+      message_id: 'msg-1',
+      data: { text: 'Hello' },
+      timestamp: new Date().toISOString(),
+    });
+
+    const msg = useBrainstormStore.getState().messages[0];
+    expect(msg!.content).toBe(''); // unchanged
+  });
+
+  it('handles artifact_created event', () => {
+    const artifact = {
+      id: 'artifact-1',
+      session_id: 'session-1',
+      type: 'spec',
+      path: '/path/to/spec.md',
+      title: 'Feature Spec',
+      created_at: new Date().toISOString(),
+    };
+
+    // Add a session so updateSession has something to update
+    useBrainstormStore.setState({
+      ...useBrainstormStore.getState(),
+      sessions: [
+        {
+          id: 'session-1',
+          profile_id: 'profile-1',
+          driver_session_id: null,
+          status: 'active',
+          topic: 'Test',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+      ],
+    });
+
+    handleBrainstormMessage({
+      type: 'brainstorm',
+      event_type: 'artifact_created',
+      session_id: 'session-1',
+      data: { artifact },
+      timestamp: new Date().toISOString(),
+    });
+
+    const state = useBrainstormStore.getState();
+    expect(state.artifacts).toHaveLength(1);
+    expect(state.artifacts[0]).toEqual(artifact);
+    expect(state.sessions[0]!.status).toBe('ready_for_handoff');
   });
 });

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { useWorkflowStore } from '../store/workflowStore';
 import { useBrainstormStore } from '../store/brainstormStore';
-import type { WebSocketMessage, WorkflowEvent } from '../types';
+import type { WebSocketMessage, WorkflowEvent, BrainstormMessage } from '../types';
+import type { BrainstormArtifact } from '../types/api';
 
 /**
  * Derive WebSocket URL from window.location.
@@ -36,6 +37,66 @@ const MAX_RECONNECT_DELAY = 30000; // 30 seconds
  * Initial delay for the first reconnection attempt in milliseconds (1 second).
  */
 const INITIAL_RECONNECT_DELAY = 1000; // 1 second
+
+/**
+ * Handle incoming brainstorm streaming events.
+ * Routes events to the brainstormStore based on event_type.
+ *
+ * @param msg - The brainstorm message from the WebSocket
+ */
+export function handleBrainstormMessage(msg: BrainstormMessage): void {
+  const state = useBrainstormStore.getState();
+
+  // Ignore events for different sessions
+  if (msg.session_id !== state.activeSessionId) return;
+
+  switch (msg.event_type) {
+    case 'text':
+      if (msg.message_id) {
+        state.updateMessage(msg.message_id, (m) => ({
+          ...m,
+          content: m.content + ((msg.data.text as string) ?? ''),
+        }));
+      }
+      break;
+
+    case 'reasoning':
+      if (msg.message_id) {
+        state.updateMessage(msg.message_id, (m) => ({
+          ...m,
+          reasoning: (m.reasoning ?? '') + ((msg.data.text as string) ?? ''),
+        }));
+      }
+      break;
+
+    case 'message_complete': {
+      const error = msg.data.error as string | undefined;
+      if (msg.message_id) {
+        state.updateMessage(msg.message_id, (m) => ({
+          ...m,
+          status: error ? 'error' : undefined,
+          errorMessage: error,
+        }));
+      }
+      state.setStreaming(false, null);
+      break;
+    }
+
+    case 'artifact_created': {
+      const artifact = msg.data.artifact as BrainstormArtifact | undefined;
+      if (artifact) {
+        state.addArtifact(artifact);
+        state.updateSession(msg.session_id, { status: 'ready_for_handoff' });
+      }
+      break;
+    }
+
+    // tool_call, tool_result, session_created, session_completed can be
+    // handled later as needed
+    default:
+      break;
+  }
+}
 
 /**
  * WebSocket hook for real-time workflow events.
@@ -184,47 +245,9 @@ export function useWebSocket() {
             setLastEventId(null);
             break;
 
-          // Brainstorm events
-          case 'brainstorm_text': {
-            const { message_id, text, session_id } = message.data ?? {};
-            const state = useBrainstormStore.getState();
-            if (
-              session_id === state.activeSessionId &&
-              message_id &&
-              typeof text === 'string'
-            ) {
-              state.appendMessageContent(message_id, text);
-            }
+          case 'brainstorm':
+            handleBrainstormMessage(message);
             break;
-          }
-
-          case 'brainstorm_reasoning': {
-            // Handle reasoning updates (for now, can be a no-op or append to parts)
-            const { session_id } = message.data ?? {};
-            const state = useBrainstormStore.getState();
-            if (session_id !== state.activeSessionId) break;
-            // Reasoning handling can be deferred
-            break;
-          }
-
-          case 'brainstorm_message_complete': {
-            const { session_id } = message.data ?? {};
-            const state = useBrainstormStore.getState();
-            if (session_id === state.activeSessionId) {
-              state.setStreaming(false, null);
-            }
-            break;
-          }
-
-          case 'brainstorm_artifact_created': {
-            const { session_id, artifact } = message.data ?? {};
-            const state = useBrainstormStore.getState();
-            if (session_id === state.activeSessionId && artifact) {
-              state.addArtifact(artifact);
-              state.updateSession(session_id, { status: 'ready_for_handoff' });
-            }
-            break;
-          }
 
           default:
             console.warn('Unknown WebSocket message type:', message);
