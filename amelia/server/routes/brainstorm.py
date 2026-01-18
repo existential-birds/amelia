@@ -131,7 +131,7 @@ async def create_session(
 @router.get("/sessions", response_model=list[BrainstormingSession])
 async def list_sessions(
     profile_id: Annotated[str | None, Query()] = None,
-    status: Annotated[SessionStatus | None, Query()] = None,
+    session_status: Annotated[SessionStatus | None, Query(alias="status")] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     service: BrainstormService = Depends(get_brainstorm_service),
 ) -> list[BrainstormingSession]:
@@ -139,7 +139,7 @@ async def list_sessions(
 
     Args:
         profile_id: Filter by profile.
-        status: Filter by status.
+        session_status: Filter by status.
         limit: Maximum sessions to return.
         service: Brainstorm service dependency.
 
@@ -147,7 +147,7 @@ async def list_sessions(
         List of sessions.
     """
     return await service.list_sessions(
-        profile_id=profile_id, status=status, limit=limit
+        profile_id=profile_id, status=session_status, limit=limit
     )
 
 
