@@ -235,7 +235,7 @@ class TestReviewerNodeTokenUsage(TestTokenUsageExtraction):
     ) -> None:
         """call_reviewer_node should extract usage from driver and save it."""
         from amelia.core.orchestrator import call_reviewer_node
-        from amelia.core.state import ReviewResult
+        from amelia.core.types import ReviewResult
 
         profile = config_with_repository[0]["configurable"]["profile"]
         mock_repository = config_with_repository[1]

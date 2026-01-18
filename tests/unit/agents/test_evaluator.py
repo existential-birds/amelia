@@ -11,8 +11,8 @@ from amelia.agents.evaluator import (
     EvaluationResult,
     Evaluator,
 )
-from amelia.core.state import ExecutionState, ReviewResult
-from amelia.core.types import Profile
+from amelia.core.state import ExecutionState
+from amelia.core.types import Profile, ReviewResult
 
 
 class TestEvaluatedItem:

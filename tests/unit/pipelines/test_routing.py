@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 from typing import Any
 
-from amelia.core.state import ReviewResult
+from amelia.core.types import ReviewResult
 from amelia.pipelines.implementation.state import (
     ImplementationState,
     rebuild_implementation_state,

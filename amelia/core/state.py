@@ -7,38 +7,17 @@ from __future__ import annotations
 
 import operator
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Literal
+from typing import TYPE_CHECKING, Annotated
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from amelia.core.agentic_state import AgenticStatus, ToolCall, ToolResult
-from amelia.core.types import Issue
+from amelia.core.types import Issue, ReviewResult
 
 
 if TYPE_CHECKING:
     from amelia.agents.evaluator import EvaluationResult
     from amelia.agents.reviewer import StructuredReviewResult
-
-
-Severity = Literal["low", "medium", "high", "critical"]
-
-
-class ReviewResult(BaseModel):
-    """Result from a code review.
-
-    Attributes:
-        reviewer_persona: The persona or role of the reviewer.
-        approved: Whether the review approved the changes.
-        comments: List of actionable issues to fix. Filtered at creation time
-            to exclude positive observations.
-        severity: Severity level of issues found (low, medium, high, critical).
-    """
-    model_config = ConfigDict(frozen=True)
-
-    reviewer_persona: str
-    approved: bool
-    comments: list[str]
-    severity: Severity
 
 
 class ExecutionState(BaseModel):

@@ -8,8 +8,8 @@ from uuid import uuid4
 from loguru import logger
 from pydantic import BaseModel, ConfigDict, Field
 
-from amelia.core.state import ExecutionState, ReviewResult, Severity
-from amelia.core.types import Profile
+from amelia.core.state import ExecutionState
+from amelia.core.types import Profile, ReviewResult, Severity
 from amelia.drivers.base import DriverInterface
 from amelia.server.models.events import EventLevel, EventType, WorkflowEvent
 

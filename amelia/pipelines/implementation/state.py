@@ -11,8 +11,7 @@ from typing import TYPE_CHECKING, Literal
 
 from pydantic import Field
 
-from amelia.core.state import ReviewResult
-from amelia.core.types import Design, Issue
+from amelia.core.types import Design, Issue, ReviewResult
 from amelia.pipelines.base import BasePipelineState
 
 

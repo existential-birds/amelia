@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from amelia.core.orchestrator import call_reviewer_node
-from amelia.core.state import ReviewResult
+from amelia.core.types import ReviewResult
 
 
 @pytest.fixture
