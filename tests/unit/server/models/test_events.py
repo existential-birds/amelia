@@ -4,7 +4,13 @@ from datetime import UTC, datetime
 
 import pytest
 
-from amelia.server.models.events import EventLevel, EventType, WorkflowEvent, get_event_level
+from amelia.server.models.events import (
+    EventDomain,
+    EventLevel,
+    EventType,
+    WorkflowEvent,
+    get_event_level,
+)
 
 
 class TestEventLevel:
@@ -57,6 +63,42 @@ class TestEventLevel:
     def test_get_event_level(self, event_type: EventType, expected_level: EventLevel) -> None:
         """get_event_level returns correct level for each event type."""
         assert get_event_level(event_type) == expected_level
+
+
+class TestEventDomain:
+    """Tests for EventDomain enum."""
+
+    def test_event_domain_enum_values(self) -> None:
+        """EventDomain has workflow and brainstorm values."""
+        assert EventDomain.WORKFLOW == "workflow"
+        assert EventDomain.BRAINSTORM == "brainstorm"
+
+    def test_workflow_event_domain_defaults_to_workflow(self) -> None:
+        """WorkflowEvent.domain defaults to EventDomain.WORKFLOW."""
+        event = WorkflowEvent(
+            id="test-id",
+            workflow_id="wf-1",
+            sequence=1,
+            timestamp=datetime.now(UTC),
+            agent="system",
+            event_type=EventType.WORKFLOW_STARTED,
+            message="Test event",
+        )
+        assert event.domain == EventDomain.WORKFLOW
+
+    def test_workflow_event_domain_can_be_brainstorm(self) -> None:
+        """WorkflowEvent.domain can be set to EventDomain.BRAINSTORM."""
+        event = WorkflowEvent(
+            id="test-id",
+            workflow_id="session-1",
+            sequence=0,
+            timestamp=datetime.now(UTC),
+            agent="brainstormer",
+            event_type=EventType.BRAINSTORM_TEXT,
+            message="Streaming text",
+            domain=EventDomain.BRAINSTORM,
+        )
+        assert event.domain == EventDomain.BRAINSTORM
 
 
 class TestWorkflowEvent:

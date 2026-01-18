@@ -7,6 +7,18 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 
+class EventDomain(StrEnum):
+    """Domain of event origin.
+
+    Attributes:
+        WORKFLOW: Standard workflow events (orchestrator, agents).
+        BRAINSTORM: Brainstorming session events (chat streaming).
+    """
+
+    WORKFLOW = "workflow"
+    BRAINSTORM = "brainstorm"
+
+
 class EventLevel(StrEnum):
     """Event severity level for filtering and retention.
 
@@ -155,6 +167,7 @@ class WorkflowEvent(BaseModel):
 
     Attributes:
         id: Unique event identifier (UUID).
+        domain: Event domain (workflow or brainstorm).
         workflow_id: Links to ExecutionState.
         sequence: Monotonic counter per workflow (ensures ordering).
         timestamp: When event occurred.
@@ -172,6 +185,10 @@ class WorkflowEvent(BaseModel):
     """
 
     id: str = Field(..., description="Unique event identifier")
+    domain: EventDomain = Field(
+        default=EventDomain.WORKFLOW,
+        description="Event domain (workflow or brainstorm)",
+    )
     workflow_id: str = Field(..., description="Workflow this event belongs to")
     sequence: int = Field(..., ge=0, description="Monotonic sequence number (0 for trace-only events)")
     timestamp: datetime = Field(..., description="When event occurred")
