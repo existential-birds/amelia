@@ -3,6 +3,8 @@ name: Amelia QA
 on:
   pull_request:
     types: [opened, ready_for_review]
+    paths:
+      - 'docs/testing/**'
 
 permissions:
   pull-requests: write
