@@ -11,9 +11,16 @@
 | Phase | Status | PRs |
 |-------|--------|-----|
 | **Phase 1: Foundation** | **COMPLETE** | #295, #296, feat/pipeline-cleanup-262 |
-| Phase 2: Brainstorming Pipeline Backend | Not started | - |
+| Phase 2: Brainstorming Sessions Backend | **DESIGNED** | - |
 | Phase 3: Dashboard UI | Not started | - |
 | Phase 4: Integration & Polish | Not started | - |
+
+**Phase 2 design completed 2026-01-18:**
+- See [Brainstorming Pipeline Design](./2026-01-18-brainstorming-pipeline-design.md) for detailed design
+- Key decision: Direct chat sessions with driver continuity, NOT a LangGraph workflow
+- Reuses existing WebSocket infrastructure for streaming
+- Dedicated database tables for sessions, messages, artifacts
+- ai-elements React components for chat UI
 
 **Phase 1 completed 2026-01-18:**
 - Created `amelia/pipelines/` package with `Pipeline` protocol and `BasePipelineState`
@@ -28,12 +35,12 @@
 ## MVP Scope
 
 **In scope:**
-- Hardcoded pipeline registry (Implementation + Brainstorming)
+- Hardcoded pipeline registry (Implementation + Review)
 - Shared base state with pipeline-specific extensions
 - User selects pipeline type explicitly (dashboard UI)
-- Brainstorming: chat-based Brainstormer with research tools → Document Writer → handoff prompt
+- Brainstorming: chat-based sessions with driver continuity and Oracle research (NOT a LangGraph pipeline — see Phase 2 design)
 - Implementation: current flow (Architect → Developer ↔ Reviewer)
-- Pipeline-to-pipeline handoff via "Plan and Queue" or "Just Queue"
+- Session-to-pipeline handoff via "Plan and Queue" or "Just Queue"
 
 **Out of scope:**
 - Planner agent (automatic intent detection)
@@ -76,11 +83,11 @@ The registry is a simple dict:
 ```python
 # amelia/pipelines/registry.py
 from amelia.pipelines.implementation import ImplementationPipeline
-from amelia.pipelines.brainstorming import BrainstormingPipeline
+from amelia.pipelines.review import ReviewPipeline
 
 PIPELINES: dict[str, type[Pipeline]] = {
     "implementation": ImplementationPipeline,
-    "brainstorming": BrainstormingPipeline,
+    "review": ReviewPipeline,
 }
 
 def get_pipeline(name: str) -> Pipeline:
@@ -135,212 +142,27 @@ class ImplementationState(BasePipelineState):
     review_iteration: int = 0
 ```
 
-```python
-# amelia/pipelines/brainstorming/state.py
-class BrainstormingState(BasePipelineState):
-    """State for brainstorming pipeline."""
-    pipeline_type: Literal["brainstorming"] = "brainstorming"
-
-    topic: str
-    conversation: list[Message] = Field(default_factory=list)
-    design_sections: dict[str, str] = Field(default_factory=dict)
-    design_doc_path: Path | None = None
-    ready_for_handoff: bool = False
-```
+Note: Brainstorming uses dedicated database tables instead of pipeline state. See [Phase 2 design](./2026-01-18-brainstorming-pipeline-design.md).
 
 ---
 
-## Brainstorming Pipeline
+## Brainstorming Sessions
 
-### Graph Structure
+Brainstorming is implemented as direct chat sessions with Claude driver session continuity, NOT as a LangGraph pipeline. See [Brainstorming Pipeline Design](./2026-01-18-brainstorming-pipeline-design.md) for full details.
 
-```python
-# amelia/pipelines/brainstorming/graph.py
-
-def create_brainstorming_graph(
-    checkpointer: BaseCheckpointSaver | None = None,
-) -> CompiledStateGraph:
-
-    graph = StateGraph(BrainstormingState)
-
-    graph.add_node("brainstormer", brainstormer_node)
-    graph.add_node("document_writer", document_writer_node)
-
-    graph.set_entry_point("brainstormer")
-
-    graph.add_conditional_edges(
-        "brainstormer",
-        route_after_brainstormer,
-        {
-            "wait_for_user": END,
-            "write_document": "document_writer",
-        }
-    )
-
-    graph.add_edge("document_writer", END)
-
-    return graph.compile(
-        checkpointer=checkpointer,
-        interrupt_before=["brainstormer"],
-    )
-
-def route_after_brainstormer(state: BrainstormingState) -> str:
-    if state.ready_for_handoff:
-        return "write_document"
-    return "wait_for_user"
-```
-
-### Brainstormer Agent
-
-Chat agent with research tools:
-
-```python
-# amelia/pipelines/brainstorming/agents/brainstormer.py
-
-class Brainstormer:
-    """Conversational agent for exploring ideas and refining designs."""
-
-    SYSTEM_PROMPT = """You help turn ideas into fully formed designs through collaborative dialogue.
-
-## The Process
-
-### Phase 1: Understanding the Idea
-- First, check out the current project state (files, docs, recent commits) using your tools
-- Ask questions ONE AT A TIME to refine the idea
-- Prefer multiple choice questions when possible, but open-ended is fine too
-- Only one question per message - if a topic needs more exploration, break it into multiple questions
-- Focus on understanding: purpose, constraints, success criteria
-
-### Phase 2: Exploring Approaches
-- Propose 2-3 different approaches with trade-offs
-- Present options conversationally with your recommendation and reasoning
-- Lead with your recommended option and explain why
-
-### Phase 3: Presenting the Design
-- Once you believe you understand what you're building, present the design
-- Break it into sections of 200-300 words
-- Ask after each section: "Does this look right so far?"
-- Cover: architecture, components, data flow, error handling, testing
-- Be ready to go back and clarify if something doesn't make sense
-
-### Phase 4: Completion
-- When all sections are validated, ask: "Ready to document?"
-- If user confirms, signal ready_for_handoff
-
-## Key Principles
-- **One question at a time** - Don't overwhelm with multiple questions
-- **Multiple choice preferred** - Easier to answer than open-ended when possible
-- **YAGNI ruthlessly** - Remove unnecessary features from all designs
-- **Explore alternatives** - Always propose 2-3 approaches before settling
-- **Incremental validation** - Present design in sections, validate each
-- **Be flexible** - Go back and clarify when something doesn't make sense
-
-## Tools Available
-Use these to understand project context before and during brainstorming:
-- research_codebase: Search code for patterns, examples, existing implementations
-- explore_files: Read specific files to understand context
-- web_search: Search for external references, libraries, best practices
-"""
-
-    TOOLS = [
-        research_codebase,
-        explore_files,
-        web_search,
-    ]
-```
-
-### Document Writer Agent
-
-```python
-# amelia/pipelines/brainstorming/agents/document_writer.py
-
-class DocumentWriter:
-    """Agent that writes validated design to a markdown file."""
-
-    SYSTEM_PROMPT = """You are a technical writer producing design documents.
-
-## Your Task
-Take the validated design sections from the brainstorming conversation and write them as a clean markdown document.
-
-## Output
-Write to: docs/plans/YYYY-MM-DD-<topic>-design.md
-
-## Structure
-- Title and overview
-- Each validated section, cleaned up for readability
-- No new content - only organize and polish what was validated
-
-## Writing Style
-
-Follow Strunk & White and Orwell:
-
-**Core principles:**
-- Use active voice
-- Put statements in positive form (avoid "not")
-- Use definite, specific, concrete language
-- Omit needless words
-- Keep related words together
-- Place emphatic words at end of sentence
-
-**Orwell's rules:**
-- Never use a long word where a short one will do
-- If it is possible to cut a word out, always cut it out
-- Never use the passive where you can use the active
-- Never use jargon if you can think of an everyday equivalent
-
-**Be ruthless.** Cut every word that doesn't earn its place.
-"""
-```
-
-### Research Tools
-
-Create these tools for the Brainstormer:
-
-- `research_codebase`: Wrapper around grep/glob for searching code
-- `explore_files`: Wrapper around file read for examining specific files
-- `web_search`: Wrapper around web search for external references
+Key differences from pipelines:
+- No LangGraph state machine — driver maintains conversation context via `session_id`
+- Dedicated database tables: `brainstorm_sessions`, `brainstorm_messages`, `brainstorm_artifacts`
+- Streams via existing WebSocket infrastructure
+- Hands off to Implementation pipeline via artifact path
 
 ---
 
-## Pipeline-to-Pipeline Handoff
+## Session-to-Pipeline Handoff
 
-After Document Writer completes, the dashboard prompts for handoff:
+Brainstorming sessions hand off to implementation workflows via the artifact path (design document). The handoff creates a new implementation workflow with the design document attached.
 
-```python
-# amelia/server/api/routes/workflows.py
-
-@router.post("/workflows/{workflow_id}/handoff")
-async def handoff_to_implementation(
-    workflow_id: str,
-    request: HandoffRequest,
-    repo: WorkflowRepository = Depends(get_repo),
-):
-    """Hand off completed brainstorming to implementation pipeline."""
-
-    brainstorm_workflow = await repo.get_workflow(workflow_id)
-    if brainstorm_workflow.pipeline_type != "brainstorming":
-        raise HTTPException(400, "Can only hand off from brainstorming")
-    if brainstorm_workflow.status != "completed":
-        raise HTTPException(400, "Brainstorming must be completed")
-
-    impl_workflow = await repo.create_workflow(
-        pipeline_type="implementation",
-        profile_id=brainstorm_workflow.profile_id,
-        initial_state={
-            "design": Design.from_file(brainstorm_workflow.design_doc_path),
-            "issue": request.issue,
-        },
-    )
-
-    if request.mode == "plan_and_queue":
-        await orchestrator.start_planning(impl_workflow.id)
-
-    return {"workflow_id": impl_workflow.id, "status": "created"}
-
-class HandoffRequest(BaseModel):
-    mode: Literal["plan_and_queue", "just_queue"]
-    issue: Issue | None = None
-```
+See [Brainstorming Pipeline Design](./2026-01-18-brainstorming-pipeline-design.md) for handoff API details and flow.
 
 ---
 
@@ -471,37 +293,7 @@ amelia/
 
 ### Planned (Phase 2+)
 
-```
-amelia/
-├── pipelines/
-│   └── brainstorming/
-│       ├── __init__.py            # BrainstormingPipeline class
-│       ├── state.py               # BrainstormingState
-│       ├── graph.py               # create_brainstorming_graph()
-│       ├── agents/
-│       │   ├── __init__.py
-│       │   ├── brainstormer.py
-│       │   └── document_writer.py
-│       └── tools/
-│           ├── __init__.py
-│           ├── research_codebase.py
-│           ├── explore_files.py
-│           └── web_search.py
-
-dashboard/src/
-├── components/
-│   ├── chat/
-│   │   ├── ChatView.tsx
-│   │   ├── ChatMessage.tsx
-│   │   ├── ChatInput.tsx
-│   │   ├── ToolCallCard.tsx
-│   │   └── index.ts
-│   ├── QuickShotModal.tsx
-│   ├── HandoffDialog.tsx
-│   └── workflows/
-│       ├── ImplementationView.tsx
-│       └── BrainstormingView.tsx
-```
+See [Phase 2 design](./2026-01-18-brainstorming-pipeline-design.md) for brainstorming file structure.
 
 ---
 
@@ -515,13 +307,9 @@ dashboard/src/
 - [x] Create `ReviewPipeline` for `amelia review --local` workflow
 - [x] Verify existing functionality still works (932 tests passing)
 
-### Phase 2: Brainstorming Pipeline Backend
-- Create `BrainstormingState`
-- Create Brainstormer agent with system prompt
-- Create research tools (research_codebase, explore_files, web_search)
-- Create DocumentWriter agent
-- Create brainstorming graph with chat loop
-- Add handoff endpoint
+### Phase 2: Brainstorming Sessions Backend
+
+See [Brainstorming Pipeline Design](./2026-01-18-brainstorming-pipeline-design.md) for detailed tasks and implementation plan.
 
 ### Phase 3: Dashboard UI
 - Build reusable `ChatView` component
