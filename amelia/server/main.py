@@ -52,6 +52,7 @@ from amelia.logging import configure_logging, log_server_startup
 from amelia.pipelines.implementation.state import rebuild_implementation_state
 from amelia.server.config import ServerConfig
 from amelia.server.database import WorkflowRepository
+from amelia.server.database.brainstorm_repository import BrainstormRepository
 from amelia.server.database.connection import Database
 from amelia.server.database.prompt_repository import PromptRepository
 from amelia.server.dependencies import (
@@ -76,9 +77,14 @@ from amelia.server.routes import (
     websocket_router,
     workflows_router,
 )
+from amelia.server.routes.brainstorm import (
+    get_brainstorm_service,
+    router as brainstorm_router,
+)
 from amelia.server.routes.prompts import get_prompt_repository, router as prompts_router
 from amelia.server.routes.websocket import connection_manager
 from amelia.server.routes.workflows import configure_exception_handlers
+from amelia.server.services.brainstorm import BrainstormService
 
 
 @asynccontextmanager
@@ -128,6 +134,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         checkpoint_path=str(config.checkpoint_path),
     )
     set_orchestrator(orchestrator)
+
+    # Create brainstorm repository and service
+    brainstorm_repo = BrainstormRepository(database)
+    brainstorm_service = BrainstormService(brainstorm_repo, event_bus)
+    app.state.brainstorm_service = brainstorm_service
 
     # Create lifecycle components
     log_retention = LogRetentionService(
@@ -195,6 +206,7 @@ def create_app() -> FastAPI:
     application.include_router(health_router, prefix="/api")
     application.include_router(paths_router, prefix="/api")
     application.include_router(workflows_router, prefix="/api")
+    application.include_router(brainstorm_router, prefix="/api/brainstorm")
     application.include_router(websocket_router)  # No prefix - route is /ws/events
     application.include_router(prompts_router)  # Already has /api/prompts prefix
 
@@ -204,6 +216,13 @@ def create_app() -> FastAPI:
         return PromptRepository(get_database())
 
     application.dependency_overrides[get_prompt_repository] = get_prompt_repo
+
+    # Set up brainstorm service dependency
+    def get_brainstorm_svc() -> BrainstormService:
+        service: BrainstormService = application.state.brainstorm_service
+        return service
+
+    application.dependency_overrides[get_brainstorm_service] = get_brainstorm_svc
 
     # Serve dashboard static files
     # Priority: bundled static files (installed package) > dev build (dashboard/dist)
