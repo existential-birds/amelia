@@ -4,17 +4,35 @@ Handles business logic for brainstorming sessions, coordinating
 between the repository, event bus, and Claude driver.
 """
 
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
+from amelia.drivers.base import (
+    AgenticMessage,
+    AgenticMessageType,
+    DriverInterface,
+)
 from amelia.server.database.brainstorm_repository import BrainstormRepository
 from amelia.server.events.bus import EventBus
 from amelia.server.models.brainstorm import (
     BrainstormingSession,
+    Message,
     SessionStatus,
 )
 from amelia.server.models.events import EventType, WorkflowEvent
+
+
+BRAINSTORMER_SYSTEM_PROMPT = """You are a collaborative design partner helping the user brainstorm and refine software designs.
+
+Your role:
+- Ask clarifying questions to understand requirements
+- Suggest design patterns and architectural approaches
+- Help identify edge cases and potential issues
+- Produce clear, actionable design documents when ready
+
+Keep responses focused and conversational. When the design is ready, offer to produce a formal document."""
 
 
 class BrainstormService:
@@ -178,3 +196,147 @@ class BrainstormService:
         session.driver_session_id = driver_session_id
         session.updated_at = datetime.now(UTC)
         await self._repository.update_session(session)
+
+    async def send_message(
+        self,
+        session_id: str,
+        content: str,
+        driver: DriverInterface,
+        cwd: str,
+    ) -> AsyncIterator[WorkflowEvent]:
+        """Send a message in a brainstorming session.
+
+        Saves the user message, invokes the driver, streams events,
+        and saves the assistant response.
+
+        Args:
+            session_id: Session to send message in.
+            content: User message content.
+            driver: LLM driver for generating response.
+            cwd: Working directory for driver execution.
+
+        Yields:
+            WorkflowEvent for each driver message.
+
+        Raises:
+            ValueError: If session not found.
+        """
+        # Validate session exists
+        session = await self._repository.get_session(session_id)
+        if session is None:
+            raise ValueError(f"Session not found: {session_id}")
+
+        # Get next sequence number and save user message
+        max_seq = await self._repository.get_max_sequence(session_id)
+        user_sequence = max_seq + 1
+
+        now = datetime.now(UTC)
+        user_message = Message(
+            id=str(uuid4()),
+            session_id=session_id,
+            sequence=user_sequence,
+            role="user",
+            content=content,
+            created_at=now,
+        )
+        await self._repository.save_message(user_message)
+
+        # Invoke driver and stream events
+        assistant_content_parts: list[str] = []
+        driver_session_id: str | None = None
+
+        async for agentic_msg in driver.execute_agentic(
+            prompt=content,
+            cwd=cwd,
+            session_id=session.driver_session_id,
+            instructions=BRAINSTORMER_SYSTEM_PROMPT,
+        ):
+            # Convert to event and emit
+            event = self._agentic_message_to_event(agentic_msg, session_id)
+            self._event_bus.emit(event)
+            yield event
+
+            # Collect result content and session ID
+            if agentic_msg.type == AgenticMessageType.RESULT:
+                if agentic_msg.content:
+                    assistant_content_parts.append(agentic_msg.content)
+                if agentic_msg.session_id:
+                    driver_session_id = agentic_msg.session_id
+
+        # Update driver session ID if we got one
+        if driver_session_id and driver_session_id != session.driver_session_id:
+            session.driver_session_id = driver_session_id
+            session.updated_at = datetime.now(UTC)
+            await self._repository.update_session(session)
+
+        # Save assistant message
+        assistant_sequence = user_sequence + 1
+        assistant_content = "\n".join(assistant_content_parts)
+        assistant_message = Message(
+            id=str(uuid4()),
+            session_id=session_id,
+            sequence=assistant_sequence,
+            role="assistant",
+            content=assistant_content,
+            created_at=datetime.now(UTC),
+        )
+        await self._repository.save_message(assistant_message)
+
+        # Emit message complete event
+        complete_event = WorkflowEvent(
+            id=str(uuid4()),
+            workflow_id=session_id,
+            sequence=0,
+            timestamp=datetime.now(UTC),
+            agent="brainstormer",
+            event_type=EventType.BRAINSTORM_MESSAGE_COMPLETE,
+            message="Message complete",
+            data={"message_id": assistant_message.id},
+        )
+        self._event_bus.emit(complete_event)
+        yield complete_event
+
+    def _agentic_message_to_event(
+        self,
+        agentic_msg: AgenticMessage,
+        session_id: str,
+    ) -> WorkflowEvent:
+        """Convert an AgenticMessage to a WorkflowEvent.
+
+        Args:
+            agentic_msg: The agentic message from the driver.
+            session_id: Session ID for the event.
+
+        Returns:
+            WorkflowEvent for the agentic message.
+        """
+        # Map agentic message types to brainstorm event types
+        type_mapping = {
+            AgenticMessageType.THINKING: EventType.BRAINSTORM_REASONING,
+            AgenticMessageType.TOOL_CALL: EventType.BRAINSTORM_TOOL_CALL,
+            AgenticMessageType.TOOL_RESULT: EventType.BRAINSTORM_TOOL_RESULT,
+            AgenticMessageType.RESULT: EventType.BRAINSTORM_TEXT,
+        }
+
+        event_type = type_mapping.get(agentic_msg.type, EventType.BRAINSTORM_TEXT)
+
+        # Build message from content
+        message = agentic_msg.content or ""
+        if agentic_msg.type == AgenticMessageType.TOOL_CALL:
+            message = f"Calling {agentic_msg.tool_name or 'tool'}"
+        elif agentic_msg.type == AgenticMessageType.TOOL_RESULT:
+            message = agentic_msg.tool_output or f"Result from {agentic_msg.tool_name}"
+
+        return WorkflowEvent(
+            id=str(uuid4()),
+            workflow_id=session_id,
+            sequence=0,
+            timestamp=datetime.now(UTC),
+            agent="brainstormer",
+            event_type=event_type,
+            message=message,
+            tool_name=agentic_msg.tool_name,
+            tool_input=agentic_msg.tool_input,
+            is_error=agentic_msg.is_error,
+            model=agentic_msg.model,
+        )

@@ -157,3 +157,147 @@ class TestUpdateSessionStatus(TestBrainstormService):
 
         with pytest.raises(ValueError, match="Session not found"):
             await service.update_session_status("nonexistent", "completed")
+
+
+class TestSendMessage(TestBrainstormService):
+    """Test message sending with driver integration."""
+
+    @pytest.fixture
+    def mock_driver(self) -> MagicMock:
+        """Create mock driver."""
+        driver = MagicMock()
+
+        # execute_agentic returns an async iterator
+        async def mock_execute_agentic(*args, **kwargs):
+            from amelia.drivers.base import AgenticMessage, AgenticMessageType
+
+            yield AgenticMessage(
+                type=AgenticMessageType.THINKING,
+                content="Let me think about this...",
+            )
+            yield AgenticMessage(
+                type=AgenticMessageType.RESULT,
+                content="Here's my response",
+                session_id="claude-sess-789",
+            )
+
+        driver.execute_agentic = mock_execute_agentic
+        return driver
+
+    async def test_send_message_saves_user_message(
+        self,
+        service: BrainstormService,
+        mock_repository: MagicMock,
+        mock_driver: MagicMock,
+    ) -> None:
+        """Should save user message to database."""
+        now = datetime.now(UTC)
+        mock_session = BrainstormingSession(
+            id="sess-1",
+            profile_id="work",
+            status="active",
+            created_at=now,
+            updated_at=now,
+        )
+        mock_repository.get_session.return_value = mock_session
+        mock_repository.get_max_sequence.return_value = 0
+
+        # Consume the async generator
+        messages = []
+        async for msg in service.send_message(
+            session_id="sess-1",
+            content="Design a cache",
+            driver=mock_driver,
+            cwd="/tmp/project",
+        ):
+            messages.append(msg)
+
+        # Verify user message was saved
+        save_calls = mock_repository.save_message.call_args_list
+        user_msg_call = save_calls[0][0][0]
+        assert user_msg_call.role == "user"
+        assert user_msg_call.content == "Design a cache"
+        assert user_msg_call.sequence == 1
+
+    async def test_send_message_emits_events(
+        self,
+        service: BrainstormService,
+        mock_repository: MagicMock,
+        mock_event_bus: MagicMock,
+        mock_driver: MagicMock,
+    ) -> None:
+        """Should emit events for driver messages."""
+        now = datetime.now(UTC)
+        mock_session = BrainstormingSession(
+            id="sess-1",
+            profile_id="work",
+            status="active",
+            created_at=now,
+            updated_at=now,
+        )
+        mock_repository.get_session.return_value = mock_session
+        mock_repository.get_max_sequence.return_value = 0
+
+        messages = []
+        async for msg in service.send_message(
+            session_id="sess-1",
+            content="Design a cache",
+            driver=mock_driver,
+            cwd="/tmp/project",
+        ):
+            messages.append(msg)
+
+        # Verify events were emitted (thinking + result + message_complete)
+        assert mock_event_bus.emit.call_count >= 2
+
+    async def test_send_message_updates_driver_session_id(
+        self,
+        service: BrainstormService,
+        mock_repository: MagicMock,
+        mock_driver: MagicMock,
+    ) -> None:
+        """Should update driver_session_id from result."""
+        now = datetime.now(UTC)
+        mock_session = BrainstormingSession(
+            id="sess-1",
+            profile_id="work",
+            status="active",
+            created_at=now,
+            updated_at=now,
+        )
+        mock_repository.get_session.return_value = mock_session
+        mock_repository.get_max_sequence.return_value = 0
+
+        messages = []
+        async for msg in service.send_message(
+            session_id="sess-1",
+            content="Hello",
+            driver=mock_driver,
+            cwd="/tmp/project",
+        ):
+            messages.append(msg)
+
+        # Verify session was updated with driver session ID
+        update_calls = mock_repository.update_session.call_args_list
+        assert len(update_calls) > 0
+        # Find the call that updated driver_session_id
+        updated_session = update_calls[-1][0][0]
+        assert updated_session.driver_session_id == "claude-sess-789"
+
+    async def test_send_message_session_not_found(
+        self,
+        service: BrainstormService,
+        mock_repository: MagicMock,
+        mock_driver: MagicMock,
+    ) -> None:
+        """Should raise error if session not found."""
+        mock_repository.get_session.return_value = None
+
+        with pytest.raises(ValueError, match="Session not found"):
+            async for _ in service.send_message(
+                session_id="nonexistent",
+                content="Hello",
+                driver=mock_driver,
+                cwd="/tmp/project",
+            ):
+                pass
