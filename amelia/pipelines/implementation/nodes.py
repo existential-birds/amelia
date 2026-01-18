@@ -220,14 +220,18 @@ async def call_architect_node(
         )
         for tc in final_state.tool_calls:
             input_keys = list(tc.tool_input.keys()) if tc.tool_input else []
-            is_match = tc.tool_name == ToolName.WRITE_FILE and "content" in tc.tool_input
+            is_match = (
+                tc.tool_name == ToolName.WRITE_FILE
+                and tc.tool_input
+                and "content" in tc.tool_input
+            )
             logger.debug(
                 "Checking tool call for write_file",
                 tool_name=tc.tool_name,
                 input_keys=input_keys,
                 is_write_file=is_match,
             )
-            if tc.tool_name == ToolName.WRITE_FILE and "content" in tc.tool_input:
+            if is_match:
                 plan_content = tc.tool_input.get("content", "")
                 if plan_content:
                     await asyncio.to_thread(plan_path.write_text, plan_content)
@@ -254,7 +258,7 @@ async def call_architect_node(
                     plan_path=str(plan_path),
                     tool_calls=[tc.tool_name for tc in final_state.tool_calls],
                     tool_calls_count=len(final_state.tool_calls),
-                    raw_output_preview=raw_output[:500] if raw_output else "EMPTY",
+                    raw_output_length=len(raw_output) if raw_output else 0,
                 )
 
     logger.info(
