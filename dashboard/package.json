@@ -34,6 +34,7 @@
     "@radix-ui/react-tooltip": "^1.1.5",
     "@radix-ui/react-use-controllable-state": "^1.2.2",
     "@tailwindcss/typography": "^0.5.19",
+    "@tanstack/react-table": "^8.21.3",
     "@tanstack/react-virtual": "^3.13.17",
     "@xyflow/react": "^12.10.0",
     "ai": "^5.0.108",
