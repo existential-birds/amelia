@@ -309,7 +309,6 @@ export function DashboardSidebar() {
                 to="/costs"
                 icon={Coins}
                 label="Costs"
-                comingSoon
               />
             </SidebarMenu>
           </SidebarGroupContent>

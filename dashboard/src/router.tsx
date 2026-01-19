@@ -7,6 +7,7 @@ import { Layout } from '@/components/Layout';
 import { RootErrorBoundary } from '@/components/ErrorBoundary';
 import { workflowsLoader, workflowDetailLoader, historyLoader } from '@/loaders/workflows';
 import { promptsLoader } from '@/loaders/prompts';
+import { costsLoader } from '@/loaders';
 import { approveAction, rejectAction, cancelAction } from '@/actions/workflows';
 
 /**
@@ -98,6 +99,14 @@ export const router = createBrowserRouter([
         loader: promptsLoader,
         lazy: async () => {
           const { default: Component } = await import('@/pages/PromptConfigPage');
+          return { Component };
+        },
+      },
+      {
+        path: 'costs',
+        loader: costsLoader,
+        lazy: async () => {
+          const { default: Component } = await import('@/pages/CostsPage');
           return { Component };
         },
       },
