@@ -38,7 +38,7 @@ def _check_dependencies() -> None:
 _check_dependencies()
 
 import os
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -46,10 +46,14 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException, Response
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from loguru import logger
 
 from amelia import __version__
 from amelia.drivers.base import DriverInterface
-from amelia.drivers.factory import get_driver as factory_get_driver
+from amelia.drivers.factory import (
+    cleanup_driver_session,
+    get_driver as factory_get_driver,
+)
 from amelia.logging import configure_logging, log_server_startup
 from amelia.pipelines.implementation.state import rebuild_implementation_state
 from amelia.server.config import ServerConfig
@@ -83,12 +87,34 @@ from amelia.server.routes.brainstorm import (
     get_brainstorm_service,
     get_cwd,
     get_driver,
+    get_driver_type,
     router as brainstorm_router,
 )
 from amelia.server.routes.prompts import get_prompt_repository, router as prompts_router
 from amelia.server.routes.websocket import connection_manager
 from amelia.server.routes.workflows import configure_exception_handlers
 from amelia.server.services.brainstorm import BrainstormService
+
+
+def create_driver_cleanup_callback() -> Callable[[str, str], bool]:
+    """Create callback for cleaning up driver sessions.
+
+    Returns:
+        Callback that takes (profile_id, driver_session_id) and returns bool.
+    """
+
+    def cleanup(profile_id: str, driver_session_id: str) -> bool:
+        driver_type = get_driver_type(profile_id)
+        if driver_type is None:
+            logger.warning(
+                "Cannot clean up driver session: profile not found",
+                profile_id=profile_id,
+                driver_session_id=driver_session_id,
+            )
+            return False
+        return cleanup_driver_session(driver_type, driver_session_id)
+
+    return cleanup
 
 
 @asynccontextmanager
@@ -141,7 +167,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # Create brainstorm repository and service
     brainstorm_repo = BrainstormRepository(database)
-    brainstorm_service = BrainstormService(brainstorm_repo, event_bus)
+    brainstorm_service = BrainstormService(
+        repository=brainstorm_repo,
+        event_bus=event_bus,
+        driver_cleanup=create_driver_cleanup_callback(),
+    )
     app.state.brainstorm_service = brainstorm_service
 
     # Create lifecycle components

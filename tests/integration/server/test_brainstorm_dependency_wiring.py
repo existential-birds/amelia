@@ -369,3 +369,38 @@ class TestBrainstormDependencyResolution:
                 f"Expected 202 but got {msg_resp.status_code}. "
                 f"Response: {msg_resp.json()}"
             )
+
+
+# =============================================================================
+# Driver Cleanup Wiring Tests
+# =============================================================================
+
+
+@pytest.mark.integration
+class TestDriverCleanupWiring:
+    """Test driver cleanup is wired correctly.
+
+    These tests verify that the production main.py lifespan properly wires
+    the driver_cleanup callback to BrainstormService. This enables automatic
+    cleanup of driver sessions (e.g., API session memory) when brainstorming
+    sessions are deleted or reach terminal status.
+    """
+
+    def test_cleanup_wired_to_service(self) -> None:
+        """BrainstormService should have driver_cleanup callback wired.
+
+        Inspects the production lifespan source to verify driver_cleanup
+        is passed to BrainstormService constructor.
+        """
+        import inspect
+
+        from amelia.server.main import lifespan
+
+        # Get the source code of the lifespan function
+        source = inspect.getsource(lifespan)
+
+        # Verify driver_cleanup is passed to BrainstormService
+        assert "driver_cleanup" in source, (
+            "main.py lifespan does not pass driver_cleanup to BrainstormService. "
+            "Add: BrainstormService(..., driver_cleanup=create_driver_cleanup_callback())"
+        )
