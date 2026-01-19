@@ -787,6 +787,12 @@ export interface UsageSummary {
   cache_hit_rate?: number;
   /** Savings from caching in USD, optional for efficiency metrics. */
   cache_savings_usd?: number;
+  /** Cost from previous period for comparison, null if no prior data. */
+  previous_period_cost_usd?: number | null;
+  /** Number of workflows that completed successfully. */
+  successful_workflows?: number | null;
+  /** Success rate (0-1), successful_workflows / total_workflows. */
+  success_rate?: number | null;
 }
 
 /**
@@ -799,6 +805,8 @@ export interface UsageTrendPoint {
   cost_usd: number;
   /** Number of workflows on this date. */
   workflows: number;
+  /** Per-model cost breakdown (model name -> cost in USD). */
+  by_model?: Record<string, number>;
 }
 
 /**
@@ -817,6 +825,12 @@ export interface UsageByModel {
   cache_hit_rate?: number;
   /** Savings from caching in USD, optional for efficiency metrics. */
   cache_savings_usd?: number;
+  /** Daily cost array for sparkline visualization. */
+  trend?: number[];
+  /** Number of workflows that completed successfully. */
+  successful_workflows?: number;
+  /** Success rate (0-1), successful_workflows / workflows. */
+  success_rate?: number;
 }
 
 /**
