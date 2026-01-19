@@ -9,7 +9,11 @@ from pydantic import BaseModel, Field
 # Pricing per million tokens
 # Sources: https://www.anthropic.com/pricing, https://openrouter.ai/pricing (last updated: 2026-01-19)
 # Note: Update this when providers change pricing. Short aliases map to full model IDs.
-# Cache pricing: cache_read = 90% discount, cache_write = 25% premium (where supported)
+# Cache pricing varies by provider:
+# - Anthropic: cache_read = 0.1× input (90% discount), cache_write = 1.25× input (25% premium)
+# - OpenAI: cache_read = 0.5× input, cache_write = 0 (free)
+# - Google: cache_read = 0.25× input, cache_write = 0 (free)
+# - DeepSeek: cache_read = 0.1× input, cache_write = 1× input
 MODEL_PRICING: dict[str, dict[str, float]] = {
     # ==========================================================================
     # Anthropic Claude 4.5 (current generation - 2026)
@@ -38,20 +42,20 @@ MODEL_PRICING: dict[str, dict[str, float]] = {
     "openai/gpt-4o": {
         "input": 2.5,
         "output": 10.0,
-        "cache_read": 1.25,
-        "cache_write": 2.5,
+        "cache_read": 1.25,  # 0.5× input
+        "cache_write": 0,  # free
     },
     "openai/o1": {
         "input": 15.0,
         "output": 60.0,
-        "cache_read": 7.5,
-        "cache_write": 15.0,
+        "cache_read": 7.5,  # 0.5× input
+        "cache_write": 0,  # free
     },
     "openai/o3-mini": {
         "input": 1.1,
         "output": 4.4,
-        "cache_read": 0.55,
-        "cache_write": 1.1,
+        "cache_read": 0.55,  # 0.5× input
+        "cache_write": 0,  # free
     },
     # ==========================================================================
     # Google Gemini (via OpenRouter)
@@ -59,14 +63,14 @@ MODEL_PRICING: dict[str, dict[str, float]] = {
     "google/gemini-2.0-flash": {
         "input": 0.1,
         "output": 0.4,
-        "cache_read": 0.025,
-        "cache_write": 0.1,
+        "cache_read": 0.025,  # 0.25× input
+        "cache_write": 0,  # free
     },
     "google/gemini-2.0-pro": {
         "input": 1.25,
         "output": 5.0,
-        "cache_read": 0.31,
-        "cache_write": 1.25,
+        "cache_read": 0.3125,  # 0.25× input
+        "cache_write": 0,  # free
     },
     # ==========================================================================
     # DeepSeek (via OpenRouter) - Very cost-effective
@@ -74,14 +78,14 @@ MODEL_PRICING: dict[str, dict[str, float]] = {
     "deepseek/deepseek-coder-v3": {
         "input": 0.14,
         "output": 0.28,
-        "cache_read": 0.014,
-        "cache_write": 0.14,
+        "cache_read": 0.014,  # 0.1× input
+        "cache_write": 0.14,  # 1× input
     },
     "deepseek/deepseek-v3": {
         "input": 0.14,
         "output": 0.28,
-        "cache_read": 0.014,
-        "cache_write": 0.14,
+        "cache_read": 0.014,  # 0.1× input
+        "cache_write": 0.14,  # 1× input
     },
     # ==========================================================================
     # Mistral (via OpenRouter)

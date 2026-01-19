@@ -828,9 +828,9 @@ export interface UsageByModel {
   /** Daily cost array for sparkline visualization. */
   trend?: number[];
   /** Number of workflows that completed successfully. */
-  successful_workflows?: number;
+  successful_workflows?: number | null;
   /** Success rate (0-1), successful_workflows / workflows. */
-  success_rate?: number;
+  success_rate?: number | null;
 }
 
 /**

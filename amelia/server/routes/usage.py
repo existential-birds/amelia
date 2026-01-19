@@ -44,6 +44,18 @@ async def get_usage(
     Raises:
         HTTPException: 400 if invalid preset or date combination.
     """
+    # Validate date parameters
+    if bool(start) != bool(end):
+        raise HTTPException(
+            status_code=400,
+            detail="Both start and end must be provided together.",
+        )
+    if start and end and start > end:
+        raise HTTPException(
+            status_code=400,
+            detail="Start date must be on or before end date.",
+        )
+
     # Determine date range
     if start and end:
         start_date = start

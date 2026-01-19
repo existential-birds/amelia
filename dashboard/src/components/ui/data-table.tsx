@@ -50,7 +50,13 @@ export function DataTable<TData, TValue>({
                     'py-2 px-3 text-muted-foreground font-medium',
                     header.column.getCanSort() && 'cursor-pointer select-none'
                   )}
-                  onClick={header.column.getToggleSortingHandler()}
+                  aria-sort={
+                    header.column.getIsSorted() === 'asc'
+                      ? 'ascending'
+                      : header.column.getIsSorted() === 'desc'
+                        ? 'descending'
+                        : 'none'
+                  }
                 >
                   {header.isPlaceholder
                     ? null

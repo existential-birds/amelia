@@ -19,14 +19,17 @@ def mock_repo() -> MagicMock:
         "total_workflows": 24,
         "total_tokens": 1_200_000,
         "total_duration_ms": 2_820_000,
+        "previous_period_cost_usd": 98.12,
+        "successful_workflows": 22,
+        "success_rate": 0.9167,
     })
     repo.get_usage_trend = AsyncMock(return_value=[
-        {"date": "2026-01-15", "cost_usd": 12.34, "workflows": 3},
-        {"date": "2026-01-16", "cost_usd": 15.67, "workflows": 4},
+        {"date": "2026-01-15", "cost_usd": 12.34, "workflows": 3, "by_model": {"claude-sonnet-4": 12.34}},
+        {"date": "2026-01-16", "cost_usd": 15.67, "workflows": 4, "by_model": {"claude-opus-4": 15.67}},
     ])
     repo.get_usage_by_model = AsyncMock(return_value=[
-        {"model": "claude-sonnet-4", "workflows": 18, "tokens": 892_000, "cost_usd": 42.17},
-        {"model": "claude-opus-4", "workflows": 6, "tokens": 340_000, "cost_usd": 85.26},
+        {"model": "claude-sonnet-4", "workflows": 18, "tokens": 892_000, "cost_usd": 42.17, "trend": [12.34, 0.0], "successful_workflows": 17, "success_rate": 0.9444},
+        {"model": "claude-opus-4", "workflows": 6, "tokens": 340_000, "cost_usd": 85.26, "trend": [0.0, 15.67], "successful_workflows": 5, "success_rate": 0.8333},
     ])
     return repo
 
