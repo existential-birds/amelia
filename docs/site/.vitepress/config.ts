@@ -1,10 +1,33 @@
 import { defineConfig } from 'vitepress'
 
 /**
- * Shared sidebar configuration for Ideas and Reference sections.
- * Used across multiple URL prefixes to maintain consistent navigation.
+ * Guide sidebar - combines user documentation and architecture.
+ * Used for both /guide/ and /architecture/ URL prefixes.
  */
-const sharedSidebar = [
+const guideSidebar = [
+  {
+    text: 'User Guide',
+    items: [
+      { text: 'Usage', link: '/guide/usage' },
+      { text: 'Configuration', link: '/guide/configuration' },
+      { text: 'Troubleshooting', link: '/guide/troubleshooting' }
+    ]
+  },
+  {
+    text: 'Architecture',
+    items: [
+      { text: 'Overview', link: '/architecture/overview' },
+      { text: 'Concepts', link: '/architecture/concepts' },
+      { text: 'Data Model', link: '/architecture/data-model' }
+    ]
+  }
+]
+
+/**
+ * About sidebar - ideas, research, and reference content.
+ * Used for /ideas/ and /reference/ URL prefixes.
+ */
+const aboutSidebar = [
   {
     text: 'Ideas & Explorations',
     items: [
@@ -14,7 +37,10 @@ const sharedSidebar = [
   {
     text: 'Research',
     items: [
-      { text: 'Knowledge Agents', link: '/ideas/research/knowledge-agents' }
+      { text: 'AI Impact on Organizations', link: '/ideas/research/ai-impact-organizations' },
+      { text: 'Benchmarking Code Review', link: '/ideas/research/benchmarking-code-review-agents' },
+      { text: 'Knowledge Agents', link: '/ideas/research/knowledge-agents' },
+      { text: 'Design Influences', link: '/ideas/research/inspirations-research-notes' }
     ]
   },
   {
@@ -51,34 +77,15 @@ export default defineConfig({
     // Navigation menu
     nav: [
       { text: 'Guide', link: '/guide/usage' },
-      { text: 'Architecture', link: '/architecture/overview' },
-      { text: 'Roadmap', link: '/reference/roadmap' }
+      { text: 'About', link: '/ideas/' }
     ],
 
     // Sidebar navigation
     sidebar: {
-      '/guide/': [
-        {
-          text: 'User Guide',
-          items: [
-            { text: 'Usage', link: '/guide/usage' },
-            { text: 'Configuration', link: '/guide/configuration' },
-            { text: 'Troubleshooting', link: '/guide/troubleshooting' }
-          ]
-        }
-      ],
-      '/architecture/': [
-        {
-          text: 'Architecture',
-          items: [
-            { text: 'Overview', link: '/architecture/overview' },
-            { text: 'Concepts', link: '/architecture/concepts' },
-            { text: 'Data Model', link: '/architecture/data-model' }
-          ]
-        }
-      ],
-      '/reference/': sharedSidebar,
-      '/ideas/': sharedSidebar
+      '/guide/': guideSidebar,
+      '/architecture/': guideSidebar,
+      '/reference/': aboutSidebar,
+      '/ideas/': aboutSidebar
     },
 
     // Social links

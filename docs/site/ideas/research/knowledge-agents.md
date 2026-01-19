@@ -1,136 +1,393 @@
-# Breaking knowledge work into AI agent tasks: A systematic guide
+---
+title: Agentic Workflows for Knowledge Work
+description: Architectures for AI agents in research synthesis, strategic planning, and organizational coordination
+---
 
-> **Research conducted by:** hey-amelia bot (research mode) with Claude Opus 4.5
+# Agentic Workflows for Knowledge Work
 
-**AI agents for knowledge work have evolved from experiments to production infrastructure, with 51% of companies now deploying agents and the market projected to grow from $5.1B to $47.1B by 2030.** The shift is driven by a paradox: while 78% of companies use generative AI, 80% report negligible earnings gains from chatbots and copilots alone. Agentic architectures—where LLMs autonomously plan, execute, and iterate—are emerging as the path to measurable productivity gains. Companies like Klarna (700 FTE equivalent from agents), Nubank (12x efficiency improvement in code migration), and McKinsey's clients (50-60% productivity increases) demonstrate what's possible when knowledge work is systematically decomposed into agent-executable tasks.
+As development velocity increases through coding agents, upstream processes (research, planning, alignment, and coordination) become bottlenecks. Our companion research on [AI's Impact on Software Organizations](./ai-impact-organizations.md) documents this shift: as execution costs drop, planning and verification become the new constraints. This document surveys architectures and patterns for agentic workflows that address these upstream bottlenecks.
 
-## Four foundational patterns define how agents tackle complex work
+::: info Research Context
+This report analyzes agentic systems for **knowledge work** (research synthesis, planning, prioritization) and **organizational coordination** (strategy alignment, workforce modeling, technical governance).
+:::
 
-The industry has converged on four core agentic design patterns, originally articulated by Andrew Ng and now implemented across major frameworks:
+The coordination cost of software development scales with team size. As teams grow, individuals spend increasing time gathering context, synthesizing information, and orchestrating workflows. Agentic systems address this by executing entire workflows autonomously. Earlier "copilot" approaches required continuous prompting; current agents complete extended tasks ("conduct a competitive audit" or "identify technical debt in the payment gateway") with minimal supervision.
 
-**Reflection** enables agents to evaluate and refine their own outputs. By using verbal reinforcement learning—linguistic self-critique rather than numerical reward signals—researchers formalized this pattern as "Reflexion," which achieved a **91% pass rate on HumanEval coding benchmarks** compared to GPT-4's 80%.
+**[Part 1](#part-1-research-and-planning-agents)** examines agents for research and planning, with case studies of [Perplexity](#1-1-deep-research-architecture) and [Manus AI](#1-2-general-purpose-execution-manus-ai) architectures. **[Part 2](#part-2-organizational-coordination-agents)** analyzes agents for organizational coordination: [ROI analysis](#2-2-1-roi-and-budget-optimization-agents), [workforce planning](#2-2-2-organizational-design-and-workforce-planning), and [strategic alignment](#2-2-3-strategic-alignment-agentic-okrs). **[Part 3](#part-3-cross-cutting-patterns)** covers cross-cutting patterns for enterprise deployment: [evaluation frameworks](#3-1-evaluation-frameworks), [human-in-the-loop workflows](#3-2-human-in-the-loop-architectures), and [identity security](#3-3-security-identity-propagation).
 
-**Tool use** allows LLMs to invoke external functions and APIs. Practitioners find tool design matters as much as prompt design: tools must be self-contained, robust to errors, and have clear intended purposes. As Anthropic's engineering team notes, "if a human engineer can't definitively say which tool should be used, an AI agent can't do better."
+## Part 1: Research and Planning Agents
 
-**Planning** breaks complex tasks into subtasks, either statically (the planner determines all steps upfront) or dynamically (the agent adapts steps based on intermediate results). The **Plan-and-Execute** pattern creates an explicit multi-step plan then follows a ReAct loop for each step, outperforming single-step reactive approaches on tasks requiring multiple reasoning steps.
+Knowledge work involves synthesizing disparate signals (customer feedback, market data, engineering constraints, business goals) into coherent plans. This synthesis has historically required manual effort: retrieving information, organizing it, drawing connections. Specialized agents now automate discovery and definition phases.
 
-**Multi-agent collaboration** assigns specialized roles to different agents. Using Claude Opus 4 to coordinate Claude Sonnet 4 subagents, Anthropic's orchestrator-worker pattern outperformed a single Opus 4 by **90.2%** on internal research evaluations—though it consumed 15× more tokens.
+### 1.1 Deep Research Architecture
 
-## Task decomposition frameworks span academic research and industry practice
+"Deep Research" synthesizes hundreds of sources into coherent narrative, beyond simple retrieval and ranking. This capability defines modern knowledge work agents. Traditional search engines retrieve and rank results but fail on complex, multi-hop questions. **Perplexity AI** exemplifies systems that employ "research with reasoning" architecture.<sup id="cite-1"><a href="#ref-1">[1]</a></sup>
 
-Several named frameworks provide systematic approaches to breaking down knowledge work:
+#### 1.1.1 Iterative Planning and Reasoning Loops
 
-| Framework | Core Approach | Best Application |
-|-----------|---------------|------------------|
-| **ReAct** | Interleaves reasoning traces with actions in an observe-think-act loop | Interactive tool-using tasks, dynamic problem-solving |
-| **TDAG** (Task Decomposition and Agent Generation) | Dynamically generates subtasks and spawns specialized subagents; adapts when subtasks fail | Complex workflows requiring flexible re-planning |
-| **ADAPT** | Recursive strategy assigning subtasks to subagents, with further decomposition on failure | Deeply nested problem structures |
-| **Plan-and-Solve** | Creates upfront multi-step plan, then executes each step via ReAct | Structured analysis, data pipelines |
-| **Tree of Thoughts** | Explores multiple reasoning paths using tree search before committing | Game-like problems, deliberate decision-making |
+Perplexity's "Deep Research" mode operates through a recursive agentic loop. On receiving a complex query, the system engages a reasoning engine to formulate a research plan, identifying information gaps and steps to fill them. The agent executes the first research phase, reads retrieved documents, and evaluates whether the information suffices.<sup id="cite-1b"><a href="#ref-1">[1]</a></sup>
 
-The key distinction: **static decomposition** (the system fixes all subtasks at planning time) versus **dynamic decomposition** (the orchestrator adjusts subtasks based on completion status). Dynamic approaches recover better from failed subtasks but require explicit state management and failure-handling logic. Research on Hierarchical Task Networks (HTN) combined with LLMs suggests hybrid symbolic-neural approaches catch logical errors while preserving flexibility.
+::: tip Key Innovation
+When data proves incomplete or ambiguous, the agent **refines its plan**, generating new queries from intermediate findings. This iteration enables navigation of "unknown unknowns": pivoting research direction as the agent learns.
+:::
 
-## Discovery and exploration workflows require specific architectural patterns
+The system processes dozens of searches and reads hundreds of sources in minutes.<sup id="cite-1c"><a href="#ref-1">[1]</a></sup> Benchmark results: Perplexity's reasoning model scored 21.1% on "Humanity's Last Exam," outperforming other frontier models.
 
-For market research, competitive analysis, and opportunity identification—tasks where goals, scope, or success criteria cannot be fully specified upfront—successful implementations follow a common blueprint:
+![Perplexity Deep Research Architecture](/amelia/images/placeholder_perplexity_architecture.svg)
+<figcaption style="text-align: center; color: var(--vp-c-text-2); margin-top: 0.5rem; font-size: 0.875rem;">Placeholder: Perplexity's recursive agentic loop showing query → plan → search → evaluate → refine cycle.</figcaption>
 
-**Phase 1: Goal clarification and scoping.** The orchestrator agent analyzes incoming requests, generates subtasks on demand, and establishes success criteria. This differs from code generation or customer service, which have well-specified tasks.
+#### 1.1.2 Infrastructure: Exabyte Scale and Atomic Indexing
 
-**Phase 2: Parallel exploration with specialized agents.** Multiple subagents tackle distinct information-gathering tasks simultaneously—one agent per competitor, data source, or analytical dimension. Each subagent may consume 20,000-40,000 tokens but returns condensed summaries—**1,000-2,000 tokens** each—that maintain separation of concerns while preserving manageable context.
+This architecture requires substantial infrastructure. Perplexity maintains an index of over **200 billion unique URLs**, updated by a crawling system that uses ML models to predict when specific pages (stock tickers, news sites) will change, prioritizing freshness.<sup id="cite-2"><a href="#ref-2">[2]</a></sup>
 
-**Phase 3: Synthesis and reflection.** The orchestrator aggregates findings, identifies patterns and conflicts, and assesses completeness. If gaps remain, it spawns additional targeted research or requests human input.
+To enable LLM processing within context windows, Perplexity employs a "Self-Improving Content Understanding" module. Unlike rigid scrapers, this AI-driven parser adapts rulesets to each website's structure, decomposing documents into "atomic spans" (self-contained paragraphs or sections).<sup id="cite-2b"><a href="#ref-2">[2]</a></sup>
 
-Real implementations include:
-- **Botpress competitive intelligence bot**: Autonomously scans competitor websites, interprets page structure, and adapts extraction logic over time
-- **Causaly**: Knowledge graph with 500M scientific facts enabling natural language queries that return evidence-backed insights in seconds, achieving **90% faster target identification** in pharmaceutical R&D
-- **n8n competitor research template**: Multi-agent workflow sending each competitor through three specialized agents (overview, product offering, customer reviews) before compiling into Notion database
+| Benefit | Description |
+|---------|-------------|
+| **Context Efficiency** | Retrieves only relevant sections, maximizing signal-to-noise ratio in prompts |
+| **Citation Accuracy** | Enables inline citations linking to exact sentences, supporting factual verification<sup id="cite-1d"><a href="#ref-1">[1]</a></sup> |
 
-## Human-in-the-loop control balances enterprise requirements with autonomous capability
+### 1.2 General-Purpose Execution: Manus AI
 
-The LangChain State of AI Agents survey of 1,300+ professionals reveals how organizations balance autonomy and control:
+Perplexity optimizes for information retrieval. **Manus AI** targets general-purpose task execution through tool, browser, and file system interaction. Manus executes open-ended instructions ("Create a competitive landscape deck") autonomously.
 
-**Permission models correlate with company size.** Large enterprises (2,000+ employees) lean heavily on read-only agent permissions paired with offline evaluations. Mid-sized companies (100-2,000 employees) show the most aggressive production deployment at 63%. Small companies (<100 employees) focus on tracing and observability to understand agent behavior while shipping fast.
+#### 1.2.1 Context Engineering: File System as Memory
 
-**Approval checkpoints** represent the most common pattern. LangGraph's `interrupt()` function pauses workflow execution for human review before high-risk actions like payments, data modifications, or external communications. The agent provides context and a recommended action; the human approves, rejects, or edits before the workflow resumes.
+Context windows create bottlenecks for long-horizon agents. Even 128,000+ token windows degrade reasoning performance and increase latency when filled with irrelevant history. Manus addresses this through "Context Engineering."<sup id="cite-4"><a href="#ref-4">[4]</a></sup>
 
-**Confidence-based routing** enables graceful degradation. Agents self-assess confidence scores for each decision; when scores fall below thresholds, the system escalates to human handlers with full context preserved. Zapier and enterprise customer service agents commonly implement this pattern.
+::: info Core Innovation
+Manus treats the **file system as unlimited context**. Rather than keeping entire history in active memory, the agent offloads state to persistent files (`todo.md`, `research_notes.txt`, `logs.json`). The agent reads from and writes to this file system as "External Memory."<sup id="cite-4b"><a href="#ref-4">[4]</a></sup>
+:::
 
-**The "vibe coding" spectrum** emerged in 2025 as a framework for thinking about autonomy. At one extreme, vibe coding (coined by Andrej Karpathy) involves natural language interaction where humans "see things, say things, run things" with constant involvement. At the other extreme, agentic coding sets a goal and lets autonomous agents plan, execute, test, and submit pull requests with minimal intervention. The autonomous end is viable: Y Combinator's Winter 2025 batch revealed that **25% of startups had 95% AI-generated codebases**.
+| Technique | Description |
+|-----------|-------------|
+| **Restorable Compression** | Large observations (full HTML of scraped websites) are processed then dropped from active context. Only metadata (URL, file path) remains. Content restores from file system when needed.<sup id="cite-4c"><a href="#ref-4">[4]</a></sup> |
+| **KV-Cache Optimization** | Stable system prompts and append-only history formats enable attention map reuse, reducing cost and latency for long-running tasks.<sup id="cite-4d"><a href="#ref-4">[4]</a></sup> |
 
-## Open-source frameworks implement these patterns with different trade-offs
+![Manus AI Context Engineering](/amelia/images/placeholder_manus_context.svg)
+<figcaption style="text-align: center; color: var(--vp-c-text-2); margin-top: 0.5rem; font-size: 0.875rem;">Placeholder: Manus AI's context engineering showing Active Context vs External Memory (File System) architecture.</figcaption>
 
-Several frameworks now lead the field:
+#### 1.2.2 Action Space Management
 
-Graph-based stateful workflows distinguish **LangGraph** from its competitors. Agents operate as nodes in directed graphs with conditional edges enabling dynamic routing. It excels at complex workflows requiring replay, time-travel debugging, and state persistence—production deployments at LinkedIn and AppFolio prove its enterprise worth. But expect a steep learning curve.
+A large array of potential tools can confuse agents. Manus uses a "context-aware state machine" for **Action Space Management**: it masks token logits during decoding, constraining model choices to valid subsets based on current mode.
 
-For the fastest path to working prototypes, **CrewAI** delivers. You define agents with specific roles (Researcher, Writer, Editor), assign tasks with explicit dependencies, and let the "crew" coordinate execution. It handles content generation and internal automation well, though it offers less control over fine-grained flow than LangGraph.
+::: warning Implementation Detail
+In "Browser Mode," the system suppresses "Shell Command" token probabilities, forcing browser action selection. This prevents "tool hallucination" and maintains agent focus.<sup id="cite-4e"><a href="#ref-4">[4]</a></sup>
+:::
 
-**AutoGen** from Microsoft treats workflows as conversations between agents with flexible topologies. It supports code execution in Docker containers and includes advanced error handling, making it well-suited for ML research workflows requiring iterative code generation. Achieving enterprise reliability requires higher complexity.
+### 1.3 User Research and Synthesis Agents
 
-What if you could eliminate prompting? **DSPy** from Stanford NLP answers with "programming, not prompting." You define signatures specifying input/output behavior, compose modules into pipelines, and let optimizers automatically tune prompts. DSPy improved Wikipedia RAG accuracy from 31% to 54% through automatic optimization—best for teams comfortable with a different paradigm.
+Agents now automate qualitative user research. Platforms like **Dovetail**<sup id="cite-5"><a href="#ref-5">[5]</a></sup> and **Discuss.io**<sup id="cite-7"><a href="#ref-7">[7]</a></sup> automate synthesis.
 
-Deep research workflows demand a purpose-built solution. **GPT Researcher** creates research outlines, spawns parallel sub-agents for source investigation, synthesizes findings, and outputs structured reports with citations. In Carnegie Mellon's May 2025 DeepResearchGym benchmark, it outperformed Perplexity, OpenAI, and every other contender.
+#### 1.3.1 Automating Qualitative Analysis
 
-## Academic foundations reveal both capabilities and limitations
+The "Insights Agent" in Discuss.io processes qualitative data differently. When a user interview ends, the agent processes the transcript immediately: tagging themes, tracking emotional tone shifts (sentiment analysis), and highlighting quotes.<sup id="cite-7b"><a href="#ref-7">[7]</a></sup>
 
-The theoretical progression follows a clear arc:
+This reduces time-to-insight from days of manual coding to minutes of automated processing. Dovetail's "Auto Highlighting" and "Cluster Analysis" group feedback from disparate sources (support tickets, video calls, surveys) into coherent themes.<sup id="cite-6"><a href="#ref-6">[6]</a></sup>
 
-In 2022, Google Brain researchers showed that prompting LLMs to display intermediate reasoning steps—**Chain-of-Thought**—improves complex task performance. The key finding: models with 100B+ parameters exhibit these capabilities through scale alone, without additional fine-tuning.
+::: tip Practical Application
+Query a data repository: "What are the top three usability complaints regarding the onboarding flow this quarter?" and receive a synthesized answer grounded in specific user quotes.
+:::
 
-Building on this foundation, **ReAct** (Yao et al., 2023) interleaved reasoning traces with actions, enabling models to dynamically create, maintain, and adjust plans while interacting with external environments. On ALFWorld benchmarks, ReAct outperformed imitation and reinforcement learning methods by **34% absolute success rate**.
+#### 1.3.2 Synthetic Users: A Testing Paradigm
 
-Where Chain-of-Thought follows a single path, **Tree of Thoughts** (Yao et al., NeurIPS 2023) explores multiple reasoning branches via tree search. The results were striking: **74% success versus 4%** on the Game of 24 task with GPT-4, demonstrating the power of deliberate problem-solving.
+**Synthetic User Research** uses foundation models to simulate user personas. Platforms like Synthetic Users<sup id="cite-8"><a href="#ref-8">[8]</a></sup> and Remesh.ai<sup id="cite-9"><a href="#ref-9">[9]</a></sup> enable prompting agents with demographic and psychographic data ("You are a 45-year-old CFO at a mid-sized logistics firm, skeptical of new software") and interviewing these synthetic participants.<sup id="cite-10"><a href="#ref-10">[10]</a></sup>
 
-**Reflexion** (Shinn et al., 2023) took a different direction—linguistic self-critique stored in episodic memory. The approach requires no model fine-tuning; improvement comes purely from verbal reflection on task feedback.
+::: warning Limitations
+These agents cannot replace human empathy and nuance. They serve as a **high-volume, low-fidelity filter**. Test fifty variations of a value proposition against synthetic agents in an hour, identifying obvious clarity issues before investing in human recruitment.
+:::
 
-However, Kambhampati et al. (2024) argue that "LLMs can't plan, but can help planning in LLM-modulo frameworks"—making the case that hybrid approaches combining symbolic planners with LLM capabilities are necessary for reliable complex planning.
+The architecture typically employs RAG to ground synthetic users in previous real-world interview transcripts, ensuring they reflect observed behaviors rather than generic LLM outputs.<sup id="cite-10b"><a href="#ref-10">[10]</a></sup>
 
-## Human-AI collaboration research identifies the complementarity challenge
+![Synthetic User Research Architecture](/amelia/images/placeholder_synthetic_users.svg)
+<figcaption style="text-align: center; color: var(--vp-c-text-2); margin-top: 0.5rem; font-size: 0.875rem;">Placeholder: Synthetic user research pipeline showing persona prompting → RAG grounding → interview simulation.</figcaption>
 
-Academic research reveals a sobering pattern: human-AI teams consistently outperform individuals, yet **the AI alone often outperforms them both**. Achieving "Complementary Team Performance" (CTP)—where the team exceeds the maximum of either individual—requires leveraging human contextual knowledge as beneficial input.
+### 1.4 Strategy and Generative UI
 
-Research on human-AI teaming emphasizes dynamic rather than rigid function allocation. The most effective patterns treat AI as partners rather than tools, with responsibilities adapting based on task requirements, confidence levels, and stakes.
+Agents move from analysis to creation roles.
 
-For knowledge work specifically, frameworks like Task Technology Fit theory suggest matching AI capabilities to task characteristics: generative AI excels at producing fluent text with simpler language than humans, while humans contribute contextual judgment, ethical reasoning, and creative direction.
+#### 1.4.1 Dynamic Roadmaps: Productboard
 
-## Gaps and open problems define the frontier
+Productboard integrates AI to make roadmaps dynamic and data-driven.<sup id="cite-11"><a href="#ref-11">[11]</a></sup> The "Pulse" agent<sup id="cite-13"><a href="#ref-13">[13]</a></sup> analyzes incoming feedback streams continuously (support tickets, sales notes, Slack conversations) and links them to feature ideas.
 
-**Planning reliability remains an open challenge.** LLMs generate fluent but logically inconsistent reasoning chains, particularly on mathematical and constraint-satisfaction problems. Researchers are actively developing verification mechanisms, external knowledge grounding, and hybrid symbolic-neural approaches.
+This creates a prioritization matrix that updates in real-time.<sup id="cite-14"><a href="#ref-14">[14]</a></sup> See that a feature request gained 40% more traction in the last month among enterprise customers. This shifts prioritization from intuition to signal-driven, enabling roadmaps to react to market changes dynamically.
 
-**Evaluation remains coarse-grained.** Most benchmarks measure final task completion without assessing intermediate planning quality. The field lacks mature step-wise evaluation and feasibility assessment methods for generated plans.
+#### 1.4.2 Generative UI: Figma and Co-Creation
 
-**Efficiency versus performance creates hard trade-offs.** Multi-agent systems consume 15× more tokens than equivalent single-agent workflows. Economic viability limits agentic approaches to high-value tasks; research on architectures that achieve comparable results with fewer tokens continues.
+Figma pioneers **Generative UI**.<sup id="cite-15"><a href="#ref-15">[15]</a></sup> Instead of drawing every screen manually, prompt an agent: "Create a settings dashboard for a healthcare app."
 
-**Cognitive architecture integration is nascent.** Researchers have not yet determined how to optimally combine classical patterns from architectures like ACT-R and Soar with LLM capabilities—particularly for knowledge compilation and memory management.
+The "Static Generative UI" pattern maps intent to existing design system components.<sup id="cite-16"><a href="#ref-16">[16]</a></sup> The agent assembles UI from approved building blocks, ensuring consistency and speed. This creates a co-creative workflow: the human acts as director, steering output through high-level critique rather than pixel manipulation.<sup id="cite-17"><a href="#ref-17">[17]</a></sup>
 
-## Key terminology for navigating this space
+### 1.5 Workflow Transformation Summary
 
-**Agentic AI**: Systems that dynamically plan and execute tasks, leveraging tools and memory to achieve goals autonomously
+| Area | Traditional Workflow | Agentic Workflow | Technologies |
+|:-----|:---------------------|:-----------------|:-------------|
+| **Market Research** | Keyword search, manual aggregation, reading reports | Recursive research agents that plan, read, synthesize | Perplexity, Deep Research |
+| **User Research** | Manual transcription, coding themes in spreadsheets | Auto-tagging, sentiment analysis, synthetic user testing | Dovetail, Discuss.io, Synthetic Users |
+| **Roadmapping** | Static slides, manual feedback linking | Dynamic prioritization based on real-time signals | Productboard Pulse |
+| **Design** | Mockups from scratch | Generative UI, component assembly, co-ideation | Figma AI |
 
-**Orchestrator-worker pattern**: Central agent coordinates subtasks and synthesizes results from specialized worker agents
+## Part 2: Organizational Coordination Agents
 
-**Context engineering**: Strategies for curating and maintaining optimal tokens during LLM inference to maximize relevant information
+Part 1 addressed research and planning. Part 2 addresses organizational coordination. Leaders face information asymmetry, context switching, and difficulty measuring productivity in complex systems. Agents provide visibility, analysis, and strategic modeling. These coordination agents enable the [role convergence and orchestration patterns](./ai-impact-organizations.md#4-role-convergence-and-skill-requirements) that address the verification bottleneck in AI-augmented organizations.
 
-**Compaction**: Summarizing conversation nearing context limits and reinitiating with condensed summary to maintain coherence over long tasks
+### 2.1 Workflow and Health Monitoring
 
-**Handoff**: Transfer of control from one agent to another, typically with context preservation
+Coordination tasks consume substantial time. Agents automate ritualistic tasks, freeing time for mentorship and architectural guidance.
 
-**Sectioning vs. voting**: Two parallelization variants—sectioning assigns different independent subtasks, voting runs the same task multiple times for consensus
+#### 2.1.1 Automating Rituals: Waydev
 
-## Resources for practitioners
+**Waydev**<sup id="cite-18"><a href="#ref-18">[18]</a></sup> applies agents to coordination loops. The "Daily Standup Agent" automates status reporting by connecting to development toolchain (Jira, GitHub, Slack) and generating daily briefings.
 
-**Foundational reading**: Anthropic's "Building Effective Agents" and "Effective Context Engineering for AI Agents" provide production-tested patterns. Phil Schmid's "Zero to One: Learning Agentic Patterns" offers hands-on implementation guidance.
+::: tip Focus on Blockers
+This agent highlights *blockers* and *action items*, not activity logs.<sup id="cite-18b"><a href="#ref-18">[18]</a></sup> By synthesizing yesterday's events, it frees synchronous meetings to focus on solving today's problems.
+:::
 
-**Courses**: DeepLearning.AI's "AI Agents in LangGraph" (with LangChain's founder) and CrewAI's "Multi-Agent Systems and How to Build Them" (endorsed by Andrew Ng) cover framework fundamentals.
+#### 2.1.2 Burnout Detection
 
-**Cloud provider guides**: AWS Prescriptive Guidance, Google Cloud's "Choose a Design Pattern for Your Agentic AI System," and Microsoft's "AI Agent Orchestration Patterns" document enterprise-ready architectures.
+**Burnout Detection**<sup id="cite-18c"><a href="#ref-18">[18]</a></sup> agents analyze work patterns (late-night commits, weekend activity, increasing code churn, sentiment in code review comments) to detect early warning signs of fatigue.
 
-**Framework documentation**: LangGraph's Agentic Concepts, CrewAI's learn portal, and Anthropic's cookbook repository contain implementation examples.
+The agent acts as a nudge system:
 
-## Conclusion: Systematic decomposition enables systematic automation
+> "Engineer X has worked 3 consecutive weekends and their code review sentiment has dropped. Risk of burnout is High."
 
-The field has matured from academic curiosity to production infrastructure, but success requires matching patterns to problems. Use prompt chaining for well-defined sequences, routing for categorical inputs, parallelization for independent subtasks, orchestrator-workers for open-ended exploration, and evaluator-optimizer loops for quality-critical outputs.
+This enables proactive intervention, operationalizing psychological safety through data no individual could track manually across a large team.
 
-The golden rule from Anthropic's engineering team: "Find the simplest solution possible, and only increase complexity when needed." Many tasks that seem to require sophisticated multi-agent systems can be handled by well-designed single-agent workflows with appropriate tools. Reserve full agentic architectures for genuinely ambiguous, exploratory knowledge work where the path to solution emerges during execution—and even then, **human-in-the-loop checkpoints remain essential**.
+![Coordination Dashboard](/amelia/images/placeholder_em_dashboard.svg)
+<figcaption style="text-align: center; color: var(--vp-c-text-2); margin-top: 0.5rem; font-size: 0.875rem;">Placeholder: Agentic coordination dashboard showing team health metrics, burnout risk indicators, and daily briefing synthesis.</figcaption>
 
-The combination of task decomposition frameworks (TDAG, ReAct, Plan-and-Solve), orchestration patterns (hierarchical, parallel, handoff), and emerging tooling (LangGraph, CrewAI, GPT Researcher) now provides practitioners with a systematic foundation for automating research synthesis, competitive analysis, and code generation. The remaining challenges—planning reliability, evaluation granularity, efficiency optimization—are research frontiers, not fundamental barriers.
+### 2.2 ROI and Organizational Design
+
+Executives face capital allocation, organizational structure, and long-term strategy problems. Agents multiply capacity.
+
+#### 2.2.1 ROI and Budget Optimization Agents
+
+**ROI Agents**<sup id="cite-18d"><a href="#ref-18">[18]</a></sup> map engineering effort (tickets, time) to business initiatives (project codes, OKRs), calculating real-time P&L for engineering:
+
+| Metric | Example Output |
+|--------|----------------|
+| **ROI Projection** | "Project Alpha tracks at +15% ROI based on current velocity and resource cost." |
+| **Budget Utilization** | "65% of Q3 budget utilized, but Platform Migration trends toward overspend." |
+| **Burnout Alerts** | "2 teams flagged for high burnout risk", correlating human health to delivery risk. |
+
+This synthesis enables dynamic budgeting: real-time resource reallocation based on agentic signals.<sup id="cite-19"><a href="#ref-19">[19]</a></sup>
+
+#### 2.2.2 Organizational Design and Workforce Planning
+
+**Orgvue**<sup id="cite-20"><a href="#ref-20">[20]</a></sup> and **ChartHop**<sup id="cite-22"><a href="#ref-22">[22]</a></sup> use agents for organizational design.
+
+| Capability | Description |
+|------------|-------------|
+| **Automated Role Clustering** | "Henshaw AI"<sup id="cite-21"><a href="#ref-21">[21]</a></sup> analyzes job descriptions and employee profiles, clustering positions into standardized roles. This enables skills gap analysis and builds foundation for workforce planning. |
+| **Scenario Modeling** | Model restructuring: "If we shift 20% of QA headcount to AI Tooling, how do burn rate and management span of control change?" The agent provides quantified impact assessments. |
+
+#### 2.2.3 Strategic Alignment: Agentic OKRs
+
+**Tability**<sup id="cite-23"><a href="#ref-23">[23]</a></sup> created **Tabby**, an AI agent for OKRs (Objectives and Key Results). Tabby follows up with team leads for updates autonomously, then synthesizes updates into executive summaries.
+
+::: info Automated Data Connection
+Tabby connects to data sources (Stripe, Jira) to update Key Results automatically, monitoring strategy-to-execution gaps continuously. When a Key Result goes off-track, Tabby alerts stakeholders with context ("Velocity dropped due to 3 critical bugs in Checkout service"), making OKRs living feedback loops.
+:::
+
+### 2.3 Technical Due Diligence and Governance
+
+Agents enable deep technical asset inspection for M&A or internal audits.
+
+#### 2.3.1 Technical Due Diligence Agents
+
+Firms like **V7 Labs**<sup id="cite-24"><a href="#ref-24">[24]</a></sup> and **Atomic Object**<sup id="cite-25"><a href="#ref-25">[25]</a></sup> deploy **Technical Due Diligence Agents** for codebase audits. These agents ingest repositories and documentation, performing multi-dimensional analysis:
+
+| Analysis Type | What It Detects |
+|---------------|-----------------:|
+| **Code Quality** | Code smells, anti-patterns, technical debt hotspots |
+| **Security** | Vulnerabilities and dependency risks |
+| **Scalability** | Architectural bottlenecks (e.g., single point of failure in database layer) |
+
+The output: a "Red Flag Report" generated in hours, replacing weeks of manual architect review. Investment committees make go/no-go decisions with high confidence and speed.
+
+#### 2.3.2 Automated Architectural Decision Records
+
+**ADR Writer Agents**<sup id="cite-26"><a href="#ref-26">[26]</a></sup> automate Architectural Decision Record creation.
+
+**Workflow:**
+1. An architect discusses a design change in a Slack channel or recorded meeting
+2. The agent extracts core components: **Context**, **Decision**, **Consequences**
+3. Drafts a formal ADR in Markdown
+
+::: tip Compliance Integration
+Advanced agents<sup id="cite-27"><a href="#ref-27">[27]</a></sup> index industry standards like the Azure Well-Architected Framework. They review new ADRs against these standards, flagging deviations from best practices ("This decision lacks a Disaster Recovery plan").
+:::
+
+## Part 3: Cross-Cutting Patterns
+
+Deploying agents for research or strategy requires robust technical foundation. Success demands three cross-cutting patterns: **Evaluation** (trust), **Human-in-the-Loop** (control), and **Security** (identity).
+
+### 3.1 Evaluation Frameworks
+
+How do you evaluate an agent that writes a strategy document? Standard software metrics (latency, uptime) reveal nothing about output quality. Enterprise deployment requires semantic evaluation.
+
+#### 3.1.1 G-Eval: LLM-as-a-Judge
+
+The **G-Eval** framework<sup id="cite-28"><a href="#ref-28">[28]</a></sup> has become standard for evaluating subjective, open-ended tasks. It replaces manual grading with "LLM-as-a-Judge" pipelines. This methodology applies beyond knowledge work. Our [Benchmarking Code Review Agents](./benchmarking-code-review-agents.md) research shows how the same evaluation framework assesses code review quality.
+
+**The G-Eval Process:**
+
+1. **Input & Criteria:** Receive agent output (e.g., a summary) and rubric ("Rate Coherence 1-5")
+2. **Auto-CoT (Chain of Thought):** The judge LLM generates reasoning steps, explaining *why* a summary might lack coherence before assigning a score. This improves correlation with human judgment.
+3. **Probability-Weighted Scoring:** This is the key innovation.<sup id="cite-28b"><a href="#ref-28">[28]</a></sup>
+
+::: info Probability-Weighted Scoring
+G-Eval analyzes **token probabilities (log-probs)** rather than requesting simple integers. It calculates weighted scores from model confidence distributions.
+
+*Example:* If the model assigns 60% probability to "4" and 40% to "3", the score is 3.6. This continuous metric captures nuance that integer scores miss.
+:::
+
+![G-Eval Evaluation Framework](/amelia/images/placeholder_geval_framework.svg)
+<figcaption style="text-align: center; color: var(--vp-c-text-2); margin-top: 0.5rem; font-size: 0.875rem;">Placeholder: G-Eval pipeline showing Input → Auto-CoT Reasoning → Probability-Weighted Scoring → Calibrated Output.</figcaption>
+
+### 3.2 Human-in-the-Loop Architectures
+
+High-stakes actions (deleting production databases, emailing all customers) make full autonomy unacceptable. **HITL** patterns provide safety valves.<sup id="cite-30"><a href="#ref-30">[30]</a></sup> These patterns directly address the [verification bottleneck](./ai-impact-organizations.md#23-the-verification-bottleneck) that emerges when AI execution outpaces human review capacity.
+
+#### 3.2.1 Interrupt & Resume Pattern
+
+Frameworks like **LangGraph**<sup id="cite-32"><a href="#ref-32">[32]</a></sup> enable "Interrupt & Resume" architecture.
+
+| Step | Description |
+|------|-------------|
+| **Checkpointing** | Agent persists entire state (memory, plan, variables) to database after every step |
+| **Suspension** | When agent encounters tool configured as "Sensitive" (e.g., `deploy_code`), it halts |
+| **Asynchronous Review** | Human receives notification, reviews plan, inspects arguments, clicks "Approve" |
+| **Resumption** | Agent restores state from database and executes approved action |
+
+This architecture decouples agent speed from human availability.
+
+#### 3.2.2 Human-as-a-Tool Pattern
+
+The **Human-as-a-Tool** pattern<sup id="cite-31"><a href="#ref-31">[31]</a></sup> treats humans as API endpoints.
+
+**Workflow:**
+1. Agent receives tool definition: `ask_human(question: string)`
+2. When agent encounters ambiguity ("I found two conflicting budget files; which is correct?"), it calls `ask_human`
+3. Call triggers Slack message or email
+4. Agent waits until user replies
+5. Reply feeds back as tool output, enabling correct context
+
+::: tip Design Philosophy
+This keeps humans in the loop for *guidance*, not merely *approval*.
+:::
+
+### 3.3 Security: Identity Propagation
+
+Multi-agent environments pose security challenges beyond single-user applications. Critical challenge: **Identity Propagation**.<sup id="cite-33"><a href="#ref-33">[33]</a></sup> When User A asks Agent B to ask Agent C to query a database, whose identity governs access?
+
+#### 3.3.1 Delegation Problem and ABAC
+
+Using agent service accounts ("God Mode" keys) creates privilege escalation vulnerabilities. A junior engineer could ask a DevOps Agent to restart production servers, bypassing permissions they lack.
+
+| Solution | Description |
+|----------|-------------|
+| **Identity Propagation** | Pass user identity (via cryptographic token chain, often JWTs) through every agent chain step |
+| **On-Behalf-Of (OBO) Flow** | Each agent presents token asserting: "I am Agent B, acting *on behalf of* User A" |
+| **Attribute-Based Access Control (ABAC)** | Final resource checks *original* user's attributes: "Does User A have `restart_server` attribute?" If not, request fails regardless of agent permissions.<sup id="cite-35"><a href="#ref-35">[35]</a></sup> |
+
+![Identity Propagation in Agentic Systems](/amelia/images/placeholder_identity_propagation.svg)
+<figcaption style="text-align: center; color: var(--vp-c-text-2); margin-top: 0.5rem; font-size: 0.875rem;">Placeholder: Multi-agent identity propagation showing User → Agent A → Agent B → Resource with JWT token chain and ABAC verification.</figcaption>
+
+#### 3.3.2 RAG Security and Document-Level ACLs
+
+Agents using RAG require **Document-Level Security**.<sup id="cite-36"><a href="#ref-36">[36]</a></sup>
+
+::: danger Security Risk
+An internal knowledge agent indexing company Google Drive might summarize confidential documents for unauthorized users.
+:::
+
+**Solution:** Retrieval engines (e.g., Azure AI Search, Perplexity Enterprise) must enforce **Access Control Lists (ACLs)** of source documents. Search query becomes: "Find documents matching 'plans' *AND* where `user_id` has `read_access`." Filtering must occur at retrieval time to prevent sensitive data from entering LLM context.
+
+## Conclusion
+
+Agentic workflows restructure how organizations create value.
+
+### Extension Opportunities Beyond Development
+
+| Domain | Opportunity | Relevant Patterns |
+|--------|-------------|-------------------|
+| **Research Synthesis** | Automate competitive analysis, market research, technical documentation review | Deep Research architecture, RAG, iterative planning |
+| **Organizational Coordination** | Automate status synthesis, OKR tracking, burnout detection | Waydev, Tability, workflow automation |
+| **Strategic Planning** | Enable scenario modeling, ROI projection, workforce planning | Orgvue, dynamic prioritization |
+| **Governance** | Automate ADR creation, compliance checking, technical due diligence | ADR agents, framework compliance |
+
+::: tip Key Insight
+As development velocity increases, upstream bottlenecks (research, planning, alignment) become critical. Organizations that extend agentic workflows beyond development will maintain throughput across the entire software lifecycle.
+:::
+
+## References
+
+<div class="references">
+
+<div id="ref-1"><a href="#cite-1">↑</a> 1. "Introducing Perplexity Deep Research" <a href="https://www.perplexity.ai/hub/blog/introducing-perplexity-deep-research">perplexity.ai</a></div>
+<div id="ref-2"><a href="#cite-2">↑</a> 2. "Architecting and Evaluating an AI-First Search API" <a href="https://research.perplexity.ai/articles/architecting-and-evaluating-an-ai-first-search-api">research.perplexity.ai</a></div>
+<div id="ref-3">3. "How to use Perplexity AI for effective research" <a href="https://www.datastudios.org/post/how-to-use-perplexity-ai-for-effective-research-with-real-time-sources-file-uploads-and-citation-t">datastudios.org</a></div>
+<div id="ref-4"><a href="#cite-4">↑</a> 4. "Context Engineering for AI Agents: Lessons from Building Manus" <a href="https://manus.im/blog/Context-Engineering-for-AI-Agents-Lessons-from-Building-Manus">manus.im</a></div>
+<div id="ref-5"><a href="#cite-5">↑</a> 5. "AI-Enhanced User Research with Dovetail" <a href="https://www.perpetualny.com/blog/ai-enhanced-user-research-with-dovetail">perpetualny.com</a></div>
+<div id="ref-6"><a href="#cite-6">↑</a> 6. "Dovetail AI" <a href="https://docs.dovetail.com/help/dovetail-ai">docs.dovetail.com</a></div>
+<div id="ref-7"><a href="#cite-7">↑</a> 7. "AI Agent Qualitative Research: How AI Enhances Consumer Feedback Analysis" <a href="https://www.discuss.io/blog/ai-agent-qualitative-research-how-ai-enhances-consumer-feedback-analysis/">discuss.io</a></div>
+<div id="ref-8"><a href="#cite-8">↑</a> 8. "Synthetic Users: user research without the headaches" <a href="https://www.syntheticusers.com/">syntheticusers.com</a></div>
+<div id="ref-9"><a href="#cite-9">↑</a> 9. "Agentic AI for Research: A Practical Primer" <a href="https://www.remesh.ai/resources/agentic-ai-for-research-primer">remesh.ai</a></div>
+<div id="ref-10"><a href="#cite-10">↑</a> 10. "Synthetic Users system architecture (the simplified version)" <a href="https://www.syntheticusers.com/science-posts/synthetic-users-system-architecture-the-simplified-version">syntheticusers.com</a></div>
+<div id="ref-11"><a href="#cite-11">↑</a> 11. "Using AI for Product Roadmap Prioritization" <a href="https://www.productboard.com/blog/using-ai-for-product-roadmap-prioritization/">productboard.com</a></div>
+<div id="ref-12">12. "Productboard AI" <a href="https://support.productboard.com/hc/en-us/articles/15113485128467-Productboard-AI">support.productboard.com</a></div>
+<div id="ref-13"><a href="#cite-13">↑</a> 13. "Prioritize features within objectives" <a href="https://portal.productboard.com/pb/1-productboard-portal/c/774-prioritize-features-within-objectives">portal.productboard.com</a></div>
+<div id="ref-14"><a href="#cite-14">↑</a> 14. "Prioritize Features" <a href="https://www.productboard.com/prioritize-features/">productboard.com</a></div>
+<div id="ref-15"><a href="#cite-15">↑</a> 15. "Generative UI: A rich, custom, visual interactive user experience for any prompt" <a href="https://research.google/blog/generative-ui-a-rich-custom-visual-interactive-user-experience-for-any-prompt/">research.google</a></div>
+<div id="ref-16"><a href="#cite-16">↑</a> 16. "Generative UI: Understanding Agent-Powered Interfaces" <a href="https://www.copilotkit.ai/generative-ui">copilotkit.ai</a></div>
+<div id="ref-17"><a href="#cite-17">↑</a> 17. "Enhancing designer creativity through human–AI co-ideation" <a href="https://www.cambridge.org/core/journals/ai-edam/article/enhancing-designer-creativity-through-humanai-coideation-a-cocreation-framework-for-design-ideation-with-custom-gpt/BCC2CBE43EECE6F0D937BBC0D2F44868">cambridge.org</a></div>
+<div id="ref-18"><a href="#cite-18">↑</a> 18. "AI Agents for Engineering Leadership" <a href="https://waydev.co/features/way-ai-agents/">waydev.co</a></div>
+<div id="ref-19"><a href="#cite-19">↑</a> 19. "The agentic organization: A new operating model for AI" <a href="https://www.mckinsey.com/capabilities/people-and-organizational-performance/our-insights/the-agentic-organization-contours-of-the-next-paradigm-for-the-ai-era">mckinsey.com</a></div>
+<div id="ref-20"><a href="#cite-20">↑</a> 20. "What is Organizational Design?" <a href="https://www.orgvue.com/solutions/organizational-design/">orgvue.com</a></div>
+<div id="ref-21"><a href="#cite-21">↑</a> 21. "Orgvue unveils Henshaw suite of AI platform capabilities" <a href="https://www.orgvue.com/news/orgvue-unveils-henshaw-suite-of-ai-platform-capabilities/">orgvue.com</a></div>
+<div id="ref-22"><a href="#cite-22">↑</a> 22. "Workforce & Headcount Planning Software" <a href="https://www.charthop.com/modules/headcount-planning">charthop.com</a></div>
+<div id="ref-23"><a href="#cite-23">↑</a> 23. "Introducing the very first AI Agent dedicated to OKRs" <a href="https://www.tability.io/odt/articles/introducing-the-very-first-ai-agent-dedicated-to-okrs">tability.io</a></div>
+<div id="ref-24"><a href="#cite-24">↑</a> 24. "AI VC Technical Assessment Agent" <a href="https://www.v7labs.com/agents/ai-venture-capital-technical-assessment-agent">v7labs.com</a></div>
+<div id="ref-25"><a href="#cite-25">↑</a> 25. "Leverage AI in Technical Due Diligence Engagements" <a href="https://spin.atomicobject.com/ai-technical-due-diligence/">atomicobject.com</a></div>
+<div id="ref-26"><a href="#cite-26">↑</a> 26. "Building an Architecture Decision Record Writer Agent" <a href="https://piethein.medium.com/building-an-architecture-decision-record-writer-agent-a74f8f739271">medium.com</a></div>
+<div id="ref-27"><a href="#cite-27">↑</a> 27. "Architecture Decision Record (ADR) agent" <a href="https://github.com/macromania/adr-agent">github.com</a></div>
+<div id="ref-28"><a href="#cite-28">↑</a> 28. "Deep Dive into G-Eval: How LLMs Evaluate Themselves" <a href="https://medium.com/@zlatkov/deep-dive-into-g-eval-how-llms-evaluate-themselves-743624d22bf7">medium.com</a></div>
+<div id="ref-29">29. "G-Eval Simply Explained: LLM-as-a-Judge for LLM Evaluation" <a href="https://www.confident-ai.com/blog/g-eval-the-definitive-guide">confident-ai.com</a></div>
+<div id="ref-30"><a href="#cite-30">↑</a> 30. "Human in the Loop" <a href="https://developers.cloudflare.com/agents/concepts/human-in-the-loop/">developers.cloudflare.com</a></div>
+<div id="ref-31"><a href="#cite-31">↑</a> 31. "Human-in-the-Loop for AI Agents: Best Practices, Frameworks, Use Cases, and Demo" <a href="https://www.permit.io/blog/human-in-the-loop-for-ai-agents-best-practices-frameworks-use-cases-and-demo">permit.io</a></div>
+<div id="ref-32"><a href="#cite-32">↑</a> 32. "Oversee a prior art search AI agent with human-in-the-loop by using LangGraph and watsonx.ai" <a href="https://www.ibm.com/think/tutorials/human-in-the-loop-ai-agent-langraph-watsonx-ai">ibm.com</a></div>
+<div id="ref-33"><a href="#cite-33">↑</a> 33. "The 4 Most Common AI Agent Deployment Patterns And What They Mean for Identity Security" <a href="https://aembit.io/blog/ai-agent-architectures-identity-security/">aembit.io</a></div>
+<div id="ref-34">34. "How will AI Agents Manage Identity & Build Trust in Complex Systems" <a href="https://www.youtube.com/watch?v=wiU7VEvi1LM">youtube.com</a></div>
+<div id="ref-35"><a href="#cite-35">↑</a> 35. "What Is ABAC?" <a href="https://tetrate.io/learn/what-is-abac">tetrate.io</a></div>
+<div id="ref-36"><a href="#cite-36">↑</a> 36. "Document-level access control - Azure AI Search" <a href="https://learn.microsoft.com/en-us/azure/search/search-document-level-access-overview">learn.microsoft.com</a></div>
+<div id="ref-37">37. "Tutorial | Manage document-level permissions for RAG" <a href="https://knowledge.dataiku.com/latest/gen-ai/rag/tutorial-manage-rag-access.html">knowledge.dataiku.com</a></div>
+
+</div>
+
+<style>
+.research-meta {
+  background: var(--vp-c-bg-soft);
+  border-radius: 8px;
+  padding: 1rem 1.5rem;
+  margin: 1.5rem 0;
+  border-left: 4px solid var(--vp-c-brand);
+}
+
+.references {
+  font-size: 0.875rem;
+  line-height: 1.8;
+  column-count: 2;
+  column-gap: 2rem;
+}
+
+.references a {
+  word-break: break-word;
+}
+
+@media (max-width: 768px) {
+  .references {
+    column-count: 1;
+  }
+}
+</style>
