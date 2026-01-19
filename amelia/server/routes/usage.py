@@ -44,6 +44,13 @@ async def get_usage(
     Raises:
         HTTPException: 400 if invalid preset or date combination.
     """
+    # Validate mutual exclusivity
+    if preset is not None and (start is not None or end is not None):
+        raise HTTPException(
+            status_code=400,
+            detail="Provide either start/end or preset, not both.",
+        )
+
     # Validate date parameters
     if bool(start) != bool(end):
         raise HTTPException(
@@ -60,13 +67,19 @@ async def get_usage(
     if start and end:
         start_date = start
         end_date = end
-    elif preset:
-        if preset not in PRESETS:
+    elif preset is not None:
+        preset_value = preset.strip()
+        if not preset_value:
             raise HTTPException(
                 status_code=400,
-                detail=f"Invalid preset '{preset}'. Valid: {', '.join(PRESETS.keys())}",
+                detail="Preset cannot be empty.",
             )
-        days = PRESETS[preset]
+        if preset_value not in PRESETS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid preset '{preset_value}'. Valid: {', '.join(PRESETS.keys())}",
+            )
+        days = PRESETS[preset_value]
         end_date = datetime.now(UTC).date()
         start_date = end_date - timedelta(days=days - 1)
     else:

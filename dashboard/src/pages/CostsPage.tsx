@@ -59,6 +59,16 @@ function getPresetLabel(preset: string | null): string {
 }
 
 /**
+ * Returns a grammatically correct description for the preset range.
+ * Used in empty-state messages.
+ */
+function getPresetDescription(preset: string | null): string {
+  if (preset === 'all') return 'all time';
+  if (preset === null) return 'the selected range';
+  return `the last ${getPresetLabel(preset).toLowerCase()}`;
+}
+
+/**
  * Escape a CSV field value to handle special characters.
  * - Neutralizes formula injection by prefixing formula triggers with single quote
  * - Escapes double quotes by doubling them
@@ -308,7 +318,7 @@ export default function CostsPage() {
               </EmptyMedia>
               <EmptyTitle>No usage data</EmptyTitle>
               <EmptyDescription>
-                No workflows ran in the last {getPresetLabel(currentPreset).toLowerCase()}.
+                No workflows ran in {getPresetDescription(currentPreset)}.
                 Try a longer time range or start a new workflow.
               </EmptyDescription>
             </EmptyHeader>
