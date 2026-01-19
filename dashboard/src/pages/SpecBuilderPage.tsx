@@ -26,6 +26,7 @@ import {
   ReasoningTrigger,
   ReasoningContent,
 } from "@/components/ai-elements/reasoning";
+import { Shimmer } from "@/components/ai-elements/shimmer";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/PageHeader";
 import { useBrainstormStore } from "@/store/brainstormStore";
@@ -175,24 +176,29 @@ function SpecBuilderPageContent() {
               description="Type a message below to begin exploring ideas and producing design documents."
             />
           ) : (
-            <div className="space-y-4 max-w-3xl mx-auto">
+            <div className="w-full space-y-4 max-w-3xl mx-auto">
               {messages.map((message) => {
                 const hasReasoning = message.parts?.some((p) => p.type === "reasoning");
                 const reasoningText = message.parts
                   ?.filter((p) => p.type === "reasoning")
                   .map((p) => p.text)
                   .join("\n") || "";
+                const isStreamingEmpty = message.role === "assistant" && message.status === "streaming" && !message.content;
 
                 return (
                   <Message key={message.id} from={message.role}>
-                    <MessageContent>
+                    <MessageContent className={message.role === "assistant" ? "w-full" : undefined}>
                       {hasReasoning && (
                         <Reasoning isStreaming={isStreaming}>
                           <ReasoningTrigger />
                           <ReasoningContent>{reasoningText}</ReasoningContent>
                         </Reasoning>
                       )}
-                      <MessageResponse>{message.content}</MessageResponse>
+                      {isStreamingEmpty ? (
+                        <Shimmer className="text-muted-foreground">Thinking...</Shimmer>
+                      ) : (
+                        <MessageResponse>{message.content}</MessageResponse>
+                      )}
                     </MessageContent>
                   </Message>
                 );

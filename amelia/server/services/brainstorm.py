@@ -420,6 +420,7 @@ class BrainstormService:
             data={
                 "session_id": session_id,
                 "message_id": message_id,
+                "text": message,
             },
         )
 
