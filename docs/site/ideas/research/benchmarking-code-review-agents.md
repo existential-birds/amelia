@@ -23,8 +23,6 @@ This report synthesizes **200+ papers**, repositories, and industry reports to e
 
 Our analysis reveals a critical dichotomy: the tension between **synthetic, isolated evaluations** (high reproducibility, low realism) and **"in-the-wild" production monitoring** (high realism, noisy ground truth). The report concludes with a gap analysis identifying specific deficiencies—primarily missing "soft skill" evaluation and multi-turn conversational assessment.
 
----
-
 ## 1. The Code Review Evaluation Landscape
 
 To properly evaluate a modern code review agent, one must understand the limitations of previous evaluation paradigms. The evaluation of automated code review systems has historically been bifurcated into **static analysis** and **code generation**. However, the modern AI code reviewer exists at the intersection, requiring compiler precision and engineer intuition.
@@ -33,7 +31,7 @@ To properly evaluate a modern code review agent, one must understand the limitat
 
 In the era of n-gram models, code review generation was treated as a translation task (Code → Natural Language). Metrics like BLEU and ROUGE calculated n-gram overlap between generated and reference reviews.
 
-Recent literature, particularly **DeepCRCEval**<sup>[1]</sup>, has demonstrated that these metrics correlate poorly with actual review quality:
+Recent literature, particularly **DeepCRCEval**<sup id="cite-1"><a href="#ref-1">[1]</a></sup>, has demonstrated that these metrics correlate poorly with actual review quality:
 
 - A high BLEU score might indicate memorized phrases ("Please fix formatting") while missing critical race conditions
 - A model might correctly identify a complex security flaw using different phrasing, resulting in low BLEU despite high utility
@@ -43,14 +41,14 @@ Recent literature, particularly **DeepCRCEval**<sup>[1]</sup>, has demonstrated 
 
 Modern code review agents must be evaluated across three dimensions:
 
-::: details **Defect Detection (The "What")**
+::: info **Defect Detection (The "What")**
 Identifying objective issues.
 
 - **Precision:** Does the agent flag actual issues, or hallucinate bugs (False Positives)? A false positive rate of even 20% can render a tool unusable in high-velocity CI pipelines.
 - **Recall:** Does the agent catch critical bugs? In security contexts, recall is paramount—missing a vulnerability is far worse than flagging a false positive.
 :::
 
-::: details **Contextual Reasoning (The "Why")**
+::: info **Contextual Reasoning (The "Why")**
 Agents must demonstrate understanding beyond the immediate diff.
 
 - **Architectural Awareness:** Does a database schema change update all downstream API endpoints?
@@ -58,7 +56,7 @@ Agents must demonstrate understanding beyond the immediate diff.
 - **Breaking Changes:** Does the agent distinguish between breaking a public API and safe internal refactoring?
 :::
 
-::: details **Communication & Calibration (The "How")**
+::: info **Communication & Calibration (The "How")**
 Code review is inherently social. A technically correct but abrasive agent will fail adoption.
 
 - **Severity Calibration:** Label SQL injection as "Critical" and naming nitpicks as "Low"
@@ -66,10 +64,7 @@ Code review is inherently social. A technically correct but abrasive agent will 
 - **Tone and Persuasion:** Encourage fixes rather than triggering defensiveness
 :::
 
-![The Hierarchy of Code Review Evaluation Metrics](/amelia/images/hierarchy_of_metrics_themed.jpeg)
-<figcaption style="text-align: center; color: var(--vp-c-text-2); margin-top: 0.5rem; font-size: 0.875rem;">The Hierarchy of Code Review Evaluation Metrics: A four-tier pyramid showing Syntax & Formatting at the base, progressing through Semantic Correctness, Contextual Awareness, to Social & Conversational at the apex.</figcaption>
-
----
+![Hierarchy of Code Review Evaluation Metrics: A four-tier pyramid showing Syntax & Formatting at the base, progressing through Semantic Correctness, Contextual Awareness, to Social & Conversational at the apex.](/amelia/images/hierarchy_of_metrics_themed.jpeg)
 
 ## 2. Open Source Benchmark Datasets
 
@@ -81,17 +76,17 @@ These datasets consist of real-world bugs paired with triggering tests and patch
 
 #### Defects4J <Badge type="tip" text="Java" />
 
-The most cited database of real faults for Java, containing ~400 bugs from Apache Commons Lang, JFreeChart, Mockito, and Joda-Time.<sup>[3]</sup>
+The most cited database of real faults for Java, containing ~400 bugs from Apache Commons Lang, JFreeChart, Mockito, and Joda-Time.<sup id="cite-3"><a href="#ref-3">[3]</a></sup>
 
 | Aspect | Details |
 |--------|---------|
 | **Structure** | Buggy version, fixed version, triggering test case |
 | **Use for Review** | Present the "buggy" diff to see if agent detects fault introduction |
-| **Limitations** | Java-only; potential LLM memorization (data contamination)<sup>[5]</sup> |
+| **Limitations** | Java-only; potential LLM memorization (data contamination)<sup id="cite-5"><a href="#ref-5">[5]</a></sup> |
 
 #### BugsInPy <Badge type="tip" text="Python" />
 
-The Python equivalent, containing bugs from pandas, numpy, django, keras, and scikit-learn.<sup>[6]</sup>
+The Python equivalent, containing bugs from pandas, numpy, django, keras, and scikit-learn.<sup id="cite-6"><a href="#ref-6">[6]</a></sup>
 
 | Aspect | Details |
 |--------|---------|
@@ -100,12 +95,12 @@ The Python equivalent, containing bugs from pandas, numpy, django, keras, and sc
 
 #### SWE-bench <Badge type="tip" text="Python" />
 
-Modern benchmark evaluating LLMs on real GitHub issues, requiring patch generation within full repository context.<sup>[9]</sup>
+Modern benchmark evaluating LLMs on real GitHub issues, requiring patch generation within full repository context.<sup id="cite-9"><a href="#ref-9">[9]</a></sup>
 
 | Aspect | Details |
 |--------|---------|
 | **Use for Review** | Feed failed patches to the reviewer agent |
-| **Critique** | Overly focused on simple fixes; may struggle to generalize to enterprise codebases<sup>[11]</sup> |
+| **Critique** | Overly focused on simple fixes; may struggle to generalize to enterprise codebases<sup id="cite-11"><a href="#ref-11">[11]</a></sup> |
 
 ### 2.2 Security Vulnerability Datasets
 
@@ -113,7 +108,7 @@ Security review is a primary use case, often the "entry wedge" for enterprise ad
 
 #### PrimeVul <Badge type="danger" text="Security" /> <Badge type="tip" text="C/C++" />
 
-State-of-the-art dataset (ICSE 2025) addressing data quality and label accuracy issues.<sup>[12]</sup>
+State-of-the-art dataset (ICSE 2025) addressing data quality and label accuracy issues.<sup id="cite-12"><a href="#ref-12">[12]</a></sup>
 
 | Aspect | Details |
 |--------|---------|
@@ -123,7 +118,7 @@ State-of-the-art dataset (ICSE 2025) addressing data quality and label accuracy 
 
 #### CASTLE Benchmark <Badge type="danger" text="Security" /> <Badge type="tip" text="C" />
 
-Modern micro-benchmark (2025/2026) targeting the gap between static analysis and LLM capabilities.<sup>[15]</sup>
+Modern micro-benchmark (2025/2026) targeting the gap between static analysis and LLM capabilities.<sup id="cite-15"><a href="#ref-15">[15]</a></sup>
 
 | Aspect | Details |
 |--------|---------|
@@ -132,7 +127,7 @@ Modern micro-benchmark (2025/2026) targeting the gap between static analysis and
 
 #### SARD / Juliet Test Suite <Badge type="danger" text="Security" />
 
-NIST's massive collection of 80,000+ synthetic C/C++ and Java programs with known flaws.<sup>[17]</sup>
+NIST's massive collection of 80,000+ synthetic C/C++ and Java programs with known flaws.<sup id="cite-17"><a href="#ref-17">[17]</a></sup>
 
 ::: warning Synthetic Limitations
 While exhaustive in CWE coverage, Juliet is synthetic. Code patterns are artificial compared to real exploits. Agents excelling on Juliet may struggle with production code complexity.
@@ -144,7 +139,7 @@ The newest generation captures the *process* of code review, including conversat
 
 #### ContextCRBench <Badge type="warning" text="Context-Aware" />
 
-The gold standard for context-aware review evaluation (late 2024/2025).<sup>[20]</sup>
+The gold standard for context-aware review evaluation (late 2024/2025).<sup id="cite-20a"><a href="#ref-20">[20]</a></sup>
 
 | Aspect | Details |
 |--------|---------|
@@ -154,7 +149,7 @@ The gold standard for context-aware review evaluation (late 2024/2025).<sup>[20]
 
 #### CodeReviewer (Microsoft) <Badge type="info" text="Pre-training" />
 
-Massive dataset with millions of code changes and review comments from GitHub.<sup>[23]</sup>
+Massive dataset with millions of code changes and review comments from GitHub.<sup id="cite-23"><a href="#ref-23">[23]</a></sup>
 
 ::: tip Best Use
 Excellent for pre-training on review style. However, as a correctness benchmark, it suffers from noise—many comments are "LGTM" or incorrect feedback.
@@ -173,17 +168,15 @@ Excellent for pre-training on review style. However, as a correctness benchmark,
 | **CodeReviewer** | [huggingface.co/microsoft/codereviewer](https://huggingface.co/microsoft/codereviewer) | GitHub Diffs + Comments | Millions | Multi (9) | Apache-2.0 |
 | **SWE-bench** | [swebench.com](https://www.swebench.com) | GitHub Issues + PRs | ~2.3k instances | Python | MIT |
 
----
-
 ## 3. Academic Frontiers in Code Review Evaluation
 
 The academic discourse has evolved significantly between 2020-2025, shifting from simple bug detection to evaluating the *quality* and *helpfulness* of review comments.
 
 ### 3.1 The Shift to "LLM-as-a-Judge"
 
-A recurring theme<sup>[2]</sup> is using powerful LLMs (GPT-4, Claude) to evaluate smaller reviewer agents. LLM-as-a-Judge scales better than human evaluation while providing more nuance than n-gram metrics.
+A recurring theme<sup id="cite-2a"><a href="#ref-2">[2]</a></sup> is using powerful LLMs (GPT-4, Claude) to evaluate smaller reviewer agents. LLM-as-a-Judge scales better than human evaluation while providing more nuance than n-gram metrics.
 
-**DeepCRCEval Framework:**<sup>[2]</sup>
+**DeepCRCEval Framework:**<sup id="cite-2b"><a href="#ref-2">[2]</a></sup>
 
 - **Human Evaluation:** Small subset scored by experts as "Gold Standard"
 - **LLM Evaluation:** LLM calibrated against human scores, then evaluates full dataset
@@ -191,7 +184,7 @@ A recurring theme<sup>[2]</sup> is using powerful LLMs (GPT-4, Claude) to evalua
 
 ### 3.2 The Primacy of Context
 
-Research on ContextCRBench<sup>[20]</sup> and Augment Code<sup>[31]</sup> reveals a critical insight:
+Research on ContextCRBench<sup id="cite-20b"><a href="#ref-20">[20]</a></sup> and Augment Code<sup id="cite-31a"><a href="#ref-31">[31]</a></sup> reveals a critical insight:
 
 ::: tip Key Finding
 AI reviewers fail from missing information, not weak reasoning. Providing textual context (issue descriptions) yields **greater performance gains** than code context alone.
@@ -201,7 +194,7 @@ AI reviewers fail from missing information, not weak reasoning. Providing textua
 
 ### 3.3 Severity and Calibration
 
-Recent work<sup>[32]</sup> rigorously addresses **Severity Calibration Error**:
+Recent work<sup id="cite-32"><a href="#ref-32">[32]</a></sup> rigorously addresses **Severity Calibration Error**:
 
 - **The Problem:** LLMs are "over-eager," labeling minor nitpicks as "Critical"
 - **The Metric:** Expected Severity Calibration Error (ESCE) measures divergence between predicted severity probability and empirical precision
@@ -217,13 +210,11 @@ Recent work<sup>[32]</sup> rigorously addresses **Severity Calibration Error**:
 | 2022 | **CodeReviewer: Pre-Training for Code Review** | Li et al. (Microsoft) | Massive CodeReviewer dataset |
 | 2024 | **Severity Calibration for Defect Detection** | — | Adapts ESCE to defect detection |
 
----
-
 ## 4. Industry Methodologies and Case Studies
 
 Industry evaluations prioritize **Signal-to-Noise ratios** and developer adoption over theoretical rigor.
 
-### 4.1 Greptile: The "Replication" Methodology <sup>[33]</sup>
+### 4.1 Greptile: The "Replication" Methodology <sup id="cite-33"><a href="#ref-33">[33]</a></sup>
 
 A standout example of reproducible, real-world evaluation:
 
@@ -237,7 +228,7 @@ A standout example of reproducible, real-world evaluation:
 
 **Result:** Greptile 82% catch rate vs Graphite 6%—stark difference between "review assistance" vs "autonomous coding" tools.
 
-### 4.2 CodeRabbit: The "In-the-Wild" Framework <sup>[34]</sup>
+### 4.2 CodeRabbit: The "In-the-Wild" Framework <sup id="cite-34"><a href="#ref-34">[34]</a></sup>
 
 Emphasizes *usability* over raw detection rates:
 
@@ -251,7 +242,7 @@ Emphasizes *usability* over raw detection rates:
 A tool catching 100% of bugs but spamming 500 nits will be uninstalled. **Signal-to-Noise Ratio (SNR)** is the governing metric.
 :::
 
-### 4.3 Amp & Augment Code: The Context Engine <sup>[31]</sup>
+### 4.3 Amp & Augment Code: The Context Engine <sup id="cite-31b"><a href="#ref-31">[31]</a></sup>
 
 Differentiate based on proprietary **Context Engines**:
 
@@ -259,14 +250,14 @@ Differentiate based on proprietary **Context Engines**:
 - **Golden Set Expansion:** Manually expand "must-catch" issues beyond narrow public benchmarks
 - **Finding:** Standard tools treat files in isolation. Benchmarks must include "spooky action at a distance" bugs.
 
-### 4.4 Prime Intellect: Reinforcement Learning & Scale <sup>[35]</sup>
+### 4.4 Prime Intellect: Reinforcement Learning & Scale <sup id="cite-35"><a href="#ref-35">[35]</a></sup>
 
 Their INTELLECT-3 model and PRIME-RL framework suggest benchmarks as **reward signals for RL**:
 
 - Use "Verifiers" (automated tests) in RL loops
 - *Executable* benchmarks (Defects4J) are superior to static text-based benchmarks for training
 
-### 4.5 Modu: The Aggregator Leaderboard <sup>[37]</sup>
+### 4.5 Modu: The Aggregator Leaderboard <sup id="cite-37a"><a href="#ref-37">[37]</a></sup>
 
 Third-party ranking based on:
 
@@ -278,10 +269,7 @@ Third-party ranking based on:
 
 This measures **autonomy**—an agent needing 5 iterations is less valuable than one-shot success.
 
-![Methodology Contrast: Controlled Replication vs. Live Monitoring](/amelia/images/methodology_comparison_themed.jpeg)
-<figcaption style="text-align: center; color: var(--vp-c-text-2); margin-top: 0.5rem; font-size: 0.875rem;">Methodology Contrast: Comparing the Greptile approach (controlled replication with historical bugs) versus the CodeRabbit approach (live monitoring with production feedback loops).</figcaption>
-
----
+![Methodology Contrast: Comparing the Greptile approach (controlled replication with historical bugs) versus the CodeRabbit approach (live monitoring with production feedback loops)](/amelia/images/methodology_comparison_themed.jpeg)
 
 ## 5. Metrics Framework: Measuring What Matters
 
@@ -316,8 +304,7 @@ SCE = (1/N) × Σ |P(severity_i) - I(is_critical_i)|
 - **Application:** "Critical" labels should only appear when issues *must* be fixed before merge
 - **Visualization:** Reliability Diagrams show overconfidence (nits as critical) or underconfidence (bugs as optional)
 
-![Severity Calibration Chart](/amelia/images/severity_calibration_themed.jpeg)
-<figcaption style="text-align: center; color: var(--vp-c-text-2); margin-top: 0.5rem; font-size: 0.875rem;">Severity Calibration: A reliability diagram showing predicted severity confidence versus observed fraction of true bugs, with the diagonal representing perfect calibration.</figcaption>
+![Severity Calibration: A reliability diagram showing predicted severity confidence versus observed fraction of true bugs, with the diagonal representing perfect calibration](/amelia/images/severity_calibration_themed.jpeg)
 
 ### 5.2 Conversational Quality Metrics
 
@@ -328,8 +315,6 @@ Code review is a conversation. Technically correct but socially inept agents fai
 | **Constructiveness** | Does comment offer a solution? (Binary or 1-5 scale via LLM-Judge) |
 | **Tone Alignment** | Professional and collaborative? ("Consider using..." vs "Use...") |
 | **Redundancy Rate** | Same comment repeated across lines? (Common hunk-by-hunk failure) |
-
----
 
 ## 6. Gap Analysis and Strategic Recommendations
 
@@ -356,10 +341,8 @@ Use **PrimeVul** for C/C++ realism. For other languages, adapt CVE-based exploit
 Existing benchmarks treat review as single-turn "generate comments." Real review is dialogue—developers push back, ask clarification, explain reasoning.
 
 ::: tip Recommendation
-Incorporate **multi-turn evaluation** where agents respond to developer defenses ("I did this because of X..."). Modu's "Iterated Merges" tracking<sup>[37]</sup> is a good proxy.
+Incorporate **multi-turn evaluation** where agents respond to developer defenses ("I did this because of X..."). Modu's "Iterated Merges" tracking<sup id="cite-37b"><a href="#ref-37">[37]</a></sup> is a good proxy.
 :::
-
----
 
 ## Conclusion
 
@@ -380,49 +363,47 @@ Benchmarking AI code reviewers requires more than bug detection. Combine:
 
 This multi-layered approach ensures your agent is not just a stochastic parrot, but a **calibrated, collaborative, and reliable team member**.
 
----
-
 ## References
 
 <div class="references">
 
-1. Lu et al. "DeepCRCEval: Revisiting the Evaluation of Code Review Comment Generation" [arXiv:2412.18291](https://arxiv.org/abs/2412.18291)
-2. Moonlight AI. "DeepCRCEval Literature Review" [themoonlight.io](https://www.themoonlight.io/en/review/deepcrceval-revisiting-the-evaluation-of-code-review-comment-generation)
-3. Just et al. "Defects4J: A Database of Real Faults" [GitHub](https://github.com/rjust/defects4j)
-4. GMU-SWE. "Defects4J-Knarr" [GitHub](https://github.com/gmu-swe/defects4j-knarr)
-5. "Evaluating Generalizability of LLMs in APR" [arXiv:2503.09217](https://arxiv.org/html/2503.09217v1)
-6. "BugsInPy: Benchmarking Bugs in Python" [GitHub](https://github.com/soarsmu/BugsInPy)
-7. "Reproducing BugsInPy" [GitHub](https://github.com/reproducing-research-projects/BugsInPy)
-8. "BugsInPy-MF: Multiple-bug Versions" [GitHub](https://github.com/DCallaz/bugsinpy-mf)
-9. "SWE-bench Overview" [swebench.com](https://www.swebench.com/SWE-bench/)
-10. "SWE-bench: Can LMs Resolve GitHub Issues?" [GitHub](https://github.com/SWE-bench/SWE-bench)
-11. Epoch AI. "What Skills Does SWE-bench Verified Evaluate?" [epoch.ai](https://epoch.ai/blog/what-skills-does-swe-bench-verified-evaluate)
-12. Ding et al. "PrimeVul" [GitHub](https://github.com/DLVulDet/PrimeVul)
-13. "Vulnerability Detection with Code LMs" [arXiv PDF](https://arxiv.org/pdf/2403.18624)
-14. "Vulnerability Detection with Code LMs" [arXiv:2403.18624](https://arxiv.org/abs/2403.18624)
-15. "CASTLE: Benchmarking for CWE Detection" [arXiv:2503.09433](https://arxiv.org/html/2503.09433v1)
-16. "CASTLE-Benchmark" [GitHub](https://github.com/CASTLE-Benchmark/CASTLE-Benchmark)
-17. "Juliet Test Suite C" [GitHub](https://github.com/arichardson/juliet-test-suite-c)
-18. NIST. "Juliet 1.1 C/C++ and Java Test Suite" [nist.gov](https://www.nist.gov/publications/juliet-11-cc-and-java-test-suite)
-19. NIST. "SARD Test Suites" [nist.gov](https://www.nist.gov/itl/ssd/software-quality-group/sard-acknowledgments-and-test-suites-descriptions)
-20. "Benchmarking LLMs for Fine-Grained Code Review" [arXiv:2511.07017](https://arxiv.org/abs/2511.07017)
-21. "ContextCRBench" [ResearchGate](https://www.researchgate.net/publication/397480187_Benchmarking_LLMs_for_Fine-Grained_Code_Review_with_Enriched_Context_in_Practice)
-22. "ContextCRBench" [ChatPaper](https://chatpaper.com/paper/207899)
-23. Li et al. "CodeReviewer: Pre-Training for Code Review" [arXiv:2203.09095](https://arxiv.org/pdf/2203.09095)
-24. Microsoft. "CodeReviewer README" [GitHub](https://github.com/microsoft/CodeBERT/blob/master/CodeReviewer/README.md)
-25. "Too Noisy To Learn: Enhancing Data Quality" [arXiv:2502.02757](https://arxiv.org/html/2502.02757v2)
-26. "Automatic Code Review by Learning Code Graph Structure" [ResearchGate](https://www.researchgate.net/publication/368858938_Automatic_Code_Review_by_Learning_the_Structure_Information_of_Code_Graph)
-27. Microsoft. "CodeReviewer" [Hugging Face](https://huggingface.co/microsoft/codereviewer)
-28. "Automated Code Review In Practice" [arXiv:2412.18531](https://arxiv.org/html/2412.18531v2)
-29. "CRScore: Grounding Automated Evaluation" [arXiv:2409.19801](https://arxiv.org/html/2409.19801v2)
-30. "DeepCRCEval" [arXiv HTML](https://arxiv.org/html/2412.18291v1)
-31. Augment Code. "We Benchmarked 7 AI Code Review Tools" [augmentcode.com](https://www.augmentcode.com/blog/we-benchmarked-7-ai-code-review-tools-on-real-world-prs-here-are-the-results)
-32. "A Novel Severity Calibration Algorithm" [ResearchGate](https://www.researchgate.net/publication/361556995_A_Novel_Severity_Calibration_Algorithm_for_Defect_Detection_by_Constructing_Maps)
-33. Greptile. "AI Code Review Benchmarks 2025" [greptile.com](https://www.greptile.com/benchmarks)
-34. CodeRabbit. "How to Evaluate AI Code Review Tools" [coderabbit.ai](https://www.coderabbit.ai/blog/framework-for-evaluating-ai-code-review-tools)
-35. Prime Intellect. "Benchmarking" [docs.primeintellect.ai](https://docs.primeintellect.ai/prime-rl/benchmarking)
-36. Prime Intellect. "INTELLECT-3" [primeintellect.ai](https://www.primeintellect.ai/blog/intellect-3)
-37. Modu. "AI-Native Development Security Control Plane" [askmodu.com](https://www.askmodu.com/rankings)
+<div id="ref-1"><a href="#cite-1">↑</a> 1. Lu et al. "DeepCRCEval: Revisiting the Evaluation of Code Review Comment Generation" <a href="https://arxiv.org/abs/2412.18291">arXiv:2412.18291</a></div>
+<div id="ref-2"><a href="#cite-2a">↑a</a> <a href="#cite-2b">↑b</a> 2. Moonlight AI. "DeepCRCEval Literature Review" <a href="https://www.themoonlight.io/en/review/deepcrceval-revisiting-the-evaluation-of-code-review-comment-generation">themoonlight.io</a></div>
+<div id="ref-3"><a href="#cite-3">↑</a> 3. Just et al. "Defects4J: A Database of Real Faults" <a href="https://github.com/rjust/defects4j">GitHub</a></div>
+<div id="ref-4">4. GMU-SWE. "Defects4J-Knarr" <a href="https://github.com/gmu-swe/defects4j-knarr">GitHub</a></div>
+<div id="ref-5"><a href="#cite-5">↑</a> 5. "Evaluating Generalizability of LLMs in APR" <a href="https://arxiv.org/html/2503.09217v1">arXiv:2503.09217</a></div>
+<div id="ref-6"><a href="#cite-6">↑</a> 6. "BugsInPy: Benchmarking Bugs in Python" <a href="https://github.com/soarsmu/BugsInPy">GitHub</a></div>
+<div id="ref-7">7. "Reproducing BugsInPy" <a href="https://github.com/reproducing-research-projects/BugsInPy">GitHub</a></div>
+<div id="ref-8">8. "BugsInPy-MF: Multiple-bug Versions" <a href="https://github.com/DCallaz/bugsinpy-mf">GitHub</a></div>
+<div id="ref-9"><a href="#cite-9">↑</a> 9. "SWE-bench Overview" <a href="https://www.swebench.com/SWE-bench/">swebench.com</a></div>
+<div id="ref-10">10. "SWE-bench: Can LMs Resolve GitHub Issues?" <a href="https://github.com/SWE-bench/SWE-bench">GitHub</a></div>
+<div id="ref-11"><a href="#cite-11">↑</a> 11. Epoch AI. "What Skills Does SWE-bench Verified Evaluate?" <a href="https://epoch.ai/blog/what-skills-does-swe-bench-verified-evaluate">epoch.ai</a></div>
+<div id="ref-12"><a href="#cite-12">↑</a> 12. Ding et al. "PrimeVul" <a href="https://github.com/DLVulDet/PrimeVul">GitHub</a></div>
+<div id="ref-13">13. "Vulnerability Detection with Code LMs" <a href="https://arxiv.org/pdf/2403.18624">arXiv PDF</a></div>
+<div id="ref-14">14. "Vulnerability Detection with Code LMs" <a href="https://arxiv.org/abs/2403.18624">arXiv:2403.18624</a></div>
+<div id="ref-15"><a href="#cite-15">↑</a> 15. "CASTLE: Benchmarking for CWE Detection" <a href="https://arxiv.org/html/2503.09433v1">arXiv:2503.09433</a></div>
+<div id="ref-16">16. "CASTLE-Benchmark" <a href="https://github.com/CASTLE-Benchmark/CASTLE-Benchmark">GitHub</a></div>
+<div id="ref-17"><a href="#cite-17">↑</a> 17. "Juliet Test Suite C" <a href="https://github.com/arichardson/juliet-test-suite-c">GitHub</a></div>
+<div id="ref-18">18. NIST. "Juliet 1.1 C/C++ and Java Test Suite" <a href="https://www.nist.gov/publications/juliet-11-cc-and-java-test-suite">nist.gov</a></div>
+<div id="ref-19">19. NIST. "SARD Test Suites" <a href="https://www.nist.gov/itl/ssd/software-quality-group/sard-acknowledgments-and-test-suites-descriptions">nist.gov</a></div>
+<div id="ref-20"><a href="#cite-20a">↑a</a> <a href="#cite-20b">↑b</a> 20. "Benchmarking LLMs for Fine-Grained Code Review" <a href="https://arxiv.org/abs/2511.07017">arXiv:2511.07017</a></div>
+<div id="ref-21">21. "ContextCRBench" <a href="https://www.researchgate.net/publication/397480187_Benchmarking_LLMs_for_Fine-Grained_Code_Review_with_Enriched_Context_in_Practice">ResearchGate</a></div>
+<div id="ref-22">22. "ContextCRBench" <a href="https://chatpaper.com/paper/207899">ChatPaper</a></div>
+<div id="ref-23"><a href="#cite-23">↑</a> 23. Li et al. "CodeReviewer: Pre-Training for Code Review" <a href="https://arxiv.org/pdf/2203.09095">arXiv:2203.09095</a></div>
+<div id="ref-24">24. Microsoft. "CodeReviewer README" <a href="https://github.com/microsoft/CodeBERT/blob/master/CodeReviewer/README.md">GitHub</a></div>
+<div id="ref-25">25. "Too Noisy To Learn: Enhancing Data Quality" <a href="https://arxiv.org/html/2502.02757v2">arXiv:2502.02757</a></div>
+<div id="ref-26">26. "Automatic Code Review by Learning Code Graph Structure" <a href="https://www.researchgate.net/publication/368858938_Automatic_Code_Review_by_Learning_the_Structure_Information_of_Code_Graph">ResearchGate</a></div>
+<div id="ref-27">27. Microsoft. "CodeReviewer" <a href="https://huggingface.co/microsoft/codereviewer">Hugging Face</a></div>
+<div id="ref-28">28. "Automated Code Review In Practice" <a href="https://arxiv.org/html/2412.18531v2">arXiv:2412.18531</a></div>
+<div id="ref-29">29. "CRScore: Grounding Automated Evaluation" <a href="https://arxiv.org/html/2409.19801v2">arXiv:2409.19801</a></div>
+<div id="ref-30">30. "DeepCRCEval" <a href="https://arxiv.org/html/2412.18291v1">arXiv HTML</a></div>
+<div id="ref-31"><a href="#cite-31a">↑a</a> <a href="#cite-31b">↑b</a> 31. Augment Code. "We Benchmarked 7 AI Code Review Tools" <a href="https://www.augmentcode.com/blog/we-benchmarked-7-ai-code-review-tools-on-real-world-prs-here-are-the-results">augmentcode.com</a></div>
+<div id="ref-32"><a href="#cite-32">↑</a> 32. "A Novel Severity Calibration Algorithm" <a href="https://www.researchgate.net/publication/361556995_A_Novel_Severity_Calibration_Algorithm_for_Defect_Detection_by_Constructing_Maps">ResearchGate</a></div>
+<div id="ref-33"><a href="#cite-33">↑</a> 33. Greptile. "AI Code Review Benchmarks 2025" <a href="https://www.greptile.com/benchmarks">greptile.com</a></div>
+<div id="ref-34"><a href="#cite-34">↑</a> 34. CodeRabbit. "How to Evaluate AI Code Review Tools" <a href="https://www.coderabbit.ai/blog/framework-for-evaluating-ai-code-review-tools">coderabbit.ai</a></div>
+<div id="ref-35"><a href="#cite-35">↑</a> 35. Prime Intellect. "Benchmarking" <a href="https://docs.primeintellect.ai/prime-rl/benchmarking">docs.primeintellect.ai</a></div>
+<div id="ref-36">36. Prime Intellect. "INTELLECT-3" <a href="https://www.primeintellect.ai/blog/intellect-3">primeintellect.ai</a></div>
+<div id="ref-37"><a href="#cite-37a">↑a</a> <a href="#cite-37b">↑b</a> 37. Modu. "AI-Native Development Security Control Plane" <a href="https://www.askmodu.com/rankings">askmodu.com</a></div>
 
 </div>
 
