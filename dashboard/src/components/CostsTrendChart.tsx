@@ -7,8 +7,6 @@ import {
   ChartContainer,
   ChartTooltip,
   ChartTooltipContent,
-  ChartLegend,
-  ChartLegendContent,
   type ChartConfig,
 } from '@/components/ui/chart';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
@@ -190,93 +188,93 @@ export function CostsTrendChart({ data, className }: CostsTrendChartProps) {
         </ToggleGroup>
       </div>
 
-      <ChartContainer config={chartConfig} className="h-64 w-full" role="figure">
-        {chartType === 'stacked' ? (
-          <AreaChart data={chartData} margin={{ left: 12, right: 12, top: 12, bottom: 12 }}>
-            <defs>
+      <div>
+        <ChartContainer config={chartConfig} className="h-64 w-full" role="figure">
+          {chartType === 'stacked' ? (
+            <AreaChart data={chartData} margin={{ left: 12, right: 12, top: 12, bottom: 12 }}>
+              <defs>
+                {models.map((model, index) => (
+                  <linearGradient key={model} id={`gradient-${index}`} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor={getModelColor(index)} stopOpacity={0.4} />
+                    <stop offset="95%" stopColor={getModelColor(index)} stopOpacity={0.05} />
+                  </linearGradient>
+                ))}
+              </defs>
+              <XAxis
+                dataKey="date"
+                tickLine={false}
+                axisLine={false}
+                tickFormatter={formatChartDate}
+                tickMargin={8}
+                className="text-xs"
+              />
+              <YAxis
+                tickLine={false}
+                axisLine={false}
+                tickFormatter={(value) => `$${value}`}
+                tickMargin={8}
+                width={50}
+                className="text-xs"
+              />
+              <ChartTooltip
+                content={
+                  <ChartTooltipContent
+                    labelFormatter={(label) => formatChartDate(String(label))}
+                  />
+                }
+              />
               {models.map((model, index) => (
-                <linearGradient key={model} id={`gradient-${index}`} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor={getModelColor(index)} stopOpacity={0.4} />
-                  <stop offset="95%" stopColor={getModelColor(index)} stopOpacity={0.05} />
-                </linearGradient>
+                <Area
+                  key={model}
+                  dataKey={model}
+                  stackId="costs"
+                  type="monotone"
+                  fill={`url(#gradient-${index})`}
+                  stroke={getModelColor(index)}
+                  strokeWidth={1.5}
+                />
               ))}
-            </defs>
-            <XAxis
-              dataKey="date"
-              tickLine={false}
-              axisLine={false}
-              tickFormatter={formatChartDate}
-              tickMargin={8}
-              className="text-xs"
-            />
-            <YAxis
-              tickLine={false}
-              axisLine={false}
-              tickFormatter={(value) => `$${value}`}
-              tickMargin={8}
-              width={50}
-              className="text-xs"
-            />
-            <ChartTooltip
-              content={
-                <ChartTooltipContent
-                  labelFormatter={(label) => formatChartDate(String(label))}
-                />
-              }
-            />
-            <ChartLegend content={<ChartLegendContent />} />
-            {models.map((model, index) => (
-              <Area
-                key={model}
-                dataKey={model}
-                stackId="costs"
-                type="monotone"
-                fill={`url(#gradient-${index})`}
-                stroke={getModelColor(index)}
-                strokeWidth={1.5}
+            </AreaChart>
+          ) : (
+            <LineChart data={chartData} margin={{ left: 12, right: 12, top: 12, bottom: 12 }}>
+              <XAxis
+                dataKey="date"
+                tickLine={false}
+                axisLine={false}
+                tickFormatter={formatChartDate}
+                tickMargin={8}
+                className="text-xs"
               />
-            ))}
-          </AreaChart>
-        ) : (
-          <LineChart data={chartData} margin={{ left: 12, right: 12, top: 12, bottom: 12 }}>
-            <XAxis
-              dataKey="date"
-              tickLine={false}
-              axisLine={false}
-              tickFormatter={formatChartDate}
-              tickMargin={8}
-              className="text-xs"
-            />
-            <YAxis
-              tickLine={false}
-              axisLine={false}
-              tickFormatter={(value) => `$${value}`}
-              tickMargin={8}
-              width={50}
-              className="text-xs"
-            />
-            <ChartTooltip
-              content={
-                <ChartTooltipContent
-                  labelFormatter={(label) => formatChartDate(String(label))}
-                />
-              }
-            />
-            <ChartLegend content={<ChartLegendContent />} />
-            {models.map((model, index) => (
-              <Line
-                key={model}
-                dataKey={model}
-                type="monotone"
-                stroke={getModelColor(index)}
-                strokeWidth={2}
-                dot={false}
-                activeDot={{ r: 4 }}
+              <YAxis
+                tickLine={false}
+                axisLine={false}
+                tickFormatter={(value) => `$${value}`}
+                tickMargin={8}
+                width={50}
+                className="text-xs"
               />
-            ))}
-          </LineChart>
-        )}
-      </ChartContainer>
+              <ChartTooltip
+                content={
+                  <ChartTooltipContent
+                    labelFormatter={(label) => formatChartDate(String(label))}
+                  />
+                }
+              />
+              {models.map((model, index) => (
+                <Line
+                  key={model}
+                  dataKey={model}
+                  type="monotone"
+                  stroke={getModelColor(index)}
+                  strokeWidth={2}
+                  dot={false}
+                  activeDot={{ r: 4 }}
+                />
+              ))}
+            </LineChart>
+          )}
+        </ChartContainer>
+      </div>
     </div>
   );
 }
