@@ -117,6 +117,25 @@ export interface MessagePart {
   result?: unknown;
 }
 
+/** State of a tool call for UI display. Matches ToolUIPart["state"] from Vercel AI SDK. */
+export type ToolCallState = "input-available" | "output-available" | "output-error";
+
+/** A tool call with its input and result for display in the chat UI. */
+export interface ToolCall {
+  /** Unique identifier for this tool call from the backend. */
+  tool_call_id: string;
+  /** Name of the tool being called. */
+  tool_name: string;
+  /** Input parameters passed to the tool. */
+  input: unknown;
+  /** Output result from the tool (populated when complete). */
+  output?: unknown;
+  /** Error text if the tool call failed. */
+  errorText?: string;
+  /** Current state of the tool call. */
+  state: ToolCallState;
+}
+
 /** A message in a brainstorming session. */
 export interface BrainstormMessage {
   id: string;
@@ -131,6 +150,8 @@ export interface BrainstormMessage {
   status?: "streaming" | "error";
   /** Human-readable error message when status is 'error' */
   errorMessage?: string;
+  /** Tool calls made during this message (for UI display). */
+  toolCalls?: ToolCall[];
 }
 
 /** An artifact generated during a brainstorming session. */

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { useWorkflowStore } from '../store/workflowStore';
 import { useBrainstormStore } from '../store/brainstormStore';
 import type { WebSocketMessage, WorkflowEvent, BrainstormMessage } from '../types';
-import type { BrainstormArtifact } from '../types/api';
+import type { BrainstormArtifact, ToolCall } from '../types/api';
 
 /**
  * Derive WebSocket URL from window.location.
@@ -76,6 +76,13 @@ export function handleBrainstormMessage(msg: BrainstormMessage): void {
           ...m,
           status: error ? 'error' : undefined,
           errorMessage: error,
+          // Mark all running tool calls as completed since the SDK doesn't
+          // stream explicit tool results - it handles execution internally
+          toolCalls: m.toolCalls?.map((tc) =>
+            tc.state === 'input-available'
+              ? { ...tc, state: 'output-available' as const }
+              : tc
+          ),
         }));
       }
       state.setStreaming(false, null);
@@ -91,8 +98,45 @@ export function handleBrainstormMessage(msg: BrainstormMessage): void {
       break;
     }
 
-    // tool_call, tool_result, session_created, session_completed can be
-    // handled later as needed
+    case 'tool_call': {
+      if (msg.message_id) {
+        const toolCall: ToolCall = {
+          tool_call_id: msg.data.tool_call_id as string,
+          tool_name: msg.data.tool_name as string,
+          input: msg.data.input,
+          state: 'input-available',
+        };
+        state.updateMessage(msg.message_id, (m) => ({
+          ...m,
+          toolCalls: [...(m.toolCalls ?? []), toolCall],
+        }));
+      }
+      break;
+    }
+
+    case 'tool_result': {
+      if (msg.message_id) {
+        const toolCallId = msg.data.tool_call_id as string;
+        const output = msg.data.output;
+        const errorText = msg.data.error as string | undefined;
+        state.updateMessage(msg.message_id, (m) => ({
+          ...m,
+          toolCalls: m.toolCalls?.map((tc) =>
+            tc.tool_call_id === toolCallId
+              ? {
+                  ...tc,
+                  output,
+                  errorText,
+                  state: errorText ? 'output-error' : 'output-available',
+                }
+              : tc
+          ),
+        }));
+      }
+      break;
+    }
+
+    // session_created, session_completed can be handled later as needed
     default:
       break;
   }

@@ -66,10 +66,11 @@ class MockToolUseBlock:
 class MockToolResultBlock:
     """Mock ToolResultBlock from claude-agent-sdk."""
 
-    def __init__(self, content: str, is_error: bool = False) -> None:
+    def __init__(self, content: str, is_error: bool = False, tool_use_id: str = "tool_use_123") -> None:
         self.content = content
         self.is_error = is_error
         self.type = "tool_result"
+        self.tool_use_id = tool_use_id
 
 
 class MockAssistantMessage:
@@ -772,6 +773,23 @@ class TestBuildOptions:
 
         assert options.resume == "sess_prev"
 
+    def test_build_options_session_id_uses_preset_system_prompt(self) -> None:
+        """Test that system_prompt becomes preset when session_id is provided.
+
+        When resuming a session, we must not override the original system prompt.
+        Using a preset without `append` tells the SDK to skip the --system-prompt
+        flag entirely, preserving the original session's context.
+        """
+        driver = ClaudeCliDriver()
+        options = driver._build_options(
+            session_id="sess_prev",
+            system_prompt="This should be ignored"
+        )
+
+        assert options.resume == "sess_prev"
+        # system_prompt should be preset (not string) to avoid overriding context
+        assert options.system_prompt == {"type": "preset", "preset": "claude_code"}
+
     def test_build_options_with_system_prompt(self) -> None:
         """Test options with system_prompt."""
         driver = ClaudeCliDriver()
@@ -862,6 +880,40 @@ class TestExecuteAgenticYieldsAgenticMessage:
         assert len(tool_results) == 1
         assert tool_results[0].tool_output == "file contents here"
         assert tool_results[0].is_error is False
+
+    async def test_tool_result_includes_tool_call_id(self, driver: ClaudeCliDriver) -> None:
+        """TOOL_RESULT should include tool_call_id from the ToolResultBlock.tool_use_id.
+
+        This is critical for the UI to match tool results with their calls.
+        Without this, tool calls appear as 'RUNNING' forever.
+        """
+        tool_call_id = "toolu_abc123"
+        tool_block = MockToolUseBlock("Read", {"file_path": "/test.py"})
+        tool_block.id = tool_call_id  # Set specific ID for this test
+
+        messages = [
+            MockAssistantMessage([
+                tool_block,
+                MockToolResultBlock("file contents here", tool_use_id=tool_call_id),
+            ]),
+            MockResultMessage(result="Done", session_id="sess_123"),
+        ]
+
+        with (
+            _patch_sdk_types(),
+            patch("amelia.drivers.cli.claude.ClaudeSDKClient", create_mock_sdk_client(messages)),
+        ):
+            results = [msg async for msg in driver.execute_agentic("test", "/tmp")]
+
+        # Verify tool call has the ID
+        tool_calls = [m for m in results if m.type == AgenticMessageType.TOOL_CALL]
+        assert len(tool_calls) == 1
+        assert tool_calls[0].tool_call_id == tool_call_id
+
+        # Verify tool result ALSO has the same ID
+        tool_results = [m for m in results if m.type == AgenticMessageType.TOOL_RESULT]
+        assert len(tool_results) == 1
+        assert tool_results[0].tool_call_id == tool_call_id
 
     async def test_yields_error_tool_result(self, driver: ClaudeCliDriver) -> None:
         """ToolResultBlock with is_error=True should set is_error on AgenticMessage."""

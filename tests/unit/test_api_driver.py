@@ -495,8 +495,8 @@ class TestExecuteAgenticYieldsAgenticMessage:
         result_msgs = [m for m in results if m.type == AgenticMessageType.RESULT]
         assert len(result_msgs) == 1
         assert result_msgs[0].content == "Task completed successfully"
-        # API driver has no session support
-        assert result_msgs[0].session_id is None
+        # API driver returns session_id for conversation continuity
+        assert result_msgs[0].session_id is not None
 
     async def test_yields_result_with_list_content(
         self, api_driver: ApiDriver, mock_deepagents: MagicMock

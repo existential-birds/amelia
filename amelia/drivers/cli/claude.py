@@ -13,6 +13,7 @@ from claude_agent_sdk.types import (
     Message,
     ResultMessage,
     StreamEvent as SDKStreamEvent,
+    SystemPromptPreset,
     TextBlock,
     ToolResultBlock,
     ToolUseBlock,
@@ -219,11 +220,21 @@ class ClaudeCliDriver:
                 "schema": schema.model_json_schema(),
             }
 
+        # When resuming a session, don't override the system prompt.
+        # The SDK passes `--system-prompt ""` when system_prompt is None, which
+        # replaces the original context. Using a preset without `append` tells
+        # the SDK to not pass any --system-prompt flag, preserving the original
+        # session's system prompt and conversation context.
+        effective_system_prompt: str | SystemPromptPreset | None = system_prompt
+        if session_id is not None:
+            # Resuming: use preset without append to skip --system-prompt flag
+            effective_system_prompt = SystemPromptPreset(type="preset", preset="claude_code")
+
         return ClaudeAgentOptions(
             model=self.model,
             cwd=cwd,
             permission_mode=permission_mode,
-            system_prompt=system_prompt,
+            system_prompt=effective_system_prompt,
             resume=session_id,
             output_format=output_format,
         )
@@ -422,6 +433,7 @@ class ClaudeCliDriver:
                                 yield AgenticMessage(
                                     type=AgenticMessageType.TOOL_RESULT,
                                     tool_name=result_tool_name,
+                                    tool_call_id=block.tool_use_id,
                                     tool_output=content,
                                     is_error=block.is_error or False,
                                     model=self.model,

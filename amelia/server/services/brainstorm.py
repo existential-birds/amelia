@@ -421,6 +421,11 @@ class BrainstormService:
                 "session_id": session_id,
                 "message_id": message_id,
                 "text": message,
+                "tool_call_id": agentic_msg.tool_call_id,
+                "tool_name": agentic_msg.tool_name,
+                "input": agentic_msg.tool_input,
+                "output": agentic_msg.tool_output,
+                "error": agentic_msg.tool_output if agentic_msg.is_error else None,
             },
         )
 

@@ -5,6 +5,7 @@ import subprocess
 import time
 from collections.abc import AsyncIterator
 from typing import Any
+from uuid import uuid4
 
 from deepagents import create_deep_agent
 from deepagents.backends import FilesystemBackend
@@ -165,6 +166,10 @@ class ApiDriver(DriverInterface):
 
     DEFAULT_MODEL = "minimax/minimax-m2"
 
+    # Class-level session storage for conversation continuity
+    # Maps session_id -> MemorySaver checkpointer
+    _sessions: dict[str, MemorySaver] = {}
+
     def __init__(
         self,
         model: str | None = None,
@@ -305,8 +310,12 @@ class ApiDriver(DriverInterface):
         Args:
             prompt: The prompt to execute.
             cwd: Working directory for tool execution.
-            session_id: Unused (API driver has no session support).
-            instructions: Optional system prompt for the agent.
+            session_id: Optional session ID for conversation continuity. If
+                provided, reuses the checkpointer from a previous call to
+                maintain conversation history. If None, creates a new session.
+            instructions: Optional system prompt for the agent. Only used on
+                the first message of a session; ignored on subsequent calls
+                to preserve conversation context.
             schema: Unused (structured output not supported in agentic mode).
             required_tool: If set, agent will be prompted to continue if this
                 tool wasn't called. Use "write_file" to ensure file creation.
@@ -344,13 +353,35 @@ class ApiDriver(DriverInterface):
             # absolute paths from filesystem root (e.g., /docs/plans/...)
             backend = LocalSandbox(root_dir=cwd, virtual_mode=True)
 
-            # Use in-memory checkpointer to enable continuation
-            checkpointer = MemorySaver()
-            thread_id = f"exec-{id(self)}-{time.perf_counter()}"
+            # Session management for conversation continuity
+            # - If session_id is provided, reuse the existing checkpointer
+            # - If session_id is None, create a new session with fresh checkpointer
+            is_new_session = session_id is None
+            current_session_id = session_id or str(uuid4())
+
+            if current_session_id in ApiDriver._sessions:
+                checkpointer = ApiDriver._sessions[current_session_id]
+                logger.debug(
+                    "Resuming existing session",
+                    session_id=current_session_id,
+                )
+            else:
+                checkpointer = MemorySaver()
+                ApiDriver._sessions[current_session_id] = checkpointer
+                logger.debug(
+                    "Created new session",
+                    session_id=current_session_id,
+                )
+
+            # Use session_id as thread_id for checkpointing
+            thread_id = current_session_id
+
+            # Only use system prompt on new sessions to preserve conversation context
+            effective_system_prompt = instructions or "" if is_new_session else ""
 
             agent = create_deep_agent(
                 model=chat_model,
-                system_prompt=instructions or "",
+                system_prompt=effective_system_prompt,
                 backend=backend,
                 checkpointer=checkpointer,
             )
@@ -360,6 +391,8 @@ class ApiDriver(DriverInterface):
                 model=self.model,
                 cwd=cwd,
                 prompt_length=len(prompt),
+                session_id=current_session_id,
+                is_new_session=is_new_session,
             )
 
             last_message: AIMessage | None = None
@@ -621,7 +654,7 @@ class ApiDriver(DriverInterface):
                 yield AgenticMessage(
                     type=AgenticMessageType.RESULT,
                     content=final_content,
-                    session_id=None,  # API driver has no session support
+                    session_id=current_session_id,
                     model=self.model,
                 )
             else:
@@ -629,7 +662,7 @@ class ApiDriver(DriverInterface):
                 yield AgenticMessage(
                     type=AgenticMessageType.RESULT,
                     content="Agent produced no output",
-                    session_id=None,
+                    session_id=current_session_id,
                     is_error=True,
                     model=self.model,
                 )

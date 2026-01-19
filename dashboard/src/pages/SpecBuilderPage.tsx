@@ -27,6 +27,13 @@ import {
   ReasoningTrigger,
   ReasoningContent,
 } from "@/components/ai-elements/reasoning";
+import {
+  Tool,
+  ToolHeader,
+  ToolContent,
+  ToolInput,
+  ToolOutput,
+} from "@/components/ai-elements/tool";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/PageHeader";
@@ -279,6 +286,22 @@ function SpecBuilderPageContent() {
                           <ReasoningContent>{reasoningText}</ReasoningContent>
                         </Reasoning>
                       )}
+                      {message.toolCalls?.map((toolCall) => (
+                        <Tool key={toolCall.tool_call_id}>
+                          <ToolHeader
+                            title={toolCall.tool_name}
+                            type="tool-invocation"
+                            state={toolCall.state}
+                          />
+                          <ToolContent>
+                            <ToolInput input={toolCall.input} />
+                            <ToolOutput
+                              output={toolCall.output}
+                              errorText={toolCall.errorText}
+                            />
+                          </ToolContent>
+                        </Tool>
+                      ))}
                       {isStreamingEmpty ? (
                         <Shimmer className="text-muted-foreground">Thinking...</Shimmer>
                       ) : (
