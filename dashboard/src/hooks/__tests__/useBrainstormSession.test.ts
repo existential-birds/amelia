@@ -11,6 +11,7 @@ describe("useBrainstormSession", () => {
     useBrainstormStore.setState({
       sessions: [],
       activeSessionId: null,
+      activeProfile: null,
       messages: [],
       artifacts: [],
       isStreaming: false,
@@ -74,6 +75,11 @@ describe("useBrainstormSession", () => {
           },
         ],
         artifacts: [],
+        profile: {
+          name: "p1",
+          driver: "cli:claude",
+          model: "sonnet",
+        },
       };
       vi.mocked(brainstormApi.getSession).mockResolvedValueOnce(mockData);
 
@@ -86,6 +92,7 @@ describe("useBrainstormSession", () => {
       expect(brainstormApi.getSession).toHaveBeenCalledWith("s1");
       expect(useBrainstormStore.getState().activeSessionId).toBe("s1");
       expect(useBrainstormStore.getState().messages).toEqual(mockData.messages);
+      expect(useBrainstormStore.getState().activeProfile).toEqual(mockData.profile);
     });
   });
 

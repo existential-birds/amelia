@@ -4,9 +4,11 @@ Provides endpoints for session lifecycle management and chat functionality.
 """
 
 import os
+from pathlib import Path
 from typing import TYPE_CHECKING, Annotated
 from uuid import uuid4
 
+import yaml
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 
@@ -60,6 +62,39 @@ def get_cwd() -> str:
     return os.getcwd()
 
 
+def get_profile_info(profile_id: str) -> "ProfileInfo | None":
+    """Load profile info from settings for display.
+
+    Args:
+        profile_id: Profile ID to look up.
+
+    Returns:
+        ProfileInfo if found, None otherwise.
+    """
+    settings_path = Path("settings.amelia.yaml")
+    env_path = os.environ.get("AMELIA_SETTINGS")
+    if env_path:
+        settings_path = Path(env_path)
+
+    if not settings_path.exists():
+        return None
+
+    try:
+        with settings_path.open() as f:
+            data = yaml.safe_load(f)
+        profiles = data.get("profiles", {})
+        profile_data = profiles.get(profile_id, {})
+        if not profile_data:
+            return None
+        return ProfileInfo(
+            name=profile_id,
+            driver=profile_data.get("driver", "unknown"),
+            model=profile_data.get("model", "unknown"),
+        )
+    except Exception:
+        return None
+
+
 # Request/Response Models
 class CreateSessionRequest(BaseModel):
     """Request to create a new brainstorming session."""
@@ -68,12 +103,21 @@ class CreateSessionRequest(BaseModel):
     topic: str | None = None
 
 
+class ProfileInfo(BaseModel):
+    """Profile information for display in UI."""
+
+    name: str
+    driver: str
+    model: str
+
+
 class SessionWithHistoryResponse(BaseModel):
     """Response containing session with messages and artifacts."""
 
     session: BrainstormingSession
     messages: list[Message]
     artifacts: list[Artifact]
+    profile: ProfileInfo | None = None
 
 
 class SendMessageRequest(BaseModel):
@@ -163,7 +207,7 @@ async def get_session(
         service: Brainstorm service dependency.
 
     Returns:
-        Session with history.
+        Session with history including profile info.
 
     Raises:
         HTTPException: 404 if session not found.
@@ -174,7 +218,17 @@ async def get_session(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Session not found: {session_id}",
         )
-    return SessionWithHistoryResponse(**result)
+
+    # Load profile info for display
+    session = result["session"]
+    profile_info = get_profile_info(session.profile_id)
+
+    return SessionWithHistoryResponse(
+        session=session,
+        messages=result["messages"],
+        artifacts=result["artifacts"],
+        profile=profile_info,
+    )
 
 
 @router.delete("/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)

@@ -714,6 +714,9 @@ export interface ConfigResponse {
 
   /** Maximum concurrent workflows. */
   max_concurrent: number;
+
+  /** Active profile name from settings.amelia.yaml. */
+  active_profile: string;
 }
 
 // ============================================================================

@@ -7,6 +7,7 @@ describe("useBrainstormStore", () => {
     useBrainstormStore.setState({
       sessions: [],
       activeSessionId: null,
+      activeProfile: null,
       messages: [],
       artifacts: [],
       isStreaming: false,
@@ -45,6 +46,28 @@ describe("useBrainstormStore", () => {
       useBrainstormStore.getState().setActiveSessionId(null);
 
       expect(useBrainstormStore.getState().activeSessionId).toBeNull();
+    });
+
+    it("sets active profile", () => {
+      const profile = {
+        name: "test-profile",
+        driver: "cli:claude",
+        model: "sonnet",
+      };
+      useBrainstormStore.getState().setActiveProfile(profile);
+
+      expect(useBrainstormStore.getState().activeProfile).toEqual(profile);
+    });
+
+    it("clears active profile", () => {
+      useBrainstormStore.getState().setActiveProfile({
+        name: "p1",
+        driver: "api:openrouter",
+        model: "gpt-4",
+      });
+      useBrainstormStore.getState().setActiveProfile(null);
+
+      expect(useBrainstormStore.getState().activeProfile).toBeNull();
     });
   });
 

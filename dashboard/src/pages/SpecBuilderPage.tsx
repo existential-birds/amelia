@@ -1,6 +1,7 @@
-import { useEffect, useState, useCallback, type FormEvent } from "react";
+import { useEffect, useState, useCallback, useRef, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { Menu, Lightbulb } from "lucide-react";
+import { api } from "@/api/client";
 import {
   Conversation,
   ConversationContent,
@@ -33,6 +34,8 @@ import { useBrainstormStore } from "@/store/brainstormStore";
 import { useBrainstormSession } from "@/hooks/useBrainstormSession";
 import {
   SessionDrawer,
+  SessionInfoBar,
+  MessageMetadata,
   ArtifactCard,
   HandoffDialog,
 } from "@/components/brainstorm";
@@ -42,6 +45,8 @@ function SpecBuilderPageContent() {
   const navigate = useNavigate();
   const {
     activeSessionId,
+    activeProfile,
+    sessions,
     messages,
     artifacts,
     isStreaming,
@@ -62,10 +67,18 @@ function SpecBuilderPageContent() {
   const [handoffArtifact, setHandoffArtifact] = useState<BrainstormArtifact | null>(null);
   const [isHandingOff, setIsHandingOff] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const activeProfileRef = useRef<string>("");
 
-  // Load sessions on mount
+  // Load sessions and config on mount
   useEffect(() => {
     loadSessions();
+
+    // Fetch active_profile from config for session creation
+    api.getConfig().then((config) => {
+      activeProfileRef.current = config.active_profile;
+    }).catch(() => {
+      // Fall back to empty string on error - backend will use its default
+    });
   }, [loadSessions]);
 
   const handleSubmit = useCallback(
@@ -79,9 +92,8 @@ function SpecBuilderPageContent() {
         if (activeSessionId) {
           await sendMessage(content);
         } else {
-          // Create new session with first message
-          // TODO: Get actual profile ID from settings
-          await createSession("default", content);
+          // Create new session with first message using active profile from config
+          await createSession(activeProfileRef.current, content);
         }
         textInput.clear();
       } catch {
@@ -166,6 +178,15 @@ function SpecBuilderPageContent() {
         onNewSession={startNewSession}
       />
 
+      {/* Session Info Bar - shown when there's an active session */}
+      {activeSessionId && messages.length > 0 && (
+        <SessionInfoBar
+          profile={activeProfile}
+          status={sessions.find((s) => s.id === activeSessionId)?.status ?? "active"}
+          messageCount={messages.length}
+        />
+      )}
+
       {/* Conversation Area */}
       <Conversation className="flex-1 overflow-hidden">
         <ConversationContent className="px-4 py-6">
@@ -185,6 +206,8 @@ function SpecBuilderPageContent() {
                   .join("\n") || "";
                 const isStreamingEmpty = message.role === "assistant" && message.status === "streaming" && !message.content;
 
+                const isComplete = message.role === "assistant" && message.status !== "streaming" && message.content;
+
                 return (
                   <Message key={message.id} from={message.role}>
                     <MessageContent className={message.role === "assistant" ? "w-full" : undefined}>
@@ -198,6 +221,12 @@ function SpecBuilderPageContent() {
                         <Shimmer className="text-muted-foreground">Thinking...</Shimmer>
                       ) : (
                         <MessageResponse>{message.content}</MessageResponse>
+                      )}
+                      {isComplete && (
+                        <MessageMetadata
+                          timestamp={message.created_at}
+                          content={message.content}
+                        />
                       )}
                     </MessageContent>
                   </Message>

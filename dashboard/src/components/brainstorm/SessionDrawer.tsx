@@ -61,7 +61,7 @@ export function SessionDrawer({
 
   return (
     <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
-      <SheetContent side="right" className="w-80 p-0">
+      <SheetContent side="right" className="w-80 p-0 overflow-hidden">
         <SheetHeader className="px-4 py-4 border-b">
           <SheetTitle>Sessions</SheetTitle>
         </SheetHeader>
@@ -79,7 +79,7 @@ export function SessionDrawer({
         </div>
 
         <ScrollArea className="flex-1 h-[calc(100vh-12rem)]">
-          <div className="p-2">
+          <div className="p-2 overflow-hidden">
             {!hasAnySessions ? (
               <p className="text-center text-muted-foreground py-8">
                 No sessions yet. Click "New Session" above to start.

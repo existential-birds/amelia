@@ -7,6 +7,11 @@ import { useBrainstormStore } from "@/store/brainstormStore";
 import { brainstormApi } from "@/api/brainstorm";
 
 vi.mock("@/api/brainstorm");
+vi.mock("@/api/client", () => ({
+  api: {
+    getConfig: vi.fn().mockResolvedValue({ working_dir: "", max_concurrent: 5, active_profile: "test" }),
+  },
+}));
 
 function renderPage() {
   return render(
@@ -66,7 +71,7 @@ describe("SpecBuilderPage", () => {
   it("creates session on first message", async () => {
     const mockSession = {
       id: "s1",
-      profile_id: "default",
+      profile_id: "test",
       driver_session_id: null,
       status: "active" as const,
       topic: "Test",
@@ -83,7 +88,7 @@ describe("SpecBuilderPage", () => {
 
     await waitFor(() => {
       expect(brainstormApi.createSession).toHaveBeenCalledWith(
-        "default",
+        "test",
         "Design a caching layer"
       );
     });

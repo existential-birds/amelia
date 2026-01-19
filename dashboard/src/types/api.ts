@@ -143,9 +143,17 @@ export interface BrainstormArtifact {
   created_at: string;
 }
 
+/** Profile information for display in UI. */
+export interface ProfileInfo {
+  name: string;
+  driver: string;
+  model: string;
+}
+
 /** A complete brainstorming session with its message history and artifacts. */
 export interface SessionWithHistory {
   session: BrainstormingSession;
   messages: BrainstormMessage[];
   artifacts: BrainstormArtifact[];
+  profile?: ProfileInfo;
 }

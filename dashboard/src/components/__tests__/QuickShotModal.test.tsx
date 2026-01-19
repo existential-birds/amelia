@@ -12,7 +12,7 @@ import { toast } from 'sonner';
 vi.mock('@/api/client', () => ({
   api: {
     createWorkflow: vi.fn(),
-    getConfig: vi.fn().mockResolvedValue({ working_dir: '', max_concurrent: 5 }),
+    getConfig: vi.fn().mockResolvedValue({ working_dir: '', max_concurrent: 5, active_profile: 'test' }),
     readFile: vi.fn().mockResolvedValue({
       content: '# Test Design\n\n## Problem\n\nTest problem.',
       filename: 'test-design.md',
@@ -351,7 +351,7 @@ describe('QuickShotModal', () => {
 
   describe('Import Zone', () => {
     beforeEach(() => {
-      vi.mocked(api.getConfig).mockResolvedValue({ working_dir: '/tmp/repo', max_concurrent: 5 });
+      vi.mocked(api.getConfig).mockResolvedValue({ working_dir: '/tmp/repo', max_concurrent: 5, active_profile: 'test' });
       vi.mocked(api.readFile).mockResolvedValue({
         content: '# Test Design\n\n## Problem\n\nTest problem.',
         filename: 'test-design.md',
@@ -421,7 +421,7 @@ describe('QuickShotModal', () => {
 
   describe('Config Integration', () => {
     it('pre-fills worktree path from server config', async () => {
-      vi.mocked(api.getConfig).mockResolvedValue({ working_dir: '/tmp/repo', max_concurrent: 5 });
+      vi.mocked(api.getConfig).mockResolvedValue({ working_dir: '/tmp/repo', max_concurrent: 5, active_profile: 'test' });
       render(<QuickShotModal {...defaultProps} />);
 
       await waitFor(() => {

@@ -12,6 +12,7 @@ export function useBrainstormSession() {
     addSession,
     removeSession,
     setActiveSessionId,
+    setActiveProfile,
     setMessages,
     addMessage,
     removeMessage,
@@ -35,9 +36,10 @@ export function useBrainstormSession() {
       setActiveSessionId(sessionId);
       setMessages(data.messages);
       setArtifacts(data.artifacts);
+      setActiveProfile(data.profile ?? null);
       setDrawerOpen(false);
     },
-    [setActiveSessionId, setMessages, setArtifacts, setDrawerOpen]
+    [setActiveSessionId, setMessages, setArtifacts, setActiveProfile, setDrawerOpen]
   );
 
   const createSession = useCallback(
@@ -149,9 +151,10 @@ export function useBrainstormSession() {
 
   const startNewSession = useCallback(() => {
     setActiveSessionId(null);
+    setActiveProfile(null);
     clearMessages();
     setDrawerOpen(false);
-  }, [setActiveSessionId, clearMessages, setDrawerOpen]);
+  }, [setActiveSessionId, setActiveProfile, clearMessages, setDrawerOpen]);
 
   return {
     activeSessionId,

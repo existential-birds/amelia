@@ -35,11 +35,11 @@ export function SessionListItem({
   });
 
   return (
-    <div className="group flex items-center gap-2 rounded-lg p-2">
+    <div className="group flex w-full items-center gap-2 rounded-lg p-2 min-w-0 overflow-hidden">
       <Button
         variant="ghost"
         className={cn(
-          "flex-1 justify-start gap-3 h-auto py-2 px-2",
+          "min-w-0 flex-1 !shrink justify-start gap-3 h-auto py-2 px-2",
           isSelected && "bg-accent"
         )}
         onClick={() => onSelect(session.id)}
@@ -49,8 +49,8 @@ export function SessionListItem({
           data-testid="status-indicator"
           className={cn("h-2 w-2 rounded-full shrink-0", statusStyles[session.status])}
         />
-        <div className="flex flex-col items-start text-left min-w-0">
-          <span className="text-sm font-medium truncate w-full">
+        <div className="flex flex-col items-start text-left min-w-0 w-0 flex-1">
+          <span className="text-sm font-medium truncate max-w-full">
             {session.topic || "Untitled"}
           </span>
           <span className="text-xs text-muted-foreground">{timeAgo}</span>
