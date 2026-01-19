@@ -58,7 +58,7 @@ Code review is inherently social. A technically correct but abrasive agent will 
 - **Tone and Persuasion:** Encourage fixes rather than triggering defensiveness
 :::
 
-![Hierarchy of Code Review Evaluation Metrics: A four-tier pyramid showing Syntax & Formatting at the base, progressing through Semantic Correctness, Contextual Awareness, to Social & Conversational at the apex.](/amelia/images/hierarchy_of_metrics_themed.jpeg)
+![Hierarchy of Code Review Evaluation Metrics: A four-tier pyramid showing Syntax & Formatting at the base, progressing through Semantic Correctness, Contextual Awareness, to Social & Conversational at the apex.](/images/hierarchy_of_metrics_themed.jpeg)
 
 ## 2. Open Source Benchmark Datasets
 
@@ -267,7 +267,7 @@ Third-party ranking based on:
 
 This measures **autonomy**—an agent needing 5 iterations is less valuable than one-shot success.
 
-![Methodology Contrast: Comparing the Greptile approach (controlled replication with historical bugs) versus the CodeRabbit approach (live monitoring with production feedback loops)](/amelia/images/methodology_comparison_themed.jpeg)
+![Methodology Contrast: Comparing the Greptile approach (controlled replication with historical bugs) versus the CodeRabbit approach (live monitoring with production feedback loops)](/images/methodology_comparison_themed.jpeg)
 
 ## 5. Metrics Framework: Measuring What Matters
 
@@ -302,7 +302,7 @@ SCE = (1/N) × Σ |P(severity_i) - I(is_critical_i)|
 - **Application:** "Critical" labels should only appear when issues *must* be fixed before merge
 - **Visualization:** Reliability Diagrams show overconfidence (nits as critical) or underconfidence (bugs as optional)
 
-![Severity Calibration: A reliability diagram showing predicted severity confidence versus observed fraction of true bugs, with the diagonal representing perfect calibration](/amelia/images/severity_calibration_themed.jpeg)
+![Severity Calibration: A reliability diagram showing predicted severity confidence versus observed fraction of true bugs, with the diagonal representing perfect calibration](/images/severity_calibration_themed.jpeg)
 
 ### 5.2 Conversational Quality Metrics
 
