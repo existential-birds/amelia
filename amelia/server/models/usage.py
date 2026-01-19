@@ -12,6 +12,9 @@ class UsageSummary(BaseModel):
     total_duration_ms: int
     cache_hit_rate: float | None = None
     cache_savings_usd: float | None = None
+    previous_period_cost_usd: float | None = None  # For period-over-period comparison
+    successful_workflows: int | None = None  # Workflows not cancelled or failed
+    success_rate: float | None = None  # 0-1, successful_workflows / total_workflows
 
 
 class UsageTrendPoint(BaseModel):
@@ -32,6 +35,9 @@ class UsageByModel(BaseModel):
     cost_usd: float
     cache_hit_rate: float | None = None
     cache_savings_usd: float | None = None
+    trend: list[float] | None = None  # Daily costs array for sparkline
+    successful_workflows: int | None = None  # Workflows not cancelled or failed
+    success_rate: float | None = None  # 0-1, successful_workflows / workflows
 
 
 class UsageResponse(BaseModel):

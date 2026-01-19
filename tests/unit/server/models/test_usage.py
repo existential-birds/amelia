@@ -83,6 +83,37 @@ def test_usage_trend_point_by_model_defaults_to_none():
     assert point.by_model is None
 
 
+def test_usage_by_model_with_trend_and_success():
+    """UsageByModel should include trend data and success metrics."""
+    model_usage = UsageByModel(
+        model="claude-sonnet-4",
+        workflows=18,
+        tokens=892000,
+        cost_usd=42.17,
+        trend=[10.5, 12.3, 8.7, 10.67],
+        successful_workflows=16,
+        success_rate=0.889,
+    )
+
+    assert model_usage.trend == [10.5, 12.3, 8.7, 10.67]
+    assert model_usage.successful_workflows == 16
+    assert model_usage.success_rate == 0.889
+
+
+def test_usage_by_model_new_fields_default_to_none():
+    """New UsageByModel fields should default to None for backwards compat."""
+    model_usage = UsageByModel(
+        model="claude-sonnet-4",
+        workflows=18,
+        tokens=892000,
+        cost_usd=42.17,
+    )
+
+    assert model_usage.trend is None
+    assert model_usage.successful_workflows is None
+    assert model_usage.success_rate is None
+
+
 def test_usage_response_complete():
     """UsageResponse combines all components."""
     response = UsageResponse(
@@ -101,3 +132,34 @@ def test_usage_response_complete():
     )
     assert len(response.trend) == 1
     assert len(response.by_model) == 1
+
+
+def test_usage_summary_with_comparison_and_success():
+    """UsageSummary should include period comparison and success metrics."""
+    summary = UsageSummary(
+        total_cost_usd=127.50,
+        total_workflows=24,
+        total_tokens=1200000,
+        total_duration_ms=2820000,
+        previous_period_cost_usd=100.00,
+        successful_workflows=20,
+        success_rate=0.833,
+    )
+
+    assert summary.previous_period_cost_usd == 100.00
+    assert summary.successful_workflows == 20
+    assert summary.success_rate == 0.833
+
+
+def test_usage_summary_new_fields_default_to_none():
+    """New UsageSummary fields should default to None for backwards compat."""
+    summary = UsageSummary(
+        total_cost_usd=127.50,
+        total_workflows=24,
+        total_tokens=1200000,
+        total_duration_ms=2820000,
+    )
+
+    assert summary.previous_period_cost_usd is None
+    assert summary.successful_workflows is None
+    assert summary.success_rate is None
