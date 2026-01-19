@@ -34,10 +34,10 @@ export function Layout() {
         <DashboardSidebar />
 
         {/* Main content area with navigation progress */}
-        <main className="flex-1 overflow-hidden relative">
+        <main className="flex-1 overflow-auto relative">
           {/* Starfield background - z-0 */}
           <div
-            className="absolute inset-0 pointer-events-none z-0 opacity-40"
+            className="fixed inset-0 pointer-events-none z-0 opacity-40"
             style={{
               background: `
                 radial-gradient(1px 1px at 20px 30px, rgb(239 248 226), transparent),
@@ -61,7 +61,7 @@ export function Layout() {
 
           {/* Glass scanlines - z-[5] (behind content at z-10) */}
           <div
-            className="absolute inset-0 pointer-events-none z-[5]"
+            className="fixed inset-0 pointer-events-none z-[5]"
             style={{
               background: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgb(239 248 226 / 0.01) 2px, rgb(239 248 226 / 0.01) 4px)',
             }}
@@ -70,7 +70,7 @@ export function Layout() {
 
           {/* Vignette - z-[6] (behind content at z-10) */}
           <div
-            className="absolute inset-0 pointer-events-none z-[6]"
+            className="fixed inset-0 pointer-events-none z-[6]"
             style={{
               background: 'radial-gradient(ellipse at center, transparent 30%, rgb(13 26 18 / 0.6) 100%)',
             }}
