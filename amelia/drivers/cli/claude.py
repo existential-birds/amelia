@@ -483,3 +483,17 @@ class ClaudeCliDriver:
             num_turns=getattr(self.last_result_message, "num_turns", None),
             model=usage_data.get("model") or self.model,
         )
+
+    def cleanup_session(self, session_id: str) -> bool:
+        """Clean up session state.
+
+        ClaudeCliDriver delegates session management to the SDK,
+        so no explicit cleanup is needed.
+
+        Args:
+            session_id: The driver session ID (unused).
+
+        Returns:
+            False - no local state to clean up.
+        """
+        return False

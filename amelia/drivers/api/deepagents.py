@@ -679,3 +679,17 @@ class ApiDriver(DriverInterface):
             DriverUsage with accumulated totals, or None if no execution occurred.
         """
         return self._usage
+
+    def cleanup_session(self, session_id: str) -> bool:
+        """Clean up session state from the class-level cache.
+
+        Delegates to the classmethod to remove the MemorySaver
+        checkpointer for the given session.
+
+        Args:
+            session_id: The driver session ID to clean up.
+
+        Returns:
+            True if session was found and removed, False otherwise.
+        """
+        return ApiDriver._sessions.pop(session_id, None) is not None

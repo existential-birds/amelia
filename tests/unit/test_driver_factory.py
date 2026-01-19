@@ -86,3 +86,28 @@ class TestDriverCleanupSession:
         driver = ApiDriver(cwd="/tmp")
         assert hasattr(driver, "cleanup_session")
         assert callable(driver.cleanup_session)
+
+    def test_claude_cli_driver_cleanup_returns_false(self) -> None:
+        """ClaudeCliDriver cleanup_session should return False (no state to clean)."""
+        driver = ClaudeCliDriver()
+        result = driver.cleanup_session("any-session-id")
+        assert result is False
+
+    def test_api_driver_cleanup_removes_session(self) -> None:
+        """ApiDriver cleanup_session should remove session from cache."""
+        # Directly add a session to the class-level cache
+        test_session_id = "test-cleanup-session-123"
+        from langgraph.checkpoint.memory import MemorySaver
+        ApiDriver._sessions[test_session_id] = MemorySaver()
+
+        driver = ApiDriver(cwd="/tmp")
+        result = driver.cleanup_session(test_session_id)
+
+        assert result is True
+        assert test_session_id not in ApiDriver._sessions
+
+    def test_api_driver_cleanup_returns_false_for_unknown(self) -> None:
+        """ApiDriver cleanup_session should return False for unknown session."""
+        driver = ApiDriver(cwd="/tmp")
+        result = driver.cleanup_session("nonexistent-session-id")
+        assert result is False
