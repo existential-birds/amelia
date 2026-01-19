@@ -459,3 +459,195 @@ class TestUsageSummaryWithSuccessMetrics:
         assert summary["successful_workflows"] == 0
         assert summary["success_rate"] == 0.0
         assert summary["previous_period_cost_usd"] == 0.0
+
+
+class TestUsageByModelWithTrendAndSuccess:
+    """Tests for get_usage_by_model with trend array and success metrics."""
+
+    @pytest.fixture
+    async def db_with_multi_model_usage(
+        self, db_with_schema: Database
+    ) -> Database:
+        """Create database with multiple models across multiple days.
+
+        Creates test data with:
+        - 4 workflows across Jan 15-18, 2026
+        - 2 models: claude-sonnet-4-20250514 and claude-opus-4-20250514
+        - Mixed success states (3 completed, 1 failed)
+
+        Returns:
+            Database with workflow and token usage records.
+        """
+        repo = WorkflowRepository(db_with_schema)
+
+        # Create workflows with mixed statuses
+        wf1 = ServerExecutionState(
+            id="wf-model-1",
+            issue_id="ISSUE-M1",
+            worktree_path="/tmp/test-model-1",
+            workflow_status="completed",
+            started_at=datetime(2026, 1, 15, 10, 0, 0, tzinfo=UTC),
+            completed_at=datetime(2026, 1, 15, 12, 0, 0, tzinfo=UTC),
+        )
+        wf2 = ServerExecutionState(
+            id="wf-model-2",
+            issue_id="ISSUE-M2",
+            worktree_path="/tmp/test-model-2",
+            workflow_status="completed",
+            started_at=datetime(2026, 1, 16, 10, 0, 0, tzinfo=UTC),
+            completed_at=datetime(2026, 1, 16, 12, 0, 0, tzinfo=UTC),
+        )
+        wf3 = ServerExecutionState(
+            id="wf-model-3",
+            issue_id="ISSUE-M3",
+            worktree_path="/tmp/test-model-3",
+            workflow_status="completed",
+            started_at=datetime(2026, 1, 17, 10, 0, 0, tzinfo=UTC),
+            completed_at=datetime(2026, 1, 17, 12, 0, 0, tzinfo=UTC),
+        )
+        wf4 = ServerExecutionState(
+            id="wf-model-4",
+            issue_id="ISSUE-M4",
+            worktree_path="/tmp/test-model-4",
+            workflow_status="failed",
+            started_at=datetime(2026, 1, 18, 10, 0, 0, tzinfo=UTC),
+            completed_at=datetime(2026, 1, 18, 11, 0, 0, tzinfo=UTC),
+            failure_reason="Test failure",
+        )
+        await repo.create(wf1)
+        await repo.create(wf2)
+        await repo.create(wf3)
+        await repo.create(wf4)
+
+        # wf1 (Jan 15): uses sonnet only
+        await repo.save_token_usage(
+            TokenUsage(
+                workflow_id="wf-model-1",
+                agent="architect",
+                model="claude-sonnet-4-20250514",
+                input_tokens=1000,
+                output_tokens=500,
+                cost_usd=0.03,
+                duration_ms=5000,
+                num_turns=3,
+                timestamp=datetime(2026, 1, 15, 10, 0, 0, tzinfo=UTC),
+            )
+        )
+
+        # wf2 (Jan 16): uses sonnet and opus
+        await repo.save_token_usage(
+            TokenUsage(
+                workflow_id="wf-model-2",
+                agent="architect",
+                model="claude-sonnet-4-20250514",
+                input_tokens=1100,
+                output_tokens=550,
+                cost_usd=0.035,
+                duration_ms=5500,
+                num_turns=3,
+                timestamp=datetime(2026, 1, 16, 10, 0, 0, tzinfo=UTC),
+            )
+        )
+        await repo.save_token_usage(
+            TokenUsage(
+                workflow_id="wf-model-2",
+                agent="developer",
+                model="claude-opus-4-20250514",
+                input_tokens=2000,
+                output_tokens=1000,
+                cost_usd=0.08,
+                duration_ms=10000,
+                num_turns=5,
+                timestamp=datetime(2026, 1, 16, 11, 0, 0, tzinfo=UTC),
+            )
+        )
+
+        # wf3 (Jan 17): uses opus only
+        await repo.save_token_usage(
+            TokenUsage(
+                workflow_id="wf-model-3",
+                agent="architect",
+                model="claude-opus-4-20250514",
+                input_tokens=2500,
+                output_tokens=1200,
+                cost_usd=0.10,
+                duration_ms=12000,
+                num_turns=6,
+                timestamp=datetime(2026, 1, 17, 10, 0, 0, tzinfo=UTC),
+            )
+        )
+
+        # wf4 (Jan 18, failed): uses sonnet
+        await repo.save_token_usage(
+            TokenUsage(
+                workflow_id="wf-model-4",
+                agent="architect",
+                model="claude-sonnet-4-20250514",
+                input_tokens=500,
+                output_tokens=250,
+                cost_usd=0.015,
+                duration_ms=2500,
+                num_turns=2,
+                timestamp=datetime(2026, 1, 18, 10, 0, 0, tzinfo=UTC),
+            )
+        )
+
+        return db_with_schema
+
+    async def test_get_usage_by_model_includes_trend_and_success(
+        self, db_with_multi_model_usage: Database
+    ) -> None:
+        """get_usage_by_model should include trend array and success metrics."""
+        repo = WorkflowRepository(db_with_multi_model_usage)
+
+        by_model = await repo.get_usage_by_model(
+            start_date=date(2026, 1, 15),
+            end_date=date(2026, 1, 21),
+        )
+
+        for model_data in by_model:
+            assert "trend" in model_data
+            assert isinstance(model_data["trend"], list)
+            assert "successful_workflows" in model_data
+            assert "success_rate" in model_data
+
+    async def test_get_usage_by_model_trend_has_correct_daily_costs(
+        self, db_with_multi_model_usage: Database
+    ) -> None:
+        """trend array should contain correct daily costs for each model."""
+        repo = WorkflowRepository(db_with_multi_model_usage)
+
+        by_model = await repo.get_usage_by_model(
+            start_date=date(2026, 1, 15),
+            end_date=date(2026, 1, 21),
+        )
+
+        # Find sonnet model data (used on Jan 15, 16, 18)
+        sonnet = next(m for m in by_model if m["model"] == "claude-sonnet-4-20250514")
+        # Trend should have 7 days worth of data points
+        assert len(sonnet["trend"]) == 7
+
+        # Find opus model data (used on Jan 16, 17)
+        opus = next(m for m in by_model if m["model"] == "claude-opus-4-20250514")
+        assert len(opus["trend"]) == 7
+
+    async def test_get_usage_by_model_success_metrics_per_model(
+        self, db_with_multi_model_usage: Database
+    ) -> None:
+        """success metrics should be calculated per model."""
+        repo = WorkflowRepository(db_with_multi_model_usage)
+
+        by_model = await repo.get_usage_by_model(
+            start_date=date(2026, 1, 15),
+            end_date=date(2026, 1, 21),
+        )
+
+        # Sonnet: used by wf1 (completed), wf2 (completed), wf4 (failed) = 2/3 = 66.67%
+        sonnet = next(m for m in by_model if m["model"] == "claude-sonnet-4-20250514")
+        assert sonnet["successful_workflows"] == 2
+        assert sonnet["success_rate"] == pytest.approx(66.67, rel=0.01)
+
+        # Opus: used by wf2 (completed), wf3 (completed) = 2/2 = 100%
+        opus = next(m for m in by_model if m["model"] == "claude-opus-4-20250514")
+        assert opus["successful_workflows"] == 2
+        assert opus["success_rate"] == pytest.approx(100.0, rel=0.01)
