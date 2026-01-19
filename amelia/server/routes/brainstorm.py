@@ -19,6 +19,7 @@ from amelia.server.models.brainstorm import (
     Message,
     SessionStatus,
 )
+from amelia.server.routes.config import ProfileInfo
 from amelia.server.services.brainstorm import BrainstormService
 
 
@@ -133,14 +134,6 @@ class CreateSessionRequest(BaseModel):
 
     profile_id: str
     topic: str | None = None
-
-
-class ProfileInfo(BaseModel):
-    """Profile information for display in UI."""
-
-    name: str
-    driver: str
-    model: str
 
 
 class SessionWithHistoryResponse(BaseModel):

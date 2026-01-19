@@ -73,24 +73,31 @@ export function useBrainstormSession() {
       addMessage(userMessage);
 
       // Send the message
-      setStreaming(true, null);
-      const response = await brainstormApi.sendMessage(session.id, firstMessage);
+      try {
+        setStreaming(true, null);
+        const response = await brainstormApi.sendMessage(session.id, firstMessage);
 
-      // Create assistant placeholder with streaming status
-      const assistantMessage = {
-        id: response.message_id,
-        session_id: session.id,
-        sequence: 2,
-        role: "assistant" as const,
-        content: "",
-        parts: null,
-        created_at: new Date().toISOString(),
-        status: "streaming" as const,
-      };
-      addMessage(assistantMessage);
-      setStreaming(true, response.message_id);
+        // Create assistant placeholder with streaming status
+        const assistantMessage = {
+          id: response.message_id,
+          session_id: session.id,
+          sequence: 2,
+          role: "assistant" as const,
+          content: "",
+          parts: null,
+          created_at: new Date().toISOString(),
+          status: "streaming" as const,
+        };
+        addMessage(assistantMessage);
+        setStreaming(true, response.message_id);
+      } catch (error) {
+        // Rollback optimistic user message
+        removeMessage(userMessage.id);
+        setStreaming(false, null);
+        throw error;
+      }
     },
-    [addSession, setActiveSessionId, setActiveProfile, clearMessages, setSessionUsage, addMessage, setStreaming]
+    [addSession, setActiveSessionId, setActiveProfile, clearMessages, setSessionUsage, addMessage, removeMessage, setStreaming]
   );
 
   const sendMessage = useCallback(
