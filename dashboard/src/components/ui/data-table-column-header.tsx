@@ -31,6 +31,7 @@ export function DataTableColumnHeader<TData, TValue>({
       type="button"
       className={cn(
         'flex items-center gap-1 hover:text-foreground transition-colors',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1',
         align === 'right' && 'ml-auto',
         className
       )}
