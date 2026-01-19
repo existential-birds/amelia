@@ -33,7 +33,7 @@ When data proves incomplete or ambiguous, the agent **refines its plan**, genera
 
 The system processes dozens of searches and reads hundreds of sources in minutes.<sup id="cite-1c"><a href="#ref-1">[1]</a></sup> Benchmark results: Perplexity's reasoning model scored 21.1% on "Humanity's Last Exam," outperforming other frontier models.
 
-![Perplexity Deep Research Architecture](/amelia/images/placeholder_perplexity_architecture.svg)
+![Perplexity Deep Research Architecture](/images/placeholder_perplexity_architecture.svg)
 <figcaption style="text-align: center; color: var(--vp-c-text-2); margin-top: 0.5rem; font-size: 0.875rem;">Placeholder: Perplexity's recursive agentic loop showing query → plan → search → evaluate → refine cycle.</figcaption>
 
 #### 1.1.2 Infrastructure: Exabyte Scale and Atomic Indexing
@@ -64,7 +64,7 @@ Manus treats the **file system as unlimited context**. Rather than keeping entir
 | **Restorable Compression** | Large observations (full HTML of scraped websites) are processed then dropped from active context. Only metadata (URL, file path) remains. Content restores from file system when needed.<sup id="cite-4c"><a href="#ref-4">[4]</a></sup> |
 | **KV-Cache Optimization** | Stable system prompts and append-only history formats enable attention map reuse, reducing cost and latency for long-running tasks.<sup id="cite-4d"><a href="#ref-4">[4]</a></sup> |
 
-![Manus AI Context Engineering](/amelia/images/placeholder_manus_context.svg)
+![Manus AI Context Engineering](/images/placeholder_manus_context.svg)
 <figcaption style="text-align: center; color: var(--vp-c-text-2); margin-top: 0.5rem; font-size: 0.875rem;">Placeholder: Manus AI's context engineering showing Active Context vs External Memory (File System) architecture.</figcaption>
 
 #### 1.2.2 Action Space Management
@@ -99,7 +99,7 @@ These agents cannot replace human empathy and nuance. They serve as a **high-vol
 
 The architecture typically employs RAG to ground synthetic users in previous real-world interview transcripts, ensuring they reflect observed behaviors rather than generic LLM outputs.<sup id="cite-10b"><a href="#ref-10">[10]</a></sup>
 
-![Synthetic User Research Architecture](/amelia/images/placeholder_synthetic_users.svg)
+![Synthetic User Research Architecture](/images/placeholder_synthetic_users.svg)
 <figcaption style="text-align: center; color: var(--vp-c-text-2); margin-top: 0.5rem; font-size: 0.875rem;">Placeholder: Synthetic user research pipeline showing persona prompting → RAG grounding → interview simulation.</figcaption>
 
 ### 1.4 Strategy and Generative UI
@@ -153,7 +153,7 @@ The agent acts as a nudge system:
 
 This enables proactive intervention, operationalizing psychological safety through data no individual could track manually across a large team.
 
-![Coordination Dashboard](/amelia/images/placeholder_em_dashboard.svg)
+![Coordination Dashboard](/images/placeholder_em_dashboard.svg)
 <figcaption style="text-align: center; color: var(--vp-c-text-2); margin-top: 0.5rem; font-size: 0.875rem;">Placeholder: Agentic coordination dashboard showing team health metrics, burnout risk indicators, and daily briefing synthesis.</figcaption>
 
 ### 2.2 ROI and Organizational Design
@@ -242,7 +242,7 @@ G-Eval analyzes **token probabilities (log-probs)** rather than requesting simpl
 *Example:* If the model assigns 60% probability to "4" and 40% to "3", the score is 3.6. This continuous metric captures nuance that integer scores miss.
 :::
 
-![G-Eval Evaluation Framework](/amelia/images/placeholder_geval_framework.svg)
+![G-Eval Evaluation Framework](/images/placeholder_geval_framework.svg)
 <figcaption style="text-align: center; color: var(--vp-c-text-2); margin-top: 0.5rem; font-size: 0.875rem;">Placeholder: G-Eval pipeline showing Input → Auto-CoT Reasoning → Probability-Weighted Scoring → Calibrated Output.</figcaption>
 
 ### 3.2 Human-in-the-Loop Architectures
@@ -291,7 +291,7 @@ Using agent service accounts ("God Mode" keys) creates privilege escalation vuln
 | **On-Behalf-Of (OBO) Flow** | Each agent presents token asserting: "I am Agent B, acting *on behalf of* User A" |
 | **Attribute-Based Access Control (ABAC)** | Final resource checks *original* user's attributes: "Does User A have `restart_server` attribute?" If not, request fails regardless of agent permissions.<sup id="cite-35"><a href="#ref-35">[35]</a></sup> |
 
-![Identity Propagation in Agentic Systems](/amelia/images/placeholder_identity_propagation.svg)
+![Identity Propagation in Agentic Systems](/images/placeholder_identity_propagation.svg)
 <figcaption style="text-align: center; color: var(--vp-c-text-2); margin-top: 0.5rem; font-size: 0.875rem;">Placeholder: Multi-agent identity propagation showing User → Agent A → Agent B → Resource with JWT token chain and ABAC verification.</figcaption>
 
 #### 3.3.2 RAG Security and Document-Level ACLs
