@@ -9,7 +9,7 @@ from amelia.server.database.connection import Database
 
 
 @pytest.fixture
-async def seed_data(db_with_schema: Database):
+async def seed_data(db_with_schema: Database) -> None:
     """Seed test data for usage queries."""
     # Create two workflows
     await db_with_schema.execute("""
@@ -29,7 +29,7 @@ async def seed_data(db_with_schema: Database):
     """)
 
 
-async def test_get_usage_summary(repository: WorkflowRepository, seed_data):
+async def test_get_usage_summary(repository: WorkflowRepository, seed_data: None) -> None:
     """get_usage_summary returns aggregated totals."""
     summary = await repository.get_usage_summary(
         start_date=date(2026, 1, 1),
@@ -42,7 +42,7 @@ async def test_get_usage_summary(repository: WorkflowRepository, seed_data):
     assert summary["total_duration_ms"] == 135000  # 30k+60k+45k
 
 
-async def test_get_usage_trend(repository: WorkflowRepository, seed_data):
+async def test_get_usage_trend(repository: WorkflowRepository, seed_data: None) -> None:
     """get_usage_trend returns daily aggregates."""
     trend = await repository.get_usage_trend(
         start_date=date(2026, 1, 1),
@@ -63,7 +63,7 @@ async def test_get_usage_trend(repository: WorkflowRepository, seed_data):
     assert jan15["workflows"] == 1
 
 
-async def test_get_usage_by_model(repository: WorkflowRepository, seed_data):
+async def test_get_usage_by_model(repository: WorkflowRepository, seed_data: None) -> None:
     """get_usage_by_model returns model breakdown."""
     by_model = await repository.get_usage_by_model(
         start_date=date(2026, 1, 1),
@@ -82,7 +82,7 @@ async def test_get_usage_by_model(repository: WorkflowRepository, seed_data):
     assert opus["tokens"] == 18000  # 15k+3k
 
 
-async def test_get_usage_summary_date_filtering(repository: WorkflowRepository, seed_data):
+async def test_get_usage_summary_date_filtering(repository: WorkflowRepository, seed_data: None) -> None:
     """Date filtering excludes out-of-range data."""
     summary = await repository.get_usage_summary(
         start_date=date(2026, 1, 14),

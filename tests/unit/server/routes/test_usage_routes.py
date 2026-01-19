@@ -11,7 +11,7 @@ from amelia.server.dependencies import get_repository
 
 
 @pytest.fixture
-def mock_repo():
+def mock_repo() -> MagicMock:
     """Create mock repository."""
     repo = MagicMock()
     repo.get_usage_summary = AsyncMock(return_value={
@@ -32,7 +32,7 @@ def mock_repo():
 
 
 @pytest.fixture
-def client(mock_repo):
+def client(mock_repo: MagicMock) -> TestClient:
     """Create test client with mocked dependencies."""
     from amelia.server.routes.usage import router
 
@@ -45,7 +45,7 @@ def client(mock_repo):
     return TestClient(app)
 
 
-def test_get_usage_with_preset(client, mock_repo):
+def test_get_usage_with_preset(client: TestClient, mock_repo: MagicMock) -> None:
     """GET /api/usage?preset=30d returns usage data."""
     response = client.get("/api/usage?preset=30d")
 
@@ -58,7 +58,7 @@ def test_get_usage_with_preset(client, mock_repo):
     assert len(data["by_model"]) == 2
 
 
-def test_get_usage_with_date_range(client, mock_repo):
+def test_get_usage_with_date_range(client: TestClient, mock_repo: MagicMock) -> None:
     """GET /api/usage with start/end dates uses those dates."""
     response = client.get("/api/usage?start=2026-01-01&end=2026-01-15")
 
@@ -70,7 +70,7 @@ def test_get_usage_with_date_range(client, mock_repo):
     assert call_args[1]["end_date"] == date(2026, 1, 15)
 
 
-def test_get_usage_preset_7d(client, mock_repo):
+def test_get_usage_preset_7d(client: TestClient, mock_repo: MagicMock) -> None:
     """preset=7d calculates correct date range."""
     response = client.get("/api/usage?preset=7d")
 
@@ -83,14 +83,14 @@ def test_get_usage_preset_7d(client, mock_repo):
     assert (end_date - start_date).days == 6  # 7 days inclusive
 
 
-def test_get_usage_invalid_preset(client):
+def test_get_usage_invalid_preset(client: TestClient) -> None:
     """Invalid preset returns 400."""
     response = client.get("/api/usage?preset=invalid")
 
     assert response.status_code == 400
 
 
-def test_get_usage_missing_params_uses_30d(client, mock_repo):
+def test_get_usage_missing_params_uses_30d(client: TestClient, mock_repo: MagicMock) -> None:
     """No params defaults to preset=30d."""
     response = client.get("/api/usage")
 
