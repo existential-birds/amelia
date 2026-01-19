@@ -92,8 +92,38 @@ def get_profile_info(profile_id: str) -> "ProfileInfo | None":
             driver=profile_data.get("driver", "unknown"),
             model=profile_data.get("model", "unknown"),
         )
-    except Exception as e:
+    except (FileNotFoundError, PermissionError, yaml.YAMLError, KeyError) as e:
         logger.debug("Failed to load profile info", profile_id=profile_id, error=str(e))
+        return None
+
+
+def get_driver_type(profile_id: str, settings_path: Path | None = None) -> str | None:
+    """Get driver type for a profile.
+
+    Args:
+        profile_id: Profile ID to look up.
+        settings_path: Optional explicit path to settings file.
+
+    Returns:
+        Driver type string (e.g., "api:openrouter") or None if not found.
+    """
+    if settings_path is None:
+        settings_path = Path("settings.amelia.yaml")
+        env_path = os.environ.get("AMELIA_SETTINGS")
+        if env_path:
+            settings_path = Path(env_path)
+
+    if not settings_path.exists():
+        return None
+
+    try:
+        with settings_path.open() as f:
+            data = yaml.safe_load(f)
+        profiles = data.get("profiles", {})
+        profile_data = profiles.get(profile_id, {})
+        return profile_data.get("driver") if profile_data else None
+    except (FileNotFoundError, PermissionError, yaml.YAMLError) as e:
+        logger.debug("Failed to get driver type", profile_id=profile_id, error=str(e))
         return None
 
 
