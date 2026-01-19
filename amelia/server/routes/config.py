@@ -29,7 +29,7 @@ def _load_settings() -> dict[str, Any]:
         with settings_path.open() as f:
             data = yaml.safe_load(f)
         return data or {}
-    except (FileNotFoundError, yaml.YAMLError):
+    except (FileNotFoundError, PermissionError, yaml.YAMLError):
         return {}
 
 

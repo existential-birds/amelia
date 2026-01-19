@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { cn, copyToClipboard } from "@/lib/utils";
 import { Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,15 @@ export function CopyButton({ content, className }: CopyButtonProps) {
       timeoutRef.current = setTimeout(() => setCopied(false), 2000);
     }
   }, [content]);
+
+  // Clean up timeout on unmount to prevent memory leak
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
 
   return (
     <Button
