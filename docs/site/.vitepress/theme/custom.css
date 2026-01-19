@@ -166,6 +166,21 @@ html:not(.dark) .vp-doc h1::before {
 }
 
 /**
+ * Component: Doc Aside / "On This Page" Outline
+ * Fix transparent background causing readability issues when scrolling
+ * -------------------------------------------------------------------------- */
+
+/* Add solid background to fixed aside container */
+.aside-container {
+  background-color: var(--vp-c-bg);
+}
+
+/* Ensure the outline area has proper background in both themes */
+.VPDocAside {
+  background-color: var(--vp-c-bg);
+}
+
+/**
  * Component: Code Block Left Accent
  * Subtle left border for code blocks - IDE-inspired styling
  * -------------------------------------------------------------------------- */
