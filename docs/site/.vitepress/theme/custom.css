@@ -156,13 +156,40 @@
   border-radius: 2px;
 }
 
-/* Light mode gradient - terracotta to blue */
+/* Light mode gradient - forest green to gold */
 html:not(.dark) .vp-doc h1::before {
   background: linear-gradient(
     180deg,
-    oklch(50% 0.15 30) 0%,
-    var(--vp-c-brand-1) 100%
+    var(--vp-c-brand-3) 0%,
+    #C9A030 100%
   );
+}
+
+/**
+ * Component: Doc Aside / "On This Page" Outline
+ * Fix transparent background causing readability issues when scrolling
+ * -------------------------------------------------------------------------- */
+
+/* Add solid background to fixed aside container */
+.aside-container {
+  background-color: var(--vp-c-bg);
+}
+
+/* Ensure the outline area has proper background in both themes */
+.VPDocAside {
+  background-color: var(--vp-c-bg);
+}
+
+/* Mobile "On this page" dropdown - needs solid background */
+.VPLocalNavOutlineDropdown .items {
+  background-color: var(--vp-c-bg);
+  border: 1px solid var(--vp-c-divider);
+  box-shadow: 0 8px 24px var(--shadow-color-medium);
+}
+
+/* The entire flyout container */
+.VPLocalNavOutlineDropdown .items-container {
+  background-color: var(--vp-c-bg);
 }
 
 /**
