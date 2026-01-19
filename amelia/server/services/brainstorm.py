@@ -263,9 +263,7 @@ class BrainstormService:
 
         # Acquire session lock to prevent sequence collisions under concurrent sends
         lock = self._get_session_lock(session_id)
-        await lock.acquire()
-
-        try:
+        async with lock:
             # Get next sequence number and save user message
             max_seq = await self._repository.get_max_sequence(session_id)
             user_sequence = max_seq + 1
@@ -350,8 +348,6 @@ class BrainstormService:
                 created_at=datetime.now(UTC),
             )
             await self._repository.save_message(assistant_message)
-        finally:
-            lock.release()
 
         # Emit message complete event
         complete_event = WorkflowEvent(

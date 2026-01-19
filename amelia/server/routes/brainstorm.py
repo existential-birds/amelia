@@ -10,6 +10,7 @@ from uuid import uuid4
 
 import yaml
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from loguru import logger
 from pydantic import BaseModel
 
 from amelia.server.models.brainstorm import (
@@ -91,7 +92,8 @@ def get_profile_info(profile_id: str) -> "ProfileInfo | None":
             driver=profile_data.get("driver", "unknown"),
             model=profile_data.get("model", "unknown"),
         )
-    except Exception:
+    except Exception as e:
+        logger.debug("Failed to load profile info", profile_id=profile_id, error=str(e))
         return None
 
 

@@ -4,7 +4,7 @@ import os
 import subprocess
 import time
 from collections.abc import AsyncIterator
-from typing import Any
+from typing import Any, ClassVar
 from uuid import uuid4
 
 from deepagents import create_deep_agent
@@ -168,7 +168,7 @@ class ApiDriver(DriverInterface):
 
     # Class-level session storage for conversation continuity
     # Maps session_id -> MemorySaver checkpointer
-    _sessions: dict[str, MemorySaver] = {}
+    _sessions: ClassVar[dict[str, MemorySaver]] = {}
 
     def __init__(
         self,
