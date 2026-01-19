@@ -27,8 +27,6 @@ Introduces **Software 3.0**: prompts are programs, English is the programming la
 
 **Key influence:** Human-in-the-loop approval gates, treating prompts as source code (version controlled in profiles), building for LLM consumption.
 
----
-
 ## Research Papers
 
 ### Agent Architecture & Reasoning
@@ -39,8 +37,6 @@ Introduces **Software 3.0**: prompts are programs, English is the programming la
 Demonstrates that sophisticated reasoning capabilities can emerge from reinforcement learning alone. Introduces GRPO (Group Relative Policy Optimization), which eliminates the critic network by computing advantages relative to group statistics. Shows emergent self-reflection, backtracking, and "aha moment" behaviors from pure RL.
 
 **Key influence:** Self-verification patterns, rejection sampling for quality filtering (applies to reviewer), GRPO's group comparison parallels competitive review strategy, multi-stage training pipeline mirrors Architect-Developer-Reviewer flow.
-
----
 
 ### Context Management for Long-Horizon Agents
 
@@ -72,8 +68,6 @@ Treats long prompts as external environment variables rather than direct inputs.
 
 **Key influence:** Treat filesystem as environment variable agents navigate programmatically, recursive sub-agent calls for specific subtasks, sandbox isolation patterns for safe execution.
 
----
-
 ### Benchmarks & Evaluation
 
 #### [LongBench v2: Towards Deeper Understanding and Reasoning on Realistic Long-context Multitasks](https://arxiv.org/abs/2412.15204)
@@ -97,8 +91,6 @@ A multilingual extension of RULER shows performance degrades significantly at 12
 
 **Key influence:** Focused context extraction over raw context length, handle "issue already resolved" scenarios, consistent language in prompts and analyzed code.
 
----
-
 ## Methodologies & Frameworks
 
 ### [12-Factor Agents](https://github.com/humanlayer/12-factor-agents)
@@ -111,8 +103,6 @@ Production-grade patterns for building reliable agentic systems. Amelia's archit
 - **Prompt Templating (F2):** Profile-based configuration, externalized prompts
 - **Error Self-Healing (F9):** Automatic replan on agent failure
 - **Immutable State (F12):** All state updates return new objects
-
----
 
 ## How These Influenced Amelia
 
@@ -128,8 +118,6 @@ Production-grade patterns for building reliable agentic systems. Amelia's archit
 | RAPTOR Retrieval | Hierarchical code understanding |
 | 12-Factor Agents | Stateless, immutable, observable design |
 
----
-
 ## Further Reading
 
-For detailed research notes on each paper and how concepts map to Amelia's codebase, see the [Inspirations Research Notes](./inspirations-research-notes.md).
+For detailed research notes on each paper and how concepts map to Amelia's codebase, see [Design Influences](./research/inspirations-research-notes.md).

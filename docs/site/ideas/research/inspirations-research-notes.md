@@ -1,23 +1,20 @@
-# Inspirations Research Notes
+# Design Influences
 
-Research findings about the papers, blog posts, and projects that influenced Amelia's design.
+Papers, blog posts, and projects that influenced Amelia's architecture.
 
 ## Blog Posts & Videos
 
-### vtrivedy - Claude Code SDK / HaaS (Harness as a Service)
-- **URL:** https://www.vtrivedy.com/posts/claude-code-sdk-haas-harness-as-a-service
+### [vtrivedy - Claude Code SDK / HaaS (Harness as a Service)](https://www.vtrivedy.com/posts/claude-code-sdk-haas-harness-as-a-service)
 - **Key thesis:** Agent infrastructure is commoditizing. HaaS provides complete runtime environments (context management, tool invocation, permissions, loop control) so developers focus on domain specialization.
 - **Four customization pillars:** System prompts, Tools/MCPs, Context, Subagents
 - **Influence on Amelia:** Validates driver abstraction (`api:openrouter` vs `cli:claude`), profile-based configuration, and the multi-agent architecture (Architect, Developer, Reviewer as specialized subagents)
 
-### ghuntley - Ralph
-- **URL:** https://ghuntley.com/ralph/
+### [ghuntley - Ralph](https://ghuntley.com/ralph/)
 - **Key thesis:** LLMs are "deterministically bad in an undeterministic world" - success comes from iteration, not expecting perfection
 - **Core insight:** The infinite loop `while :; do cat PROMPT.md | claude-code ; done` represents continuous refinement
 - **Influence on Amelia:** Validates the Developer ↔ Reviewer iteration loop. Each review rejection "tunes" the developer like tuning a guitar. Eventual consistency over immediate correctness.
 
-### Andrej Karpathy - Software is Changing (Again)
-- **URL:** https://www.youtube.com/watch?v=zDmW5hJPsvQ
+### [Andrej Karpathy - Software is Changing (Again)](https://www.youtube.com/watch?v=zDmW5hJPsvQ)
 - **Key thesis:** Software 3.0 - prompts are programs, English is the programming language, LLMs are the new CPUs
 - **Key concepts:**
   - LLMs as operating systems with context windows as working memory
@@ -30,8 +27,7 @@ Research findings about the papers, blog posts, and projects that influenced Ame
 
 ## ArXiv Papers
 
-### DeepSeek-R1 (2501.12948)
-- **Title:** Incentivizing Reasoning Capability in LLMs via Reinforcement Learning
+### [DeepSeek-R1: Incentivizing Reasoning Capability in LLMs via Reinforcement Learning](https://arxiv.org/abs/2501.12948)
 - **Key contributions:**
   - GRPO (Group Relative Policy Optimization) - eliminates critic network, computes advantages relative to group
   - Emergent self-reflection, backtracking, "aha moments" from pure RL
@@ -42,8 +38,7 @@ Research findings about the papers, blog posts, and projects that influenced Ame
   - GRPO's group comparison parallels competitive review strategy
   - Multi-stage training pipeline mirrors Architect → Developer → Reviewer flow
 
-### AgentFold (2510.24699)
-- **Title:** Long-Horizon Web Agents with Proactive Context Management
+### [AgentFold: Long-Horizon Web Agents with Proactive Context Management](https://arxiv.org/abs/2510.24699)
 - **Key contributions:**
   - Multi-scale folding: dual-mode condensation (fine-grained) and consolidation (coarse abstraction)
   - Context as "dynamic cognitive workspace" not passive log
@@ -53,8 +48,7 @@ Research findings about the papers, blog posts, and projects that influenced Ame
   - Proactive context budgeting before saturation
   - Multi-scale state summaries where recent actions stay detailed, older iterations compress
 
-### FoldAgent/Context-Folding (2510.11967)
-- **Title:** Scaling Long-Horizon LLM Agent via Context-Folding
+### [FoldAgent: Scaling Long-Horizon LLM Agent via Context-Folding](https://arxiv.org/abs/2510.11967)
 - **Key contributions:**
   - Branch/Return primitives for hierarchical task decomposition
   - 10x context reduction (32K vs 327K tokens)
@@ -64,8 +58,7 @@ Research findings about the papers, blog posts, and projects that influenced Ame
   - Each review iteration as a "branch" that folds after completion
   - Strategic context compression preserving decision-critical information
 
-### LongBench v2 (2412.15204)
-- **Title:** Towards Deeper Understanding and Reasoning on Realistic Long-context Multitasks
+### [LongBench v2: Towards Deeper Understanding and Reasoning on Realistic Long-context Multitasks](https://arxiv.org/abs/2412.15204)
 - **Key findings:**
   - Reasoning-enhanced models (o1-preview, DeepSeek-R1) significantly outperform standard models
   - Human experts achieve only 53.7% on benchmark (validates difficulty)
@@ -75,8 +68,7 @@ Research findings about the papers, blog posts, and projects that influenced Ame
   - Specialized prompting for codebase navigation
   - Use reasoning-enhanced models for planning stages
 
-### ReSum (2509.13313)
-- **Title:** Unlocking Long-Horizon Search Intelligence via Context Summarization
+### [ReSum: Unlocking Long-Horizon Search Intelligence via Context Summarization](https://arxiv.org/abs/2509.13313)
 - **Key contributions:**
   - Periodic context summarization enables indefinite exploration
   - ReSum-GRPO: segmented trajectory training with advantage broadcasting
@@ -86,8 +78,7 @@ Research findings about the papers, blog posts, and projects that influenced Ame
   - Compact reasoning states instead of full interaction histories
   - Configuration-driven summarization frequency
 
-### Recursive Language Models (2512.24601)
-- **Title:** Recursive Language Models
+### [Recursive Language Models](https://arxiv.org/abs/2512.24601)
 - **Key contributions:**
   - REPL-based context offloading - long prompts as environment variables, not direct inputs
   - `llm_query()` for recursive self-invocation on context subsets
@@ -97,8 +88,7 @@ Research findings about the papers, blog posts, and projects that influenced Ame
   - Recursive sub-agent calls for specific subtasks (file analysis, module implementation)
   - Sandbox isolation patterns (Docker/Modal) for safe execution
 
-### Long Context vs RAG (2501.01880)
-- **Title:** Long Context vs. RAG for LLMs: An Evaluation and Revisits
+### [Long Context vs. RAG for LLMs: An Evaluation and Revisits](https://arxiv.org/abs/2501.01880)
 - **Key findings:**
   - RAPTOR (summarization-based retrieval) achieves 38.5% vs 20-22% for chunk-based
   - Self-contained narratives: Long Context wins
@@ -110,8 +100,7 @@ Research findings about the papers, blog posts, and projects that influenced Ame
   - Quality of retrieved context > quantity
   - RAPTOR pattern for hierarchical code understanding
 
-### ONERULER (2503.01996)
-- **Title:** One Ruler to Measure Them All: Benchmarking Multilingual Long-Context Language Models
+### [ONERULER: One Ruler to Measure Them All: Benchmarking Multilingual Long-Context Language Models](https://arxiv.org/abs/2503.01996)
 - **Key findings:**
   - Performance degrades significantly at 128K tokens
   - Models struggle to recognize when no answer exists
@@ -125,7 +114,7 @@ Research findings about the papers, blog posts, and projects that influenced Ame
 
 ## Codebase Connections
 
-### 12-Factor Agents (Primary Methodology)
+### [12-Factor Agents](https://github.com/humanlayer/12-factor-agents) (Primary Methodology)
 The most referenced external influence in Amelia's GitHub issues. Key factors implemented:
 - **Stateless Reducer Pattern** (F12): Frozen models, append-only fields, dict_merge reducers
 - **Prompt Templating** (F2): Profile-based configuration, externalized prompts
@@ -135,7 +124,7 @@ The most referenced external influence in Amelia's GitHub issues. Key factors im
 ### Architecture Patterns Implemented
 | Research Pattern | Amelia Implementation |
 |------------------|----------------------|
-| Orchestrator-Worker (Anthropic) | Architect → Developer ↔ Reviewer |
+| [Orchestrator-Worker](https://www.anthropic.com/engineering/building-effective-agents) (Anthropic) | Architect → Developer ↔ Reviewer |
 | Dynamic Decomposition (TDAG) | ReplanRequest, replanning on scope changes |
 | Confidence Routing | escalation_threshold + confidence tracking |
 | Plan Verification | plan_validator_node before execution |
@@ -155,11 +144,11 @@ The most referenced external influence in Amelia's GitHub issues. Key factors im
 ## Summary
 
 Amelia's architecture synthesizes insights from:
-- **HaaS/Claude Code SDK**: Agent infrastructure as commodity, focus on domain specialization
-- **Ralph technique**: Iteration over perfection, eventual consistency
-- **Software 3.0**: LLMs as programmable, human-in-the-loop autonomy
-- **DeepSeek-R1**: Emergent reasoning through RL, multi-stage pipelines
-- **AgentFold/FoldAgent/ReSum**: Context folding and summarization for long-horizon tasks
-- **RLM**: Recursive self-invocation, context as environment variable
-- **LongBench/Long Context vs RAG**: When to use full context vs retrieval
-- **12-Factor Agents**: Production-grade agent architecture patterns
+- **[HaaS/Claude Code SDK](https://www.vtrivedy.com/posts/claude-code-sdk-haas-harness-as-a-service)**: Agent infrastructure as commodity, focus on domain specialization
+- **[Ralph technique](https://ghuntley.com/ralph/)**: Iteration over perfection, eventual consistency
+- **[Software 3.0](https://www.youtube.com/watch?v=zDmW5hJPsvQ)**: LLMs as programmable, human-in-the-loop autonomy
+- **[DeepSeek-R1](https://arxiv.org/abs/2501.12948)**: Emergent reasoning through RL, multi-stage pipelines
+- **[AgentFold](https://arxiv.org/abs/2510.24699)/[FoldAgent](https://arxiv.org/abs/2510.11967)/[ReSum](https://arxiv.org/abs/2509.13313)**: Context folding and summarization for long-horizon tasks
+- **[RLM](https://arxiv.org/abs/2512.24601)**: Recursive self-invocation, context as environment variable
+- **[LongBench](https://arxiv.org/abs/2412.15204)/[Long Context vs RAG](https://arxiv.org/abs/2501.01880)**: When to use full context vs retrieval
+- **[12-Factor Agents](https://github.com/humanlayer/12-factor-agents)**: Production-grade agent architecture patterns
