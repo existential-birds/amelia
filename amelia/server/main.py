@@ -259,9 +259,31 @@ def create_app() -> FastAPI:
 
     # Set up cwd dependency for brainstorm routes
     def get_brainstorm_cwd() -> str:
-        """Get working directory from server config."""
-        from amelia.server.dependencies import get_config
-        return str(get_config().working_dir)
+        """Get working directory from active profile in settings.
+
+        Loads raw YAML to extract working_dir from the active profile.
+        Falls back to os.getcwd() if settings file not found or working_dir not set.
+        """
+        import yaml
+
+        settings_path = Path("settings.amelia.yaml")
+        env_path = os.environ.get("AMELIA_SETTINGS")
+        if env_path:
+            settings_path = Path(env_path)
+
+        try:
+            with settings_path.open() as f:
+                data = yaml.safe_load(f)
+            active_profile = data.get("active_profile", "")
+            profiles = data.get("profiles", {})
+            profile_data = profiles.get(active_profile, {})
+            working_dir = profile_data.get("working_dir")
+            if working_dir:
+                return str(working_dir)
+            return os.getcwd()
+        except (FileNotFoundError, KeyError, TypeError):
+            # Settings file not found or malformed - use cwd as default
+            return os.getcwd()
 
     application.dependency_overrides[get_cwd] = get_brainstorm_cwd
 

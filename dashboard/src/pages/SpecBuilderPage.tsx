@@ -87,8 +87,9 @@ function SpecBuilderPageContent() {
     api.getConfig().then((config) => {
       activeProfileRef.current = config.active_profile;
       setConfigProfileInfo(config.active_profile_info);
-    }).catch(() => {
+    }).catch((error) => {
       // Fall back to empty string on error - backend will use its default
+      console.warn('Failed to load config, using defaults:', error);
     });
   }, [loadSessions]);
 

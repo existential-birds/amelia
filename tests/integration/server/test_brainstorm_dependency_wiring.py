@@ -16,12 +16,11 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
 
-from amelia.core.types import Profile, Settings
 from amelia.server.database.brainstorm_repository import BrainstormRepository
 from amelia.server.database.connection import Database
 from amelia.server.events.bus import EventBus
@@ -107,29 +106,12 @@ class TestBrainstormDependencyResolution:
     """Verify that wired dependencies resolve correctly at runtime.
 
     These tests mock only at the external boundary:
-    - Settings file (load_settings)
-    - Server config (get_config)
+    - Settings file path (AMELIA_SETTINGS env var or settings.amelia.yaml)
+    - LLM API calls (execute_agentic)
 
     They do NOT mock internal dependencies (get_driver, get_cwd), which is
     the key difference from other integration tests.
     """
-
-    @pytest.fixture
-    def mock_settings(self, tmp_path: Path) -> Settings:
-        """Create mock settings with CLI driver."""
-        return Settings(
-            active_profile="test",
-            profiles={
-                "test": Profile(
-                    name="test",
-                    driver="cli:claude",
-                    model="sonnet",
-                    tracker="noop",
-                    working_dir=str(tmp_path),
-                    validator_model="sonnet",
-                )
-            },
-        )
 
     @pytest.fixture
     async def test_db(self, temp_db_path: Path) -> AsyncGenerator[Database, None]:
@@ -149,19 +131,39 @@ class TestBrainstormDependencyResolution:
         event_bus = EventBus()
         return BrainstormService(repo, event_bus)
 
-    def test_get_driver_resolves_with_settings(
+    def test_get_driver_resolves_with_settings_file(
         self,
-        mock_settings: Settings,
         test_brainstorm_service: BrainstormService,
+        tmp_path: Path,
     ) -> None:
-        """get_driver should resolve when settings file exists.
+        """get_driver should resolve from active profile in settings file.
 
         This test verifies that the dependency wiring in main.py correctly
-        calls load_settings() and factory_get_driver() to create the driver.
-
-        We mock load_settings to provide test settings, but let the real
-        factory_get_driver create the driver instance.
+        loads settings.amelia.yaml and reads driver from the active profile,
+        then uses factory_get_driver() to create the driver instance.
         """
+        import yaml
+
+        # Create settings file with driver in profile
+        settings_path = tmp_path / "settings.amelia.yaml"
+        working_dir = tmp_path / "working"
+        working_dir.mkdir()
+        settings_data = {
+            "active_profile": "test",
+            "profiles": {
+                "test": {
+                    "name": "test",
+                    "driver": "cli:claude",
+                    "model": "sonnet",
+                    "tracker": "noop",
+                    "working_dir": str(working_dir),
+                    "validator_model": "sonnet",
+                }
+            },
+        }
+        with settings_path.open("w") as f:
+            yaml.dump(settings_data, f)
+
         app = create_app()
 
         @asynccontextmanager
@@ -175,8 +177,8 @@ class TestBrainstormDependencyResolution:
             lambda: test_brainstorm_service
         )
 
-        # Mock load_settings at the external boundary
-        with patch("amelia.server.main.load_settings", return_value=mock_settings):
+        # Set AMELIA_SETTINGS to use our test settings file
+        with patch.dict("os.environ", {"AMELIA_SETTINGS": str(settings_path)}):
             client = TestClient(app)
 
             # Create a session - this doesn't use get_driver
@@ -190,15 +192,67 @@ class TestBrainstormDependencyResolution:
             # If it wasn't wired, we'd get RuntimeError("Driver not initialized")
             # when calling send_message (which uses Depends(get_driver))
 
-    def test_get_cwd_resolves_with_config(
+    def test_get_cwd_resolves_with_settings_file(
         self,
         test_brainstorm_service: BrainstormService,
         tmp_path: Path,
     ) -> None:
-        """get_cwd should resolve when server config is available.
+        """get_cwd should resolve from active profile in settings file.
 
         This test verifies that the dependency wiring in main.py correctly
-        calls get_config().working_dir to get the working directory.
+        loads settings.amelia.yaml and reads working_dir from the active profile.
+        """
+        import yaml
+
+        # Create settings file with working_dir in profile
+        settings_path = tmp_path / "settings.amelia.yaml"
+        working_dir = tmp_path / "my_working_dir"
+        working_dir.mkdir()
+        settings_data = {
+            "active_profile": "test",
+            "profiles": {
+                "test": {
+                    "name": "test",
+                    "driver": "cli:claude",
+                    "model": "sonnet",
+                    "tracker": "noop",
+                    "working_dir": str(working_dir),
+                    "validator_model": "sonnet",
+                }
+            },
+        }
+        with settings_path.open("w") as f:
+            yaml.dump(settings_data, f)
+
+        app = create_app()
+
+        @asynccontextmanager
+        async def noop_lifespan(_app: Any) -> AsyncGenerator[None, None]:
+            yield
+
+        app.router.lifespan_context = noop_lifespan
+
+        # Only override brainstorm_service (needs app.state from lifespan)
+        app.dependency_overrides[get_brainstorm_service] = (
+            lambda: test_brainstorm_service
+        )
+
+        # Set AMELIA_SETTINGS to use our test settings file
+        with patch.dict("os.environ", {"AMELIA_SETTINGS": str(settings_path)}):
+            # Get the actual override function and call it
+            cwd_override = app.dependency_overrides[get_cwd]
+            result = cwd_override()
+            assert result == str(working_dir)
+
+    def test_get_cwd_falls_back_to_getcwd(
+        self,
+        test_brainstorm_service: BrainstormService,
+        tmp_path: Path,
+    ) -> None:
+        """get_cwd should fall back to os.getcwd() when settings file not found.
+
+        This test verifies the fallback behavior when settings.amelia.yaml
+        doesn't exist or doesn't have working_dir.
         """
         app = create_app()
 
@@ -213,21 +267,18 @@ class TestBrainstormDependencyResolution:
             lambda: test_brainstorm_service
         )
 
-        # Mock get_config at the external boundary (imported inside function)
-        mock_config = MagicMock()
-        mock_config.working_dir = tmp_path
-
-        with patch(
-            "amelia.server.dependencies.get_config", return_value=mock_config
-        ):
-            # Verify get_cwd is wired and would resolve
-            # We can't easily call the override directly, but we verified
-            # the wiring exists in the static tests above
-            assert get_cwd in app.dependency_overrides
+        # Point to non-existent settings file
+        non_existent_path = tmp_path / "nonexistent.yaml"
+        with patch.dict("os.environ", {"AMELIA_SETTINGS": str(non_existent_path)}):
+            # Get the actual override function and call it
+            cwd_override = app.dependency_overrides[get_cwd]
+            result = cwd_override()
+            # Should fall back to current working directory
+            import os
+            assert result == os.getcwd()
 
     def test_send_message_endpoint_uses_real_dependencies(
         self,
-        mock_settings: Settings,
         test_brainstorm_service: BrainstormService,
         tmp_path: Path,
     ) -> None:
@@ -239,12 +290,33 @@ class TestBrainstormDependencyResolution:
         3. The endpoint accepts requests (even if driver execution is mocked)
 
         We only mock:
-        - load_settings (external: reads from disk)
-        - get_config (external: reads from environment)
+        - AMELIA_SETTINGS env var (external: points to settings file)
         - DriverInterface.execute_agentic (external: calls LLM API)
         """
+        import yaml
+
         from amelia.drivers.base import AgenticMessage, AgenticMessageType
         from tests.conftest import create_mock_execute_agentic
+
+        # Create settings file with working_dir in profile
+        settings_path = tmp_path / "settings.amelia.yaml"
+        working_dir = tmp_path / "working"
+        working_dir.mkdir()
+        settings_data = {
+            "active_profile": "test",
+            "profiles": {
+                "test": {
+                    "name": "test",
+                    "driver": "cli:claude",
+                    "model": "sonnet",
+                    "tracker": "noop",
+                    "working_dir": str(working_dir),
+                    "validator_model": "sonnet",
+                }
+            },
+        }
+        with settings_path.open("w") as f:
+            yaml.dump(settings_data, f)
 
         app = create_app()
 
@@ -259,10 +331,6 @@ class TestBrainstormDependencyResolution:
             lambda: test_brainstorm_service
         )
 
-        # Mock external boundaries
-        mock_config = MagicMock()
-        mock_config.working_dir = tmp_path
-
         # Create mock driver response at LLM boundary
         mock_messages = [
             AgenticMessage(
@@ -273,10 +341,7 @@ class TestBrainstormDependencyResolution:
         ]
 
         with (
-            patch("amelia.server.main.load_settings", return_value=mock_settings),
-            patch(
-                "amelia.server.dependencies.get_config", return_value=mock_config
-            ),
+            patch.dict("os.environ", {"AMELIA_SETTINGS": str(settings_path)}),
             patch(
                 "amelia.drivers.cli.ClaudeCliDriver.execute_agentic",
                 create_mock_execute_agentic(mock_messages),
@@ -290,7 +355,7 @@ class TestBrainstormDependencyResolution:
                 json={"profile_id": "test"},
             )
             assert create_resp.status_code == 201
-            session_id = create_resp.json()["id"]
+            session_id = create_resp.json()["session"]["id"]
 
             # Send message - this uses REAL get_driver and get_cwd wiring
             # If dependencies weren't wired, this would fail with RuntimeError
