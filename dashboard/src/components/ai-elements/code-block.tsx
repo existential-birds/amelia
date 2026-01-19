@@ -7,6 +7,7 @@ import {
   type HTMLAttributes,
   useContext,
   useEffect,
+  useRef,
   useState,
 } from "react";
 import { type BundledLanguage, codeToHtml, type ShikiTransformer } from "shiki";
@@ -140,6 +141,16 @@ export const CodeBlockCopyButton = ({
 }: CodeBlockCopyButtonProps) => {
   const [isCopied, setIsCopied] = useState(false);
   const { code } = useContext(CodeBlockContext);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
 
   const handleCopy = async () => {
     try {
@@ -150,7 +161,12 @@ export const CodeBlockCopyButton = ({
       }
       setIsCopied(true);
       onCopy?.();
-      setTimeout(() => setIsCopied(false), timeout);
+
+      // Clear any existing timeout before setting a new one
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+      timeoutRef.current = setTimeout(() => setIsCopied(false), timeout);
     } catch (error) {
       onError?.(error as Error);
     }
