@@ -70,6 +70,15 @@
   --color-agent-developer-bg: var(--agent-developer-bg);
   --color-agent-reviewer-bg: var(--agent-reviewer-bg);
 
+  /* Multi-model chart palette */
+  --color-chart-model-1: var(--chart-model-1);
+  --color-chart-model-2: var(--chart-model-2);
+  --color-chart-model-3: var(--chart-model-3);
+  --color-chart-model-4: var(--chart-model-4);
+  --color-chart-model-5: var(--chart-model-5);
+  --color-chart-model-6: var(--chart-model-6);
+  --color-cost-value: var(--cost-value);
+
   /* Border radius scale */
   --radius-sm: 0.375rem;
   --radius-md: 0.5rem;
@@ -154,6 +163,18 @@
   --chart-3: oklch(65% 0.12 240);             /* Blue */
   --chart-4: oklch(50% 0.2 25);               /* Red */
   --chart-5: oklch(60% 0.05 150);             /* Gray */
+
+  /* Multi-model chart palette (ordered by cost rank) */
+  --chart-model-1: oklch(72% 0.14 195);       /* Teal - highest cost */
+  --chart-model-2: oklch(68% 0.12 280);       /* Violet */
+  --chart-model-3: oklch(70% 0.10 45);        /* Coral */
+  --chart-model-4: oklch(65% 0.13 160);       /* Mint */
+  --chart-model-5: oklch(60% 0.08 230);       /* Steel Blue */
+  --chart-model-6: oklch(65% 0.10 330);       /* Dusty Rose */
+
+  /* Cost-specific (demoted from gold for table values) */
+  --cost-value: oklch(75% 0.08 90);           /* Warm cream */
+
   --sidebar-ring: oklch(62% 0.214 259);
 
   /* Agent-specific colors */
