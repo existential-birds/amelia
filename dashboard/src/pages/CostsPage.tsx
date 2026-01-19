@@ -59,6 +59,25 @@ function getPresetLabel(preset: string | null): string {
 }
 
 /**
+ * Escape a CSV field value to handle special characters.
+ * - Neutralizes formula injection by prefixing formula triggers with single quote
+ * - Escapes double quotes by doubling them
+ * - Wraps fields in quotes if they contain commas, quotes, or newlines
+ */
+function escapeCsvField(value: string | number): string {
+  let text = String(value);
+  // Neutralize spreadsheet formula interpretation
+  if (/^[=+\-@]/.test(text)) {
+    text = `'${text}`;
+  }
+  // Check if quoting is needed
+  const needsQuote = /[",\n\r]/.test(text);
+  // Escape existing double quotes
+  text = text.replace(/"/g, '""');
+  return needsQuote ? `"${text}"` : text;
+}
+
+/**
  * Export usage data to CSV.
  */
 function exportCSV(byModel: UsageByModel[], dateRange: string) {
@@ -67,12 +86,12 @@ function exportCSV(byModel: UsageByModel[], dateRange: string) {
     ...byModel.map((m) => [
       m.model,
       m.workflows,
-      m.success_rate !== undefined ? `${Math.round(m.success_rate * 100)}%` : 'N/A',
+      m.success_rate != null ? `${Math.round(m.success_rate * 100)}%` : 'N/A',
       m.tokens,
       m.cost_usd.toFixed(2),
     ]),
   ];
-  const csv = rows.map((r) => r.join(',')).join('\n');
+  const csv = rows.map((r) => r.map(escapeCsvField).join(',')).join('\n');
   const blob = new Blob([csv], { type: 'text/csv' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -152,8 +171,8 @@ export default function CostsPage() {
           <DataTableColumnHeader column={column} title="Success" align="right" />
         ),
         cell: ({ row }) => {
-          const rate = row.getValue('success_rate') as number | undefined;
-          return rate !== undefined ? (
+          const rate = row.getValue('success_rate') as number | null | undefined;
+          return rate != null ? (
             <div className="text-right">
               <SuccessRateBadge rate={rate} />
             </div>
@@ -383,7 +402,7 @@ export default function CostsPage() {
           <span className="text-foreground">{formatTokens(usage.summary.total_tokens)} tokens</span>
           <span className="text-muted-foreground">·</span>
           <span className="text-foreground">{formatDuration(usage.summary.total_duration_ms)}</span>
-          {usage.summary.success_rate !== null && usage.summary.success_rate !== undefined && (
+          {usage.summary.success_rate != null && (
             <>
               <span className="text-muted-foreground">·</span>
               <SuccessRateBadge rate={usage.summary.success_rate} />
@@ -449,7 +468,7 @@ export default function CostsPage() {
                     >
                       {model.model}
                     </span>
-                    {model.success_rate !== undefined && (
+                    {model.success_rate != null && (
                       <SuccessRateBadge rate={model.success_rate} />
                     )}
                   </div>

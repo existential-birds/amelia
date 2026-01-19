@@ -1,6 +1,6 @@
 """Usage metrics routes."""
 
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -67,11 +67,11 @@ async def get_usage(
                 detail=f"Invalid preset '{preset}'. Valid: {', '.join(PRESETS.keys())}",
             )
         days = PRESETS[preset]
-        end_date = date.today()
+        end_date = datetime.now(UTC).date()
         start_date = end_date - timedelta(days=days - 1)
     else:
         # Default to 30d
-        end_date = date.today()
+        end_date = datetime.now(UTC).date()
         start_date = end_date - timedelta(days=29)
 
     # Fetch data in parallel conceptually (SQLite is single-threaded but this is the pattern)

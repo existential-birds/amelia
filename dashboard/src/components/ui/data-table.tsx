@@ -81,7 +81,8 @@ export function DataTable<TData, TValue>({
               tabIndex={onRowClick ? 0 : undefined}
               className={cn(
                 'border-b border-border/50 last:border-0',
-                onRowClick && 'cursor-pointer hover:bg-muted/50 transition-colors'
+                onRowClick &&
+                  'cursor-pointer hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:outline-none transition-colors'
               )}
             >
               {row.getVisibleCells().map((cell) => (

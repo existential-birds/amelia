@@ -433,6 +433,11 @@ To clean up test data, simply delete the database file.
 
     args = parser.parse_args()
 
+    if args.days <= 0:
+        parser.error("--days must be >= 1")
+    if args.workflows <= 0:
+        parser.error("--workflows must be >= 1")
+
     if args.seed is not None:
         random.seed(args.seed)
 
