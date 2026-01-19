@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { Menu, Lightbulb } from "lucide-react";
+import { Menu, Lightbulb, Bot, Cpu } from "lucide-react";
 import { api } from "@/api/client";
 import {
   Conversation,
@@ -40,6 +40,36 @@ import {
   HandoffDialog,
 } from "@/components/brainstorm";
 import type { BrainstormArtifact } from "@/types/api";
+import type { ConfigProfileInfo } from "@/types";
+
+/**
+ * Formats driver string for display.
+ * "api:openrouter" -> "API"
+ * "cli:claude" -> "CLI"
+ */
+function formatDriver(driver: string): string {
+  if (driver.startsWith("api:")) return "API";
+  if (driver.startsWith("cli:")) return "CLI";
+  return driver.toUpperCase();
+}
+
+/**
+ * Formats model name for display.
+ * "sonnet" -> "Sonnet"
+ * "claude-3-5-sonnet" -> "Claude 3.5 Sonnet"
+ */
+function formatModel(model: string): string {
+  // Handle simple names like "sonnet", "opus", "haiku"
+  if (/^(sonnet|opus|haiku)$/i.test(model)) {
+    return model.charAt(0).toUpperCase() + model.slice(1).toLowerCase();
+  }
+  // Handle longer model names - capitalize and clean up
+  return model
+    .split(/[-_]/)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ")
+    .replace(/(\d)(\d)/g, "$1.$2"); // "35" -> "3.5"
+}
 
 function SpecBuilderPageContent() {
   const navigate = useNavigate();
@@ -67,15 +97,17 @@ function SpecBuilderPageContent() {
   const [handoffArtifact, setHandoffArtifact] = useState<BrainstormArtifact | null>(null);
   const [isHandingOff, setIsHandingOff] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [configProfileInfo, setConfigProfileInfo] = useState<ConfigProfileInfo | null>(null);
   const activeProfileRef = useRef<string>("");
 
   // Load sessions and config on mount
   useEffect(() => {
     loadSessions();
 
-    // Fetch active_profile from config for session creation
+    // Fetch active_profile from config for session creation and display
     api.getConfig().then((config) => {
       activeProfileRef.current = config.active_profile;
+      setConfigProfileInfo(config.active_profile_info);
     }).catch(() => {
       // Fall back to empty string on error - backend will use its default
     });
@@ -195,16 +227,46 @@ function SpecBuilderPageContent() {
               icon={<Lightbulb className="h-12 w-12" />}
               title="Start a brainstorming session"
               description="Type a message below to begin exploring ideas and producing design documents."
-            />
+            >
+              <>
+                <div className="text-muted-foreground">
+                  <Lightbulb className="h-12 w-12" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="font-medium text-sm">Start a brainstorming session</h3>
+                  <p className="text-muted-foreground text-sm">
+                    Type a message below to begin exploring ideas and producing design documents.
+                  </p>
+                </div>
+                {/* Profile Info Badge */}
+                {configProfileInfo && (
+                  <div className="flex items-center gap-2 mt-4 text-xs font-mono">
+                    <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-primary/10 border border-primary/20">
+                      <Bot className="h-3 w-3 text-primary" />
+                      <span className="text-foreground font-medium">
+                        {formatModel(configProfileInfo.model)}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1 px-1.5 py-1 rounded bg-muted/50">
+                      <Cpu className="h-3 w-3 text-muted-foreground" />
+                      <span className="text-muted-foreground text-[10px] uppercase tracking-wider">
+                        {formatDriver(configProfileInfo.driver)}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </>
+            </ConversationEmptyState>
           ) : (
-            <div className="w-full space-y-4 max-w-3xl mx-auto">
+            <div className="w-full space-y-6 max-w-3xl mx-auto">
               {messages.map((message) => {
-                const hasReasoning = message.parts?.some((p) => p.type === "reasoning");
+                // Check both message.parts (for completed messages) and message.reasoning (for streaming)
+                const hasReasoning = message.parts?.some((p) => p.type === "reasoning") || !!message.reasoning;
                 const reasoningText = message.parts
                   ?.filter((p) => p.type === "reasoning")
                   .map((p) => p.text)
-                  .join("\n") || "";
-                const isStreamingEmpty = message.role === "assistant" && message.status === "streaming" && !message.content;
+                  .join("\n") || message.reasoning || "";
+                const isStreamingEmpty = message.role === "assistant" && message.status === "streaming" && !message.content && !message.reasoning;
 
                 const isComplete = message.role === "assistant" && message.status !== "streaming" && message.content;
 

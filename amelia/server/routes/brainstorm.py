@@ -120,6 +120,13 @@ class SessionWithHistoryResponse(BaseModel):
     profile: ProfileInfo | None = None
 
 
+class CreateSessionResponse(BaseModel):
+    """Response from creating a new session."""
+
+    session: BrainstormingSession
+    profile: ProfileInfo | None = None
+
+
 class SendMessageRequest(BaseModel):
     """Request to send a message in a session."""
 
@@ -151,12 +158,12 @@ class HandoffResponse(BaseModel):
 @router.post(
     "/sessions",
     status_code=status.HTTP_201_CREATED,
-    response_model=BrainstormingSession,
+    response_model=CreateSessionResponse,
 )
 async def create_session(
     request: CreateSessionRequest,
     service: BrainstormService = Depends(get_brainstorm_service),
-) -> BrainstormingSession:
+) -> CreateSessionResponse:
     """Create a new brainstorming session.
 
     Args:
@@ -164,12 +171,14 @@ async def create_session(
         service: Brainstorm service dependency.
 
     Returns:
-        Created session.
+        Created session with profile info.
     """
-    return await service.create_session(
+    session = await service.create_session(
         profile_id=request.profile_id,
         topic=request.topic,
     )
+    profile_info = get_profile_info(request.profile_id)
+    return CreateSessionResponse(session=session, profile=profile_info)
 
 
 @router.get("/sessions", response_model=list[BrainstormingSession])

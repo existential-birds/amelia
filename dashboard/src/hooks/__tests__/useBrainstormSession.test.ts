@@ -107,7 +107,15 @@ describe("useBrainstormSession", () => {
         created_at: "2026-01-18T00:00:00Z",
         updated_at: "2026-01-18T00:00:00Z",
       };
-      vi.mocked(brainstormApi.createSession).mockResolvedValueOnce(mockSession);
+      const mockProfile = {
+        name: "p1",
+        driver: "cli:claude",
+        model: "sonnet",
+      };
+      vi.mocked(brainstormApi.createSession).mockResolvedValueOnce({
+        session: mockSession,
+        profile: mockProfile,
+      });
       vi.mocked(brainstormApi.sendMessage).mockResolvedValueOnce({
         message_id: "m1",
       });
@@ -121,6 +129,7 @@ describe("useBrainstormSession", () => {
       expect(brainstormApi.createSession).toHaveBeenCalledWith("p1", "Hello");
       expect(brainstormApi.sendMessage).toHaveBeenCalledWith("s1", "Hello");
       expect(useBrainstormStore.getState().activeSessionId).toBe("s1");
+      expect(useBrainstormStore.getState().activeProfile).toEqual(mockProfile);
     });
   });
 

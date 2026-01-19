@@ -1,5 +1,6 @@
 import type {
   BrainstormingSession,
+  CreateSessionResponse,
   SessionWithHistory,
   SessionStatus,
 } from "@/types/api";
@@ -46,14 +47,14 @@ export const brainstormApi = {
   async createSession(
     profileId: string,
     topic?: string
-  ): Promise<BrainstormingSession> {
+  ): Promise<CreateSessionResponse> {
     const response = await fetch(`${API_BASE_URL}/sessions`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ profile_id: profileId, topic }),
       signal: createTimeoutSignal(DEFAULT_TIMEOUT_MS),
     });
-    return handleResponse<BrainstormingSession>(response);
+    return handleResponse<CreateSessionResponse>(response);
   },
 
   async getSession(sessionId: string): Promise<SessionWithHistory> {

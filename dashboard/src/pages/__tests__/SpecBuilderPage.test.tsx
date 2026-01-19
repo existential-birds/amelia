@@ -78,7 +78,15 @@ describe("SpecBuilderPage", () => {
       created_at: "2026-01-18T00:00:00Z",
       updated_at: "2026-01-18T00:00:00Z",
     };
-    vi.mocked(brainstormApi.createSession).mockResolvedValue(mockSession);
+    const mockProfile = {
+      name: "test",
+      driver: "cli:claude",
+      model: "sonnet",
+    };
+    vi.mocked(brainstormApi.createSession).mockResolvedValue({
+      session: mockSession,
+      profile: mockProfile,
+    });
     vi.mocked(brainstormApi.sendMessage).mockResolvedValue({ message_id: "m1" });
 
     renderPage();
@@ -100,5 +108,66 @@ describe("SpecBuilderPage", () => {
     await userEvent.click(screen.getByRole("button", { name: /open sessions/i }));
 
     expect(useBrainstormStore.getState().drawerOpen).toBe(true);
+  });
+
+  it("shows expandable reasoning when message has reasoning field (streaming)", async () => {
+    // When reasoning comes in via WebSocket streaming, it's stored in message.reasoning
+    useBrainstormStore.setState({
+      activeSessionId: "s1",
+      sessions: [{ id: "s1", profile_id: "test", driver_session_id: null, status: "active" as const, topic: "Test", created_at: "2026-01-18T00:00:00Z", updated_at: "2026-01-18T00:00:00Z" }],
+      messages: [
+        {
+          id: "m1",
+          session_id: "s1",
+          sequence: 1,
+          role: "assistant" as const,
+          content: "",
+          reasoning: "Thinking about the design...",
+          parts: null,
+          created_at: "2026-01-18T00:00:00Z",
+          status: "streaming" as const,
+        },
+      ],
+      isStreaming: true,
+    });
+
+    renderPage();
+
+    // Should show the expandable Reasoning component (not just plain Shimmer)
+    // The Reasoning component uses a Collapsible with data-slot="collapsible"
+    await waitFor(() => {
+      const collapsible = document.querySelector('[data-slot="collapsible"]');
+      expect(collapsible).toBeInTheDocument();
+    });
+  });
+
+  it("shows expandable reasoning when message has parts with reasoning type", async () => {
+    // After streaming completes, reasoning is stored in message.parts
+    useBrainstormStore.setState({
+      activeSessionId: "s1",
+      sessions: [{ id: "s1", profile_id: "test", driver_session_id: null, status: "active" as const, topic: "Test", created_at: "2026-01-18T00:00:00Z", updated_at: "2026-01-18T00:00:00Z" }],
+      messages: [
+        {
+          id: "m1",
+          session_id: "s1",
+          sequence: 1,
+          role: "assistant" as const,
+          content: "Here is my response",
+          parts: [{ type: "reasoning" as const, text: "I thought about this carefully" }],
+          created_at: "2026-01-18T00:00:00Z",
+        },
+      ],
+      isStreaming: false,
+    });
+
+    renderPage();
+
+    // Should show the message content
+    await waitFor(() => {
+      expect(screen.getByText(/Here is my response/)).toBeInTheDocument();
+    });
+    // Should have the expandable Reasoning component
+    const collapsible = document.querySelector('[data-slot="collapsible"]');
+    expect(collapsible).toBeInTheDocument();
   });
 });

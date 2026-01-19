@@ -351,7 +351,7 @@ describe('QuickShotModal', () => {
 
   describe('Import Zone', () => {
     beforeEach(() => {
-      vi.mocked(api.getConfig).mockResolvedValue({ working_dir: '/tmp/repo', max_concurrent: 5, active_profile: 'test' });
+      vi.mocked(api.getConfig).mockResolvedValue({ working_dir: '/tmp/repo', max_concurrent: 5, active_profile: 'test', active_profile_info: null });
       vi.mocked(api.readFile).mockResolvedValue({
         content: '# Test Design\n\n## Problem\n\nTest problem.',
         filename: 'test-design.md',
@@ -421,7 +421,7 @@ describe('QuickShotModal', () => {
 
   describe('Config Integration', () => {
     it('pre-fills worktree path from server config', async () => {
-      vi.mocked(api.getConfig).mockResolvedValue({ working_dir: '/tmp/repo', max_concurrent: 5, active_profile: 'test' });
+      vi.mocked(api.getConfig).mockResolvedValue({ working_dir: '/tmp/repo', max_concurrent: 5, active_profile: 'test', active_profile_info: null });
       render(<QuickShotModal {...defaultProps} />);
 
       await waitFor(() => {

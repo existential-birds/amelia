@@ -17,7 +17,7 @@ import {
  * @property children - Text content to animate
  * @property as - HTML element type to render (default: 'p')
  * @property className - Optional additional CSS classes
- * @property duration - Animation duration in seconds (default: 2)
+ * @property duration - Animation duration in seconds (default: 4)
  * @property spread - Shimmer spread factor (default: 2)
  */
 export type TextShimmerProps = {
@@ -41,7 +41,7 @@ const ShimmerComponent = ({
   children,
   as: Component = "p",
   className,
-  duration = 2,
+  duration = 4,
   spread = 2,
 }: TextShimmerProps) => {
   const MotionComponent = motion.create(
@@ -58,7 +58,7 @@ const ShimmerComponent = ({
       animate={{ backgroundPosition: "0% center" }}
       className={cn(
         "relative inline-block bg-[length:250%_100%,auto] bg-clip-text text-transparent",
-        "[--bg:linear-gradient(90deg,#0000_calc(50%-var(--spread)),var(--color-background),#0000_calc(50%+var(--spread)))] [background-repeat:no-repeat,padding-box]",
+        "[--bg:linear-gradient(90deg,#0000_calc(50%-var(--spread)),var(--color-foreground),#0000_calc(50%+var(--spread)))] [background-repeat:no-repeat,padding-box]",
         className
       )}
       initial={{ backgroundPosition: "100% center" }}

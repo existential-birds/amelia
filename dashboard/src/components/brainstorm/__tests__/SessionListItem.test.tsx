@@ -95,12 +95,13 @@ describe("SessionListItem", () => {
       />
     );
 
-    expect(screen.getByRole("button", { name: /test session/i })).toHaveClass(
-      "bg-accent"
-    );
+    const button = screen.getByRole("button", { name: /test session/i });
+    expect(button).toHaveClass("bg-session-selected");
+    expect(button).toHaveClass("border-l-2");
+    expect(button).toHaveClass("border-session-active-border");
   });
 
-  it("calls onDelete from overflow menu", async () => {
+  it("calls onDelete when delete button is clicked", async () => {
     const onDelete = vi.fn();
     render(
       <SessionListItem
@@ -111,11 +112,8 @@ describe("SessionListItem", () => {
       />
     );
 
-    // Open overflow menu
-    await userEvent.click(screen.getByRole("button", { name: /options/i }));
-
-    // Click delete
-    await userEvent.click(screen.getByRole("menuitem", { name: /delete/i }));
+    // Click delete button
+    await userEvent.click(screen.getByRole("button", { name: /delete session/i }));
 
     expect(onDelete).toHaveBeenCalledWith("s1");
   });

@@ -34,7 +34,8 @@ export function SessionListItem({
         variant="ghost"
         className={cn(
           "min-w-0 flex-1 !shrink justify-start gap-3 h-auto py-2 px-2",
-          isSelected && "bg-accent"
+          "hover:bg-session-hover",
+          isSelected && "bg-session-selected border-l-2 border-session-active-border rounded-l-none"
         )}
         onClick={() => onSelect(session.id)}
         aria-label={session.topic || "Untitled"}
@@ -47,7 +48,12 @@ export function SessionListItem({
           <span className="text-sm font-medium truncate max-w-full">
             {session.topic || "Untitled"}
           </span>
-          <span className="text-xs text-muted-foreground">{timeAgo}</span>
+          <span className={cn(
+            "text-xs",
+            isSelected ? "text-session-selected-foreground/70" : "text-muted-foreground"
+          )}>
+            {timeAgo}
+          </span>
         </div>
       </Button>
 

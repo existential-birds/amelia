@@ -705,6 +705,21 @@ export interface DefaultContent {
 // ============================================================================
 
 /**
+ * Profile information for display in UI.
+ * Contains driver and model configuration.
+ */
+export interface ConfigProfileInfo {
+  /** Profile name. */
+  name: string;
+
+  /** Driver type (e.g., 'api:openrouter', 'cli:claude'). */
+  driver: string;
+
+  /** Model name. */
+  model: string;
+}
+
+/**
  * Response from GET /api/config endpoint.
  * Provides server configuration for dashboard.
  */
@@ -717,6 +732,9 @@ export interface ConfigResponse {
 
   /** Active profile name from settings.amelia.yaml. */
   active_profile: string;
+
+  /** Full profile info for the active profile. */
+  active_profile_info: ConfigProfileInfo | null;
 }
 
 // ============================================================================

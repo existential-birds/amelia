@@ -150,6 +150,12 @@ export interface ProfileInfo {
   model: string;
 }
 
+/** Response from creating a new brainstorming session. */
+export interface CreateSessionResponse {
+  session: BrainstormingSession;
+  profile?: ProfileInfo;
+}
+
 /** A complete brainstorming session with its message history and artifacts. */
 export interface SessionWithHistory {
   session: BrainstormingSession;

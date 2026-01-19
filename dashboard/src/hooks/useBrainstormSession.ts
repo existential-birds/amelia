@@ -45,9 +45,10 @@ export function useBrainstormSession() {
   const createSession = useCallback(
     async (profileId: string, firstMessage: string) => {
       // Create session with first message as topic
-      const session = await brainstormApi.createSession(profileId, firstMessage);
+      const { session, profile } = await brainstormApi.createSession(profileId, firstMessage);
       addSession(session);
       setActiveSessionId(session.id);
+      setActiveProfile(profile ?? null);
       clearMessages();
 
       // Add optimistic user message
@@ -80,7 +81,7 @@ export function useBrainstormSession() {
       addMessage(assistantMessage);
       setStreaming(true, response.message_id);
     },
-    [addSession, setActiveSessionId, clearMessages, addMessage, setStreaming]
+    [addSession, setActiveSessionId, setActiveProfile, clearMessages, addMessage, setStreaming]
   );
 
   const sendMessage = useCallback(
