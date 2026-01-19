@@ -27,12 +27,18 @@ const chartConfig = {
 
 /**
  * Formats a date string for chart display.
+ * Uses UTC to avoid timezone-related off-by-one display issues.
  * @param dateStr - ISO date string (YYYY-MM-DD)
  * @returns Formatted date (e.g., "Jan 15")
  */
 function formatChartDate(dateStr: string): string {
-  const date = new Date(dateStr + 'T00:00:00');
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  });
 }
 
 /**

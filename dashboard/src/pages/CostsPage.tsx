@@ -131,6 +131,15 @@ export default function CostsPage() {
                     <tr
                       key={model.model}
                       onClick={() => handleModelClick(model.model)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          handleModelClick(model.model);
+                        }
+                      }}
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`View history for ${model.model}`}
                       className={cn(
                         'border-b border-border/50 last:border-0 cursor-pointer',
                         'hover:bg-muted/50 transition-colors'
