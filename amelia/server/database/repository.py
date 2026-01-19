@@ -747,12 +747,14 @@ class WorkflowRepository:
             (prev_start_str, prev_end_str),
         )
 
+        # Store token_usage-derived total_workflows for consistent response
+        total_workflows_from_usage = row[1] if row else 0
+
         # Success metrics from workflows table
-        # Count workflows that have completed_at in the date range
+        # Count successful workflows that have completed_at in the date range
         success_row = await self._db.fetch_one(
             """
             SELECT
-                COUNT(*) as total_workflows,
                 SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as successful_workflows
             FROM workflows
             WHERE DATE(completed_at) >= ? AND DATE(completed_at) <= ?
@@ -761,17 +763,17 @@ class WorkflowRepository:
             (start_str, end_str),
         )
 
-        total_workflows = success_row[0] if success_row and success_row[0] else 0
-        successful_workflows = success_row[1] if success_row and success_row[1] else 0
+        successful_workflows = success_row[0] if success_row and success_row[0] else 0
+        # Use token_usage-derived total_workflows as denominator for consistency
         success_rate = (
-            (successful_workflows / total_workflows)
-            if total_workflows > 0
+            (successful_workflows / total_workflows_from_usage)
+            if total_workflows_from_usage > 0
             else 0.0
         )
 
         return {
             "total_cost_usd": row[0] if row else 0.0,
-            "total_workflows": row[1] if row else 0,
+            "total_workflows": total_workflows_from_usage,
             "total_tokens": row[2] if row else 0,
             "total_duration_ms": row[3] if row else 0,
             "previous_period_cost_usd": prev_row[0] if prev_row else 0.0,

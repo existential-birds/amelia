@@ -43,6 +43,22 @@ const PRESETS = [
 ];
 
 /**
+ * Default preset value when none is specified.
+ */
+const DEFAULT_PRESET = '30d';
+
+/**
+ * Get the display label for a preset value.
+ * Returns the preset label if found, or "Custom range" for null/unknown values.
+ */
+function getPresetLabel(preset: string | null): string {
+  if (preset === null) {
+    return 'Custom range';
+  }
+  return PRESETS.find((p) => p.value === preset)?.label ?? 'Custom range';
+}
+
+/**
  * Export usage data to CSV.
  */
 function exportCSV(byModel: UsageByModel[], dateRange: string) {
@@ -247,12 +263,12 @@ export default function CostsPage() {
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" size="sm">
                     <Calendar className="size-4" />
-                    <span>{PRESETS.find((p) => p.value === currentPreset)?.label}</span>
+                    <span>{getPresetLabel(currentPreset)}</span>
                     <ChevronDown className="size-4" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuRadioGroup value={currentPreset ?? '30d'} onValueChange={handlePresetChange}>
+                  <DropdownMenuRadioGroup value={currentPreset ?? DEFAULT_PRESET} onValueChange={handlePresetChange}>
                     {PRESETS.map((p) => (
                       <DropdownMenuRadioItem key={p.value} value={p.value}>
                         {p.label}
@@ -273,8 +289,7 @@ export default function CostsPage() {
               </EmptyMedia>
               <EmptyTitle>No usage data</EmptyTitle>
               <EmptyDescription>
-                No workflows ran in the last{' '}
-                {PRESETS.find((p) => p.value === currentPreset)?.label ?? '30 days'}.
+                No workflows ran in the last {getPresetLabel(currentPreset).toLowerCase()}.
                 Try a longer time range or start a new workflow.
               </EmptyDescription>
             </EmptyHeader>
@@ -338,12 +353,12 @@ export default function CostsPage() {
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm">
                   <Calendar className="size-4" />
-                  <span>{PRESETS.find((p) => p.value === currentPreset)?.label}</span>
+                  <span>{getPresetLabel(currentPreset)}</span>
                   <ChevronDown className="size-4" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuRadioGroup value={currentPreset ?? '30d'} onValueChange={handlePresetChange}>
+                <DropdownMenuRadioGroup value={currentPreset ?? DEFAULT_PRESET} onValueChange={handlePresetChange}>
                   {PRESETS.map((p) => (
                     <DropdownMenuRadioItem key={p.value} value={p.value}>
                       {p.label}
@@ -394,7 +409,7 @@ export default function CostsPage() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => exportCSV(usage.by_model, currentPreset ?? '30d')}
+              onClick={() => exportCSV(usage.by_model, currentPreset ?? DEFAULT_PRESET)}
             >
               <Download className="size-4 mr-1" />
               Export CSV
