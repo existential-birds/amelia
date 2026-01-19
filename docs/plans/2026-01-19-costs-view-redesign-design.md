@@ -15,6 +15,7 @@ This design improves the dashboard's costs view to provide better visual hierarc
 - Make date range selection mobile-friendly via collapsible dropdown
 - Add period-over-period comparison to contextualize spending
 - Enhance the table with sorting, sparklines, and CSV export
+- Show goal completion rate (success rate) per model and aggregate
 - Provide skeleton loading states and helpful empty states
 
 ### Non-Goals
@@ -53,10 +54,14 @@ interface UsageSummary {
   cache_hit_rate?: number;
   cache_savings_usd?: number;
   previous_period_cost_usd: number | null;  // null if no prior data
+  successful_workflows: number;             // Not canceled or failed
+  success_rate: number;                     // 0-1 (successful / total)
 }
 ```
 
-The frontend calculates the delta: `((current - previous) / previous) * 100`.
+The frontend calculates the cost delta: `((current - previous) / previous) * 100`.
+
+The aggregate success rate displays in the summary cards alongside total cost, workflows, tokens, and duration.
 
 ### Extended UsageByModel
 
@@ -66,10 +71,11 @@ Add per-model trend for sparklines:
 interface UsageByModel {
   model: string;
   workflows: number;
+  successful_workflows: number;  // Not canceled or failed
   tokens: number;
   cost_usd: number;
-  trend: number[];  // Daily costs array for sparkline
-  // e.g., [0.5, 1.2, 0.8, 2.1, ...] matching the date range
+  trend: number[];               // Daily costs array for sparkline
+  success_rate: number;          // 0-1 (successful_workflows / workflows)
 }
 ```
 
@@ -228,8 +234,11 @@ On mobile (`<md`), the table converts to stacked cards:
 <div className="md:hidden space-y-3">
   {models.map(model => (
     <div className="bg-card rounded-lg p-4">
-      <div className="font-medium" style={{ color: modelColor }}>
-        {model.model}
+      <div className="flex justify-between items-center">
+        <span className="font-medium" style={{ color: modelColor }}>
+          {model.model}
+        </span>
+        <SuccessRateBadge rate={model.success_rate} />
       </div>
       <div className="grid grid-cols-2 gap-2 mt-2 text-sm">
         <div>Workflows: {model.workflows}</div>
@@ -263,13 +272,22 @@ const columns: ColumnDef<UsageByModel>[] = [
     ),
   },
   {
+    accessorKey: 'success_rate',
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Success" />
+    ),
+    cell: ({ row }) => (
+      <SuccessRateBadge rate={row.getValue('success_rate')} />
+    ),
+  },
+  {
     accessorKey: 'cost_usd',
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Cost" />
     ),
     cell: ({ row }) => formatCost(row.getValue('cost_usd')),
   },
-  // ... other columns
+  // ... workflows, tokens, share columns
 ];
 
 <DataTable columns={columns} data={sortedByModel} />
@@ -294,6 +312,33 @@ function Sparkline({ data, color }: { data: number[]; color: string }) {
 }
 ```
 
+### Success Rate Column
+
+The "Success" column shows goal completion rate per model with color-coded badges:
+
+```tsx
+function SuccessRateBadge({ rate }: { rate: number }) {
+  const percentage = Math.round(rate * 100);
+  const color =
+    percentage >= 90 ? 'text-green-400' :
+    percentage >= 70 ? 'text-yellow-400' :
+    'text-red-400';
+
+  return (
+    <span className={cn('tabular-nums font-medium', color)}>
+      {percentage}%
+    </span>
+  );
+}
+```
+
+Color thresholds:
+- **Green (≥90%)**: High reliability, model performing well
+- **Yellow (70-89%)**: Moderate reliability, may need attention
+- **Red (<70%)**: Low reliability, investigate failures
+
+Success is defined as workflows that are not `canceled` or `failed`.
+
 ### CSV Export
 
 Button in page header triggers download:
@@ -301,8 +346,15 @@ Button in page header triggers download:
 ```typescript
 function exportCSV(usage: UsageResponse, dateRange: string) {
   const rows = [
-    ['Model', 'Workflows', 'Tokens', 'Cost (USD)', 'Share (%)'],
-    ...usage.by_model.map(m => [m.model, m.workflows, m.tokens, m.cost_usd, calcShare(m)])
+    ['Model', 'Workflows', 'Success Rate', 'Tokens', 'Cost (USD)', 'Share (%)'],
+    ...usage.by_model.map(m => [
+      m.model,
+      m.workflows,
+      `${Math.round(m.success_rate * 100)}%`,
+      m.tokens,
+      m.cost_usd,
+      calcShare(m)
+    ])
   ];
   const csv = rows.map(r => r.join(',')).join('\n');
   downloadBlob(csv, `costs-${dateRange}.csv`, 'text/csv');
@@ -319,9 +371,9 @@ Use shared components consistent with other dashboard views.
 function CostsPageSkeleton() {
   return (
     <>
-      {/* Summary row skeletons */}
-      <div className="grid grid-cols-4 gap-4">
-        {Array.from({ length: 4 }).map((_, i) => (
+      {/* Summary row skeletons (5 cards: cost, workflows, tokens, duration, success rate) */}
+      <div className="grid grid-cols-5 gap-4">
+        {Array.from({ length: 5 }).map((_, i) => (
           <Skeleton key={i} className="h-20 rounded-lg" />
         ))}
       </div>
@@ -391,7 +443,8 @@ function EmptyState({ currentPreset, onPresetChange }) {
 |------|---------|
 | Usage endpoint handler | Include `by_model` in each trend point |
 | Usage endpoint handler | Add `previous_period_cost_usd` to summary |
-| Usage endpoint handler | Add `trend` array to each `UsageByModel` |
+| Usage endpoint handler | Add `successful_workflows` and `success_rate` to summary |
+| Usage endpoint handler | Add `trend`, `successful_workflows`, and `success_rate` to each `UsageByModel` |
 
 ## Implementation Phases
 
@@ -406,7 +459,8 @@ function EmptyState({ currentPreset, onPresetChange }) {
 
 - Extend usage endpoint to include `by_model` breakdown in each `UsageTrendPoint`
 - Add `previous_period_cost_usd` to `UsageSummary`
-- Add `trend` array to each `UsageByModel` for sparklines
+- Add `successful_workflows` and `success_rate` to `UsageSummary`
+- Add `trend`, `successful_workflows`, and `success_rate` to each `UsageByModel`
 - Update TypeScript types in `dashboard/src/types/index.ts`
 
 ### Phase 3: Multi-Model Chart
@@ -442,3 +496,5 @@ function EmptyState({ currentPreset, onPresetChange }) {
 | Table sorting | `@tanstack/react-table` | Built-in sorting with accessibility |
 | Loading/empty states | Shared components | Consistency across dashboard views |
 | Mobile table | Card layout | Better touch targets, no horizontal scroll |
+| Success definition | Not canceled or failed | Clear, measurable criteria |
+| Success rate colors | Green/Yellow/Red thresholds | Intuitive traffic-light pattern |
