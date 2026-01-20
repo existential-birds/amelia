@@ -9,11 +9,10 @@ from collections.abc import AsyncIterator, Callable
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+
 if TYPE_CHECKING:
     from amelia.server.orchestrator.service import OrchestratorService
 from uuid import uuid4
-
-from amelia.server.models.requests import CreateWorkflowRequest
 
 from deepagents.backends.protocol import BackendProtocol, WriteResult
 from deepagents.middleware.filesystem import (  # type: ignore[import-untyped]
@@ -44,6 +43,7 @@ from amelia.server.models.brainstorm import (
     SessionStatus,
 )
 from amelia.server.models.events import EventDomain, EventType, WorkflowEvent
+from amelia.server.models.requests import CreateWorkflowRequest
 
 
 # Tool description for the write_design_doc tool (markdown-only write)
