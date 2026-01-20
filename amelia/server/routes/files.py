@@ -3,6 +3,7 @@ import asyncio
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from amelia.server.config import ServerConfig
@@ -100,3 +101,87 @@ async def read_file(
         content=content,
         filename=resolved_path.name,
     )
+
+
+@router.get("/{file_path:path}")
+async def get_file(
+    file_path: str,
+    config: ServerConfig = Depends(get_config),
+) -> Response:
+    """Get file content by path.
+
+    Args:
+        file_path: Absolute path to the file.
+        config: Server configuration.
+
+    Returns:
+        File content as plain text response.
+
+    Raises:
+        HTTPException: 400 if path is invalid or outside working_dir.
+        HTTPException: 404 if file doesn't exist.
+    """
+    path = Path(file_path)
+
+    # Validate absolute path
+    if not path.is_absolute():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": "Path must be absolute", "code": "INVALID_PATH"},
+        )
+
+    # Resolve to handle symlinks and ..
+    try:
+        resolved_path = path.resolve()
+    except (OSError, RuntimeError) as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": f"Invalid path: {e}", "code": "INVALID_PATH"},
+        ) from e
+
+    # Check working_dir restriction
+    working_dir_resolved = config.working_dir.resolve()
+    try:
+        resolved_path.relative_to(working_dir_resolved)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "error": "Path not accessible (outside working directory)",
+                "code": "PATH_NOT_ACCESSIBLE",
+            },
+        ) from e
+
+    # Check file exists
+    if not resolved_path.exists():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"error": "File not found", "code": "FILE_NOT_FOUND"},
+        )
+
+    if not resolved_path.is_file():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": "Path is not a file", "code": "NOT_A_FILE"},
+        )
+
+    # Read content
+    try:
+        content = await asyncio.to_thread(resolved_path.read_text, encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": f"Failed to read file: {e}", "code": "READ_ERROR"},
+        ) from e
+
+    # Determine content type based on extension
+    suffix = resolved_path.suffix.lower()
+    content_type = {
+        ".md": "text/markdown",
+        ".txt": "text/plain",
+        ".json": "application/json",
+        ".yaml": "text/yaml",
+        ".yml": "text/yaml",
+    }.get(suffix, "text/plain")
+
+    return Response(content=content, media_type=content_type)
