@@ -76,6 +76,7 @@ function SpecBuilderPageContent() {
     deleteSession,
     handoff,
     startNewSession,
+    startPrimedSession,
   } = useBrainstormSession();
 
   const { textInput } = usePromptInputController();
@@ -173,6 +174,15 @@ function SpecBuilderPageContent() {
     setHandoffArtifact(null);
   }, []);
 
+  const handleStartBrainstorming = useCallback(async () => {
+    if (isStreaming) return;
+    try {
+      await startPrimedSession(activeProfileRef.current);
+    } catch {
+      // TODO: Show error toast
+    }
+  }, [isStreaming, startPrimedSession]);
+
   const getStatus = () => {
     if (isStreaming) return "streaming";
     if (isSubmitting) return "submitted";
@@ -247,6 +257,15 @@ function SpecBuilderPageContent() {
                     </div>
                   </div>
                 )}
+                {/* Start Brainstorming Button */}
+                <Button
+                  className="mt-6"
+                  onClick={handleStartBrainstorming}
+                  disabled={isStreaming}
+                >
+                  <Lightbulb className="h-4 w-4 mr-2" />
+                  Start Brainstorming
+                </Button>
               </>
             </ConversationEmptyState>
           ) : (
@@ -319,25 +338,27 @@ function SpecBuilderPageContent() {
         <ConversationScrollButton />
       </Conversation>
 
-      {/* Input Area */}
-      <div className="border-t bg-background p-4">
-        <PromptInput
-          className="max-w-3xl mx-auto"
-          onSubmit={handleSubmit}
-        >
-          <PromptInputTextarea
-            placeholder="What would you like to design?"
-            disabled={isStreaming}
-          />
-          <PromptInputFooter>
-            <div />
-            <PromptInputSubmit
-              disabled={!textInput.value.trim() || isStreaming}
-              status={getStatus()}
+      {/* Input Area - only shown when there's an active session */}
+      {activeSessionId && (
+        <div className="border-t bg-background p-4">
+          <PromptInput
+            className="max-w-3xl mx-auto"
+            onSubmit={handleSubmit}
+          >
+            <PromptInputTextarea
+              placeholder="What would you like to design?"
+              disabled={isStreaming}
             />
-          </PromptInputFooter>
-        </PromptInput>
-      </div>
+            <PromptInputFooter>
+              <div />
+              <PromptInputSubmit
+                disabled={!textInput.value.trim() || isStreaming}
+                status={getStatus()}
+              />
+            </PromptInputFooter>
+          </PromptInput>
+        </div>
+      )}
 
       {/* Handoff Dialog */}
       <HandoffDialog

@@ -80,6 +80,16 @@ class MockAssistantMessage:
         self.content = content
 
 
+class MockUserMessage:
+    """Mock UserMessage from claude-agent-sdk.
+
+    The SDK delivers ToolResultBlock inside UserMessage, not AssistantMessage.
+    """
+
+    def __init__(self, content: list[Any]) -> None:
+        self.content = content
+
+
 class MockResultMessage:
     """Mock ResultMessage from claude-agent-sdk."""
 
@@ -107,6 +117,7 @@ def _patch_sdk_types():
     return patch.multiple(
         "amelia.drivers.cli.claude",
         AssistantMessage=MockAssistantMessage,
+        UserMessage=MockUserMessage,
         ResultMessage=MockResultMessage,
         TextBlock=MockTextBlock,
         ToolUseBlock=MockToolUseBlock,
@@ -964,3 +975,190 @@ class TestExecuteAgenticYieldsAgenticMessage:
         result_msgs = [m for m in results if m.type == AgenticMessageType.RESULT]
         assert len(result_msgs) == 1
         assert result_msgs[0].is_error is True
+
+
+class TestUserMessageToolResultHandling:
+    """Tests for handling ToolResultBlock in UserMessage.
+
+    The SDK delivers ToolResultBlock inside UserMessage, not AssistantMessage.
+    This is critical for artifact creation in brainstorm sessions.
+    """
+
+    async def test_yields_tool_result_from_user_message(self, driver: ClaudeCliDriver) -> None:
+        """ToolResultBlock in UserMessage should yield TOOL_RESULT AgenticMessage.
+
+        Bug: CLI driver only checked AssistantMessage for ToolResultBlock.
+        The SDK actually delivers ToolResultBlock inside UserMessage.
+        Without this fix, TOOL_RESULT events are never emitted.
+        """
+        tool_call_id = "toolu_write123"
+
+        # Create ToolUseBlock with matching ID (simulates real SDK behavior)
+        tool_use_block = MockToolUseBlock("Write", {"file_path": "/test.md", "content": "test"})
+        tool_use_block.id = tool_call_id  # Match the result's tool_use_id
+
+        # SDK flow: AssistantMessage with ToolUseBlock, then UserMessage with ToolResultBlock
+        messages = [
+            MockAssistantMessage([tool_use_block]),
+            MockUserMessage([MockToolResultBlock("File written successfully", tool_use_id=tool_call_id)]),
+            MockResultMessage(result="Done", session_id="sess_user_msg"),
+        ]
+
+        with (
+            _patch_sdk_types(),
+            patch("amelia.drivers.cli.claude.ClaudeSDKClient", create_mock_sdk_client(messages)),
+        ):
+            results = [msg async for msg in driver.execute_agentic("write a file", "/tmp")]
+
+        # Should have TOOL_RESULT from UserMessage
+        tool_results = [m for m in results if m.type == AgenticMessageType.TOOL_RESULT]
+        assert len(tool_results) == 1, "Expected ToolResultBlock in UserMessage to yield TOOL_RESULT"
+        assert tool_results[0].tool_output == "File written successfully"
+        assert tool_results[0].tool_call_id == tool_call_id
+
+    async def test_user_message_tool_result_preserves_error_flag(self, driver: ClaudeCliDriver) -> None:
+        """ToolResultBlock in UserMessage with is_error=True should set is_error."""
+        messages = [
+            MockAssistantMessage([MockToolUseBlock("Read", {"file_path": "/missing.txt"})]),
+            MockUserMessage([MockToolResultBlock("Error: File not found", is_error=True)]),
+            MockResultMessage(result="Failed", session_id="sess_err"),
+        ]
+
+        with (
+            _patch_sdk_types(),
+            patch("amelia.drivers.cli.claude.ClaudeSDKClient", create_mock_sdk_client(messages)),
+        ):
+            results = [msg async for msg in driver.execute_agentic("read a file", "/tmp")]
+
+        tool_results = [m for m in results if m.type == AgenticMessageType.TOOL_RESULT]
+        assert len(tool_results) == 1
+        assert tool_results[0].is_error is True
+
+    async def test_user_message_tool_result_normalizes_tool_name(self, driver: ClaudeCliDriver) -> None:
+        """Tool name from preceding ToolUseBlock should be normalized in UserMessage ToolResultBlock."""
+        from amelia.core.constants import ToolName
+
+        messages = [
+            MockAssistantMessage([MockToolUseBlock("Write", {"file_path": "/test.md", "content": "x"})]),
+            MockUserMessage([MockToolResultBlock("Written")]),
+            MockResultMessage(result="Done", session_id="sess_norm"),
+        ]
+
+        with (
+            _patch_sdk_types(),
+            patch("amelia.drivers.cli.claude.ClaudeSDKClient", create_mock_sdk_client(messages)),
+        ):
+            results = [msg async for msg in driver.execute_agentic("test", "/tmp")]
+
+        tool_results = [m for m in results if m.type == AgenticMessageType.TOOL_RESULT]
+        assert len(tool_results) == 1
+        assert tool_results[0].tool_name == ToolName.WRITE_FILE
+
+
+class TestToolCallIdMatchingForArtifactDetection:
+    """Tests verifying TOOL_CALL and TOOL_RESULT have matching IDs.
+
+    Artifact detection in the brainstorm service relies on matching tool_call_id
+    between TOOL_CALL and TOOL_RESULT events. If these don't match, artifacts
+    won't be created even when files are successfully written.
+    """
+
+    async def test_tool_call_ids_match_for_artifact_detection(
+        self, driver: ClaudeCliDriver
+    ) -> None:
+        """TOOL_CALL and TOOL_RESULT must have matching tool_call_id for artifact detection.
+
+        This test simulates the real SDK flow where:
+        1. AssistantMessage contains ToolUseBlock with id
+        2. UserMessage contains ToolResultBlock with tool_use_id
+
+        For artifact detection to work, block.id == block.tool_use_id must be true.
+        """
+        # Simulated SDK tool call ID (matches real SDK format)
+        tool_call_id = "toolu_01XYZ789abc"
+
+        # Create ToolUseBlock with specific ID
+        tool_use_block = MockToolUseBlock(
+            "Write", {"file_path": "/docs/design.md", "content": "# Design"}
+        )
+        tool_use_block.id = tool_call_id
+
+        # SDK flow: ToolUseBlock in AssistantMessage, ToolResultBlock in UserMessage
+        messages = [
+            MockAssistantMessage([tool_use_block]),
+            MockUserMessage(
+                [MockToolResultBlock("File written", tool_use_id=tool_call_id)]
+            ),
+            MockResultMessage(result="Done", session_id="sess_artifact"),
+        ]
+
+        with (
+            _patch_sdk_types(),
+            patch(
+                "amelia.drivers.cli.claude.ClaudeSDKClient",
+                create_mock_sdk_client(messages),
+            ),
+        ):
+            results = [msg async for msg in driver.execute_agentic("write file", "/tmp")]
+
+        # Extract TOOL_CALL and TOOL_RESULT events
+        tool_calls = [m for m in results if m.type == AgenticMessageType.TOOL_CALL]
+        tool_results = [m for m in results if m.type == AgenticMessageType.TOOL_RESULT]
+
+        assert len(tool_calls) == 1, "Expected one TOOL_CALL event"
+        assert len(tool_results) == 1, "Expected one TOOL_RESULT event"
+
+        # CRITICAL: IDs must match for artifact detection
+        assert tool_calls[0].tool_call_id == tool_results[0].tool_call_id, (
+            f"TOOL_CALL id ({tool_calls[0].tool_call_id}) must match "
+            f"TOOL_RESULT id ({tool_results[0].tool_call_id}) for artifact detection"
+        )
+
+        # Verify both have the expected ID
+        assert tool_calls[0].tool_call_id == tool_call_id
+        assert tool_results[0].tool_call_id == tool_call_id
+
+    async def test_write_tool_has_file_path_parameter(
+        self, driver: ClaudeCliDriver
+    ) -> None:
+        """Write tool events must include file_path in tool_input for artifact detection.
+
+        The brainstorm service extracts the artifact path from tool_input using
+        file_path or path keys. This test verifies the CLI driver preserves
+        the file_path parameter from Claude Code's Write tool.
+        """
+        tool_call_id = "toolu_write_path_test"
+
+        tool_use_block = MockToolUseBlock(
+            "Write",
+            {"file_path": "/docs/adr/0001-architecture.md", "content": "# ADR"},
+        )
+        tool_use_block.id = tool_call_id
+
+        messages = [
+            MockAssistantMessage([tool_use_block]),
+            MockUserMessage(
+                [MockToolResultBlock("Written", tool_use_id=tool_call_id)]
+            ),
+            MockResultMessage(result="Done"),
+        ]
+
+        with (
+            _patch_sdk_types(),
+            patch(
+                "amelia.drivers.cli.claude.ClaudeSDKClient",
+                create_mock_sdk_client(messages),
+            ),
+        ):
+            results = [msg async for msg in driver.execute_agentic("write adr", "/tmp")]
+
+        tool_calls = [m for m in results if m.type == AgenticMessageType.TOOL_CALL]
+        assert len(tool_calls) == 1
+
+        # Verify tool_input contains file_path for artifact detection
+        assert tool_calls[0].tool_input is not None
+        assert "file_path" in tool_calls[0].tool_input, (
+            f"tool_input must contain 'file_path' for artifact detection, "
+            f"got keys: {list(tool_calls[0].tool_input.keys())}"
+        )
+        assert tool_calls[0].tool_input["file_path"] == "/docs/adr/0001-architecture.md"

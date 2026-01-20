@@ -148,4 +148,21 @@ describe("brainstormApi", () => {
       expect(result).toEqual({ workflow_id: "w1", status: "created" });
     });
   });
+
+  describe("primeSession", () => {
+    it("primes a session and returns message_id", async () => {
+      vi.mocked(fetch).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ message_id: "prime-m1" }),
+      } as Response);
+
+      const result = await brainstormApi.primeSession("s1");
+
+      expect(fetch).toHaveBeenCalledWith(
+        expect.stringContaining("/api/brainstorm/sessions/s1/prime"),
+        expect.objectContaining({ method: "POST" })
+      );
+      expect(result).toEqual({ message_id: "prime-m1" });
+    });
+  });
 });

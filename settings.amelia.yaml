@@ -1,4 +1,4 @@
-active_profile: local_haiku
+active_profile: local_sonnet
 profiles:
   local_haiku:
     name: local_haiku

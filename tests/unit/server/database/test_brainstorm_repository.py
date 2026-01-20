@@ -226,6 +226,107 @@ class TestMessageCRUD(TestBrainstormRepository):
 
         assert await repository.get_max_sequence(sample_session.id) == 3
 
+    async def test_save_message_with_is_system(
+        self, repository: BrainstormRepository, sample_session: BrainstormingSession
+    ) -> None:
+        """Should save and retrieve message with is_system flag."""
+        await repository.create_session(sample_session)
+
+        # Save a system message
+        system_msg = Message(
+            id="msg-system-1",
+            session_id=sample_session.id,
+            sequence=1,
+            role="user",
+            content="System priming content",
+            is_system=True,
+            created_at=datetime.now(UTC),
+        )
+        await repository.save_message(system_msg)
+
+        # Save a regular message
+        regular_msg = Message(
+            id="msg-regular-1",
+            session_id=sample_session.id,
+            sequence=2,
+            role="user",
+            content="User authored content",
+            is_system=False,
+            created_at=datetime.now(UTC),
+        )
+        await repository.save_message(regular_msg)
+
+        messages = await repository.get_messages(sample_session.id)
+        assert len(messages) == 2
+        assert messages[0].is_system is True
+        assert messages[1].is_system is False
+
+    async def test_get_messages_include_system_default(
+        self, repository: BrainstormRepository, sample_session: BrainstormingSession
+    ) -> None:
+        """Should include system messages by default."""
+        await repository.create_session(sample_session)
+
+        # Save system and regular messages
+        for i, is_sys in [(1, True), (2, False), (3, True)]:
+            msg = Message(
+                id=f"msg-{i}",
+                session_id=sample_session.id,
+                sequence=i,
+                role="user",
+                content=f"Message {i}",
+                is_system=is_sys,
+                created_at=datetime.now(UTC),
+            )
+            await repository.save_message(msg)
+
+        messages = await repository.get_messages(sample_session.id)
+        assert len(messages) == 3
+
+    async def test_get_messages_exclude_system(
+        self, repository: BrainstormRepository, sample_session: BrainstormingSession
+    ) -> None:
+        """Should filter out system messages when include_system=False."""
+        await repository.create_session(sample_session)
+
+        # Save system and regular messages
+        for i, is_sys in [(1, True), (2, False), (3, True), (4, False)]:
+            msg = Message(
+                id=f"msg-{i}",
+                session_id=sample_session.id,
+                sequence=i,
+                role="user",
+                content=f"Message {i}",
+                is_system=is_sys,
+                created_at=datetime.now(UTC),
+            )
+            await repository.save_message(msg)
+
+        messages = await repository.get_messages(sample_session.id, include_system=False)
+        assert len(messages) == 2
+        assert all(not m.is_system for m in messages)
+        assert [m.sequence for m in messages] == [2, 4]
+
+    async def test_is_system_defaults_to_false(
+        self, repository: BrainstormRepository, sample_session: BrainstormingSession
+    ) -> None:
+        """Should default is_system to False when not specified."""
+        await repository.create_session(sample_session)
+
+        message = Message(
+            id="msg-1",
+            session_id=sample_session.id,
+            sequence=1,
+            role="user",
+            content="Regular message",
+            created_at=datetime.now(UTC),
+        )
+        await repository.save_message(message)
+
+        messages = await repository.get_messages(sample_session.id)
+        assert len(messages) == 1
+        assert messages[0].is_system is False
+
 
 class TestArtifactCRUD(TestBrainstormRepository):
     """Test artifact CRUD operations."""

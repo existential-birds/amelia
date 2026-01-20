@@ -176,7 +176,7 @@ class ConnectionManager:
             payload = {
                 "type": "brainstorm",
                 "event_type": event_type_str,
-                "session_id": event.data.get("session_id") if event.data else None,
+                "session_id": event.workflow_id,  # Brainstorm events use workflow_id as session_id
                 "message_id": event.data.get("message_id") if event.data else None,
                 "data": event.data or {},
                 "timestamp": event.timestamp.isoformat(),

@@ -97,7 +97,7 @@ describe("useBrainstormSession", () => {
   });
 
   describe("createSession", () => {
-    it("creates session and sends first message", async () => {
+    it("creates session and sends first message without priming", async () => {
       const mockSession = {
         id: "s1",
         profile_id: "p1",
@@ -127,9 +127,125 @@ describe("useBrainstormSession", () => {
       });
 
       expect(brainstormApi.createSession).toHaveBeenCalledWith("p1", "Hello");
+      expect(brainstormApi.primeSession).not.toHaveBeenCalled();
       expect(brainstormApi.sendMessage).toHaveBeenCalledWith("s1", "Hello");
       expect(useBrainstormStore.getState().activeSessionId).toBe("s1");
       expect(useBrainstormStore.getState().activeProfile).toEqual(mockProfile);
+    });
+  });
+
+  describe("startPrimedSession", () => {
+    it("creates session and primes it to get greeting", async () => {
+      const mockSession = {
+        id: "s1",
+        profile_id: "p1",
+        status: "active" as const,
+        topic: null,
+        driver_session_id: null,
+        created_at: "2026-01-18T00:00:00Z",
+        updated_at: "2026-01-18T00:00:00Z",
+      };
+      const mockProfile = {
+        name: "p1",
+        driver: "cli:claude",
+        model: "sonnet",
+      };
+      vi.mocked(brainstormApi.createSession).mockResolvedValueOnce({
+        session: mockSession,
+        profile: mockProfile,
+      });
+      vi.mocked(brainstormApi.primeSession).mockResolvedValueOnce({
+        message_id: "greeting-msg-id",
+      });
+
+      const { result } = renderHook(() => useBrainstormSession());
+
+      await act(async () => {
+        await result.current.startPrimedSession("p1");
+      });
+
+      // Should create session without a topic
+      expect(brainstormApi.createSession).toHaveBeenCalledWith("p1");
+      // Should prime the session
+      expect(brainstormApi.primeSession).toHaveBeenCalledWith("s1");
+      // Should NOT send a message
+      expect(brainstormApi.sendMessage).not.toHaveBeenCalled();
+      // Should set up session state
+      expect(useBrainstormStore.getState().activeSessionId).toBe("s1");
+      expect(useBrainstormStore.getState().activeProfile).toEqual(mockProfile);
+      // Should create assistant placeholder for the greeting
+      const messages = useBrainstormStore.getState().messages;
+      expect(messages).toHaveLength(1);
+      expect(messages[0]).toMatchObject({
+        id: "greeting-msg-id",
+        session_id: "s1",
+        role: "assistant",
+        content: "",
+        status: "streaming",
+      });
+      expect(useBrainstormStore.getState().streamingMessageId).toBe("greeting-msg-id");
+    });
+
+    it("sets streaming state during priming", async () => {
+      const mockSession = {
+        id: "s1",
+        profile_id: "p1",
+        status: "active" as const,
+        topic: null,
+        driver_session_id: null,
+        created_at: "2026-01-18T00:00:00Z",
+        updated_at: "2026-01-18T00:00:00Z",
+      };
+      vi.mocked(brainstormApi.createSession).mockResolvedValueOnce({
+        session: mockSession,
+        profile: undefined,
+      });
+      vi.mocked(brainstormApi.primeSession).mockResolvedValueOnce({
+        message_id: "greeting-msg-id",
+      });
+
+      const { result } = renderHook(() => useBrainstormSession());
+
+      await act(async () => {
+        await result.current.startPrimedSession("p1");
+      });
+
+      expect(useBrainstormStore.getState().isStreaming).toBe(true);
+    });
+
+    it("clears streaming state on error", async () => {
+      const mockSession = {
+        id: "s1",
+        profile_id: "p1",
+        status: "active" as const,
+        topic: null,
+        driver_session_id: null,
+        created_at: "2026-01-18T00:00:00Z",
+        updated_at: "2026-01-18T00:00:00Z",
+      };
+      vi.mocked(brainstormApi.createSession).mockResolvedValueOnce({
+        session: mockSession,
+        profile: undefined,
+      });
+      vi.mocked(brainstormApi.primeSession).mockRejectedValueOnce(
+        new Error("Prime failed")
+      );
+
+      const { result } = renderHook(() => useBrainstormSession());
+
+      // Use try-catch inside act to ensure state updates are flushed before assertions
+      let caughtError: Error | undefined;
+      await act(async () => {
+        try {
+          await result.current.startPrimedSession("p1");
+        } catch (e) {
+          caughtError = e as Error;
+        }
+      });
+
+      expect(caughtError?.message).toBe("Prime failed");
+      expect(useBrainstormStore.getState().isStreaming).toBe(false);
+      expect(useBrainstormStore.getState().streamingMessageId).toBeNull();
     });
   });
 

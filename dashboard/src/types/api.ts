@@ -158,6 +158,8 @@ export interface BrainstormMessage {
   session_id: string;
   sequence: number;
   role: "user" | "assistant";
+  /** Whether this is a system-generated message (e.g., session welcome, handoff summary). */
+  is_system?: boolean;
   content: string;
   reasoning?: string;
   parts: MessagePart[] | null;

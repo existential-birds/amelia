@@ -432,21 +432,39 @@ class Database:
                 input_tokens INTEGER,
                 output_tokens INTEGER,
                 cost_usd REAL,
+                is_system INTEGER NOT NULL DEFAULT 0,
                 UNIQUE(session_id, sequence)
             )
         """)
 
-        # Migration: Add token tracking columns to existing brainstorm_messages tables
+        # Migration: Add columns to existing brainstorm_messages tables
         # These ALTER TABLE statements are idempotent (ignore if column exists)
-        for column, col_type in [
-            ("input_tokens", "INTEGER"),
-            ("output_tokens", "INTEGER"),
-            ("cost_usd", "REAL"),
+        for column, col_type, default in [
+            ("input_tokens", "INTEGER", None),
+            ("output_tokens", "INTEGER", None),
+            ("cost_usd", "REAL", None),
+            ("is_system", "INTEGER NOT NULL", "0"),
         ]:
             with contextlib.suppress(Exception):
-                await self.execute(
-                    f"ALTER TABLE brainstorm_messages ADD COLUMN {column} {col_type}"
-                )
+                if default is not None:
+                    await self.execute(
+                        f"ALTER TABLE brainstorm_messages ADD COLUMN {column} {col_type} DEFAULT {default}"
+                    )
+                else:
+                    await self.execute(
+                        f"ALTER TABLE brainstorm_messages ADD COLUMN {column} {col_type}"
+                    )
+
+        # Data migration: Mark existing priming messages as system messages
+        # Priming messages are sequence 1, user role, and start with the skill header
+        await self.execute("""
+            UPDATE brainstorm_messages
+            SET is_system = 1
+            WHERE sequence = 1
+              AND role = 'user'
+              AND content LIKE '# Brainstorming Ideas Into Designs%'
+              AND is_system = 0
+        """)
 
         await self.execute("""
             CREATE INDEX IF NOT EXISTS idx_brainstorm_messages_session

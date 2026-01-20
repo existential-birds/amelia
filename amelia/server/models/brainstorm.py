@@ -100,6 +100,7 @@ class Message(BaseModel):
         content: Text content of the message.
         parts: Optional structured parts (tool calls, reasoning, etc.).
         usage: Optional token usage for this message (assistant messages only).
+        is_system: Whether this is a system/priming message (not user-authored).
         created_at: When the message was created.
     """
 
@@ -110,6 +111,7 @@ class Message(BaseModel):
     content: str
     parts: list[MessagePart] | None = None
     usage: MessageUsage | None = None
+    is_system: bool = False
     created_at: datetime
 
 

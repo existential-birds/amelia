@@ -13,6 +13,7 @@ from deepagents.backends.protocol import (
     ExecuteResponse,
     SandboxBackendProtocol,
 )
+from langchain.agents.middleware.types import AgentMiddleware
 from langchain.agents.structured_output import ToolStrategy
 from langchain.chat_models import init_chat_model
 from langchain_core.language_models import BaseChatModel
@@ -317,6 +318,9 @@ class ApiDriver(DriverInterface):
                 the first message of a session; ignored on subsequent calls
                 to preserve conversation context.
             schema: Unused (structured output not supported in agentic mode).
+            tools: Optional list of tools to provide to the agent. If None,
+                uses default tools (ls, read_file, write_file, edit_file,
+                glob, grep, execute, write_todos).
             required_tool: If set, agent will be prompted to continue if this
                 tool wasn't called. Use "write_file" to ensure file creation.
             max_continuations: Maximum continuation attempts if required_tool
@@ -334,6 +338,8 @@ class ApiDriver(DriverInterface):
             raise ValueError("Prompt cannot be empty")
 
         # Extract optional parameters from kwargs
+        tools: list[Any] | None = kwargs.get("tools")
+        middleware: list[AgentMiddleware] | None = kwargs.get("middleware")
         required_tool: str | None = kwargs.get("required_tool")
         required_file_path: str | None = kwargs.get("required_file_path")
         max_continuations: int = kwargs.get("max_continuations", 10)
@@ -384,6 +390,8 @@ class ApiDriver(DriverInterface):
                 system_prompt=effective_system_prompt,
                 backend=backend,
                 checkpointer=checkpointer,
+                tools=tools,
+                middleware=middleware or (),
             )
 
             logger.debug(

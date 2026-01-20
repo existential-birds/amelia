@@ -17,6 +17,7 @@ from claude_agent_sdk.types import (
     TextBlock,
     ToolResultBlock,
     ToolUseBlock,
+    UserMessage,
 )
 from loguru import logger
 from pydantic import BaseModel, ValidationError
@@ -141,6 +142,18 @@ def _log_sdk_message(message: Message | SDKStreamEvent) -> None:
                     result_text=content,
                     subtype="error" if block.is_error else "success",
                 )
+
+    elif isinstance(message, UserMessage):
+        # SDK delivers ToolResultBlock inside UserMessage
+        if isinstance(message.content, list):
+            for block in message.content:
+                if isinstance(block, ToolResultBlock):
+                    content = block.content if isinstance(block.content, str) else str(block.content)
+                    log_claude_result(
+                        result_type="result",
+                        result_text=content,
+                        subtype="error" if block.is_error else "success",
+                    )
 
     elif isinstance(message, ResultMessage):
         log_claude_result(
@@ -438,6 +451,25 @@ class ClaudeCliDriver:
                                     is_error=block.is_error or False,
                                     model=self.model,
                                 )
+
+                    elif isinstance(message, UserMessage):
+                        # SDK delivers ToolResultBlock inside UserMessage
+                        if isinstance(message.content, list):
+                            for block in message.content:
+                                if isinstance(block, ToolResultBlock):
+                                    content = block.content if isinstance(block.content, str) else str(block.content)
+                                    # Normalize tool name to standard format
+                                    result_tool_name = None
+                                    if last_tool_name:
+                                        result_tool_name = normalize_tool_name(last_tool_name)
+                                    yield AgenticMessage(
+                                        type=AgenticMessageType.TOOL_RESULT,
+                                        tool_name=result_tool_name,
+                                        tool_call_id=block.tool_use_id,
+                                        tool_output=content,
+                                        is_error=block.is_error or False,
+                                        model=self.model,
+                                    )
 
                     elif isinstance(message, ResultMessage):
                         # Store ResultMessage for token usage extraction
