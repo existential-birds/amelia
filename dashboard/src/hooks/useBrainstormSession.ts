@@ -51,6 +51,7 @@ export function useBrainstormSession() {
       setActiveSessionId(session.id);
       setActiveProfile(profile ?? null);
       clearMessages();
+      setArtifacts([]);
       // Initialize usage to zeros for new sessions
       setSessionUsage({
         total_input_tokens: 0,
@@ -96,7 +97,7 @@ export function useBrainstormSession() {
         throw error;
       }
     },
-    [addSession, setActiveSessionId, setActiveProfile, clearMessages, setSessionUsage, addMessage, removeMessage, setStreaming]
+    [addSession, setActiveSessionId, setActiveProfile, clearMessages, setArtifacts, setSessionUsage, addMessage, removeMessage, setStreaming]
   );
 
   const sendMessage = useCallback(
@@ -154,9 +155,14 @@ export function useBrainstormSession() {
       removeSession(sessionId);
       if (activeSessionId === sessionId) {
         clearMessages();
+        setArtifacts([]);
+        setActiveSessionId(null);
+        setActiveProfile(null);
+        setSessionUsage(null);
+        setStreaming(false, null);
       }
     },
-    [activeSessionId, removeSession, clearMessages]
+    [activeSessionId, removeSession, clearMessages, setArtifacts, setActiveSessionId, setActiveProfile, setSessionUsage, setStreaming]
   );
 
   const handoff = useCallback(
@@ -173,9 +179,11 @@ export function useBrainstormSession() {
     setActiveSessionId(null);
     setActiveProfile(null);
     clearMessages();
+    setArtifacts([]);
     setSessionUsage(null);
+    setStreaming(false, null);
     setDrawerOpen(false);
-  }, [setActiveSessionId, setActiveProfile, clearMessages, setSessionUsage, setDrawerOpen]);
+  }, [setActiveSessionId, setActiveProfile, clearMessages, setArtifacts, setSessionUsage, setStreaming, setDrawerOpen]);
 
   const startPrimedSession = useCallback(
     async (profileId: string) => {
@@ -185,6 +193,7 @@ export function useBrainstormSession() {
       setActiveSessionId(session.id);
       setActiveProfile(profile ?? null);
       clearMessages();
+      setArtifacts([]);
       setSessionUsage({
         total_input_tokens: 0,
         total_output_tokens: 0,
@@ -216,7 +225,7 @@ export function useBrainstormSession() {
         throw error;
       }
     },
-    [addSession, setActiveSessionId, setActiveProfile, clearMessages, setSessionUsage, setDrawerOpen, addMessage, setStreaming]
+    [addSession, setActiveSessionId, setActiveProfile, clearMessages, setArtifacts, setSessionUsage, setDrawerOpen, addMessage, setStreaming]
   );
 
   return {
