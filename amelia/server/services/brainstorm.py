@@ -7,9 +7,24 @@ between the repository, event bus, and Claude driver.
 import asyncio
 from collections.abc import AsyncIterator, Callable
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from amelia.server.orchestrator.service import OrchestratorService
 from uuid import uuid4
 
+from deepagents.backends.protocol import BackendProtocol, WriteResult
+from deepagents.middleware.filesystem import (  # type: ignore[import-untyped]
+    TOOL_GENERATORS,
+    FilesystemMiddleware,
+    FilesystemState,
+    _get_backend,
+    _validate_path,
+)
+from langchain.tools import ToolRuntime
+from langchain_core.messages import ToolMessage
+from langchain_core.tools import BaseTool, StructuredTool
+from langgraph.types import Command
 from loguru import logger
 
 from amelia.drivers.base import (
@@ -29,15 +44,242 @@ from amelia.server.models.brainstorm import (
 from amelia.server.models.events import EventDomain, EventType, WorkflowEvent
 
 
-BRAINSTORMER_SYSTEM_PROMPT = """You are a collaborative design partner helping the user brainstorm and refine software designs.
+# Tool description for the write_design_doc tool (markdown-only write)
+WRITE_DESIGN_DOC_DESCRIPTION = """Write a design document (markdown file) to the filesystem.
 
-Your role:
-- Ask clarifying questions to understand requirements
-- Suggest design patterns and architectural approaches
-- Help identify edge cases and potential issues
-- Produce clear, actionable design documents when ready
+Usage:
+- The file_path parameter must be an absolute path ending with .md
+- ONLY markdown files (.md) can be written - this tool will reject other file types
+- The content parameter must be a string containing markdown content
+- This tool creates new files only; use for design docs, ADRs, specs, etc.
+- Typical paths: /docs/plans/YYYY-MM-DD-feature-design.md, /docs/adr/NNNN-decision.md"""
 
-Keep responses focused and conversational. When the design is ready, offer to produce a formal document."""
+
+def _write_design_doc_tool_generator(
+    backend: BackendProtocol | Callable[[ToolRuntime], BackendProtocol],
+) -> BaseTool:
+    """Generate the write_design_doc tool (markdown-only write).
+
+    This is a restricted version of write_file that only allows writing
+    markdown (.md) files. Used by the brainstormer to prevent accidental
+    code generation.
+
+    Args:
+        backend: Backend to use for file storage.
+
+    Returns:
+        Configured write_design_doc tool.
+    """
+
+    def sync_write_design_doc(
+        file_path: str,
+        content: str,
+        runtime: ToolRuntime[None, FilesystemState],
+    ) -> Command[Any] | str:
+        """Synchronous write_design_doc implementation."""
+        # Validate markdown extension
+        if not file_path.lower().endswith(".md"):
+            return (
+                f"Error: write_design_doc only allows markdown files (.md). "
+                f"Got: {file_path}. The brainstormer cannot write code files."
+            )
+
+        resolved_backend = _get_backend(backend, runtime)
+        validated_path = _validate_path(file_path)
+        res: WriteResult = resolved_backend.write(validated_path, content)
+
+        if res.error:
+            return res.error
+        if res.files_update is not None:
+            return Command(
+                update={
+                    "files": res.files_update,
+                    "messages": [
+                        ToolMessage(
+                            content=f"Created design document: {res.path}",
+                            tool_call_id=runtime.tool_call_id,
+                        )
+                    ],
+                }
+            )
+        return f"Created design document: {res.path}"
+
+    async def async_write_design_doc(
+        file_path: str,
+        content: str,
+        runtime: ToolRuntime[None, FilesystemState],
+    ) -> Command[Any] | str:
+        """Asynchronous write_design_doc implementation."""
+        # Validate markdown extension
+        if not file_path.lower().endswith(".md"):
+            return (
+                f"Error: write_design_doc only allows markdown files (.md). "
+                f"Got: {file_path}. The brainstormer cannot write code files."
+            )
+
+        resolved_backend = _get_backend(backend, runtime)
+        validated_path = _validate_path(file_path)
+        res: WriteResult = await resolved_backend.awrite(validated_path, content)
+
+        if res.error:
+            return res.error
+        if res.files_update is not None:
+            return Command(
+                update={
+                    "files": res.files_update,
+                    "messages": [
+                        ToolMessage(
+                            content=f"Created design document: {res.path}",
+                            tool_call_id=runtime.tool_call_id,
+                        )
+                    ],
+                }
+            )
+        return f"Created design document: {res.path}"
+
+    return StructuredTool.from_function(
+        name="write_design_doc",
+        description=WRITE_DESIGN_DOC_DESCRIPTION,
+        func=sync_write_design_doc,
+        coroutine=async_write_design_doc,
+    )
+
+
+def create_brainstormer_tools(
+    backend: BackendProtocol | Callable[[ToolRuntime], BackendProtocol],
+) -> list[BaseTool]:
+    """Create the restricted tool set for the brainstormer agent.
+
+    The brainstormer can:
+    - READ any files (for context): ls, read_file, glob, grep
+    - WRITE only markdown files: write_design_doc
+
+    The brainstormer CANNOT:
+    - Execute shell commands (no execute tool)
+    - Edit existing files (no edit_file tool)
+    - Write non-markdown files (write_design_doc validates .md extension)
+
+    Args:
+        backend: Backend to use for file operations.
+
+    Returns:
+        List of restricted tools for the brainstormer.
+    """
+    tools: list[BaseTool] = []
+
+    # Read-only tools from TOOL_GENERATORS
+    read_only_tools = ["ls", "read_file", "glob", "grep"]
+    for tool_name in read_only_tools:
+        generator = TOOL_GENERATORS[tool_name]
+        tools.append(generator(backend))
+
+    # Custom markdown-only write tool
+    tools.append(_write_design_doc_tool_generator(backend))
+
+    return tools
+
+
+# Custom restricted filesystem prompt for brainstormer
+BRAINSTORMER_FILESYSTEM_PROMPT = """## Filesystem Tools `ls`, `read_file`, `glob`, `grep`, `write_design_doc`
+
+You have access to a filesystem which you can interact with using these tools.
+All file paths must start with a /.
+
+- ls: list files in a directory (requires absolute path)
+- read_file: read a file from the filesystem
+- glob: find files matching a pattern (e.g., "**/*.py")
+- grep: search for text within files
+- write_design_doc: write markdown design documents (.md files ONLY)
+
+**IMPORTANT**: You can ONLY write markdown files (.md) using write_design_doc.
+You do NOT have access to: write_file, edit_file, or execute tools."""
+
+
+class BrainstormerFilesystemMiddleware(FilesystemMiddleware):  # type: ignore[misc]
+    """Restricted filesystem middleware for brainstormer agent.
+
+    Provides only read operations (ls, read_file, glob, grep) and a
+    markdown-only write tool (write_design_doc). Does not include:
+    - write_file (unrestricted file creation)
+    - edit_file (code modification)
+    - execute (shell command execution)
+
+    This ensures the brainstormer can only create design documents,
+    not modify code or run commands.
+    """
+
+    def __init__(
+        self,
+        *,
+        backend: BackendProtocol | Callable[[ToolRuntime], BackendProtocol] | None = None,
+        tool_token_limit_before_evict: int | None = 20000,
+    ) -> None:
+        """Initialize with restricted tools.
+
+        Args:
+            backend: Backend for file storage.
+            tool_token_limit_before_evict: Token limit before evicting tool results.
+        """
+        # Don't call super().__init__() as it would create all tools
+        # Instead, initialize only what we need
+        self.tool_token_limit_before_evict = tool_token_limit_before_evict
+        self.backend = backend
+        self._custom_system_prompt = BRAINSTORMER_FILESYSTEM_PROMPT
+
+        # Create restricted tools only if backend is provided
+        # If backend is None, tools will be created later when backend is set
+        if backend is not None:
+            self.tools = create_brainstormer_tools(backend)
+        else:
+            self.tools = []
+
+
+BRAINSTORMER_PRIMING_PROMPT = """# Brainstorming Ideas Into Designs
+
+## Overview
+
+Help turn ideas into fully formed designs and specs through natural collaborative dialogue.
+
+Start by understanding the current project context, then ask questions one at a time to refine the idea. Once you understand what you're building, present the design in small sections (200-300 words), checking after each section whether it looks right so far.
+
+## The Process
+
+**Understanding the idea:**
+- Check out the current project state first (files, docs, recent commits)
+- Ask questions one at a time to refine the idea
+- Prefer multiple choice questions when possible, but open-ended is fine too
+- Only one question per message - if a topic needs more exploration, break it into multiple questions
+- Focus on understanding: purpose, constraints, success criteria
+
+**Exploring approaches:**
+- Propose 2-3 different approaches with trade-offs
+- Present options conversationally with your recommendation and reasoning
+- Lead with your recommended option and explain why
+
+**Presenting the design:**
+- Once you believe you understand what you're building, present the design
+- Break it into sections of 200-300 words
+- Ask after each section whether it looks right so far
+- Cover: architecture, components, data flow, error handling, testing
+- Be ready to go back and clarify if something doesn't make sense
+
+## After the Design
+
+**Documentation:**
+- Write the validated design to `docs/plans/YYYY-MM-DD-<topic>-design.md`
+
+## Key Principles
+
+- **One question at a time** - Don't overwhelm with multiple questions
+- **Multiple choice preferred** - Easier to answer than open-ended when possible
+- **YAGNI ruthlessly** - Remove unnecessary features from all designs
+- **Explore alternatives** - Always propose 2-3 approaches before settling
+- **Incremental validation** - Present design in sections, validate each
+- **Be flexible** - Go back and clarify when something doesn't make sense
+
+---
+
+Respond with a brief greeting (1-2 sentences) that you're ready to help brainstorm and design. Invite the user to share their idea."""
 
 
 class BrainstormService:
@@ -124,6 +366,45 @@ class BrainstormService:
 
         return session
 
+    async def prime_session(
+        self,
+        session_id: str,
+        driver: DriverInterface,
+        cwd: str,
+        assistant_message_id: str | None = None,
+    ) -> AsyncIterator[WorkflowEvent]:
+        """Prime a new session with the brainstorming skill.
+
+        Sends the brainstorming skill instructions as the first message and
+        yields the model's greeting response. This establishes the brainstorming
+        context before the user sends their first real message.
+
+        Should be called immediately after create_session(). Works with any
+        LLM backend (CLI or API drivers).
+
+        Args:
+            session_id: Session to prime.
+            driver: LLM driver for generating response.
+            cwd: Working directory for driver execution.
+            assistant_message_id: Optional ID for the assistant message.
+                If not provided, a UUID will be generated.
+
+        Yields:
+            WorkflowEvent for each driver message during priming.
+
+        Raises:
+            ValueError: If session not found.
+        """
+        async for event in self.send_message(
+            session_id=session_id,
+            content=BRAINSTORMER_PRIMING_PROMPT,
+            driver=driver,
+            cwd=cwd,
+            assistant_message_id=assistant_message_id,
+            is_system=True,
+        ):
+            yield event
+
     async def get_session(self, session_id: str) -> BrainstormingSession | None:
         """Get a session by ID.
 
@@ -151,7 +432,8 @@ class BrainstormService:
         if session is None:
             return None
 
-        messages = await self._repository.get_messages(session_id)
+        # Exclude system messages (like priming prompts) from session history
+        messages = await self._repository.get_messages(session_id, include_system=False)
         artifacts = await self._repository.get_artifacts(session_id)
 
         # Fetch and attach usage summary to session
@@ -281,6 +563,7 @@ class BrainstormService:
         driver: DriverInterface,
         cwd: str,
         assistant_message_id: str | None = None,
+        is_system: bool = False,
     ) -> AsyncIterator[WorkflowEvent]:
         """Send a message in a brainstorming session.
 
@@ -297,6 +580,8 @@ class BrainstormService:
             cwd: Working directory for driver execution.
             assistant_message_id: Optional ID for the assistant message.
                 If not provided, a UUID will be generated.
+            is_system: Whether this is a system message (e.g., priming prompt).
+                System messages are excluded from session history by default.
 
         Yields:
             WorkflowEvent for each driver message.
@@ -324,6 +609,7 @@ class BrainstormService:
                 role="user",
                 content=content,
                 created_at=now,
+                is_system=is_system,
             )
             await self._repository.save_message(user_message)
 
@@ -335,11 +621,15 @@ class BrainstormService:
             driver_session_id: str | None = None
             pending_write_files: dict[str, str] = {}  # tool_call_id -> path
 
+            # Create restricted middleware for brainstormer
+            # The middleware will be bound to the backend created by the driver
+            brainstormer_middleware = [BrainstormerFilesystemMiddleware()]
+
             async for agentic_msg in driver.execute_agentic(
                 prompt=content,
                 cwd=cwd,
                 session_id=session.driver_session_id,
-                instructions=BRAINSTORMER_SYSTEM_PROMPT,
+                middleware=brainstormer_middleware,
             ):
                 # Convert to event and emit
                 event = self._agentic_message_to_event(
@@ -348,24 +638,93 @@ class BrainstormService:
                 self._event_bus.emit(event)
                 yield event
 
-                # Track write_file tool calls for artifact detection
+                # Track write_design_doc tool calls for artifact detection
+                # Also track write_file for backwards compatibility
+                # DEBUG: Log all TOOL_CALL events to diagnose artifact detection
+                if agentic_msg.type == AgenticMessageType.TOOL_CALL:
+                    is_write_tool = agentic_msg.tool_name in (
+                        "write_design_doc",
+                        "write_file",
+                    )
+                    logger.debug(
+                        "Artifact detection: TOOL_CALL received",
+                        tool_name=agentic_msg.tool_name,
+                        tool_call_id=agentic_msg.tool_call_id,
+                        has_tool_input=agentic_msg.tool_input is not None,
+                        tool_input_type=type(agentic_msg.tool_input).__name__,
+                        is_write_tool=is_write_tool,
+                    )
+                    # Log full tool_input for write tools to diagnose parameter issues
+                    if is_write_tool and agentic_msg.tool_input:
+                        logger.debug(
+                            "Artifact detection: write tool_input details",
+                            tool_input=agentic_msg.tool_input,
+                        )
+
                 if (
                     agentic_msg.type == AgenticMessageType.TOOL_CALL
-                    and agentic_msg.tool_name == "write_file"
+                    and agentic_msg.tool_name in ("write_design_doc", "write_file")
                     and agentic_msg.tool_call_id
                     and agentic_msg.tool_input
                 ):
-                    path = agentic_msg.tool_input.get("path")
+                    # Tool uses file_path parameter
+                    # Also check common variations: filename, filepath, target_path
+                    path = (
+                        agentic_msg.tool_input.get("file_path")
+                        or agentic_msg.tool_input.get("path")
+                        or agentic_msg.tool_input.get("filename")
+                        or agentic_msg.tool_input.get("filepath")
+                        or agentic_msg.tool_input.get("target_path")
+                    )
                     if path:
                         pending_write_files[agentic_msg.tool_call_id] = path
+                        logger.debug(
+                            "Artifact detection: tracked write tool call",
+                            tool_name=agentic_msg.tool_name,
+                            tool_call_id=agentic_msg.tool_call_id,
+                            path=path,
+                            tool_input_keys=list(agentic_msg.tool_input.keys()),
+                        )
+                    else:
+                        logger.warning(
+                            "Artifact detection: write tool call missing path",
+                            tool_name=agentic_msg.tool_name,
+                            tool_call_id=agentic_msg.tool_call_id,
+                            tool_input=agentic_msg.tool_input,
+                        )
 
-                # Detect successful write_file completions and create artifacts
+                # Detect successful write completions and create artifacts
+                if agentic_msg.type == AgenticMessageType.TOOL_RESULT:
+                    pending_ids = list(pending_write_files.keys())
+                    id_match = agentic_msg.tool_call_id in pending_write_files
+                    logger.debug(
+                        "Artifact detection: tool result received",
+                        tool_name=agentic_msg.tool_name,
+                        tool_call_id=agentic_msg.tool_call_id,
+                        is_error=agentic_msg.is_error,
+                        pending_ids=pending_ids,
+                        id_match=id_match,
+                    )
+                    # If IDs don't match but we have pending writes, log for diagnosis
+                    if not id_match and pending_ids:
+                        logger.warning(
+                            "Artifact detection: tool_call_id mismatch",
+                            result_id=agentic_msg.tool_call_id,
+                            pending_ids=pending_ids,
+                            result_id_type=type(agentic_msg.tool_call_id).__name__,
+                        )
+
                 if (
                     agentic_msg.type == AgenticMessageType.TOOL_RESULT
                     and agentic_msg.tool_call_id in pending_write_files
                     and not agentic_msg.is_error
                 ):
                     path = pending_write_files.pop(agentic_msg.tool_call_id)
+                    logger.info(
+                        "Artifact detection: creating artifact from write result",
+                        tool_call_id=agentic_msg.tool_call_id,
+                        path=path,
+                    )
                     artifact_event = await self._create_artifact_from_path(
                         session_id, path
                     )
@@ -527,7 +886,8 @@ class BrainstormService:
             agent="brainstormer",
             event_type=EventType.BRAINSTORM_ARTIFACT_CREATED,
             message=f"Created artifact: {path}",
-            data={"artifact_id": artifact.id, "path": path, "type": artifact_type},
+            data={"artifact": artifact.model_dump(mode="json")},
+            domain=EventDomain.BRAINSTORM,
         )
         self._event_bus.emit(event)
         return event
@@ -573,6 +933,8 @@ class BrainstormService:
         artifact_path: str,
         issue_title: str | None = None,
         issue_description: str | None = None,
+        orchestrator: "OrchestratorService | None" = None,
+        worktree_path: str | None = None,
     ) -> dict[str, str]:
         """Hand off brainstorming session to implementation pipeline.
 
@@ -581,6 +943,8 @@ class BrainstormService:
             artifact_path: Path to the design artifact.
             issue_title: Optional title for the implementation issue.
             issue_description: Optional description for the implementation issue.
+            orchestrator: Orchestrator service for creating workflows.
+            worktree_path: Path to the worktree for loading settings.
 
         Returns:
             Dict with workflow_id for the implementation pipeline.

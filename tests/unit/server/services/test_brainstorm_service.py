@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from amelia.server.models.brainstorm import Artifact, BrainstormingSession, Message
+from amelia.server.models.events import EventDomain
 from amelia.server.services.brainstorm import BrainstormService
 
 
@@ -326,7 +327,7 @@ class TestArtifactDetection(TestBrainstormService):
 
     @pytest.fixture
     def mock_driver_with_write(self) -> MagicMock:
-        """Create mock driver that writes a file."""
+        """Create mock driver that writes a file using 'path' key."""
         driver = MagicMock()
 
         async def mock_execute_agentic(*args, **kwargs):
@@ -348,6 +349,41 @@ class TestArtifactDetection(TestBrainstormService):
                 type=AgenticMessageType.RESULT,
                 content="I've written the design document.",
                 session_id="claude-sess-789",
+            )
+
+        driver.execute_agentic = mock_execute_agentic
+        return driver
+
+    @pytest.fixture
+    def mock_cli_driver_with_write(self) -> MagicMock:
+        """Create mock driver simulating CLI driver format with 'file_path' key.
+
+        This matches what the real CLI driver produces when Claude Code's
+        Write tool is used.
+        """
+        driver = MagicMock()
+
+        async def mock_execute_agentic(*args, **kwargs):
+            from amelia.drivers.base import AgenticMessage, AgenticMessageType
+
+            # CLI driver normalizes "Write" -> "write_file"
+            # CLI driver passes block.input directly: {"file_path": "...", "content": "..."}
+            yield AgenticMessage(
+                type=AgenticMessageType.TOOL_CALL,
+                tool_name="write_file",
+                tool_input={"file_path": "/tmp/test-project/docs/spec.md", "content": "# Spec"},
+                tool_call_id="toolu_01ABC123",
+            )
+            yield AgenticMessage(
+                type=AgenticMessageType.TOOL_RESULT,
+                tool_name="write_file",
+                tool_output="File written successfully",
+                tool_call_id="toolu_01ABC123",
+            )
+            yield AgenticMessage(
+                type=AgenticMessageType.RESULT,
+                content="I've written the spec document.",
+                session_id="sess-cli-xyz",
             )
 
         driver.execute_agentic = mock_execute_agentic
@@ -424,7 +460,131 @@ class TestArtifactDetection(TestBrainstormService):
             if call[0][0].event_type == EventType.BRAINSTORM_ARTIFACT_CREATED
         ]
         assert len(artifact_events) == 1
-        assert artifact_events[0].data["path"] == "docs/plans/2026-01-18-cache-design.md"
+        event = artifact_events[0]
+        assert event.domain == EventDomain.BRAINSTORM
+        assert event.data["artifact"]["path"] == "docs/plans/2026-01-18-cache-design.md"
+
+    async def test_detects_artifact_from_cli_driver_write(
+        self,
+        service: BrainstormService,
+        mock_repository: MagicMock,
+        mock_event_bus: MagicMock,
+        mock_cli_driver_with_write: MagicMock,
+    ) -> None:
+        """Should save artifact when CLI driver's Write tool uses 'file_path' key.
+
+        This tests the actual format produced by the CLI driver when Claude Code's
+        Write tool is used (file_path key instead of path key).
+        """
+        now = datetime.now(UTC)
+        mock_session = BrainstormingSession(
+            id="sess-1",
+            profile_id="work",
+            status="active",
+            created_at=now,
+            updated_at=now,
+        )
+        mock_repository.get_session.return_value = mock_session
+        mock_repository.get_max_sequence.return_value = 0
+
+        messages = []
+        async for msg in service.send_message(
+            session_id="sess-1",
+            content="Write the spec",
+            driver=mock_cli_driver_with_write,
+            cwd="/tmp/test-project",
+        ):
+            messages.append(msg)
+
+        # Verify artifact was saved with the file_path key format
+        mock_repository.save_artifact.assert_called_once()
+        artifact = mock_repository.save_artifact.call_args[0][0]
+        assert artifact.path == "/tmp/test-project/docs/spec.md"
+
+    @pytest.fixture
+    def mock_driver_with_separate_tool_messages(self) -> MagicMock:
+        """Create mock driver where TOOL_CALL and TOOL_RESULT come separately.
+
+        This simulates a scenario where the SDK yields ToolUseBlock first,
+        then ToolResultBlock in a subsequent message - both with matching tool_call_id.
+        """
+        driver = MagicMock()
+
+        async def mock_execute_agentic(*args, **kwargs):
+            from amelia.drivers.base import AgenticMessage, AgenticMessageType
+
+            # Unique tool call ID (realistic format)
+            tool_call_id = "toolu_01XYZ789abc"
+
+            # First: thinking about what to do
+            yield AgenticMessage(
+                type=AgenticMessageType.THINKING,
+                content="I'll write a design document for this feature.",
+            )
+
+            # Second: TOOL_CALL - Claude decides to write a file
+            yield AgenticMessage(
+                type=AgenticMessageType.TOOL_CALL,
+                tool_name="write_file",
+                tool_input={"file_path": "/project/docs/design.md", "content": "# Design\n..."},
+                tool_call_id=tool_call_id,
+            )
+
+            # Third: TOOL_RESULT - Tool execution completes (separate message)
+            yield AgenticMessage(
+                type=AgenticMessageType.TOOL_RESULT,
+                tool_name="write_file",
+                tool_output="File written successfully",
+                tool_call_id=tool_call_id,  # Must match!
+                is_error=False,
+            )
+
+            # Fourth: Final response
+            yield AgenticMessage(
+                type=AgenticMessageType.RESULT,
+                content="I've created the design document.",
+                session_id="claude-sess-separate",
+            )
+
+        driver.execute_agentic = mock_execute_agentic
+        return driver
+
+    async def test_detects_artifact_with_separate_tool_messages(
+        self,
+        service: BrainstormService,
+        mock_repository: MagicMock,
+        mock_event_bus: MagicMock,
+        mock_driver_with_separate_tool_messages: MagicMock,
+    ) -> None:
+        """Should detect artifact when TOOL_CALL and TOOL_RESULT are separate messages.
+
+        This tests the realistic scenario where the SDK streams ToolUseBlock
+        first, then ToolResultBlock later, both with matching tool_call_id.
+        """
+        now = datetime.now(UTC)
+        mock_session = BrainstormingSession(
+            id="sess-1",
+            profile_id="work",
+            status="active",
+            created_at=now,
+            updated_at=now,
+        )
+        mock_repository.get_session.return_value = mock_session
+        mock_repository.get_max_sequence.return_value = 0
+
+        messages = []
+        async for msg in service.send_message(
+            session_id="sess-1",
+            content="Create a design doc",
+            driver=mock_driver_with_separate_tool_messages,
+            cwd="/project",
+        ):
+            messages.append(msg)
+
+        # Verify artifact was saved
+        mock_repository.save_artifact.assert_called_once()
+        artifact = mock_repository.save_artifact.call_args[0][0]
+        assert artifact.path == "/project/docs/design.md"
 
 
 class TestHandoff(TestBrainstormService):
@@ -520,6 +680,39 @@ class TestHandoff(TestBrainstormService):
                 session_id="nonexistent",
                 artifact_path="docs/plans/design.md",
             )
+
+    async def test_handoff_calls_orchestrator_queue_workflow(
+        self,
+        service: BrainstormService,
+        mock_repository: MagicMock,
+    ) -> None:
+        """Should call orchestrator.queue_workflow with correct parameters."""
+        now = datetime.now(UTC)
+        mock_session = BrainstormingSession(
+            id="sess-1", profile_id="work", status="ready_for_handoff",
+            created_at=now, updated_at=now,
+        )
+        mock_repository.get_session.return_value = mock_session
+        mock_repository.get_artifacts.return_value = [
+            Artifact(
+                id="art-1", session_id="sess-1", type="design",
+                path="docs/plans/design.md", created_at=now,
+            )
+        ]
+
+        mock_orchestrator = MagicMock()
+        mock_orchestrator.queue_workflow = AsyncMock(return_value="wf-real-123")
+
+        result = await service.handoff_to_implementation(
+            session_id="sess-1",
+            artifact_path="docs/plans/design.md",
+            issue_title="Implement feature X",
+            orchestrator=mock_orchestrator,
+            worktree_path="/path/to/worktree",
+        )
+
+        assert result["workflow_id"] == "wf-real-123"
+        mock_orchestrator.queue_workflow.assert_called_once()
 
 
 class TestDeleteSessionCleanup(TestBrainstormService):
@@ -648,3 +841,188 @@ class TestUpdateSessionStatusCleanup(TestBrainstormService):
         await service_with_cleanup.update_session_status("sess-1", "active")
 
         mock_cleanup.assert_not_called()
+
+
+class TestPrimeSessionSystemMessages(TestBrainstormService):
+    """Test that prime_session marks priming messages as system messages."""
+
+    @pytest.fixture
+    def mock_driver(self) -> MagicMock:
+        """Create mock driver that returns a greeting."""
+        from collections.abc import AsyncIterator
+
+        from amelia.drivers.base import AgenticMessage, AgenticMessageType
+
+        driver = MagicMock()
+
+        async def mock_execute_agentic(
+            *args: object, **kwargs: object
+        ) -> AsyncIterator[AgenticMessage]:
+            yield AgenticMessage(
+                type=AgenticMessageType.RESULT,
+                content="Hello! I'm ready to help you brainstorm.",
+                session_id="claude-sess-123",
+            )
+
+        driver.execute_agentic = mock_execute_agentic
+        driver.get_usage = MagicMock(return_value=None)
+        return driver
+
+    async def test_prime_session_marks_priming_message_as_system(
+        self,
+        service: BrainstormService,
+        mock_repository: MagicMock,
+        mock_driver: MagicMock,
+    ) -> None:
+        """Prime session should save the priming prompt with is_system=True."""
+        now = datetime.now(UTC)
+        mock_session = BrainstormingSession(
+            id="sess-1",
+            profile_id="work",
+            status="active",
+            created_at=now,
+            updated_at=now,
+        )
+        mock_repository.get_session.return_value = mock_session
+        mock_repository.get_max_sequence.return_value = 0
+
+        # Consume the async generator from prime_session
+        events = []
+        async for event in service.prime_session(
+            session_id="sess-1",
+            driver=mock_driver,
+            cwd="/tmp/project",
+        ):
+            events.append(event)
+
+        # Verify the first save_message call (the priming prompt) has is_system=True
+        save_calls = mock_repository.save_message.call_args_list
+        assert len(save_calls) >= 1
+
+        # First call should be the user message (priming prompt)
+        priming_message = save_calls[0][0][0]
+        assert priming_message.role == "user"
+        assert priming_message.is_system is True
+        # Should contain the brainstormer priming prompt
+        assert "Brainstorming" in priming_message.content
+
+    async def test_prime_session_assistant_response_not_marked_as_system(
+        self,
+        service: BrainstormService,
+        mock_repository: MagicMock,
+        mock_driver: MagicMock,
+    ) -> None:
+        """The assistant response to priming should NOT be marked as system."""
+        now = datetime.now(UTC)
+        mock_session = BrainstormingSession(
+            id="sess-1",
+            profile_id="work",
+            status="active",
+            created_at=now,
+            updated_at=now,
+        )
+        mock_repository.get_session.return_value = mock_session
+        mock_repository.get_max_sequence.return_value = 0
+
+        # Consume the async generator from prime_session
+        events = []
+        async for event in service.prime_session(
+            session_id="sess-1",
+            driver=mock_driver,
+            cwd="/tmp/project",
+        ):
+            events.append(event)
+
+        # Verify the second save_message call (assistant response)
+        save_calls = mock_repository.save_message.call_args_list
+        assert len(save_calls) >= 2
+
+        # Second call should be the assistant message
+        assistant_message = save_calls[1][0][0]
+        assert assistant_message.role == "assistant"
+        # Assistant messages don't inherit is_system from the user message
+        assert assistant_message.is_system is False
+
+
+class TestGetSessionWithHistorySystemFiltering(TestBrainstormService):
+    """Test that get_session_with_history excludes system messages."""
+
+    async def test_get_session_with_history_excludes_system_messages(
+        self,
+        service: BrainstormService,
+        mock_repository: MagicMock,
+    ) -> None:
+        """get_session_with_history should filter out system messages."""
+        now = datetime.now(UTC)
+        mock_session = BrainstormingSession(
+            id="sess-1",
+            profile_id="work",
+            status="active",
+            created_at=now,
+            updated_at=now,
+        )
+        mock_repository.get_session.return_value = mock_session
+        mock_repository.get_artifacts.return_value = []
+        mock_repository.get_session_usage.return_value = None
+
+        # Simulate messages returned when include_system=False
+        # Only non-system messages should be returned
+        mock_repository.get_messages.return_value = [
+            Message(
+                id="msg-3",
+                session_id="sess-1",
+                sequence=3,
+                role="user",
+                content="User's actual message",
+                is_system=False,
+                created_at=now,
+            ),
+            Message(
+                id="msg-4",
+                session_id="sess-1",
+                sequence=4,
+                role="assistant",
+                content="Assistant response to user",
+                is_system=False,
+                created_at=now,
+            ),
+        ]
+
+        result = await service.get_session_with_history("sess-1")
+
+        # Verify get_messages was called with include_system=False
+        mock_repository.get_messages.assert_called_once_with(
+            "sess-1", include_system=False
+        )
+
+        # Verify result contains only non-system messages
+        assert result is not None
+        assert len(result["messages"]) == 2
+        assert all(not msg.is_system for msg in result["messages"])
+
+    async def test_get_session_with_history_passes_include_system_false(
+        self,
+        service: BrainstormService,
+        mock_repository: MagicMock,
+    ) -> None:
+        """Verify the service passes include_system=False to repository."""
+        now = datetime.now(UTC)
+        mock_session = BrainstormingSession(
+            id="sess-1",
+            profile_id="work",
+            status="active",
+            created_at=now,
+            updated_at=now,
+        )
+        mock_repository.get_session.return_value = mock_session
+        mock_repository.get_messages.return_value = []
+        mock_repository.get_artifacts.return_value = []
+        mock_repository.get_session_usage.return_value = None
+
+        await service.get_session_with_history("sess-1")
+
+        # The key assertion: include_system=False should be passed
+        mock_repository.get_messages.assert_called_once()
+        call_args = mock_repository.get_messages.call_args
+        assert call_args[0][0] == "sess-1"  # session_id
+        assert call_args[1]["include_system"] is False
