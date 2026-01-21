@@ -3,14 +3,10 @@
  * @fileoverview Automatic graph layout using dagre for workflow visualization.
  *
  * Uses dagre to compute node positions based on graph structure with
- * configurable layout direction (horizontal or vertical) optimized for
- * workflow pipelines.
+ * horizontal left-to-right layout optimized for workflow pipelines.
  */
 import Dagre from '@dagrejs/dagre';
 import type { Node, Edge } from '@xyflow/react';
-
-/** Layout direction for the workflow graph. */
-export type LayoutDirection = 'horizontal' | 'vertical';
 
 /** Fixed node width for layout calculation (matches AgentNode card width). */
 export const NODE_WIDTH = 180;
@@ -27,19 +23,17 @@ const RANK_SEP = 100;
 /**
  * Positions nodes using dagre automatic graph layout.
  *
- * Creates a directed graph with configurable layout direction and computes
+ * Creates a directed graph with horizontal (LR) layout and computes
  * optimal positions based on edges. React Flow's fitView will scale
  * and center the result.
  *
  * @param nodes - React Flow nodes to layout
  * @param edges - Edges defining the graph structure
- * @param direction - Layout direction: 'horizontal' (LR) or 'vertical' (TB)
  * @returns Nodes with updated positions computed by dagre
  */
 export function getLayoutedElements<T extends Node>(
   nodes: T[],
-  edges: Edge[],
-  direction: LayoutDirection = 'horizontal'
+  edges: Edge[]
 ): T[] {
   // Handle empty input
   if (nodes.length === 0) {
@@ -49,17 +43,14 @@ export function getLayoutedElements<T extends Node>(
   // Create new dagre graph
   const g = new Dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}));
 
-  // Configure graph layout based on direction
-  // LR = left-to-right (horizontal), TB = top-to-bottom (vertical)
-  const rankdir = direction === 'horizontal' ? 'LR' : 'TB';
-
+  // Configure graph for horizontal left-to-right layout
   g.setGraph({
-    rankdir,
+    rankdir: 'LR',
     nodesep: NODE_SEP,
     ranksep: RANK_SEP,
   });
 
-  // Add nodes with dimensions
+  // Add nodes with fixed dimensions
   nodes.forEach((node) => {
     g.setNode(node.id, { width: NODE_WIDTH, height: NODE_HEIGHT });
   });

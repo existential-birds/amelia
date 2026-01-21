@@ -4,9 +4,6 @@
  * Uses ai-elements Canvas component as base. Accepts an EventDrivenPipeline
  * and renders agent nodes with status-based styling. Read-only canvas with
  * no user interaction for nodes/edges.
- *
- * Supports responsive layout: horizontal (LR) on desktop, vertical (TB) on
- * tablet and smaller viewports (< 1024px).
  */
 import { useEffect, useMemo, useRef } from 'react';
 import { useReactFlow, useNodesInitialized } from '@xyflow/react';
@@ -15,9 +12,7 @@ import type { NodeTypes } from '@xyflow/react';
 import { Canvas } from './ai-elements/canvas';
 import { AgentNode } from './AgentNode';
 import { getLayoutedElements } from '@/utils/layout';
-import type { LayoutDirection } from '@/utils/layout';
 import type { EventDrivenPipeline } from '@/utils/pipeline';
-import { useIsTablet } from '@/hooks/use-tablet';
 
 const nodeTypes: NodeTypes = {
   agent: AgentNode,
@@ -57,43 +52,26 @@ function FitViewOnNodeCountChange({ nodeCount }: { nodeCount: number }) {
 interface WorkflowCanvasProps {
   pipeline: EventDrivenPipeline;
   className?: string;
-  /** Layout direction override. If not provided, auto-detects based on viewport. */
-  direction?: LayoutDirection;
 }
 
 /**
  * Visualizes a workflow pipeline using ai-elements Canvas.
  *
- * Displays agent nodes with status-based styling. Layout direction adapts
- * to viewport size: horizontal (LR) on desktop, vertical (TB) on tablet
- * and smaller (< 1024px). Can be overridden via the direction prop.
- *
+ * Displays agent nodes with status-based styling in a horizontal layout.
  * Shows empty state when pipeline has no nodes. Read-only canvas with
  * nodesDraggable, nodesConnectable, and elementsSelectable disabled.
  *
  * @param props - Component props
  * @param props.pipeline - Event-driven pipeline data with nodes and edges
  * @param props.className - Optional additional CSS classes
- * @param props.direction - Optional layout direction override
  * @returns The workflow canvas visualization
  */
-export function WorkflowCanvas({
-  pipeline,
-  className,
-  direction,
-}: WorkflowCanvasProps) {
-  // Detect tablet viewport for responsive layout
-  const isTablet = useIsTablet();
-
-  // Use provided direction or auto-detect based on viewport
-  const layoutDirection: LayoutDirection =
-    direction ?? (isTablet ? 'vertical' : 'horizontal');
-
+export function WorkflowCanvas({ pipeline, className }: WorkflowCanvasProps) {
   // Apply Dagre layout to nodes - memoized to avoid recalculating on every render
   const layoutedNodes = useMemo(() => {
     if (pipeline.nodes.length === 0) return [];
-    return getLayoutedElements(pipeline.nodes, pipeline.edges, layoutDirection);
-  }, [pipeline.nodes, pipeline.edges, layoutDirection]);
+    return getLayoutedElements(pipeline.nodes, pipeline.edges);
+  }, [pipeline.nodes, pipeline.edges]);
 
   if (pipeline.nodes.length === 0) {
     return (

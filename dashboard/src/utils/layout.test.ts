@@ -72,31 +72,4 @@ describe('getLayoutedElements', () => {
     expect(result[1]?.position.x).toBeGreaterThanOrEqual(0);
     expect(result[2]?.position.x).toBeGreaterThanOrEqual(0);
   });
-
-  it('uses vertical top-to-bottom layout when direction is vertical', () => {
-    const result = getLayoutedElements(mockNodes, mockEdges, 'vertical');
-
-    // For a linear pipeline (1 -> 2 -> 3), vertical layout means
-    // nodes are arranged top to bottom with similar X coordinates
-    const xValues = result.map(n => n.position.x);
-    const maxXDiff = Math.max(...xValues) - Math.min(...xValues);
-
-    // X difference should be minimal for vertical layout
-    // (allowing some variation from dagre's centering logic)
-    expect(maxXDiff).toBeLessThan(50);
-
-    // Nodes should be positioned top-to-bottom (increasing y coordinates)
-    expect(result[1]?.position.y).toBeGreaterThan(result[0]?.position.y ?? 0);
-    expect(result[2]?.position.y).toBeGreaterThan(result[1]?.position.y ?? 0);
-  });
-
-  it('defaults to horizontal layout when direction is not specified', () => {
-    const result = getLayoutedElements(mockNodes, mockEdges);
-
-    // Should use horizontal layout by default (same as explicit 'horizontal')
-    const yValues = result.map(n => n.position.y);
-    const maxYDiff = Math.max(...yValues) - Math.min(...yValues);
-    expect(maxYDiff).toBeLessThan(50);
-  });
-
 });
