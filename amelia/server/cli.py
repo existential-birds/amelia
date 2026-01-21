@@ -6,6 +6,7 @@ import typer
 import uvicorn
 from rich.console import Console
 
+from amelia.cli.config import run_first_time_setup
 from amelia.logging import configure_logging
 from amelia.server.banner import print_banner
 from amelia.server.config import ServerConfig
@@ -56,6 +57,10 @@ def server(
     # Skip if subcommand is invoked
     if ctx.invoked_subcommand is not None:
         return
+
+    # Run first-time setup if needed
+    if not run_first_time_setup():
+        raise typer.Exit(1)
 
     # Configure logging with dashboard colors
     # Read log level from environment variable (default to INFO)

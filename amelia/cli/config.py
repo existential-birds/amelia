@@ -5,6 +5,7 @@ Provides commands for managing profiles and server settings through the CLI.
 
 import asyncio
 import os
+from pathlib import Path
 from typing import Annotated
 
 import typer
@@ -311,6 +312,60 @@ def profile_activate(
             await db.close()
 
     asyncio.run(_run())
+
+
+# =============================================================================
+# First-Run Setup
+# =============================================================================
+
+
+async def check_and_run_first_time_setup() -> bool:
+    """Check if this is first run and prompt for profile creation.
+
+    Returns:
+        True if setup completed or not needed, False if user cancelled.
+    """
+    db, repo = await _get_profile_repository()
+    try:
+        profiles = await repo.list_profiles()
+
+        if profiles:
+            return True  # Not first run
+
+        console.print(
+            "[yellow]No profiles configured. Let's create your first profile.[/yellow]\n"
+        )
+
+        name = typer.prompt("Profile name", default="dev")
+        driver = typer.prompt("Driver (cli:claude, api:openrouter)", default="cli:claude")
+        model = typer.prompt("Model", default="opus")
+        working_dir = typer.prompt("Working directory", default=str(Path.cwd()))
+
+        record = ProfileRecord(
+            id=name,
+            driver=driver,
+            model=model,
+            validator_model="haiku",
+            tracker="noop",
+            working_dir=working_dir,
+        )
+
+        await repo.create_profile(record)
+        await repo.set_active(name)
+
+        console.print(f"\n[green]Profile '{name}' created and set as active.[/green]")
+        return True
+    finally:
+        await db.close()
+
+
+def run_first_time_setup() -> bool:
+    """Sync wrapper for first-time setup.
+
+    Returns:
+        True if setup completed or not needed, False if user cancelled.
+    """
+    return asyncio.run(check_and_run_first_time_setup())
 
 
 # =============================================================================

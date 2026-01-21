@@ -20,6 +20,7 @@ import typer
 from rich.console import Console
 from rich.text import Text
 
+from amelia.cli.config import run_first_time_setup
 from amelia.server.banner import (
     CREAM,
     GOLD,
@@ -477,6 +478,10 @@ def dev(
     """
     if ctx.invoked_subcommand is not None:
         return
+
+    # Run first-time setup if needed
+    if not run_first_time_setup():
+        raise typer.Exit(1)
 
     is_dev_repo = is_amelia_dev_repo()
 
