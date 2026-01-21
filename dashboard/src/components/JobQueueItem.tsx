@@ -106,6 +106,7 @@ export function JobQueueItem({ workflow, selected, onSelect, className }: JobQue
     <button
       type="button"
       onClick={handleClick}
+      aria-pressed={selected}
       data-slot="job-queue-item"
       data-selected={selected}
       className={cn(
@@ -128,7 +129,7 @@ export function JobQueueItem({ workflow, selected, onSelect, className }: JobQue
           <span className="font-mono text-sm font-semibold text-accent truncate">
             {workflow.issue_id}
           </span>
-          <div role="status" className={cn('flex items-center gap-1.5 shrink-0', style.text)}>
+          <div role="status" aria-live="polite" className={cn('flex items-center gap-1.5 shrink-0', style.text)}>
             <span className={cn('size-1.5 rounded-full', style.dot)} />
             <span className="font-heading text-[10px] font-semibold tracking-wider">
               {statusLabels[workflow.status]}
