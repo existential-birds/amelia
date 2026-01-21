@@ -106,7 +106,6 @@ export function JobQueueItem({ workflow, selected, onSelect, className }: JobQue
     <button
       type="button"
       onClick={handleClick}
-      aria-pressed={selected}
       data-slot="job-queue-item"
       data-selected={selected}
       className={cn(
