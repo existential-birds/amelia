@@ -4,14 +4,9 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { MoreHorizontal, Pencil, Trash2, Star } from 'lucide-react';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+import { Pencil, Trash2, Star, Folder } from 'lucide-react';
 import type { Profile } from '@/api/settings';
+import { getDriverStyle } from '@/utils/driver-colors';
 
 interface ProfileCardProps {
   profile: Profile;
@@ -21,12 +16,22 @@ interface ProfileCardProps {
 }
 
 export function ProfileCard({ profile, onEdit, onDelete, onActivate }: ProfileCardProps) {
-  const driverColor = profile.driver.startsWith('cli:')
-    ? 'bg-yellow-500/10 text-yellow-500'
-    : 'bg-blue-500/10 text-blue-500';
+  const driverStyle = getDriverStyle(profile.driver);
+  const DriverIcon = driverStyle.icon;
+
+  const handleCardClick = () => {
+    if (!profile.is_active) {
+      onActivate(profile);
+    }
+  };
 
   return (
-    <Card className={profile.is_active ? 'border-primary' : ''}>
+    <Card
+      onClick={handleCardClick}
+      className={`cursor-pointer transition-all duration-200 hover:translate-y-[-2px] hover:shadow-lg hover:shadow-primary/5 ${
+        profile.is_active ? 'border-primary shadow-md shadow-primary/10' : ''
+      }`}
+    >
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <div className="flex items-center gap-2">
           <CardTitle className="text-sm font-medium">{profile.id}</CardTitle>
@@ -36,39 +41,46 @@ export function ProfileCard({ profile, onEdit, onDelete, onActivate }: ProfileCa
             </Badge>
           )}
         </div>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="h-8 w-8 p-0">
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => onEdit(profile)}>
-              <Pencil className="mr-2 h-4 w-4" /> Edit
-            </DropdownMenuItem>
-            {!profile.is_active && (
-              <DropdownMenuItem onClick={() => onActivate(profile)}>
-                <Star className="mr-2 h-4 w-4" /> Set Active
-              </DropdownMenuItem>
-            )}
-            <DropdownMenuItem
-              onClick={() => onDelete(profile)}
-              variant="destructive"
-            >
-              <Trash2 className="mr-2 h-4 w-4" /> Delete
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={(e) => {
+              e.stopPropagation();
+              onEdit(profile);
+            }}
+          >
+            <Pencil className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-muted-foreground hover:text-destructive"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(profile);
+            }}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
       </CardHeader>
       <CardContent>
         <div className="space-y-1 text-sm text-muted-foreground">
           <div className="flex items-center gap-2">
-            <Badge variant="outline" className={driverColor}>
+            <Badge variant="outline" className={`${driverStyle.bg} ${driverStyle.text}`}>
+              <DriverIcon className="mr-1 h-3 w-3" />
               {profile.driver}
             </Badge>
             <span>{profile.model}</span>
           </div>
-          <div className="truncate">{profile.working_dir}</div>
+          <div className="flex items-center gap-1.5 truncate">
+            <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70" />
+            <span className="truncate" title={profile.working_dir}>
+              {profile.working_dir}
+            </span>
+          </div>
         </div>
       </CardContent>
     </Card>

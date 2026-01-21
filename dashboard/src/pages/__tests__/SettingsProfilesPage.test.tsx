@@ -178,7 +178,7 @@ describe('SettingsProfilesPage', () => {
 
     const cards = await screen.findAllByText(/dev|prod/);
     // Active profile (dev) should come first
-    expect(cards[0].textContent).toBe('dev');
+    expect(cards[0]?.textContent).toBe('dev');
   });
 });
 
@@ -188,9 +188,11 @@ describe('SettingsProfilesPage actions', () => {
     vi.mocked(useLoaderData).mockReturnValue({ profiles: mockProfiles });
   });
 
-  it('calls activateProfile when Set Active is clicked', async () => {
+  it('calls activateProfile when clicking inactive profile card', async () => {
     const user = userEvent.setup();
-    vi.mocked(settingsApi.activateProfile).mockResolvedValue(mockProfiles[1]);
+    const prodProfile = mockProfiles[1];
+    if (!prodProfile) throw new Error('Test setup error: prodProfile not found');
+    vi.mocked(settingsApi.activateProfile).mockResolvedValue(prodProfile);
 
     render(
       <MemoryRouter>
@@ -198,17 +200,10 @@ describe('SettingsProfilesPage actions', () => {
       </MemoryRouter>
     );
 
-    // Find all dropdown triggers (h-8 w-8 buttons)
-    const dropdownTriggers = screen.getAllByRole('button').filter(
-      (btn) => btn.className.includes('h-8 w-8')
-    );
-
-    // Click the second dropdown (prod profile, which is not active)
-    await user.click(dropdownTriggers[1]);
-
-    // Wait for dropdown menu to appear and click Set Active
-    const setActiveItem = await screen.findByRole('menuitem', { name: /set active/i });
-    await user.click(setActiveItem);
+    // Click on the prod profile card (inactive) to activate it
+    const prodCard = screen.getByText('prod').closest('[class*="cursor-pointer"]');
+    if (!prodCard) throw new Error('Test setup error: prod card not found');
+    await user.click(prodCard);
 
     await waitFor(() => {
       expect(settingsApi.activateProfile).toHaveBeenCalledWith('prod');
@@ -216,7 +211,7 @@ describe('SettingsProfilesPage actions', () => {
     expect(toast.success).toHaveBeenCalledWith('Profile "prod" is now active');
   });
 
-  it('calls deleteProfile when Delete is clicked and confirmed', async () => {
+  it('calls deleteProfile when trash button is clicked and confirmed', async () => {
     const user = userEvent.setup();
     vi.mocked(settingsApi.deleteProfile).mockResolvedValue();
     vi.spyOn(window, 'confirm').mockReturnValue(true);
@@ -227,17 +222,14 @@ describe('SettingsProfilesPage actions', () => {
       </MemoryRouter>
     );
 
-    // Find all dropdown triggers
-    const dropdownTriggers = screen.getAllByRole('button').filter(
-      (btn) => btn.className.includes('h-8 w-8')
-    );
+    // Find the dev profile card, then find the trash button within it
+    const devCard = screen.getByText('dev').closest('[class*="cursor-pointer"]');
+    if (!devCard) throw new Error('Test setup error: dev card not found');
 
-    // Click the first dropdown (dev profile)
-    await user.click(dropdownTriggers[0]);
-
-    // Wait for dropdown menu to appear and click Delete
-    const deleteItem = await screen.findByRole('menuitem', { name: /delete/i });
-    await user.click(deleteItem);
+    // Find the button with hover:text-destructive class (trash button)
+    const trashButton = devCard.querySelector('button[class*="hover:text-destructive"]');
+    if (!trashButton) throw new Error('Test setup error: trash button not found');
+    await user.click(trashButton);
 
     await waitFor(() => {
       expect(settingsApi.deleteProfile).toHaveBeenCalledWith('dev');
@@ -255,17 +247,14 @@ describe('SettingsProfilesPage actions', () => {
       </MemoryRouter>
     );
 
-    // Find all dropdown triggers
-    const dropdownTriggers = screen.getAllByRole('button').filter(
-      (btn) => btn.className.includes('h-8 w-8')
-    );
+    // Find the dev profile card, then find the trash button within it
+    const devCard = screen.getByText('dev').closest('[class*="cursor-pointer"]');
+    if (!devCard) throw new Error('Test setup error: dev card not found');
 
-    // Click the first dropdown
-    await user.click(dropdownTriggers[0]);
-
-    // Wait for dropdown menu to appear and click Delete
-    const deleteItem = await screen.findByRole('menuitem', { name: /delete/i });
-    await user.click(deleteItem);
+    // Find the button with hover:text-destructive class (trash button)
+    const trashButton = devCard.querySelector('button[class*="hover:text-destructive"]');
+    if (!trashButton) throw new Error('Test setup error: trash button not found');
+    await user.click(trashButton);
 
     expect(settingsApi.deleteProfile).not.toHaveBeenCalled();
   });
@@ -280,17 +269,10 @@ describe('SettingsProfilesPage actions', () => {
       </MemoryRouter>
     );
 
-    // Find all dropdown triggers
-    const dropdownTriggers = screen.getAllByRole('button').filter(
-      (btn) => btn.className.includes('h-8 w-8')
-    );
-
-    // Click the second dropdown (prod profile)
-    await user.click(dropdownTriggers[1]);
-
-    // Wait for dropdown menu to appear and click Set Active
-    const setActiveItem = await screen.findByRole('menuitem', { name: /set active/i });
-    await user.click(setActiveItem);
+    // Click on the prod profile card (inactive) to try activating it
+    const prodCard = screen.getByText('prod').closest('[class*="cursor-pointer"]');
+    if (!prodCard) throw new Error('Test setup error: prod card not found');
+    await user.click(prodCard);
 
     await waitFor(() => {
       expect(toast.error).toHaveBeenCalledWith('Failed to activate profile');
@@ -308,17 +290,14 @@ describe('SettingsProfilesPage actions', () => {
       </MemoryRouter>
     );
 
-    // Find all dropdown triggers
-    const dropdownTriggers = screen.getAllByRole('button').filter(
-      (btn) => btn.className.includes('h-8 w-8')
-    );
+    // Find the dev profile card, then find the trash button within it
+    const devCard = screen.getByText('dev').closest('[class*="cursor-pointer"]');
+    if (!devCard) throw new Error('Test setup error: dev card not found');
 
-    // Click the first dropdown
-    await user.click(dropdownTriggers[0]);
-
-    // Wait for dropdown menu to appear and click Delete
-    const deleteItem = await screen.findByRole('menuitem', { name: /delete/i });
-    await user.click(deleteItem);
+    // Find the button with hover:text-destructive class (trash button)
+    const trashButton = devCard.querySelector('button[class*="hover:text-destructive"]');
+    if (!trashButton) throw new Error('Test setup error: trash button not found');
+    await user.click(trashButton);
 
     await waitFor(() => {
       expect(toast.error).toHaveBeenCalledWith('Failed to delete profile');

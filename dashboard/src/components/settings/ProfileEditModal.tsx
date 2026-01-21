@@ -1,7 +1,7 @@
 /**
  * Modal for creating and editing profiles.
  */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -14,10 +14,41 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { ChevronDown } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { createProfile, updateProfile } from '@/api/settings';
+import { ToggleField } from './ToggleField';
 import type { Profile, ProfileCreate, ProfileUpdate } from '@/api/settings';
 import * as toast from '@/components/Toast';
+
+interface FormData {
+  id: string;
+  driver: string;
+  model: string;
+  validator_model: string;
+  tracker: string;
+  working_dir: string;
+  plan_output_dir: string;
+  plan_path_pattern: string;
+  max_review_iterations: number;
+  max_task_review_iterations: number;
+  auto_approve_reviews: boolean;
+}
+
+const DEFAULT_FORM_DATA: FormData = {
+  id: '',
+  driver: 'cli:claude',
+  model: 'opus',
+  validator_model: 'haiku',
+  tracker: 'noop',
+  working_dir: '',
+  plan_output_dir: 'docs/plans',
+  plan_path_pattern: 'docs/plans/{date}-{issue_key}.md',
+  max_review_iterations: 3,
+  max_task_review_iterations: 5,
+  auto_approve_reviews: false,
+};
 
 interface ProfileEditModalProps {
   open: boolean;
@@ -39,63 +70,155 @@ const TRACKER_OPTIONS = [
 
 const MODEL_OPTIONS = ['opus', 'sonnet', 'haiku', 'gpt-4', 'gpt-4o'];
 
+/** Validation rules for profile fields */
+const validateField = (field: string, value: string): string | null => {
+  switch (field) {
+    case 'id':
+      if (!value.trim()) {
+        return 'Profile name is required';
+      }
+      if (/\s/.test(value)) {
+        return 'Profile name cannot contain spaces';
+      }
+      if (!/^[a-zA-Z0-9_-]+$/.test(value)) {
+        return 'Profile name can only contain letters, numbers, underscores, and hyphens';
+      }
+      return null;
+    case 'working_dir':
+      if (!value.trim()) {
+        return 'Working directory is required';
+      }
+      return null;
+    default:
+      return null;
+  }
+};
+
+/** Convert Profile to FormData for comparison */
+const profileToFormData = (profile: Profile): FormData => ({
+  id: profile.id,
+  driver: profile.driver,
+  model: profile.model,
+  validator_model: profile.validator_model,
+  tracker: profile.tracker,
+  working_dir: profile.working_dir,
+  plan_output_dir: profile.plan_output_dir,
+  plan_path_pattern: profile.plan_path_pattern,
+  max_review_iterations: profile.max_review_iterations,
+  max_task_review_iterations: profile.max_task_review_iterations,
+  auto_approve_reviews: profile.auto_approve_reviews,
+});
+
 export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: ProfileEditModalProps) {
   const isEditMode = profile !== null;
   const [isSaving, setIsSaving] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [advancedOpen, setAdvancedOpen] = useState(false);
 
-  const [formData, setFormData] = useState({
-    id: '',
-    driver: 'cli:claude',
-    model: 'opus',
-    validator_model: 'haiku',
-    tracker: 'noop',
-    working_dir: '',
-    plan_output_dir: 'docs/plans',
-    plan_path_pattern: 'docs/plans/{date}-{issue_key}.md',
-    max_review_iterations: 3,
-    max_task_review_iterations: 5,
-    auto_approve_reviews: false,
-  });
+  const [formData, setFormData] = useState<FormData>({ ...DEFAULT_FORM_DATA });
+
+  // Track the original state when modal opens for comparison
+  const originalFormDataRef = useRef<FormData>({ ...DEFAULT_FORM_DATA });
 
   useEffect(() => {
-    if (profile) {
-      setFormData({
-        id: profile.id,
-        driver: profile.driver,
-        model: profile.model,
-        validator_model: profile.validator_model,
-        tracker: profile.tracker,
-        working_dir: profile.working_dir,
-        plan_output_dir: profile.plan_output_dir,
-        plan_path_pattern: profile.plan_path_pattern,
-        max_review_iterations: profile.max_review_iterations,
-        max_task_review_iterations: profile.max_task_review_iterations,
-        auto_approve_reviews: profile.auto_approve_reviews,
-      });
-    } else {
-      // Reset to defaults for create mode
-      setFormData({
-        id: '',
-        driver: 'cli:claude',
-        model: 'opus',
-        validator_model: 'haiku',
-        tracker: 'noop',
-        working_dir: '',
-        plan_output_dir: 'docs/plans',
-        plan_path_pattern: 'docs/plans/{date}-{issue_key}.md',
-        max_review_iterations: 3,
-        max_task_review_iterations: 5,
-        auto_approve_reviews: false,
-      });
-    }
+    const newFormData = profile ? profileToFormData(profile) : { ...DEFAULT_FORM_DATA };
+    setFormData(newFormData);
+    originalFormDataRef.current = newFormData;
+    // Clear errors when modal opens/closes or profile changes
+    setErrors({});
   }, [profile, open]);
+
+  /**
+   * Check if the form has unsaved changes by comparing current formData
+   * to the original state (profile values for edit mode, defaults for create mode)
+   */
+  const hasUnsavedChanges = useCallback((): boolean => {
+    const original = originalFormDataRef.current;
+    return (
+      formData.id !== original.id ||
+      formData.driver !== original.driver ||
+      formData.model !== original.model ||
+      formData.validator_model !== original.validator_model ||
+      formData.tracker !== original.tracker ||
+      formData.working_dir !== original.working_dir ||
+      formData.plan_output_dir !== original.plan_output_dir ||
+      formData.plan_path_pattern !== original.plan_path_pattern ||
+      formData.max_review_iterations !== original.max_review_iterations ||
+      formData.max_task_review_iterations !== original.max_task_review_iterations ||
+      formData.auto_approve_reviews !== original.auto_approve_reviews
+    );
+  }, [formData]);
+
+  /**
+   * Handle modal close attempt. If there are unsaved changes, prompt user for confirmation.
+   */
+  const handleClose = useCallback(() => {
+    if (hasUnsavedChanges()) {
+      const confirmed = window.confirm(
+        'You have unsaved changes. Are you sure you want to close?'
+      );
+      if (!confirmed) {
+        return;
+      }
+    }
+    onOpenChange(false);
+  }, [hasUnsavedChanges, onOpenChange]);
+
+  /**
+   * Handle Dialog onOpenChange - intercept close attempts to check for unsaved changes
+   */
+  const handleOpenChange = useCallback((newOpen: boolean) => {
+    if (!newOpen) {
+      // User is trying to close the modal
+      handleClose();
+    } else {
+      onOpenChange(newOpen);
+    }
+  }, [handleClose, onOpenChange]);
 
   const handleChange = (key: string, value: string | number | boolean) => {
     setFormData((prev) => ({ ...prev, [key]: value }));
+    // Clear error for this field when user starts typing
+    if (errors[key]) {
+      setErrors((prev) => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+    }
+  };
+
+  const handleBlur = (field: string, value: string) => {
+    const error = validateField(field, value);
+    if (error) {
+      setErrors((prev) => ({ ...prev, [field]: error }));
+    }
+  };
+
+  const validateForm = (): boolean => {
+    const newErrors: Record<string, string> = {};
+
+    // Validate id only in create mode
+    if (!isEditMode) {
+      const idError = validateField('id', formData.id);
+      if (idError) newErrors.id = idError;
+    }
+
+    // Validate working_dir always
+    const workingDirError = validateField('working_dir', formData.working_dir);
+    if (workingDirError) newErrors.working_dir = workingDirError;
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!validateForm()) {
+      return;
+    }
+
     setIsSaving(true);
 
     try {
@@ -132,8 +255,9 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
         toast.success('Profile created');
       }
       onSaved();
+      // Close without checking for unsaved changes since we just saved
       onOpenChange(false);
-    } catch (err) {
+    } catch {
       toast.error(isEditMode ? 'Failed to update profile' : 'Failed to create profile');
     } finally {
       setIsSaving(false);
@@ -141,7 +265,7 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEditMode ? 'Edit Profile' : 'Create Profile'}</DialogTitle>
@@ -160,10 +284,15 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
               id="id"
               value={formData.id}
               onChange={(e) => handleChange('id', e.target.value)}
+              onBlur={(e) => !isEditMode && handleBlur('id', e.target.value)}
               disabled={isEditMode}
               placeholder="e.g., dev, prod"
-              required
+              aria-invalid={!!errors.id}
+              className={errors.id ? 'border-destructive focus-visible:ring-destructive' : ''}
             />
+            {errors.id && (
+              <p className="text-xs text-destructive">{errors.id}</p>
+            )}
           </div>
 
           {/* Driver */}
@@ -237,28 +366,87 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
               id="working_dir"
               value={formData.working_dir}
               onChange={(e) => handleChange('working_dir', e.target.value)}
+              onBlur={(e) => handleBlur('working_dir', e.target.value)}
               placeholder="/path/to/repo"
-              required
+              aria-invalid={!!errors.working_dir}
+              className={errors.working_dir ? 'border-destructive focus-visible:ring-destructive' : ''}
             />
+            {errors.working_dir && (
+              <p className="text-xs text-destructive">{errors.working_dir}</p>
+            )}
           </div>
 
           {/* Auto-approve toggle */}
-          <div className="flex items-center justify-between rounded-lg border p-3">
-            <div className="space-y-0.5">
-              <Label htmlFor="auto_approve">Auto-approve Reviews</Label>
-              <p className="text-xs text-muted-foreground">
-                Automatically approve all review iterations
-              </p>
-            </div>
-            <Switch
-              id="auto_approve"
-              checked={formData.auto_approve_reviews}
-              onCheckedChange={(checked) => handleChange('auto_approve_reviews', checked)}
-            />
-          </div>
+          <ToggleField
+            id="auto_approve"
+            label="Auto-approve Reviews"
+            description="Automatically approve all review iterations"
+            checked={formData.auto_approve_reviews}
+            onCheckedChange={(checked) => handleChange('auto_approve_reviews', checked)}
+          />
+
+          {/* Advanced Settings */}
+          <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
+            <CollapsibleTrigger className="flex w-full items-center justify-between rounded-lg border bg-muted/50 px-4 py-3 text-sm font-medium hover:bg-muted transition-colors">
+              <span>Advanced Settings</span>
+              <ChevronDown
+                className={cn(
+                  'size-4 transition-transform duration-200',
+                  advancedOpen && 'rotate-180'
+                )}
+              />
+            </CollapsibleTrigger>
+            <CollapsibleContent className="space-y-4 pt-4">
+              {/* Plan Output Directory */}
+              <div className="space-y-2">
+                <Label htmlFor="plan_output_dir">Plan Output Directory</Label>
+                <Input
+                  id="plan_output_dir"
+                  value={formData.plan_output_dir}
+                  onChange={(e) => handleChange('plan_output_dir', e.target.value)}
+                  placeholder="docs/plans"
+                />
+              </div>
+
+              {/* Plan Path Pattern */}
+              <div className="space-y-2">
+                <Label htmlFor="plan_path_pattern">Plan Path Pattern</Label>
+                <Input
+                  id="plan_path_pattern"
+                  value={formData.plan_path_pattern}
+                  onChange={(e) => handleChange('plan_path_pattern', e.target.value)}
+                  placeholder="docs/plans/{date}-{issue_key}.md"
+                />
+              </div>
+
+              {/* Review Iterations */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="max_review_iterations">Max Review Iterations</Label>
+                  <Input
+                    id="max_review_iterations"
+                    type="number"
+                    min={1}
+                    value={formData.max_review_iterations}
+                    onChange={(e) => handleChange('max_review_iterations', parseInt(e.target.value) || 1)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="max_task_review_iterations">Max Task Review Iterations</Label>
+                  <Input
+                    id="max_task_review_iterations"
+                    type="number"
+                    min={1}
+                    value={formData.max_task_review_iterations}
+                    onChange={(e) => handleChange('max_task_review_iterations', parseInt(e.target.value) || 1)}
+                  />
+                </div>
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button type="button" variant="outline" onClick={handleClose}>
               Cancel
             </Button>
             <Button type="submit" disabled={isSaving}>
