@@ -236,7 +236,12 @@ function SpecBuilderPageContent() {
       )}
 
       {/* Conversation Area */}
-      <Conversation className="flex-1 overflow-hidden">
+      <Conversation
+        className="flex-1 overflow-hidden"
+        aria-live="polite"
+        aria-atomic="false"
+        aria-busy={isStreaming}
+      >
         <ConversationContent className="px-4 py-6">
           {messages.length === 0 ? (
             <ConversationEmptyState>

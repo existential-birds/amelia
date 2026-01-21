@@ -202,8 +202,8 @@ describe("SpecBuilderPage", () => {
     const mockArtifact = {
       id: "a1",
       session_id: "s1",
+      type: "design",
       path: "/path/to/design.md",
-      artifact_type: "design" as const,
       title: "Design Doc",
       created_at: "2026-01-18T00:00:00Z",
     };
@@ -287,5 +287,32 @@ describe("SpecBuilderPage", () => {
     await waitFor(() => {
       expect(screen.getByText(/connection lost/i)).toBeInTheDocument();
     });
+  });
+
+  it("has aria-live region for screen reader announcements", async () => {
+    useBrainstormStore.setState({
+      activeSessionId: "s1",
+      sessions: [{ id: "s1", profile_id: "test", driver_session_id: null, status: "active" as const, topic: "Test", created_at: "2026-01-18T00:00:00Z", updated_at: "2026-01-18T00:00:00Z" }],
+      messages: [{ id: "m1", session_id: "s1", sequence: 1, role: "user" as const, content: "Hello", parts: null, created_at: "2026-01-18T00:00:00Z" }],
+    });
+
+    renderPage();
+
+    const logRegion = await screen.findByRole("log");
+    expect(logRegion).toHaveAttribute("aria-live", "polite");
+  });
+
+  it("sets aria-busy during streaming", async () => {
+    useBrainstormStore.setState({
+      activeSessionId: "s1",
+      sessions: [{ id: "s1", profile_id: "test", driver_session_id: null, status: "active" as const, topic: "Test", created_at: "2026-01-18T00:00:00Z", updated_at: "2026-01-18T00:00:00Z" }],
+      messages: [{ id: "m1", session_id: "s1", sequence: 1, role: "assistant" as const, content: "", parts: null, created_at: "2026-01-18T00:00:00Z", status: "streaming" as const }],
+      isStreaming: true,
+    });
+
+    renderPage();
+
+    const logRegion = await screen.findByRole("log");
+    expect(logRegion).toHaveAttribute("aria-busy", "true");
   });
 });
