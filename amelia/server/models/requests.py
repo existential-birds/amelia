@@ -122,6 +122,14 @@ class CreateWorkflowRequest(BaseModel):
     plan_now: bool = False
     """If not starting, whether to run Architect immediately. Ignored if start=True."""
 
+    artifact_path: Annotated[
+        str | None,
+        Field(
+            default=None,
+            description="Path to design artifact from brainstorming session",
+        ),
+    ] = None
+
     @model_validator(mode="after")
     def validate_task_fields(self) -> "CreateWorkflowRequest":
         """Validate task_description requires task_title."""

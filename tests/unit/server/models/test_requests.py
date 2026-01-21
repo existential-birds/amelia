@@ -294,6 +294,36 @@ class TestCreateWorkflowRequestQueueParams:
         assert request.plan_now is True  # Stored but not used
 
 
+class TestCreateWorkflowRequestArtifactPath:
+    """Tests for artifact_path field."""
+
+    def test_artifact_path_accepts_valid_path(self) -> None:
+        """artifact_path accepts absolute path."""
+        request = CreateWorkflowRequest(
+            issue_id="ISSUE-123",
+            worktree_path="/path/to/repo",
+            artifact_path="/path/to/artifact.md",
+        )
+        assert request.artifact_path == "/path/to/artifact.md"
+
+    def test_artifact_path_defaults_to_none(self) -> None:
+        """artifact_path defaults to None."""
+        request = CreateWorkflowRequest(
+            issue_id="ISSUE-123",
+            worktree_path="/path/to/repo",
+        )
+        assert request.artifact_path is None
+
+    def test_artifact_path_accepts_none_explicitly(self) -> None:
+        """artifact_path can be set to None explicitly."""
+        request = CreateWorkflowRequest(
+            issue_id="ISSUE-123",
+            worktree_path="/path/to/repo",
+            artifact_path=None,
+        )
+        assert request.artifact_path is None
+
+
 class TestBatchStartRequest:
     """Tests for BatchStartRequest model."""
 
