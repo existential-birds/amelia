@@ -300,14 +300,14 @@ class OrchestratorService:
             task_title: Optional task title for noop tracker.
             task_description: Optional task description (defaults to task_title).
             artifact_path: Optional path to design artifact file from brainstorming.
-                Can be an absolute path or a worktree-relative path (e.g., /docs/plans/design.md).
+                Must be a worktree-relative path (e.g., docs/plans/design.md).
 
         Returns:
             Tuple of (resolved_path, profile, execution_state).
 
         Raises:
-            ValueError: If settings are invalid, profile not found, or task_title
-                used with non-noop tracker.
+            ValueError: If settings are invalid, profile not found, task_title
+                used with non-noop tracker, or artifact_path escapes worktree.
             FileNotFoundError: If artifact_path is provided but the file doesn't exist.
         """
         # Load settings from worktree (required - no fallback)
@@ -356,15 +356,26 @@ class OrchestratorService:
         # Load design from artifact path if provided
         design = None
         if artifact_path:
-            # Resolve artifact path: could be absolute or worktree-relative
-            artifact_path_obj = Path(artifact_path)
-            if artifact_path_obj.is_absolute() and artifact_path_obj.exists():
-                # Truly absolute path that exists - use as-is
-                full_artifact_path = artifact_path_obj
-            else:
-                # Worktree-relative path (e.g., /docs/plans/design.md)
-                # Strip leading slash and join with worktree_path
-                full_artifact_path = Path(worktree_path) / artifact_path.lstrip("/")
+            # Resolve worktree path to canonical form for validation
+            worktree_resolved = Path(worktree_path).resolve()
+
+            # Always treat artifact_path as worktree-relative, stripping any
+            # leading slashes to prevent absolute path injection
+            relative_artifact = artifact_path.lstrip("/")
+            full_artifact_path = (worktree_resolved / relative_artifact).resolve()
+
+            # Validate the resolved path stays within the worktree
+            # (prevents traversal via .. sequences or symlinks)
+            try:
+                full_artifact_path.relative_to(worktree_resolved)
+            except ValueError:
+                raise ValueError(
+                    f"artifact_path '{artifact_path}' resolves outside worktree directory"
+                ) from None
+
+            if not full_artifact_path.exists():
+                raise FileNotFoundError(f"Artifact file not found: {full_artifact_path}")
+
             design = Design.from_file(full_artifact_path)
 
         # Create ImplementationState with all required fields

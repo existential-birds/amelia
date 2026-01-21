@@ -56,7 +56,8 @@ class TestHandoffDesignFlow:
                 worktree_path=str(tmp_path),
                 issue_id="issue-1",
                 task_title="Implement design",
-                artifact_path=str(design_file),
+                # Use relative path within worktree (leading slash stripped)
+                artifact_path="design.md",
             )
 
         # Verify design was loaded
@@ -183,11 +184,12 @@ class TestHandoffDesignFlow:
         orchestrator._repository = MagicMock()
         orchestrator._repository.create = AsyncMock()
 
+        # Use worktree-relative path (not absolute) for security
         request = CreateWorkflowRequest(
             issue_id="issue-1",
             worktree_path=str(tmp_path),
             task_title="Implement design",
-            artifact_path=str(design_file),
+            artifact_path="design.md",  # Relative to worktree
             start=False,
         )
 
@@ -212,3 +214,101 @@ class TestHandoffDesignFlow:
         state = orchestrator._repository.create.call_args[0][0]
         assert state.execution_state.design is not None
         assert state.execution_state.design.content == "# Design Content"
+
+    async def test_prepare_workflow_state_rejects_path_traversal(
+        self, tmp_path: Path, mock_settings: MagicMock
+    ) -> None:
+        """Rejects artifact_path that escapes worktree via .. sequences."""
+        orchestrator = OrchestratorService.__new__(OrchestratorService)
+        orchestrator._event_bus = MagicMock()
+        orchestrator._repository = MagicMock()
+
+        with (
+            patch.object(
+                orchestrator,
+                "_load_settings_for_worktree",
+                return_value=mock_settings,
+            ),
+            patch(
+                "amelia.server.orchestrator.service.get_git_head",
+                new_callable=AsyncMock,
+                return_value="abc123",
+            ),
+            pytest.raises(ValueError, match="resolves outside worktree"),
+        ):
+            await orchestrator._prepare_workflow_state(
+                workflow_id="wf-123",
+                worktree_path=str(tmp_path),
+                issue_id="issue-1",
+                task_title="Implement design",
+                artifact_path="../../../etc/passwd",
+            )
+
+    async def test_prepare_workflow_state_rejects_absolute_path_outside_worktree(
+        self, tmp_path: Path, mock_settings: MagicMock
+    ) -> None:
+        """Rejects absolute paths that would escape worktree.
+
+        Even if an absolute path is provided, it gets stripped and treated
+        as worktree-relative, so /etc/passwd becomes {worktree}/etc/passwd
+        and fails validation since it doesn't exist.
+        """
+        orchestrator = OrchestratorService.__new__(OrchestratorService)
+        orchestrator._event_bus = MagicMock()
+        orchestrator._repository = MagicMock()
+
+        with (
+            patch.object(
+                orchestrator,
+                "_load_settings_for_worktree",
+                return_value=mock_settings,
+            ),
+            patch(
+                "amelia.server.orchestrator.service.get_git_head",
+                new_callable=AsyncMock,
+                return_value="abc123",
+            ),
+            # Absolute paths are stripped, so /etc/passwd becomes etc/passwd
+            # within the worktree, which won't exist
+            pytest.raises(FileNotFoundError),
+        ):
+            await orchestrator._prepare_workflow_state(
+                workflow_id="wf-123",
+                worktree_path=str(tmp_path),
+                issue_id="issue-1",
+                task_title="Implement design",
+                artifact_path="/etc/passwd",
+            )
+
+    async def test_prepare_workflow_state_rejects_symlink_escape(
+        self, tmp_path: Path, mock_settings: MagicMock
+    ) -> None:
+        """Rejects artifact_path that escapes via symlinks."""
+        # Create a symlink that points outside the worktree
+        symlink = tmp_path / "escape_link"
+        symlink.symlink_to("/etc")
+
+        orchestrator = OrchestratorService.__new__(OrchestratorService)
+        orchestrator._event_bus = MagicMock()
+        orchestrator._repository = MagicMock()
+
+        with (
+            patch.object(
+                orchestrator,
+                "_load_settings_for_worktree",
+                return_value=mock_settings,
+            ),
+            patch(
+                "amelia.server.orchestrator.service.get_git_head",
+                new_callable=AsyncMock,
+                return_value="abc123",
+            ),
+            pytest.raises(ValueError, match="resolves outside worktree"),
+        ):
+            await orchestrator._prepare_workflow_state(
+                workflow_id="wf-123",
+                worktree_path=str(tmp_path),
+                issue_id="issue-1",
+                task_title="Implement design",
+                artifact_path="escape_link/passwd",
+            )
