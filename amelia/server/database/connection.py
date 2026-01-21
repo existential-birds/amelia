@@ -487,6 +487,59 @@ class Database:
             ON brainstorm_artifacts(session_id)
         """)
 
+        # Server settings singleton table
+        await self.execute("""
+            CREATE TABLE IF NOT EXISTS server_settings (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                log_retention_days INTEGER NOT NULL DEFAULT 30,
+                log_retention_max_events INTEGER NOT NULL DEFAULT 100000,
+                trace_retention_days INTEGER NOT NULL DEFAULT 7,
+                checkpoint_retention_days INTEGER NOT NULL DEFAULT 0,
+                checkpoint_path TEXT NOT NULL DEFAULT '~/.amelia/checkpoints.db',
+                websocket_idle_timeout_seconds REAL NOT NULL DEFAULT 300.0,
+                workflow_start_timeout_seconds REAL NOT NULL DEFAULT 60.0,
+                max_concurrent INTEGER NOT NULL DEFAULT 5,
+                stream_tool_results INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # Profiles table
+        await self.execute("""
+            CREATE TABLE IF NOT EXISTS profiles (
+                id TEXT PRIMARY KEY,
+                driver TEXT NOT NULL,
+                model TEXT NOT NULL,
+                validator_model TEXT NOT NULL,
+                tracker TEXT NOT NULL DEFAULT 'noop',
+                working_dir TEXT NOT NULL,
+                plan_output_dir TEXT NOT NULL DEFAULT 'docs/plans',
+                plan_path_pattern TEXT NOT NULL DEFAULT 'docs/plans/{date}-{issue_key}.md',
+                max_review_iterations INTEGER NOT NULL DEFAULT 3,
+                max_task_review_iterations INTEGER NOT NULL DEFAULT 5,
+                auto_approve_reviews INTEGER NOT NULL DEFAULT 0,
+                is_active INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # Trigger to ensure only one active profile
+        await self.execute("""
+            CREATE TRIGGER IF NOT EXISTS ensure_single_active_profile
+            AFTER UPDATE OF is_active ON profiles
+            WHEN NEW.is_active = 1
+            BEGIN
+                UPDATE profiles SET is_active = 0 WHERE id != NEW.id;
+            END
+        """)
+
+        # Index for active profile lookup
+        await self.execute(
+            "CREATE INDEX IF NOT EXISTS idx_profiles_active ON profiles(is_active)"
+        )
+
     async def initialize_prompts(self) -> None:
         """Seed prompts table from defaults. Idempotent.
 
