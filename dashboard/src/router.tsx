@@ -8,6 +8,7 @@ import { RootErrorBoundary } from '@/components/ErrorBoundary';
 import { workflowsLoader, workflowDetailLoader, historyLoader } from '@/loaders/workflows';
 import { promptsLoader } from '@/loaders/prompts';
 import { costsLoader } from '@/loaders';
+import { profilesLoader, serverSettingsLoader } from '@/loaders/settings';
 import { approveAction, rejectAction, cancelAction } from '@/actions/workflows';
 
 /**
@@ -25,6 +26,9 @@ import { approveAction, rejectAction, cancelAction } from '@/actions/workflows';
  * - `/logs` → System logs view (lazy-loaded)
  * - `/prompts` → Prompts configuration page (lazy-loaded)
  * - `/specs` → Spec Builder page (lazy-loaded)
+ * - `/settings` → Redirects to `/settings/profiles`
+ * - `/settings/profiles` → Profile management (lazy-loaded)
+ * - `/settings/server` → Server configuration (lazy-loaded)
  * - `*` → Fallback redirect to `/workflows`
  *
  * All page components are lazy-loaded for optimal initial bundle size.
@@ -117,6 +121,35 @@ export const router = createBrowserRouter([
           const { default: Component } = await import('@/pages/CostsPage');
           return { Component };
         },
+      },
+      {
+        path: 'settings',
+        lazy: async () => {
+          const { SettingsLayout } = await import('@/components/settings/SettingsLayout');
+          return { Component: SettingsLayout };
+        },
+        children: [
+          {
+            index: true,
+            element: <Navigate to="/settings/profiles" replace />,
+          },
+          {
+            path: 'profiles',
+            loader: profilesLoader,
+            lazy: async () => {
+              const { default: Component } = await import('@/pages/SettingsProfilesPage');
+              return { Component };
+            },
+          },
+          {
+            path: 'server',
+            loader: serverSettingsLoader,
+            lazy: async () => {
+              const { default: Component } = await import('@/pages/SettingsServerPage');
+              return { Component };
+            },
+          },
+        ],
       },
       {
         path: '*',

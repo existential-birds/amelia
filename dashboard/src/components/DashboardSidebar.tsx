@@ -324,7 +324,6 @@ export function DashboardSidebar() {
                 to="/settings"
                 icon={Settings}
                 label="Settings"
-                comingSoon
               />
             </SidebarMenu>
           </SidebarGroupContent>
