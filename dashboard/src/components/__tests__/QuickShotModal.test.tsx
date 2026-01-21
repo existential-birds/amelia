@@ -340,7 +340,7 @@ describe('QuickShotModal', () => {
 
       await user.click(screen.getByRole('button', { name: /^start$/i }));
 
-      // Wait for the launching state to appear (after 400ms ripple animation)
+      // Wait for the launching state to appear
       await waitFor(() => {
         expect(screen.getByText(/launching/i)).toBeInTheDocument();
       });

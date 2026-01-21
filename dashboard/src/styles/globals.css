@@ -368,17 +368,6 @@
   }
 }
 
-@keyframes quick-shot-lightning-ripple {
-  0% {
-    transform: scale(0);
-    opacity: 1;
-  }
-  100% {
-    transform: scale(2.5);
-    opacity: 0;
-  }
-}
-
 @keyframes quick-shot-scan-line {
   0% { left: -100%; }
   100% { left: 100%; }
@@ -403,10 +392,6 @@
 
   .animate-quick-shot-charge {
     animation: quick-shot-charge-pulse 2s ease-in-out infinite;
-  }
-
-  .animate-quick-shot-ripple {
-    animation: quick-shot-lightning-ripple 400ms ease-out;
   }
 
   .animate-quick-shot-scan {
