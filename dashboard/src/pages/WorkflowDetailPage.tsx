@@ -10,6 +10,7 @@ import { ApprovalControls } from '@/components/ApprovalControls';
 import { AgentProgressBar, type AgentStage } from '@/components/AgentProgressBar';
 import { UsageCard } from '@/components/UsageCard';
 import { useElapsedTime, useAutoRevalidation } from '@/hooks';
+import { truncateWorkflowId } from '@/utils';
 import { workflowDetailLoader } from '@/loaders';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useWorkflowStore } from '@/store/workflowStore';
@@ -94,7 +95,9 @@ export default function WorkflowDetailPage() {
         <PageHeader.Left>
           <PageHeader.Label>WORKFLOW</PageHeader.Label>
           <div className="flex items-center gap-3">
-            <PageHeader.Title>{workflow.issue_id}</PageHeader.Title>
+            <PageHeader.Title title={workflow.issue_id}>
+              {truncateWorkflowId(workflow.issue_id)}
+            </PageHeader.Title>
             <PageHeader.Subtitle>{workflow.worktree_path}</PageHeader.Subtitle>
           </div>
         </PageHeader.Left>

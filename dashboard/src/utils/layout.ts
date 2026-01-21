@@ -8,17 +8,7 @@
 import Dagre from '@dagrejs/dagre';
 import type { Node, Edge } from '@xyflow/react';
 
-/** Fixed node width for layout calculation (matches WorkflowNode card width). */
-export const NODE_WIDTH = 180;
-
-/** Fixed node height for layout calculation (matches WorkflowNode card height). */
-export const NODE_HEIGHT = 128;
-
-/** Horizontal spacing between nodes in the same rank. */
-const NODE_SEP = 50;
-
-/** Spacing between ranks (levels) in the graph. */
-const RANK_SEP = 100;
+import { NODE_WIDTH, NODE_HEIGHT, NODE_SEP, RANK_SEP } from '@/constants/node-dimensions';
 
 /**
  * Positions nodes using dagre automatic graph layout.

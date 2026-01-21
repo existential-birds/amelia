@@ -66,11 +66,11 @@ describe("SpecBuilderPage", () => {
     });
   });
 
-  it("shows input area when there is an active session", () => {
+  it("shows input area when session is active", () => {
     useBrainstormStore.setState({
       activeSessionId: "s1",
       sessions: [{ id: "s1", profile_id: "test", driver_session_id: null, status: "active" as const, topic: "Test", created_at: "2026-01-18T00:00:00Z", updated_at: "2026-01-18T00:00:00Z" }],
-      messages: [],
+      messages: [{ id: "m1", session_id: "s1", sequence: 1, role: "user" as const, content: "Hello", parts: null, created_at: "2026-01-18T00:00:00Z" }],
     });
 
     renderPage();
@@ -78,6 +78,35 @@ describe("SpecBuilderPage", () => {
     expect(
       screen.getByPlaceholderText(/what would you like to design/i)
     ).toBeInTheDocument();
+  });
+
+  it("hides input area when no active session", () => {
+    renderPage();
+
+    expect(
+      screen.queryByPlaceholderText(/what would you like to design/i)
+    ).not.toBeInTheDocument();
+  });
+
+  it("sends message in active session", async () => {
+    useBrainstormStore.setState({
+      activeSessionId: "s1",
+      sessions: [{ id: "s1", profile_id: "test", driver_session_id: null, status: "active" as const, topic: "Test", created_at: "2026-01-18T00:00:00Z", updated_at: "2026-01-18T00:00:00Z" }],
+      messages: [{ id: "m1", session_id: "s1", sequence: 1, role: "user" as const, content: "Hello", parts: null, created_at: "2026-01-18T00:00:00Z" }],
+    });
+    vi.mocked(brainstormApi.sendMessage).mockResolvedValue({ message_id: "m2" });
+
+    renderPage();
+
+    const input = screen.getByPlaceholderText(/what would you like to design/i);
+    await userEvent.type(input, "Design a caching layer{enter}");
+
+    await waitFor(() => {
+      expect(brainstormApi.sendMessage).toHaveBeenCalledWith(
+        "s1",
+        "Design a caching layer"
+      );
+    });
   });
 
   it("creates session when Start Brainstorming is clicked", async () => {

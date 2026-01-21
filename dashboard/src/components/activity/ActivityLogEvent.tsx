@@ -33,7 +33,7 @@ export function ActivityLogEvent({ event }: ActivityLogEventProps) {
     <div
       data-slot="activity-log-event"
       className={cn(
-        'grid grid-cols-[100px_120px_1fr] gap-3 py-1.5 px-3',
+        'grid grid-cols-[80px_1fr] lg:grid-cols-[100px_100px_1fr] gap-2 lg:gap-3 py-1.5 px-3',
         'border-b border-border/30 font-mono text-sm',
         style.bg
       )}
@@ -41,10 +41,10 @@ export function ActivityLogEvent({ event }: ActivityLogEventProps) {
       <span className="text-muted-foreground tabular-nums">
         {formatTime(event.timestamp)}
       </span>
-      <span className={cn('font-semibold', style.text)}>
+      <span className={cn('hidden lg:block font-semibold', style.text)}>
         {agentKey}
       </span>
-      <span className="text-foreground/80 break-words">{event.message}</span>
+      <span className="text-foreground/80 break-words min-w-0">{event.message}</span>
     </div>
   );
 }

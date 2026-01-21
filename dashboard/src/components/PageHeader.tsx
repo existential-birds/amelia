@@ -29,7 +29,7 @@ function Label({ children, className }: TypographyProps) {
   return (
     <span
       className={cn(
-        'block font-heading text-xs font-semibold tracking-widest text-muted-foreground mb-1',
+        'block font-heading text-[10px] lg:text-xs font-semibold tracking-widest text-muted-foreground mb-1',
         className
       )}
     >
@@ -38,19 +38,29 @@ function Label({ children, className }: TypographyProps) {
   );
 }
 
+interface TitleProps extends TypographyProps {
+  /** Optional full text for hover tooltip (useful when displaying truncated text) */
+  title?: string;
+}
+
 /**
  * Large display title (e.g., issue ID, page title).
  *
  * @param props - Component props.
  * @param props.children - Title text content to display.
+ * @param props.title - Optional full text for hover tooltip (defaults to children if string).
  * @param props.className - Optional additional CSS classes.
  * @returns An h2 element with display font styling.
  */
-function Title({ children, className }: TypographyProps) {
+function Title({ children, title, className }: TitleProps) {
+  // Use explicit title prop if provided, otherwise fall back to children if it's a string
+  const tooltipText = title ?? (typeof children === 'string' ? children : undefined);
+
   return (
     <h2
+      title={tooltipText}
       className={cn(
-        'font-display text-3xl font-bold tracking-wider text-foreground',
+        'font-display text-xl lg:text-3xl font-bold tracking-wider text-foreground truncate max-w-[200px] lg:max-w-[400px]',
         className
       )}
     >
@@ -69,7 +79,10 @@ function Title({ children, className }: TypographyProps) {
  */
 function Subtitle({ children, className }: TypographyProps) {
   return (
-    <span className={cn('font-mono text-sm text-muted-foreground', className)}>
+    <span
+      title={typeof children === 'string' ? children : undefined}
+      className={cn('font-mono text-xs lg:text-sm text-muted-foreground truncate max-w-[120px] lg:max-w-[200px]', className)}
+    >
       {children}
     </span>
   );
@@ -93,7 +106,7 @@ function Value({ children, glow, className }: ValueProps) {
   return (
     <div
       className={cn(
-        'font-mono text-2xl font-semibold text-primary',
+        'font-mono text-lg lg:text-2xl font-semibold text-primary',
         glow && '[text-shadow:0_0_10px_rgba(255,200,87,0.4)]',
         className
       )}

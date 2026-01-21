@@ -22,7 +22,9 @@ import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { success, error } from '@/components/Toast';
 import { getActiveWorkflow } from '@/utils/workflow';
+import { truncateWorkflowId } from '@/utils';
 import { useElapsedTime, useAutoRevalidation } from '@/hooks';
+import { useIsTablet } from '@/hooks/use-tablet';
 import { buildPipelineFromEvents } from '@/utils/pipeline';
 import type { workflowsLoader } from '@/loaders/workflows';
 
@@ -47,6 +49,7 @@ export default function WorkflowsPage() {
   const { workflows, detail, detailError } = useLoaderData<typeof workflowsLoader>();
   const navigate = useNavigate();
   const params = useParams<{ id?: string }>();
+  const isTablet = useIsTablet();
 
   // Auto-revalidate when any workflow's status changes (approval events, completion, etc.)
   useAutoRevalidation();
@@ -92,7 +95,9 @@ export default function WorkflowsPage() {
           <PageHeader.Label>WORKFLOW</PageHeader.Label>
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2">
-              <PageHeader.Title>{detail?.issue_id ?? 'SELECT JOB'}</PageHeader.Title>
+              <PageHeader.Title title={detail?.issue_id}>
+                {detail?.issue_id ? truncateWorkflowId(detail.issue_id) : 'SELECT JOB'}
+              </PageHeader.Title>
               {detail?.issue_id && (
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -126,7 +131,7 @@ export default function WorkflowsPage() {
         )}
       </PageHeader>
       <Separator />
-      <WorkflowCanvas pipeline={pipeline} className="h-64" />
+      <WorkflowCanvas pipeline={pipeline} className="h-48 lg:h-64" />
 
       {/* Plan Review - shown when workflow needs approval */}
       {detail?.status === 'blocked' && (
@@ -168,15 +173,18 @@ export default function WorkflowsPage() {
       )}
 
       {/* Bottom: Queue + Activity (split) - ScrollArea provides overflow handling */}
-      <div className="flex-1 grid grid-cols-[360px_1fr] grid-rows-[1fr] gap-4 p-4 overflow-hidden relative z-10 min-h-[300px]">
-        <ScrollArea className="h-full overflow-hidden">
+      {/* Responsive: stacked on mobile/tablet (grid-cols-1), side-by-side on lg+ */}
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-[360px_1fr] gap-4 p-4 overflow-hidden relative z-10 min-h-[300px]">
+        <ScrollArea className="h-full lg:max-h-none overflow-hidden">
           <JobQueue
             workflows={workflows}
             selectedId={displayedId}
             onSelect={handleSelect}
+            collapsible={isTablet}
+            defaultCollapsed={true}
           />
         </ScrollArea>
-        <ScrollArea className="h-full overflow-hidden">
+        <ScrollArea className="h-full min-h-[200px] overflow-hidden">
           {detailError ? (
             <div className="p-4 text-destructive text-sm">
               Failed to load workflow details: {detailError}

@@ -142,34 +142,33 @@ export const AgentNode = memo(function AgentNode({ data }: NodeProps<AgentNodeTy
     <div
       data-status={status}
       className={cn(
-        'w-[180px] rounded-lg border p-3 transition-all',
+        'w-[100px] lg:w-[120px] rounded-lg border p-2 lg:p-3 transition-all',
         getStatusClasses(status, agentType)
       )}
     >
       <Handle type="target" position={Position.Left} className="!bg-border" />
 
-      <div className="flex items-center gap-2">
-        <Icon className={cn('h-4 w-4', getIconClasses(status, agentType))} />
-        <span className="font-medium">{getNodeDisplayName(agentType)}</span>
+      <div className="flex flex-col items-center gap-1 lg:gap-1.5 text-center">
+        <Icon className={cn('h-5 w-5 lg:h-6 lg:w-6', getIconClasses(status, agentType))} />
+        <span className="text-sm lg:text-base font-medium">{getNodeDisplayName(agentType)}</span>
+        <p className="text-xs lg:text-sm text-muted-foreground">
+          {status === 'active' && 'In progress...'}
+          {status === 'completed' && 'Completed'}
+          {status === 'pending' && 'Pending'}
+          {status === 'blocked' && 'Blocked'}
+        </p>
         {iterations.length > 1 && (
-          <Badge variant="secondary" className="ml-auto text-xs">
+          <Badge variant="secondary" className="text-[10px] lg:text-xs">
             {iterations.length} runs
           </Badge>
         )}
       </div>
 
-      <p className="mt-2 text-sm text-muted-foreground">
-        {status === 'active' && 'In progress...'}
-        {status === 'completed' && 'Completed'}
-        {status === 'pending' && 'Pending'}
-        {status === 'blocked' && 'Blocked'}
-      </p>
-
       {isExpanded && iterations.length > 0 && (
-        <div className="mt-2 space-y-1 text-xs">
+        <div className="mt-2 space-y-1 text-xs text-center">
           {iterations.map((iter, idx) => (
-            <div key={iter.id} className="flex items-center gap-1">
-              <span className="text-muted-foreground">Run {idx + 1}:</span>
+            <div key={iter.id} className="flex flex-col">
+              <span className="text-muted-foreground">Run {idx + 1}</span>
               <span className={cn(
                 iter.status === 'running' && 'text-primary',
                 iter.status === 'completed' && 'text-status-completed',

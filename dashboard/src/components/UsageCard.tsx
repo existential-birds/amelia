@@ -55,7 +55,7 @@ export function UsageCard({ tokenUsage, className }: UsageCardProps) {
 
       {/* Agent breakdown table */}
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full text-sm min-w-[500px]">
           <thead>
             <tr className="border-b border-border">
               <th

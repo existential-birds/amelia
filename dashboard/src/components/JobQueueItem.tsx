@@ -3,6 +3,7 @@
  */
 import { StatusBadge } from '@/components/StatusBadge';
 import { cn } from '@/lib/utils';
+import { truncateWorkflowId } from '@/utils';
 import type { WorkflowSummary } from '@/types';
 
 /**
@@ -48,11 +49,14 @@ export function JobQueueItem({ workflow, selected, onSelect, className }: JobQue
       )}
     >
       {/* Row 1: Issue ID and Status Badge */}
-      <div className="flex items-center justify-between">
-        <span className="font-mono text-sm font-semibold text-accent">
-          {workflow.issue_id}
+      <div className="flex items-center justify-between gap-2 min-w-0">
+        <span
+          title={workflow.issue_id}
+          className="font-mono text-sm font-semibold text-accent truncate"
+        >
+          {truncateWorkflowId(workflow.issue_id)}
         </span>
-        <StatusBadge status={workflow.status} />
+        <StatusBadge status={workflow.status} className="flex-shrink-0" />
       </div>
 
       {/* Row 2: Worktree Path */}

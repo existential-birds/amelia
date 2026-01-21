@@ -314,4 +314,5 @@ describe('AgentNode', () => {
       expect(icon).toHaveClass('text-primary/70');
     });
   });
+
 });
