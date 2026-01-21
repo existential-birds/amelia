@@ -91,12 +91,14 @@ class TestHandoffDesignFlow:
         orchestrator._workflows = {}
         orchestrator._load_settings_for_worktree = MagicMock(return_value=mock_settings)
 
-        with patch(
-            "amelia.server.orchestrator.service.get_git_head",
-            new_callable=AsyncMock,
-            return_value="abc123",
+        with (
+            patch(
+                "amelia.server.orchestrator.service.get_git_head",
+                new_callable=AsyncMock,
+                return_value="abc123",
+            ),
+            pytest.raises(FileNotFoundError),
         ):
-            with pytest.raises(FileNotFoundError):
                 await orchestrator._prepare_workflow_state(
                     workflow_id="wf-123",
                     worktree_path=str(tmp_path),
@@ -139,7 +141,7 @@ class TestHandoffDesignFlow:
             new_callable=AsyncMock,
             return_value="abc123",
         ):
-            workflow_id = await orchestrator.queue_workflow(request)
+            await orchestrator.queue_workflow(request)
 
         # Verify workflow was created with design loaded
         # Check the call to _repository.create to get the state
