@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Plus, Search } from 'lucide-react';
 import { ProfileCard } from '@/components/settings/ProfileCard';
+import { ProfileEditModal } from '@/components/settings/ProfileEditModal';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { deleteProfile, activateProfile } from '@/api/settings';
 import type { Profile } from '@/api/settings';
@@ -24,6 +25,8 @@ export default function SettingsProfilesPage() {
 
   const [search, setSearch] = useState('');
   const [driverFilter, setDriverFilter] = useState<DriverFilter>('all');
+  const [editingProfile, setEditingProfile] = useState<Profile | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Filter profiles
   const filteredProfiles = profiles.filter((p) => {
@@ -47,8 +50,8 @@ export default function SettingsProfilesPage() {
   });
 
   const handleEdit = (profile: Profile) => {
-    // TODO: Open edit modal (will be implemented in Task 4.6)
-    console.log('Edit', profile);
+    setEditingProfile(profile);
+    setIsModalOpen(true);
   };
 
   const handleDelete = async (profile: Profile) => {
@@ -76,7 +79,7 @@ export default function SettingsProfilesPage() {
     <div className="container mx-auto py-6 space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Profiles</h1>
-        <Button>
+        <Button onClick={() => { setEditingProfile(null); setIsModalOpen(true); }}>
           <Plus className="mr-2 h-4 w-4" /> Create Profile
         </Button>
       </div>
@@ -124,6 +127,13 @@ export default function SettingsProfilesPage() {
           ))}
         </div>
       )}
+
+      <ProfileEditModal
+        open={isModalOpen}
+        onOpenChange={setIsModalOpen}
+        profile={editingProfile}
+        onSaved={revalidate}
+      />
     </div>
   );
 }
