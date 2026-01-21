@@ -1,36 +1,12 @@
 """Configuration endpoint for dashboard."""
-import os
-from pathlib import Path
-from typing import Any
-
-import yaml
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
-from amelia.server.config import ServerConfig
-from amelia.server.dependencies import get_config
+from amelia.server.database import ProfileRepository, SettingsRepository
+from amelia.server.dependencies import get_profile_repository, get_settings_repository
 
 
 router = APIRouter(prefix="/config", tags=["config"])
-
-
-def _load_settings() -> dict[str, Any]:
-    """Load settings from settings.amelia.yaml.
-
-    Returns:
-        Settings dict, or empty dict if not found.
-    """
-    settings_path = Path("settings.amelia.yaml")
-    env_path = os.environ.get("AMELIA_SETTINGS")
-    if env_path:
-        settings_path = Path(env_path)
-
-    try:
-        with settings_path.open() as f:
-            data = yaml.safe_load(f)
-        return data or {}
-    except (FileNotFoundError, PermissionError, yaml.YAMLError):
-        return {}
 
 
 class ProfileInfo(BaseModel):
@@ -51,7 +27,7 @@ class ConfigResponse(BaseModel):
         description="Maximum concurrent workflows"
     )
     active_profile: str = Field(
-        description="Active profile name from settings.amelia.yaml"
+        description="Active profile name from database"
     )
     active_profile_info: ProfileInfo | None = Field(
         default=None,
@@ -61,7 +37,8 @@ class ConfigResponse(BaseModel):
 
 @router.get("", response_model=ConfigResponse)
 async def get_server_config(
-    config: ServerConfig = Depends(get_config),
+    profile_repo: ProfileRepository = Depends(get_profile_repository),
+    settings_repo: SettingsRepository = Depends(get_settings_repository),
 ) -> ConfigResponse:
     """Get server configuration for dashboard.
 
@@ -69,24 +46,30 @@ async def get_server_config(
         Server configuration including working_dir, max_concurrent, active_profile,
         and active_profile_info.
     """
-    settings = _load_settings()
-    active_profile_name = settings.get("active_profile", "")
+    # Get server settings for max_concurrent
+    server_settings = await settings_repo.get_server_settings()
 
-    # Get full profile info if available
-    profile_info = None
-    if active_profile_name:
-        profiles = settings.get("profiles", {})
-        profile_data = profiles.get(active_profile_name, {})
-        if profile_data:
-            profile_info = ProfileInfo(
-                name=active_profile_name,
-                driver=profile_data.get("driver", "unknown"),
-                model=profile_data.get("model", "unknown"),
-            )
+    # Get active profile
+    active_profile = await profile_repo.get_active_profile()
+
+    # Build response based on whether there's an active profile
+    if active_profile is None:
+        return ConfigResponse(
+            working_dir="",
+            max_concurrent=server_settings.max_concurrent,
+            active_profile="",
+            active_profile_info=None,
+        )
+
+    profile_info = ProfileInfo(
+        name=active_profile.id,
+        driver=active_profile.driver,
+        model=active_profile.model,
+    )
 
     return ConfigResponse(
-        working_dir=str(config.working_dir),
-        max_concurrent=config.max_concurrent,
-        active_profile=active_profile_name,
+        working_dir=active_profile.working_dir,
+        max_concurrent=server_settings.max_concurrent,
+        active_profile=active_profile.id,
         active_profile_info=profile_info,
     )

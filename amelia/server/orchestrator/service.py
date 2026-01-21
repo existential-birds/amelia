@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import Any, cast
 from uuid import uuid4
 
-import yaml
 from httpx import TimeoutException
 from langchain_core.runnables.config import RunnableConfig
 from langgraph.checkpoint.base import BaseCheckpointSaver
@@ -19,9 +18,10 @@ from pydantic import ValidationError
 from amelia.core.constants import ToolName
 from amelia.core.types import (
     Design,
+    DriverType,
     Issue,
     Profile,
-    Settings,
+    TrackerType,
 )
 from amelia.ext import WorkflowEventType as ExtWorkflowEventType
 from amelia.ext.exceptions import PolicyDeniedError
@@ -33,6 +33,7 @@ from amelia.ext.hooks import (
 from amelia.pipelines.implementation import create_implementation_graph
 from amelia.pipelines.implementation.state import ImplementationState
 from amelia.pipelines.review import create_review_graph
+from amelia.server.database import ProfileRecord, ProfileRepository
 from amelia.server.database.repository import WorkflowRepository
 from amelia.server.events.bus import EventBus
 from amelia.server.exceptions import (
@@ -103,6 +104,7 @@ class OrchestratorService:
         self,
         event_bus: EventBus,
         repository: WorkflowRepository,
+        profile_repo: ProfileRepository | None = None,
         max_concurrent: int = 5,
         checkpoint_path: str = "~/.amelia/checkpoints.db",
     ) -> None:
@@ -111,11 +113,13 @@ class OrchestratorService:
         Args:
             event_bus: Event bus for broadcasting workflow events.
             repository: Repository for workflow persistence.
+            profile_repo: Repository for profile lookup. Required for workflow execution.
             max_concurrent: Maximum number of concurrent workflows (default: 5).
             checkpoint_path: Path to checkpoint database file.
         """
         self._event_bus = event_bus
         self._repository = repository
+        self._profile_repo = profile_repo
         self._max_concurrent = max_concurrent
         # Expand ~ and resolve path, ensure parent directory exists
         expanded_path = Path(checkpoint_path).expanduser().resolve()
@@ -188,58 +192,62 @@ class OrchestratorService:
         profile_id: str,
         worktree_path: str,
     ) -> Profile | None:
-        """Look up profile by ID from worktree settings.
+        """Look up profile by ID from database.
 
-        Settings are loaded from the worktree's settings.amelia.yaml file.
-        There is no fallback - each worktree must have its own settings.
+        Profiles are loaded from the database via ProfileRepository.
+        There is no fallback - a valid profile must exist.
 
         Args:
             workflow_id: Workflow ID for logging and status updates.
-            profile_id: Profile ID to look up in settings.
-            worktree_path: Worktree path to load settings from (required).
+            profile_id: Profile ID to look up in database.
+            worktree_path: Worktree path for agent execution (overrides profile's working_dir).
 
         Returns:
             Profile if found, None if not found (after setting workflow to failed).
         """
-        try:
-            settings = self._load_settings_for_worktree(worktree_path)
-        except ValidationError as e:
+        if self._profile_repo is None:
             logger.error(
-                "Invalid settings file in worktree",
+                "ProfileRepository not configured",
                 workflow_id=workflow_id,
-                worktree_path=worktree_path,
-                error=str(e),
             )
             await self._repository.set_status(
-                workflow_id, "failed", failure_reason=f"Invalid settings.amelia.yaml in {worktree_path}: {e}"
-            )
-            return None
-        if settings is None:
-            logger.error(
-                "No settings file found in worktree",
-                workflow_id=workflow_id,
-                worktree_path=worktree_path,
-            )
-            await self._repository.set_status(
-                workflow_id, "failed", failure_reason=f"No settings.amelia.yaml in {worktree_path}"
+                workflow_id, "failed", failure_reason="ProfileRepository not configured"
             )
             return None
 
-        if profile_id not in settings.profiles:
+        record = await self._profile_repo.get_profile(profile_id)
+        if record is None:
             logger.error("Profile not found", workflow_id=workflow_id, profile_id=profile_id)
             await self._repository.set_status(
                 workflow_id, "failed", failure_reason=f"Profile '{profile_id}' not found"
             )
             return None
 
-        profile = settings.profiles[profile_id]
+        return self._record_to_profile(record, worktree_path)
 
-        # ALWAYS set working_dir to worktree_path for agent execution
-        # This ensures agents run in the correct directory regardless of settings
-        # Create a copy to avoid mutating the shared settings profile
-        profile = profile.model_copy(update={"working_dir": worktree_path})
+    def _record_to_profile(self, record: ProfileRecord, worktree_path: str) -> Profile:
+        """Convert database ProfileRecord to core Profile.
 
-        return profile
+        Args:
+            record: ProfileRecord from database.
+            worktree_path: Worktree path to use as working_dir (overrides record).
+
+        Returns:
+            Profile instance for workflow execution.
+        """
+        return Profile(
+            name=record.id,
+            driver=cast(DriverType, record.driver),
+            model=record.model,
+            validator_model=record.validator_model,
+            tracker=cast(TrackerType, record.tracker),
+            working_dir=worktree_path,  # Always use worktree_path for agent execution
+            plan_output_dir=record.plan_output_dir,
+            plan_path_pattern=record.plan_path_pattern,
+            max_review_iterations=record.max_review_iterations,
+            max_task_review_iterations=record.max_task_review_iterations,
+            auto_approve_reviews=record.auto_approve_reviews,
+        )
 
     def _resolve_safe_worktree_path(self, worktree_path: str) -> Path | None:
         """Resolve and validate a worktree path to prevent path traversal attacks.
@@ -288,9 +296,9 @@ class OrchestratorService:
     ) -> tuple[str, Profile, ImplementationState]:
         """Prepare common state needed to create or start a workflow.
 
-        Centralizes the common initialization logic for settings loading,
-        profile resolution, issue fetching, and ImplementationState creation
-        shared across queue_workflow, start_workflow, and queue_and_plan_workflow.
+        Centralizes the common initialization logic for profile resolution,
+        issue fetching, and ImplementationState creation shared across
+        queue_workflow, start_workflow, and queue_and_plan_workflow.
 
         Args:
             workflow_id: The workflow ID (UUID).
@@ -306,31 +314,27 @@ class OrchestratorService:
             Tuple of (resolved_path, profile, execution_state).
 
         Raises:
-            ValueError: If settings are invalid, profile not found, task_title
-                used with non-noop tracker, or artifact_path escapes worktree.
+            ValueError: If profile not found, task_title used with non-noop
+                tracker, or artifact_path escapes worktree.
             FileNotFoundError: If artifact_path is provided but the file doesn't exist.
         """
-        # Load settings from worktree (required - no fallback)
-        try:
-            settings = self._load_settings_for_worktree(worktree_path)
-        except ValidationError as e:
-            raise ValueError(
-                f"Invalid settings.amelia.yaml in {worktree_path}: {e}"
-            ) from e
-        if settings is None:
-            raise ValueError(
-                f"No settings.amelia.yaml found in {worktree_path}. "
-                "Each worktree must have its own settings file."
-            )
+        # Get profile from database
+        if self._profile_repo is None:
+            raise ValueError("ProfileRepository not configured")
 
-        # Load the profile (use provided profile name or active profile as fallback)
-        resolved_profile_name = profile_name or settings.active_profile
-        if resolved_profile_name not in settings.profiles:
-            raise ValueError(f"Profile '{resolved_profile_name}' not found in settings")
-        profile = settings.profiles[resolved_profile_name]
+        if profile_name:
+            record = await self._profile_repo.get_profile(profile_name)
+            if record is None:
+                raise ValueError(f"Profile '{profile_name}' not found")
+        else:
+            record = await self._profile_repo.get_active_profile()
+            if record is None:
+                raise ValueError(
+                    "No active profile set. Use --profile to specify one or set an active profile."
+                )
 
-        # ALWAYS set working_dir to worktree_path for agent execution
-        profile = profile.model_copy(update={"working_dir": worktree_path})
+        # Convert to Profile with worktree_path as working_dir
+        profile = self._record_to_profile(record, worktree_path)
 
         # Fetch issue from tracker (or construct from task_title)
         if task_title is not None:
@@ -390,69 +394,6 @@ class OrchestratorService:
         )
 
         return worktree_path, profile, execution_state
-
-    def _load_settings_for_worktree(self, worktree_path: str) -> Settings | None:
-        """Load settings from a worktree directory.
-
-        Attempts to load settings.amelia.yaml from the worktree directory.
-        Returns None on any error (file not found, invalid YAML, validation error)
-        to allow graceful fallback to server settings.
-
-        Args:
-            worktree_path: Absolute path to the worktree directory.
-
-        Returns:
-            Settings if successfully loaded, None otherwise.
-        """
-        # Resolve and validate the worktree path to prevent path traversal
-        resolved_worktree = self._resolve_safe_worktree_path(worktree_path)
-        if resolved_worktree is None:
-            return None
-
-        settings_path = resolved_worktree / "settings.amelia.yaml"
-
-        # Verify the settings path is still within the worktree directory
-        # (prevents path traversal via symlinks)
-        try:
-            settings_path.resolve().relative_to(resolved_worktree)
-        except ValueError:
-            logger.warning(
-                "Settings path escapes worktree directory",
-                worktree_path=worktree_path,
-                settings_path=str(settings_path),
-            )
-            return None
-
-        if not settings_path.exists():
-            logger.debug(
-                "No settings file in worktree",
-                worktree_path=worktree_path,
-            )
-            return None
-
-        try:
-            with settings_path.open() as f:
-                data = yaml.safe_load(f)
-            return Settings(**data)
-        except yaml.YAMLError as e:
-            logger.warning(
-                "Invalid YAML in worktree settings",
-                worktree_path=worktree_path,
-                error=str(e),
-            )
-            return None
-        except ValidationError:
-            # Let Pydantic validation errors propagate so callers can show
-            # the actual validation error (e.g., missing required fields)
-            # instead of a misleading "file not found" message
-            raise
-        except Exception as e:
-            logger.warning(
-                "Failed to load worktree settings",
-                worktree_path=worktree_path,
-                error=str(e),
-            )
-            return None
 
     def _validate_worktree_path(self, worktree_path: str) -> Path:
         """Validate and resolve worktree path securely.
@@ -537,24 +478,16 @@ class OrchestratorService:
             # Create workflow ID early for policy check
             workflow_id = str(uuid4())
 
-            # Load settings from worktree (required - no fallback)
-            try:
-                settings = self._load_settings_for_worktree(resolved_path)
-            except ValidationError as e:
-                raise ValueError(
-                    f"Invalid settings.amelia.yaml in {resolved_path}: {e}"
-                ) from e
-            if settings is None:
-                raise ValueError(
-                    f"No settings.amelia.yaml found in {resolved_path}. "
-                    "Each worktree must have its own settings file."
-                )
-
-            # Load the profile (use provided profile name or active profile as fallback)
-            profile_name = profile or settings.active_profile
-            if profile_name not in settings.profiles:
-                raise ValueError(f"Profile '{profile_name}' not found in settings")
-            loaded_profile = settings.profiles[profile_name]
+            # Prepare issue and execution state using the helper
+            # This also loads the profile from the database
+            _, loaded_profile, execution_state = await self._prepare_workflow_state(
+                workflow_id=workflow_id,
+                worktree_path=resolved_path,
+                issue_id=issue_id,
+                profile_name=profile,
+                task_title=task_title,
+                task_description=task_description,
+            )
 
             # Check policy hooks before starting workflow
             # This allows Enterprise to enforce rate limits, quotas, etc.
@@ -574,17 +507,6 @@ class OrchestratorService:
                     reason="Workflow start denied by policy",
                     hook_name=hook_name,
                 )
-
-            # Prepare issue and execution state using the helper
-            # (settings/profile loading done above for policy check)
-            _, loaded_profile, execution_state = await self._prepare_workflow_state(
-                workflow_id=workflow_id,
-                worktree_path=resolved_path,
-                issue_id=issue_id,
-                profile_name=profile,
-                task_title=task_title,
-                task_description=task_description,
-            )
 
             state = ServerExecutionState(
                 id=workflow_id,
@@ -740,26 +662,23 @@ class OrchestratorService:
 
             workflow_id = str(uuid4())
 
-            # Load settings from worktree (required - no fallback)
-            try:
-                settings = self._load_settings_for_worktree(resolved_path)
-            except ValidationError as e:
-                raise ValueError(
-                    f"Invalid settings.amelia.yaml in {resolved_path}: {e}"
-                ) from e
-            if settings is None:
-                raise ValueError(
-                    f"No settings.amelia.yaml found in {resolved_path}. "
-                    "Each worktree must have its own settings file."
-                )
+            # Get profile from database
+            if self._profile_repo is None:
+                raise ValueError("ProfileRepository not configured")
 
-            # Load profile
-            profile_name = profile or settings.active_profile
-            if profile_name not in settings.profiles:
-                raise ValueError(f"Profile '{profile_name}' not found in settings")
-            loaded_profile = settings.profiles[profile_name]
-            # ALWAYS set working_dir to resolved_path for agent execution
-            loaded_profile = loaded_profile.model_copy(update={"working_dir": resolved_path})
+            if profile:
+                record = await self._profile_repo.get_profile(profile)
+                if record is None:
+                    raise ValueError(f"Profile '{profile}' not found")
+            else:
+                record = await self._profile_repo.get_active_profile()
+                if record is None:
+                    raise ValueError(
+                        "No active profile set. Use --profile to specify one or set an active profile."
+                    )
+
+            # Convert to Profile with resolved_path as working_dir
+            loaded_profile = self._record_to_profile(record, resolved_path)
 
             # Create dummy issue for review context
             dummy_issue = Issue(

@@ -8,14 +8,12 @@ Exports:
     app: The Typer CLI application entry point.
     create_orchestrator_graph: Factory function for the LangGraph state machine.
     ExecutionState: The core state type passed through the orchestration graph.
-    load_settings: Load configuration from settings.amelia.yaml.
     get_pipeline: Factory function to get a pipeline by name.
     ImplementationState: State type for the implementation pipeline.
     create_implementation_graph: Factory for the implementation pipeline graph.
     __version__: Package version string.
 """
 
-from amelia.config import load_settings
 from amelia.main import app
 from amelia.pipelines import get_pipeline
 from amelia.pipelines.implementation import (
@@ -41,5 +39,4 @@ __all__ = [
     "create_implementation_graph",
     "create_orchestrator_graph",
     "get_pipeline",
-    "load_settings",
 ]

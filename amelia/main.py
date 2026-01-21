@@ -19,8 +19,6 @@ from amelia.client.cli import (
     status_command,
 )
 from amelia.client.streaming import stream_workflow_events
-from amelia.config import load_settings, validate_profile
-from amelia.core.types import Profile, Settings
 from amelia.logging import configure_logging
 from amelia.server.cli import server_app
 from amelia.server.dev import dev_app
@@ -48,51 +46,6 @@ def main_callback() -> None:
     log_level = os.environ.get("AMELIA_LOG_LEVEL", "INFO").upper()
     configure_logging(level=log_level)
 
-def _get_active_profile(settings: Settings, profile_name: str | None) -> Profile:
-    """Get the active profile from settings.
-
-    Returns the specified profile if provided, otherwise returns the
-    default active profile from settings.
-
-    Args:
-        settings: Application settings containing profile configurations.
-        profile_name: Optional specific profile name, or None for default.
-
-    Returns:
-        The requested Profile object with driver and tracker configuration.
-
-    Raises:
-        typer.Exit: If the specified profile name is not found in settings.
-    """
-    if profile_name:
-        if profile_name not in settings.profiles:
-            typer.echo(f"Error: Profile '{profile_name}' not found in settings.", err=True)
-            raise typer.Exit(code=1)
-        return settings.profiles[profile_name]
-    else:
-        return settings.profiles[settings.active_profile]
-
-def _safe_load_settings() -> Settings:
-    """Load settings from YAML configuration with error handling.
-
-    Wraps load_settings() and converts exceptions to user-friendly
-    error messages before exiting.
-
-    Returns:
-        Application Settings object loaded from settings.amelia.yaml.
-
-    Raises:
-        typer.Exit: If settings file is not found or fails to parse.
-    """
-    try:
-        return load_settings()
-    except FileNotFoundError as e:
-        typer.echo(f"Error: {e}", err=True)
-        raise typer.Exit(code=1) from None
-    except Exception as e:
-        typer.echo(f"Error loading settings: {e}", err=True)
-        raise typer.Exit(code=1) from None
-
 @app.command()
 def review(
     ctx: typer.Context,
@@ -106,7 +59,7 @@ def review(
         None,
         "--profile",
         "-p",
-        help="Profile to use."
+        help="Profile to use (from database)."
     ),
 ) -> None:
     """Trigger a code review process.
@@ -114,7 +67,7 @@ def review(
     Args:
         ctx: Typer context (unused).
         local: If True, review local uncommitted changes from git diff.
-        profile_name: Optional profile name to use from settings.amelia.yaml.
+        profile_name: Optional profile name to use (managed by server).
 
     Raises:
         typer.Exit: On validation failure or review error.
@@ -122,10 +75,6 @@ def review(
     async def _run() -> None:
         """Async implementation of the review process."""
         typer.echo("Starting Amelia Review process...")
-
-        settings = _safe_load_settings()
-        active_profile = _get_active_profile(settings, profile_name)
-        validate_profile(active_profile)
 
         if local:
             typer.echo("Reviewing local uncommitted changes...")

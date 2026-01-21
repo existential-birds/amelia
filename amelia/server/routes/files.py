@@ -7,8 +7,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
-from amelia.server.config import ServerConfig
-from amelia.server.dependencies import get_config
+from amelia.server.database import ProfileRepository
+from amelia.server.dependencies import get_profile_repository
 
 
 router = APIRouter(prefix="/files", tags=["files"])
@@ -109,16 +109,37 @@ class FileReadResponse(BaseModel):
     filename: str = Field(description="Filename without path")
 
 
+async def _get_working_dir(profile_repo: ProfileRepository) -> Path:
+    """Get working directory from active profile.
+
+    Args:
+        profile_repo: Profile repository instance.
+
+    Returns:
+        Working directory path.
+
+    Raises:
+        HTTPException: 400 if no active profile is set.
+    """
+    active_profile = await profile_repo.get_active_profile()
+    if active_profile is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": "No active profile set", "code": "NO_ACTIVE_PROFILE"},
+        )
+    return Path(active_profile.working_dir)
+
+
 @router.post("/read", response_model=FileReadResponse)
 async def read_file(
     request: FileReadRequest,
-    config: ServerConfig = Depends(get_config),
+    profile_repo: ProfileRepository = Depends(get_profile_repository),
 ) -> FileReadResponse:
     """Read file content for design document import.
 
     Args:
         request: File read request with path.
-        config: Server configuration.
+        profile_repo: Profile repository for getting active profile.
 
     Returns:
         File content and filename.
@@ -127,8 +148,11 @@ async def read_file(
         HTTPException: 400 if path is invalid or outside working_dir.
         HTTPException: 404 if file doesn't exist.
     """
+    # Get working_dir from active profile
+    working_dir = await _get_working_dir(profile_repo)
+
     # Validate and resolve path - returns only after all security checks pass
-    resolved_path = _validate_and_resolve_path(request.path, config.working_dir)
+    resolved_path = _validate_and_resolve_path(request.path, working_dir)
 
     # Read content (use thread pool to avoid blocking event loop)
     try:
@@ -148,13 +172,13 @@ async def read_file(
 @router.get("/{file_path:path}")
 async def get_file(
     file_path: str,
-    config: ServerConfig = Depends(get_config),
+    profile_repo: ProfileRepository = Depends(get_profile_repository),
 ) -> Response:
     """Get file content by path.
 
     Args:
         file_path: Absolute path to the file.
-        config: Server configuration.
+        profile_repo: Profile repository for getting active profile.
 
     Returns:
         File content as plain text response.
@@ -163,8 +187,11 @@ async def get_file(
         HTTPException: 400 if path is invalid or outside working_dir.
         HTTPException: 404 if file doesn't exist.
     """
+    # Get working_dir from active profile
+    working_dir = await _get_working_dir(profile_repo)
+
     # Validate and resolve path - returns only after all security checks pass
-    resolved_path = _validate_and_resolve_path(file_path, config.working_dir)
+    resolved_path = _validate_and_resolve_path(file_path, working_dir)
 
     # Read content
     try:

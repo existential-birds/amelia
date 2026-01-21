@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from amelia.server.database import ProfileRecord
 from amelia.server.models.requests import CreateWorkflowRequest
 from amelia.server.orchestrator.service import OrchestratorService
 
@@ -48,21 +49,46 @@ def mock_repository() -> MagicMock:
 
 
 @pytest.fixture
+def mock_profile_repo() -> AsyncMock:
+    """Create mock profile repository."""
+    repo = AsyncMock()
+    repo.get_profile.return_value = ProfileRecord(
+        id="test",
+        driver="cli:claude",
+        model="sonnet",
+        validator_model="sonnet",
+        tracker="noop",
+        working_dir="/default/repo",
+    )
+    repo.get_active_profile.return_value = ProfileRecord(
+        id="test",
+        driver="cli:claude",
+        model="sonnet",
+        validator_model="sonnet",
+        tracker="noop",
+        working_dir="/default/repo",
+    )
+    return repo
+
+
+@pytest.fixture
 def orchestrator(
     mock_event_bus: MagicMock,
     mock_repository: MagicMock,
+    mock_profile_repo: AsyncMock,
 ) -> OrchestratorService:
     """Create orchestrator with mocked dependencies."""
     return OrchestratorService(
         event_bus=mock_event_bus,
         repository=mock_repository,
+        profile_repo=mock_profile_repo,
         max_concurrent=5,
     )
 
 
 @pytest.fixture
 def valid_worktree(tmp_path: Path) -> str:
-    """Create a valid git worktree directory with required settings file.
+    """Create a valid git worktree directory.
 
     Args:
         tmp_path: Pytest tmp_path fixture.
@@ -73,19 +99,7 @@ def valid_worktree(tmp_path: Path) -> str:
     worktree = tmp_path / "worktree"
     worktree.mkdir()
     (worktree / ".git").touch()
-    # Worktree settings are required (no fallback to server settings)
-    settings_content = f"""
-active_profile: test
-profiles:
-  test:
-    name: test
-    driver: cli:claude
-    model: sonnet
-    validator_model: sonnet
-    tracker: noop
-    working_dir: {worktree}
-"""
-    (worktree / "settings.amelia.yaml").write_text(settings_content)
+    # No settings.amelia.yaml needed - profiles are now in database
     return str(worktree)
 
 

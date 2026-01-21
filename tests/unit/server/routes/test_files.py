@@ -3,33 +3,49 @@ import os
 import tempfile
 from collections.abc import Iterator
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from amelia.server.dependencies import get_config
+from amelia.server.database.profile_repository import ProfileRecord
+from amelia.server.dependencies import get_profile_repository
 from amelia.server.routes.files import router
+
+
+def _create_mock_profile_repo(working_dir: Path) -> MagicMock:
+    """Create a mock profile repository with an active profile pointing to working_dir."""
+    repo = MagicMock()
+    repo.get_active_profile = AsyncMock(
+        return_value=ProfileRecord(
+            id="test",
+            driver="cli:claude",
+            model="claude-3-5-sonnet",
+            validator_model="claude-3-5-sonnet",
+            tracker="noop",
+            working_dir=str(working_dir),
+            is_active=True,
+        )
+    )
+    return repo
 
 
 class TestReadFile:
     """Tests for POST /api/files/read endpoint."""
 
     @pytest.fixture
-    def mock_config(self, tmp_path: Path) -> MagicMock:
-        """Create a mock config with working_dir set to tmp_path (allows all temp files)."""
-        config = MagicMock()
+    def mock_profile_repo(self, tmp_path: Path) -> MagicMock:
+        """Create a mock profile repo with working_dir set to tmp_path (allows all temp files)."""
         # Use /tmp (or platform equivalent) to allow access to temp files created by tests
-        config.working_dir = Path(tempfile.gettempdir())
-        return config
+        return _create_mock_profile_repo(Path(tempfile.gettempdir()))
 
     @pytest.fixture
-    def app(self, mock_config: MagicMock) -> FastAPI:
+    def app(self, mock_profile_repo: MagicMock) -> FastAPI:
         """Create test app with files router."""
         application = FastAPI()
         application.include_router(router, prefix="/api")
-        application.dependency_overrides[get_config] = lambda: mock_config
+        application.dependency_overrides[get_profile_repository] = lambda: mock_profile_repo
         return application
 
     @pytest.fixture
@@ -79,9 +95,8 @@ class TestReadFile:
     ) -> None:
         """Should return 400 when path is outside working_dir."""
         # Override with a different working_dir
-        mock_config = MagicMock()
-        mock_config.working_dir = Path("/some/other/directory")
-        app.dependency_overrides[get_config] = lambda: mock_config
+        mock_profile_repo = _create_mock_profile_repo(Path("/some/other/directory"))
+        app.dependency_overrides[get_profile_repository] = lambda: mock_profile_repo
 
         client = TestClient(app)
         response = client.post("/api/files/read", json={"path": temp_file})
@@ -98,9 +113,8 @@ class TestReadFile:
             file_path.write_text("# Test Design\n\nContent here.")
 
             # Override with matching working_dir
-            mock_config = MagicMock()
-            mock_config.working_dir = Path(tmpdir)
-            app.dependency_overrides[get_config] = lambda: mock_config
+            mock_profile_repo = _create_mock_profile_repo(Path(tmpdir))
+            app.dependency_overrides[get_profile_repository] = lambda: mock_profile_repo
 
             client = TestClient(app)
             response = client.post("/api/files/read", json={"path": str(file_path)})
@@ -108,23 +122,33 @@ class TestReadFile:
             assert response.status_code == 200
             assert "Test Design" in response.json()["content"]
 
+    def test_returns_400_when_no_active_profile(self, app: FastAPI, temp_file: str) -> None:
+        """Should return 400 when no active profile is set."""
+        mock_profile_repo = MagicMock()
+        mock_profile_repo.get_active_profile = AsyncMock(return_value=None)
+        app.dependency_overrides[get_profile_repository] = lambda: mock_profile_repo
+
+        client = TestClient(app)
+        response = client.post("/api/files/read", json={"path": temp_file})
+
+        assert response.status_code == 400
+        assert "no active profile" in response.json()["detail"]["error"].lower()
+
 
 class TestGetFile:
     """Tests for GET /api/files/{file_path:path} endpoint."""
 
     @pytest.fixture
-    def mock_config(self, tmp_path: Path) -> MagicMock:
-        """Create a mock config with working_dir set to tmp_path."""
-        config = MagicMock()
-        config.working_dir = Path(tempfile.gettempdir())
-        return config
+    def mock_profile_repo(self, tmp_path: Path) -> MagicMock:
+        """Create a mock profile repo with working_dir set to tmp_path."""
+        return _create_mock_profile_repo(Path(tempfile.gettempdir()))
 
     @pytest.fixture
-    def app(self, mock_config: MagicMock) -> FastAPI:
+    def app(self, mock_profile_repo: MagicMock) -> FastAPI:
         """Create test app with files router."""
         application = FastAPI()
         application.include_router(router, prefix="/api")
-        application.dependency_overrides[get_config] = lambda: mock_config
+        application.dependency_overrides[get_profile_repository] = lambda: mock_profile_repo
         return application
 
     @pytest.fixture
@@ -165,12 +189,23 @@ class TestGetFile:
         self, app: FastAPI
     ) -> None:
         """Should return 400 when path is outside working_dir."""
-        mock_config = MagicMock()
-        mock_config.working_dir = Path("/some/restricted/directory")
-        app.dependency_overrides[get_config] = lambda: mock_config
+        mock_profile_repo = _create_mock_profile_repo(Path("/some/restricted/directory"))
+        app.dependency_overrides[get_profile_repository] = lambda: mock_profile_repo
 
         client = TestClient(app)
         # Double slash makes the path absolute: /api/files/ + /etc/passwd
         response = client.get("/api/files//etc/passwd")
 
         assert response.status_code == 400
+
+    def test_returns_400_when_no_active_profile(self, app: FastAPI) -> None:
+        """Should return 400 when no active profile is set."""
+        mock_profile_repo = MagicMock()
+        mock_profile_repo.get_active_profile = AsyncMock(return_value=None)
+        app.dependency_overrides[get_profile_repository] = lambda: mock_profile_repo
+
+        client = TestClient(app)
+        response = client.get("/api/files//etc/passwd")
+
+        assert response.status_code == 400
+        assert "no active profile" in response.json()["detail"]["error"].lower()

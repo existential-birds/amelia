@@ -11,17 +11,19 @@ from amelia.server.dependencies import get_config
 
 
 class TestServerConfig:
-    """Tests for ServerConfig."""
+    """Tests for ServerConfig (bootstrap-only fields).
+
+    Note: Most settings have moved to the database (server_settings table).
+    See tests/unit/server/test_settings_repository.py for those tests.
+    """
 
     def test_default_values(self) -> None:
-        """ServerConfig has sensible defaults."""
+        """ServerConfig has sensible defaults for bootstrap fields."""
         config = ServerConfig()
 
         assert config.host == "127.0.0.1"
         assert config.port == 8420
-        assert config.log_retention_days == 30
-        assert config.log_retention_max_events == 100_000
-        assert config.websocket_idle_timeout_seconds == 300.0
+        assert config.database_path == Path.home() / ".amelia" / "amelia.db"
 
     def test_env_override_port(self) -> None:
         """Port can be overridden via environment variable."""
@@ -35,12 +37,6 @@ class TestServerConfig:
             config = ServerConfig()
             assert config.host == "0.0.0.0"
 
-    def test_env_override_retention_days(self) -> None:
-        """Log retention days can be overridden."""
-        with patch.dict(os.environ, {"AMELIA_LOG_RETENTION_DAYS": "90"}):
-            config = ServerConfig()
-            assert config.log_retention_days == 90
-
     def test_database_path_default(self) -> None:
         """Database path defaults to ~/.amelia/amelia.db."""
         config = ServerConfig()
@@ -53,41 +49,29 @@ class TestServerConfig:
             config = ServerConfig()
             assert config.database_path == Path("/tmp/test.db")
 
-    def test_trace_retention_days_default(self) -> None:
-        """trace_retention_days defaults to 7."""
+
+class TestBootstrapServerConfig:
+    """Tests for bootstrap-only ServerConfig."""
+
+    def test_only_bootstrap_fields(self):
+        """Verify ServerConfig only has bootstrap fields."""
         config = ServerConfig()
-        assert config.trace_retention_days == 7
+        # These should exist
+        assert hasattr(config, "host")
+        assert hasattr(config, "port")
+        assert hasattr(config, "database_path")
 
-    def test_trace_retention_days_from_env(self) -> None:
-        """trace_retention_days can be set via environment."""
-        with patch.dict(os.environ, {"AMELIA_TRACE_RETENTION_DAYS": "3"}):
-            config = ServerConfig()
-            assert config.trace_retention_days == 3
+        # These should NOT exist (moved to database)
+        assert not hasattr(config, "log_retention_days")
+        assert not hasattr(config, "max_concurrent")
+        assert not hasattr(config, "stream_tool_results")
 
-    def test_trace_retention_days_zero_disables_persistence(self) -> None:
-        """trace_retention_days=0 is valid (disables persistence)."""
-        config = ServerConfig(trace_retention_days=0)
-        assert config.trace_retention_days == 0
-
-    def test_working_dir_defaults_to_cwd(self) -> None:
-        """working_dir should default to current working directory."""
-        # Explicitly clear env var in case it's set by another test
-        env = {k: v for k, v in os.environ.items() if k != "AMELIA_WORKING_DIR"}
-        with patch.dict(os.environ, env, clear=True):
-            config = ServerConfig()
-            assert config.working_dir == Path.cwd()
-
-    def test_working_dir_from_env_var(self) -> None:
-        """working_dir should be set from AMELIA_WORKING_DIR env var."""
-        with patch.dict(os.environ, {"AMELIA_WORKING_DIR": "/tmp/test-repo"}):
-            config = ServerConfig()
-            assert config.working_dir == Path("/tmp/test-repo")
-
-    def test_working_dir_expands_user(self) -> None:
-        """working_dir should expand ~ to home directory."""
-        with patch.dict(os.environ, {"AMELIA_WORKING_DIR": "~/projects/repo"}):
-            config = ServerConfig()
-            assert config.working_dir == Path.home() / "projects" / "repo"
+    def test_defaults(self):
+        """Verify default values."""
+        config = ServerConfig()
+        assert config.host == "127.0.0.1"
+        assert config.port == 8420
+        assert config.database_path == Path.home() / ".amelia" / "amelia.db"
 
 
 class TestGetConfig:

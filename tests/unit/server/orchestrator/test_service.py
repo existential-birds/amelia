@@ -10,7 +10,7 @@ import pytest
 from langchain_core.runnables.config import RunnableConfig
 from pydantic import ValidationError
 
-from amelia.core.types import Settings
+from amelia.server.database import ProfileRecord
 from amelia.pipelines.implementation.state import (
     ImplementationState,
     rebuild_implementation_state,
@@ -56,21 +56,40 @@ def mock_repository() -> AsyncMock:
 
 
 @pytest.fixture
+def mock_profile_repo() -> AsyncMock:
+    """Create mock profile repository."""
+    repo = AsyncMock()
+    default_profile = ProfileRecord(
+        id="test",
+        driver="cli:claude",
+        model="sonnet",
+        validator_model="sonnet",
+        tracker="noop",
+        working_dir="/default/repo",
+    )
+    repo.get_profile.return_value = default_profile
+    repo.get_active_profile.return_value = default_profile
+    return repo
+
+
+@pytest.fixture
 def orchestrator(
     mock_event_bus: EventBus,
     mock_repository: AsyncMock,
+    mock_profile_repo: AsyncMock,
 ) -> OrchestratorService:
     """Create orchestrator service."""
     return OrchestratorService(
         event_bus=mock_event_bus,
         repository=mock_repository,
+        profile_repo=mock_profile_repo,
         max_concurrent=5,
     )
 
 
 @pytest.fixture
 def valid_worktree(tmp_path: Path) -> str:
-    """Create a valid git worktree directory with required settings file.
+    """Create a valid git worktree directory.
 
     Args:
         tmp_path: Pytest tmp_path fixture.
@@ -81,19 +100,6 @@ def valid_worktree(tmp_path: Path) -> str:
     worktree = tmp_path / "worktree"
     worktree.mkdir()
     (worktree / ".git").touch()  # Git worktrees have a .git file
-    # Worktree settings are required (no fallback to server settings)
-    settings_content = f"""
-active_profile: test
-profiles:
-  test:
-    name: test
-    driver: cli:claude
-    model: sonnet
-    validator_model: sonnet
-    tracker: noop
-    working_dir: {worktree}
-"""
-    (worktree / "settings.amelia.yaml").write_text(settings_content)
     return str(worktree)
 
 
@@ -393,7 +399,6 @@ async def test_approve_workflow_success(
     orchestrator: OrchestratorService,
     mock_repository: AsyncMock,
     mock_event_bus: EventBus,
-    mock_settings: Settings,
     langgraph_mock_factory,
 ) -> None:
     """Should approve blocked workflow."""
@@ -418,21 +423,20 @@ async def test_approve_workflow_success(
     mock_create_graph.return_value = mocks.graph
     mock_saver_class.from_conn_string.return_value = mocks.saver_class.from_conn_string.return_value
 
-    # Mock settings loading to return valid settings
-    with patch.object(orchestrator, "_load_settings_for_worktree", return_value=mock_settings):
-        # New API returns None, raises on error
-        await orchestrator.approve_workflow("wf-1")
+    # Profile is already mocked via mock_profile_repo fixture
+    # New API returns None, raises on error
+    await orchestrator.approve_workflow("wf-1")
 
-        # Should update status - now called twice: once for in_progress, once for completed
-        assert mock_repository.set_status.call_count == 2
-        # First call is in_progress, second is completed
-        calls = mock_repository.set_status.call_args_list
-        assert calls[0][0] == ("wf-1", "in_progress")
-        assert calls[1][0] == ("wf-1", "completed")
+    # Should update status - now called twice: once for in_progress, once for completed
+    assert mock_repository.set_status.call_count == 2
+    # First call is in_progress, second is completed
+    calls = mock_repository.set_status.call_args_list
+    assert calls[0][0] == ("wf-1", "in_progress")
+    assert calls[1][0] == ("wf-1", "completed")
 
-        # Should emit APPROVAL_GRANTED
-        approval_granted = [e for e in received_events if e.event_type == EventType.APPROVAL_GRANTED]
-        assert len(approval_granted) == 1
+    # Should emit APPROVAL_GRANTED
+    approval_granted = [e for e in received_events if e.event_type == EventType.APPROVAL_GRANTED]
+    assert len(approval_granted) == 1
 
 
 @patch("amelia.server.orchestrator.service.AsyncSqliteSaver")
@@ -443,7 +447,6 @@ async def test_reject_workflow_success(
     orchestrator: OrchestratorService,
     mock_repository: AsyncMock,
     mock_event_bus: EventBus,
-    mock_settings: Settings,
     langgraph_mock_factory,
 ) -> None:
     """Should reject blocked workflow."""
@@ -466,29 +469,28 @@ async def test_reject_workflow_success(
     mock_create_graph.return_value = mocks.graph
     mock_saver_class.from_conn_string.return_value = mocks.saver_class.from_conn_string.return_value
 
-    # Mock settings loading to return valid settings
-    with patch.object(orchestrator, "_load_settings_for_worktree", return_value=mock_settings):
-        # Create fake task
-        task = asyncio.create_task(asyncio.sleep(100))
-        orchestrator._active_tasks["/path/to/worktree"] = ("wf-1", task)
+    # Profile is already mocked via mock_profile_repo fixture
+    # Create fake task
+    task = asyncio.create_task(asyncio.sleep(100))
+    orchestrator._active_tasks["/path/to/worktree"] = ("wf-1", task)
 
-        # New API returns None, raises on error
-        await orchestrator.reject_workflow("wf-1", feedback="Plan too complex")
+    # New API returns None, raises on error
+    await orchestrator.reject_workflow("wf-1", feedback="Plan too complex")
 
-        # Should update status to failed
-        mock_repository.set_status.assert_called_once_with(
-            "wf-1", "failed", failure_reason="Plan too complex"
-        )
+    # Should update status to failed
+    mock_repository.set_status.assert_called_once_with(
+        "wf-1", "failed", failure_reason="Plan too complex"
+    )
 
-        # Should cancel task - wait for cancellation to complete
-        with contextlib.suppress(asyncio.CancelledError):
-            await task
-        assert task.cancelled()
+    # Should cancel task - wait for cancellation to complete
+    with contextlib.suppress(asyncio.CancelledError):
+        await task
+    assert task.cancelled()
 
-        # Should emit APPROVAL_REJECTED
-        approval_rejected = [e for e in received_events if e.event_type == EventType.APPROVAL_REJECTED]
-        assert len(approval_rejected) == 1
-        assert "rejected" in approval_rejected[0].message.lower()
+    # Should emit APPROVAL_REJECTED
+    approval_rejected = [e for e in received_events if e.event_type == EventType.APPROVAL_REJECTED]
+    assert len(approval_rejected) == 1
+    assert "rejected" in approval_rejected[0].message.lower()
 
 
 class TestRejectWorkflowGraphState:
@@ -497,7 +499,7 @@ class TestRejectWorkflowGraphState:
     @patch("amelia.server.orchestrator.service.AsyncSqliteSaver")
     @patch("amelia.server.orchestrator.service.create_implementation_graph")
     async def test_reject_updates_graph_state(
-        self, mock_create_graph, mock_saver_class, orchestrator, mock_repository, mock_settings, langgraph_mock_factory
+        self, mock_create_graph, mock_saver_class, orchestrator, mock_repository, langgraph_mock_factory
     ):
         """reject_workflow updates graph state with human_approved=False."""
         workflow = ServerExecutionState(
@@ -514,13 +516,12 @@ class TestRejectWorkflowGraphState:
         mock_create_graph.return_value = mocks.graph
         mock_saver_class.from_conn_string.return_value = mocks.saver_class.from_conn_string.return_value
 
-        # Mock settings loading to return valid settings
-        with patch.object(orchestrator, "_load_settings_for_worktree", return_value=mock_settings):
-            await orchestrator.reject_workflow("wf-123", "Not ready")
+        # Profile is already mocked via mock_profile_repo fixture
+        await orchestrator.reject_workflow("wf-123", "Not ready")
 
-            mocks.graph.aupdate_state.assert_called_once()
-            call_args = mocks.graph.aupdate_state.call_args
-            assert call_args[0][1] == {"human_approved": False}
+        mocks.graph.aupdate_state.assert_called_once()
+        call_args = mocks.graph.aupdate_state.call_args
+        assert call_args[0][1] == {"human_approved": False}
 
 
 class TestApproveWorkflowResume:
@@ -529,7 +530,7 @@ class TestApproveWorkflowResume:
     @patch("amelia.server.orchestrator.service.AsyncSqliteSaver")
     @patch("amelia.server.orchestrator.service.create_implementation_graph")
     async def test_approve_updates_state_and_resumes(
-        self, mock_create_graph, mock_saver_class, orchestrator, mock_repository, mock_settings, langgraph_mock_factory
+        self, mock_create_graph, mock_saver_class, orchestrator, mock_repository, langgraph_mock_factory
     ):
         """approve_workflow updates graph state and resumes execution."""
         # Setup blocked workflow
@@ -550,14 +551,13 @@ class TestApproveWorkflowResume:
         mock_create_graph.return_value = mocks.graph
         mock_saver_class.from_conn_string.return_value = mocks.saver_class.from_conn_string.return_value
 
-        # Mock settings loading to return valid settings
-        with patch.object(orchestrator, "_load_settings_for_worktree", return_value=mock_settings):
-            await orchestrator.approve_workflow("wf-123")
+        # Profile is already mocked via mock_profile_repo fixture
+        await orchestrator.approve_workflow("wf-123")
 
-            # Verify state was updated with approval
-            mocks.graph.aupdate_state.assert_called_once()
-            call_args = mocks.graph.aupdate_state.call_args
-            assert call_args[0][1] == {"human_approved": True}
+        # Verify state was updated with approval
+        mocks.graph.aupdate_state.assert_called_once()
+        call_args = mocks.graph.aupdate_state.call_args
+        assert call_args[0][1] == {"human_approved": True}
 
 
 # =============================================================================
@@ -1061,196 +1061,6 @@ class TestSyncPlanFromCheckpoint:
 
 
 # =============================================================================
-# Worktree Settings Loading Tests
-# =============================================================================
-
-
-class TestLoadSettingsForWorktree:
-    """Tests for _load_settings_for_worktree helper method."""
-
-    async def test_loads_settings_from_worktree_path(
-        self,
-        orchestrator: OrchestratorService,
-        tmp_path: Path,
-    ) -> None:
-        """_load_settings_for_worktree loads settings from worktree directory."""
-        # Create settings file in worktree
-        settings_content = f"""
-active_profile: local
-profiles:
-  local:
-    name: local
-    driver: cli:claude
-    model: sonnet
-    validator_model: sonnet
-    tracker: github
-    working_dir: {tmp_path}
-"""
-        settings_file = tmp_path / "settings.amelia.yaml"
-        settings_file.write_text(settings_content)
-
-        settings = orchestrator._load_settings_for_worktree(str(tmp_path))
-
-        assert settings is not None
-        assert settings.active_profile == "local"
-        assert "local" in settings.profiles
-        assert settings.profiles["local"].tracker == "github"
-
-    async def test_returns_none_when_settings_file_missing(
-        self,
-        orchestrator: OrchestratorService,
-        tmp_path: Path,
-    ) -> None:
-        """_load_settings_for_worktree returns None when file not found."""
-        settings = orchestrator._load_settings_for_worktree(str(tmp_path))
-        assert settings is None
-
-    async def test_returns_none_for_invalid_yaml(
-        self,
-        orchestrator: OrchestratorService,
-        tmp_path: Path,
-    ) -> None:
-        """_load_settings_for_worktree returns None for malformed YAML."""
-        settings_file = tmp_path / "settings.amelia.yaml"
-        settings_file.write_text("invalid: yaml: content: [")
-
-        settings = orchestrator._load_settings_for_worktree(str(tmp_path))
-        assert settings is None
-
-    async def test_raises_validation_error_for_invalid_structure(
-        self,
-        orchestrator: OrchestratorService,
-        tmp_path: Path,
-    ) -> None:
-        """_load_settings_for_worktree raises ValidationError for invalid config structure."""
-        settings_file = tmp_path / "settings.amelia.yaml"
-        # Missing required 'profiles' field
-        settings_file.write_text("active_profile: test\n")
-
-        with pytest.raises(ValidationError, match="profiles"):
-            orchestrator._load_settings_for_worktree(str(tmp_path))
-
-    async def test_start_workflow_uses_worktree_settings(
-        self,
-        orchestrator: OrchestratorService,
-        mock_repository: AsyncMock,
-        tmp_path: Path,
-    ) -> None:
-        """start_workflow uses settings from worktree directory, not server settings."""
-        # Create valid worktree with .git
-        worktree = tmp_path / "worktree"
-        worktree.mkdir()
-        (worktree / ".git").touch()
-
-        # Create worktree-specific settings with different profile name
-        # Use noop tracker to avoid gh CLI calls
-        settings_content = f"""
-active_profile: worktree_profile
-profiles:
-  worktree_profile:
-    name: worktree_profile
-    driver: cli:claude
-    model: sonnet
-    validator_model: sonnet
-    tracker: noop
-    working_dir: {worktree}
-"""
-        (worktree / "settings.amelia.yaml").write_text(settings_content)
-
-        with patch.object(orchestrator, "_run_workflow_with_retry", new=AsyncMock()):
-            await orchestrator.start_workflow(
-                issue_id="ISSUE-123",
-                worktree_path=str(worktree),
-                )
-
-        # Verify workflow was created with worktree profile
-        call_args = mock_repository.create.call_args
-        state = call_args[0][0]
-        assert state.execution_state.profile_id == "worktree_profile"
-
-    async def test_start_workflow_fails_gracefully_when_worktree_settings_invalid(
-        self,
-        orchestrator: OrchestratorService,
-        mock_repository: AsyncMock,
-        tmp_path: Path,
-    ) -> None:
-        """start_workflow fails workflow gracefully when worktree settings are invalid."""
-        # Create valid worktree with .git
-        worktree = tmp_path / "worktree"
-        worktree.mkdir()
-        (worktree / ".git").touch()
-
-        # Create invalid settings (missing required fields)
-        (worktree / "settings.amelia.yaml").write_text("invalid: config\n")
-
-        with pytest.raises(ValueError) as exc_info:
-            await orchestrator.start_workflow(
-                issue_id="ISSUE-123",
-                worktree_path=str(worktree),
-                )
-
-        # Should fail with clear error about settings
-        assert "settings" in str(exc_info.value).lower() or "profile" in str(exc_info.value).lower()
-
-    async def test_start_workflow_fails_when_no_worktree_settings(
-        self,
-        orchestrator: OrchestratorService,
-        mock_repository: AsyncMock,
-        tmp_path: Path,
-    ) -> None:
-        """start_workflow fails when worktree has no settings file (no fallback)."""
-        # Create worktree without settings file
-        worktree = tmp_path / "worktree_no_settings"
-        worktree.mkdir()
-        (worktree / ".git").touch()
-
-        with pytest.raises(ValueError) as exc_info:
-            await orchestrator.start_workflow(
-                issue_id="ISSUE-123",
-                worktree_path=str(worktree),
-                )
-
-        # Should fail with clear error about missing settings
-        assert "settings.amelia.yaml" in str(exc_info.value).lower()
-
-    async def test_start_review_workflow_uses_worktree_settings(
-        self,
-        orchestrator: OrchestratorService,
-        mock_repository: AsyncMock,
-        tmp_path: Path,
-    ) -> None:
-        """start_review_workflow uses settings from worktree directory."""
-        # Create valid worktree (review doesn't require .git)
-        worktree = tmp_path / "worktree"
-        worktree.mkdir()
-
-        # Create worktree-specific settings
-        settings_content = f"""
-active_profile: review_profile
-profiles:
-  review_profile:
-    name: review_profile
-    driver: cli:claude
-    model: sonnet
-    validator_model: sonnet
-    tracker: noop
-    working_dir: {worktree}
-"""
-        (worktree / "settings.amelia.yaml").write_text(settings_content)
-
-        with patch.object(orchestrator, "_run_review_workflow", new=AsyncMock()):
-            await orchestrator.start_review_workflow(
-                diff_content="--- a/file.py\n+++ b/file.py\n@@ -1 +1 @@\n-old\n+new",
-                worktree_path=str(worktree),
-            )
-
-        # Verify workflow was created with worktree profile
-        call_args = mock_repository.create.call_args
-        state = call_args[0][0]
-        assert state.execution_state.profile_id == "review_profile"
-
-
-# =============================================================================
 # Checkpoint Resume Tests (Bug #199: Infinite Loop)
 # =============================================================================
 
@@ -1407,26 +1217,16 @@ class TestStartWorkflowWithTaskFields:
         self,
         orchestrator: OrchestratorService,
         mock_repository: AsyncMock,
+        mock_profile_repo: AsyncMock,
         tmp_path: Path,
     ) -> None:
         """start_workflow with task_title and noop tracker constructs Issue directly."""
-        # Create valid worktree with noop tracker settings
+        # Create valid worktree (just needs .git, no settings.amelia.yaml needed)
         worktree = tmp_path / "worktree"
         worktree.mkdir()
         (worktree / ".git").touch()
-        settings_content = f"""
-active_profile: noop
-profiles:
-  noop:
-    name: noop
-    driver: cli:claude
-    model: sonnet
-    validator_model: sonnet
-    tracker: noop
-    working_dir: {worktree}
-"""
-        (worktree / "settings.amelia.yaml").write_text(settings_content)
 
+        # mock_profile_repo fixture already returns a profile with tracker="noop"
         with patch.object(orchestrator, "_run_workflow_with_retry", new=AsyncMock()):
             workflow_id = await orchestrator.start_workflow(
                 issue_id="TASK-1",
@@ -1446,30 +1246,30 @@ profiles:
     async def test_task_title_with_non_noop_tracker_errors(
         self,
         orchestrator: OrchestratorService,
+        mock_profile_repo: AsyncMock,
         tmp_path: Path,
     ) -> None:
         """start_workflow with task_title and non-noop tracker should error."""
-        # Create valid worktree with github tracker settings
+        # Create valid worktree
         worktree = tmp_path / "worktree"
         worktree.mkdir()
         (worktree / ".git").touch()
-        settings_content = f"""
-active_profile: github
-profiles:
-  github:
-    name: github
-    driver: cli:claude
-    model: sonnet
-    validator_model: sonnet
-    tracker: github
-    working_dir: {worktree}
-"""
-        (worktree / "settings.amelia.yaml").write_text(settings_content)
+
+        # Override the mock profile to use github tracker
+        mock_profile_repo.get_profile.return_value = ProfileRecord(
+            id="github",
+            driver="cli:claude",
+            model="sonnet",
+            validator_model="sonnet",
+            tracker="github",
+            working_dir="/default/repo",
+        )
 
         with pytest.raises(ValueError) as exc_info:
             await orchestrator.start_workflow(
                 issue_id="TASK-1",
                 worktree_path=str(worktree),
+                profile="github",
                 task_title="Add logout button",
             )
 
@@ -1480,26 +1280,16 @@ profiles:
         self,
         orchestrator: OrchestratorService,
         mock_repository: AsyncMock,
+        mock_profile_repo: AsyncMock,
         tmp_path: Path,
     ) -> None:
         """task_description defaults to task_title when not provided."""
-        # Create valid worktree with noop tracker
+        # Create valid worktree
         worktree = tmp_path / "worktree"
         worktree.mkdir()
         (worktree / ".git").touch()
-        settings_content = f"""
-active_profile: noop
-profiles:
-  noop:
-    name: noop
-    driver: cli:claude
-    model: sonnet
-    validator_model: sonnet
-    tracker: noop
-    working_dir: {worktree}
-"""
-        (worktree / "settings.amelia.yaml").write_text(settings_content)
 
+        # mock_profile_repo fixture already returns a profile with tracker="noop"
         with patch.object(orchestrator, "_run_workflow_with_retry", new=AsyncMock()):
             await orchestrator.start_workflow(
                 issue_id="TASK-1",

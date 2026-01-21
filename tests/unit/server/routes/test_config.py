@@ -1,39 +1,95 @@
 """Tests for config routes."""
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+from datetime import datetime
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from amelia.server.dependencies import get_config
-from amelia.server.routes.config import _load_settings, router
+from amelia.server.database.profile_repository import ProfileRecord
+from amelia.server.database.settings_repository import ServerSettings
+from amelia.server.dependencies import get_profile_repository, get_settings_repository
+from amelia.server.routes.config import router
 
 
 class TestGetConfig:
     """Tests for GET /api/config endpoint."""
 
     @pytest.fixture
-    def mock_config(self) -> MagicMock:
-        """Create a mock config with default values."""
-        config = MagicMock()
-        config.working_dir = Path("/tmp")
-        config.max_concurrent = 5
-        return config
+    def mock_profile_repo(self) -> MagicMock:
+        """Create a mock profile repository."""
+        repo = MagicMock()
+        repo.get_active_profile = AsyncMock(return_value=None)
+        return repo
 
     @pytest.fixture
-    def client(self, mock_config: MagicMock) -> TestClient:
-        """Create a test client with mock config dependency."""
+    def mock_settings_repo(self) -> MagicMock:
+        """Create a mock settings repository."""
+        repo = MagicMock()
+        repo.get_server_settings = AsyncMock(
+            return_value=ServerSettings(
+                log_retention_days=30,
+                log_retention_max_events=100000,
+                trace_retention_days=7,
+                checkpoint_retention_days=0,
+                checkpoint_path="~/.amelia/checkpoints.db",
+                websocket_idle_timeout_seconds=300.0,
+                workflow_start_timeout_seconds=30.0,
+                max_concurrent=5,
+                stream_tool_results=False,
+                created_at=datetime.now(),
+                updated_at=datetime.now(),
+            )
+        )
+        return repo
+
+    @pytest.fixture
+    def client(
+        self, mock_profile_repo: MagicMock, mock_settings_repo: MagicMock
+    ) -> TestClient:
+        """Create a test client with mock dependencies."""
         app = FastAPI()
         app.include_router(router, prefix="/api")
-        app.dependency_overrides[get_config] = lambda: mock_config
+        app.dependency_overrides[get_profile_repository] = lambda: mock_profile_repo
+        app.dependency_overrides[get_settings_repository] = lambda: mock_settings_repo
         return TestClient(app)
 
-    def test_returns_config_with_working_dir(
-        self, mock_config: MagicMock, client: TestClient
+    def test_returns_empty_working_dir_when_no_active_profile(
+        self,
+        mock_profile_repo: MagicMock,
+        mock_settings_repo: MagicMock,
+        client: TestClient,
     ) -> None:
-        """Should return working_dir when set."""
-        mock_config.working_dir = Path("/tmp/test-repo")
+        """Should return empty working_dir when no active profile is set."""
+        mock_profile_repo.get_active_profile = AsyncMock(return_value=None)
+
+        response = client.get("/api/config")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["working_dir"] == ""
+        assert data["max_concurrent"] == 5
+        assert data["active_profile"] == ""
+        assert data["active_profile_info"] is None
+
+    def test_returns_config_with_active_profile(
+        self,
+        mock_profile_repo: MagicMock,
+        mock_settings_repo: MagicMock,
+        client: TestClient,
+    ) -> None:
+        """Should return full config when active profile exists."""
+        mock_profile_repo.get_active_profile = AsyncMock(
+            return_value=ProfileRecord(
+                id="test",
+                driver="api:openrouter",
+                model="claude-3-5-sonnet",
+                validator_model="claude-3-5-sonnet",
+                tracker="github",
+                working_dir="/tmp/test-repo",
+                is_active=True,
+            )
+        )
 
         response = client.get("/api/config")
 
@@ -41,49 +97,6 @@ class TestGetConfig:
         data = response.json()
         assert data["working_dir"] == "/tmp/test-repo"
         assert data["max_concurrent"] == 5
-
-    def test_returns_working_dir_as_cwd_by_default(
-        self, mock_config: MagicMock, client: TestClient
-    ) -> None:
-        """Should return current working directory when using default config."""
-        mock_config.working_dir = Path.cwd()
-
-        response = client.get("/api/config")
-
-        assert response.status_code == 200
-        data = response.json()
-        assert data["working_dir"] == str(Path.cwd())
-        assert data["max_concurrent"] == 5
-
-    def test_returns_active_profile_from_settings(self, client: TestClient) -> None:
-        """Should return active_profile from settings.amelia.yaml."""
-        with patch("amelia.server.routes.config._load_settings") as mock_load:
-            mock_load.return_value = {"active_profile": "test", "profiles": {}}
-            response = client.get("/api/config")
-
-        assert response.status_code == 200
-        data = response.json()
-        assert data["active_profile"] == "test"
-        assert data["active_profile_info"] is None
-
-    def test_returns_active_profile_info_when_profile_exists(
-        self, client: TestClient
-    ) -> None:
-        """Should return full profile info when profile exists."""
-        with patch("amelia.server.routes.config._load_settings") as mock_load:
-            mock_load.return_value = {
-                "active_profile": "test",
-                "profiles": {
-                    "test": {
-                        "driver": "api:openrouter",
-                        "model": "claude-3-5-sonnet",
-                    }
-                },
-            }
-            response = client.get("/api/config")
-
-        assert response.status_code == 200
-        data = response.json()
         assert data["active_profile"] == "test"
         assert data["active_profile_info"] == {
             "name": "test",
@@ -91,50 +104,32 @@ class TestGetConfig:
             "model": "claude-3-5-sonnet",
         }
 
+    def test_returns_max_concurrent_from_server_settings(
+        self,
+        mock_profile_repo: MagicMock,
+        mock_settings_repo: MagicMock,
+        client: TestClient,
+    ) -> None:
+        """Should return max_concurrent from server settings."""
+        # Override max_concurrent in server settings
+        mock_settings_repo.get_server_settings = AsyncMock(
+            return_value=ServerSettings(
+                log_retention_days=30,
+                log_retention_max_events=100000,
+                trace_retention_days=7,
+                checkpoint_retention_days=0,
+                checkpoint_path="~/.amelia/checkpoints.db",
+                websocket_idle_timeout_seconds=300.0,
+                workflow_start_timeout_seconds=30.0,
+                max_concurrent=10,  # Different value
+                stream_tool_results=False,
+                created_at=datetime.now(),
+                updated_at=datetime.now(),
+            )
+        )
 
-class TestLoadSettings:
-    """Tests for _load_settings helper function."""
+        response = client.get("/api/config")
 
-    def test_returns_settings_from_yaml(self) -> None:
-        """Should return settings dict from YAML file."""
-        with patch("amelia.server.routes.config.Path") as mock_path:
-            mock_file = MagicMock()
-            mock_file.__enter__ = MagicMock(return_value=mock_file)
-            mock_file.__exit__ = MagicMock(return_value=False)
-            mock_path.return_value.open.return_value = mock_file
-            mock_path.return_value.exists.return_value = True
-
-            with patch("amelia.server.routes.config.yaml.safe_load") as mock_yaml:
-                mock_yaml.return_value = {
-                    "active_profile": "production",
-                    "profiles": {"production": {"driver": "cli:claude", "model": "sonnet"}},
-                }
-                result = _load_settings()
-
-        assert result["active_profile"] == "production"
-        assert "profiles" in result
-
-    def test_returns_empty_dict_when_file_not_found(self) -> None:
-        """Should return empty dict when settings file does not exist."""
-        with patch("amelia.server.routes.config.Path") as mock_path:
-            mock_path.return_value.open.side_effect = FileNotFoundError()
-
-            result = _load_settings()
-
-        assert result == {}
-
-    def test_returns_empty_dict_when_yaml_error(self) -> None:
-        """Should return empty dict on YAML parse error."""
-        import yaml
-
-        with patch("amelia.server.routes.config.Path") as mock_path:
-            mock_file = MagicMock()
-            mock_file.__enter__ = MagicMock(return_value=mock_file)
-            mock_file.__exit__ = MagicMock(return_value=False)
-            mock_path.return_value.open.return_value = mock_file
-
-            with patch("amelia.server.routes.config.yaml.safe_load") as mock_yaml:
-                mock_yaml.side_effect = yaml.YAMLError("Parse error")
-                result = _load_settings()
-
-        assert result == {}
+        assert response.status_code == 200
+        data = response.json()
+        assert data["max_concurrent"] == 10

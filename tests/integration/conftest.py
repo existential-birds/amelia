@@ -19,6 +19,7 @@ from amelia.core.types import DriverType, Issue, Profile, TrackerType
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
 from amelia.pipelines.implementation import create_implementation_graph
 from amelia.pipelines.implementation.state import ImplementationState, rebuild_implementation_state
+from amelia.server.database import ProfileRecord
 from amelia.server.database.repository import WorkflowRepository
 from amelia.server.events.bus import EventBus
 from amelia.server.events.connection_manager import ConnectionManager
@@ -356,6 +357,25 @@ def mock_repository() -> AsyncMock:
     repo.save_event = save_event
     repo.get_max_event_sequence = get_max_event_sequence
 
+    return repo
+
+
+@pytest.fixture
+def mock_profile_repo() -> AsyncMock:
+    """Create mock ProfileRepository that returns test profile."""
+    from amelia.server.database.profile_repository import ProfileRepository  # noqa: PLC0415
+
+    repo = AsyncMock(spec=ProfileRepository)
+    profile_record = ProfileRecord(
+        id="test",
+        driver="cli:claude",
+        model="sonnet",
+        validator_model="haiku",
+        tracker="noop",
+        working_dir="/tmp/test",
+    )
+    repo.get_profile.return_value = profile_record
+    repo.get_active_profile.return_value = profile_record
     return repo
 
 

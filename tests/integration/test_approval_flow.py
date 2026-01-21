@@ -91,7 +91,7 @@ class TestLifecycleEvents:
         event_tracker,
         mock_repository,
         temp_checkpoint_db,
-        mock_settings,
+        mock_profile_repo,
         langgraph_mock_factory,
     ):
         """WORKFLOW_STARTED event is emitted at the start."""
@@ -105,6 +105,7 @@ class TestLifecycleEvents:
         service = OrchestratorService(
             event_tracker,
             mock_repository,
+            profile_repo=mock_profile_repo,
             checkpoint_path=temp_checkpoint_db,
         )
 
@@ -123,9 +124,7 @@ class TestLifecycleEvents:
         )
 
         await mock_repository.create(server_state)
-        # Mock settings loading to return valid settings
-        with patch.object(service, "_load_settings_for_worktree", return_value=mock_settings):
-            await service._run_workflow("wf-lifecycle-test", server_state)
+        await service._run_workflow("wf-lifecycle-test", server_state)
 
         # Check WORKFLOW_STARTED was emitted
         started_events = event_tracker.get_by_type(EventType.WORKFLOW_STARTED)
@@ -144,7 +143,7 @@ class TestGraphInterruptHandling:
         event_tracker,
         mock_repository,
         temp_checkpoint_db,
-        mock_settings,
+        mock_profile_repo,
         langgraph_mock_factory,
     ):
         """__interrupt__ chunk sets status to blocked and emits APPROVAL_REQUIRED."""
@@ -163,6 +162,7 @@ class TestGraphInterruptHandling:
         service = OrchestratorService(
             event_tracker,
             mock_repository,
+            profile_repo=mock_profile_repo,
             checkpoint_path=temp_checkpoint_db,
         )
 
@@ -181,9 +181,7 @@ class TestGraphInterruptHandling:
         )
 
         await mock_repository.create(server_state)
-        # Mock settings loading to return valid settings
-        with patch.object(service, "_load_settings_for_worktree", return_value=mock_settings):
-            await service._run_workflow("wf-interrupt-test", server_state)
+        await service._run_workflow("wf-interrupt-test", server_state)
 
         # Verify status is blocked
         persisted = await mock_repository.get("wf-interrupt-test")

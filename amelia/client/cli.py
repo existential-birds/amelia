@@ -19,8 +19,7 @@ from amelia.client.api import (
 )
 from amelia.client.git import get_worktree_context
 from amelia.client.models import BatchStartResponse, CreateWorkflowResponse, WorkflowSummary
-from amelia.config import load_settings
-from amelia.core.types import Issue
+from amelia.core.types import Issue, Profile
 from amelia.drivers.factory import DriverFactory
 from amelia.pipelines.implementation.state import ImplementationState
 from amelia.trackers.factory import create_tracker
@@ -396,6 +395,66 @@ def cancel_command(
         raise typer.Exit(1) from None
 
 
+async def _get_profile_from_server(profile_name: str | None) -> Profile:
+    """Get profile from server API.
+
+    Args:
+        profile_name: Profile ID to fetch, or None for active profile.
+
+    Returns:
+        Profile object from the server.
+
+    Raises:
+        ValueError: If profile not found or server unreachable.
+    """
+    import httpx
+
+    base_url = "http://127.0.0.1:8420"
+    timeout = httpx.Timeout(10.0, connect=5.0)
+
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            if profile_name:
+                # Get specific profile
+                response = await client.get(f"{base_url}/api/profiles/{profile_name}")
+                if response.status_code == 404:
+                    raise ValueError(f"Profile '{profile_name}' not found")
+            else:
+                # Get active profile via config endpoint
+                response = await client.get(f"{base_url}/api/config")
+                if response.status_code != 200:
+                    raise ValueError("Failed to get server config")
+                config_data = response.json()
+                active_profile_id = config_data.get("active_profile")
+                if not active_profile_id:
+                    raise ValueError("No active profile set. Create one via the dashboard.")
+                # Now get the full profile
+                response = await client.get(f"{base_url}/api/profiles/{active_profile_id}")
+
+            if response.status_code != 200:
+                raise ValueError(f"Failed to get profile: {response.text}")
+
+            data = response.json()
+            # Convert API response to Profile type
+            return Profile(
+                name=data["id"],
+                driver=data["driver"],
+                model=data["model"],
+                validator_model=data["validator_model"],
+                tracker=data["tracker"],
+                working_dir=data["working_dir"],
+                plan_output_dir=data["plan_output_dir"],
+                plan_path_pattern=data["plan_path_pattern"],
+                max_review_iterations=data["max_review_iterations"],
+                max_task_review_iterations=data["max_task_review_iterations"],
+                auto_approve_reviews=data["auto_approve_reviews"],
+            )
+    except httpx.ConnectError as e:
+        raise ValueError(
+            "Cannot connect to Amelia server. Start it with: amelia server"
+        ) from e
+
+
 def plan_command(
     issue_id: Annotated[str, typer.Argument(help="Issue ID to generate a plan for (e.g., ISSUE-123)")],
     profile_name: Annotated[
@@ -431,15 +490,8 @@ def plan_command(
     worktree_path, _ = _get_worktree_context()
 
     async def _generate_plan() -> ImplementationState:
-        # Load settings from worktree
-        settings_path = Path(worktree_path) / "settings.amelia.yaml"
-        settings = load_settings(settings_path)
-
-        # Get profile (use specified or active profile)
-        selected_profile = profile_name or settings.active_profile
-        if selected_profile not in settings.profiles:
-            raise ValueError(f"Profile '{selected_profile}' not found in settings")
-        profile = settings.profiles[selected_profile]
+        # Get profile from server
+        profile = await _get_profile_from_server(profile_name)
 
         # Update profile with worktree path
         profile = profile.model_copy(update={"working_dir": worktree_path})

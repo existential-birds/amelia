@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from amelia.server.config import ServerConfig
-from amelia.server.database import WorkflowRepository
+from amelia.server.database import ProfileRepository, SettingsRepository, WorkflowRepository
 from amelia.server.database.connection import Database
 from amelia.server.orchestrator.service import OrchestratorService
 
@@ -64,6 +64,30 @@ def get_repository() -> WorkflowRepository:
     """
     db = get_database()
     return WorkflowRepository(db)
+
+
+def get_settings_repository() -> SettingsRepository:
+    """Get the settings repository instance.
+
+    Returns:
+        SettingsRepository instance.
+
+    Raises:
+        RuntimeError: If database not initialized.
+    """
+    return SettingsRepository(get_database())
+
+
+def get_profile_repository() -> ProfileRepository:
+    """Get the profile repository instance.
+
+    Returns:
+        ProfileRepository instance.
+
+    Raises:
+        RuntimeError: If database not initialized.
+    """
+    return ProfileRepository(get_database())
 
 
 def set_orchestrator(orch: OrchestratorService) -> None:

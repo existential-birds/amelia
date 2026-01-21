@@ -106,28 +106,42 @@ class TestPlanCommandTaskFlags:
 
     def test_title_flag_constructs_issue_directly(self, runner, tmp_path):
         """--title should construct Issue directly, bypassing tracker."""
-        # Create mock git worktree with settings
+        # Create mock git worktree
         worktree = tmp_path / "repo"
         worktree.mkdir()
         (worktree / ".git").touch()
-        settings_content = f"""
-active_profile: noop
-profiles:
-  noop:
-    name: noop
-    driver: cli:claude
-    model: sonnet
-    validator_model: sonnet
-    tracker: noop
-    working_dir: {worktree}
-"""
-        (worktree / "settings.amelia.yaml").write_text(settings_content)
+
+        # Mock profile data returned from server API
+        mock_profile_response = {
+            "id": "noop",
+            "driver": "cli:claude",
+            "model": "sonnet",
+            "validator_model": "sonnet",
+            "tracker": "noop",
+            "working_dir": str(worktree),
+            "plan_output_dir": "docs/plans",
+            "plan_path_pattern": "docs/plans/{date}-{issue_key}.md",
+            "max_review_iterations": 3,
+            "max_task_review_iterations": 5,
+            "auto_approve_reviews": False,
+            "is_active": True,
+        }
 
         with patch("amelia.client.cli._get_worktree_context") as mock_ctx, \
              patch("amelia.client.cli.Architect") as mock_architect_class, \
              patch("amelia.client.cli.DriverFactory"), \
-             patch("amelia.client.cli.create_tracker") as mock_create_tracker:
+             patch("amelia.client.cli.create_tracker") as mock_create_tracker, \
+             patch("httpx.AsyncClient") as mock_http_client_class:
             mock_ctx.return_value = (str(worktree), "repo")
+
+            # Mock the HTTP client for profile fetching
+            mock_http_client = MagicMock()
+            mock_http_client_class.return_value.__aenter__ = AsyncMock(return_value=mock_http_client)
+            mock_http_client_class.return_value.__aexit__ = AsyncMock()
+            mock_http_client.get = AsyncMock(return_value=MagicMock(
+                status_code=200,
+                json=MagicMock(return_value=mock_profile_response),
+            ))
 
             # Mock architect to capture the state
             mock_architect = mock_architect_class.return_value

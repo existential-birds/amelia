@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 from uuid import uuid4
 
 from deepagents.backends.protocol import BackendProtocol, WriteResult
-from deepagents.middleware.filesystem import (  # type: ignore[import-untyped]
+from deepagents.middleware.filesystem import (
     TOOL_GENERATORS,
     FilesystemMiddleware,
     FilesystemState,

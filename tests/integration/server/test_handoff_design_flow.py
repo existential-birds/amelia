@@ -5,28 +5,33 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from amelia.server.database import ProfileRecord
 from amelia.server.models.requests import CreateWorkflowRequest
 from amelia.server.orchestrator.service import OrchestratorService
 
 
 @pytest.fixture
-def mock_settings() -> MagicMock:
-    """Create minimal mock settings."""
-    settings = MagicMock()
-    settings.active_profile = "test"
-    profile = MagicMock()
-    profile.name = "test"
-    profile.tracker = "noop"
-    profile.model_copy.return_value = profile
-    settings.profiles = {"test": profile}
-    return settings
+def mock_profile_repo() -> AsyncMock:
+    """Create mock ProfileRepository that returns test profile."""
+    repo = AsyncMock()
+    profile_record = ProfileRecord(
+        id="test",
+        driver="cli:claude",
+        model="sonnet",
+        validator_model="haiku",
+        tracker="noop",
+        working_dir="/tmp/test",
+    )
+    repo.get_profile.return_value = profile_record
+    repo.get_active_profile.return_value = profile_record
+    return repo
 
 
 class TestHandoffDesignFlow:
     """Test design artifact flows through handoff to implementation."""
 
     async def test_prepare_workflow_state_loads_design_from_artifact_path(
-        self, tmp_path: Path, mock_settings: MagicMock
+        self, tmp_path: Path, mock_profile_repo: AsyncMock
     ) -> None:
         """Design is loaded from artifact_path into ImplementationState."""
         # Create a design artifact file
@@ -37,19 +42,13 @@ class TestHandoffDesignFlow:
         orchestrator = OrchestratorService.__new__(OrchestratorService)
         orchestrator._event_bus = MagicMock()
         orchestrator._repository = MagicMock()
+        orchestrator._profile_repo = mock_profile_repo
 
         # Patch methods to avoid dependencies
-        with (
-            patch.object(
-                orchestrator,
-                "_load_settings_for_worktree",
-                return_value=mock_settings,
-            ),
-            patch(
-                "amelia.server.orchestrator.service.get_git_head",
-                new_callable=AsyncMock,
-                return_value="abc123",
-            ),
+        with patch(
+            "amelia.server.orchestrator.service.get_git_head",
+            new_callable=AsyncMock,
+            return_value="abc123",
         ):
             _, _, state = await orchestrator._prepare_workflow_state(
                 workflow_id="wf-123",
@@ -66,24 +65,18 @@ class TestHandoffDesignFlow:
         assert state.design.source == "file"
 
     async def test_prepare_workflow_state_without_artifact_path(
-        self, tmp_path: Path, mock_settings: MagicMock
+        self, tmp_path: Path, mock_profile_repo: AsyncMock
     ) -> None:
         """Design is None when no artifact_path provided (backward compatible)."""
         orchestrator = OrchestratorService.__new__(OrchestratorService)
         orchestrator._event_bus = MagicMock()
         orchestrator._repository = MagicMock()
+        orchestrator._profile_repo = mock_profile_repo
 
-        with (
-            patch.object(
-                orchestrator,
-                "_load_settings_for_worktree",
-                return_value=mock_settings,
-            ),
-            patch(
-                "amelia.server.orchestrator.service.get_git_head",
-                new_callable=AsyncMock,
-                return_value="abc123",
-            ),
+        with patch(
+            "amelia.server.orchestrator.service.get_git_head",
+            new_callable=AsyncMock,
+            return_value="abc123",
         ):
             _, _, state = await orchestrator._prepare_workflow_state(
                 workflow_id="wf-123",
@@ -96,19 +89,15 @@ class TestHandoffDesignFlow:
         assert state.design is None
 
     async def test_prepare_workflow_state_with_missing_artifact_file(
-        self, tmp_path: Path, mock_settings: MagicMock
+        self, tmp_path: Path, mock_profile_repo: AsyncMock
     ) -> None:
         """Raises FileNotFoundError when artifact file doesn't exist."""
         orchestrator = OrchestratorService.__new__(OrchestratorService)
         orchestrator._event_bus = MagicMock()
         orchestrator._repository = MagicMock()
+        orchestrator._profile_repo = mock_profile_repo
 
         with (
-            patch.object(
-                orchestrator,
-                "_load_settings_for_worktree",
-                return_value=mock_settings,
-            ),
             patch(
                 "amelia.server.orchestrator.service.get_git_head",
                 new_callable=AsyncMock,
@@ -125,7 +114,7 @@ class TestHandoffDesignFlow:
             )
 
     async def test_prepare_workflow_state_resolves_worktree_relative_artifact_path(
-        self, tmp_path: Path, mock_settings: MagicMock
+        self, tmp_path: Path, mock_profile_repo: AsyncMock
     ) -> None:
         """Artifact path with leading slash is resolved relative to worktree.
 
@@ -141,18 +130,12 @@ class TestHandoffDesignFlow:
         orchestrator = OrchestratorService.__new__(OrchestratorService)
         orchestrator._event_bus = MagicMock()
         orchestrator._repository = MagicMock()
+        orchestrator._profile_repo = mock_profile_repo
 
-        with (
-            patch.object(
-                orchestrator,
-                "_load_settings_for_worktree",
-                return_value=mock_settings,
-            ),
-            patch(
-                "amelia.server.orchestrator.service.get_git_head",
-                new_callable=AsyncMock,
-                return_value="abc123",
-            ),
+        with patch(
+            "amelia.server.orchestrator.service.get_git_head",
+            new_callable=AsyncMock,
+            return_value="abc123",
         ):
             # Pass artifact_path with leading slash (worktree-relative)
             _, _, state = await orchestrator._prepare_workflow_state(
@@ -169,7 +152,7 @@ class TestHandoffDesignFlow:
         assert state.design.source == "file"
 
     async def test_queue_workflow_passes_artifact_path(
-        self, tmp_path: Path, mock_settings: MagicMock
+        self, tmp_path: Path, mock_profile_repo: AsyncMock
     ) -> None:
         """queue_workflow passes artifact_path through to _prepare_workflow_state."""
         # Create design file
@@ -183,6 +166,7 @@ class TestHandoffDesignFlow:
         orchestrator._event_bus = MagicMock()
         orchestrator._repository = MagicMock()
         orchestrator._repository.create = AsyncMock()
+        orchestrator._profile_repo = mock_profile_repo
 
         # Use worktree-relative path (not absolute) for security
         request = CreateWorkflowRequest(
@@ -194,11 +178,6 @@ class TestHandoffDesignFlow:
         )
 
         with (
-            patch.object(
-                orchestrator,
-                "_load_settings_for_worktree",
-                return_value=mock_settings,
-            ),
             patch.object(orchestrator, "_emit", new_callable=AsyncMock),
             patch(
                 "amelia.server.orchestrator.service.get_git_head",
@@ -216,19 +195,15 @@ class TestHandoffDesignFlow:
         assert state.execution_state.design.content == "# Design Content"
 
     async def test_prepare_workflow_state_rejects_path_traversal(
-        self, tmp_path: Path, mock_settings: MagicMock
+        self, tmp_path: Path, mock_profile_repo: AsyncMock
     ) -> None:
         """Rejects artifact_path that escapes worktree via .. sequences."""
         orchestrator = OrchestratorService.__new__(OrchestratorService)
         orchestrator._event_bus = MagicMock()
         orchestrator._repository = MagicMock()
+        orchestrator._profile_repo = mock_profile_repo
 
         with (
-            patch.object(
-                orchestrator,
-                "_load_settings_for_worktree",
-                return_value=mock_settings,
-            ),
             patch(
                 "amelia.server.orchestrator.service.get_git_head",
                 new_callable=AsyncMock,
@@ -245,7 +220,7 @@ class TestHandoffDesignFlow:
             )
 
     async def test_prepare_workflow_state_rejects_absolute_path_outside_worktree(
-        self, tmp_path: Path, mock_settings: MagicMock
+        self, tmp_path: Path, mock_profile_repo: AsyncMock
     ) -> None:
         """Rejects absolute paths that would escape worktree.
 
@@ -256,13 +231,9 @@ class TestHandoffDesignFlow:
         orchestrator = OrchestratorService.__new__(OrchestratorService)
         orchestrator._event_bus = MagicMock()
         orchestrator._repository = MagicMock()
+        orchestrator._profile_repo = mock_profile_repo
 
         with (
-            patch.object(
-                orchestrator,
-                "_load_settings_for_worktree",
-                return_value=mock_settings,
-            ),
             patch(
                 "amelia.server.orchestrator.service.get_git_head",
                 new_callable=AsyncMock,
@@ -281,7 +252,7 @@ class TestHandoffDesignFlow:
             )
 
     async def test_prepare_workflow_state_rejects_symlink_escape(
-        self, tmp_path: Path, mock_settings: MagicMock
+        self, tmp_path: Path, mock_profile_repo: AsyncMock
     ) -> None:
         """Rejects artifact_path that escapes via symlinks."""
         # Create a symlink that points outside the worktree
@@ -291,13 +262,9 @@ class TestHandoffDesignFlow:
         orchestrator = OrchestratorService.__new__(OrchestratorService)
         orchestrator._event_bus = MagicMock()
         orchestrator._repository = MagicMock()
+        orchestrator._profile_repo = mock_profile_repo
 
         with (
-            patch.object(
-                orchestrator,
-                "_load_settings_for_worktree",
-                return_value=mock_settings,
-            ),
             patch(
                 "amelia.server.orchestrator.service.get_git_head",
                 new_callable=AsyncMock,
