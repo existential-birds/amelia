@@ -331,7 +331,14 @@ describe("SpecBuilderPage", () => {
     await userEvent.type(textarea, "Test message");
     await userEvent.keyboard("{Enter}");
 
+    // Verify message was sent
     await waitFor(() => {
+      expect(brainstormApi.sendMessage).toHaveBeenCalledWith("s1", "Test message");
+    });
+
+    // Verify input was cleared and focus is maintained
+    await waitFor(() => {
+      expect(textarea).toHaveValue("");
       expect(document.activeElement).toBe(textarea);
     });
   });

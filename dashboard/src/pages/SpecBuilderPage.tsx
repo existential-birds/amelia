@@ -86,6 +86,7 @@ function SpecBuilderPageContent() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [configProfileInfo, setConfigProfileInfo] = useState<ConfigProfileInfo | null>(null);
   const activeProfileRef = useRef<string>("");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Load sessions and config on mount
   useEffect(() => {
@@ -130,6 +131,8 @@ function SpecBuilderPageContent() {
           await createSession(activeProfileRef.current, content);
         }
         textInput.clear();
+        // Return focus to input after submit
+        textareaRef.current?.focus();
       } catch {
         // Restore input on error
         textInput.setInput(content);
@@ -367,6 +370,7 @@ function SpecBuilderPageContent() {
             onSubmit={handleSubmit}
           >
             <PromptInputTextarea
+              ref={textareaRef}
               placeholder="What would you like to design?"
               disabled={isStreaming}
             />
