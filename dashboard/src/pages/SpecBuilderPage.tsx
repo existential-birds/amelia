@@ -136,7 +136,7 @@ function SpecBuilderPageContent() {
       } catch {
         // Restore input on error
         textInput.setInput(content);
-        // TODO: Show error toast
+        toast.error("Failed to send message");
       } finally {
         setIsSubmitting(false);
       }
