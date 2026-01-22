@@ -68,7 +68,23 @@ const TRACKER_OPTIONS = [
   { value: 'github', label: 'GitHub' },
 ];
 
-const MODEL_OPTIONS = ['opus', 'sonnet', 'haiku', 'gpt-4', 'gpt-4o'];
+/** Default models (Claude CLI) */
+const CLAUDE_MODELS = ['opus', 'sonnet', 'haiku'] as const;
+
+/** Model options vary by driver */
+const MODEL_OPTIONS_BY_DRIVER: Record<string, readonly string[]> = {
+  'cli:claude': CLAUDE_MODELS,
+  'api:openrouter': [
+    'qwen/qwen3-coder-flash',
+    'minimax/minimax-m2',
+    'google/gemini-3-flash-preview',
+  ],
+};
+
+/** Get available models for a driver, with fallback */
+const getModelsForDriver = (driver: string): readonly string[] => {
+  return MODEL_OPTIONS_BY_DRIVER[driver] ?? CLAUDE_MODELS;
+};
 
 /** Validation rules for profile fields */
 const validateField = (field: string, value: string): string | null => {
@@ -177,7 +193,20 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
   }, [handleClose, onOpenChange]);
 
   const handleChange = (key: string, value: string | number | boolean) => {
-    setFormData((prev) => ({ ...prev, [key]: value }));
+    setFormData((prev) => {
+      const next = { ...prev, [key]: value };
+      // When driver changes, reset model/validator_model if not supported
+      if (key === 'driver' && typeof value === 'string') {
+        const availableModels = getModelsForDriver(value);
+        if (!availableModels.includes(prev.model)) {
+          next.model = availableModels[0] ?? 'opus';
+        }
+        if (!availableModels.includes(prev.validator_model)) {
+          next.validator_model = availableModels[availableModels.length - 1] ?? 'haiku';
+        }
+      }
+      return next;
+    });
     // Clear error for this field when user starts typing
     if (errors[key]) {
       setErrors((prev) => {
@@ -268,7 +297,7 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{isEditMode ? 'Edit Profile' : 'Create Profile'}</DialogTitle>
+          <DialogTitle className="font-heading text-xl tracking-wide">{isEditMode ? 'Edit Profile' : 'Create Profile'}</DialogTitle>
           <DialogDescription>
             {isEditMode
               ? 'Update the profile configuration.'
@@ -279,7 +308,7 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Profile ID - only editable in create mode */}
           <div className="space-y-2">
-            <Label htmlFor="id">Profile Name</Label>
+            <Label htmlFor="id" className="text-xs uppercase tracking-wider text-muted-foreground">Profile Name</Label>
             <Input
               id="id"
               value={formData.id}
@@ -288,7 +317,10 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
               disabled={isEditMode}
               placeholder="e.g., dev, prod"
               aria-invalid={!!errors.id}
-              className={errors.id ? 'border-destructive focus-visible:ring-destructive' : ''}
+              className={cn(
+                'bg-background/50 hover:border-muted-foreground/30 transition-colors',
+                errors.id && 'border-destructive focus-visible:ring-destructive'
+              )}
             />
             {errors.id && (
               <p className="text-xs text-destructive">{errors.id}</p>
@@ -297,7 +329,7 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
 
           {/* Driver */}
           <div className="space-y-2">
-            <Label>Driver</Label>
+            <Label className="text-xs uppercase tracking-wider text-muted-foreground">Driver</Label>
             <Select value={formData.driver} onValueChange={(v) => handleChange('driver', v)}>
               <SelectTrigger>
                 <SelectValue />
@@ -315,26 +347,26 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
           {/* Model */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label>Model</Label>
-              <Select value={formData.model} onValueChange={(v) => handleChange('model', v)}>
+              <Label className="text-xs uppercase tracking-wider text-muted-foreground">Model</Label>
+              <Select key={`model-${formData.driver}`} value={formData.model} onValueChange={(v) => handleChange('model', v)}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {MODEL_OPTIONS.map((m) => (
+                  {getModelsForDriver(formData.driver).map((m) => (
                     <SelectItem key={m} value={m}>{m}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Validator Model</Label>
-              <Select value={formData.validator_model} onValueChange={(v) => handleChange('validator_model', v)}>
+              <Label className="text-xs uppercase tracking-wider text-muted-foreground">Validator Model</Label>
+              <Select key={`validator-${formData.driver}`} value={formData.validator_model} onValueChange={(v) => handleChange('validator_model', v)}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {MODEL_OPTIONS.map((m) => (
+                  {getModelsForDriver(formData.driver).map((m) => (
                     <SelectItem key={m} value={m}>{m}</SelectItem>
                   ))}
                 </SelectContent>
@@ -344,7 +376,7 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
 
           {/* Tracker */}
           <div className="space-y-2">
-            <Label>Issue Tracker</Label>
+            <Label className="text-xs uppercase tracking-wider text-muted-foreground">Issue Tracker</Label>
             <Select value={formData.tracker} onValueChange={(v) => handleChange('tracker', v)}>
               <SelectTrigger>
                 <SelectValue />
@@ -361,7 +393,7 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
 
           {/* Working Directory */}
           <div className="space-y-2">
-            <Label htmlFor="working_dir">Working Directory</Label>
+            <Label htmlFor="working_dir" className="text-xs uppercase tracking-wider text-muted-foreground">Working Directory</Label>
             <Input
               id="working_dir"
               value={formData.working_dir}
@@ -369,7 +401,10 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
               onBlur={(e) => handleBlur('working_dir', e.target.value)}
               placeholder="/path/to/repo"
               aria-invalid={!!errors.working_dir}
-              className={errors.working_dir ? 'border-destructive focus-visible:ring-destructive' : ''}
+              className={cn(
+                'bg-background/50 hover:border-muted-foreground/30 transition-colors',
+                errors.working_dir && 'border-destructive focus-visible:ring-destructive'
+              )}
             />
             {errors.working_dir && (
               <p className="text-xs text-destructive">{errors.working_dir}</p>
@@ -387,7 +422,7 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
 
           {/* Advanced Settings */}
           <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
-            <CollapsibleTrigger className="flex w-full items-center justify-between rounded-lg border bg-muted/50 px-4 py-3 text-sm font-medium hover:bg-muted transition-colors">
+            <CollapsibleTrigger className="flex w-full items-center justify-between rounded-md border border-border/30 bg-background/30 px-4 py-3 text-sm font-medium hover:bg-muted/30 hover:border-border/50 transition-all">
               <span>Advanced Settings</span>
               <ChevronDown
                 className={cn(
@@ -399,53 +434,57 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
             <CollapsibleContent className="space-y-4 pt-4">
               {/* Plan Output Directory */}
               <div className="space-y-2">
-                <Label htmlFor="plan_output_dir">Plan Output Directory</Label>
+                <Label htmlFor="plan_output_dir" className="text-xs uppercase tracking-wider text-muted-foreground">Plan Output Directory</Label>
                 <Input
                   id="plan_output_dir"
                   value={formData.plan_output_dir}
                   onChange={(e) => handleChange('plan_output_dir', e.target.value)}
                   placeholder="docs/plans"
+                  className="bg-background/50 hover:border-muted-foreground/30 transition-colors"
                 />
               </div>
 
               {/* Plan Path Pattern */}
               <div className="space-y-2">
-                <Label htmlFor="plan_path_pattern">Plan Path Pattern</Label>
+                <Label htmlFor="plan_path_pattern" className="text-xs uppercase tracking-wider text-muted-foreground">Plan Path Pattern</Label>
                 <Input
                   id="plan_path_pattern"
                   value={formData.plan_path_pattern}
                   onChange={(e) => handleChange('plan_path_pattern', e.target.value)}
                   placeholder="docs/plans/{date}-{issue_key}.md"
+                  className="bg-background/50 hover:border-muted-foreground/30 transition-colors"
                 />
               </div>
 
               {/* Review Iterations */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="max_review_iterations">Max Review Iterations</Label>
+                  <Label htmlFor="max_review_iterations" className="text-xs uppercase tracking-wider text-muted-foreground">Max Review Iterations</Label>
                   <Input
                     id="max_review_iterations"
                     type="number"
                     min={1}
                     value={formData.max_review_iterations}
                     onChange={(e) => handleChange('max_review_iterations', parseInt(e.target.value) || 1)}
+                    className="bg-background/50 hover:border-muted-foreground/30 transition-colors"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="max_task_review_iterations">Max Task Review Iterations</Label>
+                  <Label htmlFor="max_task_review_iterations" className="text-xs uppercase tracking-wider text-muted-foreground">Max Task Review Iterations</Label>
                   <Input
                     id="max_task_review_iterations"
                     type="number"
                     min={1}
                     value={formData.max_task_review_iterations}
                     onChange={(e) => handleChange('max_task_review_iterations', parseInt(e.target.value) || 1)}
+                    className="bg-background/50 hover:border-muted-foreground/30 transition-colors"
                   />
                 </div>
               </div>
             </CollapsibleContent>
           </Collapsible>
 
-          <DialogFooter>
+          <DialogFooter className="border-t border-border/30 pt-4 mt-2">
             <Button type="button" variant="outline" onClick={handleClose}>
               Cancel
             </Button>

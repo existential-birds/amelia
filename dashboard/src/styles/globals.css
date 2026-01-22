@@ -312,6 +312,29 @@
     );
     border-radius: var(--radius-lg) 0 0 var(--radius-lg);
   }
+
+  /* Modal panel styling with top accent */
+  .modal-panel {
+    position: relative;
+    background-color: var(--background);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 0 0 1px oklch(from var(--border) l c h / 0.5);
+  }
+
+  .modal-panel::before {
+    content: "";
+    position: absolute;
+    inset-inline: 0;
+    top: 0;
+    height: 1px;
+    background: linear-gradient(
+      to right,
+      transparent,
+      oklch(from var(--primary) l c h / 0.6),
+      transparent
+    );
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  }
 }
 
 /*
