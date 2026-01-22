@@ -122,7 +122,7 @@ export default function WorkflowsPage() {
         </PageHeader.Left>
         <PageHeader.Center>
           <PageHeader.Label>ELAPSED</PageHeader.Label>
-          <PageHeader.Value glow>{elapsedTime}</PageHeader.Value>
+          <PageHeader.Value>{elapsedTime}</PageHeader.Value>
         </PageHeader.Center>
         {detail && (
           <PageHeader.Right>

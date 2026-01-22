@@ -24,10 +24,6 @@ export { WorkflowCanvas } from './WorkflowCanvas';
 export { WorkflowProgress } from './WorkflowProgress';
 export { WorkflowEmptyState } from './WorkflowEmptyState';
 
-// Skeleton loading states
-export { JobQueueSkeleton } from './JobQueueSkeleton';
-export { ActivityLogSkeleton } from './ActivityLogSkeleton';
-
 // Layout components
 export { DashboardSidebar } from './DashboardSidebar';
 

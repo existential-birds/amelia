@@ -6,6 +6,7 @@ import { Outlet, useNavigation } from 'react-router-dom';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { DashboardSidebar } from '@/components/DashboardSidebar';
 import { NavigationProgress } from '@/components/NavigationProgress';
+import { MobileCommandBar } from '@/components/MobileCommandBar';
 import { useWebSocket } from '@/hooks/useWebSocket';
 
 /**
@@ -78,6 +79,9 @@ export function Layout() {
           />
 
           {isNavigating && <NavigationProgress />}
+
+          {/* Mobile navigation bar - only visible on mobile */}
+          <MobileCommandBar />
 
           {/* Content wrapper with z-10 for proper layering */}
           <div className="relative z-10 h-full">

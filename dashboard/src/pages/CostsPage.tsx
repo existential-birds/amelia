@@ -270,7 +270,7 @@ export default function CostsPage() {
             <PageHeader.Title>Usage & Spending</PageHeader.Title>
           </PageHeader.Left>
           <PageHeader.Center>
-            <PageHeader.Value glow>$0.00</PageHeader.Value>
+            <PageHeader.Value>$0.00</PageHeader.Value>
           </PageHeader.Center>
           <PageHeader.Right>
             <div className="hidden md:flex gap-1">
@@ -345,7 +345,7 @@ export default function CostsPage() {
         </PageHeader.Left>
         <PageHeader.Center>
           <div className="flex flex-col items-center">
-            <PageHeader.Value glow>{formatCost(usage.summary.total_cost_usd)}</PageHeader.Value>
+            <PageHeader.Value>{formatCost(usage.summary.total_cost_usd)}</PageHeader.Value>
             {costDelta !== null && (
               <span
                 className={cn(

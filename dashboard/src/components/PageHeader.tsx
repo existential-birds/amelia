@@ -29,7 +29,7 @@ function Label({ children, className }: TypographyProps) {
   return (
     <span
       className={cn(
-        'block font-heading text-[10px] lg:text-xs font-semibold tracking-widest text-muted-foreground mb-1',
+        'block font-heading text-[9px] lg:text-[11px] font-semibold tracking-widest text-muted-foreground mb-0.5',
         className
       )}
     >
@@ -60,7 +60,7 @@ function Title({ children, title, className }: TitleProps) {
     <h2
       title={tooltipText}
       className={cn(
-        'font-display text-xl lg:text-3xl font-bold tracking-wider text-foreground truncate max-w-[200px] lg:max-w-[400px]',
+        'font-display text-lg lg:text-2xl font-bold tracking-wider text-foreground truncate max-w-[200px] lg:max-w-[400px]',
         className
       )}
     >
@@ -81,16 +81,11 @@ function Subtitle({ children, className }: TypographyProps) {
   return (
     <span
       title={typeof children === 'string' ? children : undefined}
-      className={cn('font-mono text-xs lg:text-sm text-muted-foreground truncate max-w-[120px] lg:max-w-[200px]', className)}
+      className={cn('font-mono text-[11px] lg:text-xs text-muted-foreground truncate max-w-[120px] lg:max-w-[200px]', className)}
     >
       {children}
     </span>
   );
-}
-
-interface ValueProps extends TypographyProps {
-  /** Adds glowing text shadow effect */
-  glow?: boolean;
 }
 
 /**
@@ -98,16 +93,14 @@ interface ValueProps extends TypographyProps {
  *
  * @param props - Component props.
  * @param props.children - Value content to display.
- * @param props.glow - If true, adds a glowing text shadow effect.
  * @param props.className - Optional additional CSS classes.
- * @returns A div element with monospace font and optional glow effect.
+ * @returns A div element with monospace font styling.
  */
-function Value({ children, glow, className }: ValueProps) {
+function Value({ children, className }: TypographyProps) {
   return (
     <div
       className={cn(
-        'font-mono text-lg lg:text-2xl font-semibold text-primary',
-        glow && '[text-shadow:0_0_10px_rgba(255,200,87,0.4)]',
+        'font-mono text-base lg:text-xl font-semibold text-primary',
         className
       )}
     >
@@ -196,7 +189,7 @@ interface PageHeaderProps {
  *   </PageHeader.Left>
  *   <PageHeader.Center>
  *     <PageHeader.Label>ELAPSED</PageHeader.Label>
- *     <PageHeader.Value glow>02:34</PageHeader.Value>
+ *     <PageHeader.Value>02:34</PageHeader.Value>
  *   </PageHeader.Center>
  *   <PageHeader.Right>
  *     <StatusBadge status="in_progress" />
@@ -247,7 +240,7 @@ function PageHeader({ children, className }: PageHeaderProps) {
       role="banner"
       data-slot="page-header"
       className={cn(
-        'grid w-full items-center px-6 py-4 border-b border-border bg-card/50',
+        'grid w-full items-center px-6 py-2.5 border-b-2 border-primary/20 bg-card/50',
         gridCols,
         className
       )}

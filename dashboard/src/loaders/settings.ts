@@ -4,36 +4,12 @@
 import { getServerSettings, getProfiles } from '@/api/settings';
 import type { ServerSettings, Profile } from '@/api/settings';
 
-export interface SettingsLoaderData {
-  serverSettings: ServerSettings;
-  profiles: Profile[];
-}
-
 export interface ProfilesLoaderData {
   profiles: Profile[];
 }
 
 export interface ServerSettingsLoaderData {
   serverSettings: ServerSettings;
-}
-
-/**
- * Loader for the main settings page.
- * Fetches both server settings and all profiles in parallel.
- *
- * @returns Object containing server settings and profiles.
- * @throws {Error} When the API request fails.
- * @example
- * ```typescript
- * const { serverSettings, profiles } = await settingsLoader();
- * ```
- */
-export async function settingsLoader(): Promise<SettingsLoaderData> {
-  const [serverSettings, profiles] = await Promise.all([
-    getServerSettings(),
-    getProfiles(),
-  ]);
-  return { serverSettings, profiles };
 }
 
 /**

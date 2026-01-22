@@ -31,7 +31,7 @@ uv run amelia start ISSUE-123 --profile work     # Full orchestrator loop
 uv run amelia review --local                     # Review uncommitted changes
 ```
 
-**Pre-push hook**: A git pre-push hook runs `ruff check`, `mypy`, and `pytest` before every push. All checks must pass to push to remote.
+**Pre-push hook**: A git pre-push hook runs `ruff check`, `mypy`, `pytest`, and `pnpm build` (dashboard) before every push. All checks must pass to push to remote.
 
 ## Dashboard Frontend
 
