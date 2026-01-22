@@ -16,16 +16,12 @@ class ProfileRecord(BaseModel):
     """
 
     id: str
-    driver: str
-    model: str
-    validator_model: str
     tracker: str
     working_dir: str
     plan_output_dir: str = "docs/plans"
     plan_path_pattern: str = "docs/plans/{date}-{issue_key}.md"
-    max_review_iterations: int = 3
-    max_task_review_iterations: int = 5
     auto_approve_reviews: bool = False
+    agents: str  # JSON blob of dict[str, AgentConfig]
     is_active: bool = False
     created_at: datetime | None = None
     updated_at: datetime | None = None
@@ -89,22 +85,17 @@ class ProfileRepository:
         """
         await self._db.execute(
             """INSERT INTO profiles (
-                id, driver, model, validator_model, tracker, working_dir,
-                plan_output_dir, plan_path_pattern, max_review_iterations,
-                max_task_review_iterations, auto_approve_reviews, is_active
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                id, tracker, working_dir, plan_output_dir, plan_path_pattern,
+                auto_approve_reviews, agents, is_active
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 profile.id,
-                profile.driver,
-                profile.model,
-                profile.validator_model,
                 profile.tracker,
                 profile.working_dir,
                 profile.plan_output_dir,
                 profile.plan_path_pattern,
-                profile.max_review_iterations,
-                profile.max_task_review_iterations,
                 1 if profile.auto_approve_reviews else 0,
+                profile.agents,
                 1 if profile.is_active else 0,
             ),
         )
@@ -129,16 +120,12 @@ class ProfileRepository:
             ValueError: If profile not found or invalid field names.
         """
         valid_fields = {
-            "driver",
-            "model",
-            "validator_model",
             "tracker",
             "working_dir",
             "plan_output_dir",
             "plan_path_pattern",
-            "max_review_iterations",
-            "max_task_review_iterations",
             "auto_approve_reviews",
+            "agents",
         }
         invalid = set(updates.keys()) - valid_fields
         if invalid:
@@ -219,16 +206,12 @@ class ProfileRepository:
         """
         return ProfileRecord(
             id=row["id"],
-            driver=row["driver"],
-            model=row["model"],
-            validator_model=row["validator_model"],
             tracker=row["tracker"],
             working_dir=row["working_dir"],
             plan_output_dir=row["plan_output_dir"],
             plan_path_pattern=row["plan_path_pattern"],
-            max_review_iterations=row["max_review_iterations"],
-            max_task_review_iterations=row["max_task_review_iterations"],
             auto_approve_reviews=bool(row["auto_approve_reviews"]),
+            agents=row["agents"],
             is_active=bool(row["is_active"]),
             created_at=datetime.fromisoformat(row["created_at"])
             if row["created_at"]

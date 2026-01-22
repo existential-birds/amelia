@@ -1,9 +1,30 @@
 """Tests for ProfileRepository."""
 
+import json
+
 import pytest
 
 from amelia.server.database.connection import Database
 from amelia.server.database.profile_repository import ProfileRecord, ProfileRepository
+
+
+def test_profile_record_with_agents_json():
+    """ProfileRecord should store agents as JSON."""
+    agents = {
+        "architect": {"driver": "cli:claude", "model": "opus", "options": {}},
+        "developer": {"driver": "cli:claude", "model": "sonnet", "options": {}},
+    }
+
+    record = ProfileRecord(
+        id="test",
+        tracker="noop",
+        working_dir="/tmp/test",
+        agents=json.dumps(agents),
+    )
+
+    assert record.agents is not None
+    parsed = json.loads(record.agents)
+    assert parsed["architect"]["model"] == "opus"
 
 
 class TestProfileRepository:
