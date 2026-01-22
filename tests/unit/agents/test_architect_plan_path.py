@@ -2,13 +2,13 @@
 
 from datetime import UTC, date, datetime
 from typing import Any
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from amelia.agents.architect import Architect
 from amelia.core.constants import ToolName
-from amelia.core.types import Issue, Profile
+from amelia.core.types import AgentConfig, Issue, Profile
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
 from amelia.pipelines.implementation.state import ImplementationState
 
@@ -17,7 +17,7 @@ class TestArchitectPlanPath:
     """Tests for plan path in architect prompt."""
 
     @pytest.fixture
-    def mock_driver(self) -> MagicMock:
+    def mock_driver_local(self) -> MagicMock:
         """Create a mock driver."""
         return MagicMock()
 
@@ -25,7 +25,7 @@ class TestArchitectPlanPath:
     def state_and_profile(self) -> tuple[ImplementationState, Profile]:
         """Create state and profile for testing."""
         issue = Issue(id="TEST-123", title="Test Issue", description="Test description")
-        profile = Profile(name="test", driver="cli:claude", model="sonnet", validator_model="sonnet", working_dir="/tmp/test")
+        profile = Profile(name="test", working_dir="/tmp/test")
         state = ImplementationState(
             workflow_id="test-workflow",
             created_at=datetime.now(UTC),
@@ -37,12 +37,15 @@ class TestArchitectPlanPath:
 
     def test_architect_agentic_prompt_includes_plan_path(
         self,
-        mock_driver: MagicMock,
+        mock_driver_local: MagicMock,
         state_and_profile: tuple[ImplementationState, Profile],
     ) -> None:
         """Prompt should include the resolved plan path with Write instruction."""
         state, profile = state_and_profile
-        architect = Architect(driver=mock_driver)
+        config = AgentConfig(driver="cli:claude", model="sonnet")
+
+        with patch("amelia.agents.architect.get_driver", return_value=mock_driver_local):
+            architect = Architect(config)
 
         prompt = architect._build_agentic_prompt(state, profile)
 
@@ -55,12 +58,15 @@ class TestArchitectPlanPath:
 
     def test_architect_agentic_prompt_uses_todays_date(
         self,
-        mock_driver: MagicMock,
+        mock_driver_local: MagicMock,
         state_and_profile: tuple[ImplementationState, Profile],
     ) -> None:
         """Prompt should include today's date in the plan path."""
         state, profile = state_and_profile
-        architect = Architect(driver=mock_driver)
+        config = AgentConfig(driver="cli:claude", model="sonnet")
+
+        with patch("amelia.agents.architect.get_driver", return_value=mock_driver_local):
+            architect = Architect(config)
 
         prompt = architect._build_agentic_prompt(state, profile)
 
@@ -69,15 +75,12 @@ class TestArchitectPlanPath:
 
     def test_architect_agentic_prompt_uses_custom_pattern(
         self,
-        mock_driver: MagicMock,
+        mock_driver_local: MagicMock,
     ) -> None:
         """Prompt should use custom plan_path_pattern from profile."""
         issue = Issue(id="JIRA-456", title="Test", description="Desc")
         profile = Profile(
             name="test",
-            driver="cli:claude",
-            model="sonnet",
-            validator_model="sonnet",
             working_dir="/tmp/test",
             plan_path_pattern=".amelia/plans/{issue_key}.md",
         )
@@ -88,7 +91,10 @@ class TestArchitectPlanPath:
             profile_id="test",
             issue=issue,
         )
-        architect = Architect(driver=mock_driver)
+        config = AgentConfig(driver="cli:claude", model="sonnet")
+
+        with patch("amelia.agents.architect.get_driver", return_value=mock_driver_local):
+            architect = Architect(config)
 
         prompt = architect._build_agentic_prompt(state, profile)
 
@@ -96,11 +102,12 @@ class TestArchitectPlanPath:
 
     async def test_plan_method_passes_profile_to_build_agentic_prompt(
         self,
-        mock_driver: MagicMock,
+        mock_driver_local: MagicMock,
         state_and_profile: tuple[ImplementationState, Profile],
     ) -> None:
         """Plan method should pass profile to _build_agentic_prompt."""
         state, profile = state_and_profile
+        config = AgentConfig(driver="cli:claude", model="sonnet")
 
         # Capture the prompt passed to execute_agentic
         captured_prompts: list[str] = []
@@ -114,11 +121,12 @@ class TestArchitectPlanPath:
                 session_id="session-1",
             )
 
-        mock_driver.execute_agentic = mock_execute_agentic
+        mock_driver_local.execute_agentic = mock_execute_agentic
 
-        architect = Architect(driver=mock_driver)
-        async for _ in architect.plan(state, profile, workflow_id="wf-1"):
-            pass
+        with patch("amelia.agents.architect.get_driver", return_value=mock_driver_local):
+            architect = Architect(config)
+            async for _ in architect.plan(state, profile, workflow_id="wf-1"):
+                pass
 
         assert len(captured_prompts) == 1
         assert "docs/plans/" in captured_prompts[0]
@@ -126,13 +134,14 @@ class TestArchitectPlanPath:
 
     async def test_plan_extracts_plan_path_from_write_tool_call(
         self,
-        mock_driver: MagicMock,
+        mock_driver_local: MagicMock,
         state_and_profile: tuple[ImplementationState, Profile],
     ) -> None:
         """Plan method should extract plan_path from Write tool call."""
         from pathlib import Path
 
         state, profile = state_and_profile
+        config = AgentConfig(driver="cli:claude", model="sonnet")
 
         async def mock_execute_agentic(*args: Any, **kwargs: Any) -> Any:
             # Simulate Write tool call followed by result
@@ -155,12 +164,13 @@ class TestArchitectPlanPath:
                 session_id="session-1",
             )
 
-        mock_driver.execute_agentic = mock_execute_agentic
+        mock_driver_local.execute_agentic = mock_execute_agentic
 
-        architect = Architect(driver=mock_driver)
-        final_state = state
-        async for new_state, _event in architect.plan(state, profile, workflow_id="wf-1"):
-            final_state = new_state
+        with patch("amelia.agents.architect.get_driver", return_value=mock_driver_local):
+            architect = Architect(config)
+            final_state = state
+            async for new_state, _event in architect.plan(state, profile, workflow_id="wf-1"):
+                final_state = new_state
 
         # plan_path should be extracted from the Write tool call
         assert final_state.plan_path == Path("/repo/docs/plans/2026-01-07-test-123.md")
