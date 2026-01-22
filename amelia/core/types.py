@@ -5,13 +5,29 @@ Pydantic models (RetryConfig, Profile, Settings, Issue) used throughout
 the Amelia agentic coding orchestrator.
 """
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
 DriverType = Literal["cli:claude", "api:openrouter", "cli", "api"]
 TrackerType = Literal["jira", "github", "none", "noop"]
+
+
+class AgentConfig(BaseModel):
+    """Per-agent driver and model configuration.
+
+    Attributes:
+        driver: LLM driver type (e.g., 'api:openrouter', 'cli:claude').
+        model: LLM model identifier.
+        options: Agent-specific options (e.g., max_iterations).
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    driver: DriverType
+    model: str
+    options: dict[str, Any] = Field(default_factory=dict)
 
 
 class RetryConfig(BaseModel):

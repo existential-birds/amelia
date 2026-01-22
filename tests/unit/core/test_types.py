@@ -5,6 +5,29 @@ from pathlib import Path
 from amelia.core.types import Design, Profile
 
 
+def test_agent_config_creation():
+    """AgentConfig should store driver, model, and optional options."""
+    from amelia.core.types import AgentConfig
+
+    config = AgentConfig(driver="cli:claude", model="sonnet")
+    assert config.driver == "cli:claude"
+    assert config.model == "sonnet"
+    assert config.options == {}
+
+
+def test_agent_config_with_options():
+    """AgentConfig should accept arbitrary options dict."""
+    from amelia.core.types import AgentConfig
+
+    config = AgentConfig(
+        driver="api:openrouter",
+        model="anthropic/claude-sonnet-4",
+        options={"max_iterations": 5, "temperature": 0.7},
+    )
+    assert config.options["max_iterations"] == 5
+    assert config.options["temperature"] == 0.7
+
+
 def test_profile_max_task_review_iterations_default():
     """Profile should have max_task_review_iterations with default value."""
     profile = Profile(
