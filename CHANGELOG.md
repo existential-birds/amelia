@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-01-22
+
+### Added
+
+- **brainstorm:** Add brainstorming sessions backend with WebSocket streaming for interactive spec building ([#302](https://github.com/existential-birds/amelia/pull/302))
+- **dashboard:** Add Spec Builder UI for brainstorming sessions with real-time chat interface ([#312](https://github.com/existential-birds/amelia/pull/312))
+- **dashboard:** Add costs view with multi-model visualization and analytics ([#314](https://github.com/existential-birds/amelia/pull/314))
+- **dashboard:** Add mobile command bar and compact page headers for improved mobile experience ([#324](https://github.com/existential-birds/amelia/pull/324))
+- **pipelines:** Add pipeline abstraction layer with Implementation and Review pipelines for modular workflow composition ([#295](https://github.com/existential-birds/amelia/pull/295))
+- **agents:** Preserve plan_markdown across multi-task execution for context continuity ([#289](https://github.com/existential-birds/amelia/pull/289))
+
+### Changed
+
+- **Breaking:** Unify configuration with database-backed profiles and settings, replacing YAML-based configuration ([#322](https://github.com/existential-birds/amelia/pull/322))
+
+  **Migration:** Configuration is now stored in SQLite database instead of `settings.amelia.yaml`. Use the new CLI commands to manage configuration:
+  - `amelia config profile list` - List all profiles
+  - `amelia config profile create <name>` - Create a new profile
+  - `amelia config profile edit <name>` - Edit profile settings
+  - `amelia config settings` - View/edit server settings
+
+  Existing YAML configurations must be manually migrated using these commands.
+
+- **dashboard:** Redesign job queue with industrial card layout for improved workflow visibility ([#320](https://github.com/existential-birds/amelia/pull/320))
+- **core:** Migrate from ExecutionState to ImplementationState for cleaner state management ([#296](https://github.com/existential-birds/amelia/pull/296))
+
+### Removed
+
+- **core:** Remove legacy orchestrator.py and state.py in favor of pipeline-based architecture ([#297](https://github.com/existential-birds/amelia/pull/297))
+
+### Fixed
+
+- **dashboard:** Improve workflow detail UI responsiveness on smaller screens ([#319](https://github.com/existential-birds/amelia/pull/319))
+- **orchestrator:** Remove duplicate STAGE_STARTED emission in planning flow ([#303](https://github.com/existential-birds/amelia/pull/303))
+
 ## [0.9.0] - 2026-01-15
 
 ### Added
@@ -244,7 +279,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - FastAPI server with WebSocket support
 - React dashboard for workflow visualization
 
-[Unreleased]: https://github.com/existential-birds/amelia/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/existential-birds/amelia/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/existential-birds/amelia/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/existential-birds/amelia/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/existential-birds/amelia/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/existential-birds/amelia/compare/v0.6.0...v0.7.0
