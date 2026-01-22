@@ -18,7 +18,7 @@ import { cn } from '@/lib/utils';
  *
  * Features:
  * - Sidebar trigger button using the sidebar context
- * - Centered "AMELIA" branding with decorative dashes
+ * - Centered "AMELIA" branding with letter-spaced typography
  * - Connection status indicator (glowing green when connected, red when disconnected)
  * - Sticky positioning at top of viewport
  * - Hidden on tablet/desktop viewports (md:hidden)
@@ -26,7 +26,7 @@ import { cn } from '@/lib/utils';
  * Layout:
  * ```
  * +-----------------------------------------------------+
- * | [=]  ._____ A M E L I A _____.              [*]    |
+ * | [=]           A M E L I A                   [*]    |
  * +-----------------------------------------------------+
  * ```
  *
