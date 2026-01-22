@@ -2,7 +2,7 @@
 import inspect
 from collections.abc import Callable
 from datetime import UTC, datetime
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -12,11 +12,57 @@ from amelia.agents.reviewer import (
     StructuredReviewResult,
     normalize_severity,
 )
-from amelia.core.types import Profile
+from amelia.core.types import AgentConfig, Profile
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
 from amelia.pipelines.implementation.state import ImplementationState
 from amelia.server.models.events import EventType
 from tests.conftest import AsyncIteratorMock
+
+
+@pytest.fixture
+def mock_agent_config() -> AgentConfig:
+    """Default AgentConfig for tests."""
+    return AgentConfig(driver="cli:claude", model="sonnet", options={})
+
+
+@pytest.fixture
+def create_reviewer(mock_driver: MagicMock) -> Callable[..., Reviewer]:
+    """Factory fixture to create Reviewer with mock driver injected.
+
+    Returns a function that creates Reviewer instances with the mock_driver
+    already configured, accepting optional event_bus, prompts, and agent_name.
+    """
+    def _create(
+        event_bus: "MagicMock | None" = None,
+        prompts: dict[str, str] | None = None,
+        agent_name: str = "reviewer",
+    ) -> Reviewer:
+        with patch("amelia.agents.reviewer.get_driver", return_value=mock_driver):
+            config = AgentConfig(driver="cli:claude", model="sonnet", options={})
+            return Reviewer(config, event_bus=event_bus, prompts=prompts, agent_name=agent_name)
+    return _create
+
+
+class TestReviewerInit:
+    """Tests for Reviewer initialization with AgentConfig."""
+
+    def test_reviewer_init_with_agent_config(self) -> None:
+        """Reviewer should accept AgentConfig and create its own driver."""
+        config = AgentConfig(
+            driver="cli:claude",
+            model="sonnet",
+            options={"max_iterations": 5},
+        )
+
+        with patch("amelia.agents.reviewer.get_driver") as mock_get_driver:
+            mock_driver = MagicMock()
+            mock_get_driver.return_value = mock_driver
+
+            reviewer = Reviewer(config)
+
+            mock_get_driver.assert_called_once_with("cli:claude", model="sonnet")
+            assert reviewer.driver is mock_driver
+            assert reviewer.options == {"max_iterations": 5}
 
 
 class TestNormalizeSeverity:
@@ -117,6 +163,7 @@ class TestAgenticReview:
     async def test_processes_agentic_message_stream(
         self,
         mock_driver: MagicMock,
+        create_reviewer: Callable[..., Reviewer],
         mock_execution_state_factory: Callable[..., tuple[ImplementationState, Profile]],
     ) -> None:
         """Test that agentic_review processes AgenticMessage stream from driver."""
@@ -169,7 +216,7 @@ Rationale: No issues found, code is ready to merge.
         ]
         mock_driver.execute_agentic = MagicMock(return_value=AsyncIteratorMock(messages))
 
-        reviewer = Reviewer(driver=mock_driver)
+        reviewer = create_reviewer()
         result, session_id = await reviewer.agentic_review(
             state,
             base_commit="abc123",
@@ -188,6 +235,7 @@ Rationale: No issues found, code is ready to merge.
     async def test_agentic_review_emits_workflow_events(
         self,
         mock_driver: MagicMock,
+        create_reviewer: Callable[..., Reviewer],
         mock_execution_state_factory: Callable[..., tuple[ImplementationState, Profile]],
     ) -> None:
         """Test that workflow events are emitted for AgenticMessage stream."""
@@ -220,7 +268,7 @@ Rationale: No issues found, code is ready to merge.
         ]
         mock_driver.execute_agentic = MagicMock(return_value=AsyncIteratorMock(messages))
 
-        reviewer = Reviewer(driver=mock_driver, event_bus=mock_event_bus)
+        reviewer = create_reviewer(event_bus=mock_event_bus)
         await reviewer.agentic_review(
             state,
             base_commit="abc123",
@@ -240,6 +288,7 @@ Rationale: No issues found, code is ready to merge.
     async def test_agentic_review_handles_error_result(
         self,
         mock_driver: MagicMock,
+        create_reviewer: Callable[..., Reviewer],
         mock_execution_state_factory: Callable[..., tuple[ImplementationState, Profile]],
     ) -> None:
         """Test that agentic_review handles error results correctly."""
@@ -262,7 +311,7 @@ Rationale: No issues found, code is ready to merge.
         ]
         mock_driver.execute_agentic = MagicMock(return_value=AsyncIteratorMock(messages))
 
-        reviewer = Reviewer(driver=mock_driver)
+        reviewer = create_reviewer()
         result, session_id = await reviewer.agentic_review(
             state,
             base_commit="abc123",
@@ -277,6 +326,7 @@ Rationale: No issues found, code is ready to merge.
     async def test_agentic_review_uses_to_workflow_event(
         self,
         mock_driver: MagicMock,
+        create_reviewer: Callable[..., Reviewer],
         mock_execution_state_factory: Callable[..., tuple[ImplementationState, Profile]],
     ) -> None:
         """Test that agentic_review uses AgenticMessage.to_workflow_event() for conversion."""
@@ -299,7 +349,7 @@ Rationale: No issues found, code is ready to merge.
         ]
         mock_driver.execute_agentic = MagicMock(return_value=AsyncIteratorMock(messages))
 
-        reviewer = Reviewer(driver=mock_driver, event_bus=mock_event_bus)
+        reviewer = create_reviewer(event_bus=mock_event_bus)
         await reviewer.agentic_review(
             state,
             base_commit="abc123",
@@ -316,6 +366,7 @@ Rationale: No issues found, code is ready to merge.
     async def test_agentic_review_parses_beagle_markdown_result(
         self,
         mock_driver: MagicMock,
+        create_reviewer: Callable[..., Reviewer],
         mock_execution_state_factory: Callable[..., tuple[ImplementationState, Profile]],
     ) -> None:
         """Test that agentic_review correctly parses beagle markdown result from agent."""
@@ -364,7 +415,7 @@ Rationale: Two major issues need to be fixed first.
         ]
         mock_driver.execute_agentic = MagicMock(return_value=AsyncIteratorMock(messages))
 
-        reviewer = Reviewer(driver=mock_driver)
+        reviewer = create_reviewer()
         result, session_id = await reviewer.agentic_review(
             state,
             base_commit="abc123",
@@ -381,6 +432,7 @@ Rationale: Two major issues need to be fixed first.
     async def test_agentic_review_determines_severity_from_highest_issue(
         self,
         mock_driver: MagicMock,
+        create_reviewer: Callable[..., Reviewer],
         mock_execution_state_factory: Callable[..., tuple[ImplementationState, Profile]],
     ) -> None:
         """Test that agentic_review determines overall severity from highest issue severity.
@@ -433,7 +485,7 @@ Rationale: Critical security issue must be fixed.
         ]
         mock_driver.execute_agentic = MagicMock(return_value=AsyncIteratorMock(messages))
 
-        reviewer = Reviewer(driver=mock_driver)
+        reviewer = create_reviewer()
         result, session_id = await reviewer.agentic_review(
             state,
             base_commit="abc123",
@@ -478,7 +530,7 @@ class TestParseReviewResult:
 
     def test_markdown_bold_ready_yes_with_needs_fixes_in_rationale(
         self,
-        mock_driver: MagicMock,
+        create_reviewer: Callable[..., Reviewer],
     ) -> None:
         """Test that **Ready:** Yes is correctly parsed even when 'needs fixes' in rationale.
 
@@ -508,7 +560,7 @@ Code looks good overall with no issues found.
 **Ready:** Yes
 Rationale: Code needs fixes for edge cases but they are out of scope.
 """
-        reviewer = Reviewer(driver=mock_driver)
+        reviewer = create_reviewer()
         result = reviewer._parse_review_result(beagle_output, workflow_id="wf-test")
 
         # Should be approved because verdict says "Ready: Yes"
@@ -519,7 +571,7 @@ Rationale: Code needs fixes for edge cases but they are out of scope.
 
     def test_markdown_bold_only_on_ready_word(
         self,
-        mock_driver: MagicMock,
+        create_reviewer: Callable[..., Reviewer],
     ) -> None:
         """Test that **Ready**: Yes is correctly parsed (bold only on 'Ready', not 'Ready:').
 
@@ -548,7 +600,7 @@ Code looks good overall.
 **Ready**: Yes
 Rationale: All checks pass.
 """
-        reviewer = Reviewer(driver=mock_driver)
+        reviewer = create_reviewer()
         result = reviewer._parse_review_result(beagle_output, workflow_id="wf-test")
 
         assert result.approved is True, (
@@ -580,7 +632,10 @@ Second task content.
 Third task content.
 """
 
-    def test_single_task_returns_full_plan(self) -> None:
+    def test_single_task_returns_full_plan(
+        self,
+        create_reviewer: Callable[..., Reviewer],
+    ) -> None:
         """When total_tasks is None or 1, return full plan."""
         state = ImplementationState(
             workflow_id="test-workflow",
@@ -592,7 +647,7 @@ Third task content.
             total_tasks=None,
             current_task_index=0,
         )
-        reviewer = Reviewer(driver=None)  # type: ignore[arg-type]
+        reviewer = create_reviewer()
         context = reviewer._extract_task_context(state)
 
         assert context is not None
@@ -600,7 +655,9 @@ Third task content.
         assert "Simple Plan" in context
 
     def test_multi_task_extracts_current_section(
-        self, multi_task_plan: str
+        self,
+        create_reviewer: Callable[..., Reviewer],
+        multi_task_plan: str,
     ) -> None:
         """For multi-task, extract current task with index label."""
         state = ImplementationState(
@@ -613,14 +670,17 @@ Third task content.
             total_tasks=3,
             current_task_index=1,  # Task 2
         )
-        reviewer = Reviewer(driver=None)  # type: ignore[arg-type]
+        reviewer = create_reviewer()
         context = reviewer._extract_task_context(state)
 
         assert context is not None
         assert "Current Task (2/3)" in context
         assert "Add validation" in context
 
-    def test_no_plan_returns_goal_fallback(self) -> None:
+    def test_no_plan_returns_goal_fallback(
+        self,
+        create_reviewer: Callable[..., Reviewer],
+    ) -> None:
         """Without plan, fall back to goal."""
         state = ImplementationState(
             workflow_id="test-workflow",
@@ -630,7 +690,7 @@ Third task content.
             goal="Just do the thing",
             plan_markdown=None,
         )
-        reviewer = Reviewer(driver=None)  # type: ignore[arg-type]
+        reviewer = create_reviewer()
         context = reviewer._extract_task_context(state)
 
         assert context is not None
