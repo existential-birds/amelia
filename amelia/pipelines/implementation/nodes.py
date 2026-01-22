@@ -18,7 +18,6 @@ from loguru import logger
 from amelia.agents.architect import Architect, MarkdownPlanOutput
 from amelia.core.constants import ToolName, resolve_plan_path
 from amelia.core.extraction import extract_structured
-from amelia.drivers.factory import DriverFactory
 from amelia.pipelines.implementation.state import ImplementationState
 from amelia.pipelines.implementation.utils import (
     _extract_goal_from_plan,
@@ -163,8 +162,8 @@ async def call_architect_node(
     repository = configurable.get("repository")
     prompts = configurable.get("prompts", {})
 
-    driver = DriverFactory.get_driver(profile.driver, model=profile.model)
-    architect = Architect(driver, event_bus=event_bus, prompts=prompts)
+    agent_config = profile.get_agent_config("architect")
+    architect = Architect(agent_config, event_bus=event_bus, prompts=prompts)
 
     # Ensure the plan directory exists before the architect runs
     plan_rel_path = resolve_plan_path(profile.plan_path_pattern, state.issue.id)
@@ -183,7 +182,7 @@ async def call_architect_node(
         if event_bus:
             event_bus.emit(event)
 
-    await _save_token_usage(driver, workflow_id, "architect", repository)
+    await _save_token_usage(architect.driver, workflow_id, "architect", repository)
 
     # Fallback: If plan file doesn't exist, write it from Write tool call content
     # This handles cases where Claude Code's Write tool didn't persist the file
