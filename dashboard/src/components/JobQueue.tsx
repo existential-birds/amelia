@@ -1,5 +1,7 @@
 /**
  * @fileoverview Static job queue displaying active workflows.
+ *
+ * Industrial panel design with compact workflow cards.
  */
 import { useState } from 'react';
 import { ChevronUp, ChevronDown } from 'lucide-react';
@@ -28,8 +30,10 @@ interface JobQueueProps {
 /**
  * Displays a static list of active workflows.
  *
- * Renders each workflow as a selectable JobQueueItem.
- * Displays empty state when no workflows exist.
+ * Industrial panel design with:
+ * - Sticky header with workflow count
+ * - Compact card list with status indicators
+ * - Efficient use of horizontal space
  *
  * @param props - Component props
  * @returns The job queue UI
@@ -64,12 +68,13 @@ export function JobQueue({
   return (
     <div
       data-slot="job-queue"
-      className={cn('bg-card/60 border border-border/50 flex flex-col', className)}
+      className={cn('bg-card/40 border border-border/40 rounded-md flex flex-col', className)}
     >
+      {/* Header */}
       <div
         className={cn(
-          'sticky top-0 z-20 bg-card/60 backdrop-blur-sm px-5 pt-5 pb-3 border-b border-border/50',
-          collapsible && 'cursor-pointer hover:bg-card/80 transition-colors'
+          'sticky top-0 z-20 bg-card/80 backdrop-blur-sm px-4 py-3 border-b border-border/40',
+          collapsible && 'cursor-pointer hover:bg-card/90 transition-colors'
         )}
         onClick={handleHeaderClick}
         role={collapsible ? 'button' : undefined}
@@ -84,14 +89,22 @@ export function JobQueue({
       >
         <div className="flex items-center justify-between">
           <h3 className="font-heading text-xs font-semibold tracking-widest text-muted-foreground">
-            JOB QUEUE{collapsible && ` (${workflows.length})`}
+            JOB QUEUE
           </h3>
-          {collapsible && (
-            <ChevronIcon className="size-4 text-muted-foreground" />
-          )}
+          <div className="flex items-center gap-2">
+            {workflows.length > 0 && (
+              <span className="font-mono text-[10px] text-muted-foreground/60 tabular-nums">
+                {workflows.length}
+              </span>
+            )}
+            {collapsible && (
+              <ChevronIcon className="size-4 text-muted-foreground" />
+            )}
+          </div>
         </div>
       </div>
 
+      {/* Workflow List */}
       <div
         aria-hidden={collapsible && isCollapsed}
         className={cn(
@@ -102,11 +115,13 @@ export function JobQueue({
         )}
       >
         {workflows.length === 0 ? (
-          <p className="text-center text-muted-foreground py-8">
-            No active workflows
-          </p>
+          <div className="flex-1 flex items-center justify-center py-12">
+            <p className="text-sm text-muted-foreground/60">
+              No active workflows
+            </p>
+          </div>
         ) : (
-          <div className="flex flex-col gap-2 p-5">
+          <div className="flex flex-col gap-1.5 p-3">
             {workflows.map((workflow) => (
               <JobQueueItem
                 key={workflow.id}

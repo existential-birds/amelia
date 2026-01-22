@@ -13,15 +13,22 @@ describe('JobQueueItem', () => {
     current_stage: 'Developer',
   });
 
-  it('renders issue ID and worktree name', () => {
+  it('renders issue ID and repo name (extracted from worktree path)', () => {
     render(<JobQueueItem workflow={mockWorkflow} selected={false} onSelect={() => {}} />);
     expect(screen.getByText('#8')).toBeInTheDocument();
-    expect(screen.getByText('/tmp/worktrees/feature-benchmark')).toBeInTheDocument();
+    // New design shows repo name extracted from path, not full path
+    expect(screen.getByText('feature-benchmark')).toBeInTheDocument();
   });
 
-  it('renders status indicator via StatusBadge', () => {
+  it('renders status label inline', () => {
     render(<JobQueueItem workflow={mockWorkflow} selected={false} onSelect={() => {}} />);
-    expect(screen.getByRole('status')).toHaveTextContent('RUNNING');
+    // New design uses inline status text instead of StatusBadge
+    expect(screen.getByText('RUNNING')).toBeInTheDocument();
+  });
+
+  it('renders current stage when available', () => {
+    render(<JobQueueItem workflow={mockWorkflow} selected={false} onSelect={() => {}} />);
+    expect(screen.getByText('Developer')).toBeInTheDocument();
   });
 
   it('shows selected state with data-selected attribute', () => {
@@ -56,5 +63,18 @@ describe('JobQueueItem', () => {
     button.focus();
     await user.keyboard(' ');
     expect(onSelect).toHaveBeenCalledWith('wf-001');
+  });
+
+  it('handles empty worktree_path gracefully', () => {
+    const workflow = createMockWorkflowSummary({ worktree_path: '' });
+    render(<JobQueueItem workflow={workflow} selected={false} onSelect={() => {}} />);
+    // Should show 'unknown' instead of empty string or crashing
+    expect(screen.getByText('unknown')).toBeInTheDocument();
+  });
+
+  it('handles root path worktree_path gracefully', () => {
+    const workflow = createMockWorkflowSummary({ worktree_path: '/' });
+    render(<JobQueueItem workflow={workflow} selected={false} onSelect={() => {}} />);
+    expect(screen.getByText('unknown')).toBeInTheDocument();
   });
 });

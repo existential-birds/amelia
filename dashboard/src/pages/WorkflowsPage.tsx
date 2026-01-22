@@ -174,7 +174,7 @@ export default function WorkflowsPage() {
 
       {/* Bottom: Queue + Activity (split) - ScrollArea provides overflow handling */}
       {/* Responsive: stacked on mobile/tablet (grid-cols-1), side-by-side on lg+ */}
-      <div className="flex-1 grid grid-cols-1 lg:grid-cols-[360px_1fr] gap-4 p-4 overflow-hidden relative z-10 min-h-[300px]">
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-[minmax(280px,320px)_1fr] gap-4 p-4 overflow-hidden relative z-10 min-h-[300px]">
         <ScrollArea className="h-full lg:max-h-none overflow-hidden">
           <JobQueue
             workflows={workflows}
