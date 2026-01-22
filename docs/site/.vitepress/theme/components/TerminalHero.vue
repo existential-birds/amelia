@@ -14,7 +14,7 @@ const executeStep = ref(0) // 0 = not started, 1-3 = steps
 // Animation control
 const animationActive = ref(true)
 const animationTimeouts = new Set<number>()
-const fullCommand = 'amelia start 127 --profile work'
+const fullCommand = 'amelia start 42 --profile research'
 
 // Line visibility control
 const showLine = (lineNumber: number) => visibleLines.value >= lineNumber
@@ -201,12 +201,12 @@ onUnmounted(() => {
       <!-- Fetch phase -->
       <div v-if="showLine(LINES.FETCH) && !showLine(LINES.ISSUE)" class="terminal-line progress">
         <span class="spinner">◐</span>
-        <span>Fetching issue from GitHub...</span>
+        <span>Analyzing issue context...</span>
       </div>
 
       <div v-if="showLine(LINES.ISSUE)" class="terminal-line success">
         <span class="checkmark">✓</span>
-        <span>Issue #127: Add rate limiting to API</span>
+        <span>Issue #42: Implement recursive sub-agent decomposition</span>
       </div>
 
       <div v-if="showLine(LINES.BLANK_2)" class="terminal-line blank"></div>
@@ -214,7 +214,7 @@ onUnmounted(() => {
       <!-- Plan phase -->
       <div v-if="showLine(LINES.PLAN) && !showLine(LINES.PLAN_READY)" class="terminal-line progress">
         <span class="spinner">◐</span>
-        <span>Architect generating plan...</span>
+        <span>Architect decomposing task...</span>
       </div>
 
       <div v-if="showLine(LINES.PLAN_READY)" class="terminal-line success">
@@ -226,9 +226,9 @@ onUnmounted(() => {
 
       <!-- Plan Goal -->
       <div v-if="showLine(LINES.PLAN_GOAL)" class="plan-goal">
-        <div class="goal-title">◆ Goal</div>
-        <div class="goal-text">  Add rate limiting middleware to protect /api/* routes</div>
-        <div class="goal-files">  Key files: src/middleware/, src/routes/api.py</div>
+        <div class="goal-title">◆ Strategy</div>
+        <div class="goal-text">  RLM-inspired recursive decomposition</div>
+        <div class="goal-files">  Patterns: sub-agents, context-folding</div>
       </div>
 
       <div v-if="showLine(LINES.BLANK_4)" class="terminal-line blank"></div>
@@ -249,25 +249,25 @@ onUnmounted(() => {
       <!-- Execute phase - agentic tool calls -->
       <div v-if="showLine(LINES.TOOL_1) && executeStep >= 1 && !showLine(LINES.EXECUTE_DONE)" class="terminal-line tool-call">
         <span class="tool-icon">→</span>
-        <span class="tool-name">shell</span>
-        <span class="tool-cmd">mkdir -p src/middleware</span>
+        <span class="tool-name">spawn</span>
+        <span class="tool-cmd">codebase-analyzer (src/)</span>
       </div>
 
       <div v-if="showLine(LINES.TOOL_2) && executeStep >= 2 && !showLine(LINES.EXECUTE_DONE)" class="terminal-line tool-call">
         <span class="tool-icon">→</span>
-        <span class="tool-name">write</span>
-        <span class="tool-cmd">src/middleware/rate_limit.py</span>
+        <span class="tool-name">spawn</span>
+        <span class="tool-cmd">test-scanner (tests/)</span>
       </div>
 
       <div v-if="showLine(LINES.TOOL_3) && executeStep >= 3 && !showLine(LINES.EXECUTE_DONE)" class="terminal-line tool-call">
         <span class="tool-icon">→</span>
-        <span class="tool-name">edit</span>
-        <span class="tool-cmd">src/routes/api.py</span>
+        <span class="tool-name">spawn</span>
+        <span class="tool-cmd">doc-reviewer (docs/)</span>
       </div>
 
       <div v-if="showLine(LINES.EXECUTE_DONE)" class="terminal-line success">
         <span class="checkmark">✓</span>
-        <span>All tasks complete</span>
+        <span>Sub-agents complete</span>
       </div>
 
       <div v-if="showLine(LINES.BLANK_6)" class="terminal-line blank"></div>
@@ -275,12 +275,12 @@ onUnmounted(() => {
       <!-- Review phase -->
       <div v-if="showLine(LINES.REVIEW) && !showLine(LINES.REVIEW_DONE)" class="terminal-line progress">
         <span class="spinner">◐</span>
-        <span>Reviewer validating changes...</span>
+        <span>Synthesizing results...</span>
       </div>
 
       <div v-if="showLine(LINES.REVIEW_DONE)" class="terminal-line success">
         <span class="checkmark">✓</span>
-        <span>Changes approved</span>
+        <span>Changes ready for review</span>
       </div>
 
       <div v-if="showLine(LINES.BLANK_7)" class="terminal-line blank"></div>
@@ -288,7 +288,7 @@ onUnmounted(() => {
       <!-- Final message -->
       <div v-if="showLine(LINES.FINAL)" class="terminal-line info">
         <span class="indent"></span>
-        <span>Ready to commit? Open dashboard at <span class="accent">localhost:8420</span></span>
+        <span>View results at <span class="accent">localhost:8420</span></span>
       </div>
 
       <div v-if="showLine(LINES.BLANK_8)" class="terminal-line blank"></div>
