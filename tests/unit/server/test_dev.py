@@ -111,6 +111,7 @@ class TestDevCLI:
     def test_dev_fails_without_node_in_dev_mode(self, runner: CliRunner):
         """Dev command fails with clear error when node is not installed."""
         with (
+            patch("amelia.server.dev.run_first_time_setup", return_value=True),
             patch("amelia.server.dev.is_amelia_dev_repo", return_value=True),
             patch("amelia.server.dev.check_node_installed", return_value=False),
         ):
@@ -121,6 +122,7 @@ class TestDevCLI:
     def test_dev_fails_without_pnpm_in_dev_mode(self, runner: CliRunner):
         """Dev command fails with clear error when pnpm is not installed."""
         with (
+            patch("amelia.server.dev.run_first_time_setup", return_value=True),
             patch("amelia.server.dev.is_amelia_dev_repo", return_value=True),
             patch("amelia.server.dev.check_node_installed", return_value=True),
             patch("amelia.server.dev.check_pnpm_installed", return_value=False),
@@ -132,6 +134,7 @@ class TestDevCLI:
     def test_dev_user_mode_skips_node_check(self, runner: CliRunner):
         """In user mode, node/pnpm checks are skipped."""
         with (
+            patch("amelia.server.dev.run_first_time_setup", return_value=True),
             patch("amelia.server.dev.is_amelia_dev_repo", return_value=False),
             patch("amelia.server.dev.check_node_installed", return_value=False),
             patch("amelia.server.dev.check_pnpm_installed", return_value=False),
@@ -145,6 +148,7 @@ class TestDevCLI:
     def test_dev_no_dashboard_skips_node_check(self, runner: CliRunner):
         """--no-dashboard skips node/pnpm checks even in dev mode."""
         with (
+            patch("amelia.server.dev.run_first_time_setup", return_value=True),
             patch("amelia.server.dev.is_amelia_dev_repo", return_value=True),
             patch("amelia.server.dev.check_node_installed", return_value=False),
             patch("amelia.server.dev.check_pnpm_installed", return_value=False),
@@ -158,6 +162,7 @@ class TestDevCLI:
     def test_dev_fails_when_port_in_use(self, runner: CliRunner):
         """Dev command fails with clear error when port is in use."""
         with (
+            patch("amelia.server.dev.run_first_time_setup", return_value=True),
             patch("amelia.server.dev.is_amelia_dev_repo", return_value=False),
             patch("amelia.server.dev.check_port_available", return_value=False),
         ):

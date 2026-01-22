@@ -33,7 +33,11 @@ class TestServerCLI:
         self, runner: CliRunner, args: list[str], env: dict[str, str], expected_port: int, expected_host: str
     ) -> None:
         """Test server configuration from CLI args and environment."""
-        with patch.dict(os.environ, env, clear=False), patch("uvicorn.run") as mock_run:
+        with (
+            patch.dict(os.environ, env, clear=False),
+            patch("amelia.server.cli.run_first_time_setup", return_value=True),
+            patch("uvicorn.run") as mock_run,
+        ):
             mock_run.side_effect = KeyboardInterrupt()
             runner.invoke(app, ["server"] + args)
             call_kwargs = mock_run.call_args.kwargs
@@ -42,7 +46,10 @@ class TestServerCLI:
 
     def test_server_bind_all_shows_warning(self, runner: CliRunner) -> None:
         """--bind-all shows security warning."""
-        with patch("uvicorn.run") as mock_run:
+        with (
+            patch("amelia.server.cli.run_first_time_setup", return_value=True),
+            patch("uvicorn.run") as mock_run,
+        ):
             mock_run.side_effect = KeyboardInterrupt()
             result = runner.invoke(app, ["server", "--bind-all"])
 
@@ -60,9 +67,12 @@ class TestServerCLI:
                 captured_env["AMELIA_WORKING_DIR"] = os.environ.get("AMELIA_WORKING_DIR")
                 raise KeyboardInterrupt()
 
-            with patch("amelia.server.cli.uvicorn") as mock_uvicorn, \
-                 patch("amelia.server.cli.configure_logging"), \
-                 patch("amelia.server.cli.print_banner"):
+            with (
+                patch("amelia.server.cli.run_first_time_setup", return_value=True),
+                patch("amelia.server.cli.uvicorn") as mock_uvicorn,
+                patch("amelia.server.cli.configure_logging"),
+                patch("amelia.server.cli.print_banner"),
+            ):
                 mock_uvicorn.run.side_effect = capture_env_and_exit
 
                 runner.invoke(
