@@ -66,7 +66,7 @@ export function ServerSettingsForm({ settings, onSave, isSaving }: ServerSetting
               value={String(formData.log_retention_days)}
               onValueChange={(v) => handleChange('log_retention_days', Number(v))}
             >
-              <SelectTrigger>
+              <SelectTrigger id="log_retention_days">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -85,7 +85,7 @@ export function ServerSettingsForm({ settings, onSave, isSaving }: ServerSetting
               value={String(formData.trace_retention_days)}
               onValueChange={(v) => handleChange('trace_retention_days', Number(v))}
             >
-              <SelectTrigger>
+              <SelectTrigger id="trace_retention_days">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -116,7 +116,7 @@ export function ServerSettingsForm({ settings, onSave, isSaving }: ServerSetting
             value={String(formData.max_concurrent)}
             onValueChange={(v) => handleChange('max_concurrent', Number(v))}
           >
-            <SelectTrigger className="w-32">
+            <SelectTrigger id="max_concurrent" className="w-32">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

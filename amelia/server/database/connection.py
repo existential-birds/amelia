@@ -529,10 +529,18 @@ class Database:
             )
         """)
 
-        # Trigger to ensure only one active profile
+        # Triggers to ensure only one active profile (both INSERT and UPDATE)
         await self.execute("""
             CREATE TRIGGER IF NOT EXISTS ensure_single_active_profile
             AFTER UPDATE OF is_active ON profiles
+            WHEN NEW.is_active = 1
+            BEGIN
+                UPDATE profiles SET is_active = 0 WHERE id != NEW.id;
+            END
+        """)
+        await self.execute("""
+            CREATE TRIGGER IF NOT EXISTS ensure_single_active_profile_insert
+            AFTER INSERT ON profiles
             WHEN NEW.is_active = 1
             BEGIN
                 UPDATE profiles SET is_active = 0 WHERE id != NEW.id;

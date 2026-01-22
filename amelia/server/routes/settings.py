@@ -1,7 +1,9 @@
 # amelia/server/routes/settings.py
 """API routes for server settings and profiles."""
+import sqlite3
+
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from amelia.server.database import (
     ProfileRecord,
@@ -63,6 +65,10 @@ class ProfileResponse(BaseModel):
     is_active: bool
 
 
+VALID_DRIVERS = {"cli:claude", "api:openrouter", "cli", "api"}
+VALID_TRACKERS = {"jira", "github", "none", "noop"}
+
+
 class ProfileCreate(BaseModel):
     """Profile creation request."""
 
@@ -78,6 +84,20 @@ class ProfileCreate(BaseModel):
     max_task_review_iterations: int = 5
     auto_approve_reviews: bool = False
 
+    @field_validator("driver")
+    @classmethod
+    def validate_driver(cls, v: str) -> str:
+        if v not in VALID_DRIVERS:
+            raise ValueError(f"Invalid driver '{v}'. Valid options: {sorted(VALID_DRIVERS)}")
+        return v
+
+    @field_validator("tracker")
+    @classmethod
+    def validate_tracker(cls, v: str) -> str:
+        if v not in VALID_TRACKERS:
+            raise ValueError(f"Invalid tracker '{v}'. Valid options: {sorted(VALID_TRACKERS)}")
+        return v
+
 
 class ProfileUpdate(BaseModel):
     """Profile update request."""
@@ -92,6 +112,20 @@ class ProfileUpdate(BaseModel):
     max_review_iterations: int | None = None
     max_task_review_iterations: int | None = None
     auto_approve_reviews: bool | None = None
+
+    @field_validator("driver")
+    @classmethod
+    def validate_driver(cls, v: str | None) -> str | None:
+        if v is not None and v not in VALID_DRIVERS:
+            raise ValueError(f"Invalid driver '{v}'. Valid options: {sorted(VALID_DRIVERS)}")
+        return v
+
+    @field_validator("tracker")
+    @classmethod
+    def validate_tracker(cls, v: str | None) -> str | None:
+        if v is not None and v not in VALID_TRACKERS:
+            raise ValueError(f"Invalid tracker '{v}'. Valid options: {sorted(VALID_TRACKERS)}")
+        return v
 
 
 # Server settings endpoints
@@ -164,7 +198,10 @@ async def create_profile(
         max_task_review_iterations=profile.max_task_review_iterations,
         auto_approve_reviews=profile.auto_approve_reviews,
     )
-    created = await repo.create_profile(record)
+    try:
+        created = await repo.create_profile(record)
+    except sqlite3.IntegrityError as exc:
+        raise HTTPException(status_code=409, detail="Profile already exists") from exc
     return _profile_to_response(created)
 
 

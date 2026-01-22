@@ -451,7 +451,17 @@ def server_set(
         elif setting in float_fields:
             parsed_value = float(value)
         elif setting in bool_fields:
-            parsed_value = value.lower() in ("true", "1", "yes")
+            value_lower = value.lower()
+            if value_lower in ("true", "1", "yes"):
+                parsed_value = True
+            elif value_lower in ("false", "0", "no"):
+                parsed_value = False
+            else:
+                console.print(
+                    f"[red]Invalid boolean for {setting}: {value}. "
+                    "Use true/false, yes/no, or 1/0.[/red]"
+                )
+                raise typer.Exit(code=1)
         elif setting in str_fields:
             parsed_value = value
         else:

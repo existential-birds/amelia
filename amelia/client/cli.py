@@ -408,7 +408,8 @@ async def _get_profile_from_server(profile_name: str | None) -> Profile:
     Raises:
         ValueError: If profile not found or server unreachable.
     """
-    base_url = "http://127.0.0.1:8420"
+    # Use same default as AmeliaClient for consistency
+    base_url = AmeliaClient().base_url
     timeout = httpx.Timeout(10.0, connect=5.0)
 
     try:
