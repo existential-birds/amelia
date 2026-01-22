@@ -79,9 +79,7 @@ export function MobileCommandBar() {
       {/* Center section: Branding */}
       <div className="flex items-center justify-center">
         <span className="text-primary font-display tracking-[0.3em] text-sm">
-          <span className="text-muted-foreground/60">·─────</span>
-          {' '}A M E L I A{' '}
-          <span className="text-muted-foreground/60">─────·</span>
+          A M E L I A
         </span>
       </div>
 
