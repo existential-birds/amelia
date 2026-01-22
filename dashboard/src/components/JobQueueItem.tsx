@@ -78,7 +78,7 @@ const statusLabels: Record<WorkflowStatus, string> = {
  */
 function getRepoName(path: string): string {
   if (!path || path === '/') return 'unknown';
-  const segments = path.split('/').filter(Boolean);
+  const segments = path.split(/[\\/]+/).filter(Boolean);
   return segments[segments.length - 1] || 'unknown';
 }
 
