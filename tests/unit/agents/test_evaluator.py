@@ -1,6 +1,6 @@
 """Tests for the Evaluator agent."""
 from collections.abc import Callable
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -11,7 +11,7 @@ from amelia.agents.evaluator import (
     EvaluationResult,
     Evaluator,
 )
-from amelia.core.types import Profile, ReviewResult
+from amelia.core.types import AgentConfig, Profile, ReviewResult
 from amelia.pipelines.implementation.state import ImplementationState
 
 
@@ -49,16 +49,48 @@ class TestEvaluationResult:
 class TestEvaluator:
     """Tests for Evaluator agent."""
 
+    def test_evaluator_init_with_agent_config(self) -> None:
+        """Evaluator should accept AgentConfig and create its own driver."""
+        config = AgentConfig(driver="cli:claude", model="sonnet")
+
+        with patch("amelia.agents.evaluator.get_driver") as mock_get_driver:
+            mock_driver = MagicMock()
+            mock_get_driver.return_value = mock_driver
+
+            evaluator = Evaluator(config)
+
+            mock_get_driver.assert_called_once_with("cli:claude", model="sonnet")
+            assert evaluator.driver is mock_driver
+
+    def test_evaluator_init_stores_options(self) -> None:
+        """Evaluator should store options from AgentConfig."""
+        config = AgentConfig(
+            driver="api:openrouter",
+            model="anthropic/claude-sonnet-4",
+            options={"max_iterations": 5},
+        )
+
+        with patch("amelia.agents.evaluator.get_driver") as mock_get_driver:
+            mock_get_driver.return_value = MagicMock()
+
+            evaluator = Evaluator(config)
+
+            assert evaluator.options == {"max_iterations": 5}
+
     @pytest.fixture
     def evaluator(self, mock_driver: MagicMock) -> Evaluator:
         """Create an Evaluator instance with mocked driver."""
-        return Evaluator(driver=mock_driver)
+        config = AgentConfig(driver="cli:claude", model="sonnet")
+        with patch("amelia.agents.evaluator.get_driver", return_value=mock_driver):
+            return Evaluator(config)
 
     def test_system_prompt_returns_default_when_no_custom_prompt(
         self, mock_driver: MagicMock
     ) -> None:
         """Test that system_prompt returns default SYSTEM_PROMPT when no custom prompt."""
-        evaluator = Evaluator(driver=mock_driver)
+        config = AgentConfig(driver="cli:claude", model="sonnet")
+        with patch("amelia.agents.evaluator.get_driver", return_value=mock_driver):
+            evaluator = Evaluator(config)
         assert evaluator.system_prompt == Evaluator.SYSTEM_PROMPT
         assert "expert code evaluation agent" in evaluator.system_prompt
 
@@ -66,14 +98,18 @@ class TestEvaluator:
         self, mock_driver: MagicMock
     ) -> None:
         """Test that system_prompt returns default when prompts dict is empty."""
-        evaluator = Evaluator(driver=mock_driver, prompts={})
+        config = AgentConfig(driver="cli:claude", model="sonnet")
+        with patch("amelia.agents.evaluator.get_driver", return_value=mock_driver):
+            evaluator = Evaluator(config, prompts={})
         assert evaluator.system_prompt == Evaluator.SYSTEM_PROMPT
 
     def test_system_prompt_returns_default_when_key_not_present(
         self, mock_driver: MagicMock
     ) -> None:
         """Test that system_prompt returns default when evaluator.system key is absent."""
-        evaluator = Evaluator(driver=mock_driver, prompts={"other.key": "other value"})
+        config = AgentConfig(driver="cli:claude", model="sonnet")
+        with patch("amelia.agents.evaluator.get_driver", return_value=mock_driver):
+            evaluator = Evaluator(config, prompts={"other.key": "other value"})
         assert evaluator.system_prompt == Evaluator.SYSTEM_PROMPT
 
     def test_system_prompt_returns_custom_prompt_when_configured(
@@ -82,7 +118,9 @@ class TestEvaluator:
         """Test that system_prompt returns custom prompt when evaluator.system is set."""
         custom_prompt = "You are a custom code evaluator..."
         prompts = {"evaluator.system": custom_prompt}
-        evaluator = Evaluator(driver=mock_driver, prompts=prompts)
+        config = AgentConfig(driver="cli:claude", model="sonnet")
+        with patch("amelia.agents.evaluator.get_driver", return_value=mock_driver):
+            evaluator = Evaluator(config, prompts=prompts)
         assert evaluator.system_prompt == custom_prompt
         assert evaluator.system_prompt != Evaluator.SYSTEM_PROMPT
 
@@ -160,7 +198,9 @@ class TestEvaluator:
             return_value=(evaluation_output_with_items, "session-123")
         )
 
-        evaluator = Evaluator(driver=mock_driver)
+        config = AgentConfig(driver="cli:claude", model="sonnet")
+        with patch("amelia.agents.evaluator.get_driver", return_value=mock_driver):
+            evaluator = Evaluator(config)
         result, session_id = await evaluator.evaluate(
             state, profile, workflow_id="wf-123"
         )
@@ -195,7 +235,9 @@ class TestEvaluator:
             last_review=review_result,
         )
 
-        evaluator = Evaluator(driver=mock_driver)
+        config = AgentConfig(driver="cli:claude", model="sonnet")
+        with patch("amelia.agents.evaluator.get_driver", return_value=mock_driver):
+            evaluator = Evaluator(config)
         result, session_id = await evaluator.evaluate(
             state, profile, workflow_id="wf-123"
         )
@@ -266,7 +308,9 @@ class TestEvaluator:
 
         mock_driver.generate = AsyncMock(return_value=(evaluation_output, None))
 
-        evaluator = Evaluator(driver=mock_driver)
+        config = AgentConfig(driver="cli:claude", model="sonnet")
+        with patch("amelia.agents.evaluator.get_driver", return_value=mock_driver):
+            evaluator = Evaluator(config)
         result, _ = await evaluator.evaluate(state, profile, workflow_id="wf-123")
 
         # Verify correct partitioning
@@ -291,7 +335,9 @@ class TestEvaluator:
             last_review=None,
         )
 
-        evaluator = Evaluator(driver=mock_driver)
+        config = AgentConfig(driver="cli:claude", model="sonnet")
+        with patch("amelia.agents.evaluator.get_driver", return_value=mock_driver):
+            evaluator = Evaluator(config)
         with pytest.raises(ValueError, match="must have last_review"):
             await evaluator.evaluate(state, profile, workflow_id="wf-123")
 
@@ -331,7 +377,9 @@ class TestEvaluator:
         )
         mock_driver.generate = AsyncMock(return_value=(evaluation_output, None))
 
-        evaluator = Evaluator(driver=mock_driver, event_bus=mock_event_bus)
+        config = AgentConfig(driver="cli:claude", model="sonnet")
+        with patch("amelia.agents.evaluator.get_driver", return_value=mock_driver):
+            evaluator = Evaluator(config, event_bus=mock_event_bus)
         await evaluator.evaluate(state, profile, workflow_id="wf-123")
 
         # Verify event_bus.emit was called
@@ -364,7 +412,9 @@ class TestEvaluator:
         )
         mock_driver.generate = AsyncMock(return_value=(evaluation_output, None))
 
-        evaluator = Evaluator(driver=mock_driver)
+        config = AgentConfig(driver="cli:claude", model="sonnet")
+        with patch("amelia.agents.evaluator.get_driver", return_value=mock_driver):
+            evaluator = Evaluator(config)
         await evaluator.evaluate(state, profile, workflow_id="wf-123")
 
         # Check that prompt contains the goal
@@ -395,7 +445,9 @@ class TestEvaluator:
         )
         mock_driver.generate = AsyncMock(return_value=(evaluation_output, None))
 
-        evaluator = Evaluator(driver=mock_driver)
+        config = AgentConfig(driver="cli:claude", model="sonnet")
+        with patch("amelia.agents.evaluator.get_driver", return_value=mock_driver):
+            evaluator = Evaluator(config)
         await evaluator.evaluate(state, profile, workflow_id="wf-123")
 
         # Check that prompt contains issue context
