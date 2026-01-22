@@ -15,7 +15,7 @@ from pytest import TempPathFactory
 
 from amelia.core.agentic_state import ToolCall, ToolResult
 from amelia.core.types import (
-    DriverType,
+    AgentConfig,
     Issue,
     Profile,
     Settings,
@@ -297,6 +297,8 @@ def mock_profile_factory(tmp_path_factory: TempPathFactory) -> Callable[..., Pro
 
     Uses tmp_path_factory to create a unique temp directory for working_dir,
     preventing tests from writing artifacts to the main codebase.
+
+    Profiles now use agents dict for per-agent driver/model configuration.
     """
     # Create a shared temp directory for all profiles in this test session
     base_tmp = tmp_path_factory.mktemp("workdir")
@@ -304,35 +306,46 @@ def mock_profile_factory(tmp_path_factory: TempPathFactory) -> Callable[..., Pro
     def _create(
         preset: str | None = None,
         name: str = "test",
-        driver: DriverType = "cli:claude",
-        model: str = "sonnet",
         tracker: TrackerType = "noop",
+        agents: dict[str, AgentConfig] | None = None,
         **kwargs: Any
     ) -> Profile:
         # Use temp directory for working_dir unless explicitly overridden
         if "working_dir" not in kwargs:
             kwargs["working_dir"] = str(base_tmp)
 
-        # Default validator_model to the same as model unless explicitly overridden
-        if "validator_model" not in kwargs:
-            kwargs["validator_model"] = model
-        if preset == "cli_single":
-            if "validator_model" not in kwargs or kwargs["validator_model"] == model:
-                kwargs["validator_model"] = "sonnet"
-            return Profile(name="test_cli", driver="cli:claude", model="sonnet", tracker="noop", **kwargs)
-        elif preset == "api_single":
-            if "validator_model" not in kwargs or kwargs["validator_model"] == model:
-                kwargs["validator_model"] = "anthropic/claude-sonnet-4-20250514"
-            return Profile(name="test_api", driver="api:openrouter", model="anthropic/claude-sonnet-4-20250514", tracker="noop", **kwargs)
-        return Profile(name=name, driver=driver, model=model, tracker=tracker, **kwargs)
+        # Default agents configuration if not provided
+        if agents is None:
+            if preset == "cli_single":
+                agents = {
+                    "architect": AgentConfig(driver="cli:claude", model="sonnet"),
+                    "developer": AgentConfig(driver="cli:claude", model="sonnet"),
+                    "reviewer": AgentConfig(driver="cli:claude", model="sonnet"),
+                }
+                return Profile(name="test_cli", tracker="noop", agents=agents, **kwargs)
+            elif preset == "api_single":
+                agents = {
+                    "architect": AgentConfig(driver="api:openrouter", model="anthropic/claude-sonnet-4-20250514"),
+                    "developer": AgentConfig(driver="api:openrouter", model="anthropic/claude-sonnet-4-20250514"),
+                    "reviewer": AgentConfig(driver="api:openrouter", model="anthropic/claude-sonnet-4-20250514"),
+                }
+                return Profile(name="test_api", tracker="noop", agents=agents, **kwargs)
+            else:
+                # Default: all agents use cli:claude
+                agents = {
+                    "architect": AgentConfig(driver="cli:claude", model="sonnet"),
+                    "developer": AgentConfig(driver="cli:claude", model="sonnet"),
+                    "reviewer": AgentConfig(driver="cli:claude", model="sonnet"),
+                }
+        return Profile(name=name, tracker=tracker, agents=agents, **kwargs)
     return _create
 
 
 @pytest.fixture
 def mock_settings(mock_profile_factory: Callable[..., Profile]) -> Settings:
     """Create mock Settings instance with test profiles."""
-    test_profile = mock_profile_factory(name="test", driver="cli:claude", tracker="noop")
-    work_profile = mock_profile_factory(name="work", driver="cli:claude", tracker="jira")
+    test_profile = mock_profile_factory(name="test", tracker="noop")
+    work_profile = mock_profile_factory(name="work", tracker="jira")
     return Settings(
         active_profile="test",
         profiles={"test": test_profile, "work": work_profile}

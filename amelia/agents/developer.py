@@ -9,8 +9,9 @@ from typing import TYPE_CHECKING
 from loguru import logger
 
 from amelia.core.agentic_state import ToolCall, ToolResult
-from amelia.core.types import Profile
-from amelia.drivers.base import AgenticMessageType, DriverInterface
+from amelia.core.types import AgentConfig, Profile
+from amelia.drivers.base import AgenticMessageType
+from amelia.drivers.factory import get_driver
 from amelia.server.models.events import WorkflowEvent
 
 
@@ -30,8 +31,14 @@ class Developer:
 
     """
 
-    def __init__(self, driver: DriverInterface):
-        self.driver = driver
+    def __init__(self, config: AgentConfig):
+        """Initialize the Developer agent.
+
+        Args:
+            config: Agent configuration with driver, model, and options.
+        """
+        self.driver = get_driver(config.driver, model=config.model)
+        self.options = config.options
 
     async def run(
         self,
