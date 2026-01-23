@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 import pytest
 from langchain_core.runnables.config import RunnableConfig
 
-from amelia.core.types import Profile
+from amelia.core.types import AgentConfig, Profile
 from amelia.pipelines.implementation.utils import (
     extract_task_count,
     extract_task_section,
@@ -155,7 +155,16 @@ class TestExtractConfigParams:
 
     def test_extracts_profile_from_config(self) -> None:
         """Should extract profile from config.configurable.profile."""
-        profile = Profile(name="test", driver="cli:claude", model="sonnet", validator_model="sonnet", working_dir="/tmp/test")
+        profile = Profile(
+            name="test",
+            tracker="noop",
+            working_dir="/tmp/test",
+            agents={
+                "architect": AgentConfig(driver="cli:claude", model="sonnet"),
+                "developer": AgentConfig(driver="cli:claude", model="sonnet"),
+                "reviewer": AgentConfig(driver="cli:claude", model="sonnet"),
+            },
+        )
         config: RunnableConfig = {
             "configurable": {
                 "thread_id": "wf-123",
@@ -171,7 +180,16 @@ class TestExtractConfigParams:
         """Should extract event_bus when provided."""
         mock_event_bus = MagicMock()
 
-        profile = Profile(name="test", driver="cli:claude", model="sonnet", validator_model="sonnet", working_dir="/tmp/test")
+        profile = Profile(
+            name="test",
+            tracker="noop",
+            working_dir="/tmp/test",
+            agents={
+                "architect": AgentConfig(driver="cli:claude", model="sonnet"),
+                "developer": AgentConfig(driver="cli:claude", model="sonnet"),
+                "reviewer": AgentConfig(driver="cli:claude", model="sonnet"),
+            },
+        )
         config: RunnableConfig = {
             "configurable": {
                 "thread_id": "wf-123",

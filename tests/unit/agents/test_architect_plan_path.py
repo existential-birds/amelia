@@ -25,7 +25,14 @@ class TestArchitectPlanPath:
     def state_and_profile(self) -> tuple[ImplementationState, Profile]:
         """Create state and profile for testing."""
         issue = Issue(id="TEST-123", title="Test Issue", description="Test description")
-        profile = Profile(name="test", working_dir="/tmp/test")
+        profile = Profile(
+            name="test",
+            tracker="noop",
+            working_dir="/tmp/test",
+            agents={
+                "architect": AgentConfig(driver="cli:claude", model="sonnet"),
+            },
+        )
         state = ImplementationState(
             workflow_id="test-workflow",
             created_at=datetime.now(UTC),

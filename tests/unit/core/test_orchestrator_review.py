@@ -73,21 +73,20 @@ class TestCallReviewNodeBaseCommitFallback:
 
         config = mock_runnable_config(profile=profile)
 
+        # Mock the Reviewer (driver is now created internally by the agent)
         with patch(
             "amelia.pipelines.nodes.get_current_commit",
             new_callable=AsyncMock,
             return_value="abc123def456",
         ) as mock_get_commit, patch(
-            "amelia.pipelines.nodes.DriverFactory"
-        ) as mock_factory, patch(
             "amelia.pipelines.nodes.Reviewer"
-        ) as mock_reviewer_class:
-            # Setup driver mock
-            mock_driver = MagicMock()
-            mock_factory.get_driver.return_value = mock_driver
-
-            # Setup reviewer mock
+        ) as mock_reviewer_class, patch(
+            "amelia.pipelines.nodes._save_token_usage",
+            new_callable=AsyncMock,
+        ):
+            # Setup reviewer mock (agent creates its own driver internally)
             mock_reviewer = MagicMock()
+            mock_reviewer.driver = MagicMock()
             mock_reviewer.agentic_review = mock_agentic_review
             mock_reviewer_class.return_value = mock_reviewer
 
@@ -141,20 +140,19 @@ class TestCallReviewNodeBaseCommitFallback:
 
         config = mock_runnable_config(profile=profile)
 
+        # Mock the Reviewer (driver is now created internally by the agent)
         with patch(
             "amelia.pipelines.nodes.get_current_commit",
             new_callable=AsyncMock,
         ) as mock_get_commit, patch(
-            "amelia.pipelines.nodes.DriverFactory"
-        ) as mock_factory, patch(
             "amelia.pipelines.nodes.Reviewer"
-        ) as mock_reviewer_class:
-            # Setup driver mock
-            mock_driver = MagicMock()
-            mock_factory.get_driver.return_value = mock_driver
-
-            # Setup reviewer mock
+        ) as mock_reviewer_class, patch(
+            "amelia.pipelines.nodes._save_token_usage",
+            new_callable=AsyncMock,
+        ):
+            # Setup reviewer mock (agent creates its own driver internally)
             mock_reviewer = MagicMock()
+            mock_reviewer.driver = MagicMock()
             mock_reviewer.agentic_review = mock_agentic_review
             mock_reviewer_class.return_value = mock_reviewer
 
@@ -206,19 +204,19 @@ class TestCallReviewNodeBaseCommitFallback:
 
         config = mock_runnable_config(profile=profile)
 
+        # Mock the Reviewer (driver is now created internally by the agent)
         with patch(
             "amelia.pipelines.nodes.get_current_commit",
             new_callable=AsyncMock,
             return_value=None,  # Simulate failure to get commit
         ) as mock_get_commit, patch(
-            "amelia.pipelines.nodes.DriverFactory"
-        ) as mock_factory, patch(
             "amelia.pipelines.nodes.Reviewer"
-        ) as mock_reviewer_class:
-            mock_driver = MagicMock()
-            mock_factory.get_driver.return_value = mock_driver
-
+        ) as mock_reviewer_class, patch(
+            "amelia.pipelines.nodes._save_token_usage",
+            new_callable=AsyncMock,
+        ):
             mock_reviewer = MagicMock()
+            mock_reviewer.driver = MagicMock()
             mock_reviewer.agentic_review = mock_agentic_review
             mock_reviewer_class.return_value = mock_reviewer
 
@@ -252,15 +250,15 @@ class TestCallReviewNodeBaseCommitFallback:
 
         config = mock_runnable_config(profile=profile)
 
+        # Mock the Reviewer (driver is now created internally by the agent)
         with patch(
-            "amelia.pipelines.nodes.DriverFactory"
-        ) as mock_factory, patch(
             "amelia.pipelines.nodes.Reviewer"
-        ) as mock_reviewer_class:
-            mock_driver = MagicMock()
-            mock_factory.get_driver.return_value = mock_driver
-
+        ) as mock_reviewer_class, patch(
+            "amelia.pipelines.nodes._save_token_usage",
+            new_callable=AsyncMock,
+        ):
             mock_reviewer = MagicMock()
+            mock_reviewer.driver = MagicMock()
             mock_reviewer.agentic_review = AsyncMock(
                 return_value=(mock_review_result, "session-123")
             )

@@ -16,6 +16,7 @@ from pytest import TempPathFactory
 from amelia.core.agentic_state import ToolCall, ToolResult
 from amelia.core.types import (
     AgentConfig,
+    DriverType,
     Issue,
     Profile,
     Settings,
@@ -26,6 +27,7 @@ from amelia.pipelines.implementation.state import (
     ImplementationState,
     rebuild_implementation_state,
 )
+from amelia.server.database import ProfileRecord
 from amelia.server.events.bus import EventBus
 
 
@@ -288,6 +290,68 @@ def mock_issue_factory() -> Callable[..., Issue]:
         status: str = "open"
     ) -> Issue:
         return Issue(id=id, title=title, description=description, status=status)
+    return _create
+
+
+def make_agents_json(
+    driver: DriverType = "cli:claude",
+    model: str = "sonnet",
+    validator_model: str | None = None,
+) -> str:
+    """Create agents JSON blob for ProfileRecord.
+
+    Helper function to create the agents JSON string needed by ProfileRecord.
+    This centralizes the default agent configuration for tests.
+
+    Args:
+        driver: Default driver for all agents.
+        model: Default model for all agents.
+        validator_model: Model for validator agents (defaults to model).
+
+    Returns:
+        JSON string containing agents configuration.
+    """
+    import json
+    effective_validator = validator_model or model
+    agents = {
+        "architect": {"driver": driver, "model": model, "options": {}},
+        "developer": {"driver": driver, "model": model, "options": {}},
+        "reviewer": {"driver": driver, "model": model, "options": {}},
+        "plan_validator": {"driver": driver, "model": effective_validator, "options": {}},
+        "evaluator": {"driver": driver, "model": model, "options": {}},
+        "task_reviewer": {"driver": driver, "model": effective_validator, "options": {}},
+    }
+    return json.dumps(agents)
+
+
+@pytest.fixture
+def mock_profile_record_factory() -> Callable[..., ProfileRecord]:
+    """Factory fixture for creating test ProfileRecord instances.
+
+    ProfileRecord is the database-level model that stores agents as JSON.
+    Use this fixture when testing database operations or routes.
+    """
+    def _create(
+        id: str = "test",
+        tracker: str = "noop",
+        working_dir: str = "/tmp/test",
+        driver: DriverType = "cli:claude",
+        model: str = "sonnet",
+        validator_model: str | None = None,
+        agents: str | None = None,
+        is_active: bool = False,
+        **kwargs: Any
+    ) -> ProfileRecord:
+        if agents is None:
+            agents = make_agents_json(driver, model, validator_model)
+        return ProfileRecord(
+            id=id,
+            tracker=tracker,
+            working_dir=working_dir,
+            agents=agents,
+            is_active=is_active,
+            **kwargs
+        )
     return _create
 
 

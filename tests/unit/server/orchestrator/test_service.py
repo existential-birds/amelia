@@ -1122,9 +1122,18 @@ class TestRunWorkflowCheckpointResume:
         mock_graph.astream.return_value = empty_stream()
 
         # Create mock profile
-        from amelia.core.types import Profile
+        from amelia.core.types import AgentConfig, Profile
 
-        mock_profile = Profile(name="test", driver="cli:claude", model="sonnet", validator_model="sonnet", working_dir="/tmp/test")
+        mock_profile = Profile(
+            name="test",
+            tracker="noop",
+            working_dir="/tmp/test",
+            agents={
+                "architect": AgentConfig(driver="cli:claude", model="sonnet"),
+                "developer": AgentConfig(driver="cli:claude", model="sonnet"),
+                "reviewer": AgentConfig(driver="cli:claude", model="sonnet"),
+            },
+        )
 
         # Patch to use our mock graph
         with (
@@ -1175,9 +1184,18 @@ class TestRunWorkflowCheckpointResume:
 
         mock_graph.astream.return_value = empty_stream()
 
-        from amelia.core.types import Profile
+        from amelia.core.types import AgentConfig, Profile
 
-        mock_profile = Profile(name="test", driver="cli:claude", model="sonnet", validator_model="sonnet", working_dir="/tmp/test")
+        mock_profile = Profile(
+            name="test",
+            tracker="noop",
+            working_dir="/tmp/test",
+            agents={
+                "architect": AgentConfig(driver="cli:claude", model="sonnet"),
+                "developer": AgentConfig(driver="cli:claude", model="sonnet"),
+                "reviewer": AgentConfig(driver="cli:claude", model="sonnet"),
+            },
+        )
 
         with (
             patch.object(orchestrator, "_create_server_graph", return_value=mock_graph),

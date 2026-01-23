@@ -15,11 +15,10 @@ import pytest
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph.state import CompiledStateGraph
 
-from amelia.core.types import DriverType, Issue, Profile, TrackerType
+from amelia.core.types import AgentConfig, DriverType, Issue, Profile, TrackerType
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
 from amelia.pipelines.implementation import create_implementation_graph
 from amelia.pipelines.implementation.state import ImplementationState, rebuild_implementation_state
-from amelia.server.database import ProfileRecord
 from amelia.server.database.repository import WorkflowRepository
 from amelia.server.events.bus import EventBus
 from amelia.server.events.connection_manager import ConnectionManager
@@ -72,16 +71,40 @@ def make_profile(
     tracker: TrackerType = "noop",
     plan_output_dir: str | None = None,
     validator_model: str | None = None,
+    agents: dict[str, AgentConfig] | None = None,
     **kwargs: Any,
 ) -> Profile:
-    """Create a Profile with sensible defaults for testing."""
+    """Create a Profile with sensible defaults for testing.
+
+    Args:
+        name: Profile name.
+        driver: Default driver for agents (used if agents dict not provided).
+        model: Default model for agents (used if agents dict not provided).
+        tracker: Issue tracker type.
+        plan_output_dir: Directory for plan files.
+        validator_model: Model for validation (used if agents dict not provided).
+        agents: Explicit agents dict. If not provided, builds from driver/model/validator_model.
+        **kwargs: Additional Profile fields.
+
+    Returns:
+        Profile with the specified or default agents configuration.
+    """
+    if agents is None:
+        # Build default agents from driver/model for backward compatibility
+        effective_validator_model = validator_model or model
+        agents = {
+            "architect": AgentConfig(driver=driver, model=model),
+            "developer": AgentConfig(driver=driver, model=model),
+            "reviewer": AgentConfig(driver=driver, model=model),
+            "plan_validator": AgentConfig(driver=driver, model=effective_validator_model),
+            "evaluator": AgentConfig(driver=driver, model=model),
+            "task_reviewer": AgentConfig(driver=driver, model=effective_validator_model),
+        }
     return Profile(
         name=name,
-        driver=driver,
-        model=model,
         tracker=tracker,
         plan_output_dir=plan_output_dir or "/tmp/test-plans",
-        validator_model=validator_model or model,
+        agents=agents,
         **kwargs,
     )
 
@@ -362,20 +385,27 @@ def mock_repository() -> AsyncMock:
 
 @pytest.fixture
 def mock_profile_repo() -> AsyncMock:
-    """Create mock ProfileRepository that returns test profile."""
+    """Create mock ProfileRepository that returns test profile.
+
+    Note: ProfileRepository methods return Profile objects, not ProfileRecord.
+    """
     from amelia.server.database.profile_repository import ProfileRepository  # noqa: PLC0415
 
     repo = AsyncMock(spec=ProfileRepository)
-    profile_record = ProfileRecord(
-        id="test",
-        driver="cli:claude",
-        model="sonnet",
-        validator_model="haiku",
+    # ProfileRepository returns Profile objects, not ProfileRecord
+    profile = Profile(
+        name="test",
         tracker="noop",
         working_dir="/tmp/test",
+        agents={
+            "architect": AgentConfig(driver="cli:claude", model="sonnet"),
+            "developer": AgentConfig(driver="cli:claude", model="sonnet"),
+            "reviewer": AgentConfig(driver="cli:claude", model="sonnet"),
+            "plan_validator": AgentConfig(driver="cli:claude", model="haiku"),
+        },
     )
-    repo.get_profile.return_value = profile_record
-    repo.get_active_profile.return_value = profile_record
+    repo.get_profile.return_value = profile
+    repo.get_active_profile.return_value = profile
     return repo
 
 

@@ -24,7 +24,7 @@ from amelia.client.models import (
     WorkflowListResponse,
     WorkflowSummary,
 )
-from amelia.core.types import Issue, Profile, Settings
+from amelia.core.types import AgentConfig, Issue, Profile, Settings
 from amelia.main import app
 
 
@@ -50,12 +50,15 @@ def mock_settings(tmp_path: Path) -> Settings:
     """Create mock settings for CLI tests."""
     profile = Profile(
         name="test",
-        driver="api:openrouter",
-        model="openrouter:anthropic/claude-sonnet-4",
-        validator_model="openrouter:anthropic/claude-sonnet-4",
         tracker="noop",
         working_dir=str(tmp_path),
         plan_output_dir=str(tmp_path / "plans"),
+        agents={
+            "architect": AgentConfig(driver="api:openrouter", model="openrouter:anthropic/claude-sonnet-4"),
+            "developer": AgentConfig(driver="api:openrouter", model="openrouter:anthropic/claude-sonnet-4"),
+            "reviewer": AgentConfig(driver="api:openrouter", model="openrouter:anthropic/claude-sonnet-4"),
+            "plan_validator": AgentConfig(driver="api:openrouter", model="openrouter:anthropic/claude-sonnet-4"),
+        },
     )
     return Settings(active_profile="test", profiles={"test": profile})
 
@@ -121,20 +124,25 @@ class TestPlanCommand:
         # Create settings with multiple profiles
         test_profile = Profile(
             name="test",
-            driver="cli:claude",
-            model="sonnet",
-            validator_model="sonnet",
             tracker="noop",
             working_dir=str(tmp_path),
+            agents={
+                "architect": AgentConfig(driver="cli:claude", model="sonnet"),
+                "developer": AgentConfig(driver="cli:claude", model="sonnet"),
+                "reviewer": AgentConfig(driver="cli:claude", model="sonnet"),
+            },
         )
         work_profile = Profile(
             name="work",
-            driver="api:openrouter",
-            model="openrouter:anthropic/claude-sonnet-4",
-            validator_model="openrouter:anthropic/claude-sonnet-4",
             tracker="jira",
             working_dir=str(tmp_path),
             plan_output_dir=str(plans_dir),
+            agents={
+                "architect": AgentConfig(driver="api:openrouter", model="openrouter:anthropic/claude-sonnet-4"),
+                "developer": AgentConfig(driver="api:openrouter", model="openrouter:anthropic/claude-sonnet-4"),
+                "reviewer": AgentConfig(driver="api:openrouter", model="openrouter:anthropic/claude-sonnet-4"),
+                "plan_validator": AgentConfig(driver="api:openrouter", model="openrouter:anthropic/claude-sonnet-4"),
+            },
         )
         settings = Settings(
             active_profile="test",

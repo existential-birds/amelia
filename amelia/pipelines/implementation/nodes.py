@@ -75,7 +75,8 @@ async def plan_validator_node(
 
     # Extract structured fields using lightweight extraction (no tools needed)
     # The plan already exists - we just need to parse it into structured format
-    model = profile.validator_model
+    # Use plan_validator agent config for structured extraction
+    agent_config = profile.get_agent_config("plan_validator")
     prompt = f"""Extract the implementation plan structure from the following markdown plan.
 
 <plan>
@@ -91,8 +92,8 @@ Return:
         output = await extract_structured(
             prompt=prompt,
             schema=MarkdownPlanOutput,
-            model=model,
-            driver_type=profile.driver,
+            model=agent_config.model,
+            driver_type=agent_config.driver,
         )
         goal = output.goal
         plan_markdown = output.plan_markdown
