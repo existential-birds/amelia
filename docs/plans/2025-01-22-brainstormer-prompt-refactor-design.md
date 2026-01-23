@@ -146,15 +146,38 @@ Delete the `/api/brainstorm/sessions/{id}/prime` endpoint.
 **`dashboard/src/api/brainstorm.ts`:**
 - Remove `primeSession()` function
 
-**Session creation flow:**
-- Remove the priming step after session creation
-- User's first message now triggers the session directly
+**`dashboard/src/hooks/useBrainstormSession.ts`:**
+- Remove `startPrimedSession()` function
+- Remove from hook return value
 
-### 6. Database Cleanup
+**`dashboard/src/pages/SpecBuilderPage.tsx`:**
+- Remove `handleStartBrainstorming` callback
+- Remove "Start Brainstorming" button from UI
+- Users must type their idea to start a session
 
-The `is_system` column on `brainstorm_messages` becomes unused. Options:
-- Leave it (no harm, backwards compatible)
-- Remove in a future migration
+### 6. Remove `is_system` Field
+
+Remove the `is_system` field completely (no migration needed):
+- Remove `is_system` parameter from `send_message()` method
+- Remove `is_system` field from `Message` model
+- Remove `is_system` column from database schema
+- Update repository methods that reference `is_system`
+
+### 7. Fix ApiDriver System Prompt Handling
+
+The `ApiDriver.execute_agentic()` currently only passes the system prompt on the first message:
+
+```python
+# Current (buggy)
+effective_system_prompt = instructions or "" if is_new_session else ""
+```
+
+LLM APIs are stateless - the system prompt must be included with every request. Change to:
+
+```python
+# Fixed - always pass system prompt
+effective_system_prompt = instructions or ""
+```
 
 ## Session Flow
 
@@ -181,7 +204,11 @@ create_session() → send_message() → [assistant responds to idea] → ...
 
 | File | Change |
 |------|--------|
-| `amelia/server/services/brainstorm.py` | New constants, update `send_message()`, remove `prime_session()` |
+| `amelia/server/services/brainstorm.py` | New constants, update `send_message()`, remove `prime_session()`, remove `is_system` |
 | `amelia/server/routes/brainstorm.py` | Remove prime endpoint |
+| `amelia/drivers/api/deepagents.py` | Always pass system prompt in `execute_agentic()` |
+| `amelia/server/repositories/brainstorm.py` | Remove `is_system` from Message model and queries |
 | `dashboard/src/api/brainstorm.ts` | Remove `primeSession()` |
-| Dashboard components | Remove priming step from session creation |
+| `dashboard/src/hooks/useBrainstormSession.ts` | Remove `startPrimedSession()` |
+| `dashboard/src/pages/SpecBuilderPage.tsx` | Remove "Start Brainstorming" button |
+| Tests | Update all affected test files |
