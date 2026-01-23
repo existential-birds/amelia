@@ -193,7 +193,11 @@ async def call_reviewer_node(
     # Use "task_reviewer" only for non-final tasks in task-based execution
     is_non_final_task = state.total_tasks is not None and state.current_task_index + 1 < state.total_tasks
     agent_name = "task_reviewer" if is_non_final_task else "reviewer"
-    agent_config = profile.get_agent_config(agent_name)
+    # Fall back to "reviewer" config if "task_reviewer" not configured
+    try:
+        agent_config = profile.get_agent_config(agent_name)
+    except ValueError:
+        agent_config = profile.get_agent_config("reviewer")
     reviewer = Reviewer(agent_config, event_bus=event_bus, prompts=prompts, agent_name=agent_name)
 
     # Compute base_commit if not in state

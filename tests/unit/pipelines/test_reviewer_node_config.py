@@ -49,7 +49,6 @@ async def test_call_reviewer_node_uses_agent_config(profile_with_agents, mock_st
         approved=True,
         comments=[],
         reviewer_persona="Senior Engineer",
-        summary="LGTM",
     )
 
     with patch("amelia.pipelines.nodes.Reviewer") as MockReviewer:

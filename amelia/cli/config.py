@@ -88,15 +88,14 @@ def _build_default_agents(driver: str, model: str) -> dict[str, AgentConfig]:
     Returns:
         Dict mapping agent names to AgentConfig.
     """
-    agent_config = AgentConfig(driver=driver, model=model)  # type: ignore[arg-type]
     return {
-        "architect": agent_config,
-        "developer": agent_config,
-        "reviewer": agent_config,
-        "task_reviewer": agent_config,
-        "evaluator": agent_config,
-        "brainstormer": agent_config,
-        "plan_validator": agent_config,
+        "architect": AgentConfig(driver=driver, model=model),  # type: ignore[arg-type]
+        "developer": AgentConfig(driver=driver, model=model),  # type: ignore[arg-type]
+        "reviewer": AgentConfig(driver=driver, model=model),  # type: ignore[arg-type]
+        "task_reviewer": AgentConfig(driver=driver, model=model),  # type: ignore[arg-type]
+        "evaluator": AgentConfig(driver=driver, model=model),  # type: ignore[arg-type]
+        "brainstormer": AgentConfig(driver=driver, model=model),  # type: ignore[arg-type]
+        "plan_validator": AgentConfig(driver=driver, model=model),  # type: ignore[arg-type]
     }
 
 

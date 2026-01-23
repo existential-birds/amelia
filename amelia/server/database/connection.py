@@ -584,8 +584,8 @@ class Database:
                     database_path=str(self._db_path),
                 )
                 logger.warning(
-                    "To delete the database, run: rm {}",
-                    self._db_path,
+                    "To delete the database, run: rm {database_path}",
+                    database_path=str(self._db_path),
                 )
         except Exception as e:
             logger.debug("Failed to check profiles schema", error=str(e))
