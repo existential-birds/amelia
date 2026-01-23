@@ -94,6 +94,7 @@ class Profile(BaseModel):
             raise ValueError(f"Agent '{agent_name}' not configured in profile '{self.name}'")
         return self.agents[agent_name]
 
+
 class Settings(BaseModel):
     """Global settings for Amelia.
 

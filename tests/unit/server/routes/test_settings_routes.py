@@ -97,6 +97,7 @@ def mock_profile_repo():
     repo.list_profiles = AsyncMock()
     repo.create_profile = AsyncMock()
     repo.get_profile = AsyncMock()
+    repo.get_active_profile = AsyncMock(return_value=None)
     repo.update_profile = AsyncMock()
     repo.delete_profile = AsyncMock()
     repo.set_active = AsyncMock()
@@ -163,19 +164,21 @@ class TestProfileRoutes:
     """
 
     def test_list_profiles(self, profile_client, mock_profile_repo):
-        """GET /api/profiles returns all profiles."""
-        mock_profile_repo.list_profiles.return_value = [
-            make_test_profile(name="dev"),
-            make_test_profile(name="prod", driver="api:openrouter"),
-        ]
+        """GET /api/profiles returns all profiles with correct is_active."""
+        dev_profile = make_test_profile(name="dev")
+        prod_profile = make_test_profile(name="prod", driver="api:openrouter")
+        mock_profile_repo.list_profiles.return_value = [dev_profile, prod_profile]
+        mock_profile_repo.get_active_profile.return_value = dev_profile
 
         response = profile_client.get("/api/profiles")
         assert response.status_code == 200
         data = response.json()
         assert len(data) == 2
         assert data[0]["id"] == "dev"
+        assert data[0]["is_active"] is True  # dev is active
         assert "agents" in data[0]
         assert data[1]["id"] == "prod"
+        assert data[1]["is_active"] is False  # prod is not active
         # With agents dict, check agent configuration
         assert data[1]["agents"]["developer"]["driver"] == "api:openrouter"
 
@@ -335,6 +338,7 @@ class TestProfileRoutes:
         assert response.status_code == 200
         data = response.json()
         assert data["id"] == "dev"
+        assert data["is_active"] is True  # Verify is_active is True after activation
         mock_profile_repo.set_active.assert_called_once_with("dev")
 
     def test_activate_profile_not_found(self, profile_client, mock_profile_repo):

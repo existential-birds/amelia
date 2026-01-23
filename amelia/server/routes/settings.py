@@ -185,7 +185,9 @@ async def list_profiles(
 ) -> list[ProfileResponse]:
     """List all profiles."""
     profiles = await repo.list_profiles()
-    return [_profile_to_response(p) for p in profiles]
+    active = await repo.get_active_profile()
+    active_id = active.name if active else None
+    return [_profile_to_response(p, is_active=(p.name == active_id)) for p in profiles]
 
 
 @router.post("/profiles", response_model=ProfileResponse, status_code=201)
@@ -218,7 +220,8 @@ async def create_profile(
         created = await repo.create_profile(profile)
     except sqlite3.IntegrityError as exc:
         raise HTTPException(status_code=409, detail="Profile already exists") from exc
-    return _profile_to_response(created)
+    # Newly created profiles are not active
+    return _profile_to_response(created, is_active=False)
 
 
 @router.get("/profiles/{profile_id}", response_model=ProfileResponse)
@@ -230,7 +233,8 @@ async def get_profile(
     profile = await repo.get_profile(profile_id)
     if profile is None:
         raise HTTPException(status_code=404, detail="Profile not found")
-    return _profile_to_response(profile)
+    active = await repo.get_active_profile()
+    return _profile_to_response(profile, is_active=(active is not None and active.name == profile_id))
 
 
 @router.put("/profiles/{profile_id}", response_model=ProfileResponse)
@@ -262,7 +266,8 @@ async def update_profile(
 
     try:
         updated = await repo.update_profile(profile_id, update_dict)
-        return _profile_to_response(updated)
+        active = await repo.get_active_profile()
+        return _profile_to_response(updated, is_active=(active is not None and active.name == profile_id))
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from None
 
@@ -289,7 +294,8 @@ async def activate_profile(
         profile = await repo.get_profile(profile_id)
         if profile is None:
             raise HTTPException(status_code=404, detail="Profile not found")
-        return _profile_to_response(profile)
+        # After activation, this profile is definitely active
+        return _profile_to_response(profile, is_active=True)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from None
 
