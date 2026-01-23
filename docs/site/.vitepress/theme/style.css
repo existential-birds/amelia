@@ -166,7 +166,7 @@
 
   /* Custom heading font */
   --amelia-font-heading: "Barlow Condensed", sans-serif;
-  --amelia-font-display: "Bebas Neue", sans-serif;
+  --amelia-font-display: "Barlow Condensed", sans-serif;
 }
 
 /* Technical monospace headings for H1-H2 - signals engineering credibility */

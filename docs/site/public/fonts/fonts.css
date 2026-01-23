@@ -8,15 +8,6 @@
  * This ensures paths work correctly regardless of VitePress base path configuration.
  */
 
-/* Bebas Neue - Display font for headers */
-@font-face {
-  font-family: 'Bebas Neue';
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url('./bebas-neue-regular.woff2') format('woff2');
-}
-
 /* Barlow Condensed - Primary UI font */
 @font-face {
   font-family: 'Barlow Condensed';
