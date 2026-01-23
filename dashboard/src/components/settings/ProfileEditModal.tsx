@@ -6,7 +6,7 @@
  * Utility agents are collapsed by default but easily accessible.
  */
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
 import {
   Dialog,
   DialogContent,
@@ -260,100 +260,62 @@ interface AgentCardProps {
   agent: AgentDefinition;
   config: AgentFormData;
   onChange: (field: 'driver' | 'model', value: string) => void;
-  isCompact?: boolean;
 }
 
-function AgentCard({ agent, config, onChange, isCompact = false }: AgentCardProps) {
+function AgentCard({ agent, config, onChange }: AgentCardProps) {
   const Icon = agent.icon;
   const availableModels = getModelsForDriver(config.driver);
   const colors = AGENT_COLORS[agent.key] ?? { line: 'bg-muted-foreground/40', icon: 'text-muted-foreground' };
 
   return (
-    <motion.div
-      layout
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -8 }}
-      className={cn(
-        'group relative rounded-lg border border-border/40 bg-card/30 transition-all duration-200',
-        'hover:border-border/60 hover:bg-card/50',
-        isCompact ? 'p-3' : 'p-4'
-      )}
-    >
+    <div className="group relative flex flex-wrap items-center gap-2 rounded-md border border-border/40 bg-card/30 px-3 py-2 transition-all duration-200 hover:border-border/60 hover:bg-card/50">
       {/* Status indicator line */}
-      <div className={cn('absolute left-0 top-3 bottom-3 w-0.5 rounded-full', colors.line)} />
+      <div className={cn('w-0.5 h-6 rounded-full shrink-0', colors.line)} />
 
-      <div className={cn('space-y-3', isCompact && 'space-y-2')}>
-        {/* Agent header */}
-        <div className="flex items-center gap-2 pl-3">
-          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-muted/50">
-            <Icon className={cn('h-4 w-4', colors.icon)} />
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="font-heading text-sm font-medium tracking-wide">
-              {agent.label}
-            </div>
-            {!isCompact && (
-              <div className="text-xs text-muted-foreground truncate">
-                {agent.description}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Configuration selects */}
-        <div className={cn('grid gap-2 pl-3', isCompact ? 'grid-cols-2' : 'grid-cols-2')}>
-          <div className="space-y-1">
-            <Label className="text-[10px] uppercase tracking-wider text-muted-foreground/70">
-              Driver
-            </Label>
-            <Select
-              value={config.driver}
-              onValueChange={(v) => onChange('driver', v)}
-            >
-              <SelectTrigger className="h-8 text-xs bg-background/50">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {DRIVER_OPTIONS.map((opt) => {
-                  const OptIcon = opt.icon;
-                  return (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      <div className="flex items-center gap-2">
-                        <OptIcon className="h-3 w-3" />
-                        {opt.label}
-                      </div>
-                    </SelectItem>
-                  );
-                })}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-1">
-            <Label className="text-[10px] uppercase tracking-wider text-muted-foreground/70">
-              Model
-            </Label>
-            <Select
-              key={`${agent.key}-model-${config.driver}`}
-              value={config.model}
-              onValueChange={(v) => onChange('model', v)}
-            >
-              <SelectTrigger className="h-8 text-xs bg-background/50">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {availableModels.map((m) => (
-                  <SelectItem key={m} value={m}>
-                    {m}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
+      {/* Agent icon + name */}
+      <div className="flex items-center gap-2 min-w-[110px] flex-1 sm:flex-none">
+        <Icon className={cn('h-4 w-4 shrink-0', colors.icon)} />
+        <span className="font-heading text-sm font-medium tracking-wide">{agent.label}</span>
       </div>
-    </motion.div>
+
+      {/* Driver select */}
+      <Select value={config.driver} onValueChange={(v) => onChange('driver', v)}>
+        <SelectTrigger className="h-7 w-full sm:w-[130px] text-xs bg-background/50">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {DRIVER_OPTIONS.map((opt) => {
+            const OptIcon = opt.icon;
+            return (
+              <SelectItem key={opt.value} value={opt.value}>
+                <div className="flex items-center gap-2">
+                  <OptIcon className="h-3 w-3" />
+                  {opt.label}
+                </div>
+              </SelectItem>
+            );
+          })}
+        </SelectContent>
+      </Select>
+
+      {/* Model select */}
+      <Select
+        key={`${agent.key}-model-${config.driver}`}
+        value={config.model}
+        onValueChange={(v) => onChange('model', v)}
+      >
+        <SelectTrigger className="h-7 w-full sm:w-[90px] text-xs bg-background/50">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {availableModels.map((m) => (
+            <SelectItem key={m} value={m}>
+              {m}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
   );
 }
 
@@ -780,20 +742,18 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
                 Core workflow
               </Badge>
             </div>
-            <div className="grid gap-3 md:grid-cols-2">
-              <AnimatePresence mode="popLayout">
-                {PRIMARY_AGENTS.map((agent) => {
-                  const config = formData.agents[agent.key] ?? { driver: 'cli:claude', model: agent.defaultModel };
-                  return (
-                    <AgentCard
-                      key={agent.key}
-                      agent={agent}
-                      config={config}
-                      onChange={(field, value) => handleAgentChange(agent.key, field, value)}
-                    />
-                  );
-                })}
-              </AnimatePresence>
+            <div className="grid gap-2 grid-cols-1">
+              {PRIMARY_AGENTS.map((agent) => {
+                const config = formData.agents[agent.key] ?? { driver: 'cli:claude', model: agent.defaultModel };
+                return (
+                  <AgentCard
+                    key={agent.key}
+                    agent={agent}
+                    config={config}
+                    onChange={(field, value) => handleAgentChange(agent.key, field, value)}
+                  />
+                );
+              })}
             </div>
           </div>
 
@@ -814,21 +774,18 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
               />
             </CollapsibleTrigger>
             <CollapsibleContent className="pt-3">
-              <div className="grid gap-2 md:grid-cols-2">
-                <AnimatePresence mode="popLayout">
-                  {UTILITY_AGENTS.map((agent) => {
-                    const config = formData.agents[agent.key] ?? { driver: 'cli:claude', model: agent.defaultModel };
-                    return (
-                      <AgentCard
-                        key={agent.key}
-                        agent={agent}
-                        config={config}
-                        onChange={(field, value) => handleAgentChange(agent.key, field, value)}
-                        isCompact
-                      />
-                    );
-                  })}
-                </AnimatePresence>
+              <div className="grid gap-2 grid-cols-1">
+                {UTILITY_AGENTS.map((agent) => {
+                  const config = formData.agents[agent.key] ?? { driver: 'cli:claude', model: agent.defaultModel };
+                  return (
+                    <AgentCard
+                      key={agent.key}
+                      agent={agent}
+                      config={config}
+                      onChange={(field, value) => handleAgentChange(agent.key, field, value)}
+                    />
+                  );
+                })}
               </div>
             </CollapsibleContent>
           </Collapsible>
