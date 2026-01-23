@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from langchain_core.runnables.config import RunnableConfig
 
-from amelia.core.types import AgentConfig, Profile
+from amelia.core.types import AgentConfig, Profile, ReviewResult
 from amelia.pipelines.implementation.state import (
     ImplementationState,
     rebuild_implementation_state,
@@ -1230,6 +1230,337 @@ class TestRunWorkflowCheckpointResume:
 # =============================================================================
 # Task Title/Description Tests
 # =============================================================================
+
+
+class TestTaskProgressEvents:
+    """Tests for task progress event emission."""
+
+    @pytest.mark.asyncio
+    async def test_emits_task_failed_when_max_iterations_exceeded(
+        self,
+        orchestrator: OrchestratorService,
+        mock_repository: AsyncMock,
+    ) -> None:
+        """Should emit TASK_FAILED when workflow ends with unapproved task."""
+        # Create execution state: task mode, not approved, at max iterations
+        exec_state = ImplementationState(
+            workflow_id="wf-fail",
+            created_at=datetime.now(UTC),
+            status="running",
+            profile_id="test",
+            total_tasks=3,
+            current_task_index=1,
+            task_review_iteration=5,  # At max
+            last_review=ReviewResult(
+                reviewer_persona="code-reviewer",
+                approved=False,
+                comments=["Fix the bug"],
+                severity="medium",
+            ),
+        )
+        mock_state = ServerExecutionState(
+            id="wf-fail",
+            issue_id="ISSUE-123",
+            worktree_path="/path/to/worktree",
+            workflow_status="in_progress",
+            started_at=datetime.now(UTC),
+            execution_state=exec_state,
+        )
+        mock_repository.get.return_value = mock_state
+
+        # Simulate workflow completion (called by run_workflow on end)
+        await orchestrator._emit_task_failed_if_applicable("wf-fail")
+
+        # Verify TASK_FAILED event emitted
+        mock_repository.save_event.assert_called_once()
+        saved_event = mock_repository.save_event.call_args[0][0]
+        assert saved_event.event_type == EventType.TASK_FAILED
+        assert saved_event.message == "Task 2/3 failed after 5 review iterations"
+        assert saved_event.data["task_index"] == 1
+        assert saved_event.data["total_tasks"] == 3
+        assert saved_event.data["iterations"] == 5
+
+    @pytest.mark.asyncio
+    async def test_no_task_failed_when_approved(
+        self,
+        orchestrator: OrchestratorService,
+        mock_repository: AsyncMock,
+    ) -> None:
+        """Should NOT emit TASK_FAILED when last task was approved."""
+        exec_state = ImplementationState(
+            workflow_id="wf-ok",
+            created_at=datetime.now(UTC),
+            status="running",
+            profile_id="test",
+            total_tasks=3,
+            current_task_index=2,  # Last task
+            task_review_iteration=1,
+            last_review=ReviewResult(
+                reviewer_persona="code-reviewer",
+                approved=True,
+                comments=[],
+                severity="low",
+            ),
+        )
+        mock_state = ServerExecutionState(
+            id="wf-ok",
+            issue_id="ISSUE-123",
+            worktree_path="/path/to/worktree",
+            workflow_status="in_progress",
+            started_at=datetime.now(UTC),
+            execution_state=exec_state,
+        )
+        mock_repository.get.return_value = mock_state
+
+        await orchestrator._emit_task_failed_if_applicable("wf-ok")
+
+        # No event should be emitted
+        mock_repository.save_event.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_no_task_failed_in_legacy_mode(
+        self,
+        orchestrator: OrchestratorService,
+        mock_repository: AsyncMock,
+    ) -> None:
+        """Should NOT emit TASK_FAILED when total_tasks is None (legacy mode)."""
+        exec_state = ImplementationState(
+            workflow_id="wf-legacy",
+            created_at=datetime.now(UTC),
+            status="running",
+            profile_id="test",
+            # No total_tasks = legacy mode (defaults to None)
+            current_task_index=1,
+            last_review=ReviewResult(
+                reviewer_persona="code-reviewer",
+                approved=False,
+                comments=["Fix the bug"],
+                severity="medium",
+            ),
+        )
+        mock_state = ServerExecutionState(
+            id="wf-legacy",
+            issue_id="ISSUE-123",
+            worktree_path="/path/to/worktree",
+            workflow_status="in_progress",
+            started_at=datetime.now(UTC),
+            execution_state=exec_state,
+        )
+        mock_repository.get.return_value = mock_state
+
+        await orchestrator._emit_task_failed_if_applicable("wf-legacy")
+
+        # No event should be emitted in legacy mode
+        mock_repository.save_event.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_no_task_failed_when_no_last_review(
+        self,
+        orchestrator: OrchestratorService,
+        mock_repository: AsyncMock,
+    ) -> None:
+        """Should NOT emit TASK_FAILED when no last_review in state."""
+        exec_state = ImplementationState(
+            workflow_id="wf-no-review",
+            created_at=datetime.now(UTC),
+            status="running",
+            profile_id="test",
+            total_tasks=3,
+            current_task_index=1,
+            task_review_iteration=5,
+            # No last_review (defaults to None)
+        )
+        mock_state = ServerExecutionState(
+            id="wf-no-review",
+            issue_id="ISSUE-123",
+            worktree_path="/path/to/worktree",
+            workflow_status="in_progress",
+            started_at=datetime.now(UTC),
+            execution_state=exec_state,
+        )
+        mock_repository.get.return_value = mock_state
+
+        await orchestrator._emit_task_failed_if_applicable("wf-no-review")
+
+        # No event should be emitted without last_review
+        mock_repository.save_event.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_emits_task_started_when_developer_starts_in_task_mode(
+        self, orchestrator: OrchestratorService, mock_repository: AsyncMock
+    ) -> None:
+        """Should emit TASK_STARTED when developer_node starts with total_tasks set."""
+        # Track emitted events
+        emitted_events: list[tuple[str, EventType, str, dict]] = []
+
+        async def capture_emit(
+            workflow_id: str,
+            event_type: EventType,
+            message: str,
+            agent: str = "system",
+            data: dict | None = None,
+        ) -> None:
+            emitted_events.append((workflow_id, event_type, message, data or {}))
+
+        orchestrator._emit = capture_emit  # type: ignore[method-assign]
+
+        # Simulate developer_node task start event with task state
+        task_data = {
+            "name": "developer_node",
+            "input": {
+                "total_tasks": 3,
+                "current_task_index": 1,
+                "plan_markdown": "### Task 1: First\n### Task 2: Second task\n### Task 3: Third",
+            },
+        }
+        await orchestrator._handle_tasks_event("wf-123", task_data)
+
+        # Verify TASK_STARTED event emitted
+        task_events = [e for e in emitted_events if e[1] == EventType.TASK_STARTED]
+        assert len(task_events) == 1
+        _, event_type, message, data = task_events[0]
+        assert message == "Starting Task 2/3: Second task"
+        assert data["task_index"] == 1
+        assert data["total_tasks"] == 3
+        assert data["task_title"] == "Second task"
+
+    @pytest.mark.asyncio
+    async def test_no_task_started_in_legacy_mode(
+        self, orchestrator: OrchestratorService, mock_repository: AsyncMock
+    ) -> None:
+        """Should NOT emit TASK_STARTED when total_tasks is None (legacy mode)."""
+        # Track emitted events
+        emitted_events: list[tuple[str, EventType, str, dict]] = []
+
+        async def capture_emit(
+            workflow_id: str,
+            event_type: EventType,
+            message: str,
+            agent: str = "system",
+            data: dict | None = None,
+        ) -> None:
+            emitted_events.append((workflow_id, event_type, message, data or {}))
+
+        orchestrator._emit = capture_emit  # type: ignore[method-assign]
+
+        # Simulate developer_node start without task fields
+        task_data = {
+            "name": "developer_node",
+            "input": {},  # No total_tasks = legacy mode
+        }
+        await orchestrator._handle_tasks_event("wf-456", task_data)
+
+        # Should emit STAGE_STARTED but not TASK_STARTED
+        task_events = [e for e in emitted_events if e[1] == EventType.TASK_STARTED]
+        assert len(task_events) == 0
+
+    @pytest.mark.asyncio
+    async def test_emits_task_completed_when_next_task_node_completes(
+        self, orchestrator: OrchestratorService, mock_repository: AsyncMock
+    ) -> None:
+        """Should emit TASK_COMPLETED when next_task_node finishes."""
+        # Track emitted events
+        emitted_events: list[tuple[str, EventType, str, dict]] = []
+
+        async def capture_emit(
+            workflow_id: str,
+            event_type: EventType,
+            message: str,
+            agent: str = "system",
+            data: dict | None = None,
+            correlation_id: str | None = None,
+        ) -> None:
+            emitted_events.append((workflow_id, event_type, message, data or {}))
+
+        orchestrator._emit = capture_emit  # type: ignore[method-assign]
+
+        # Setup workflow in task-based mode
+        mock_state = ServerExecutionState(
+            id="wf-789",
+            issue_id="ISSUE-123",
+            worktree_path="/path/to/worktree",
+            workflow_status="in_progress",
+            started_at=datetime.now(UTC),
+            execution_state=ImplementationState(
+                workflow_id="wf-789",
+                created_at=datetime.now(UTC),
+                status="running",
+                profile_id="test",
+                total_tasks=5,
+                current_task_index=0,  # Was 0 before next_task_node runs
+            ),
+        )
+        mock_repository.get.return_value = mock_state
+
+        # Simulate next_task_node completion
+        # The output contains the NEW index (incremented from 0 to 1)
+        chunk = {
+            "next_task_node": {
+                "current_task_index": 1,  # New value after node runs
+                "task_review_iteration": 0,
+                "driver_session_id": None,
+            }
+        }
+
+        await orchestrator._handle_stream_chunk("wf-789", chunk)
+
+        # Verify TASK_COMPLETED event emitted
+        task_events = [e for e in emitted_events if e[1] == EventType.TASK_COMPLETED]
+        assert len(task_events) == 1
+        _, event_type, message, data = task_events[0]
+        # The completed task is the one we just finished (index 0, displayed as 1)
+        assert message == "Completed Task 1/5"
+        assert data["task_index"] == 0
+        assert data["total_tasks"] == 5
+
+    @pytest.mark.asyncio
+    async def test_no_task_completed_without_total_tasks(
+        self, orchestrator: OrchestratorService, mock_repository: AsyncMock
+    ) -> None:
+        """Should NOT emit TASK_COMPLETED in legacy mode (no total_tasks)."""
+        # Track emitted events
+        emitted_events: list[tuple[str, EventType, str, dict]] = []
+
+        async def capture_emit(
+            workflow_id: str,
+            event_type: EventType,
+            message: str,
+            agent: str = "system",
+            data: dict | None = None,
+            correlation_id: str | None = None,
+        ) -> None:
+            emitted_events.append((workflow_id, event_type, message, data or {}))
+
+        orchestrator._emit = capture_emit  # type: ignore[method-assign]
+
+        # Setup workflow without total_tasks (legacy mode)
+        mock_state = ServerExecutionState(
+            id="wf-legacy",
+            issue_id="ISSUE-456",
+            worktree_path="/path/to/worktree",
+            workflow_status="in_progress",
+            started_at=datetime.now(UTC),
+            execution_state=ImplementationState(
+                workflow_id="wf-legacy",
+                created_at=datetime.now(UTC),
+                status="running",
+                profile_id="test",
+                total_tasks=None,  # Legacy mode
+                current_task_index=0,
+            ),
+        )
+        mock_repository.get.return_value = mock_state
+
+        chunk = {
+            "next_task_node": {
+                "current_task_index": 1,
+            }
+        }
+
+        await orchestrator._handle_stream_chunk("wf-legacy", chunk)
+
+        task_events = [e for e in emitted_events if e[1] == EventType.TASK_COMPLETED]
+        assert len(task_events) == 0
 
 
 class TestStartWorkflowWithTaskFields:

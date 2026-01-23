@@ -29,6 +29,7 @@ from amelia.ext.hooks import (
 )
 from amelia.pipelines.implementation import create_implementation_graph
 from amelia.pipelines.implementation.state import ImplementationState
+from amelia.pipelines.implementation.utils import extract_task_title
 from amelia.pipelines.review import create_review_graph
 from amelia.server.database import ProfileRepository
 from amelia.server.database.repository import WorkflowRepository
@@ -974,6 +975,10 @@ class OrchestratorService:
                     # Note: A separate COMPLETED emission exists in approve_workflow() for
                     # workflows that resume after human approval. These are mutually exclusive
                     # code paths - only one COMPLETED event is ever emitted per workflow.
+
+                    # Check for task failure before marking complete (multi-task mode)
+                    await self._emit_task_failed_if_applicable(workflow_id)
+
                     # Fetch fresh state from DB to get accurate current_stage
                     # (the local state variable is stale - _handle_stream_chunk updates DB)
                     fresh_state = await self._repository.get(workflow_id)
@@ -1394,6 +1399,10 @@ class OrchestratorService:
                 # Note: A separate COMPLETED emission exists in _run_workflow() for
                 # workflows that complete without interruption. These are mutually exclusive
                 # code paths - only one COMPLETED event is ever emitted per workflow.
+
+                # Check for task failure before marking complete (multi-task mode)
+                await self._emit_task_failed_if_applicable(workflow_id)
+
                 await self._emit(
                     workflow_id,
                     EventType.WORKFLOW_COMPLETED,
@@ -1595,6 +1604,27 @@ class OrchestratorService:
                     data={"stage": node_name, "output": output},
                 )
 
+            # Emit TASK_COMPLETED when next_task_node completes
+            if node_name == "next_task_node":
+                state = await self._repository.get(workflow_id)
+                if state is not None and state.execution_state is not None:
+                    total_tasks = state.execution_state.total_tasks
+                    if total_tasks is not None:
+                        # The output contains the NEW index, so completed task is index - 1
+                        new_index = output.get("current_task_index", 0)
+                        completed_index = new_index - 1 if new_index > 0 else 0
+
+                        await self._emit(
+                            workflow_id,
+                            EventType.TASK_COMPLETED,
+                            f"Completed Task {completed_index + 1}/{total_tasks}",
+                            agent="system",
+                            data={
+                                "task_index": completed_index,
+                                "total_tasks": total_tasks,
+                            },
+                        )
+
     async def _handle_tasks_event(
         self,
         workflow_id: str,
@@ -1626,6 +1656,27 @@ class OrchestratorService:
                 agent=node_name.removesuffix("_node"),
                 data={"stage": node_name},
             )
+
+        # Emit TASK_STARTED for developer_node in task-based mode
+        if node_name == "developer_node":
+            input_state = task_data.get("input", {})
+            total_tasks = input_state.get("total_tasks")
+            if total_tasks is not None:
+                task_index = input_state.get("current_task_index", 0)
+                plan_markdown = input_state.get("plan_markdown", "")
+                task_title = extract_task_title(plan_markdown, task_index) or "Unknown"
+
+                await self._emit(
+                    workflow_id,
+                    EventType.TASK_STARTED,
+                    f"Starting Task {task_index + 1}/{total_tasks}: {task_title}",
+                    agent="developer",
+                    data={
+                        "task_index": task_index,
+                        "total_tasks": total_tasks,
+                        "task_title": task_title,
+                    },
+                )
 
     async def _handle_combined_stream_chunk(
         self,
@@ -1668,6 +1719,49 @@ class OrchestratorService:
             return False
         # Single mode (dict)
         return "__interrupt__" in chunk
+
+    async def _emit_task_failed_if_applicable(self, workflow_id: str) -> None:
+        """Emit TASK_FAILED if workflow ended due to unapproved task.
+
+        Called when workflow completes to check if the final task was not approved
+        (indicating failure due to max iterations).
+
+        Args:
+            workflow_id: The workflow to check.
+        """
+        state = await self._repository.get(workflow_id)
+        if state is None or state.execution_state is None:
+            return
+
+        exec_state = state.execution_state
+        total_tasks = exec_state.total_tasks
+
+        # Only emit in task mode
+        if total_tasks is None:
+            return
+
+        # Check if last review was not approved
+        last_review = exec_state.last_review
+        if last_review is None:
+            return
+
+        if last_review.approved:
+            return
+
+        task_index = exec_state.current_task_index
+        iterations = exec_state.task_review_iteration
+
+        await self._emit(
+            workflow_id,
+            EventType.TASK_FAILED,
+            f"Task {task_index + 1}/{total_tasks} failed after {iterations} review iterations",
+            agent="system",
+            data={
+                "task_index": task_index,
+                "total_tasks": total_tasks,
+                "iterations": iterations,
+            },
+        )
 
     async def _emit_agent_messages(
         self,
