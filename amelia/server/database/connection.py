@@ -537,6 +537,9 @@ class Database:
             )
         """)
 
+        # Check for old schema with 'driver' column (breaking change migration)
+        await self._check_old_profiles_schema()
+
         # Triggers to ensure only one active profile (both INSERT and UPDATE)
         await self.execute("""
             CREATE TRIGGER IF NOT EXISTS ensure_single_active_profile
@@ -559,6 +562,33 @@ class Database:
         await self.execute(
             "CREATE INDEX IF NOT EXISTS idx_profiles_active ON profiles(is_active)"
         )
+
+    async def _check_old_profiles_schema(self) -> None:
+        """Check for old profiles schema and warn user to migrate.
+
+        The database schema changed from having separate driver/model columns
+        to a single 'agents' JSON column. Users with old databases need to
+        delete and recreate.
+        """
+        try:
+            cursor = await self.connection.execute("PRAGMA table_info(profiles)")
+            columns = await cursor.fetchall()
+            column_names = [col[1] for col in columns]
+
+            # Old schema had 'driver' column, new schema has 'agents' column
+            if "driver" in column_names:
+                logger.warning(
+                    "Database has old schema with 'driver' column in profiles table. "
+                    "The schema has changed to use per-agent configuration. "
+                    "Please delete the database file and restart Amelia.",
+                    database_path=str(self._db_path),
+                )
+                logger.warning(
+                    "To delete the database, run: rm {}",
+                    self._db_path,
+                )
+        except Exception as e:
+            logger.debug("Failed to check profiles schema", error=str(e))
 
     async def initialize_prompts(self) -> None:
         """Seed prompts table from defaults. Idempotent.
