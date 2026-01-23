@@ -6,7 +6,7 @@ Thank you for your interest in Amelia!
 
 We welcome bug reports, feature requests, and feedback via [GitHub Issues](https://github.com/existential-birds/amelia/issues).
 
-**Code contributions (pull requests) are not accepted from external contributors.** Amelia uses a dual-licensing model that requires all code to be authored by the project maintainers. See [LICENSING.md](docs/legal/LICENSING.md) for details.
+**Code contributions (pull requests) are not accepted from external contributors.** Amelia is licensed under [Apache 2.0](LICENSE).
 
 If you've found a bug or have an idea for improvement, please open an issue - we appreciate the feedback.
 
