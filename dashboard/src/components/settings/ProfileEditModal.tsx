@@ -268,19 +268,19 @@ function AgentCard({ agent, config, onChange }: AgentCardProps) {
   const colors = AGENT_COLORS[agent.key] ?? { line: 'bg-muted-foreground/40', icon: 'text-muted-foreground' };
 
   return (
-    <div className="group relative flex items-center gap-3 rounded-md border border-border/40 bg-card/30 px-3 py-2 transition-all duration-200 hover:border-border/60 hover:bg-card/50">
+    <div className="group relative flex flex-wrap items-center gap-2 rounded-md border border-border/40 bg-card/30 px-3 py-2 transition-all duration-200 hover:border-border/60 hover:bg-card/50">
       {/* Status indicator line */}
       <div className={cn('w-0.5 h-6 rounded-full shrink-0', colors.line)} />
 
       {/* Agent icon + name */}
-      <div className="flex items-center gap-2 min-w-[110px]">
+      <div className="flex items-center gap-2 min-w-[110px] flex-1 sm:flex-none">
         <Icon className={cn('h-4 w-4 shrink-0', colors.icon)} />
         <span className="font-heading text-sm font-medium tracking-wide">{agent.label}</span>
       </div>
 
       {/* Driver select */}
       <Select value={config.driver} onValueChange={(v) => onChange('driver', v)}>
-        <SelectTrigger className="h-7 w-[130px] text-xs bg-background/50">
+        <SelectTrigger className="h-7 w-full sm:w-[130px] text-xs bg-background/50">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -304,7 +304,7 @@ function AgentCard({ agent, config, onChange }: AgentCardProps) {
         value={config.model}
         onValueChange={(v) => onChange('model', v)}
       >
-        <SelectTrigger className="h-7 w-[90px] text-xs bg-background/50">
+        <SelectTrigger className="h-7 w-full sm:w-[90px] text-xs bg-background/50">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
