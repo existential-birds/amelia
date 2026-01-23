@@ -44,6 +44,28 @@ def extract_task_count(plan_markdown: str) -> int | None:
     return count
 
 
+def extract_task_title(plan_markdown: str, task_index: int) -> str | None:
+    """Extract the title of a specific task from plan markdown.
+
+    Supports both simple (### Task 1: Title) and hierarchical
+    (### Task 1.1: Title) numbering formats.
+
+    Args:
+        plan_markdown: The markdown content of the plan.
+        task_index: 0-indexed task number to extract title for.
+
+    Returns:
+        The task title string, or None if task not found.
+    """
+    pattern = r"^### Task \d+(?:\.\d+)?: (.+)$"
+    matches: list[str] = re.findall(pattern, plan_markdown, re.MULTILINE)
+
+    if not matches or task_index >= len(matches):
+        return None
+
+    return matches[task_index]
+
+
 def _looks_like_plan(text: str) -> bool:
     """Check if text looks like a plan document.
 

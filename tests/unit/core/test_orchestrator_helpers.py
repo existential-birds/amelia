@@ -12,6 +12,7 @@ from amelia.core.types import AgentConfig, Profile
 from amelia.pipelines.implementation.utils import (
     extract_task_count,
     extract_task_section,
+    extract_task_title,
 )
 from amelia.pipelines.utils import extract_config_params
 
@@ -211,3 +212,33 @@ class TestExtractConfigParams:
         }
         with pytest.raises(ValueError, match="profile is required"):
             extract_config_params(config)
+
+
+class TestExtractTaskTitle:
+    """Tests for extract_task_title helper."""
+
+    def test_extracts_simple_task_title(self) -> None:
+        """Should extract title from ### Task N: Title format."""
+        plan = """# Plan
+### Task 1: First task title
+Content
+### Task 2: Second task title
+More content
+"""
+        assert extract_task_title(plan, 0) == "First task title"
+        assert extract_task_title(plan, 1) == "Second task title"
+
+    def test_extracts_hierarchical_task_title(self) -> None:
+        """Should extract title from ### Task N.M: Title format."""
+        assert extract_task_title(SAMPLE_PLAN, 0) == "Create Model Types"
+        assert extract_task_title(SAMPLE_PLAN, 1) == "Add Response Types"
+        assert extract_task_title(SAMPLE_PLAN, 2) == "Create PreferencesService"
+
+    def test_returns_none_for_invalid_index(self) -> None:
+        """Should return None if task index out of range."""
+        assert extract_task_title(SAMPLE_PLAN, 99) is None
+
+    def test_returns_none_for_no_tasks(self) -> None:
+        """Should return None if no task patterns found."""
+        plan = "# Plan\n\nNo tasks here"
+        assert extract_task_title(plan, 0) is None
