@@ -154,6 +154,14 @@ class TestMessage:
         assert msg.parts[0].type == "reasoning"
 
 
+class TestMessageNoIsSystem:
+    """Tests verifying is_system field is removed."""
+
+    def test_message_has_no_is_system_field(self) -> None:
+        """Message model should not have is_system field."""
+        assert "is_system" not in Message.model_fields
+
+
 class TestArtifact:
     """Test Artifact model."""
 
