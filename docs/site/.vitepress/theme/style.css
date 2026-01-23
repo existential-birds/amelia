@@ -195,7 +195,7 @@
   color: var(--vp-c-heading-2);
 }
 
-/* Nav title with Bebas Neue display font */
+/* Nav title with Barlow Condensed display font */
 .VPNavBarTitle .title {
   font-family: var(--amelia-font-display);
   font-size: 1.5rem;

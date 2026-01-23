@@ -62,6 +62,16 @@ pnpm type-check   # TypeScript checking
 
 **Tech Stack:** React Router v7, Tailwind CSS v4, shadcn/ui, Zustand, Vitest, XyFlow
 
+## Browser Automation
+
+Use `agent-browser` for web automation. Run `agent-browser --help` for all commands.
+
+Core workflow:
+1. `agent-browser open <url>` - Navigate to page
+2. `agent-browser snapshot -i` - Get interactive elements with refs (@e1, @e2)
+3. `agent-browser click @e1` / `agent-browser fill @e2 "text"` - Interact using refs
+4. Re-snapshot after page changes
+
 ## Architecture Overview
 
 Amelia is a local agentic coding orchestrator that coordinates specialized AI agents through a LangGraph state machine.

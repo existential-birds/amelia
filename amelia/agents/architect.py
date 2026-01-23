@@ -14,8 +14,9 @@ from pydantic import BaseModel, ConfigDict
 
 from amelia.core.agentic_state import ToolCall, ToolResult
 from amelia.core.constants import ToolName, resolve_plan_path
-from amelia.core.types import Profile
-from amelia.drivers.base import AgenticMessageType, DriverInterface
+from amelia.core.types import AgentConfig, Profile
+from amelia.drivers.base import AgenticMessageType
+from amelia.drivers.factory import get_driver
 from amelia.server.models.events import EventLevel, EventType, WorkflowEvent
 
 
@@ -121,20 +122,21 @@ Before planning, discover:
 
     def __init__(
         self,
-        driver: DriverInterface,
+        config: AgentConfig,
         event_bus: "EventBus | None" = None,
         prompts: dict[str, str] | None = None,
     ):
         """Initialize the Architect agent.
 
         Args:
-            driver: LLM driver interface for plan generation.
+            config: Agent configuration with driver, model, and options.
             event_bus: Optional EventBus for emitting workflow events.
             prompts: Optional dict mapping prompt IDs to custom content.
                 Supports keys: "architect.system", "architect.plan".
 
         """
-        self.driver = driver
+        self.driver = get_driver(config.driver, model=config.model)
+        self.options = config.options
         self._event_bus = event_bus
         self._prompts = prompts or {}
 

@@ -5,13 +5,29 @@ Pydantic models (RetryConfig, Profile, Settings, Issue) used throughout
 the Amelia agentic coding orchestrator.
 """
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
 DriverType = Literal["cli:claude", "api:openrouter", "cli", "api"]
 TrackerType = Literal["jira", "github", "none", "noop"]
+
+
+class AgentConfig(BaseModel):
+    """Per-agent driver and model configuration.
+
+    Attributes:
+        driver: LLM driver type (e.g., 'api:openrouter', 'cli:claude').
+        model: LLM model identifier.
+        options: Agent-specific options (e.g., max_iterations).
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    driver: DriverType
+    model: str
+    options: dict[str, Any] = Field(default_factory=dict)
 
 
 class RetryConfig(BaseModel):
@@ -42,34 +58,42 @@ class Profile(BaseModel):
 
     Attributes:
         name: Profile name (e.g., 'work', 'personal').
-        driver: LLM driver type (e.g., 'api:openrouter', 'cli:claude').
-        model: LLM model identifier. For cli:claude use 'sonnet', 'opus', or 'haiku'.
-            For api:openrouter use model name directly (e.g., 'minimax/minimax-m2').
-            The provider is inferred from the driver setting.
         tracker: Issue tracker type (jira, github, none, noop).
         working_dir: Working directory for agentic execution.
-        plan_output_dir: Directory for saving implementation plans (default: docs/plans).
+        plan_output_dir: Directory for saving implementation plans.
         plan_path_pattern: Path pattern for plan files with {date} and {issue_key} placeholders.
         retry: Retry configuration for transient failures.
-        max_review_iterations: Maximum review-fix loop iterations before terminating.
         auto_approve_reviews: Skip human approval steps in review workflow.
+        agents: Per-agent driver and model configuration.
     """
 
     model_config = ConfigDict(frozen=True)
 
     name: str
-    driver: DriverType
-    model: str
     tracker: TrackerType = "none"
     working_dir: str
     plan_output_dir: str = "docs/plans"
     plan_path_pattern: str = "docs/plans/{date}-{issue_key}.md"
-    validator_model: str
-    """Model for plan validation. Uses a fast/cheap model for extraction."""
     retry: RetryConfig = Field(default_factory=RetryConfig)
-    max_review_iterations: int = 3
-    max_task_review_iterations: int = 5  # Per-task review iteration limit (for task-based execution)
     auto_approve_reviews: bool = False
+    agents: dict[str, AgentConfig] = Field(default_factory=dict)
+
+    def get_agent_config(self, agent_name: str) -> AgentConfig:
+        """Get config for an agent.
+
+        Args:
+            agent_name: Name of the agent (e.g., 'architect', 'developer').
+
+        Returns:
+            AgentConfig for the specified agent.
+
+        Raises:
+            ValueError: If agent not configured in this profile.
+        """
+        if agent_name not in self.agents:
+            raise ValueError(f"Agent '{agent_name}' not configured in profile '{self.name}'")
+        return self.agents[agent_name]
+
 
 class Settings(BaseModel):
     """Global settings for Amelia.

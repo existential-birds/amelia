@@ -2,34 +2,68 @@
 
 from pathlib import Path
 
-from amelia.core.types import Design, Profile
+from amelia.core.types import Design
 
 
-def test_profile_max_task_review_iterations_default():
-    """Profile should have max_task_review_iterations with default value."""
+def test_agent_config_creation():
+    """AgentConfig should store driver, model, and optional options."""
+    from amelia.core.types import AgentConfig
+
+    config = AgentConfig(driver="cli:claude", model="sonnet")
+    assert config.driver == "cli:claude"
+    assert config.model == "sonnet"
+    assert config.options == {}
+
+
+def test_agent_config_with_options():
+    """AgentConfig should accept arbitrary options dict."""
+    from amelia.core.types import AgentConfig
+
+    config = AgentConfig(
+        driver="api:openrouter",
+        model="anthropic/claude-sonnet-4",
+        options={"max_iterations": 5, "temperature": 0.7},
+    )
+    assert config.options["max_iterations"] == 5
+    assert config.options["temperature"] == 0.7
+
+
+def test_profile_with_agents_dict():
+    """Profile should accept agents dict configuration."""
+    from amelia.core.types import AgentConfig, Profile
+
     profile = Profile(
         name="test",
-        driver="cli:claude",
-        model="sonnet",
-        validator_model="sonnet",
+        tracker="noop",
         working_dir="/tmp/test",
+        agents={
+            "architect": AgentConfig(driver="cli:claude", model="opus"),
+            "developer": AgentConfig(driver="cli:claude", model="sonnet"),
+        },
     )
+    assert profile.agents["architect"].model == "opus"
+    assert profile.agents["developer"].model == "sonnet"
 
-    assert profile.max_task_review_iterations == 5
 
+def test_profile_get_agent_config():
+    """Profile.get_agent_config should return config or raise if missing."""
+    from amelia.core.types import AgentConfig, Profile
 
-def test_profile_max_task_review_iterations_override():
-    """Profile max_task_review_iterations should be configurable."""
     profile = Profile(
         name="test",
-        driver="cli:claude",
-        model="sonnet",
-        validator_model="sonnet",
+        tracker="noop",
         working_dir="/tmp/test",
-        max_task_review_iterations=10,
+        agents={
+            "architect": AgentConfig(driver="cli:claude", model="opus"),
+        },
     )
 
-    assert profile.max_task_review_iterations == 10
+    config = profile.get_agent_config("architect")
+    assert config.model == "opus"
+
+    import pytest
+    with pytest.raises(ValueError, match="Agent 'developer' not configured"):
+        profile.get_agent_config("developer")
 
 
 class TestDesign:

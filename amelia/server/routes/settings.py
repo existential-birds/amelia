@@ -1,12 +1,14 @@
 # amelia/server/routes/settings.py
 """API routes for server settings and profiles."""
+import json
 import sqlite3
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, field_validator
 
+from amelia.core.types import AgentConfig, Profile
 from amelia.server.database import (
-    ProfileRecord,
     ProfileRepository,
     SettingsRepository,
 )
@@ -48,41 +50,41 @@ class ServerSettingsUpdate(BaseModel):
     stream_tool_results: bool | None = None
 
 
-class ProfileResponse(BaseModel):
-    """Profile API response."""
+class AgentConfigResponse(BaseModel):
+    """Agent configuration in API response."""
 
-    id: str
     driver: str
     model: str
-    validator_model: str
+    options: dict[str, Any] = {}
+
+
+class ProfileResponse(BaseModel):
+    """Profile API response.
+
+    With per-agent configuration, each agent can have its own driver/model.
+    The agents dict maps agent names to their configurations.
+    """
+
+    id: str
     tracker: str
     working_dir: str
     plan_output_dir: str
     plan_path_pattern: str
-    max_review_iterations: int
-    max_task_review_iterations: int
     auto_approve_reviews: bool
-    is_active: bool
+    agents: dict[str, AgentConfigResponse]
+    is_active: bool = False
 
 
 VALID_DRIVERS = {"cli:claude", "api:openrouter", "cli", "api"}
 VALID_TRACKERS = {"jira", "github", "none", "noop"}
 
 
-class ProfileCreate(BaseModel):
-    """Profile creation request."""
+class AgentConfigCreate(BaseModel):
+    """Agent configuration for profile creation."""
 
-    id: str
     driver: str
     model: str
-    validator_model: str
-    tracker: str = "noop"
-    working_dir: str
-    plan_output_dir: str = "docs/plans"
-    plan_path_pattern: str = "docs/plans/{date}-{issue_key}.md"
-    max_review_iterations: int = 3
-    max_task_review_iterations: int = 5
-    auto_approve_reviews: bool = False
+    options: dict[str, Any] = {}
 
     @field_validator("driver")
     @classmethod
@@ -90,6 +92,21 @@ class ProfileCreate(BaseModel):
         if v not in VALID_DRIVERS:
             raise ValueError(f"Invalid driver '{v}'. Valid options: {sorted(VALID_DRIVERS)}")
         return v
+
+
+class ProfileCreate(BaseModel):
+    """Profile creation request.
+
+    Requires agents dict mapping agent names to their driver/model configurations.
+    """
+
+    id: str
+    tracker: str = "noop"
+    working_dir: str
+    plan_output_dir: str = "docs/plans"
+    plan_path_pattern: str = "docs/plans/{date}-{issue_key}.md"
+    auto_approve_reviews: bool = False
+    agents: dict[str, AgentConfigCreate]
 
     @field_validator("tracker")
     @classmethod
@@ -100,25 +117,17 @@ class ProfileCreate(BaseModel):
 
 
 class ProfileUpdate(BaseModel):
-    """Profile update request."""
+    """Profile update request.
 
-    driver: str | None = None
-    model: str | None = None
-    validator_model: str | None = None
+    All fields are optional. To update agents, provide the full agents dict.
+    """
+
     tracker: str | None = None
     working_dir: str | None = None
     plan_output_dir: str | None = None
     plan_path_pattern: str | None = None
-    max_review_iterations: int | None = None
-    max_task_review_iterations: int | None = None
     auto_approve_reviews: bool | None = None
-
-    @field_validator("driver")
-    @classmethod
-    def validate_driver(cls, v: str | None) -> str | None:
-        if v is not None and v not in VALID_DRIVERS:
-            raise ValueError(f"Invalid driver '{v}'. Valid options: {sorted(VALID_DRIVERS)}")
-        return v
+    agents: dict[str, AgentConfigCreate] | None = None
 
     @field_validator("tracker")
     @classmethod
@@ -176,33 +185,43 @@ async def list_profiles(
 ) -> list[ProfileResponse]:
     """List all profiles."""
     profiles = await repo.list_profiles()
-    return [_profile_to_response(p) for p in profiles]
+    active = await repo.get_active_profile()
+    active_id = active.name if active else None
+    return [_profile_to_response(p, is_active=(p.name == active_id)) for p in profiles]
 
 
 @router.post("/profiles", response_model=ProfileResponse, status_code=201)
 async def create_profile(
-    profile: ProfileCreate,
+    profile_req: ProfileCreate,
     repo: ProfileRepository = Depends(get_profile_repository),
 ) -> ProfileResponse:
     """Create a new profile."""
-    record = ProfileRecord(
-        id=profile.id,
-        driver=profile.driver,
-        model=profile.model,
-        validator_model=profile.validator_model,
-        tracker=profile.tracker,
-        working_dir=profile.working_dir,
-        plan_output_dir=profile.plan_output_dir,
-        plan_path_pattern=profile.plan_path_pattern,
-        max_review_iterations=profile.max_review_iterations,
-        max_task_review_iterations=profile.max_task_review_iterations,
-        auto_approve_reviews=profile.auto_approve_reviews,
+    # Convert AgentConfigCreate to AgentConfig
+    agents = {
+        name: AgentConfig(
+            driver=config.driver,  # type: ignore[arg-type]
+            model=config.model,
+            options=config.options,
+        )
+        for name, config in profile_req.agents.items()
+    }
+
+    profile = Profile(
+        name=profile_req.id,
+        tracker=profile_req.tracker,  # type: ignore[arg-type]
+        working_dir=profile_req.working_dir,
+        plan_output_dir=profile_req.plan_output_dir,
+        plan_path_pattern=profile_req.plan_path_pattern,
+        auto_approve_reviews=profile_req.auto_approve_reviews,
+        agents=agents,
     )
+
     try:
-        created = await repo.create_profile(record)
+        created = await repo.create_profile(profile)
     except sqlite3.IntegrityError as exc:
         raise HTTPException(status_code=409, detail="Profile already exists") from exc
-    return _profile_to_response(created)
+    # Newly created profiles are not active
+    return _profile_to_response(created, is_active=False)
 
 
 @router.get("/profiles/{profile_id}", response_model=ProfileResponse)
@@ -214,7 +233,8 @@ async def get_profile(
     profile = await repo.get_profile(profile_id)
     if profile is None:
         raise HTTPException(status_code=404, detail="Profile not found")
-    return _profile_to_response(profile)
+    active = await repo.get_active_profile()
+    return _profile_to_response(profile, is_active=(active is not None and active.name == profile_id))
 
 
 @router.put("/profiles/{profile_id}", response_model=ProfileResponse)
@@ -224,10 +244,30 @@ async def update_profile(
     repo: ProfileRepository = Depends(get_profile_repository),
 ) -> ProfileResponse:
     """Update a profile."""
-    update_dict = {k: v for k, v in updates.model_dump().items() if v is not None}
+    update_dict: dict[str, Any] = {}
+
+    # Handle simple fields
+    for field in ["tracker", "working_dir", "plan_output_dir", "plan_path_pattern", "auto_approve_reviews"]:
+        value = getattr(updates, field)
+        if value is not None:
+            update_dict[field] = value
+
+    # Handle agents field - convert to JSON for database storage
+    if updates.agents is not None:
+        agents_json = json.dumps({
+            name: {
+                "driver": config.driver,
+                "model": config.model,
+                "options": config.options,
+            }
+            for name, config in updates.agents.items()
+        })
+        update_dict["agents"] = agents_json
+
     try:
         updated = await repo.update_profile(profile_id, update_dict)
-        return _profile_to_response(updated)
+        active = await repo.get_active_profile()
+        return _profile_to_response(updated, is_active=(active is not None and active.name == profile_id))
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from None
 
@@ -254,24 +294,36 @@ async def activate_profile(
         profile = await repo.get_profile(profile_id)
         if profile is None:
             raise HTTPException(status_code=404, detail="Profile not found")
-        return _profile_to_response(profile)
+        # After activation, this profile is definitely active
+        return _profile_to_response(profile, is_active=True)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from None
 
 
-def _profile_to_response(profile: ProfileRecord) -> ProfileResponse:
-    """Convert ProfileRecord to API response."""
+def _profile_to_response(profile: Profile, is_active: bool = False) -> ProfileResponse:
+    """Convert Profile to API response.
+
+    Args:
+        profile: Profile instance from database.
+        is_active: Whether this profile is the active one (determined externally).
+
+    Returns:
+        ProfileResponse for API output.
+    """
     return ProfileResponse(
-        id=profile.id,
-        driver=profile.driver,
-        model=profile.model,
-        validator_model=profile.validator_model,
+        id=profile.name,
         tracker=profile.tracker,
         working_dir=profile.working_dir,
         plan_output_dir=profile.plan_output_dir,
         plan_path_pattern=profile.plan_path_pattern,
-        max_review_iterations=profile.max_review_iterations,
-        max_task_review_iterations=profile.max_task_review_iterations,
         auto_approve_reviews=profile.auto_approve_reviews,
-        is_active=profile.is_active,
+        agents={
+            name: AgentConfigResponse(
+                driver=config.driver,
+                model=config.model,
+                options=config.options,
+            )
+            for name, config in profile.agents.items()
+        },
+        is_active=is_active,
     )

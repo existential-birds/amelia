@@ -9,7 +9,7 @@ from langchain_core.runnables.config import RunnableConfig
 from langgraph.graph import END
 
 from amelia.agents.evaluator import Disposition, EvaluatedItem, EvaluationResult
-from amelia.core.types import Profile, ReviewResult
+from amelia.core.types import AgentConfig, Profile, ReviewResult
 from amelia.pipelines.implementation import create_implementation_graph
 from amelia.pipelines.implementation.nodes import next_task_node
 from amelia.pipelines.implementation.routing import route_after_task_review
@@ -181,11 +181,16 @@ class TestRouteAfterTaskReview:
     def mock_profile_task_review(self) -> Profile:
         return Profile(
             name="test",
-            driver="cli:claude",
-            model="sonnet",
-            validator_model="sonnet",
+            tracker="noop",
             working_dir="/tmp/test",
-            max_task_review_iterations=3,
+            agents={
+                "architect": AgentConfig(driver="cli:claude", model="sonnet"),
+                "developer": AgentConfig(driver="cli:claude", model="sonnet"),
+                "reviewer": AgentConfig(driver="cli:claude", model="sonnet"),
+                "task_reviewer": AgentConfig(
+                    driver="cli:claude", model="sonnet", options={"max_iterations": 3}
+                ),
+            },
         )
 
     @pytest.fixture
@@ -277,14 +282,19 @@ class TestRouteAfterTaskReview:
         assert result == "__end__"
 
     def test_route_after_task_review_uses_profile_max_iterations(self) -> None:
-        """Should respect profile's max_task_review_iterations setting."""
+        """Should respect task_reviewer agent's options.max_iterations setting."""
         profile = Profile(
             name="test",
-            driver="cli:claude",
-            model="sonnet",
-            validator_model="sonnet",
+            tracker="noop",
             working_dir="/tmp/test",
-            max_task_review_iterations=10,
+            agents={
+                "architect": AgentConfig(driver="cli:claude", model="sonnet"),
+                "developer": AgentConfig(driver="cli:claude", model="sonnet"),
+                "reviewer": AgentConfig(driver="cli:claude", model="sonnet"),
+                "task_reviewer": AgentConfig(
+                    driver="cli:claude", model="sonnet", options={"max_iterations": 10}
+                ),
+            },
         )
         rejected_review = ReviewResult(
             reviewer_persona="test",
@@ -417,7 +427,17 @@ class TestReviewerNodeTaskIteration:
             task_review_iteration=1,
             base_commit="abc123",  # Required for agentic_review
         )
-        profile = Profile(name="test", driver="cli:claude", model="sonnet", validator_model="sonnet", working_dir="/tmp/test")
+        profile = Profile(
+            name="test",
+            tracker="noop",
+            working_dir="/tmp/test",
+            agents={
+                "architect": AgentConfig(driver="cli:claude", model="sonnet"),
+                "developer": AgentConfig(driver="cli:claude", model="sonnet"),
+                "reviewer": AgentConfig(driver="cli:claude", model="sonnet"),
+                "task_reviewer": AgentConfig(driver="cli:claude", model="sonnet"),
+            },
+        )
         config: RunnableConfig = {"configurable": {"profile": profile, "thread_id": "test-wf"}}
 
         # Mock reviewer to return a review result
@@ -428,17 +448,16 @@ class TestReviewerNodeTaskIteration:
             severity="medium",
         )
 
-        with patch("amelia.pipelines.nodes.Reviewer") as mock_reviewer_class, \
-             patch("amelia.pipelines.nodes.DriverFactory") as mock_factory:
-            mock_driver = MagicMock()
-            mock_factory.get_driver.return_value = mock_driver
-
+        with patch("amelia.pipelines.nodes.Reviewer") as mock_reviewer_class:
             mock_reviewer = MagicMock()
+            # Reviewer now creates its own driver internally
+            mock_reviewer.driver = MagicMock()
             # Use agentic_review instead of review (legacy method removed)
             mock_reviewer.agentic_review = AsyncMock(return_value=(mock_review, "session-123"))
             mock_reviewer_class.return_value = mock_reviewer
 
-            result = await call_reviewer_node(state, config)
+            with patch("amelia.pipelines.nodes._save_token_usage", new_callable=AsyncMock):
+                result = await call_reviewer_node(state, config)
 
         assert result["task_review_iteration"] == 2
 

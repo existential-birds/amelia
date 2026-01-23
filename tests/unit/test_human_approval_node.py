@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import pytest
 
-from amelia.core.types import Profile
+from amelia.core.types import AgentConfig, Profile
 from amelia.pipelines.implementation.nodes import human_approval_node
 from amelia.pipelines.implementation.state import ImplementationState
 
@@ -13,7 +13,16 @@ from amelia.pipelines.implementation.state import ImplementationState
 @pytest.fixture
 def base_state():
     """Create a base ImplementationState for testing."""
-    profile = Profile(name="test", driver="cli:claude", model="sonnet", validator_model="sonnet", working_dir="/tmp/test")
+    profile = Profile(
+        name="test",
+        tracker="noop",
+        working_dir="/tmp/test",
+        agents={
+            "architect": AgentConfig(driver="cli:claude", model="sonnet"),
+            "developer": AgentConfig(driver="cli:claude", model="sonnet"),
+            "reviewer": AgentConfig(driver="cli:claude", model="sonnet"),
+        },
+    )
     return ImplementationState(
         workflow_id="wf-test-123",
         created_at=datetime.now(UTC),

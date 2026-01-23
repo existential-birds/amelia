@@ -5,9 +5,10 @@ the driver's get_usage() method and saved via the repository when agents
 complete execution.
 
 The token usage extraction works by:
-1. Driver accumulates usage during execution
-2. Orchestrator calls driver.get_usage() to retrieve DriverUsage
-3. DriverUsage is converted to TokenUsage and saved (if repository is in config)
+1. Agent creates driver internally from AgentConfig
+2. Agent stores driver as instance attribute
+3. After agent.run(), orchestrator calls agent.driver.get_usage()
+4. DriverUsage is converted to TokenUsage and saved (if repository is in config)
 """
 from collections.abc import AsyncGenerator, Callable
 from pathlib import Path
@@ -111,16 +112,14 @@ class TestDeveloperNodeTokenUsage(TestTokenUsageExtraction):
             mock_event.type = "output"
             yield final_state, mock_event
 
-        with patch("amelia.pipelines.nodes.Developer") as mock_dev_class, \
-             patch("amelia.pipelines.nodes.DriverFactory") as mock_factory:
+        with patch("amelia.pipelines.nodes.Developer") as mock_dev_class:
             mock_dev_instance = MagicMock()
             mock_dev_instance.run = mock_run
-            mock_dev_class.return_value = mock_dev_instance
-
-            # Driver returns usage via get_usage()
+            # Driver is now an attribute on the agent instance
             mock_driver = MagicMock()
             mock_driver.get_usage.return_value = mock_driver_usage_full
-            mock_factory.get_driver.return_value = mock_driver
+            mock_dev_instance.driver = mock_driver
+            mock_dev_class.return_value = mock_dev_instance
 
             await call_developer_node(state, config_with_repository[0])
 
@@ -174,15 +173,13 @@ class TestDeveloperNodeTokenUsage(TestTokenUsageExtraction):
             mock_event = MagicMock()
             yield final_state, mock_event
 
-        with patch("amelia.pipelines.nodes.Developer") as mock_dev_class, \
-             patch("amelia.pipelines.nodes.DriverFactory") as mock_factory:
+        with patch("amelia.pipelines.nodes.Developer") as mock_dev_class:
             mock_dev_instance = MagicMock()
             mock_dev_instance.run = mock_run
-            mock_dev_class.return_value = mock_dev_instance
-
             mock_driver = MagicMock()
             mock_driver.get_usage.return_value = mock_driver_usage_none
-            mock_factory.get_driver.return_value = mock_driver
+            mock_dev_instance.driver = mock_driver
+            mock_dev_class.return_value = mock_dev_instance
 
             await call_developer_node(state, config_with_repository[0])
 
@@ -220,15 +217,13 @@ class TestDeveloperNodeTokenUsage(TestTokenUsageExtraction):
             mock_event = MagicMock()
             yield final_state, mock_event
 
-        with patch("amelia.pipelines.nodes.Developer") as mock_dev_class, \
-             patch("amelia.pipelines.nodes.DriverFactory") as mock_factory:
+        with patch("amelia.pipelines.nodes.Developer") as mock_dev_class:
             mock_dev_instance = MagicMock()
             mock_dev_instance.run = mock_run
-            mock_dev_class.return_value = mock_dev_instance
-
             mock_driver = MagicMock()
             mock_driver.get_usage.return_value = mock_driver_usage_full
-            mock_factory.get_driver.return_value = mock_driver
+            mock_dev_instance.driver = mock_driver
+            mock_dev_class.return_value = mock_dev_instance
 
             # Should not raise even without repository
             result = await call_developer_node(state, base_config)
@@ -271,17 +266,15 @@ class TestReviewerNodeTokenUsage(TestTokenUsageExtraction):
             severity="low",
         )
 
-        with patch("amelia.pipelines.nodes.Reviewer") as mock_reviewer_class, \
-             patch("amelia.pipelines.nodes.DriverFactory") as mock_factory:
+        with patch("amelia.pipelines.nodes.Reviewer") as mock_reviewer_class:
             mock_reviewer_instance = MagicMock()
             mock_reviewer_instance.agentic_review = AsyncMock(
                 return_value=(mock_review_result, "session-abc")
             )
-            mock_reviewer_class.return_value = mock_reviewer_instance
-
             mock_driver = MagicMock()
             mock_driver.get_usage.return_value = mock_driver_usage_full
-            mock_factory.get_driver.return_value = mock_driver
+            mock_reviewer_instance.driver = mock_driver
+            mock_reviewer_class.return_value = mock_reviewer_instance
 
             await call_reviewer_node(state, config_with_repository[0])
 
@@ -346,15 +339,13 @@ class TestArchitectNodeTokenUsage(TestTokenUsageExtraction):
             """Mock async generator that yields (state, event) tuples."""
             yield (mock_final_state, mock_event)
 
-        with patch("amelia.pipelines.implementation.nodes.Architect") as mock_architect_class, \
-             patch("amelia.pipelines.implementation.nodes.DriverFactory") as mock_factory:
+        with patch("amelia.pipelines.implementation.nodes.Architect") as mock_architect_class:
             mock_architect_instance = MagicMock()
             mock_architect_instance.plan = mock_plan_generator
-            mock_architect_class.return_value = mock_architect_instance
-
             mock_driver = MagicMock()
             mock_driver.get_usage.return_value = mock_driver_usage_full
-            mock_factory.get_driver.return_value = mock_driver
+            mock_architect_instance.driver = mock_driver
+            mock_architect_class.return_value = mock_architect_instance
 
             await call_architect_node(state, config_with_repository[0])
 
@@ -407,16 +398,14 @@ class TestTokenUsageEdgeCases(TestTokenUsageExtraction):
             mock_event = MagicMock()
             yield final_state, mock_event
 
-        with patch("amelia.pipelines.nodes.Developer") as mock_dev_class, \
-             patch("amelia.pipelines.nodes.DriverFactory") as mock_factory:
+        with patch("amelia.pipelines.nodes.Developer") as mock_dev_class:
             mock_dev_instance = MagicMock()
             mock_dev_instance.run = mock_run
-            mock_dev_class.return_value = mock_dev_instance
-
             mock_driver = MagicMock()
             mock_driver.model = "sonnet"  # Driver has model attribute
             mock_driver.get_usage.return_value = partial_usage
-            mock_factory.get_driver.return_value = mock_driver
+            mock_dev_instance.driver = mock_driver
+            mock_dev_class.return_value = mock_dev_instance
 
             await call_developer_node(state, config_with_repository[0])
 
@@ -468,16 +457,14 @@ class TestTokenUsageEdgeCases(TestTokenUsageExtraction):
             mock_event = MagicMock()
             yield final_state, mock_event
 
-        with patch("amelia.pipelines.nodes.Developer") as mock_dev_class, \
-             patch("amelia.pipelines.nodes.DriverFactory") as mock_factory:
+        with patch("amelia.pipelines.nodes.Developer") as mock_dev_class:
             mock_dev_instance = MagicMock()
             mock_dev_instance.run = mock_run
-            mock_dev_class.return_value = mock_dev_instance
-
             # Driver without model attribute (using spec to limit attributes)
             mock_driver = MagicMock(spec=["get_usage", "generate"])
             mock_driver.get_usage.return_value = partial_usage
-            mock_factory.get_driver.return_value = mock_driver
+            mock_dev_instance.driver = mock_driver
+            mock_dev_class.return_value = mock_dev_instance
 
             await call_developer_node(state, config_with_repository[0])
 
@@ -522,15 +509,13 @@ class TestTokenUsageEdgeCases(TestTokenUsageExtraction):
             mock_event = MagicMock()
             yield final_state, mock_event
 
-        with patch("amelia.pipelines.nodes.Developer") as mock_dev_class, \
-             patch("amelia.pipelines.nodes.DriverFactory") as mock_factory:
+        with patch("amelia.pipelines.nodes.Developer") as mock_dev_class:
             mock_dev_instance = MagicMock()
             mock_dev_instance.run = mock_run
-            mock_dev_class.return_value = mock_dev_instance
-
             mock_driver = MagicMock()
             mock_driver.get_usage.return_value = mock_driver_usage_full
-            mock_factory.get_driver.return_value = mock_driver
+            mock_dev_instance.driver = mock_driver
+            mock_dev_class.return_value = mock_dev_instance
 
             # Should NOT raise - token usage is best-effort
             result = await call_developer_node(state, config_with_repository[0])
@@ -567,15 +552,13 @@ class TestTokenUsageEdgeCases(TestTokenUsageExtraction):
             mock_event = MagicMock()
             yield final_state, mock_event
 
-        with patch("amelia.pipelines.nodes.Developer") as mock_dev_class, \
-             patch("amelia.pipelines.nodes.DriverFactory") as mock_factory:
+        with patch("amelia.pipelines.nodes.Developer") as mock_dev_class:
             mock_dev_instance = MagicMock()
             mock_dev_instance.run = mock_run
-            mock_dev_class.return_value = mock_dev_instance
-
             # Driver without get_usage method
             mock_driver = MagicMock(spec=["generate"])
-            mock_factory.get_driver.return_value = mock_driver
+            mock_dev_instance.driver = mock_driver
+            mock_dev_class.return_value = mock_dev_instance
 
             # Should not raise
             result = await call_developer_node(state, config_with_repository[0])

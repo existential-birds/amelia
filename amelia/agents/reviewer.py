@@ -8,8 +8,8 @@ from uuid import uuid4
 from loguru import logger
 from pydantic import BaseModel, ConfigDict, Field
 
-from amelia.core.types import Profile, ReviewResult, Severity
-from amelia.drivers.base import DriverInterface
+from amelia.core.types import AgentConfig, Profile, ReviewResult, Severity
+from amelia.drivers.factory import get_driver
 from amelia.server.models.events import EventLevel, EventType, WorkflowEvent
 
 
@@ -180,7 +180,7 @@ Rationale: [1-2 sentences]
 
     def __init__(
         self,
-        driver: DriverInterface,
+        config: AgentConfig,
         event_bus: "EventBus | None" = None,
         prompts: dict[str, str] | None = None,
         agent_name: str = "reviewer",
@@ -188,7 +188,7 @@ Rationale: [1-2 sentences]
         """Initialize the Reviewer agent.
 
         Args:
-            driver: LLM driver interface for generating reviews.
+            config: Agent configuration with driver, model, and options.
             event_bus: Optional EventBus for emitting workflow events.
             prompts: Optional dict mapping prompt IDs to custom content.
                 Supports key: "reviewer.agentic".
@@ -196,7 +196,8 @@ Rationale: [1-2 sentences]
                 execution to distinguish from final review.
 
         """
-        self.driver = driver
+        self.driver = get_driver(config.driver, model=config.model)
+        self.options = config.options
         self._event_bus = event_bus
         self._prompts = prompts or {}
         self._agent_name = agent_name

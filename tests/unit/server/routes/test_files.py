@@ -9,7 +9,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from amelia.server.database.profile_repository import ProfileRecord
+from amelia.core.types import AgentConfig, Profile
 from amelia.server.dependencies import get_profile_repository
 from amelia.server.routes.files import router
 
@@ -17,15 +17,17 @@ from amelia.server.routes.files import router
 def _create_mock_profile_repo(working_dir: Path) -> MagicMock:
     """Create a mock profile repository with an active profile pointing to working_dir."""
     repo = MagicMock()
+    agent_config = AgentConfig(driver="cli:claude", model="claude-3-5-sonnet")
     repo.get_active_profile = AsyncMock(
-        return_value=ProfileRecord(
-            id="test",
-            driver="cli:claude",
-            model="claude-3-5-sonnet",
-            validator_model="claude-3-5-sonnet",
+        return_value=Profile(
+            name="test",
             tracker="noop",
             working_dir=str(working_dir),
-            is_active=True,
+            agents={
+                "architect": agent_config,
+                "developer": agent_config,
+                "reviewer": agent_config,
+            },
         )
     )
     return repo

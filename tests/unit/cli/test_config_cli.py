@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from typer.testing import CliRunner
 
+from amelia.core.types import AgentConfig, Profile
 from amelia.main import app
-from amelia.server.database import ProfileRecord
 
 
 class TestConfigCLI:
@@ -69,24 +69,27 @@ class TestProfileList:
         self, runner: CliRunner, mock_db: MagicMock
     ) -> None:
         """'amelia config profile list' shows profiles in table."""
+        # ProfileRepository.list_profiles returns Profile objects, not ProfileRecord
         mock_profiles = [
-            ProfileRecord(
-                id="test-profile",
-                driver="cli:claude",
-                model="sonnet",
-                validator_model="sonnet",
+            Profile(
+                name="test-profile",
                 tracker="noop",
                 working_dir="/tmp/test",
-                is_active=True,
+                agents={
+                    "architect": AgentConfig(driver="cli:claude", model="sonnet"),
+                    "developer": AgentConfig(driver="cli:claude", model="sonnet"),
+                    "reviewer": AgentConfig(driver="cli:claude", model="sonnet"),
+                },
             ),
-            ProfileRecord(
-                id="prod-profile",
-                driver="api:openrouter",
-                model="anthropic/claude-sonnet-4-20250514",
-                validator_model="anthropic/claude-sonnet-4-20250514",
+            Profile(
+                name="prod-profile",
                 tracker="github",
                 working_dir="/home/user/project",
-                is_active=False,
+                agents={
+                    "architect": AgentConfig(driver="api:openrouter", model="anthropic/claude-sonnet-4-20250514"),
+                    "developer": AgentConfig(driver="api:openrouter", model="anthropic/claude-sonnet-4-20250514"),
+                    "reviewer": AgentConfig(driver="api:openrouter", model="anthropic/claude-sonnet-4-20250514"),
+                },
             ),
         ]
 
@@ -137,16 +140,18 @@ class TestProfileShow:
 
     def test_profile_show_found(self, runner: CliRunner, mock_db: MagicMock) -> None:
         """'amelia config profile show' displays profile details."""
-        mock_profile = ProfileRecord(
-            id="my-profile",
-            driver="cli:claude",
-            model="sonnet",
-            validator_model="opus",
+        # ProfileRepository.get_profile returns Profile object, not ProfileRecord
+        mock_profile = Profile(
+            name="my-profile",
             tracker="github",
             working_dir="/home/user/code",
             plan_output_dir="docs/plans",
-            max_review_iterations=5,
-            is_active=True,
+            agents={
+                "architect": AgentConfig(driver="cli:claude", model="sonnet"),
+                "developer": AgentConfig(driver="cli:claude", model="sonnet"),
+                "reviewer": AgentConfig(driver="cli:claude", model="sonnet"),
+                "plan_validator": AgentConfig(driver="cli:claude", model="opus"),
+            },
         )
 
         mock_repo = MagicMock()
@@ -160,7 +165,6 @@ class TestProfileShow:
         assert "my-profile" in result.stdout
         assert "cli:claude" in result.stdout
         assert "sonnet" in result.stdout
-        assert "opus" in result.stdout
 
 
 class TestProfileCreate:
@@ -184,14 +188,17 @@ class TestProfileCreate:
         self, runner: CliRunner, mock_db: MagicMock
     ) -> None:
         """'amelia config profile create' creates profile with CLI options."""
-        created_profile = ProfileRecord(
-            id="new-profile",
-            driver="cli:claude",
-            model="sonnet",
-            validator_model="sonnet",
+        # create_profile returns Profile, not ProfileRecord
+        created_profile = Profile(
+            name="new-profile",
             tracker="noop",
             working_dir="/tmp",
-            is_active=False,
+            agents={
+                "architect": AgentConfig(driver="cli:claude", model="sonnet"),
+                "developer": AgentConfig(driver="cli:claude", model="sonnet"),
+                "reviewer": AgentConfig(driver="cli:claude", model="sonnet"),
+                "plan_validator": AgentConfig(driver="cli:claude", model="sonnet"),
+            },
         )
 
         mock_repo = MagicMock()
@@ -204,7 +211,6 @@ class TestProfileCreate:
                 "config", "profile", "create", "new-profile",
                 "--driver", "cli:claude",
                 "--model", "sonnet",
-                "--validator-model", "sonnet",
                 "--tracker", "noop",
                 "--working-dir", "/tmp",
             ])
@@ -217,13 +223,16 @@ class TestProfileCreate:
         self, runner: CliRunner, mock_db: MagicMock
     ) -> None:
         """'amelia config profile create' fails if profile exists."""
-        existing_profile = ProfileRecord(
-            id="existing",
-            driver="cli:claude",
-            model="sonnet",
-            validator_model="sonnet",
+        # get_profile returns Profile, not ProfileRecord
+        existing_profile = Profile(
+            name="existing",
             tracker="noop",
             working_dir="/tmp",
+            agents={
+                "architect": AgentConfig(driver="cli:claude", model="sonnet"),
+                "developer": AgentConfig(driver="cli:claude", model="sonnet"),
+                "reviewer": AgentConfig(driver="cli:claude", model="sonnet"),
+            },
         )
 
         mock_repo = MagicMock()
@@ -235,7 +244,6 @@ class TestProfileCreate:
                 "config", "profile", "create", "existing",
                 "--driver", "cli:claude",
                 "--model", "sonnet",
-                "--validator-model", "sonnet",
                 "--tracker", "noop",
                 "--working-dir", "/tmp",
             ])

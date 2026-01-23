@@ -17,10 +17,8 @@ from loguru import logger
 from amelia.core.constants import ToolName
 from amelia.core.types import (
     Design,
-    DriverType,
     Issue,
     Profile,
-    TrackerType,
 )
 from amelia.ext import WorkflowEventType as ExtWorkflowEventType
 from amelia.ext.exceptions import PolicyDeniedError
@@ -32,7 +30,7 @@ from amelia.ext.hooks import (
 from amelia.pipelines.implementation import create_implementation_graph
 from amelia.pipelines.implementation.state import ImplementationState
 from amelia.pipelines.review import create_review_graph
-from amelia.server.database import ProfileRecord, ProfileRepository
+from amelia.server.database import ProfileRepository
 from amelia.server.database.repository import WorkflowRepository
 from amelia.server.events.bus import EventBus
 from amelia.server.exceptions import (
@@ -222,31 +220,19 @@ class OrchestratorService:
             )
             return None
 
-        return self._record_to_profile(record, worktree_path)
+        return self._update_profile_working_dir(record, worktree_path)
 
-    def _record_to_profile(self, record: ProfileRecord, worktree_path: str) -> Profile:
-        """Convert database ProfileRecord to core Profile.
+    def _update_profile_working_dir(self, profile: Profile, worktree_path: str) -> Profile:
+        """Update profile's working_dir for workflow execution.
 
         Args:
-            record: ProfileRecord from database.
-            worktree_path: Worktree path to use as working_dir (overrides record).
+            profile: Profile from database.
+            worktree_path: Worktree path to use as working_dir (overrides profile).
 
         Returns:
-            Profile instance for workflow execution.
+            Profile instance with updated working_dir.
         """
-        return Profile(
-            name=record.id,
-            driver=cast(DriverType, record.driver),
-            model=record.model,
-            validator_model=record.validator_model,
-            tracker=cast(TrackerType, record.tracker),
-            working_dir=worktree_path,  # Always use worktree_path for agent execution
-            plan_output_dir=record.plan_output_dir,
-            plan_path_pattern=record.plan_path_pattern,
-            max_review_iterations=record.max_review_iterations,
-            max_task_review_iterations=record.max_task_review_iterations,
-            auto_approve_reviews=record.auto_approve_reviews,
-        )
+        return profile.model_copy(update={"working_dir": worktree_path})
 
     def _resolve_safe_worktree_path(self, worktree_path: str) -> Path | None:
         """Resolve and validate a worktree path to prevent path traversal attacks.
@@ -333,7 +319,7 @@ class OrchestratorService:
                 )
 
         # Convert to Profile with worktree_path as working_dir
-        profile = self._record_to_profile(record, worktree_path)
+        profile = self._update_profile_working_dir(record, worktree_path)
 
         # Fetch issue from tracker (or construct from task_title)
         if task_title is not None:
@@ -677,7 +663,7 @@ class OrchestratorService:
                     )
 
             # Convert to Profile with resolved_path as working_dir
-            loaded_profile = self._record_to_profile(record, resolved_path)
+            loaded_profile = self._update_profile_working_dir(record, resolved_path)
 
             # Create dummy issue for review context
             dummy_issue = Issue(

@@ -10,7 +10,11 @@ router = APIRouter(prefix="/config", tags=["config"])
 
 
 class ProfileInfo(BaseModel):
-    """Profile information for display in UI."""
+    """Profile information for display in UI.
+
+    Note: With per-agent configuration, driver/model are extracted from
+    the 'developer' agent (or first available agent) for display purposes.
+    """
 
     name: str = Field(description="Profile name")
     driver: str = Field(description="Driver type (e.g., 'api:openrouter', 'cli:claude')")
@@ -61,15 +65,25 @@ async def get_server_config(
             active_profile_info=None,
         )
 
+    # Extract driver/model from a representative agent for display
+    # Prefer 'developer' agent, fall back to first available agent
+    display_driver = ""
+    display_model = ""
+    if active_profile.agents:
+        agent_name = "developer" if "developer" in active_profile.agents else next(iter(active_profile.agents))
+        agent_config = active_profile.agents[agent_name]
+        display_driver = agent_config.driver
+        display_model = agent_config.model
+
     profile_info = ProfileInfo(
-        name=active_profile.id,
-        driver=active_profile.driver,
-        model=active_profile.model,
+        name=active_profile.name,
+        driver=display_driver,
+        model=display_model,
     )
 
     return ConfigResponse(
         working_dir=active_profile.working_dir,
         max_concurrent=server_settings.max_concurrent,
-        active_profile=active_profile.id,
+        active_profile=active_profile.name,
         active_profile_info=profile_info,
     )

@@ -55,12 +55,18 @@ class TestProfilesSchema:
 
     async def test_profile_insert(self, db: Database):
         """Verify profile can be inserted."""
+        import json
+        agents_json = json.dumps({
+            "developer": {"driver": "cli:claude", "model": "opus", "options": {}},
+            "reviewer": {"driver": "cli:claude", "model": "haiku", "options": {}},
+        })
         await db.execute(
-            """INSERT INTO profiles (id, driver, model, validator_model, tracker, working_dir, is_active)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
-            ("dev", "cli:claude", "opus", "haiku", "noop", "/path/to/repo", True),
+            """INSERT INTO profiles (id, tracker, working_dir, agents, is_active)
+               VALUES (?, ?, ?, ?, ?)""",
+            ("dev", "noop", "/path/to/repo", agents_json, True),
         )
         row = await db.fetch_one("SELECT * FROM profiles WHERE id = ?", ("dev",))
         assert row is not None
-        assert row["driver"] == "cli:claude"
+        agents = json.loads(row["agents"])
+        assert agents["developer"]["driver"] == "cli:claude"
         assert row["is_active"] == 1

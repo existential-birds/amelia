@@ -2,15 +2,33 @@
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from amelia.agents.architect import Architect
-from amelia.core.types import Profile
+from amelia.core.types import AgentConfig, Profile
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
 from amelia.pipelines.implementation.state import ImplementationState
 from amelia.server.models.events import WorkflowEvent
+
+
+class TestArchitectInitWithAgentConfig:
+    """Tests for Architect initialization with AgentConfig."""
+
+    def test_architect_init_with_agent_config(self):
+        """Architect should accept AgentConfig and create its own driver."""
+        config = AgentConfig(driver="cli:claude", model="sonnet")
+
+        with patch("amelia.agents.architect.get_driver") as mock_get_driver:
+            mock_driver = MagicMock()
+            mock_get_driver.return_value = mock_driver
+
+            architect = Architect(config)
+
+            mock_get_driver.assert_called_once_with("cli:claude", model="sonnet")
+            assert architect.driver is mock_driver
+            assert architect.options == {}
 
 
 class TestArchitectPlanAsyncGenerator:
@@ -44,6 +62,7 @@ class TestArchitectPlanAsyncGenerator:
     ) -> None:
         """plan() should return an async iterator."""
         state, profile = state_with_issue
+        config = AgentConfig(driver="cli:claude", model="sonnet")
 
         # Mock empty stream
         async def mock_stream(*args: Any, **kwargs: Any) -> AsyncIterator[AgenticMessage]:
@@ -53,13 +72,15 @@ class TestArchitectPlanAsyncGenerator:
             )
 
         mock_agentic_driver.execute_agentic = mock_stream
-        architect = Architect(mock_agentic_driver)
 
-        result = architect.plan(state, profile, workflow_id="wf-1")
+        with patch("amelia.agents.architect.get_driver", return_value=mock_agentic_driver):
+            architect = Architect(config)
 
-        # Should be an async iterator, not a coroutine
-        assert hasattr(result, "__aiter__")
-        assert hasattr(result, "__anext__")
+            result = architect.plan(state, profile, workflow_id="wf-1")
+
+            # Should be an async iterator, not a coroutine
+            assert hasattr(result, "__aiter__")
+            assert hasattr(result, "__anext__")
 
     async def test_plan_yields_state_and_event_tuples(
         self,
@@ -68,6 +89,7 @@ class TestArchitectPlanAsyncGenerator:
     ) -> None:
         """plan() should yield (ImplementationState, WorkflowEvent) tuples."""
         state, profile = state_with_issue
+        config = AgentConfig(driver="cli:claude", model="sonnet")
 
         async def mock_stream(*args: Any, **kwargs: Any) -> AsyncIterator[AgenticMessage]:
             yield AgenticMessage(
@@ -82,16 +104,18 @@ class TestArchitectPlanAsyncGenerator:
             )
 
         mock_agentic_driver.execute_agentic = mock_stream
-        architect = Architect(mock_agentic_driver)
 
-        results = []
-        async for new_state, event in architect.plan(state, profile, workflow_id="wf-1"):
-            results.append((new_state, event))
+        with patch("amelia.agents.architect.get_driver", return_value=mock_agentic_driver):
+            architect = Architect(config)
 
-        assert len(results) >= 1
-        for new_state, event in results:
-            assert isinstance(new_state, ImplementationState)
-            assert isinstance(event, WorkflowEvent)
+            results = []
+            async for new_state, event in architect.plan(state, profile, workflow_id="wf-1"):
+                results.append((new_state, event))
+
+            assert len(results) >= 1
+            for new_state, event in results:
+                assert isinstance(new_state, ImplementationState)
+                assert isinstance(event, WorkflowEvent)
 
 
 class TestArchitectCwdPassing:
@@ -116,6 +140,7 @@ class TestArchitectCwdPassing:
             profile_id="test",
             issue=issue,
         )
+        config = AgentConfig(driver="cli:claude", model="sonnet")
 
         # Track the actual cwd passed to execute_agentic
         captured_cwd = None
@@ -129,10 +154,12 @@ class TestArchitectCwdPassing:
             )
 
         mock_driver.execute_agentic = mock_stream
-        architect = Architect(mock_driver)
 
-        async for _ in architect.plan(state, profile, workflow_id="wf-1"):
-            pass
+        with patch("amelia.agents.architect.get_driver", return_value=mock_driver):
+            architect = Architect(config)
+
+            async for _ in architect.plan(state, profile, workflow_id="wf-1"):
+                pass
 
         assert captured_cwd == expected_cwd, (
             f"Expected cwd={expected_cwd}, got cwd={captured_cwd}. "
@@ -160,6 +187,7 @@ class TestArchitectToolCallAccumulation:
             profile_id="test",
             issue=issue,
         )
+        config = AgentConfig(driver="cli:claude", model="sonnet")
 
         async def mock_stream(*args, **kwargs):
             yield AgenticMessage(
@@ -186,11 +214,13 @@ class TestArchitectToolCallAccumulation:
             )
 
         mock_driver.execute_agentic = mock_stream
-        architect = Architect(mock_driver)
 
-        final_state = None
-        async for new_state, _ in architect.plan(state, profile, workflow_id="wf-1"):
-            final_state = new_state
+        with patch("amelia.agents.architect.get_driver", return_value=mock_driver):
+            architect = Architect(config)
+
+            final_state = None
+            async for new_state, _ in architect.plan(state, profile, workflow_id="wf-1"):
+                final_state = new_state
 
         assert final_state is not None
         assert len(final_state.tool_calls) == 2

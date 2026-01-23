@@ -31,7 +31,7 @@ export default function SettingsServerPage() {
   };
 
   return (
-    <div className="container mx-auto py-6 max-w-2xl">
+    <div className="container mx-auto py-6 px-4 max-w-2xl">
       <h1 className="text-2xl font-bold mb-6">Server Settings</h1>
       <ServerSettingsForm
         settings={serverSettings}

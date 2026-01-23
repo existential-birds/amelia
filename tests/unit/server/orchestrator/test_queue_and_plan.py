@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from amelia.server.database import ProfileRecord
+from amelia.core.types import AgentConfig, Profile
 from amelia.server.models.requests import CreateWorkflowRequest
 from amelia.server.orchestrator.service import OrchestratorService
 
@@ -52,22 +52,19 @@ def mock_repository() -> MagicMock:
 def mock_profile_repo() -> AsyncMock:
     """Create mock profile repository."""
     repo = AsyncMock()
-    repo.get_profile.return_value = ProfileRecord(
-        id="test",
-        driver="cli:claude",
-        model="sonnet",
-        validator_model="sonnet",
+    agent_config = AgentConfig(driver="cli:claude", model="sonnet")
+    default_profile = Profile(
+        name="test",
         tracker="noop",
         working_dir="/default/repo",
+        agents={
+            "architect": agent_config,
+            "developer": agent_config,
+            "reviewer": agent_config,
+        },
     )
-    repo.get_active_profile.return_value = ProfileRecord(
-        id="test",
-        driver="cli:claude",
-        model="sonnet",
-        validator_model="sonnet",
-        tracker="noop",
-        working_dir="/default/repo",
-    )
+    repo.get_profile.return_value = default_profile
+    repo.get_active_profile.return_value = default_profile
     return repo
 
 

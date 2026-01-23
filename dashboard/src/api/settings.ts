@@ -45,21 +45,36 @@ export interface ServerSettings {
 }
 
 /**
+ * Per-agent driver/model configuration.
+ */
+export interface AgentConfig {
+  driver: string;
+  model: string;
+  options: Record<string, unknown>;
+}
+
+/**
  * Profile configuration for workflow execution.
+ * Each agent (architect, developer, reviewer) has its own driver/model config.
  */
 export interface Profile {
   id: string;
-  driver: string;
-  model: string;
-  validator_model: string;
   tracker: string;
   working_dir: string;
   plan_output_dir: string;
   plan_path_pattern: string;
-  max_review_iterations: number;
-  max_task_review_iterations: number;
   auto_approve_reviews: boolean;
+  agents: Record<string, AgentConfig>;
   is_active: boolean;
+}
+
+/**
+ * Agent configuration for profile creation/update.
+ */
+export interface AgentConfigInput {
+  driver: string;
+  model: string;
+  options?: Record<string, unknown>;
 }
 
 /**
@@ -67,32 +82,24 @@ export interface Profile {
  */
 export interface ProfileCreate {
   id: string;
-  driver: string;
-  model: string;
-  validator_model: string;
   tracker?: string;
   working_dir: string;
   plan_output_dir?: string;
   plan_path_pattern?: string;
-  max_review_iterations?: number;
-  max_task_review_iterations?: number;
   auto_approve_reviews?: boolean;
+  agents: Record<string, AgentConfigInput>;
 }
 
 /**
  * Request payload for updating an existing profile.
  */
 export interface ProfileUpdate {
-  driver?: string;
-  model?: string;
-  validator_model?: string;
   tracker?: string;
   working_dir?: string;
   plan_output_dir?: string;
   plan_path_pattern?: string;
-  max_review_iterations?: number;
-  max_task_review_iterations?: number;
   auto_approve_reviews?: boolean;
+  agents?: Record<string, AgentConfigInput>;
 }
 
 // =============================================================================

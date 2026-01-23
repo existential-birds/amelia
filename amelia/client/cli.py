@@ -21,7 +21,6 @@ from amelia.client.api import (
 from amelia.client.git import get_worktree_context
 from amelia.client.models import BatchStartResponse, CreateWorkflowResponse, WorkflowSummary
 from amelia.core.types import Issue, Profile
-from amelia.drivers.factory import DriverFactory
 from amelia.pipelines.implementation.state import ImplementationState
 from amelia.trackers.factory import create_tracker
 
@@ -436,18 +435,26 @@ async def _get_profile_from_server(profile_name: str | None) -> Profile:
 
             data = response.json()
             # Convert API response to Profile type
+            # Parse agents dict from API response
+            from amelia.core.types import AgentConfig  # noqa: PLC0415
+
+            agents: dict[str, AgentConfig] = {}
+            if "agents" in data and data["agents"]:
+                for agent_name, agent_data in data["agents"].items():
+                    agents[agent_name] = AgentConfig(
+                        driver=agent_data["driver"],
+                        model=agent_data["model"],
+                        options=agent_data.get("options", {}),
+                    )
+
             return Profile(
                 name=data["id"],
-                driver=data["driver"],
-                model=data["model"],
-                validator_model=data["validator_model"],
                 tracker=data["tracker"],
                 working_dir=data["working_dir"],
                 plan_output_dir=data["plan_output_dir"],
                 plan_path_pattern=data["plan_path_pattern"],
-                max_review_iterations=data["max_review_iterations"],
-                max_task_review_iterations=data["max_task_review_iterations"],
                 auto_approve_reviews=data["auto_approve_reviews"],
+                agents=agents,
             )
     except httpx.ConnectError as e:
         raise ValueError(
@@ -524,9 +531,9 @@ def plan_command(
             issue=issue,
         )
 
-        # Create driver and architect
-        driver = DriverFactory.get_driver(profile.driver, model=profile.model)
-        architect = Architect(driver)
+        # Create architect with agent config
+        agent_config = profile.get_agent_config("architect")
+        architect = Architect(agent_config)
 
         # Generate plan by consuming the async generator
         final_state = state

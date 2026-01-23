@@ -22,7 +22,7 @@ export function SettingsLayout() {
   return (
     <div>
       <div className="border-b">
-        <nav className="container flex gap-4">
+        <nav className="container flex gap-4 px-4">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             return (

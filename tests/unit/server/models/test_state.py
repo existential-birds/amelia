@@ -5,7 +5,7 @@ from typing import Any
 
 import pytest
 
-from amelia.core.types import Profile
+from amelia.core.types import AgentConfig, Profile
 from amelia.pipelines.implementation.state import ImplementationState
 from amelia.server.models.state import (
     InvalidStateTransitionError,
@@ -133,7 +133,16 @@ class TestServerExecutionStateComposition:
 
     def test_server_state_accepts_execution_state(self) -> None:
         """ServerExecutionState can hold an ImplementationState."""
-        profile = Profile(name="test", driver="cli:claude", model="sonnet", validator_model="sonnet", working_dir="/tmp/test")
+        profile = Profile(
+            name="test",
+            tracker="noop",
+            working_dir="/tmp/test",
+            agents={
+                "architect": AgentConfig(driver="cli:claude", model="sonnet"),
+                "developer": AgentConfig(driver="cli:claude", model="sonnet"),
+                "reviewer": AgentConfig(driver="cli:claude", model="sonnet"),
+            },
+        )
         core_state = ImplementationState(
             workflow_id="wf-123",
             created_at=datetime.now(UTC),

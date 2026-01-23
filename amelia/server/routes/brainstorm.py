@@ -71,12 +71,14 @@ async def get_profile_info(
 ) -> "ProfileInfo | None":
     """Load profile info from database for display.
 
+    Uses the 'brainstormer' agent config to get driver/model info.
+
     Args:
         profile_id: Profile ID to look up.
         profile_repo: Optional profile repository. If not provided, creates one.
 
     Returns:
-        ProfileInfo if found, None otherwise.
+        ProfileInfo if found and has brainstormer config, None otherwise.
     """
     if profile_repo is None:
         profile_repo = get_profile_repository()
@@ -85,10 +87,11 @@ async def get_profile_info(
         profile = await profile_repo.get_profile(profile_id)
         if profile is None:
             return None
+        agent_config = profile.get_agent_config("brainstormer")
         return ProfileInfo(
-            name=profile.id,
-            driver=profile.driver,
-            model=profile.model,
+            name=profile.name,
+            driver=agent_config.driver,
+            model=agent_config.model,
         )
     except Exception as e:
         logger.debug("Failed to load profile info", profile_id=profile_id, error=str(e))

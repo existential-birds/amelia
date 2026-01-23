@@ -12,10 +12,10 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from amelia.core.types import AgentConfig, Profile
 from amelia.server.config import ServerConfig
 from amelia.server.database import (
     Database,
-    ProfileRecord,
     ProfileRepository,
     SettingsRepository,
 )
@@ -78,6 +78,27 @@ async def _get_settings_repository() -> tuple[Database, SettingsRepository]:
     return db, repo
 
 
+def _build_default_agents(driver: str, model: str) -> dict[str, AgentConfig]:
+    """Build default agents dict for a profile.
+
+    Args:
+        driver: Driver to use for all agents.
+        model: Model to use for all agents.
+
+    Returns:
+        Dict mapping agent names to AgentConfig.
+    """
+    return {
+        "architect": AgentConfig(driver=driver, model=model),  # type: ignore[arg-type]
+        "developer": AgentConfig(driver=driver, model=model),  # type: ignore[arg-type]
+        "reviewer": AgentConfig(driver=driver, model=model),  # type: ignore[arg-type]
+        "task_reviewer": AgentConfig(driver=driver, model=model),  # type: ignore[arg-type]
+        "evaluator": AgentConfig(driver=driver, model=model),  # type: ignore[arg-type]
+        "brainstormer": AgentConfig(driver=driver, model=model),  # type: ignore[arg-type]
+        "plan_validator": AgentConfig(driver=driver, model=model),  # type: ignore[arg-type]
+    }
+
+
 # =============================================================================
 # Profile Commands
 # =============================================================================
@@ -103,15 +124,22 @@ def profile_list() -> None:
             table.add_column("Driver", style="green")
             table.add_column("Model", style="blue")
             table.add_column("Tracker", style="magenta")
-            table.add_column("Active", style="yellow")
+            table.add_column("Agents", style="yellow")
 
             for profile in profiles:
+                # Get driver/model from first agent for display
+                display_driver: str = "-"
+                display_model: str = "-"
+                if profile.agents:
+                    first_agent = next(iter(profile.agents.values()))
+                    display_driver = first_agent.driver
+                    display_model = first_agent.model
                 table.add_row(
-                    profile.id,
-                    profile.driver,
-                    profile.model,
+                    profile.name,
+                    display_driver,
+                    display_model,
                     profile.tracker,
-                    "*" if profile.is_active else "",
+                    str(len(profile.agents)),
                 )
 
             console.print(table)
@@ -135,29 +163,36 @@ def profile_show(
                 console.print(f"[red]Profile '{name}' not found.[/red]")
                 raise typer.Exit(code=1)
 
-            table = Table(title=f"Profile: {profile.id}")
+            table = Table(title=f"Profile: {profile.name}")
             table.add_column("Field", style="cyan")
             table.add_column("Value", style="white")
 
-            table.add_row("Driver", profile.driver)
-            table.add_row("Model", profile.model)
-            table.add_row("Validator Model", profile.validator_model)
             table.add_row("Tracker", profile.tracker)
             table.add_row("Working Dir", profile.working_dir)
             table.add_row("Plan Output Dir", profile.plan_output_dir)
             table.add_row("Plan Path Pattern", profile.plan_path_pattern)
-            table.add_row("Max Review Iterations", str(profile.max_review_iterations))
-            table.add_row(
-                "Max Task Review Iterations", str(profile.max_task_review_iterations)
-            )
             table.add_row("Auto Approve Reviews", str(profile.auto_approve_reviews))
-            table.add_row("Active", "*" if profile.is_active else "No")
-            if profile.created_at:
-                table.add_row("Created", profile.created_at.isoformat())
-            if profile.updated_at:
-                table.add_row("Updated", profile.updated_at.isoformat())
 
             console.print(table)
+
+            # Show agents table
+            if profile.agents:
+                agents_table = Table(title="Agent Configurations")
+                agents_table.add_column("Agent", style="cyan")
+                agents_table.add_column("Driver", style="green")
+                agents_table.add_column("Model", style="blue")
+                agents_table.add_column("Options", style="magenta")
+
+                for agent_name, agent_config in profile.agents.items():
+                    options_str = str(agent_config.options) if agent_config.options else "-"
+                    agents_table.add_row(
+                        agent_name,
+                        agent_config.driver,
+                        agent_config.model,
+                        options_str,
+                    )
+
+                console.print(agents_table)
         finally:
             await db.close()
 
@@ -175,10 +210,6 @@ def profile_create(
         str | None,
         typer.Option("--model", "-m", help="Model name"),
     ] = None,
-    validator_model: Annotated[
-        str | None,
-        typer.Option("--validator-model", help="Validator model name"),
-    ] = None,
     tracker: Annotated[
         str | None,
         typer.Option("--tracker", "-t", help="Issue tracker (noop, github, jira)"),
@@ -195,6 +226,7 @@ def profile_create(
     """Create a new profile.
 
     If options are not provided, prompts interactively.
+    Creates default agent configurations using the specified driver and model.
     """
     # Interactive prompts if options not provided
     if driver is None:
@@ -207,12 +239,6 @@ def profile_create(
         model = typer.prompt(
             "Model",
             default="sonnet",
-            show_default=True,
-        )
-    if validator_model is None:
-        validator_model = typer.prompt(
-            "Validator model",
-            default=model,
             show_default=True,
         )
     if tracker is None:
@@ -240,25 +266,25 @@ def profile_create(
             # At this point, all optional values have been filled via prompts
             assert driver is not None
             assert model is not None
-            assert validator_model is not None
             assert tracker is not None
             assert working_dir is not None
 
-            profile = ProfileRecord(
-                id=name,
-                driver=driver,
-                model=model,
-                validator_model=validator_model,
-                tracker=tracker,
+            # Build default agents configuration
+            agents = _build_default_agents(driver, model)
+
+            profile = Profile(
+                name=name,
+                tracker=tracker,  # type: ignore[arg-type]
                 working_dir=working_dir,
-                is_active=activate,
+                agents=agents,
             )
 
             created = await repo.create_profile(profile)
-            console.print(f"[green]Profile '{created.id}' created successfully.[/green]")
+            console.print(f"[green]Profile '{created.name}' created successfully.[/green]")
 
             if activate:
-                console.print(f"[green]Profile '{created.id}' is now active.[/green]")
+                await repo.set_active(name)
+                console.print(f"[green]Profile '{created.name}' is now active.[/green]")
         finally:
             await db.close()
 
@@ -341,16 +367,17 @@ async def check_and_run_first_time_setup() -> bool:
         model = typer.prompt("Model", default="opus")
         working_dir = typer.prompt("Working directory", default=str(Path.cwd()))
 
-        record = ProfileRecord(
-            id=name,
-            driver=driver,
-            model=model,
-            validator_model="haiku",
+        # Build default agents configuration
+        agents = _build_default_agents(driver, model)
+
+        profile = Profile(
+            name=name,
             tracker="noop",
             working_dir=working_dir,
+            agents=agents,
         )
 
-        await repo.create_profile(record)
+        await repo.create_profile(profile)
         await repo.set_active(name)
 
         console.print(f"\n[green]Profile '{name}' created and set as active.[/green]")

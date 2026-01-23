@@ -268,14 +268,20 @@ def create_app() -> FastAPI:
         """Get driver for brainstorming using active profile from database.
 
         Fetches the active profile from the ProfileRepository and returns
-        the configured driver. Falls back to CLI driver if no active profile.
+        the configured driver using the 'brainstormer' agent config.
+        Falls back to CLI driver if no active profile or no brainstormer config.
         """
         profile_repo = get_profile_repository()
         active_profile = await profile_repo.get_active_profile()
         if active_profile is None:
             # No active profile - use CLI driver as default
             return factory_get_driver("cli:claude")
-        return factory_get_driver(active_profile.driver)
+        try:
+            agent_config = active_profile.get_agent_config("brainstormer")
+            return factory_get_driver(agent_config.driver, model=agent_config.model)
+        except ValueError:
+            # No brainstormer config - fallback to CLI driver
+            return factory_get_driver("cli:claude")
 
     application.dependency_overrides[get_driver] = get_brainstorm_driver
 

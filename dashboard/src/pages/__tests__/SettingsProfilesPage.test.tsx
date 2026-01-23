@@ -36,31 +36,31 @@ import { useLoaderData } from 'react-router-dom';
 const mockProfiles = [
   {
     id: 'dev',
-    driver: 'cli:claude',
-    model: 'opus',
     is_active: true,
     working_dir: '/repo',
-    validator_model: 'haiku',
     tracker: 'noop',
     plan_output_dir: 'docs/plans',
     plan_path_pattern: 'docs/plans/{date}-{issue_key}.md',
-    max_review_iterations: 3,
-    max_task_review_iterations: 5,
     auto_approve_reviews: false,
+    agents: {
+      architect: { driver: 'cli:claude', model: 'opus', options: {} },
+      developer: { driver: 'cli:claude', model: 'opus', options: {} },
+      reviewer: { driver: 'cli:claude', model: 'haiku', options: {} },
+    },
   },
   {
     id: 'prod',
-    driver: 'api:openrouter',
-    model: 'gpt-4',
     is_active: false,
     working_dir: '/prod',
-    validator_model: 'haiku',
     tracker: 'jira',
     plan_output_dir: 'docs/plans',
     plan_path_pattern: 'docs/plans/{date}-{issue_key}.md',
-    max_review_iterations: 3,
-    max_task_review_iterations: 5,
     auto_approve_reviews: false,
+    agents: {
+      architect: { driver: 'api:openrouter', model: 'gpt-4', options: {} },
+      developer: { driver: 'api:openrouter', model: 'gpt-4', options: {} },
+      reviewer: { driver: 'api:openrouter', model: 'gpt-4', options: {} },
+    },
   },
 ];
 
@@ -100,7 +100,8 @@ describe('SettingsProfilesPage', () => {
       </MemoryRouter>
     );
 
-    expect(await screen.findByText(/No profiles configured/)).toBeInTheDocument();
+    expect(await screen.findByText(/Configure Your Agent Team/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Create Your First Profile/i })).toBeInTheDocument();
   });
 
   it('filters profiles by search', async () => {
@@ -114,7 +115,10 @@ describe('SettingsProfilesPage', () => {
     fireEvent.change(searchInput, { target: { value: 'dev' } });
 
     expect(screen.getByText('dev')).toBeInTheDocument();
-    expect(screen.queryByText('prod')).not.toBeInTheDocument();
+    // Wait for animation to complete - filtered items are removed after exit animation
+    await waitFor(() => {
+      expect(screen.queryByText('prod')).not.toBeInTheDocument();
+    });
   });
 
   it('filters profiles by driver type', async () => {
@@ -130,8 +134,10 @@ describe('SettingsProfilesPage', () => {
 
     // dev uses cli:claude, should be visible
     expect(screen.getByText('dev')).toBeInTheDocument();
-    // prod uses api:openrouter, should be hidden
-    expect(screen.queryByText('prod')).not.toBeInTheDocument();
+    // prod uses api:openrouter, should be hidden after animation
+    await waitFor(() => {
+      expect(screen.queryByText('prod')).not.toBeInTheDocument();
+    });
   });
 
   it('shows no match message when search has no results', async () => {
@@ -144,7 +150,8 @@ describe('SettingsProfilesPage', () => {
     const searchInput = screen.getByPlaceholderText('Search profiles...');
     fireEvent.change(searchInput, { target: { value: 'nonexistent' } });
 
-    expect(screen.getByText(/No profiles match your search/)).toBeInTheDocument();
+    expect(screen.getByText(/No profiles found/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Clear filters/i })).toBeInTheDocument();
   });
 
   it('renders Create Profile button', async () => {

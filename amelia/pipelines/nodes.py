@@ -13,7 +13,6 @@ from loguru import logger
 
 from amelia.agents.developer import Developer
 from amelia.agents.reviewer import Reviewer
-from amelia.drivers.factory import DriverFactory
 from amelia.pipelines.implementation.state import ImplementationState
 from amelia.pipelines.utils import extract_config_params
 from amelia.server.models.tokens import TokenUsage
@@ -131,8 +130,8 @@ async def call_developer_node(
     config = config or {}
     repository = config.get("configurable", {}).get("repository")
 
-    driver = DriverFactory.get_driver(profile.driver, model=profile.model)
-    developer = Developer(driver)
+    agent_config = profile.get_agent_config("developer")
+    developer = Developer(agent_config)
 
     final_state = state
     async for new_state, event in developer.run(state, profile):
@@ -141,7 +140,7 @@ async def call_developer_node(
         if event_bus:
             event_bus.emit(event)
 
-    await _save_token_usage(driver, workflow_id, "developer", repository)
+    await _save_token_usage(developer.driver, workflow_id, "developer", repository)
 
     logger.info(
         "Agent action completed",
@@ -191,11 +190,15 @@ async def call_reviewer_node(
     repository = configurable.get("repository")
     prompts = configurable.get("prompts", {})
 
-    driver = DriverFactory.get_driver(profile.driver, model=profile.model)
     # Use "task_reviewer" only for non-final tasks in task-based execution
     is_non_final_task = state.total_tasks is not None and state.current_task_index + 1 < state.total_tasks
     agent_name = "task_reviewer" if is_non_final_task else "reviewer"
-    reviewer = Reviewer(driver, event_bus=event_bus, prompts=prompts, agent_name=agent_name)
+    # Fall back to "reviewer" config if "task_reviewer" not configured
+    try:
+        agent_config = profile.get_agent_config(agent_name)
+    except ValueError:
+        agent_config = profile.get_agent_config("reviewer")
+    reviewer = Reviewer(agent_config, event_bus=event_bus, prompts=prompts, agent_name=agent_name)
 
     # Compute base_commit if not in state
     base_commit = state.base_commit
@@ -227,7 +230,7 @@ async def call_reviewer_node(
         state, base_commit, profile, workflow_id=workflow_id
     )
 
-    await _save_token_usage(driver, workflow_id, agent_name, repository)
+    await _save_token_usage(reviewer.driver, workflow_id, agent_name, repository)
 
     next_iteration = state.review_iteration + 1
     logger.info(

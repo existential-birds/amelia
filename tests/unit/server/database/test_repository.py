@@ -285,7 +285,17 @@ class TestWorkflowRepository:
         await repository.create(state)
 
         # Create event with Pydantic model in data
-        profile = Profile(name="test", driver="cli:claude", model="sonnet", validator_model="sonnet", working_dir="/tmp/test")
+        from amelia.core.types import AgentConfig
+        profile = Profile(
+            name="test",
+            tracker="noop",
+            working_dir="/tmp/test",
+            agents={
+                "architect": AgentConfig(driver="cli:claude", model="sonnet"),
+                "developer": AgentConfig(driver="cli:claude", model="sonnet"),
+                "reviewer": AgentConfig(driver="cli:claude", model="sonnet"),
+            },
+        )
         event = make_event(
             id="evt-pydantic",
             workflow_id="wf-pydantic",

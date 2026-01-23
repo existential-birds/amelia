@@ -346,12 +346,12 @@ class BrainstormService:
         Returns:
             Created session.
         """
-        # Look up driver type from profile if repository is available
+        # Look up driver type from brainstormer agent config if available
         driver_type: str | None = None
         if self._profile_repo is not None:
             profile = await self._profile_repo.get_profile(profile_id)
-            if profile is not None:
-                driver_type = profile.driver
+            if profile is not None and "brainstormer" in profile.agents:
+                driver_type = profile.agents["brainstormer"].driver
 
         now = datetime.now(UTC)
         session = BrainstormingSession(

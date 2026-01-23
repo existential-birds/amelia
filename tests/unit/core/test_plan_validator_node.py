@@ -8,7 +8,7 @@ import pytest
 from langchain_core.runnables.config import RunnableConfig
 
 from amelia.agents.architect import MarkdownPlanOutput
-from amelia.core.types import Issue, Profile
+from amelia.core.types import AgentConfig, Issue, Profile
 from amelia.pipelines.implementation.state import ImplementationState
 
 
@@ -42,12 +42,15 @@ def mock_profile(tmp_path: Path) -> Profile:
     """Create a test profile with tmp_path as working_dir."""
     return Profile(
         name="test",
-        driver="api:openrouter",
-        model="gpt-4",
         tracker="github",
-        validator_model="gpt-4o-mini",
         working_dir=str(tmp_path),
         plan_path_pattern="{date}-{issue_key}.md",
+        agents={
+            "architect": AgentConfig(driver="api:openrouter", model="gpt-4"),
+            "developer": AgentConfig(driver="api:openrouter", model="gpt-4"),
+            "reviewer": AgentConfig(driver="api:openrouter", model="gpt-4"),
+            "plan_validator": AgentConfig(driver="api:openrouter", model="gpt-4o-mini"),
+        },
     )
 
 
@@ -172,12 +175,15 @@ class TestPlanValidatorNode:
 
         profile = Profile(
             name="test",
-            driver="api:openrouter",
-            model="gpt-4",
             tracker="github",
-            validator_model="gpt-4o-mini",
             working_dir=str(tmp_path),
             plan_path_pattern="{date}-{issue_key}.md",
+            agents={
+                "architect": AgentConfig(driver="api:openrouter", model="gpt-4"),
+                "developer": AgentConfig(driver="api:openrouter", model="gpt-4"),
+                "reviewer": AgentConfig(driver="api:openrouter", model="gpt-4"),
+                "plan_validator": AgentConfig(driver="api:openrouter", model="gpt-4o-mini"),
+            },
         )
 
         create_plan_file(tmp_path, plan_content)
@@ -318,10 +324,14 @@ class TestPlanValidatorNodeTotalTasks:
     def mock_profile(self) -> Profile:
         return Profile(
             name="test",
-            driver="api:openrouter",
-            model="anthropic/claude-3.5-sonnet",
-            validator_model="anthropic/claude-3.5-sonnet",
+            tracker="noop",
             working_dir="/tmp/test",
+            agents={
+                "architect": AgentConfig(driver="api:openrouter", model="anthropic/claude-3.5-sonnet"),
+                "developer": AgentConfig(driver="api:openrouter", model="anthropic/claude-3.5-sonnet"),
+                "reviewer": AgentConfig(driver="api:openrouter", model="anthropic/claude-3.5-sonnet"),
+                "plan_validator": AgentConfig(driver="api:openrouter", model="anthropic/claude-3.5-sonnet"),
+            },
         )
 
     @pytest.fixture
@@ -366,11 +376,15 @@ Do second thing.
 
         profile = Profile(
             name="test",
-            driver="api:openrouter",
-            model="anthropic/claude-3.5-sonnet",
-            validator_model="anthropic/claude-3.5-sonnet",
+            tracker="noop",
             working_dir=str(tmp_path),
             plan_path_pattern="docs/plans/test-plan.md",
+            agents={
+                "architect": AgentConfig(driver="api:openrouter", model="anthropic/claude-3.5-sonnet"),
+                "developer": AgentConfig(driver="api:openrouter", model="anthropic/claude-3.5-sonnet"),
+                "reviewer": AgentConfig(driver="api:openrouter", model="anthropic/claude-3.5-sonnet"),
+                "plan_validator": AgentConfig(driver="api:openrouter", model="anthropic/claude-3.5-sonnet"),
+            },
         )
         config: RunnableConfig = {
             "configurable": {
@@ -427,11 +441,15 @@ Do implementation.
 
         profile = Profile(
             name="test",
-            driver="api:openrouter",
-            model="anthropic/claude-3.5-sonnet",
-            validator_model="anthropic/claude-3.5-sonnet",
+            tracker="noop",
             working_dir=str(tmp_path),
             plan_path_pattern="docs/plans/legacy-plan.md",
+            agents={
+                "architect": AgentConfig(driver="api:openrouter", model="anthropic/claude-3.5-sonnet"),
+                "developer": AgentConfig(driver="api:openrouter", model="anthropic/claude-3.5-sonnet"),
+                "reviewer": AgentConfig(driver="api:openrouter", model="anthropic/claude-3.5-sonnet"),
+                "plan_validator": AgentConfig(driver="api:openrouter", model="anthropic/claude-3.5-sonnet"),
+            },
         )
         config: RunnableConfig = {
             "configurable": {

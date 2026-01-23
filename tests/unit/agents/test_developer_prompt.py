@@ -1,11 +1,22 @@
 """Unit tests for Developer prompt building with task extraction."""
 
 from datetime import UTC, datetime
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from amelia.agents.developer import Developer
+from amelia.core.types import AgentConfig
 from amelia.pipelines.implementation.state import ImplementationState
+
+
+@pytest.fixture
+def mock_developer() -> Developer:
+    """Create a Developer with a mocked driver for prompt tests."""
+    config = AgentConfig(driver="api:openrouter", model="test-model")
+    with patch("amelia.agents.developer.get_driver") as mock_get_driver:
+        mock_get_driver.return_value = MagicMock()
+        return Developer(config)
 
 
 @pytest.fixture
@@ -45,7 +56,7 @@ Add comprehensive test coverage.
 class TestDeveloperBuildPrompt:
     """Tests for Developer._build_prompt task extraction."""
 
-    def test_single_task_uses_full_plan(self) -> None:
+    def test_single_task_uses_full_plan(self, mock_developer: Developer) -> None:
         """When total_tasks is None or 1, use full plan without extraction."""
         state = ImplementationState(
             workflow_id="test-workflow",
@@ -57,14 +68,13 @@ class TestDeveloperBuildPrompt:
             total_tasks=None,
             current_task_index=0,
         )
-        developer = Developer(driver=None)  # type: ignore[arg-type]
-        prompt = developer._build_prompt(state)
+        prompt = mock_developer._build_prompt(state)
 
         assert "# Simple Plan" in prompt
         assert "Just do the thing." in prompt
 
     def test_multi_task_extracts_current_section(
-        self, multi_task_plan: str
+        self, mock_developer: Developer, multi_task_plan: str
     ) -> None:
         """For multi-task execution, extract only the current task section."""
         state = ImplementationState(
@@ -77,8 +87,7 @@ class TestDeveloperBuildPrompt:
             total_tasks=3,
             current_task_index=1,  # Task 2 (0-indexed)
         )
-        developer = Developer(driver=None)  # type: ignore[arg-type]
-        prompt = developer._build_prompt(state)
+        prompt = mock_developer._build_prompt(state)
 
         # Should contain Task 2 content
         assert "Task 2" in prompt
@@ -87,7 +96,9 @@ class TestDeveloperBuildPrompt:
         assert "Task 1:" not in prompt and "### Task 1:" not in prompt
         assert "Task 3:" not in prompt and "### Task 3:" not in prompt
 
-    def test_multi_task_includes_breadcrumb(self, multi_task_plan: str) -> None:
+    def test_multi_task_includes_breadcrumb(
+        self, mock_developer: Developer, multi_task_plan: str
+    ) -> None:
         """Breadcrumb shows task progress for context."""
         state = ImplementationState(
             workflow_id="test-workflow",
@@ -99,14 +110,15 @@ class TestDeveloperBuildPrompt:
             total_tasks=3,
             current_task_index=2,  # Task 3 (0-indexed)
         )
-        developer = Developer(driver=None)  # type: ignore[arg-type]
-        prompt = developer._build_prompt(state)
+        prompt = mock_developer._build_prompt(state)
 
         # Should show progress breadcrumb
         assert "Tasks 1-2 of 3 completed" in prompt
         assert "Task 3" in prompt
 
-    def test_first_task_breadcrumb(self, multi_task_plan: str) -> None:
+    def test_first_task_breadcrumb(
+        self, mock_developer: Developer, multi_task_plan: str
+    ) -> None:
         """First task shows appropriate breadcrumb."""
         state = ImplementationState(
             workflow_id="test-workflow",
@@ -118,15 +130,14 @@ class TestDeveloperBuildPrompt:
             total_tasks=3,
             current_task_index=0,  # Task 1 (0-indexed)
         )
-        developer = Developer(driver=None)  # type: ignore[arg-type]
-        prompt = developer._build_prompt(state)
+        prompt = mock_developer._build_prompt(state)
 
         # First task breadcrumb
         assert "Executing Task 1 of 3" in prompt
         # Should NOT say "completed"
         assert "completed" not in prompt.lower()
 
-    def test_missing_plan_raises_error(self) -> None:
+    def test_missing_plan_raises_error(self, mock_developer: Developer) -> None:
         """Developer requires plan_markdown from Architect."""
         state = ImplementationState(
             workflow_id="test-workflow",
@@ -136,7 +147,6 @@ class TestDeveloperBuildPrompt:
             goal="Implement feature",
             plan_markdown=None,
         )
-        developer = Developer(driver=None)  # type: ignore[arg-type]
 
         with pytest.raises(ValueError, match="requires plan_markdown"):
-            developer._build_prompt(state)
+            mock_developer._build_prompt(state)

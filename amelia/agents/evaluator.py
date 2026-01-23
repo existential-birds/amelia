@@ -12,8 +12,8 @@ from uuid import uuid4
 from loguru import logger
 from pydantic import BaseModel, ConfigDict, Field
 
-from amelia.core.types import Profile
-from amelia.drivers.base import DriverInterface
+from amelia.core.types import AgentConfig, Profile
+from amelia.drivers.factory import get_driver
 from amelia.server.models.events import EventLevel, EventType, WorkflowEvent
 
 
@@ -140,19 +140,20 @@ Provide clear evidence for each disposition decision."""
 
     def __init__(
         self,
-        driver: DriverInterface,
+        config: AgentConfig,
         event_bus: "EventBus | None" = None,
         prompts: dict[str, str] | None = None,
     ):
         """Initialize the Evaluator agent.
 
         Args:
-            driver: LLM driver interface for generating evaluations.
+            config: Agent configuration with driver, model, and options.
             event_bus: Optional EventBus for emitting workflow events.
             prompts: Optional dict of prompt_id -> content for customization.
 
         """
-        self.driver = driver
+        self.driver = get_driver(config.driver, model=config.model)
+        self.options = config.options
         self._event_bus = event_bus
         self._prompts = prompts or {}
 

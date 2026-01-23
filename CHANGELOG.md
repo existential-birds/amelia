@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking:** Per-agent driver configuration replaces global driver/model settings ([#279](https://github.com/existential-birds/amelia/pull/279))
+
+  **Migration:** Delete your existing database file (`~/.amelia/amelia.db`) before starting Amelia. The database schema has changed - the `profiles` table now uses a single `agents` JSON column instead of `driver`, `model`, `validator_model`, `max_review_iterations`, and `max_task_review_iterations` columns. You will need to recreate your profiles using `amelia config profile create`.
+
 ## [0.10.0] - 2026-01-22
 
 ### Added

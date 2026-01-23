@@ -2,8 +2,28 @@
 
 from unittest.mock import AsyncMock, MagicMock
 
-from amelia.server.database import ProfileRecord
+from amelia.core.types import AgentConfig, Profile
 from amelia.server.orchestrator.service import OrchestratorService
+
+
+def _make_test_profile(
+    name: str = "dev",
+    tracker: str = "noop",
+    working_dir: str = "/repo",
+) -> Profile:
+    """Create a test Profile with default agents configuration."""
+    agent_config = AgentConfig(driver="cli:claude", model="opus")
+    return Profile(
+        name=name,
+        tracker=tracker,  # type: ignore[arg-type]
+        working_dir=working_dir,
+        agents={
+            "architect": agent_config,
+            "developer": agent_config,
+            "reviewer": agent_config,
+            "task_reviewer": agent_config,
+        },
+    )
 
 
 class TestOrchestratorProfileLoading:
@@ -12,38 +32,22 @@ class TestOrchestratorProfileLoading:
     async def test_get_profile_from_database(self):
         """Verify profile is loaded from database."""
         mock_profile_repo = AsyncMock()
-        mock_profile_repo.get_profile.return_value = ProfileRecord(
-            id="dev",
-            driver="cli:claude",
-            model="opus",
-            validator_model="haiku",
-            tracker="noop",
-            working_dir="/repo",
-        )
+        mock_profile_repo.get_profile.return_value = _make_test_profile()
 
         # Test that orchestrator uses ProfileRepository
         profile = await mock_profile_repo.get_profile("dev")
         assert profile is not None
-        assert profile.driver == "cli:claude"
+        assert profile.name == "dev"
+        assert profile.agents["developer"].driver == "cli:claude"
 
     async def test_get_profile_or_fail_returns_profile(self):
-        """Verify _get_profile_or_fail returns Profile from database record."""
+        """Verify _get_profile_or_fail returns Profile from database."""
         mock_event_bus = MagicMock()
         mock_repository = AsyncMock()
         mock_repository.get_max_event_sequence.return_value = 0
         mock_profile_repo = AsyncMock()
-        mock_profile_repo.get_profile.return_value = ProfileRecord(
-            id="dev",
-            driver="cli:claude",
-            model="opus",
-            validator_model="haiku",
-            tracker="noop",
+        mock_profile_repo.get_profile.return_value = _make_test_profile(
             working_dir="/repo",
-            plan_output_dir="docs/plans",
-            plan_path_pattern="docs/plans/{date}-{issue_key}.md",
-            max_review_iterations=3,
-            max_task_review_iterations=5,
-            auto_approve_reviews=False,
         )
 
         service = OrchestratorService(
@@ -60,9 +64,6 @@ class TestOrchestratorProfileLoading:
 
         assert profile is not None
         assert profile.name == "dev"
-        assert profile.driver == "cli:claude"
-        assert profile.model == "opus"
-        assert profile.validator_model == "haiku"
         # working_dir should be set to worktree_path
         assert profile.working_dir == "/some/worktree"
         mock_profile_repo.get_profile.assert_called_once_with("dev")
@@ -94,8 +95,8 @@ class TestOrchestratorProfileLoading:
         assert call_args[0][1] == "failed"
         assert "nonexistent" in call_args[1]["failure_reason"]
 
-    async def test_record_to_profile_conversion(self):
-        """Verify ProfileRecord is correctly converted to Profile."""
+    async def test_update_profile_working_dir_conversion(self):
+        """Verify Profile working_dir is correctly overridden."""
         mock_event_bus = MagicMock()
         mock_repository = AsyncMock()
         mock_repository.get_max_event_sequence.return_value = 0
@@ -107,31 +108,29 @@ class TestOrchestratorProfileLoading:
             profile_repo=mock_profile_repo,
         )
 
-        record = ProfileRecord(
-            id="test-profile",
-            driver="api:openrouter",
-            model="gpt-4",
-            validator_model="gpt-3.5-turbo",
+        # Create a profile with original working_dir
+        agent_config = AgentConfig(driver="api:openrouter", model="gpt-4")
+        profile = Profile(
+            name="test-profile",
             tracker="github",
             working_dir="/original/dir",
             plan_output_dir="custom/plans",
             plan_path_pattern="custom/{date}-{issue_key}.md",
-            max_review_iterations=5,
-            max_task_review_iterations=10,
             auto_approve_reviews=True,
+            agents={
+                "architect": agent_config,
+                "developer": agent_config,
+                "reviewer": agent_config,
+            },
         )
 
-        profile = service._record_to_profile(record, worktree_path="/override/dir")
+        updated_profile = service._update_profile_working_dir(profile, worktree_path="/override/dir")
 
-        assert profile.name == "test-profile"
-        assert profile.driver == "api:openrouter"
-        assert profile.model == "gpt-4"
-        assert profile.validator_model == "gpt-3.5-turbo"
-        assert profile.tracker == "github"
+        assert updated_profile.name == "test-profile"
+        assert updated_profile.tracker == "github"
         # working_dir should be overridden by worktree_path
-        assert profile.working_dir == "/override/dir"
-        assert profile.plan_output_dir == "custom/plans"
-        assert profile.plan_path_pattern == "custom/{date}-{issue_key}.md"
-        assert profile.max_review_iterations == 5
-        assert profile.max_task_review_iterations == 10
-        assert profile.auto_approve_reviews is True
+        assert updated_profile.working_dir == "/override/dir"
+        assert updated_profile.plan_output_dir == "custom/plans"
+        assert updated_profile.plan_path_pattern == "custom/{date}-{issue_key}.md"
+        assert updated_profile.auto_approve_reviews is True
+        assert updated_profile.agents["developer"].driver == "api:openrouter"

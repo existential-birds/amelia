@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from amelia.core.types import Profile
+from amelia.core.types import AgentConfig, Profile
 from amelia.ext.hooks import (
     check_policy_approval,
     check_policy_workflow_start,
@@ -71,11 +71,13 @@ def mock_profile() -> Profile:
     """Create a mock Profile for testing."""
     return Profile(
         name="test",
-        driver="cli:claude",
-        model="sonnet",
         tracker="noop",
-        validator_model="sonnet",
         working_dir="/tmp/test",
+        agents={
+            "architect": AgentConfig(driver="cli:claude", model="sonnet"),
+            "developer": AgentConfig(driver="cli:claude", model="sonnet"),
+            "reviewer": AgentConfig(driver="cli:claude", model="sonnet"),
+        },
     )
 
 

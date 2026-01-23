@@ -62,16 +62,13 @@ async def test_call_architect_node_creates_plan_directory_if_missing(
         mock_final_state.plan_path = None
         yield mock_final_state, MagicMock()
 
-    # Mock the driver factory and Architect
+    # Mock the Architect (driver is now created internally by the agent)
     with (
-        patch("amelia.pipelines.implementation.nodes.DriverFactory") as mock_factory,
         patch("amelia.pipelines.implementation.nodes.Architect") as mock_architect_class,
         patch("amelia.pipelines.nodes._save_token_usage", new_callable=AsyncMock),
     ):
-        mock_driver = MagicMock()
-        mock_factory.get_driver.return_value = mock_driver
-
         mock_architect = MagicMock()
+        mock_architect.driver = MagicMock()  # Agent creates its own driver internally
         mock_architect.plan = mock_plan
         mock_architect_class.return_value = mock_architect
 

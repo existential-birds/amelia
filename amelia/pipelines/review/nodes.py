@@ -10,7 +10,6 @@ from langchain_core.runnables.config import RunnableConfig
 from loguru import logger
 
 from amelia.agents.evaluator import Evaluator
-from amelia.drivers.factory import DriverFactory
 from amelia.pipelines.implementation.state import ImplementationState
 from amelia.pipelines.nodes import _save_token_usage
 from amelia.pipelines.utils import extract_config_params
@@ -39,14 +38,14 @@ async def call_evaluation_node(
     prompts = configurable.get("prompts", {})
     repository = configurable.get("repository")
 
-    driver = DriverFactory.get_driver(profile.driver, model=profile.model)
-    evaluator = Evaluator(driver=driver, event_bus=event_bus, prompts=prompts)
+    agent_config = profile.get_agent_config("evaluator")
+    evaluator = Evaluator(config=agent_config, event_bus=event_bus, prompts=prompts)
 
     evaluation_result, new_session_id = await evaluator.evaluate(
         state, profile, workflow_id=workflow_id
     )
 
-    await _save_token_usage(driver, workflow_id, "evaluator", repository)
+    await _save_token_usage(evaluator.driver, workflow_id, "evaluator", repository)
 
     approved_items: list[int] = []
     if state.auto_approve:

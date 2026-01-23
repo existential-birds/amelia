@@ -33,7 +33,7 @@ def route_after_review(
 
     Args:
         state: Current execution state with last_review and review_iteration.
-        profile: Profile containing max_review_iterations.
+        profile: Profile with agent configs. Uses reviewer.options.max_iterations.
 
     Returns:
         "developer" if review rejected and under max iterations,
@@ -48,7 +48,10 @@ def route_after_review(
     if state.last_review and state.last_review.approved:
         return "__end__"
 
-    max_iterations = profile.max_review_iterations
+    # Get max iterations from reviewer agent options, default to 3
+    max_iterations = 3
+    if "reviewer" in profile.agents:
+        max_iterations = profile.agents["reviewer"].options.get("max_iterations", 3)
 
     if state.review_iteration >= max_iterations:
         logger.warning(
@@ -68,7 +71,7 @@ def route_after_task_review(
 
     Args:
         state: Current execution state with task tracking fields.
-        profile: Profile containing max_task_review_iterations.
+        profile: Profile with agent configs. Uses task_reviewer.options.max_iterations.
 
     Returns:
         "next_task_node" if approved and more tasks remain.
@@ -99,8 +102,10 @@ def route_after_task_review(
         )
         return "next_task_node"  # Move to next task
 
-    # Not approved - check iteration limit
-    max_iterations = profile.max_task_review_iterations
+    # Not approved - check iteration limit from task_reviewer options, default to 5
+    max_iterations = 5
+    if "task_reviewer" in profile.agents:
+        max_iterations = profile.agents["task_reviewer"].options.get("max_iterations", 5)
     if state.task_review_iteration >= max_iterations:
         logger.debug(
             "Task routing decision",

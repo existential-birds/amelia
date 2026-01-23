@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from amelia.cli.config import check_and_run_first_time_setup
-from amelia.server.database import ProfileRecord
+from amelia.core.types import AgentConfig, Profile
 
 
 class TestFirstRunDetection:
@@ -24,13 +24,16 @@ class TestFirstRunDetection:
         self, mock_db: MagicMock
     ) -> None:
         """First-run detection returns True when profiles exist."""
-        existing_profile = ProfileRecord(
-            id="existing",
-            driver="cli:claude",
-            model="sonnet",
-            validator_model="haiku",
+        # ProfileRepository.list_profiles returns Profile objects
+        existing_profile = Profile(
+            name="existing",
             tracker="noop",
             working_dir="/tmp",
+            agents={
+                "architect": AgentConfig(driver="cli:claude", model="sonnet"),
+                "developer": AgentConfig(driver="cli:claude", model="sonnet"),
+                "reviewer": AgentConfig(driver="cli:claude", model="sonnet"),
+            },
         )
 
         mock_repo = MagicMock()
@@ -49,18 +52,21 @@ class TestFirstRunDetection:
         self, mock_db: MagicMock
     ) -> None:
         """First-run detection prompts user when no profiles exist."""
+        # create_profile returns Profile objects
+        created_profile = Profile(
+            name="dev",
+            tracker="noop",
+            working_dir="/tmp",
+            agents={
+                "architect": AgentConfig(driver="cli:claude", model="opus"),
+                "developer": AgentConfig(driver="cli:claude", model="opus"),
+                "reviewer": AgentConfig(driver="cli:claude", model="opus"),
+            },
+        )
+
         mock_repo = MagicMock()
         mock_repo.list_profiles = AsyncMock(return_value=[])
-        mock_repo.create_profile = AsyncMock(
-            return_value=ProfileRecord(
-                id="dev",
-                driver="cli:claude",
-                model="opus",
-                validator_model="haiku",
-                tracker="noop",
-                working_dir="/tmp",
-            )
-        )
+        mock_repo.create_profile = AsyncMock(return_value=created_profile)
         mock_repo.set_active = AsyncMock()
 
         with patch("amelia.cli.config.get_database", return_value=mock_db), \
@@ -98,18 +104,21 @@ class TestFirstRunProfileCreation:
         self, mock_db: MagicMock
     ) -> None:
         """First-run creates profile with user-provided values."""
+        # create_profile returns Profile objects
+        created_profile = Profile(
+            name="myprofile",
+            tracker="noop",
+            working_dir="/home/user/project",
+            agents={
+                "architect": AgentConfig(driver="api:openrouter", model="sonnet"),
+                "developer": AgentConfig(driver="api:openrouter", model="sonnet"),
+                "reviewer": AgentConfig(driver="api:openrouter", model="sonnet"),
+            },
+        )
+
         mock_repo = MagicMock()
         mock_repo.list_profiles = AsyncMock(return_value=[])
-        mock_repo.create_profile = AsyncMock(
-            return_value=ProfileRecord(
-                id="myprofile",
-                driver="api:openrouter",
-                model="sonnet",
-                validator_model="haiku",
-                tracker="noop",
-                working_dir="/home/user/project",
-            )
-        )
+        mock_repo.create_profile = AsyncMock(return_value=created_profile)
         mock_repo.set_active = AsyncMock()
 
         with patch("amelia.cli.config.get_database", return_value=mock_db), \
@@ -126,29 +135,32 @@ class TestFirstRunProfileCreation:
 
         # Verify profile was created with correct values
         call_args = mock_repo.create_profile.call_args
-        created_profile: ProfileRecord = call_args[0][0]
+        created_profile_arg: Profile = call_args[0][0]
 
-        assert created_profile.id == "myprofile"
-        assert created_profile.driver == "api:openrouter"
-        assert created_profile.model == "sonnet"
-        assert created_profile.validator_model == "haiku"
-        assert created_profile.tracker == "noop"
-        assert created_profile.working_dir == "/home/user/project"
+        assert created_profile_arg.name == "myprofile"
+        assert created_profile_arg.tracker == "noop"
+        assert created_profile_arg.working_dir == "/home/user/project"
+        # Check that agents were created with correct driver/model
+        assert "architect" in created_profile_arg.agents
+        assert created_profile_arg.agents["architect"].driver == "api:openrouter"
+        assert created_profile_arg.agents["architect"].model == "sonnet"
 
     async def test_profile_set_as_active(self, mock_db: MagicMock) -> None:
         """First-run sets created profile as active."""
+        created_profile = Profile(
+            name="testprofile",
+            tracker="noop",
+            working_dir="/tmp",
+            agents={
+                "architect": AgentConfig(driver="cli:claude", model="opus"),
+                "developer": AgentConfig(driver="cli:claude", model="opus"),
+                "reviewer": AgentConfig(driver="cli:claude", model="opus"),
+            },
+        )
+
         mock_repo = MagicMock()
         mock_repo.list_profiles = AsyncMock(return_value=[])
-        mock_repo.create_profile = AsyncMock(
-            return_value=ProfileRecord(
-                id="testprofile",
-                driver="cli:claude",
-                model="opus",
-                validator_model="haiku",
-                tracker="noop",
-                working_dir="/tmp",
-            )
-        )
+        mock_repo.create_profile = AsyncMock(return_value=created_profile)
         mock_repo.set_active = AsyncMock()
 
         with patch("amelia.cli.config.get_database", return_value=mock_db), \
@@ -167,18 +179,20 @@ class TestFirstRunProfileCreation:
 
     async def test_database_closed_after_setup(self, mock_db: MagicMock) -> None:
         """Database connection is closed after first-run setup."""
+        created_profile = Profile(
+            name="dev",
+            tracker="noop",
+            working_dir="/tmp",
+            agents={
+                "architect": AgentConfig(driver="cli:claude", model="opus"),
+                "developer": AgentConfig(driver="cli:claude", model="opus"),
+                "reviewer": AgentConfig(driver="cli:claude", model="opus"),
+            },
+        )
+
         mock_repo = MagicMock()
         mock_repo.list_profiles = AsyncMock(return_value=[])
-        mock_repo.create_profile = AsyncMock(
-            return_value=ProfileRecord(
-                id="dev",
-                driver="cli:claude",
-                model="opus",
-                validator_model="haiku",
-                tracker="noop",
-                working_dir="/tmp",
-            )
-        )
+        mock_repo.create_profile = AsyncMock(return_value=created_profile)
         mock_repo.set_active = AsyncMock()
 
         with patch("amelia.cli.config.get_database", return_value=mock_db), \
@@ -194,13 +208,15 @@ class TestFirstRunProfileCreation:
         self, mock_db: MagicMock
     ) -> None:
         """Database connection is closed when profiles exist."""
-        existing_profile = ProfileRecord(
-            id="existing",
-            driver="cli:claude",
-            model="sonnet",
-            validator_model="haiku",
+        existing_profile = Profile(
+            name="existing",
             tracker="noop",
             working_dir="/tmp",
+            agents={
+                "architect": AgentConfig(driver="cli:claude", model="sonnet"),
+                "developer": AgentConfig(driver="cli:claude", model="sonnet"),
+                "reviewer": AgentConfig(driver="cli:claude", model="sonnet"),
+            },
         )
 
         mock_repo = MagicMock()

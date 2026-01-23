@@ -6,7 +6,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from amelia.server.database.profile_repository import ProfileRecord
+from amelia.core.types import AgentConfig, Profile
 from amelia.server.database.settings_repository import ServerSettings
 from amelia.server.dependencies import get_profile_repository, get_settings_repository
 from amelia.server.routes.config import router
@@ -78,16 +78,21 @@ class TestGetConfig:
         mock_settings_repo: MagicMock,
         client: TestClient,
     ) -> None:
-        """Should return full config when active profile exists."""
+        """Should return full config when active profile exists.
+
+        Uses 'developer' agent config for display driver/model.
+        """
         mock_profile_repo.get_active_profile = AsyncMock(
-            return_value=ProfileRecord(
-                id="test",
-                driver="api:openrouter",
-                model="claude-3-5-sonnet",
-                validator_model="claude-3-5-sonnet",
+            return_value=Profile(
+                name="test",
                 tracker="github",
                 working_dir="/tmp/test-repo",
-                is_active=True,
+                agents={
+                    "developer": AgentConfig(
+                        driver="api:openrouter",
+                        model="claude-3-5-sonnet",
+                    ),
+                },
             )
         )
 

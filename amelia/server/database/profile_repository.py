@@ -1,10 +1,12 @@
 """Repository for profile management."""
 
+import json
 from datetime import datetime
 
 import aiosqlite
 from pydantic import BaseModel
 
+from amelia.core.types import AgentConfig, Profile
 from amelia.server.database.connection import Database
 
 
@@ -16,16 +18,12 @@ class ProfileRecord(BaseModel):
     """
 
     id: str
-    driver: str
-    model: str
-    validator_model: str
     tracker: str
     working_dir: str
     plan_output_dir: str = "docs/plans"
     plan_path_pattern: str = "docs/plans/{date}-{issue_key}.md"
-    max_review_iterations: int = 3
-    max_task_review_iterations: int = 5
     auto_approve_reviews: bool = False
+    agents: str  # JSON blob of dict[str, AgentConfig]
     is_active: bool = False
     created_at: datetime | None = None
     updated_at: datetime | None = None
@@ -42,7 +40,7 @@ class ProfileRepository:
         """
         self._db = db
 
-    async def list_profiles(self) -> list[ProfileRecord]:
+    async def list_profiles(self) -> list[Profile]:
         """List all profiles.
 
         Returns:
@@ -51,7 +49,7 @@ class ProfileRepository:
         rows = await self._db.fetch_all("SELECT * FROM profiles ORDER BY id")
         return [self._row_to_profile(row) for row in rows]
 
-    async def get_profile(self, profile_id: str) -> ProfileRecord | None:
+    async def get_profile(self, profile_id: str) -> Profile | None:
         """Get a profile by ID.
 
         Args:
@@ -66,7 +64,7 @@ class ProfileRepository:
         )
         return self._row_to_profile(row) if row else None
 
-    async def get_active_profile(self) -> ProfileRecord | None:
+    async def get_active_profile(self) -> Profile | None:
         """Get the currently active profile.
 
         Returns:
@@ -75,47 +73,51 @@ class ProfileRepository:
         row = await self._db.fetch_one("SELECT * FROM profiles WHERE is_active = 1")
         return self._row_to_profile(row) if row else None
 
-    async def create_profile(self, profile: ProfileRecord) -> ProfileRecord:
-        """Create a new profile.
+    async def create_profile(self, profile: Profile) -> Profile:
+        """Create a new profile in the database.
 
         Args:
             profile: Profile to create.
 
         Returns:
-            Created profile with timestamps.
+            Created profile.
 
         Raises:
-            sqlite3.IntegrityError: If profile ID already exists.
+            sqlite3.IntegrityError: If profile name already exists.
         """
+        agents_json = json.dumps({
+            name: {
+                "driver": config.driver,
+                "model": config.model,
+                "options": config.options,
+            }
+            for name, config in profile.agents.items()
+        })
+
         await self._db.execute(
             """INSERT INTO profiles (
-                id, driver, model, validator_model, tracker, working_dir,
-                plan_output_dir, plan_path_pattern, max_review_iterations,
-                max_task_review_iterations, auto_approve_reviews, is_active
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                id, tracker, working_dir, plan_output_dir, plan_path_pattern,
+                auto_approve_reviews, agents, is_active
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
             (
-                profile.id,
-                profile.driver,
-                profile.model,
-                profile.validator_model,
+                profile.name,
                 profile.tracker,
                 profile.working_dir,
                 profile.plan_output_dir,
                 profile.plan_path_pattern,
-                profile.max_review_iterations,
-                profile.max_task_review_iterations,
                 1 if profile.auto_approve_reviews else 0,
-                1 if profile.is_active else 0,
+                agents_json,
+                0,
             ),
         )
-        result = await self.get_profile(profile.id)
+        result = await self.get_profile(profile.name)
         # Result should never be None since we just inserted it
         assert result is not None
         return result
 
     async def update_profile(
         self, profile_id: str, updates: dict[str, str | int | bool]
-    ) -> ProfileRecord:
+    ) -> Profile:
         """Update a profile.
 
         Args:
@@ -129,16 +131,12 @@ class ProfileRepository:
             ValueError: If profile not found or invalid field names.
         """
         valid_fields = {
-            "driver",
-            "model",
-            "validator_model",
             "tracker",
             "working_dir",
             "plan_output_dir",
             "plan_path_pattern",
-            "max_review_iterations",
-            "max_task_review_iterations",
             "auto_approve_reviews",
+            "agents",
         }
         invalid = set(updates.keys()) - valid_fields
         if invalid:
@@ -208,32 +206,26 @@ class ProfileRepository:
         if rows_affected == 0:
             raise ValueError(f"Profile not found: {profile_id}")
 
-    def _row_to_profile(self, row: aiosqlite.Row) -> ProfileRecord:
-        """Convert database row to ProfileRecord.
+    def _row_to_profile(self, row: aiosqlite.Row) -> Profile:
+        """Convert a database row to a Profile object.
 
         Args:
             row: Database row from profiles table.
 
         Returns:
-            ProfileRecord instance.
+            Profile instance.
         """
-        return ProfileRecord(
-            id=row["id"],
-            driver=row["driver"],
-            model=row["model"],
-            validator_model=row["validator_model"],
+        agents_data = json.loads(row["agents"])
+        agents = {
+            name: AgentConfig(**config) for name, config in agents_data.items()
+        }
+
+        return Profile(
+            name=row["id"],
             tracker=row["tracker"],
             working_dir=row["working_dir"],
             plan_output_dir=row["plan_output_dir"],
             plan_path_pattern=row["plan_path_pattern"],
-            max_review_iterations=row["max_review_iterations"],
-            max_task_review_iterations=row["max_task_review_iterations"],
             auto_approve_reviews=bool(row["auto_approve_reviews"]),
-            is_active=bool(row["is_active"]),
-            created_at=datetime.fromisoformat(row["created_at"])
-            if row["created_at"]
-            else None,
-            updated_at=datetime.fromisoformat(row["updated_at"])
-            if row["updated_at"]
-            else None,
+            agents=agents,
         )

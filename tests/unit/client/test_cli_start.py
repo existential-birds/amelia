@@ -112,24 +112,24 @@ class TestPlanCommandTaskFlags:
         (worktree / ".git").touch()
 
         # Mock profile data returned from server API
+        # Profile response with agents dict format
         mock_profile_response = {
             "id": "noop",
-            "driver": "cli:claude",
-            "model": "sonnet",
-            "validator_model": "sonnet",
             "tracker": "noop",
             "working_dir": str(worktree),
             "plan_output_dir": "docs/plans",
             "plan_path_pattern": "docs/plans/{date}-{issue_key}.md",
-            "max_review_iterations": 3,
-            "max_task_review_iterations": 5,
             "auto_approve_reviews": False,
             "is_active": True,
+            "agents": {
+                "architect": {"driver": "cli:claude", "model": "sonnet", "options": {}},
+                "developer": {"driver": "cli:claude", "model": "sonnet", "options": {}},
+                "reviewer": {"driver": "cli:claude", "model": "sonnet", "options": {}},
+            },
         }
 
         with patch("amelia.client.cli._get_worktree_context") as mock_ctx, \
              patch("amelia.client.cli.Architect") as mock_architect_class, \
-             patch("amelia.client.cli.DriverFactory"), \
              patch("amelia.client.cli.create_tracker") as mock_create_tracker, \
              patch("httpx.AsyncClient") as mock_http_client_class:
             mock_ctx.return_value = (str(worktree), "repo")

@@ -9,11 +9,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from langchain_core.runnables.config import RunnableConfig
 
+from amelia.core.types import AgentConfig, Profile
 from amelia.pipelines.implementation.state import (
     ImplementationState,
     rebuild_implementation_state,
 )
-from amelia.server.database import ProfileRecord
 from amelia.server.database.repository import WorkflowRepository
 from amelia.server.models.state import rebuild_server_execution_state
 
@@ -58,13 +58,18 @@ def mock_repository() -> AsyncMock:
 def mock_profile_repo() -> AsyncMock:
     """Create mock profile repository."""
     repo = AsyncMock()
-    default_profile = ProfileRecord(
-        id="test",
-        driver="cli:claude",
-        model="sonnet",
-        validator_model="sonnet",
+    agent_config = AgentConfig(driver="cli:claude", model="sonnet")
+    default_profile = Profile(
+        name="test",
         tracker="noop",
         working_dir="/default/repo",
+        agents={
+            "architect": agent_config,
+            "developer": agent_config,
+            "reviewer": agent_config,
+            "task_reviewer": agent_config,
+            "evaluator": agent_config,
+        },
     )
     repo.get_profile.return_value = default_profile
     repo.get_active_profile.return_value = default_profile
@@ -1122,9 +1127,18 @@ class TestRunWorkflowCheckpointResume:
         mock_graph.astream.return_value = empty_stream()
 
         # Create mock profile
-        from amelia.core.types import Profile
+        from amelia.core.types import AgentConfig, Profile
 
-        mock_profile = Profile(name="test", driver="cli:claude", model="sonnet", validator_model="sonnet", working_dir="/tmp/test")
+        mock_profile = Profile(
+            name="test",
+            tracker="noop",
+            working_dir="/tmp/test",
+            agents={
+                "architect": AgentConfig(driver="cli:claude", model="sonnet"),
+                "developer": AgentConfig(driver="cli:claude", model="sonnet"),
+                "reviewer": AgentConfig(driver="cli:claude", model="sonnet"),
+            },
+        )
 
         # Patch to use our mock graph
         with (
@@ -1175,9 +1189,18 @@ class TestRunWorkflowCheckpointResume:
 
         mock_graph.astream.return_value = empty_stream()
 
-        from amelia.core.types import Profile
+        from amelia.core.types import AgentConfig, Profile
 
-        mock_profile = Profile(name="test", driver="cli:claude", model="sonnet", validator_model="sonnet", working_dir="/tmp/test")
+        mock_profile = Profile(
+            name="test",
+            tracker="noop",
+            working_dir="/tmp/test",
+            agents={
+                "architect": AgentConfig(driver="cli:claude", model="sonnet"),
+                "developer": AgentConfig(driver="cli:claude", model="sonnet"),
+                "reviewer": AgentConfig(driver="cli:claude", model="sonnet"),
+            },
+        )
 
         with (
             patch.object(orchestrator, "_create_server_graph", return_value=mock_graph),
@@ -1255,13 +1278,16 @@ class TestStartWorkflowWithTaskFields:
         (worktree / ".git").touch()
 
         # Override the mock profile to use github tracker
-        mock_profile_repo.get_profile.return_value = ProfileRecord(
-            id="github",
-            driver="cli:claude",
-            model="sonnet",
-            validator_model="sonnet",
+        agent_config = AgentConfig(driver="cli:claude", model="sonnet")
+        mock_profile_repo.get_profile.return_value = Profile(
+            name="github",
             tracker="github",
             working_dir="/default/repo",
+            agents={
+                "architect": agent_config,
+                "developer": agent_config,
+                "reviewer": agent_config,
+            },
         )
 
         with pytest.raises(ValueError) as exc_info:
