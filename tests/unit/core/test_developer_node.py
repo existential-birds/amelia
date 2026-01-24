@@ -35,7 +35,6 @@ def create_developer_with_mock_driver(mock_driver: MagicMock) -> Developer:
         return Developer(config)
 
 
-@pytest.mark.skip(reason="Requires Task 7: Update nodes.py to use profile.get_agent_config()")
 class TestDeveloperNodeProfileFromConfig:
     """Tests for call_developer_node using profile from config."""
 
@@ -68,13 +67,8 @@ class TestDeveloperNodeProfileFromConfig:
             }
         }
 
-        # Mock both DriverFactory and Developer to avoid actual execution
-        # NOTE: nodes.py will be updated in Task 7 to use profile.get_agent_config()
-        with (
-            patch("amelia.pipelines.nodes.DriverFactory") as mock_factory,
-            patch("amelia.pipelines.nodes.Developer") as mock_dev,
-        ):
-            mock_factory.get_driver.return_value = MagicMock()
+        # Mock Developer to avoid actual execution
+        with patch("amelia.pipelines.nodes.Developer") as mock_dev:
             mock_dev_instance = MagicMock()
             # Developer.run is now an async generator
             async def mock_run(*args: Any, **kwargs: Any) -> Any:
@@ -85,8 +79,13 @@ class TestDeveloperNodeProfileFromConfig:
             # Should not raise, should use profile from config
             await call_developer_node(state, config)
 
-            # Verify Developer was created with profile from config
+            # Verify Developer was created with AgentConfig from profile
             mock_dev.assert_called_once()
+            # The AgentConfig should come from profile.get_agent_config("developer")
+            call_args = mock_dev.call_args
+            assert call_args is not None
+            agent_config = call_args[0][0]
+            assert agent_config == profile.get_agent_config("developer")
 
 
 class TestDeveloperUnifiedExecution:
@@ -564,7 +563,6 @@ class TestDeveloperUnifiedExecution:
                 pass
 
 
-@pytest.mark.skip(reason="Requires Task 7: Update nodes.py to use profile.get_agent_config()")
 class TestDeveloperTaskBasedExecution:
     """Tests for task-based execution in call_developer_node."""
 
@@ -636,12 +634,7 @@ Step 1: Build the thing
             # Return minimal valid state updates
             yield (state.model_copy(update={"agentic_status": "completed"}), MagicMock())
 
-        # NOTE: nodes.py will be updated in Task 7 to use profile.get_agent_config()
-        with (
-            patch("amelia.pipelines.nodes.DriverFactory") as mock_factory,
-            patch("amelia.pipelines.nodes.Developer") as mock_developer_class,
-        ):
-            mock_factory.get_driver.return_value = MagicMock()
+        with patch("amelia.pipelines.nodes.Developer") as mock_developer_class:
             mock_developer = MagicMock()
             mock_developer.run = mock_run
             mock_developer_class.return_value = mock_developer
@@ -677,12 +670,7 @@ Step 1: Build the thing
             captured_plan = state.plan_markdown
             yield (state.model_copy(update={"agentic_status": "completed"}), MagicMock())
 
-        # NOTE: nodes.py will be updated in Task 7 to use profile.get_agent_config()
-        with (
-            patch("amelia.pipelines.nodes.DriverFactory") as mock_factory,
-            patch("amelia.pipelines.nodes.Developer") as mock_developer_class,
-        ):
-            mock_factory.get_driver.return_value = MagicMock()
+        with patch("amelia.pipelines.nodes.Developer") as mock_developer_class:
             mock_developer = MagicMock()
             mock_developer.run = mock_run
             mock_developer_class.return_value = mock_developer
@@ -697,19 +685,19 @@ Step 1: Build the thing
         assert "**Goal:**" in captured_plan
         assert "## Phase 1:" in captured_plan
 
-    async def test_developer_node_preserves_session_for_legacy_mode(
+    async def test_developer_node_clears_session_for_single_task(
         self,
         mock_profile_with_working_dir: Profile,
     ) -> None:
-        """Developer node should preserve session_id when total_tasks is None."""
+        """Developer node should clear session_id even when total_tasks is 1."""
         state = ImplementationState(
             workflow_id="test-workflow",
             created_at=datetime.now(UTC),
             status="running",
             profile_id="test",
-            goal="Legacy goal",
+            goal="Single task goal",
             plan_markdown="Do stuff",
-            total_tasks=None,  # Legacy mode
+            total_tasks=1,  # Single task mode
             driver_session_id="existing-session",
         )
         config: RunnableConfig = {
@@ -728,17 +716,12 @@ Step 1: Build the thing
             captured_session_id = state.driver_session_id
             yield (state.model_copy(update={"agentic_status": "completed"}), MagicMock())
 
-        # NOTE: nodes.py will be updated in Task 7 to use profile.get_agent_config()
-        with (
-            patch("amelia.pipelines.nodes.DriverFactory") as mock_factory,
-            patch("amelia.pipelines.nodes.Developer") as mock_developer_class,
-        ):
-            mock_factory.get_driver.return_value = MagicMock()
+        with patch("amelia.pipelines.nodes.Developer") as mock_developer_class:
             mock_developer = MagicMock()
             mock_developer.run = mock_run
             mock_developer_class.return_value = mock_developer
 
             await call_developer_node(state, config)
 
-        # Should preserve existing session_id in legacy mode
-        assert captured_session_id == "existing-session"
+        # Session should be cleared for task execution
+        assert captured_session_id is None

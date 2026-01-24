@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING, Any, Literal
 from langchain_core.runnables.config import RunnableConfig
 from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
-from loguru import logger
 
 from amelia.pipelines.implementation.nodes import (
     call_architect_node,
@@ -18,7 +17,6 @@ from amelia.pipelines.implementation.nodes import (
     plan_validator_node,
 )
 from amelia.pipelines.implementation.routing import (
-    route_after_review,
     route_after_task_review,
     route_approval,
 )
@@ -38,43 +36,18 @@ if TYPE_CHECKING:
 
 def _route_after_review_or_task(
     state: ImplementationState, config: RunnableConfig
-) -> Literal["developer", "developer_node", "next_task_node", "__end__"]:
-    """Route after review: handles both legacy and task-based execution.
-
-    For task-based execution (total_tasks is set), uses route_after_task_review.
-    For legacy execution (total_tasks is None), uses route_after_review.
+) -> Literal["developer", "next_task_node", "__end__"]:
+    """Route after task review to next task, retry, or end.
 
     Args:
         state: Current execution state.
         config: Runnable config with profile.
 
     Returns:
-        Routing target: developer_node (legacy), developer (task retry),
-        next_task_node (task approved), or __end__.
+        Routing target: developer (retry), next_task_node (task approved), or __end__.
     """
     _, _, profile = extract_config_params(config)
-
-    if state.total_tasks is not None:
-        result = route_after_task_review(state, profile)
-        logger.debug(
-            "_route_after_review_or_task: task mode",
-            route=result,
-            current_task_index=state.current_task_index,
-            total_tasks=state.total_tasks,
-        )
-        return result
-
-    # Legacy mode: route_after_review returns "developer" but graph uses "developer_node"
-    result = route_after_review(state, profile)
-    final_result: Literal["developer_node", "__end__"] = (
-        "developer_node" if result == "developer" else "__end__"
-    )
-    logger.debug(
-        "_route_after_review_or_task: legacy mode",
-        inner_result=result,
-        final_route=final_result,
-    )
-    return final_result
+    return route_after_task_review(state, profile)
 
 
 def create_implementation_graph(
@@ -83,13 +56,7 @@ def create_implementation_graph(
 ) -> CompiledStateGraph[Any]:
     """Creates and compiles the LangGraph state machine for implementation.
 
-    The graph flow supports both legacy and task-based execution:
-
-    Legacy flow (total_tasks is None):
-    START -> architect_node -> plan_validator_node -> human_approval_node
-          -> developer_node <-> reviewer_node -> END
-
-    Task-based flow (total_tasks is set):
+    The graph flow:
     START -> architect_node -> plan_validator_node -> human_approval_node
           -> developer_node -> reviewer_node -> next_task_node -> developer_node
           (loops for each task until all complete or max iterations reached)
@@ -136,15 +103,12 @@ def create_implementation_graph(
     # Developer -> Reviewer
     workflow.add_edge("developer_node", "reviewer_node")
 
-    # Reviewer routing: handles both legacy and task-based execution
-    # - Legacy: developer_node (retry) or __end__ (approved)
-    # - Task-based: developer (retry), next_task_node (task approved), or __end__ (all done)
+    # Reviewer routing: developer (retry), next_task_node (task approved), or __end__ (all done)
     workflow.add_conditional_edges(
         "reviewer_node",
         _route_after_review_or_task,
         {
             "developer": "developer_node",
-            "developer_node": "developer_node",
             "next_task_node": "next_task_node",
             "__end__": END,
         }

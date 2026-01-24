@@ -15,19 +15,18 @@ Generate a manual test plan for the current PR that will be auto-posted as a PR 
    ```
 
 2. **Identify testable functionality** - focus on:
-   - New features or commands
-   - Changed behavior
-   - Integration points
+   - User-facing workflows (CLI commands, dashboard interactions)
+   - Changed behavior visible to users
+   - Integration points between components
    - Edge cases that automated tests can't cover
-   - User-facing workflows
 
 3. **Write the test plan** to `docs/testing/pr-test-plan.md` using the template below.
 
 4. **Guidelines:**
-   - Only include tests that require manual verification (not automated test coverage)
+   - Only include tests that require manual verification
+   - Focus on real user workflows, not internal implementation details
    - Be specific with commands and expected output
-   - Include setup/teardown if needed
-   - Keep it concise - focus on what's changed
+   - Include the standard setup/cleanup sections (copy from template)
 
 5. **After PR merges:** Delete `docs/testing/pr-test-plan.md` (it's preserved in the PR comment)
 
@@ -36,46 +35,81 @@ Generate a manual test plan for the current PR that will be auto-posted as a PR 
 ## Template
 
 ```markdown
-# {Feature Name} Manual Testing Plan
+# {Feature Name} - Manual Testing Plan
 
 **Branch:** `{branch_name}`
-**Feature:** {Brief description of the feature being tested}
+**Feature:** {Brief description}
 
 ## Overview
 
-{Detailed description of what this PR changes and why manual testing is needed. Explain the key functionality being added or modified.}
+{What this PR changes and why manual testing is needed}
 
 ---
 
 ## Prerequisites
 
-### Environment Setup
+### Kill Existing Processes and Setup
 
 ```bash
-# 1. Install Python dependencies
-cd {project_directory}
+# Kill any existing Amelia processes
+pkill -f "amelia server" || true
+pkill -f "amelia dev" || true
+sleep 2
+
+# Force kill if port 8420 is still occupied
+lsof -ti :8420 | xargs kill -9 2>/dev/null || true
+
+# Navigate to project and sync dependencies
+cd /path/to/amelia
 uv sync
-
-# 2. Start the backend server (if needed)
-uv run amelia server --reload
-# Server runs on http://localhost:8420 by default
-
-# 3. For dashboard testing (general usage - no frontend changes)
-# Dashboard is served at localhost:8420 by the backend server above
-
-# 3b. For frontend development with HMR (only if modifying dashboard code)
-cd dashboard
-pnpm install
-pnpm run dev
-# Vite dev server runs on localhost:8421, proxies API to backend
-
-# 4. Verify setup
-{verification command}
 ```
 
-### Testing Tools
+### Create Test Repository (if needed)
 
-{List any tools needed for testing with installation instructions}
+```bash
+# Create isolated test repo
+rm -rf /tmp/amelia-test-repo
+mkdir -p /tmp/amelia-test-repo
+cd /tmp/amelia-test-repo
+git init
+echo "# Test Repo" > README.md
+git add README.md
+git commit -m "Initial commit"
+```
+
+### Create Test Profile
+
+```bash
+# Start server first (required for profile creation via API)
+cd /path/to/amelia
+nohup uv run amelia server > /tmp/amelia-server.log 2>&1 &
+sleep 5
+
+# Verify server is running
+curl -s http://localhost:8420/api/profiles || echo "Server not ready"
+
+# Create test profile via API
+curl -s -X POST http://localhost:8420/api/profiles \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": "test",
+    "tracker": "noop",
+    "working_dir": "/tmp/amelia-test-repo",
+    "plan_output_dir": "docs/plans",
+    "plan_path_pattern": "docs/plans/{date}-{issue_key}.md",
+    "auto_approve_reviews": false,
+    "agents": {
+      "architect": {"driver": "cli:claude", "model": "sonnet", "options": {}},
+      "developer": {"driver": "cli:claude", "model": "sonnet", "options": {}},
+      "reviewer": {"driver": "cli:claude", "model": "sonnet", "options": {"max_iterations": 3}},
+      "task_reviewer": {"driver": "cli:claude", "model": "haiku", "options": {"max_iterations": 2}},
+      "plan_validator": {"driver": "cli:claude", "model": "haiku", "options": {}}
+    }
+  }'
+
+# Activate profile
+curl -s -X POST http://localhost:8420/api/profiles/test/activate
+```
 
 ---
 
@@ -83,91 +117,72 @@ pnpm run dev
 
 ### TC-01: {Test Case Name}
 
-**Objective:** {What this test verifies}
+**Objective:** {What user-visible behavior this verifies}
 
 **Steps:**
-1. {Step 1}
-2. {Step 2}
-3. {Step 3}
+1. {Step from user's perspective}
+2. {Next step}
 
 **Expected Result:**
-- {Expected outcome 1}
-- {Expected outcome 2}
+- {What the user should see/experience}
 
-**Verification Commands:**
+**Verification:**
 ```bash
-{Command to run the test}
+{Commands to run}
 ```
 
 ---
 
 ### TC-02: {Next Test Case}
 
-**Objective:** {What this test verifies}
+{Continue pattern...}
 
-**Steps:**
-1. {Step 1}
-2. {Step 2}
+---
 
-**Expected Result:**
-- {Expected outcome}
+## Cleanup
 
-**Verification Commands:**
 ```bash
-{Command to run the test}
+# Stop server
+pkill -f "amelia server" || true
+
+# Delete test profile
+curl -s -X DELETE http://localhost:8420/api/profiles/test 2>/dev/null || true
+
+# Remove test repo
+rm -rf /tmp/amelia-test-repo
+
+# Clear checkpoints (optional)
+rm -f ~/.amelia/checkpoints.db
 ```
 
 ---
 
-{Continue with TC-03, TC-04, etc. for each test scenario}
-
----
-
-## Test Environment Cleanup
-
-After testing:
-```bash
-# Stop any running processes
-{cleanup commands}
-
-# Reset state if needed
-{reset commands}
-```
-
----
-
-## Test Result Template
+## Test Results
 
 | Test ID | Description | Status | Notes |
 |---------|-------------|--------|-------|
 | TC-01 | {Description} | [ ] Pass / [ ] Fail | |
 | TC-02 | {Description} | [ ] Pass / [ ] Fail | |
-{Add rows for each test case}
 
 ---
 
 ## Agent Execution Notes
 
-### For LLM Agent Executing This Plan:
+When executing this test plan:
 
-1. **{Setup step}** - {Details}
-2. **Execute tests sequentially** - Some tests may depend on state
-3. **Capture output** - Log important verification data
-4. **Mark results** - Update the result template after each test
-5. **Report issues** - Note any failures with exact error messages
-
-{Add any code examples for programmatic testing if applicable}
+1. **Always kill existing processes first** - Use `pkill -f "amelia server"` before starting
+2. **Server command is `uv run amelia server`** (not `server start`)
+3. **Create profiles via API** after server is running (the CLI prompts interactively)
+4. **Check server logs** at `/tmp/amelia-server.log` for debugging
+5. **Use default port 8420** - Don't use custom ports unless testing port configuration
+```
 
 ---
 
-## Key Changes in This Branch
+## Key Principles for Test Plans
 
-The following changes should be verified through testing:
-
-1. **{Change category 1}** (`{file path}`):
-   - {Specific change to verify}
-   - {Another change}
-
-2. **{Change category 2}** (`{file path}`):
-   - {Specific change to verify}
-```
+1. **User POV only** - Test what users see and do, not internal implementation
+2. **Real workflows** - Start workflow, check results, verify output
+3. **Concrete commands** - Every step should have copy-paste commands
+4. **Isolated environment** - Use `/tmp/amelia-test-repo` to avoid polluting real repos
+5. **Clean setup/teardown** - Always kill existing processes, always clean up after

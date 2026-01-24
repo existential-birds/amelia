@@ -114,18 +114,17 @@ async def call_developer_node(
     event_bus, workflow_id, profile = extract_config_params(config or {})
 
     # Task-based execution: clear session and inject task-scoped context
-    if state.total_tasks is not None:
-        task_number = state.current_task_index + 1  # 1-indexed for display
-        logger.info(
-            "Starting task execution",
-            task=task_number,
-            total_tasks=state.total_tasks,
-            fresh_session=True,
-        )
-        state = state.model_copy(update={
-            "driver_session_id": None,  # Fresh session for each task
-            # plan_markdown stays intact - extraction happens in Developer._build_prompt
-        })
+    task_number = state.current_task_index + 1  # 1-indexed for display
+    logger.info(
+        "Starting task execution",
+        task=task_number,
+        total_tasks=state.total_tasks,
+        fresh_session=True,
+    )
+    state = state.model_copy(update={
+        "driver_session_id": None,  # Fresh session for each task
+        # plan_markdown stays intact - extraction happens in Developer._build_prompt
+    })
 
     config = config or {}
     repository = config.get("configurable", {}).get("repository")
@@ -191,7 +190,7 @@ async def call_reviewer_node(
     prompts = configurable.get("prompts", {})
 
     # Use "task_reviewer" only for non-final tasks in task-based execution
-    is_non_final_task = state.total_tasks is not None and state.current_task_index + 1 < state.total_tasks
+    is_non_final_task = state.current_task_index + 1 < state.total_tasks
     agent_name = "task_reviewer" if is_non_final_task else "reviewer"
     # Fall back to "reviewer" config if "task_reviewer" not configured
     try:
@@ -253,8 +252,7 @@ async def call_reviewer_node(
     }
 
     # Increment task review iteration for task-based execution
-    if state.total_tasks is not None:
-        result_dict["task_review_iteration"] = state.task_review_iteration + 1
+    result_dict["task_review_iteration"] = state.task_review_iteration + 1
 
     # Debug: Log the full state update being returned
     logger.debug(

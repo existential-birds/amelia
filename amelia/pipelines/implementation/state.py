@@ -62,7 +62,7 @@ class ImplementationState(BasePipelineState):
     review_iteration: int = 0
 
     # Task-based execution (multi-task plans)
-    total_tasks: int | None = None
+    total_tasks: int = 1
     current_task_index: int = 0
     task_review_iteration: int = 0
 

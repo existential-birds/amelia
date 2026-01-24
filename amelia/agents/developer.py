@@ -179,7 +179,7 @@ IMPLEMENTATION PLAN:
 
         from amelia.pipelines.implementation.utils import extract_task_section  # noqa: PLC0415
 
-        total = state.total_tasks or 1
+        total = state.total_tasks
         current = state.current_task_index
 
         if total == 1:

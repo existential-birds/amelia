@@ -234,8 +234,8 @@ Run tests.
 """
         assert extract_task_count(plan) == 3
 
-    def test_extract_task_count_returns_none_for_no_tasks(self) -> None:
-        """Should return None when no ### Task N: patterns found."""
+    def test_extract_task_count_returns_one_for_no_tasks(self) -> None:
+        """Should return 1 when no ### Task N: patterns found (single-task default)."""
         from amelia.pipelines.implementation.utils import extract_task_count
 
         plan = """
@@ -247,7 +247,7 @@ Some content without task markers.
 
 More content.
 """
-        assert extract_task_count(plan) is None
+        assert extract_task_count(plan) == 1
 
     def test_extract_task_count_ignores_malformed_patterns(self) -> None:
         """Should only match exact ### Task N: pattern."""
@@ -402,14 +402,14 @@ Do second thing.
 
         assert result["total_tasks"] == 2
 
-    async def test_plan_validator_sets_total_tasks_none_for_legacy_plans(
+    async def test_plan_validator_defaults_total_tasks_to_one_for_simple_plans(
         self, tmp_path: Path
     ) -> None:
-        """plan_validator_node should set total_tasks=None for plans without task markers."""
+        """plan_validator_node should set total_tasks=1 for plans without task markers."""
         from amelia.pipelines.implementation.nodes import plan_validator_node
 
         plan_content = """
-# Legacy Plan
+# Simple Plan
 
 No task markers here, just freeform instructions.
 
@@ -421,7 +421,7 @@ Do setup.
 
 Do implementation.
 """
-        plan_path = tmp_path / "docs" / "plans" / "legacy-plan.md"
+        plan_path = tmp_path / "docs" / "plans" / "simple-plan.md"
         plan_path.parent.mkdir(parents=True, exist_ok=True)
         plan_path.write_text(plan_content)
 
@@ -431,11 +431,11 @@ Do implementation.
             status="running",
             profile_id="test",
             raw_architect_output=str(plan_path),
-            issue=Issue(id="TEST-456", title="Legacy", description="Legacy test"),
+            issue=Issue(id="TEST-456", title="Simple", description="Simple test"),
         )
 
         mock_output = MagicMock()
-        mock_output.goal = "Legacy goal"
+        mock_output.goal = "Simple goal"
         mock_output.key_files = []
         mock_output.plan_markdown = plan_content
 
@@ -443,7 +443,7 @@ Do implementation.
             name="test",
             tracker="noop",
             working_dir=str(tmp_path),
-            plan_path_pattern="docs/plans/legacy-plan.md",
+            plan_path_pattern="docs/plans/simple-plan.md",
             agents={
                 "architect": AgentConfig(driver="api:openrouter", model="anthropic/claude-3.5-sonnet"),
                 "developer": AgentConfig(driver="api:openrouter", model="anthropic/claude-3.5-sonnet"),
@@ -465,4 +465,4 @@ Do implementation.
         ):
             result = await plan_validator_node(state, config)
 
-        assert result["total_tasks"] is None
+        assert result["total_tasks"] == 1
