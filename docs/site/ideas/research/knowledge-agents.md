@@ -5,19 +5,19 @@ description: Architectures for AI agents in research synthesis, strategic planni
 
 # Agentic Workflows for Knowledge Work
 
-As development velocity increases through coding agents, upstream processes (research, planning, alignment, and coordination) become bottlenecks. Our companion research on [AI's Impact on Software Organizations](./ai-impact-organizations.md) documents this shift: as execution costs drop, planning and verification become the new constraints. This document surveys architectures and patterns for agentic workflows that address these upstream bottlenecks.
+Coding agents accelerate development; upstream processes (research, planning, alignment, and coordination) now bottleneck it. Our companion research on [AI's Impact on Software Organizations](./ai-impact-organizations.md) documents this shift: as execution costs drop, planning and verification become the new constraints. This document surveys architectures and patterns for agentic workflows that address these upstream bottlenecks.
 
 ::: info Research Context
 This report analyzes agentic systems for **knowledge work** (research synthesis, planning, prioritization) and **organizational coordination** (strategy alignment, workforce modeling, technical governance).
 :::
 
-The coordination cost of software development scales with team size. As teams grow, individuals spend increasing time gathering context, synthesizing information, and orchestrating workflows. Agentic systems address this by executing entire workflows autonomously. Earlier "copilot" approaches required continuous prompting; current agents complete extended tasks ("conduct a competitive audit" or "identify technical debt in the payment gateway") with minimal supervision.
+Coordination cost scales with team size. As teams grow, individuals spend increasing time gathering context, synthesizing information, and orchestrating workflows. Agentic systems address this by executing entire workflows autonomously. Earlier "copilot" approaches required continuous prompting; current agents complete extended tasks ("conduct a competitive audit" or "identify technical debt in the payment gateway") with minimal supervision.
 
 **[Part 1](#part-1-research-and-planning-agents)** examines agents for research and planning, with case studies of [Perplexity](#1-1-deep-research-architecture) and [Manus AI](#1-2-general-purpose-execution-manus-ai) architectures. **[Part 2](#part-2-organizational-coordination-agents)** analyzes agents for organizational coordination: [ROI analysis](#2-2-1-roi-and-budget-optimization-agents), [workforce planning](#2-2-2-organizational-design-and-workforce-planning), and [strategic alignment](#2-2-3-strategic-alignment-agentic-okrs). **[Part 3](#part-3-cross-cutting-patterns)** covers cross-cutting patterns for enterprise deployment: [evaluation frameworks](#3-1-evaluation-frameworks), [human-in-the-loop workflows](#3-2-human-in-the-loop-architectures), and [identity security](#3-3-security-identity-propagation).
 
 ## Part 1: Research and Planning Agents
 
-Knowledge work involves synthesizing disparate signals (customer feedback, market data, engineering constraints, business goals) into coherent plans. This synthesis has historically required manual effort: retrieving information, organizing it, drawing connections. Specialized agents now automate discovery and definition phases.
+Knowledge work involves synthesizing disparate signals (customer feedback, market data, engineering constraints, business goals) into coherent plans. Historically, this synthesis required manual effort: retrieving information, organizing it, drawing connections. Specialized agents now automate discovery and definition phases.
 
 ### 1.1 Deep Research Architecture
 
@@ -31,7 +31,7 @@ Perplexity's "Deep Research" mode operates through a recursive agentic loop. On 
 When data proves incomplete or ambiguous, the agent **refines its plan**, generating new queries from intermediate findings. This iteration enables navigation of "unknown unknowns": pivoting research direction as the agent learns.
 :::
 
-The system processes dozens of searches and reads hundreds of sources in minutes.<sup id="cite-1c"><a href="#ref-1">[1]</a></sup> Benchmark results: Perplexity's reasoning model scored 21.1% on "Humanity's Last Exam," outperforming other frontier models.
+It processes dozens of searches and reads hundreds of sources in minutes.<sup id="cite-1c"><a href="#ref-1">[1]</a></sup> Perplexity's reasoning model outperformed other frontier models, scoring 21.1% on "Humanity's Last Exam."
 
 ![Perplexity Deep Research Architecture](/images/placeholder_perplexity_architecture.svg)
 <figcaption style="text-align: center; color: var(--vp-c-text-2); margin-top: 0.5rem; font-size: 0.875rem;">Placeholder: Perplexity's recursive agentic loop showing query → plan → search → evaluate → refine cycle.</figcaption>
@@ -53,7 +53,7 @@ Perplexity optimizes for information retrieval. **Manus AI** targets general-pur
 
 #### 1.2.1 Context Engineering: File System as Memory
 
-Context windows create bottlenecks for long-horizon agents. Even 128,000+ token windows degrade reasoning performance and increase latency when filled with irrelevant history. Manus addresses this through "Context Engineering."<sup id="cite-4"><a href="#ref-4">[4]</a></sup>
+Context windows bottleneck long-horizon agents. Even 128,000+ token windows degrade reasoning performance and increase latency when filled with irrelevant history. Manus addresses this through "Context Engineering."<sup id="cite-4"><a href="#ref-4">[4]</a></sup>
 
 ::: info Core Innovation
 Manus treats the **file system as unlimited context**. Rather than keeping entire history in active memory, the agent offloads state to persistent files (`todo.md`, `research_notes.txt`, `logs.json`). The agent reads from and writes to this file system as "External Memory."<sup id="cite-4b"><a href="#ref-4">[4]</a></sup>
@@ -69,7 +69,7 @@ Manus treats the **file system as unlimited context**. Rather than keeping entir
 
 #### 1.2.2 Action Space Management
 
-A large array of potential tools can confuse agents. Manus uses a "context-aware state machine" for **Action Space Management**: it masks token logits during decoding, constraining model choices to valid subsets based on current mode.
+Too many tools confuse agents. Manus uses a "context-aware state machine" for **Action Space Management**: it masks token logits during decoding, constraining model choices to valid subsets based on current mode.
 
 ::: warning Implementation Detail
 In "Browser Mode," the system suppresses "Shell Command" token probabilities, forcing browser action selection. This prevents "tool hallucination" and maintains agent focus.<sup id="cite-4e"><a href="#ref-4">[4]</a></sup>
@@ -83,7 +83,7 @@ Agents now automate qualitative user research. Platforms like **Dovetail**<sup i
 
 The "Insights Agent" in Discuss.io processes qualitative data differently. When a user interview ends, the agent processes the transcript immediately: tagging themes, tracking emotional tone shifts (sentiment analysis), and highlighting quotes.<sup id="cite-7b"><a href="#ref-7">[7]</a></sup>
 
-This reduces time-to-insight from days of manual coding to minutes of automated processing. Dovetail's "Auto Highlighting" and "Cluster Analysis" group feedback from disparate sources (support tickets, video calls, surveys) into coherent themes.<sup id="cite-6"><a href="#ref-6">[6]</a></sup>
+This cuts synthesis from days to minutes. Dovetail's "Auto Highlighting" and "Cluster Analysis" group feedback from disparate sources (support tickets, video calls, surveys) into coherent themes.<sup id="cite-6"><a href="#ref-6">[6]</a></sup>
 
 ::: tip Practical Application
 Query a data repository: "What are the top three usability complaints regarding the onboarding flow this quarter?" and receive a synthesized answer grounded in specific user quotes.
@@ -94,7 +94,7 @@ Query a data repository: "What are the top three usability complaints regarding 
 **Synthetic User Research** uses foundation models to simulate user personas. Platforms like Synthetic Users<sup id="cite-8"><a href="#ref-8">[8]</a></sup> and Remesh.ai<sup id="cite-9"><a href="#ref-9">[9]</a></sup> enable prompting agents with demographic and psychographic data ("You are a 45-year-old CFO at a mid-sized logistics firm, skeptical of new software") and interviewing these synthetic participants.<sup id="cite-10"><a href="#ref-10">[10]</a></sup>
 
 ::: warning Limitations
-These agents cannot replace human empathy and nuance. They serve as a **high-volume, low-fidelity filter**. Test fifty variations of a value proposition against synthetic agents in an hour, identifying obvious clarity issues before investing in human recruitment.
+Human empathy and nuance remain beyond these agents. They serve as a **high-volume, low-fidelity filter**. Test fifty variations of a value proposition against synthetic agents in an hour, identifying obvious clarity issues before investing in human recruitment.
 :::
 
 The architecture typically employs RAG to ground synthetic users in previous real-world interview transcripts, ensuring they reflect observed behaviors rather than generic LLM outputs.<sup id="cite-10b"><a href="#ref-10">[10]</a></sup>
@@ -108,9 +108,9 @@ Agents move from analysis to creation roles.
 
 #### 1.4.1 Dynamic Roadmaps: Productboard
 
-Productboard integrates AI to make roadmaps dynamic and data-driven.<sup id="cite-11"><a href="#ref-11">[11]</a></sup> The "Pulse" agent<sup id="cite-13"><a href="#ref-13">[13]</a></sup> analyzes incoming feedback streams continuously (support tickets, sales notes, Slack conversations) and links them to feature ideas.
+Productboard integrates AI to make roadmaps dynamic and data-driven.<sup id="cite-11"><a href="#ref-11">[11]</a></sup> The "Pulse" agent<sup id="cite-13"><a href="#ref-13">[13]</a></sup> continuously analyzes incoming feedback streams (support tickets, sales notes, Slack conversations) and links them to feature ideas.
 
-This creates a prioritization matrix that updates in real-time.<sup id="cite-14"><a href="#ref-14">[14]</a></sup> See that a feature request gained 40% more traction in the last month among enterprise customers. This shifts prioritization from intuition to signal-driven, enabling roadmaps to react to market changes dynamically.
+This creates a prioritization matrix that updates in real-time.<sup id="cite-14"><a href="#ref-14">[14]</a></sup> See that a feature request gained 40% more traction among enterprise customers in the last month. This shifts prioritization from intuition to signal-driven, enabling roadmaps to react to market changes dynamically.
 
 #### 1.4.2 Generative UI: Figma and Co-Creation
 
@@ -122,14 +122,14 @@ The "Static Generative UI" pattern maps intent to existing design system compone
 
 | Area | Traditional Workflow | Agentic Workflow | Technologies |
 |:-----|:---------------------|:-----------------|:-------------|
-| **Market Research** | Keyword search, manual aggregation, reading reports | Recursive research agents that plan, read, synthesize | Perplexity, Deep Research |
-| **User Research** | Manual transcription, coding themes in spreadsheets | Auto-tagging, sentiment analysis, synthetic user testing | Dovetail, Discuss.io, Synthetic Users |
-| **Roadmapping** | Static slides, manual feedback linking | Dynamic prioritization based on real-time signals | Productboard Pulse |
-| **Design** | Mockups from scratch | Generative UI, component assembly, co-ideation | Figma AI |
+| **Market Research** | Searching keywords, aggregating manually, reading reports | Recursive research agents that plan, read, synthesize | Perplexity, Deep Research |
+| **User Research** | Transcribing manually, coding themes in spreadsheets | Auto-tagging, sentiment analysis, synthetic user testing | Dovetail, Discuss.io, Synthetic Users |
+| **Roadmapping** | Creating static slides, linking feedback manually | Dynamic prioritization based on real-time signals | Productboard Pulse |
+| **Design** | Creating mockups from scratch | Generative UI, component assembly, co-ideation | Figma AI |
 
 ## Part 2: Organizational Coordination Agents
 
-Part 1 addressed research and planning. Part 2 addresses organizational coordination. Leaders face information asymmetry, context switching, and difficulty measuring productivity in complex systems. Agents provide visibility, analysis, and strategic modeling. These coordination agents enable the [role convergence and orchestration patterns](./ai-impact-organizations.md#4-role-convergence-and-skill-requirements) that address the verification bottleneck in AI-augmented organizations.
+Part 1 addressed research and planning. Leaders struggle to see what engineers see, switch between unrelated projects hourly, and lack metrics that reflect real output. Agents provide visibility, analysis, and strategic modeling. These coordination agents enable the [role convergence and orchestration patterns](./ai-impact-organizations.md#4-role-convergence-and-skill-requirements) that address the verification bottleneck in AI-augmented organizations.
 
 ### 2.1 Workflow and Health Monitoring
 
@@ -203,7 +203,7 @@ Firms like **V7 Labs**<sup id="cite-24"><a href="#ref-24">[24]</a></sup> and **A
 | **Security** | Vulnerabilities and dependency risks |
 | **Scalability** | Architectural bottlenecks (e.g., single point of failure in database layer) |
 
-The output: a "Red Flag Report" generated in hours, replacing weeks of manual architect review. Investment committees make go/no-go decisions with high confidence and speed.
+The output: a "Red Flag Report" generated in hours, replacing weeks of manual architect review. Investment committees make confident, fast go/no-go decisions.
 
 #### 2.3.2 Automated Architectural Decision Records
 
@@ -228,7 +228,7 @@ How do you evaluate an agent that writes a strategy document? Standard software 
 
 #### 3.1.1 G-Eval: LLM-as-a-Judge
 
-The **G-Eval** framework<sup id="cite-28"><a href="#ref-28">[28]</a></sup> has become standard for evaluating subjective, open-ended tasks. It replaces manual grading with "LLM-as-a-Judge" pipelines. This methodology applies beyond knowledge work. Our [Benchmarking Code Review Agents](./benchmarking-code-review-agents.md) research shows how the same evaluation framework assesses code review quality.
+**G-Eval**<sup id="cite-28"><a href="#ref-28">[28]</a></sup> has become standard for evaluating subjective, open-ended tasks. It replaces manual grading with "LLM-as-a-Judge" pipelines. This methodology applies beyond knowledge work. Our [Benchmarking Code Review Agents](./benchmarking-code-review-agents.md) research shows how the same evaluation framework assesses code review quality.
 
 **The G-Eval Process:**
 
@@ -318,7 +318,7 @@ Agentic workflows restructure how organizations create value.
 | **Governance** | Automate ADR creation, compliance checking, technical due diligence | ADR agents, framework compliance |
 
 ::: tip Key Insight
-As development velocity increases, upstream bottlenecks (research, planning, alignment) become critical. Organizations that extend agentic workflows beyond development will maintain throughput across the entire software lifecycle.
+Coding agents have made development fast; research, planning, and alignment now limit throughput. Organizations that extend agentic workflows upstream will maintain velocity across the entire software lifecycle.
 :::
 
 ## References
