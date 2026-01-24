@@ -225,28 +225,31 @@ class TestDeveloperNodeTaskInjection:
         # Task 2 content should be present (extracted from plan_markdown)
         assert "Add tests" in captured_prompt[0]
 
-    async def test_developer_node_preserves_session_for_legacy_mode(
+    async def test_developer_node_clears_session_for_single_task(
         self,
         tmp_path: Path,
         integration_profile: Profile,
         integration_issue: Issue,
     ) -> None:
-        """Developer node should preserve session_id when total_tasks is None (legacy).
+        """Developer node should clear session_id even when total_tasks is 1.
 
-        Real components: call_developer_node legacy mode handling
+        All task executions clear session for fresh context, regardless of
+        whether there's one task or many.
+
+        Real components: call_developer_node session handling
         Mock boundary: ApiDriver.execute_agentic
         """
         state = make_execution_state(
             profile=integration_profile,
             issue=integration_issue,
-            goal="Legacy goal",
+            goal="Single task goal",
             plan_markdown="Do stuff",
-            total_tasks=None,  # Legacy mode
+            total_tasks=1,  # Single task mode
             driver_session_id="existing-session",
         )
 
         config = make_config(
-            thread_id="test-legacy-session",
+            thread_id="test-single-task-session",
             profile=integration_profile,
         )
 
@@ -260,9 +263,9 @@ class TestDeveloperNodeTaskInjection:
         with patch.object(ApiDriver, "execute_agentic", mock_execute_agentic):
             await call_developer_node(state, cast(RunnableConfig, config))
 
-        # Session should be preserved in legacy mode
+        # Session should be cleared for task execution
         assert len(captured_session_id) == 1
-        assert captured_session_id[0] == "existing-session"
+        assert captured_session_id[0] is None
 
 
 @pytest.mark.integration

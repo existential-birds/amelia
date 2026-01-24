@@ -55,7 +55,7 @@ class TestTaskExecutionFields:
             profile_id="test",
         )
 
-        assert state.total_tasks is None  # None = legacy single-session mode
+        assert state.total_tasks == 1  # 1 = single-task mode (default)
         assert state.current_task_index == 0  # 0-indexed
         assert state.task_review_iteration == 0  # Resets per task
         # Note: max_task_review_iterations is on Profile, not ExecutionState

@@ -57,7 +57,7 @@ class TestDeveloperBuildPrompt:
     """Tests for Developer._build_prompt task extraction."""
 
     def test_single_task_uses_full_plan(self, mock_developer: Developer) -> None:
-        """When total_tasks is None or 1, use full plan without extraction."""
+        """When total_tasks is 1, use full plan without extraction."""
         state = ImplementationState(
             workflow_id="test-workflow",
             created_at=datetime.now(UTC),
@@ -65,7 +65,7 @@ class TestDeveloperBuildPrompt:
             profile_id="test",
             goal="Implement feature",
             plan_markdown="# Simple Plan\n\nJust do the thing.",
-            total_tasks=None,
+            total_tasks=1,
             current_task_index=0,
         )
         prompt = mock_developer._build_prompt(state)

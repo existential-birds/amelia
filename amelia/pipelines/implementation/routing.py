@@ -25,44 +25,6 @@ def route_approval(state: ImplementationState) -> Literal["approve", "reject"]:
     return "approve" if state.human_approved else "reject"
 
 
-def route_after_review(
-    state: ImplementationState,
-    profile: Profile,
-) -> Literal["developer", "__end__"]:
-    """Route after review based on approval and iteration count (legacy mode).
-
-    Args:
-        state: Current execution state with last_review and review_iteration.
-        profile: Profile with agent configs. Uses reviewer.options.max_iterations.
-
-    Returns:
-        "developer" if review rejected and under max iterations,
-        "__end__" if approved or max iterations reached.
-    """
-    logger.debug(
-        "route_after_review decision",
-        has_last_review=state.last_review is not None,
-        approved=state.last_review.approved if state.last_review else None,
-        review_iteration=state.review_iteration,
-    )
-    if state.last_review and state.last_review.approved:
-        return "__end__"
-
-    # Get max iterations from reviewer agent options, default to 3
-    max_iterations = 3
-    if "reviewer" in profile.agents:
-        max_iterations = profile.agents["reviewer"].options.get("max_iterations", 3)
-
-    if state.review_iteration >= max_iterations:
-        logger.warning(
-            "Max review iterations reached, terminating loop",
-            max_iterations=max_iterations,
-        )
-        return "__end__"
-
-    return "developer"
-
-
 def route_after_task_review(
     state: ImplementationState,
     profile: Profile,
@@ -83,9 +45,7 @@ def route_after_task_review(
 
     if approved:
         # Task approved - check if more tasks remain
-        # total_tasks should always be set when using task-based routing,
-        # but handle None for safety (treat as single task complete)
-        if state.total_tasks is None or state.current_task_index + 1 >= state.total_tasks:
+        if state.current_task_index + 1 >= state.total_tasks:
             logger.debug(
                 "Task routing decision",
                 task=task_number,

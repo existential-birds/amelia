@@ -74,11 +74,11 @@ More content
         count = extract_task_count(plan)
         assert count == 2
 
-    def test_returns_none_for_no_tasks(self) -> None:
-        """Should return None if no task patterns found."""
+    def test_returns_one_for_no_tasks(self) -> None:
+        """Should return 1 if no task patterns found (single-task default)."""
         plan = "# Plan\n\nSome content without tasks"
         count = extract_task_count(plan)
-        assert count is None
+        assert count == 1
 
 
 class TestExtractTaskSection:

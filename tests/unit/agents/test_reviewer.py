@@ -636,7 +636,7 @@ Third task content.
         self,
         create_reviewer: Callable[..., Reviewer],
     ) -> None:
-        """When total_tasks is None or 1, return full plan."""
+        """When total_tasks is 1, return full plan."""
         state = ImplementationState(
             workflow_id="test-workflow",
             created_at=datetime.now(UTC),
@@ -644,7 +644,7 @@ Third task content.
             profile_id="test",
             goal="Implement feature",
             plan_markdown="# Simple Plan\n\nJust do it.",
-            total_tasks=None,
+            total_tasks=1,
             current_task_index=0,
         )
         reviewer = create_reviewer()
