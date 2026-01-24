@@ -1,5 +1,6 @@
 """Tests for brainstorming API routes."""
 
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
@@ -220,7 +221,9 @@ class TestSendMessage(TestBrainstormRoutes):
         )
 
         # Mock send_message as async generator yielding WorkflowEvent (matches production type)
-        async def mock_send_message(*args, **kwargs):
+        async def mock_send_message(
+            *args: object, **kwargs: object
+        ) -> AsyncIterator[WorkflowEvent]:
             yield WorkflowEvent(
                 id="evt-1",
                 workflow_id="sess-123",

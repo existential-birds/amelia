@@ -292,14 +292,16 @@ class TestApiDriverSessionContinuity:
         self, mock_deepagents_for_sessions: MagicMock
     ) -> None:
         """execute_agentic with session_id reuses existing checkpointer."""
-        from amelia.drivers.api.deepagents import ApiDriver, MemorySaver
+        from langgraph.checkpoint.memory import MemorySaver
+
+        from amelia.drivers.api.deepagents import ApiDriver
 
         msg = AIMessage(content="Response")
         msg.usage_metadata = UsageMetadata(
             input_tokens=10, output_tokens=5, total_tokens=15
         )
 
-        captured_checkpointers: list[MemorySaver] = []
+        captured_checkpointers: list[MemorySaver | None] = []
 
         def capture_checkpointer(**kwargs: Any) -> MagicMock:
             # Capture the checkpointer passed to create_deep_agent

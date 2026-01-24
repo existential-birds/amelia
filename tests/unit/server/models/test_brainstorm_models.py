@@ -150,6 +150,7 @@ class TestMessage:
             created_at=datetime.now(UTC),
         )
         assert msg.role == "assistant"
+        assert msg.parts is not None
         assert len(msg.parts) == 2
         assert msg.parts[0].type == "reasoning"
 

@@ -12,7 +12,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from amelia.core.types import AgentConfig, Profile
+from amelia.core.types import AgentConfig, DriverType, Profile, TrackerType
 from amelia.server.config import ServerConfig
 from amelia.server.database import (
     Database,
@@ -78,7 +78,49 @@ async def _get_settings_repository() -> tuple[Database, SettingsRepository]:
     return db, repo
 
 
-def _build_default_agents(driver: str, model: str) -> dict[str, AgentConfig]:
+VALID_DRIVERS: set[DriverType] = {"cli:claude", "api:openrouter", "cli", "api"}
+VALID_TRACKERS: set[TrackerType] = {"jira", "github", "none", "noop"}
+
+
+def _validate_driver(value: str) -> DriverType:
+    """Validate and cast a string to DriverType.
+
+    Args:
+        value: The driver string from user input.
+
+    Returns:
+        The validated DriverType.
+
+    Raises:
+        typer.BadParameter: If the driver is invalid.
+    """
+    if value not in VALID_DRIVERS:
+        raise typer.BadParameter(
+            f"Invalid driver '{value}'. Valid options: {sorted(VALID_DRIVERS)}"
+        )
+    return value  # type: ignore[return-value]
+
+
+def _validate_tracker(value: str) -> TrackerType:
+    """Validate and cast a string to TrackerType.
+
+    Args:
+        value: The tracker string from user input.
+
+    Returns:
+        The validated TrackerType.
+
+    Raises:
+        typer.BadParameter: If the tracker is invalid.
+    """
+    if value not in VALID_TRACKERS:
+        raise typer.BadParameter(
+            f"Invalid tracker '{value}'. Valid options: {sorted(VALID_TRACKERS)}"
+        )
+    return value  # type: ignore[return-value]
+
+
+def _build_default_agents(driver: DriverType, model: str) -> dict[str, AgentConfig]:
     """Build default agents dict for a profile.
 
     Args:
@@ -89,13 +131,13 @@ def _build_default_agents(driver: str, model: str) -> dict[str, AgentConfig]:
         Dict mapping agent names to AgentConfig.
     """
     return {
-        "architect": AgentConfig(driver=driver, model=model),  # type: ignore[arg-type]
-        "developer": AgentConfig(driver=driver, model=model),  # type: ignore[arg-type]
-        "reviewer": AgentConfig(driver=driver, model=model),  # type: ignore[arg-type]
-        "task_reviewer": AgentConfig(driver=driver, model=model),  # type: ignore[arg-type]
-        "evaluator": AgentConfig(driver=driver, model=model),  # type: ignore[arg-type]
-        "brainstormer": AgentConfig(driver=driver, model=model),  # type: ignore[arg-type]
-        "plan_validator": AgentConfig(driver=driver, model=model),  # type: ignore[arg-type]
+        "architect": AgentConfig(driver=driver, model=model),
+        "developer": AgentConfig(driver=driver, model=model),
+        "reviewer": AgentConfig(driver=driver, model=model),
+        "task_reviewer": AgentConfig(driver=driver, model=model),
+        "evaluator": AgentConfig(driver=driver, model=model),
+        "brainstormer": AgentConfig(driver=driver, model=model),
+        "plan_validator": AgentConfig(driver=driver, model=model),
     }
 
 
@@ -269,12 +311,16 @@ def profile_create(
             assert tracker is not None
             assert working_dir is not None
 
+            # Validate and cast to proper types
+            validated_driver = _validate_driver(driver)
+            validated_tracker = _validate_tracker(tracker)
+
             # Build default agents configuration
-            agents = _build_default_agents(driver, model)
+            agents = _build_default_agents(validated_driver, model)
 
             profile = Profile(
                 name=name,
-                tracker=tracker,  # type: ignore[arg-type]
+                tracker=validated_tracker,
                 working_dir=working_dir,
                 agents=agents,
             )
@@ -363,12 +409,15 @@ async def check_and_run_first_time_setup() -> bool:
         )
 
         name = typer.prompt("Profile name", default="dev")
-        driver = typer.prompt("Driver (cli:claude, api:openrouter)", default="cli:claude")
+        driver_input = typer.prompt("Driver (cli:claude, api:openrouter)", default="cli:claude")
         model = typer.prompt("Model", default="opus")
         working_dir = typer.prompt("Working directory", default=str(Path.cwd()))
 
+        # Validate driver
+        validated_driver = _validate_driver(driver_input)
+
         # Build default agents configuration
-        agents = _build_default_agents(driver, model)
+        agents = _build_default_agents(validated_driver, model)
 
         profile = Profile(
             name=name,

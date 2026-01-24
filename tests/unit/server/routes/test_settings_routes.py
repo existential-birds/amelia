@@ -7,7 +7,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from amelia.core.types import AgentConfig, Profile
+from amelia.core.types import AgentConfig, DriverType, Profile, TrackerType
 from amelia.server.database import ServerSettings
 from amelia.server.dependencies import get_profile_repository
 from amelia.server.routes.settings import get_settings_repository, router
@@ -122,9 +122,9 @@ def profile_client(profile_app):
 
 def make_test_profile(
     name: str = "test-profile",
-    tracker: str = "noop",
+    tracker: TrackerType = "noop",
     working_dir: str = "/path/to/repo",
-    driver: str = "cli:claude",
+    driver: DriverType = "cli:claude",
     model: str = "opus",
 ) -> Profile:
     """Create a Profile for testing with agents dict.
@@ -139,7 +139,7 @@ def make_test_profile(
     Returns:
         Profile with default agents configuration.
     """
-    agent_config = AgentConfig(driver=driver, model=model)  # type: ignore[arg-type]
+    agent_config = AgentConfig(driver=driver, model=model)
     agents = {
         "architect": agent_config,
         "developer": agent_config,
@@ -150,7 +150,7 @@ def make_test_profile(
     }
     return Profile(
         name=name,
-        tracker=tracker,  # type: ignore[arg-type]
+        tracker=tracker,
         working_dir=working_dir,
         agents=agents,
     )
@@ -216,13 +216,13 @@ class TestProfileRoutes:
         """POST /api/profiles creates profile with all optional fields."""
         mock_profile_repo.create_profile.return_value = Profile(
             name="full-profile",
-            tracker="jira",  # type: ignore[arg-type]
+            tracker="jira",
             working_dir="/custom/path",
             plan_output_dir="custom/plans",
             plan_path_pattern="custom/{date}.md",
             auto_approve_reviews=True,
             agents={
-                "developer": AgentConfig(driver="api:openrouter", model="gpt-4"),  # type: ignore[arg-type]
+                "developer": AgentConfig(driver="api:openrouter", model="gpt-4"),
             },
         )
 
@@ -282,10 +282,10 @@ class TestProfileRoutes:
         """PUT /api/profiles/{id} updates agents configuration."""
         mock_profile_repo.update_profile.return_value = Profile(
             name="dev",
-            tracker="noop",  # type: ignore[arg-type]
+            tracker="noop",
             working_dir="/new/path",
             agents={
-                "developer": AgentConfig(driver="api:openrouter", model="gpt-4"),  # type: ignore[arg-type]
+                "developer": AgentConfig(driver="api:openrouter", model="gpt-4"),
             },
         )
 

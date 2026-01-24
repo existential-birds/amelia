@@ -1,6 +1,8 @@
 """Tests for BrainstormRepository."""
 
+from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 
@@ -18,7 +20,7 @@ class TestBrainstormRepository:
     """Test BrainstormRepository CRUD operations."""
 
     @pytest.fixture
-    async def db(self, temp_db_path) -> Database:
+    async def db(self, temp_db_path: Path) -> AsyncGenerator[Database, None]:
         """Create database with schema."""
         async with Database(temp_db_path) as db:
             await db.ensure_schema()

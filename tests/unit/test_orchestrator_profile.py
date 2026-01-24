@@ -2,20 +2,20 @@
 
 from unittest.mock import AsyncMock, MagicMock
 
-from amelia.core.types import AgentConfig, Profile
+from amelia.core.types import AgentConfig, Profile, TrackerType
 from amelia.server.orchestrator.service import OrchestratorService
 
 
 def _make_test_profile(
     name: str = "dev",
-    tracker: str = "noop",
+    tracker: TrackerType = "noop",
     working_dir: str = "/repo",
 ) -> Profile:
     """Create a test Profile with default agents configuration."""
     agent_config = AgentConfig(driver="cli:claude", model="opus")
     return Profile(
         name=name,
-        tracker=tracker,  # type: ignore[arg-type]
+        tracker=tracker,
         working_dir=working_dir,
         agents={
             "architect": agent_config,
