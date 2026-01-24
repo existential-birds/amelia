@@ -1386,42 +1386,6 @@ class TestTaskProgressEvents:
         mock_repository.save_event.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_no_task_failed_in_legacy_mode(
-        self,
-        orchestrator: OrchestratorService,
-        mock_repository: AsyncMock,
-    ) -> None:
-        """Should NOT emit TASK_FAILED when total_tasks is None (legacy mode)."""
-        exec_state = ImplementationState(
-            workflow_id="wf-legacy",
-            created_at=datetime.now(UTC),
-            status="running",
-            profile_id="test",
-            # No total_tasks = legacy mode (defaults to None)
-            current_task_index=1,
-            last_review=ReviewResult(
-                reviewer_persona="code-reviewer",
-                approved=False,
-                comments=["Fix the bug"],
-                severity="medium",
-            ),
-        )
-        mock_state = ServerExecutionState(
-            id="wf-legacy",
-            issue_id="ISSUE-123",
-            worktree_path="/path/to/worktree",
-            workflow_status="in_progress",
-            started_at=datetime.now(UTC),
-            execution_state=exec_state,
-        )
-        mock_repository.get.return_value = mock_state
-
-        await orchestrator._emit_task_failed_if_applicable("wf-legacy")
-
-        # No event should be emitted in legacy mode
-        mock_repository.save_event.assert_not_called()
-
-    @pytest.mark.asyncio
     async def test_no_task_failed_when_no_last_review(
         self,
         orchestrator: OrchestratorService,
@@ -1464,14 +1428,20 @@ class TestTaskProgressEvents:
         emitted_events, install = capture_emit
         install()
 
-        # Simulate developer_node task start event with task state
+        # Simulate developer_node task start event with Pydantic state
+        # (LangGraph passes ImplementationState as input, not a dict)
+        input_state = ImplementationState(
+            workflow_id="wf-123",
+            profile_id="test",
+            created_at=datetime.now(UTC),
+            status="running",
+            total_tasks=3,
+            current_task_index=1,
+            plan_markdown="### Task 1: First\n### Task 2: Second task\n### Task 3: Third",
+        )
         task_data = {
             "name": "developer_node",
-            "input": {
-                "total_tasks": 3,
-                "current_task_index": 1,
-                "plan_markdown": "### Task 1: First\n### Task 2: Second task\n### Task 3: Third",
-            },
+            "input": input_state,
         }
         await orchestrator._handle_tasks_event("wf-123", task_data)
 
@@ -1483,28 +1453,6 @@ class TestTaskProgressEvents:
         assert data["task_index"] == 1
         assert data["total_tasks"] == 3
         assert data["task_title"] == "Second task"
-
-    @pytest.mark.asyncio
-    async def test_no_task_started_in_legacy_mode(
-        self,
-        orchestrator: OrchestratorService,
-        mock_repository: AsyncMock,
-        capture_emit: tuple[list[tuple[str, EventType, str, dict[str, object]]], Callable[[], None]],
-    ) -> None:
-        """Should NOT emit TASK_STARTED when total_tasks is None (legacy mode)."""
-        emitted_events, install = capture_emit
-        install()
-
-        # Simulate developer_node start without task fields
-        task_data = {
-            "name": "developer_node",
-            "input": {},  # No total_tasks = legacy mode
-        }
-        await orchestrator._handle_tasks_event("wf-456", task_data)
-
-        # Should emit STAGE_STARTED but not TASK_STARTED
-        task_events = [e for e in emitted_events if e[1] == EventType.TASK_STARTED]
-        assert len(task_events) == 0
 
     @pytest.mark.asyncio
     async def test_emits_task_completed_when_next_task_node_completes(
@@ -1536,12 +1484,13 @@ class TestTaskProgressEvents:
         mock_repository.get.return_value = mock_state
 
         # Simulate next_task_node completion
-        # The output contains the NEW index (incremented from 0 to 1)
+        # The output contains the NEW index (incremented from 0 to 1) and total_tasks
         chunk = {
             "next_task_node": {
                 "current_task_index": 1,  # New value after node runs
                 "task_review_iteration": 0,
                 "driver_session_id": None,
+                "total_tasks": 5,  # Passed through for TASK_COMPLETED event
             }
         }
 
@@ -1555,47 +1504,6 @@ class TestTaskProgressEvents:
         assert message == "Completed Task 1/5"
         assert data["task_index"] == 0
         assert data["total_tasks"] == 5
-
-    @pytest.mark.asyncio
-    async def test_no_task_completed_without_total_tasks(
-        self,
-        orchestrator: OrchestratorService,
-        mock_repository: AsyncMock,
-        capture_emit: tuple[list[tuple[str, EventType, str, dict[str, object]]], Callable[[], None]],
-    ) -> None:
-        """Should NOT emit TASK_COMPLETED in legacy mode (no total_tasks)."""
-        emitted_events, install = capture_emit
-        install()
-
-        # Setup workflow without total_tasks (legacy mode)
-        mock_state = ServerExecutionState(
-            id="wf-legacy",
-            issue_id="ISSUE-456",
-            worktree_path="/path/to/worktree",
-            workflow_status="in_progress",
-            started_at=datetime.now(UTC),
-            execution_state=ImplementationState(
-                workflow_id="wf-legacy",
-                created_at=datetime.now(UTC),
-                status="running",
-                profile_id="test",
-                total_tasks=None,  # Legacy mode
-                current_task_index=0,
-            ),
-        )
-        mock_repository.get.return_value = mock_state
-
-        chunk = {
-            "next_task_node": {
-                "current_task_index": 1,
-            }
-        }
-
-        await orchestrator._handle_stream_chunk("wf-legacy", chunk)
-
-        task_events = [e for e in emitted_events if e[1] == EventType.TASK_COMPLETED]
-        assert len(task_events) == 0
-
 
 class TestStartWorkflowWithTaskFields:
     """Tests for start_workflow with task_title/task_description."""

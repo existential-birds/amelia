@@ -1606,24 +1606,23 @@ class OrchestratorService:
 
             # Emit TASK_COMPLETED when next_task_node completes
             if node_name == "next_task_node":
-                state = await self._repository.get(workflow_id)
-                if state is not None and state.execution_state is not None:
-                    total_tasks = state.execution_state.total_tasks
-                    if total_tasks is not None:
-                        # The output contains the NEW index, so completed task is index - 1
-                        new_index = output.get("current_task_index", 0)
-                        completed_index = new_index - 1 if new_index > 0 else 0
+                # Get total_tasks from output (passed through by next_task_node)
+                total_tasks = output.get("total_tasks")
+                if total_tasks is not None:
+                    # The output contains the NEW index, so completed task is index - 1
+                    new_index = output.get("current_task_index", 0)
+                    completed_index = new_index - 1 if new_index > 0 else 0
 
-                        await self._emit(
-                            workflow_id,
-                            EventType.TASK_COMPLETED,
-                            f"Completed Task {completed_index + 1}/{total_tasks}",
-                            agent="system",
-                            data={
-                                "task_index": completed_index,
-                                "total_tasks": total_tasks,
-                            },
-                        )
+                    await self._emit(
+                        workflow_id,
+                        EventType.TASK_COMPLETED,
+                        f"Completed Task {completed_index + 1}/{total_tasks}",
+                        agent="system",
+                        data={
+                            "task_index": completed_index,
+                            "total_tasks": total_tasks,
+                        },
+                    )
 
     async def _handle_tasks_event(
         self,
@@ -1659,11 +1658,13 @@ class OrchestratorService:
 
         # Emit TASK_STARTED for developer_node in task-based mode
         if node_name == "developer_node":
-            input_state = task_data.get("input", {})
-            total_tasks = input_state.get("total_tasks")
-            if total_tasks is not None:
-                task_index = input_state.get("current_task_index", 0)
-                plan_markdown = input_state.get("plan_markdown", "")
+            input_state = task_data.get("input")
+            # input_state is an ImplementationState Pydantic model from LangGraph.
+            # Access attributes directly, not via .get() which doesn't exist on Pydantic models.
+            if input_state is not None and getattr(input_state, "total_tasks", None) is not None:
+                total_tasks = input_state.total_tasks
+                task_index = input_state.current_task_index
+                plan_markdown = input_state.plan_markdown or ""
                 task_title = extract_task_title(plan_markdown, task_index) or "Unknown"
 
                 await self._emit(

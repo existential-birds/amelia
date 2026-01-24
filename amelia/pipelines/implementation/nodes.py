@@ -370,4 +370,5 @@ async def next_task_node(
         "current_task_index": state.current_task_index + 1,
         "task_review_iteration": 0,
         "driver_session_id": None,  # Fresh session for next task
+        "total_tasks": state.total_tasks,  # Pass through for TASK_COMPLETED event
     }

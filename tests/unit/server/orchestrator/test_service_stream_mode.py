@@ -155,3 +155,61 @@ class TestStreamModeTaskEvents:
         # Tasks chunk
         chunk = ("tasks", {"id": "t1", "name": "architect_node"})
         assert service._is_interrupt_chunk(chunk) is False
+
+
+class TestTaskStartedEvents:
+    """Test TASK_STARTED events for task-based execution mode."""
+
+    @pytest.mark.asyncio
+    async def test_developer_task_started_with_pydantic_state(
+        self, mock_repository, mock_event_bus
+    ):
+        """TASK_STARTED should work when input is a Pydantic model (production case).
+
+        Regression test for AttributeError: 'ImplementationState' object has no attribute 'get'.
+        LangGraph passes the state as a Pydantic model, not a dict.
+        """
+        from datetime import UTC, datetime
+
+        from amelia.pipelines.implementation.state import ImplementationState
+        from amelia.server.models.events import EventType
+        from amelia.server.orchestrator.service import OrchestratorService
+
+        service = OrchestratorService(
+            repository=mock_repository,
+            event_bus=mock_event_bus,
+        )
+
+        # Create a real Pydantic state object (what LangGraph actually passes)
+        input_state = ImplementationState(
+            workflow_id="test-workflow",
+            profile_id="test-profile",
+            created_at=datetime.now(UTC),
+            status="running",
+            total_tasks=3,
+            current_task_index=1,
+            plan_markdown="## Tasks\n1. First task\n2. Second task\n3. Third task",
+        )
+
+        task_event = {
+            "id": "task-456",
+            "name": "developer_node",
+            "input": input_state,  # Pydantic model, NOT dict
+            "triggers": ["approve_plan_node"],
+        }
+
+        await service._handle_tasks_event("workflow-123", task_event)
+
+        # Verify TASK_STARTED was emitted (in addition to STAGE_STARTED)
+        assert mock_event_bus.emit.call_count == 2
+        events = [call.args[0] for call in mock_event_bus.emit.call_args_list]
+        event_types = [e.event_type for e in events]
+
+        assert EventType.STAGE_STARTED in event_types
+        assert EventType.TASK_STARTED in event_types
+
+        # Find the TASK_STARTED event and verify data
+        task_event_emitted = next(e for e in events if e.event_type == EventType.TASK_STARTED)
+        assert task_event_emitted.data["task_index"] == 1
+        assert task_event_emitted.data["total_tasks"] == 3
+        assert task_event_emitted.agent == "developer"
