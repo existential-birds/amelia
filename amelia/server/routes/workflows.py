@@ -84,7 +84,7 @@ async def create_workflow(
 
     return CreateWorkflowResponse(
         id=workflow_id,
-        status="pending",
+        status=WorkflowStatus.PENDING,
         message=f"Workflow created for issue {request.issue_id}",
     )
 
@@ -116,7 +116,7 @@ async def create_review_workflow(
 
     return CreateWorkflowResponse(
         id=workflow_id,
-        status="pending",
+        status=WorkflowStatus.PENDING,
         message="Review workflow created",
     )
 

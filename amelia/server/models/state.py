@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Literal
+from enum import StrEnum
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field
 
@@ -12,27 +13,34 @@ if TYPE_CHECKING:
     from amelia.pipelines.implementation.state import ImplementationState
 
 
-# Type alias for workflow status
-WorkflowStatus = Literal[
-    "pending",  # Not yet started
-    "planning",  # Architect generating plan
-    "in_progress",  # Currently executing
-    "blocked",  # Awaiting human approval
-    "completed",  # Successfully finished
-    "failed",  # Error occurred
-    "cancelled",  # Explicitly cancelled
-]
+class WorkflowStatus(StrEnum):
+    """Status for server workflow execution."""
+
+    PENDING = "pending"  # Not yet started
+    PLANNING = "planning"  # Architect generating plan
+    IN_PROGRESS = "in_progress"  # Currently executing
+    BLOCKED = "blocked"  # Awaiting human approval
+    COMPLETED = "completed"  # Successfully finished
+    FAILED = "failed"  # Error occurred
+    CANCELLED = "cancelled"  # Explicitly cancelled
+
+
+class WorkflowType(StrEnum):
+    """Type of workflow execution."""
+
+    FULL = "full"  # Standard full workflow
+    REVIEW = "review"  # Review-only workflow
 
 
 # State machine validation - prevents invalid transitions
 VALID_TRANSITIONS: dict[WorkflowStatus, set[WorkflowStatus]] = {
-    "pending": {"planning", "in_progress", "cancelled", "failed"},
-    "planning": {"blocked", "failed", "cancelled"},
-    "in_progress": {"blocked", "completed", "failed", "cancelled"},
-    "blocked": {"in_progress", "failed", "cancelled"},
-    "completed": set(),  # Terminal state
-    "failed": set(),  # Terminal state
-    "cancelled": set(),  # Terminal state
+    WorkflowStatus.PENDING: {WorkflowStatus.PLANNING, WorkflowStatus.IN_PROGRESS, WorkflowStatus.CANCELLED, WorkflowStatus.FAILED},
+    WorkflowStatus.PLANNING: {WorkflowStatus.BLOCKED, WorkflowStatus.FAILED, WorkflowStatus.CANCELLED},
+    WorkflowStatus.IN_PROGRESS: {WorkflowStatus.BLOCKED, WorkflowStatus.COMPLETED, WorkflowStatus.FAILED, WorkflowStatus.CANCELLED},
+    WorkflowStatus.BLOCKED: {WorkflowStatus.IN_PROGRESS, WorkflowStatus.FAILED, WorkflowStatus.CANCELLED},
+    WorkflowStatus.COMPLETED: set(),  # Terminal state
+    WorkflowStatus.FAILED: set(),  # Terminal state
+    WorkflowStatus.CANCELLED: set(),  # Terminal state
 }
 
 
@@ -94,8 +102,8 @@ class ServerExecutionState(BaseModel):
     id: str = Field(..., description="Unique workflow identifier")
     issue_id: str = Field(..., description="Issue being worked on")
     worktree_path: str = Field(..., description="Absolute path to worktree")
-    workflow_type: Literal["full", "review"] = Field(
-        default="full",
+    workflow_type: WorkflowType = Field(
+        default=WorkflowType.FULL,
         description="Type of workflow: 'full' for standard, 'review' for review-only",
     )
 
@@ -104,7 +112,7 @@ class ServerExecutionState(BaseModel):
         description="Core orchestration state",
     )
     workflow_status: WorkflowStatus = Field(
-        default="pending",
+        default=WorkflowStatus.PENDING,
         description="Current workflow status",
     )
     created_at: datetime = Field(

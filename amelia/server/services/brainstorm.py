@@ -40,6 +40,7 @@ from amelia.server.models.brainstorm import (
     Artifact,
     BrainstormingSession,
     Message,
+    MessageRole,
     MessageUsage,
     SessionStatus,
 )
@@ -358,7 +359,7 @@ class BrainstormService:
             id=str(uuid4()),
             profile_id=profile_id,
             driver_type=driver_type,
-            status="active",
+            status=SessionStatus.ACTIVE,
             topic=topic,
             created_at=now,
             updated_at=now,
@@ -622,7 +623,7 @@ class BrainstormService:
                 id=str(uuid4()),
                 session_id=session_id,
                 sequence=user_sequence,
-                role="user",
+                role=MessageRole.USER,
                 content=content,
                 created_at=now,
                 is_system=is_system,
@@ -776,7 +777,7 @@ class BrainstormService:
                 id=resolved_message_id,
                 session_id=session_id,
                 sequence=assistant_sequence,
-                role="assistant",
+                role=MessageRole.ASSISTANT,
                 content=assistant_content,
                 usage=message_usage,
                 created_at=datetime.now(UTC),
@@ -1006,7 +1007,7 @@ class BrainstormService:
             workflow_id = str(uuid4())
 
         # Update session status to completed
-        session.status = "completed"
+        session.status = SessionStatus.COMPLETED
         session.updated_at = datetime.now(UTC)
         await self._repository.update_session(session)
 

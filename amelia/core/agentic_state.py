@@ -3,12 +3,20 @@
 This module defines the state model for agentic (tool-calling) execution,
 replacing the structured batch/step execution model.
 """
-from typing import Any, Literal
+from enum import StrEnum
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
 
-AgenticStatus = Literal["running", "awaiting_approval", "completed", "failed", "cancelled"]
+class AgenticStatus(StrEnum):
+    """Status for agentic workflow execution."""
+
+    RUNNING = "running"
+    AWAITING_APPROVAL = "awaiting_approval"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
 
 
 class ToolCall(BaseModel):
@@ -83,7 +91,7 @@ class AgenticState(BaseModel):
 
     # Completion state
     final_response: str | None = None
-    status: AgenticStatus = "running"
+    status: AgenticStatus = AgenticStatus.RUNNING
     error: str | None = None
 
     # Session continuity

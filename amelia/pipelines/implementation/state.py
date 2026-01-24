@@ -38,7 +38,7 @@ class ImplementationState(BasePipelineState):
     # Agentic execution tracking (from agent interactions)
     tool_calls: Annotated[list[ToolCall], operator.add] = Field(default_factory=list)
     tool_results: Annotated[list[ToolResult], operator.add] = Field(default_factory=list)
-    agentic_status: AgenticStatus = "running"
+    agentic_status: AgenticStatus = AgenticStatus.RUNNING
 
     # Domain data (from planning phase)
     issue: Issue | None = None

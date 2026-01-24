@@ -2,7 +2,8 @@
 
 import re
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Literal, cast
+from enum import StrEnum
+from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from loguru import logger
@@ -18,12 +19,24 @@ if TYPE_CHECKING:
     from amelia.server.events.bus import EventBus
 
 
-# Valid severity values from the Severity literal type
-VALID_SEVERITIES: set[Severity] = {"low", "medium", "high", "critical"}
+class ReviewItemSeverity(StrEnum):
+    """Severity level for individual review items (beagle format)."""
+
+    CRITICAL = "critical"
+    MAJOR = "major"
+    MINOR = "minor"
 
 
-def normalize_severity(value: str | None, default: Severity = "medium") -> Severity:
-    """Normalize a severity value to a valid Severity literal.
+class ReviewVerdict(StrEnum):
+    """Verdict for structured review results."""
+
+    APPROVED = "approved"
+    NEEDS_FIXES = "needs_fixes"
+    BLOCKED = "blocked"
+
+
+def normalize_severity(value: str | None, default: Severity = Severity.MEDIUM) -> Severity:
+    """Normalize a severity value to a valid Severity enum.
 
     LLMs may return invalid severity values like "none" or other hallucinated
     values. This function ensures we always get a valid Severity.
@@ -33,11 +46,14 @@ def normalize_severity(value: str | None, default: Severity = "medium") -> Sever
         default: The default severity to use if value is invalid.
 
     Returns:
-        A valid Severity literal.
+        A valid Severity enum member.
 
     """
-    if value in VALID_SEVERITIES:
-        return cast(Severity, value)
+    if value is not None:
+        try:
+            return Severity(value)
+        except ValueError:
+            pass
     return default
 
 
@@ -69,7 +85,7 @@ class ReviewItem(BaseModel):
     title: str
     file_path: str
     line: int
-    severity: Literal["critical", "major", "minor"]
+    severity: ReviewItemSeverity
     issue: str  # What's wrong
     why: str  # Why it matters
     fix: str  # Recommended fix
@@ -91,7 +107,7 @@ class StructuredReviewResult(BaseModel):
     summary: str
     items: list[ReviewItem]
     good_patterns: list[str] = Field(default_factory=list)
-    verdict: Literal["approved", "needs_fixes", "blocked"]
+    verdict: ReviewVerdict
 
 
 class Reviewer:
@@ -402,7 +418,7 @@ The changes are in git - diff against commit: {base_commit}"""
                 reviewer_persona=result.reviewer_persona,
                 approved=False,
                 comments=result.comments,
-                severity="high" if result.severity in ("low", "medium") else result.severity,
+                severity=Severity.HIGH if result.severity in (Severity.LOW, Severity.MEDIUM) else result.severity,
             )
 
         # Emit completion event
@@ -451,7 +467,7 @@ The changes are in git - diff against commit: {base_commit}"""
                 reviewer_persona="Agentic",
                 approved=False,
                 comments=["Review did not produce output"],
-                severity="high",
+                severity=Severity.HIGH,
             )
 
         # Parse verdict to determine approval
@@ -543,14 +559,14 @@ The changes are in git - diff against commit: {base_commit}"""
         if issues:
             max_severity_value = max(severity_priority.get(sev, 0) for sev, _ in issues)
             severity_map: dict[int, Severity] = {
-                3: "critical",
-                2: "high",  # major maps to high
-                1: "medium",  # minor maps to medium
-                0: "low",
+                3: Severity.CRITICAL,
+                2: Severity.HIGH,  # major maps to high
+                1: Severity.MEDIUM,  # minor maps to medium
+                0: Severity.LOW,
             }
             overall_severity = severity_map[max_severity_value]
         else:
-            overall_severity = "low" if approved else "medium"
+            overall_severity = Severity.LOW if approved else Severity.MEDIUM
 
         # Extract just the issue text for comments
         comments = [issue_text for _, issue_text in issues]

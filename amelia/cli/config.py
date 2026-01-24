@@ -12,7 +12,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from amelia.core.types import AgentConfig, Profile, validate_driver, validate_tracker
+from amelia.core.types import AgentConfig, DriverType, Profile, TrackerType
 from amelia.server.config import ServerConfig
 from amelia.server.database import (
     Database,
@@ -82,21 +82,21 @@ def _build_default_agents(driver: str, model: str) -> dict[str, AgentConfig]:
     """Build default agents dict for a profile.
 
     Args:
-        driver: Driver to use for all agents (validated via validate_driver).
+        driver: Driver to use for all agents (converted to DriverType enum).
         model: Model to use for all agents.
 
     Returns:
         Dict mapping agent names to AgentConfig.
     """
-    validated_driver = validate_driver(driver)
+    driver_type = DriverType(driver)
     return {
-        "architect": AgentConfig(driver=validated_driver, model=model),
-        "developer": AgentConfig(driver=validated_driver, model=model),
-        "reviewer": AgentConfig(driver=validated_driver, model=model),
-        "task_reviewer": AgentConfig(driver=validated_driver, model=model),
-        "evaluator": AgentConfig(driver=validated_driver, model=model),
-        "brainstormer": AgentConfig(driver=validated_driver, model=model),
-        "plan_validator": AgentConfig(driver=validated_driver, model=model),
+        "architect": AgentConfig(driver=driver_type, model=model),
+        "developer": AgentConfig(driver=driver_type, model=model),
+        "reviewer": AgentConfig(driver=driver_type, model=model),
+        "task_reviewer": AgentConfig(driver=driver_type, model=model),
+        "evaluator": AgentConfig(driver=driver_type, model=model),
+        "brainstormer": AgentConfig(driver=driver_type, model=model),
+        "plan_validator": AgentConfig(driver=driver_type, model=model),
     }
 
 
@@ -275,7 +275,7 @@ def profile_create(
 
             profile = Profile(
                 name=name,
-                tracker=validate_tracker(tracker),
+                tracker=TrackerType(tracker),
                 working_dir=working_dir,
                 agents=agents,
             )
@@ -373,7 +373,7 @@ async def check_and_run_first_time_setup() -> bool:
 
         profile = Profile(
             name=name,
-            tracker="noop",
+            tracker=TrackerType.NOOP,
             working_dir=working_dir,
             agents=agents,
         )

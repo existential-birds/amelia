@@ -5,12 +5,35 @@ collaborate with an AI agent to produce design documents.
 """
 
 from datetime import datetime
-from typing import Any, Literal
+from enum import StrEnum
+from typing import Any
 
 from pydantic import BaseModel
 
 
-SessionStatus = Literal["active", "ready_for_handoff", "completed", "failed"]
+class SessionStatus(StrEnum):
+    """Status for brainstorming sessions."""
+
+    ACTIVE = "active"
+    READY_FOR_HANDOFF = "ready_for_handoff"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class MessagePartType(StrEnum):
+    """Type of message part in AI SDK UIMessage format."""
+
+    TEXT = "text"
+    TOOL_CALL = "tool-call"
+    TOOL_RESULT = "tool-result"
+    REASONING = "reasoning"
+
+
+class MessageRole(StrEnum):
+    """Role of message sender."""
+
+    USER = "user"
+    ASSISTANT = "assistant"
 
 
 class MessageUsage(BaseModel):
@@ -83,7 +106,7 @@ class MessagePart(BaseModel):
         result: Result returned from tool execution.
     """
 
-    type: Literal["text", "tool-call", "tool-result", "reasoning"]
+    type: MessagePartType
     text: str | None = None
     tool_call_id: str | None = None
     tool_name: str | None = None
@@ -109,7 +132,7 @@ class Message(BaseModel):
     id: str
     session_id: str
     sequence: int
-    role: Literal["user", "assistant"]
+    role: MessageRole
     content: str
     parts: list[MessagePart] | None = None
     usage: MessageUsage | None = None

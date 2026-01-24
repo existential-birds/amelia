@@ -87,7 +87,7 @@ class WorkflowRepository:
     async def get_by_worktree(
         self,
         worktree_path: str,
-        statuses: tuple[WorkflowStatus, ...] = ("in_progress", "blocked"),
+        statuses: tuple[WorkflowStatus, ...] = (WorkflowStatus.IN_PROGRESS, WorkflowStatus.BLOCKED),
     ) -> ServerExecutionState | None:
         """Get workflow for a worktree matching specified statuses.
 
