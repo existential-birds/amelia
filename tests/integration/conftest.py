@@ -143,7 +143,7 @@ def make_execution_state(
 
     # Use sentinel to distinguish between "not provided" and "explicitly None"
     resolved_issue: Issue | None = (
-        make_issue() if issue is _NOT_PROVIDED else issue  # type: ignore[assignment]
+        make_issue() if issue is _NOT_PROVIDED else issue  # type: ignore[assignment]  # Sentinel pattern: _NOT_PROVIDED type not narrowed
     )
 
     return ImplementationState(

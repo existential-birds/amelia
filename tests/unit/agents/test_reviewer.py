@@ -103,7 +103,7 @@ class TestReviewItem:
                 title="Test",
                 file_path="test.py",
                 line=1,
-                severity=severity,  # type: ignore[arg-type]
+                severity=severity,  # type: ignore[arg-type]  # Testing valid Literal values via iteration
                 issue="Issue",
                 why="Why",
                 fix="Fix",
@@ -120,7 +120,7 @@ class TestStructuredReviewResult:
             result = StructuredReviewResult(
                 summary="Review",
                 items=[],
-                verdict=verdict,  # type: ignore[arg-type]
+                verdict=verdict,  # type: ignore[arg-type]  # Testing valid Literal values via iteration
             )
             assert result.verdict == verdict
 

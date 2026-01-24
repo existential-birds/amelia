@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 from uuid import uuid4
 
 from deepagents.backends.protocol import BackendProtocol, WriteResult
-from deepagents.middleware.filesystem import (  # type: ignore[import-untyped]
+from deepagents.middleware.filesystem import (
     TOOL_GENERATORS,
     FilesystemMiddleware,
     FilesystemState,
@@ -198,7 +198,7 @@ All file paths must start with a /.
 You do NOT have access to: write_file, edit_file, or execute tools."""
 
 
-class BrainstormerFilesystemMiddleware(FilesystemMiddleware):  # type: ignore[misc]
+class BrainstormerFilesystemMiddleware(FilesystemMiddleware):
     """Restricted filesystem middleware for brainstormer agent.
 
     Provides only read operations (ls, read_file, glob, grep) and a

@@ -7,7 +7,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, field_validator
 
-from amelia.core.types import AgentConfig, Profile
+from amelia.core.types import AgentConfig, Profile, validate_driver, validate_tracker
 from amelia.server.database import (
     ProfileRepository,
     SettingsRepository,
@@ -199,7 +199,7 @@ async def create_profile(
     # Convert AgentConfigCreate to AgentConfig
     agents = {
         name: AgentConfig(
-            driver=config.driver,  # type: ignore[arg-type]
+            driver=validate_driver(config.driver),
             model=config.model,
             options=config.options,
         )
@@ -208,7 +208,7 @@ async def create_profile(
 
     profile = Profile(
         name=profile_req.id,
-        tracker=profile_req.tracker,  # type: ignore[arg-type]
+        tracker=validate_tracker(profile_req.tracker),
         working_dir=profile_req.working_dir,
         plan_output_dir=profile_req.plan_output_dir,
         plan_path_pattern=profile_req.plan_path_pattern,

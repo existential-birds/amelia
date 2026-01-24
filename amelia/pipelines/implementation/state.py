@@ -99,8 +99,8 @@ def rebuild_implementation_state() -> None:
     # These dynamic assignments are required for Python's typing.get_type_hints()
     # to resolve forward references when used by LangGraph's StateGraph.
     module = sys.modules[__name__]
-    module.StructuredReviewResult = StructuredReviewResult  # type: ignore[attr-defined]
-    module.EvaluationResult = EvaluationResult  # type: ignore[attr-defined]
+    module.StructuredReviewResult = StructuredReviewResult  # type: ignore[attr-defined]  # Dynamic module injection for LangGraph
+    module.EvaluationResult = EvaluationResult  # type: ignore[attr-defined]  # Dynamic module injection for LangGraph
 
     ImplementationState.model_rebuild(
         _types_namespace={

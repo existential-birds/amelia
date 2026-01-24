@@ -564,7 +564,7 @@ class TestClaudeCliDriverAgentic:
     def test_clear_tool_history(self, driver: ClaudeCliDriver) -> None:
         """Test clearing tool history."""
         # Manually add some history
-        driver.tool_call_history = [MagicMock()]  # type: ignore[list-item]
+        driver.tool_call_history = [MagicMock()]  # type: ignore[list-item]  # Test setup: mock in typed list
         assert len(driver.tool_call_history) == 1
 
         driver.clear_tool_history()

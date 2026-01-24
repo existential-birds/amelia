@@ -37,7 +37,7 @@ class TestImplementationState:
     def test_required_fields_inherited(self) -> None:
         """Should require workflow_id, profile_id, created_at, status."""
         with pytest.raises(ValidationError):
-            ImplementationState()  # type: ignore[call-arg]
+            ImplementationState()  # type: ignore[call-arg]  # Intentional: testing ValidationError on missing required fields
 
     def test_optional_domain_fields(self) -> None:
         """Should have optional domain fields with defaults."""

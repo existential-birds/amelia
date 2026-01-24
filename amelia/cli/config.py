@@ -12,7 +12,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from amelia.core.types import AgentConfig, Profile
+from amelia.core.types import AgentConfig, Profile, validate_driver, validate_tracker
 from amelia.server.config import ServerConfig
 from amelia.server.database import (
     Database,
@@ -82,20 +82,21 @@ def _build_default_agents(driver: str, model: str) -> dict[str, AgentConfig]:
     """Build default agents dict for a profile.
 
     Args:
-        driver: Driver to use for all agents.
+        driver: Driver to use for all agents (validated via validate_driver).
         model: Model to use for all agents.
 
     Returns:
         Dict mapping agent names to AgentConfig.
     """
+    validated_driver = validate_driver(driver)
     return {
-        "architect": AgentConfig(driver=driver, model=model),  # type: ignore[arg-type]
-        "developer": AgentConfig(driver=driver, model=model),  # type: ignore[arg-type]
-        "reviewer": AgentConfig(driver=driver, model=model),  # type: ignore[arg-type]
-        "task_reviewer": AgentConfig(driver=driver, model=model),  # type: ignore[arg-type]
-        "evaluator": AgentConfig(driver=driver, model=model),  # type: ignore[arg-type]
-        "brainstormer": AgentConfig(driver=driver, model=model),  # type: ignore[arg-type]
-        "plan_validator": AgentConfig(driver=driver, model=model),  # type: ignore[arg-type]
+        "architect": AgentConfig(driver=validated_driver, model=model),
+        "developer": AgentConfig(driver=validated_driver, model=model),
+        "reviewer": AgentConfig(driver=validated_driver, model=model),
+        "task_reviewer": AgentConfig(driver=validated_driver, model=model),
+        "evaluator": AgentConfig(driver=validated_driver, model=model),
+        "brainstormer": AgentConfig(driver=validated_driver, model=model),
+        "plan_validator": AgentConfig(driver=validated_driver, model=model),
     }
 
 
@@ -274,7 +275,7 @@ def profile_create(
 
             profile = Profile(
                 name=name,
-                tracker=tracker,  # type: ignore[arg-type]
+                tracker=validate_tracker(tracker),
                 working_dir=working_dir,
                 agents=agents,
             )

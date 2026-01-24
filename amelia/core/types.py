@@ -5,13 +5,49 @@ Pydantic models (RetryConfig, Profile, Settings, Issue) used throughout
 the Amelia agentic coding orchestrator.
 """
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, cast, get_args
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
 DriverType = Literal["cli:claude", "api:openrouter", "cli", "api"]
 TrackerType = Literal["jira", "github", "none", "noop"]
+
+
+def validate_driver(value: str) -> DriverType:
+    """Validate and cast a string to DriverType.
+
+    Args:
+        value: String to validate.
+
+    Returns:
+        The value cast to DriverType.
+
+    Raises:
+        ValueError: If value is not a valid driver type.
+    """
+    if value not in get_args(DriverType):
+        valid = ", ".join(get_args(DriverType))
+        raise ValueError(f"Invalid driver: {value!r}. Valid options: {valid}")
+    return cast(DriverType, value)
+
+
+def validate_tracker(value: str) -> TrackerType:
+    """Validate and cast a string to TrackerType.
+
+    Args:
+        value: String to validate.
+
+    Returns:
+        The value cast to TrackerType.
+
+    Raises:
+        ValueError: If value is not a valid tracker type.
+    """
+    if value not in get_args(TrackerType):
+        valid = ", ".join(get_args(TrackerType))
+        raise ValueError(f"Invalid tracker: {value!r}. Valid options: {valid}")
+    return cast(TrackerType, value)
 
 
 class AgentConfig(BaseModel):

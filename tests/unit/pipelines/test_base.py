@@ -65,7 +65,7 @@ class TestBasePipelineState:
     def test_required_fields(self) -> None:
         """BasePipelineState should require identity fields."""
         with pytest.raises(ValidationError):
-            BasePipelineState()  # type: ignore[call-arg]
+            BasePipelineState()  # type: ignore[call-arg]  # Intentional: testing ValidationError on missing required fields
 
     def test_valid_state_creation(self) -> None:
         """BasePipelineState should accept valid identity fields."""

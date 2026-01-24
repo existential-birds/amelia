@@ -2,7 +2,7 @@
 
 import re
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, cast
 from uuid import uuid4
 
 from loguru import logger
@@ -37,7 +37,7 @@ def normalize_severity(value: str | None, default: Severity = "medium") -> Sever
 
     """
     if value in VALID_SEVERITIES:
-        return value  # type: ignore[return-value]
+        return cast(Severity, value)
     return default
 
 

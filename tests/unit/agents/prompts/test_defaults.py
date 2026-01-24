@@ -10,7 +10,7 @@ def test_prompt_default_is_frozen() -> None:
     """PromptDefault should be immutable."""
     default = PROMPT_DEFAULTS["architect.system"]
     with pytest.raises(ValidationError, match="Instance is frozen"):
-        default.agent = "modified"  # type: ignore[misc]
+        default.agent = "modified"  # type: ignore[misc]  # Intentional: testing frozen model rejects assignment
 
 
 @pytest.mark.parametrize("prompt_id,expected_agent", [

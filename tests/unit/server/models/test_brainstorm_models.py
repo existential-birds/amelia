@@ -72,7 +72,7 @@ class TestBrainstormingSession:
             BrainstormingSession(
                 id="session-123",
                 profile_id="work",
-                status="invalid_status",  # type: ignore[arg-type]
+                status="invalid_status",  # type: ignore[arg-type]  # Intentional: testing ValidationError on invalid Literal value
                 created_at=now,
                 updated_at=now,
             )

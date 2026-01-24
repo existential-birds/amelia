@@ -1,9 +1,10 @@
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
+from langchain_core.runnables.config import RunnableConfig
 
 from amelia.core.types import AgentConfig, Issue, Profile
 from amelia.pipelines.implementation.nodes import call_architect_node
@@ -78,7 +79,7 @@ async def test_call_architect_node_uses_agent_config(
             patch("pathlib.Path.exists", return_value=True),
             patch("pathlib.Path.read_text", return_value="# Plan"),
         ):
-            await call_architect_node(mock_state, config)  # type: ignore[arg-type]
+            await call_architect_node(mock_state, cast(RunnableConfig, config))
 
         # Verify Architect was instantiated with AgentConfig, not driver
         call_args = MockArchitect.call_args
