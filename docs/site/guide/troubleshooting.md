@@ -300,14 +300,16 @@ Plan file not found after architect completed
 
 **Solutions:**
 
-1. Use a model with strong tool-calling capabilities:
+1. Create a new profile with a stronger model:
    ```bash
-   amelia config profile update dev --model "anthropic/claude-sonnet-4"
+   amelia config profile create dev-strong --driver api --model "anthropic/claude-sonnet-4"
+   amelia config profile activate dev-strong
    ```
 
-2. Switch to the CLI driver (recommended for reliability):
+2. Or switch to the CLI driver (recommended for reliability):
    ```bash
-   amelia config profile update dev --driver cli:claude
+   amelia config profile create dev-cli --driver cli
+   amelia config profile activate dev-cli
    ```
 
 **Models known to work well:**
@@ -398,7 +400,7 @@ Error: No profiles configured. Run 'amelia config profile create' to add one.
 1. Create a profile with CLI commands:
    ```bash
    # Create a profile with CLI driver (recommended for getting started)
-   amelia config profile create dev --driver cli:claude --tracker noop
+   amelia config profile create dev --driver cli:claude --tracker none
 
    # Or with API driver
    amelia config profile create dev --driver api:openrouter --model "anthropic/claude-sonnet-4" --tracker github
@@ -434,9 +436,10 @@ Error: OPENROUTER_API_KEY environment variable not set
    export OPENROUTER_API_KEY=sk-...
    ```
 
-2. Or switch to CLI driver (no API key needed):
+2. Or create a CLI-based profile (no API key needed):
    ```bash
-   amelia config profile update dev --driver cli:claude
+   amelia config profile create dev-cli --driver cli
+   amelia config profile activate dev-cli
    ```
 
 ### Tracker authentication failed
@@ -470,7 +473,8 @@ gh auth login
 
 **For testing without real tracker:**
 ```bash
-amelia config profile update test --tracker noop
+amelia config profile create test --driver cli --tracker none
+amelia config profile activate test
 ```
 
 ### Issue not found
@@ -491,12 +495,13 @@ Error: Issue 'PROJ-999' not found
 
 2. Check tracker authentication (see above)
 
-3. For testing, use `noop` tracker:
+3. For testing, use `none` tracker:
    ```bash
-   amelia config profile update test --tracker noop
+   amelia config profile create test --driver cli --tracker none
+   amelia config profile activate test
    ```
 
-   The `noop` tracker creates mock issues automatically for any ID.
+   The `none` tracker creates mock issues automatically for any ID.
 
 ---
 
@@ -605,7 +610,7 @@ await file_writer.write("/absolute/path/in/project/file.md", content)
 **Checklist:**
 1. Dependencies installed: `uv sync`
 2. Profile created: `amelia config profile create dev --driver cli:claude --activate`
-3. Tracker configured (or use `--tracker noop`)
+3. Tracker configured (or use `--tracker none`)
 4. Driver credentials set (or use `cli:claude`)
 5. Server started: `amelia dev`
 

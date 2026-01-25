@@ -48,7 +48,7 @@ amelia config profile create my-profile \
 |------|-------|-------------|
 | `--driver` | `-d` | LLM driver (e.g., `cli:claude`, `api:openrouter`) |
 | `--model` | `-m` | Model name (required for API drivers) |
-| `--tracker` | `-t` | Issue tracker (`noop`, `github`, `jira`) |
+| `--tracker` | `-t` | Issue tracker (`none`, `github`, `jira`) |
 | `--working-dir` | `-w` | Working directory for agent execution |
 | `--activate` | `-a` | Set as active profile after creation |
 
@@ -100,8 +100,7 @@ Where Amelia fetches issue details from.
 |-------|-------------|--------------|
 | `github` | GitHub issues | `gh` CLI authenticated (`gh auth login`) |
 | `jira` | Jira issues | `JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN` env vars |
-| `noop` | No tracker | None (use `--task` for ad-hoc tasks) |
-| `none` | Alias for `noop` | None |
+| `none` | No tracker | None (use `--task` for ad-hoc tasks) |
 
 ### Working Directory
 
@@ -173,14 +172,14 @@ amelia config server set <key> <value>
 | `checkpoint_path` | path | `~/.amelia/checkpoints.db` | Checkpoint database location |
 | `websocket_idle_timeout_seconds` | float | `300.0` | WebSocket idle timeout |
 | `workflow_start_timeout_seconds` | float | `60.0` | Workflow start timeout |
-| `max_concurrent_workflows` | int | `5` | Max concurrent workflows |
+| `max_concurrent` | int | `5` | Max concurrent workflows |
 | `stream_tool_results` | bool | `false` | Stream tool results to dashboard |
 
 Example:
 
 ```bash
 # Allow more concurrent workflows
-amelia config server set max_concurrent_workflows 10
+amelia config server set max_concurrent 10
 
 # Enable tool result streaming for debugging
 amelia config server set stream_tool_results true

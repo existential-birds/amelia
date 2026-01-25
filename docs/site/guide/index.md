@@ -18,7 +18,7 @@ Install, configure, and run your first multi-agent workflow in under five minute
 2. **Create a profile**:
    ```bash
    # Create a profile
-   amelia config profile create dev --driver cli:claude --tracker noop --activate
+   amelia config profile create dev --driver cli:claude --tracker none --activate
    ```
 
 3. **Run your first workflow**:
