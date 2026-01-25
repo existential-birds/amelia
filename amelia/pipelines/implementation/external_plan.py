@@ -41,14 +41,26 @@ async def import_external_plan(
 
     Raises:
         FileNotFoundError: If plan_file doesn't exist.
-        ValueError: If validation fails or content is empty.
+        ValueError: If validation fails, content is empty, or path traversal detected.
     """
+    # Establish working directory as security boundary
+    working_dir = Path(profile.working_dir) if profile.working_dir else Path(".")
+    working_dir = working_dir.expanduser().resolve()
+
     # Resolve content from file or use inline
     if plan_file is not None:
         plan_path = Path(plan_file)
         if not plan_path.is_absolute():
-            working_dir = Path(profile.working_dir) if profile.working_dir else Path(".")
             plan_path = working_dir / plan_file
+        plan_path = plan_path.expanduser().resolve()
+
+        # Validate plan_path is within working directory (prevent path traversal)
+        try:
+            plan_path.relative_to(working_dir)
+        except ValueError:
+            raise ValueError(
+                f"Plan file '{plan_file}' resolves outside working directory"
+            ) from None
 
         if not plan_path.exists():
             raise FileNotFoundError(f"Plan file not found: {plan_path}")
@@ -61,8 +73,17 @@ async def import_external_plan(
     if not content.strip():
         raise ValueError("Plan content is empty")
 
+    # Validate target_path is within working directory (prevent path traversal)
+    target_path = target_path.expanduser().resolve()
+    try:
+        target_path.relative_to(working_dir)
+    except ValueError:
+        raise ValueError(
+            f"Target path '{target_path}' resolves outside working directory"
+        ) from None
+
     # Write to target path
-    target_path.parent.mkdir(parents=True, exist_ok=True)
+    await asyncio.to_thread(target_path.parent.mkdir, parents=True, exist_ok=True)
     await asyncio.to_thread(target_path.write_text, content)
 
     logger.info(

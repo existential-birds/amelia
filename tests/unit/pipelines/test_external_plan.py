@@ -45,7 +45,8 @@ Create the auth module.
 """
         plan_file.write_text(plan_content)
 
-        target_path = tmp_path / "output" / "plan.md"
+        # Target path must be within working directory (security constraint)
+        target_path = worktree / "output" / "plan.md"
 
         with patch(
             "amelia.pipelines.implementation.external_plan.extract_structured"
@@ -76,6 +77,10 @@ Create the auth module.
         """Import plan from inline content writes and validates."""
         from amelia.pipelines.implementation.external_plan import import_external_plan
 
+        # Create worktree directory
+        worktree = Path(mock_profile.working_dir)
+        worktree.mkdir(parents=True, exist_ok=True)
+
         plan_content = """# Implementation Plan
 
 **Goal:** Fix bug
@@ -84,7 +89,8 @@ Create the auth module.
 
 Fix it.
 """
-        target_path = tmp_path / "output" / "plan.md"
+        # Target path must be within working directory (security constraint)
+        target_path = worktree / "output" / "plan.md"
 
         with patch(
             "amelia.pipelines.implementation.external_plan.extract_structured"
@@ -112,11 +118,17 @@ Fix it.
         """Import with non-existent file raises FileNotFoundError."""
         from amelia.pipelines.implementation.external_plan import import_external_plan
 
-        target_path = tmp_path / "output" / "plan.md"
+        # Create worktree directory
+        worktree = Path(mock_profile.working_dir)
+        worktree.mkdir(parents=True, exist_ok=True)
 
+        # Target path must be within working directory (security constraint)
+        target_path = worktree / "output" / "plan.md"
+
+        # Non-existent file within worktree
         with pytest.raises(FileNotFoundError, match="Plan file not found"):
             await import_external_plan(
-                plan_file="/nonexistent/plan.md",
+                plan_file="nonexistent/plan.md",  # Relative to worktree
                 plan_content=None,
                 target_path=target_path,
                 profile=mock_profile,
@@ -129,7 +141,12 @@ Fix it.
         """Import with empty content raises ValueError."""
         from amelia.pipelines.implementation.external_plan import import_external_plan
 
-        target_path = tmp_path / "output" / "plan.md"
+        # Create worktree directory
+        worktree = Path(mock_profile.working_dir)
+        worktree.mkdir(parents=True, exist_ok=True)
+
+        # Target path must be within working directory (security constraint)
+        target_path = worktree / "output" / "plan.md"
 
         with pytest.raises(ValueError, match="Plan content is empty"):
             await import_external_plan(
@@ -162,7 +179,8 @@ Fix it.
             },
         )
 
-        target_path = tmp_path / "output" / "plan.md"
+        # Target path must be within working directory (security constraint)
+        target_path = worktree / "output" / "plan.md"
 
         with patch(
             "amelia.pipelines.implementation.external_plan.extract_structured"
@@ -189,6 +207,10 @@ Fix it.
         """Import uses fallback extraction when LLM extraction fails."""
         from amelia.pipelines.implementation.external_plan import import_external_plan
 
+        # Create worktree directory
+        worktree = Path(mock_profile.working_dir)
+        worktree.mkdir(parents=True, exist_ok=True)
+
         plan_content = """# Implementation Plan
 
 **Goal:** Build feature
@@ -199,7 +221,8 @@ Create: `src/feature.py`
 
 Content here.
 """
-        target_path = tmp_path / "output" / "plan.md"
+        # Target path must be within working directory (security constraint)
+        target_path = worktree / "output" / "plan.md"
 
         with patch(
             "amelia.pipelines.implementation.external_plan.extract_structured"
@@ -221,3 +244,77 @@ Content here.
         # Fallback should extract key files from Create: pattern
         assert "src/feature.py" in result["key_files"]
         assert result["total_tasks"] == 1
+
+    async def test_import_plan_file_path_traversal_blocked(
+        self, tmp_path: Path, mock_profile: Profile
+    ) -> None:
+        """Import rejects plan_file that resolves outside working directory."""
+        from amelia.pipelines.implementation.external_plan import import_external_plan
+
+        # Create worktree directory
+        worktree = Path(mock_profile.working_dir)
+        worktree.mkdir(parents=True, exist_ok=True)
+
+        # Target path within working directory
+        target_path = worktree / "output" / "plan.md"
+
+        # Attempt path traversal with ..
+        with pytest.raises(ValueError, match="resolves outside working directory"):
+            await import_external_plan(
+                plan_file="../../../etc/passwd",
+                plan_content=None,
+                target_path=target_path,
+                profile=mock_profile,
+                workflow_id="wf-001",
+            )
+
+    async def test_import_target_path_traversal_blocked(
+        self, tmp_path: Path, mock_profile: Profile
+    ) -> None:
+        """Import rejects target_path that resolves outside working directory."""
+        from amelia.pipelines.implementation.external_plan import import_external_plan
+
+        # Create worktree directory
+        worktree = Path(mock_profile.working_dir)
+        worktree.mkdir(parents=True, exist_ok=True)
+
+        # Attempt path traversal with target_path outside worktree
+        target_path = tmp_path / "outside" / "plan.md"
+
+        with pytest.raises(ValueError, match="resolves outside working directory"):
+            await import_external_plan(
+                plan_file=None,
+                plan_content="# Plan\n\n### Task 1: Do thing",
+                target_path=target_path,
+                profile=mock_profile,
+                workflow_id="wf-001",
+            )
+
+    async def test_import_absolute_plan_file_outside_worktree_blocked(
+        self, tmp_path: Path, mock_profile: Profile
+    ) -> None:
+        """Import rejects absolute plan_file path outside working directory."""
+        from amelia.pipelines.implementation.external_plan import import_external_plan
+
+        # Create worktree directory
+        worktree = Path(mock_profile.working_dir)
+        worktree.mkdir(parents=True, exist_ok=True)
+
+        # Create plan file outside worktree
+        outside_dir = tmp_path / "outside"
+        outside_dir.mkdir()
+        outside_plan = outside_dir / "plan.md"
+        outside_plan.write_text("# Plan\n\n### Task 1: Do thing")
+
+        # Target path within working directory
+        target_path = worktree / "output" / "plan.md"
+
+        # Attempt to read file outside worktree
+        with pytest.raises(ValueError, match="resolves outside working directory"):
+            await import_external_plan(
+                plan_file=str(outside_plan),
+                plan_content=None,
+                target_path=target_path,
+                profile=mock_profile,
+                workflow_id="wf-001",
+            )
