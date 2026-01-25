@@ -74,6 +74,10 @@ class ImplementationState(BasePipelineState):
     review_pass: int = 0
     max_review_passes: int = 3
 
+    # External plan tracking
+    external_plan: bool = False
+    """True if plan was imported externally (bypasses Architect)."""
+
 
 def rebuild_implementation_state() -> None:
     """Rebuild ImplementationState to resolve forward references.
