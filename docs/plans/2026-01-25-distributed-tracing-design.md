@@ -205,10 +205,15 @@ class BraintrustTracingProvider:
         parent: SpanContext | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> SpanContext:
-        parent_span = (parent or get_current_span()).provider_data
-        span = parent_span.start_span(name=name, **(metadata or {}))
+        resolved_parent = parent or get_current_span()
+        if resolved_parent is not None:
+            parent_provider = resolved_parent.provider_data
+            span = parent_provider.start_span(name=name, **(metadata or {}))
+        else:
+            # No parent context available - start a new root span
+            span = self._logger.start_span(name=name, **(metadata or {}))
         return SpanContext(
-            trace_id=parent.trace_id if parent else span.id,
+            trace_id=resolved_parent.trace_id if resolved_parent else span.id,
             span_id=span.id,
             provider_data=span,
         )
