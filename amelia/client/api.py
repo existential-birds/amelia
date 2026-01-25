@@ -154,7 +154,7 @@ class AmeliaClient:
             issue_id: Issue identifier (e.g., "ISSUE-123")
             worktree_path: Absolute path to git worktree
             profile: Optional profile name for configuration
-            task_title: Optional task title for noop tracker (bypasses issue lookup)
+            task_title: Optional task title for none tracker (bypasses issue lookup)
             task_description: Optional task description (requires task_title)
             start: Whether to start workflow immediately (default True)
             plan_now: Whether to run Architect before queueing (requires start=False)

@@ -13,7 +13,7 @@ def create_reviewer(mock_driver: MagicMock) -> Callable[..., Reviewer]:
     """Factory fixture to create Reviewer with mock driver injected."""
     def _create(prompts: dict[str, str] | None = None) -> Reviewer:
         with patch("amelia.agents.reviewer.get_driver", return_value=mock_driver):
-            config = AgentConfig(driver="cli:claude", model="sonnet", options={})
+            config = AgentConfig(driver="cli", model="sonnet", options={})
             return Reviewer(config, prompts=prompts)
     return _create
 

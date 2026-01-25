@@ -46,10 +46,10 @@ def mock_profile(tmp_path: Path) -> Profile:
         working_dir=str(tmp_path),
         plan_path_pattern="{date}-{issue_key}.md",
         agents={
-            "architect": AgentConfig(driver="api:openrouter", model="gpt-4"),
-            "developer": AgentConfig(driver="api:openrouter", model="gpt-4"),
-            "reviewer": AgentConfig(driver="api:openrouter", model="gpt-4"),
-            "plan_validator": AgentConfig(driver="api:openrouter", model="gpt-4o-mini"),
+            "architect": AgentConfig(driver="api", model="gpt-4"),
+            "developer": AgentConfig(driver="api", model="gpt-4"),
+            "reviewer": AgentConfig(driver="api", model="gpt-4"),
+            "plan_validator": AgentConfig(driver="api", model="gpt-4o-mini"),
         },
     )
 
@@ -179,10 +179,10 @@ class TestPlanValidatorNode:
             working_dir=str(tmp_path),
             plan_path_pattern="{date}-{issue_key}.md",
             agents={
-                "architect": AgentConfig(driver="api:openrouter", model="gpt-4"),
-                "developer": AgentConfig(driver="api:openrouter", model="gpt-4"),
-                "reviewer": AgentConfig(driver="api:openrouter", model="gpt-4"),
-                "plan_validator": AgentConfig(driver="api:openrouter", model="gpt-4o-mini"),
+                "architect": AgentConfig(driver="api", model="gpt-4"),
+                "developer": AgentConfig(driver="api", model="gpt-4"),
+                "reviewer": AgentConfig(driver="api", model="gpt-4"),
+                "plan_validator": AgentConfig(driver="api", model="gpt-4o-mini"),
             },
         )
 
@@ -207,7 +207,7 @@ class TestPlanValidatorNode:
         mock_extract.assert_called_once()
         call_kwargs = mock_extract.call_args.kwargs
         assert call_kwargs["model"] == "gpt-4o-mini"
-        assert call_kwargs["driver_type"] == "api:openrouter"
+        assert call_kwargs["driver_type"] == "api"
 
 
 class TestExtractTaskCount:
@@ -324,13 +324,13 @@ class TestPlanValidatorNodeTotalTasks:
     def mock_profile(self) -> Profile:
         return Profile(
             name="test",
-            tracker="noop",
+            tracker="none",
             working_dir="/tmp/test",
             agents={
-                "architect": AgentConfig(driver="api:openrouter", model="anthropic/claude-3.5-sonnet"),
-                "developer": AgentConfig(driver="api:openrouter", model="anthropic/claude-3.5-sonnet"),
-                "reviewer": AgentConfig(driver="api:openrouter", model="anthropic/claude-3.5-sonnet"),
-                "plan_validator": AgentConfig(driver="api:openrouter", model="anthropic/claude-3.5-sonnet"),
+                "architect": AgentConfig(driver="api", model="anthropic/claude-3.5-sonnet"),
+                "developer": AgentConfig(driver="api", model="anthropic/claude-3.5-sonnet"),
+                "reviewer": AgentConfig(driver="api", model="anthropic/claude-3.5-sonnet"),
+                "plan_validator": AgentConfig(driver="api", model="anthropic/claude-3.5-sonnet"),
             },
         )
 
@@ -376,14 +376,14 @@ Do second thing.
 
         profile = Profile(
             name="test",
-            tracker="noop",
+            tracker="none",
             working_dir=str(tmp_path),
             plan_path_pattern="docs/plans/test-plan.md",
             agents={
-                "architect": AgentConfig(driver="api:openrouter", model="anthropic/claude-3.5-sonnet"),
-                "developer": AgentConfig(driver="api:openrouter", model="anthropic/claude-3.5-sonnet"),
-                "reviewer": AgentConfig(driver="api:openrouter", model="anthropic/claude-3.5-sonnet"),
-                "plan_validator": AgentConfig(driver="api:openrouter", model="anthropic/claude-3.5-sonnet"),
+                "architect": AgentConfig(driver="api", model="anthropic/claude-3.5-sonnet"),
+                "developer": AgentConfig(driver="api", model="anthropic/claude-3.5-sonnet"),
+                "reviewer": AgentConfig(driver="api", model="anthropic/claude-3.5-sonnet"),
+                "plan_validator": AgentConfig(driver="api", model="anthropic/claude-3.5-sonnet"),
             },
         )
         config: RunnableConfig = {
@@ -441,14 +441,14 @@ Do implementation.
 
         profile = Profile(
             name="test",
-            tracker="noop",
+            tracker="none",
             working_dir=str(tmp_path),
             plan_path_pattern="docs/plans/simple-plan.md",
             agents={
-                "architect": AgentConfig(driver="api:openrouter", model="anthropic/claude-3.5-sonnet"),
-                "developer": AgentConfig(driver="api:openrouter", model="anthropic/claude-3.5-sonnet"),
-                "reviewer": AgentConfig(driver="api:openrouter", model="anthropic/claude-3.5-sonnet"),
-                "plan_validator": AgentConfig(driver="api:openrouter", model="anthropic/claude-3.5-sonnet"),
+                "architect": AgentConfig(driver="api", model="anthropic/claude-3.5-sonnet"),
+                "developer": AgentConfig(driver="api", model="anthropic/claude-3.5-sonnet"),
+                "reviewer": AgentConfig(driver="api", model="anthropic/claude-3.5-sonnet"),
+                "plan_validator": AgentConfig(driver="api", model="anthropic/claude-3.5-sonnet"),
             },
         )
         config: RunnableConfig = {

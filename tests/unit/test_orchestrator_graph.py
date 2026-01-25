@@ -181,14 +181,14 @@ class TestRouteAfterTaskReview:
     def mock_profile_task_review(self) -> Profile:
         return Profile(
             name="test",
-            tracker="noop",
+            tracker="none",
             working_dir="/tmp/test",
             agents={
-                "architect": AgentConfig(driver="cli:claude", model="sonnet"),
-                "developer": AgentConfig(driver="cli:claude", model="sonnet"),
-                "reviewer": AgentConfig(driver="cli:claude", model="sonnet"),
+                "architect": AgentConfig(driver="cli", model="sonnet"),
+                "developer": AgentConfig(driver="cli", model="sonnet"),
+                "reviewer": AgentConfig(driver="cli", model="sonnet"),
                 "task_reviewer": AgentConfig(
-                    driver="cli:claude", model="sonnet", options={"max_iterations": 3}
+                    driver="cli", model="sonnet", options={"max_iterations": 3}
                 ),
             },
         )
@@ -285,14 +285,14 @@ class TestRouteAfterTaskReview:
         """Should respect task_reviewer agent's options.max_iterations setting."""
         profile = Profile(
             name="test",
-            tracker="noop",
+            tracker="none",
             working_dir="/tmp/test",
             agents={
-                "architect": AgentConfig(driver="cli:claude", model="sonnet"),
-                "developer": AgentConfig(driver="cli:claude", model="sonnet"),
-                "reviewer": AgentConfig(driver="cli:claude", model="sonnet"),
+                "architect": AgentConfig(driver="cli", model="sonnet"),
+                "developer": AgentConfig(driver="cli", model="sonnet"),
+                "reviewer": AgentConfig(driver="cli", model="sonnet"),
                 "task_reviewer": AgentConfig(
-                    driver="cli:claude", model="sonnet", options={"max_iterations": 10}
+                    driver="cli", model="sonnet", options={"max_iterations": 10}
                 ),
             },
         )
@@ -429,13 +429,13 @@ class TestReviewerNodeTaskIteration:
         )
         profile = Profile(
             name="test",
-            tracker="noop",
+            tracker="none",
             working_dir="/tmp/test",
             agents={
-                "architect": AgentConfig(driver="cli:claude", model="sonnet"),
-                "developer": AgentConfig(driver="cli:claude", model="sonnet"),
-                "reviewer": AgentConfig(driver="cli:claude", model="sonnet"),
-                "task_reviewer": AgentConfig(driver="cli:claude", model="sonnet"),
+                "architect": AgentConfig(driver="cli", model="sonnet"),
+                "developer": AgentConfig(driver="cli", model="sonnet"),
+                "reviewer": AgentConfig(driver="cli", model="sonnet"),
+                "task_reviewer": AgentConfig(driver="cli", model="sonnet"),
             },
         )
         config: RunnableConfig = {"configurable": {"profile": profile, "thread_id": "test-wf"}}

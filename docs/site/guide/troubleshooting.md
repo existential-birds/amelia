@@ -304,7 +304,7 @@ Plan file not found after architect completed
    ```yaml
    profiles:
      dev:
-       driver: api:openrouter
+       driver: api
        model: "anthropic/claude-sonnet-4"  # Reliable tool calling
    ```
 
@@ -312,7 +312,7 @@ Plan file not found after architect completed
    ```yaml
    profiles:
      dev:
-       driver: cli:claude  # Uses Claude CLI with native tool support
+       driver: cli  # Uses Claude CLI with native tool support
    ```
 
 **Models known to work well:**
@@ -336,7 +336,7 @@ Agent completed but required tool was never called
 
 **Solution:**
 
-The API driver includes retry logic (up to 3 attempts) and fallback extraction, but some models consistently fail. Use a different model or switch to `cli:claude`.
+The API driver includes retry logic (up to 3 attempts) and fallback extraction, but some models consistently fail. Use a different model or switch to `cli`.
 
 ---
 
@@ -385,7 +385,7 @@ Error: Profile 'production' not found in settings.
    profiles:
      dev:
        name: dev
-       driver: cli:claude
+       driver: cli
        tracker: github
    ```
 
@@ -412,8 +412,8 @@ FileNotFoundError: Configuration file not found at settings.amelia.yaml
    profiles:
      dev:
        name: dev
-       driver: cli:claude
-       tracker: noop
+       driver: cli
+       tracker: none
    EOF
    ```
 
@@ -434,13 +434,13 @@ FileNotFoundError: Configuration file not found at settings.amelia.yaml
 Error: OPENROUTER_API_KEY environment variable not set
 ```
 
-**Cause:** Using `driver: api:openrouter` without credentials.
+**Cause:** Using `driver: api` without credentials.
 
 **Solutions:**
 
 **Driver → Required Credentials:**
-- `api:openrouter` → `OPENROUTER_API_KEY`
-- `cli:claude` → Claude CLI authenticated (`claude auth login`)
+- `api` → `OPENROUTER_API_KEY`
+- `cli` → Claude CLI authenticated (`claude auth login`)
 
 1. Set API key:
    ```bash
@@ -451,7 +451,7 @@ Error: OPENROUTER_API_KEY environment variable not set
    ```yaml
    profiles:
      dev:
-       driver: cli:claude
+       driver: cli
    ```
 
 ### Tracker authentication failed
@@ -467,7 +467,7 @@ ConfigurationError: Missing required JIRA environment variables: JIRA_BASE_URL
 |---------|-------------------|
 | `jira` | `JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN` |
 | `github` | `gh` CLI authenticated (`gh auth login`) |
-| `noop` | None (for testing) |
+| `none` | None (for testing) |
 
 **Solutions:**
 
@@ -487,7 +487,7 @@ gh auth login
 ```yaml
 profiles:
   test:
-    tracker: noop
+    tracker: none
 ```
 
 ### Issue not found
@@ -508,14 +508,14 @@ Error: Issue 'PROJ-999' not found
 
 2. Check tracker authentication (see above)
 
-3. For testing, use `noop` tracker:
+3. For testing, use `none` tracker:
    ```yaml
    profiles:
      test:
-       tracker: noop
+       tracker: none
    ```
 
-   The `noop` tracker creates mock issues automatically for any ID.
+   The `none` tracker creates mock issues automatically for any ID.
 
 ---
 
@@ -624,8 +624,8 @@ await file_writer.write("/absolute/path/in/project/file.md", content)
 **Checklist:**
 1. Dependencies installed: `uv sync`
 2. Settings file created: `settings.amelia.yaml`
-3. Tracker configured (or use `tracker: noop`)
-4. Driver credentials set (or use `cli:claude`)
+3. Tracker configured (or use `tracker: none`)
+4. Driver credentials set (or use `cli`)
 5. Server started: `amelia dev`
 
 ### Can't start workflow
@@ -634,7 +634,7 @@ await file_writer.write("/absolute/path/in/project/file.md", content)
 1. Server running: `amelia dev`
 2. No existing workflow in worktree: `amelia status`
 3. Valid git repository: `git status`
-4. Issue ID valid (or use `tracker: noop`)
+4. Issue ID valid (or use `tracker: none`)
 
 ### Workflow stuck in pending_approval
 

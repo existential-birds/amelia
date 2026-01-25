@@ -1,7 +1,7 @@
 """Integration tests verifying agents work correctly with multiple drivers.
 
 This module tests that agents (Developer, Reviewer) produce consistent behavior
-regardless of which driver implementation is used (cli:claude, api:openrouter).
+regardless of which driver implementation is used (cli, api).
 These tests replace the low-value static import tests in test_agent_imports.py
 by actually verifying the driver abstraction works at runtime.
 """
@@ -33,12 +33,12 @@ def mock_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
 # Driver configurations for parametrized tests
 DRIVER_CONFIGS = [
     pytest.param(
-        "api:openrouter",
+        "api",
         "openrouter:anthropic/claude-sonnet-4",
         id="api-openrouter",
     ),
     pytest.param(
-        "cli:claude",
+        "cli",
         "sonnet",
         id="cli-claude",
     ),
@@ -58,7 +58,7 @@ class TestDeveloperMultiDriver:
     ) -> None:
         """Developer should collect tool calls regardless of driver type.
 
-        Both cli:claude and api:openrouter drivers yield AgenticMessage objects.
+        Both cli and api drivers yield AgenticMessage objects.
         The Developer agent processes these uniformly - this test verifies that
         the abstraction works correctly for both driver implementations.
         """

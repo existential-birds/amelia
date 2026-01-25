@@ -118,7 +118,7 @@ See [`amelia/pipelines/implementation/nodes.py`](https://github.com/existential-
 
 See [`Profile`](https://github.com/existential-birds/amelia/blob/main/amelia/core/types.py#L37-L72) for the full definition. Key fields:
 
-- `driver`: LLM driver type (`api:openrouter`, `cli:claude`)
+- `driver`: LLM driver type (`api`, `cli`)
 - `model`: LLM model identifier
 - `tracker`: Issue tracker type (`jira`, `github`, `none`)
 - `max_review_iterations`: Maximum review-fix loop iterations
@@ -366,7 +366,7 @@ amelia/
 │   ├── factory.py            # create_tracker()
 │   ├── github.py             # GitHub via gh CLI
 │   ├── jira.py               # Jira REST API
-│   └── noop.py               # Placeholder tracker
+│   └── none.py               # Placeholder tracker
 ├── tools/
 │   ├── git_utils.py          # Git operations (diff, commit, worktree)
 │   └── shell_executor.py     # Simple shell command execution

@@ -20,7 +20,7 @@ async def test_call_developer_node_uses_agent_config(
     profile = mock_profile_factory(
         preset="cli_single",
         agents={
-            "developer": AgentConfig(driver="cli:claude", model="sonnet"),
+            "developer": AgentConfig(driver="cli", model="sonnet"),
         },
     )
 
@@ -55,5 +55,5 @@ async def test_call_developer_node_uses_agent_config(
         assert call_args is not None
         config_arg = call_args[0][0]  # First positional arg
         assert isinstance(config_arg, AgentConfig)
-        assert config_arg.driver == "cli:claude"
+        assert config_arg.driver == "cli"
         assert config_arg.model == "sonnet"

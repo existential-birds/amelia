@@ -525,7 +525,7 @@ class Database:
         await self.execute("""
             CREATE TABLE IF NOT EXISTS profiles (
                 id TEXT PRIMARY KEY,
-                tracker TEXT NOT NULL DEFAULT 'noop',
+                tracker TEXT NOT NULL DEFAULT 'none',
                 working_dir TEXT NOT NULL,
                 plan_output_dir TEXT NOT NULL DEFAULT 'docs/plans',
                 plan_path_pattern TEXT NOT NULL DEFAULT 'docs/plans/{date}-{issue_key}.md',
@@ -539,6 +539,25 @@ class Database:
 
         # Check for old schema with 'driver' column (breaking change migration)
         await self._check_old_profiles_schema()
+
+        # Data migration: Convert legacy type values to new simplified values
+        # TrackerType: 'noop' -> 'none'
+        await self.execute("UPDATE profiles SET tracker = 'none' WHERE tracker = 'noop'")
+
+        # DriverType in agents JSON: 'cli:claude' -> 'cli', 'api:openrouter' -> 'api'
+        await self.execute("""
+            UPDATE profiles
+            SET agents = REPLACE(REPLACE(agents, '"cli:claude"', '"cli"'), '"api:openrouter"', '"api"')
+            WHERE agents LIKE '%cli:claude%' OR agents LIKE '%api:openrouter%'
+        """)
+
+        # DriverType in brainstorm_sessions
+        await self.execute(
+            "UPDATE brainstorm_sessions SET driver_type = 'cli' WHERE driver_type = 'cli:claude'"
+        )
+        await self.execute(
+            "UPDATE brainstorm_sessions SET driver_type = 'api' WHERE driver_type = 'api:openrouter'"
+        )
 
         # Triggers to ensure only one active profile (both INSERT and UPDATE)
         await self.execute("""

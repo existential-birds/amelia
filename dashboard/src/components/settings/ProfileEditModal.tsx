@@ -158,12 +158,12 @@ interface FormData {
 // =============================================================================
 
 const DRIVER_OPTIONS = [
-  { value: 'cli:claude', label: 'Claude CLI', icon: Terminal },
-  { value: 'api:openrouter', label: 'OpenRouter API', icon: Cloud },
+  { value: 'cli', label: 'Claude CLI', icon: Terminal },
+  { value: 'api', label: 'OpenRouter API', icon: Cloud },
 ];
 
 const TRACKER_OPTIONS = [
-  { value: 'noop', label: 'None' },
+  { value: 'none', label: 'None' },
   { value: 'jira', label: 'Jira' },
   { value: 'github', label: 'GitHub' },
 ];
@@ -173,8 +173,8 @@ const CLAUDE_MODELS = ['opus', 'sonnet', 'haiku'] as const;
 
 /** Model options vary by driver */
 const MODEL_OPTIONS_BY_DRIVER: Record<string, readonly string[]> = {
-  'cli:claude': CLAUDE_MODELS,
-  'api:openrouter': [
+  'cli': CLAUDE_MODELS,
+  'api': [
     'qwen/qwen3-coder-flash',
     'minimax/minimax-m2',
     'google/gemini-3-flash-preview',
@@ -195,7 +195,7 @@ const buildDefaultAgents = (): Record<string, AgentFormData> => {
   const agents: Record<string, AgentFormData> = {};
   for (const agent of AGENT_DEFINITIONS) {
     agents[agent.key] = {
-      driver: 'cli:claude',
+      driver: 'cli',
       model: agent.defaultModel,
     };
   }
@@ -204,7 +204,7 @@ const buildDefaultAgents = (): Record<string, AgentFormData> => {
 
 const DEFAULT_FORM_DATA: FormData = {
   id: '',
-  tracker: 'noop',
+  tracker: 'none',
   working_dir: '',
   plan_output_dir: 'docs/plans',
   plan_path_pattern: 'docs/plans/{date}-{issue_key}.md',
@@ -236,7 +236,7 @@ const profileToFormData = (profile: Profile): FormData => {
 
   for (const agent of AGENT_DEFINITIONS) {
     agents[agent.key] = {
-      driver: profile.agents?.[agent.key]?.driver ?? 'cli:claude',
+      driver: profile.agents?.[agent.key]?.driver ?? 'cli',
       model: profile.agents?.[agent.key]?.model ?? agent.defaultModel,
     };
   }
@@ -328,7 +328,7 @@ interface BulkApplyProps {
 }
 
 function BulkApply({ onApply }: BulkApplyProps) {
-  const [driver, setDriver] = useState('cli:claude');
+  const [driver, setDriver] = useState('cli');
   const [model, setModel] = useState('sonnet');
   const [showSuccess, setShowSuccess] = useState(false);
 
@@ -519,7 +519,7 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
   const handleAgentChange = (agentKey: string, field: 'driver' | 'model', value: string) => {
     setFormData((prev) => {
       const nextAgents = { ...prev.agents };
-      const currentAgent = nextAgents[agentKey] ?? { driver: 'cli:claude', model: 'opus' };
+      const currentAgent = nextAgents[agentKey] ?? { driver: 'cli', model: 'opus' };
       nextAgents[agentKey] = { ...currentAgent, [field]: value };
 
       // When driver changes, reset model if not supported
@@ -578,7 +578,7 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
     for (const key of ALL_AGENT_KEYS) {
       const agentConfig = formData.agents[key];
       agents[key] = {
-        driver: agentConfig?.driver ?? 'cli:claude',
+        driver: agentConfig?.driver ?? 'cli',
         model: agentConfig?.model ?? 'opus',
       };
     }
@@ -744,7 +744,7 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
             </div>
             <div className="grid gap-2 grid-cols-1">
               {PRIMARY_AGENTS.map((agent) => {
-                const config = formData.agents[agent.key] ?? { driver: 'cli:claude', model: agent.defaultModel };
+                const config = formData.agents[agent.key] ?? { driver: 'cli', model: agent.defaultModel };
                 return (
                   <AgentCard
                     key={agent.key}
@@ -776,7 +776,7 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
             <CollapsibleContent className="pt-3">
               <div className="grid gap-2 grid-cols-1">
                 {UTILITY_AGENTS.map((agent) => {
-                  const config = formData.agents[agent.key] ?? { driver: 'cli:claude', model: agent.defaultModel };
+                  const config = formData.agents[agent.key] ?? { driver: 'cli', model: agent.defaultModel };
                   return (
                     <AgentCard
                       key={agent.key}

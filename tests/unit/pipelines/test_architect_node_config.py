@@ -15,10 +15,10 @@ from amelia.pipelines.implementation.state import ImplementationState
 def profile_with_agents() -> Profile:
     return Profile(
         name="test",
-        tracker="noop",
+        tracker="none",
         working_dir="/tmp/test",
         agents={
-            "architect": AgentConfig(driver="cli:claude", model="opus"),
+            "architect": AgentConfig(driver="cli", model="opus"),
         },
     )
 
@@ -86,5 +86,5 @@ async def test_call_architect_node_uses_agent_config(
         assert call_args is not None
         config_arg = call_args[0][0]  # First positional arg
         assert isinstance(config_arg, AgentConfig)
-        assert config_arg.driver == "cli:claude"
+        assert config_arg.driver == "cli"
         assert config_arg.model == "opus"

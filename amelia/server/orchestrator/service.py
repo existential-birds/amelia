@@ -292,16 +292,17 @@ class OrchestratorService:
             worktree_path: Resolved worktree path (already validated).
             issue_id: The issue ID to work on.
             profile_name: Optional profile name (defaults to active profile).
-            task_title: Optional task title for noop tracker.
+            task_title: Optional task title for none tracker.
             task_description: Optional task description (defaults to task_title).
             artifact_path: Optional path to design artifact file from brainstorming.
-                Must be a worktree-relative path (e.g., docs/plans/design.md).
+                Can be worktree-relative (e.g., docs/plans/design.md or /docs/plans/design.md)
+                or an absolute path within the worktree.
 
         Returns:
             Tuple of (resolved_path, profile, execution_state).
 
         Raises:
-            ValueError: If profile not found, task_title used with non-noop
+            ValueError: If profile not found, task_title used with non-none
                 tracker, or artifact_path escapes worktree.
             FileNotFoundError: If artifact_path is provided but the file doesn't exist.
         """
@@ -325,10 +326,10 @@ class OrchestratorService:
 
         # Fetch issue from tracker (or construct from task_title)
         if task_title is not None:
-            # Validate that tracker is noop when using task_title
-            if profile.tracker not in ("noop", "none"):
+            # Validate that tracker is none when using task_title
+            if profile.tracker != "none":
                 raise ValueError(
-                    f"task_title can only be used with noop tracker, "
+                    f"task_title can only be used with none tracker, "
                     f"but profile '{profile.name}' uses tracker '{profile.tracker}'"
                 )
             issue = Issue(
@@ -349,11 +350,24 @@ class OrchestratorService:
         if artifact_path:
             # Resolve worktree path to canonical form for validation
             worktree_resolved = Path(worktree_path).resolve()
+            artifact_as_path = Path(artifact_path)
 
-            # Always treat artifact_path as worktree-relative, stripping any
-            # leading slashes to prevent absolute path injection
-            relative_artifact = artifact_path.lstrip("/")
-            full_artifact_path = (worktree_resolved / relative_artifact).resolve()
+            # Handle both absolute and relative paths
+            if artifact_as_path.is_absolute():
+                resolved_artifact = artifact_as_path.resolve()
+                # Check if absolute path is within worktree (e.g., from LLM write_design_doc)
+                try:
+                    resolved_artifact.relative_to(worktree_resolved)
+                    # Path is within worktree, use it directly
+                    full_artifact_path = resolved_artifact
+                except ValueError:
+                    # Absolute path outside worktree - treat as worktree-relative
+                    # (strip leading slash and resolve against worktree)
+                    relative_artifact = artifact_path.lstrip("/")
+                    full_artifact_path = (worktree_resolved / relative_artifact).resolve()
+            else:
+                # Relative path: resolve against worktree
+                full_artifact_path = (worktree_resolved / artifact_path).resolve()
 
             # Validate the resolved path stays within the worktree
             # (prevents traversal via .. sequences or symlinks)

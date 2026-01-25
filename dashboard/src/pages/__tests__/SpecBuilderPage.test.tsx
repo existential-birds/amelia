@@ -121,7 +121,7 @@ describe("SpecBuilderPage", () => {
     };
     const mockProfile = {
       name: "test",
-      driver: "cli:claude",
+      driver: "cli",
       model: "sonnet",
     };
     vi.mocked(brainstormApi.createSession).mockResolvedValue({

@@ -52,10 +52,10 @@ def mock_repository() -> MagicMock:
 def mock_profile_repo() -> AsyncMock:
     """Create mock profile repository."""
     repo = AsyncMock()
-    agent_config = AgentConfig(driver="cli:claude", model="sonnet")
+    agent_config = AgentConfig(driver="cli", model="sonnet")
     default_profile = Profile(
         name="test",
-        tracker="noop",
+        tracker="none",
         working_dir="/default/repo",
         agents={
             "architect": agent_config,

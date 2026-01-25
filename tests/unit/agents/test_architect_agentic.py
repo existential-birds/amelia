@@ -18,7 +18,7 @@ class TestArchitectInitWithAgentConfig:
 
     def test_architect_init_with_agent_config(self):
         """Architect should accept AgentConfig and create its own driver."""
-        config = AgentConfig(driver="cli:claude", model="sonnet")
+        config = AgentConfig(driver="cli", model="sonnet")
 
         with patch("amelia.agents.architect.get_driver") as mock_get_driver:
             mock_driver = MagicMock()
@@ -26,7 +26,7 @@ class TestArchitectInitWithAgentConfig:
 
             architect = Architect(config)
 
-            mock_get_driver.assert_called_once_with("cli:claude", model="sonnet")
+            mock_get_driver.assert_called_once_with("cli", model="sonnet")
             assert architect.driver is mock_driver
             assert architect.options == {}
 
@@ -62,7 +62,7 @@ class TestArchitectPlanAsyncGenerator:
     ) -> None:
         """plan() should return an async iterator."""
         state, profile = state_with_issue
-        config = AgentConfig(driver="cli:claude", model="sonnet")
+        config = AgentConfig(driver="cli", model="sonnet")
 
         # Mock empty stream
         async def mock_stream(*args: Any, **kwargs: Any) -> AsyncIterator[AgenticMessage]:
@@ -89,7 +89,7 @@ class TestArchitectPlanAsyncGenerator:
     ) -> None:
         """plan() should yield (ImplementationState, WorkflowEvent) tuples."""
         state, profile = state_with_issue
-        config = AgentConfig(driver="cli:claude", model="sonnet")
+        config = AgentConfig(driver="cli", model="sonnet")
 
         async def mock_stream(*args: Any, **kwargs: Any) -> AsyncIterator[AgenticMessage]:
             yield AgenticMessage(
@@ -140,7 +140,7 @@ class TestArchitectCwdPassing:
             profile_id="test",
             issue=issue,
         )
-        config = AgentConfig(driver="cli:claude", model="sonnet")
+        config = AgentConfig(driver="cli", model="sonnet")
 
         # Track the actual cwd passed to execute_agentic
         captured_cwd = None
@@ -187,7 +187,7 @@ class TestArchitectToolCallAccumulation:
             profile_id="test",
             issue=issue,
         )
-        config = AgentConfig(driver="cli:claude", model="sonnet")
+        config = AgentConfig(driver="cli", model="sonnet")
 
         async def mock_stream(*args, **kwargs):
             yield AgenticMessage(

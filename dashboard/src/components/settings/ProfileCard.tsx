@@ -85,7 +85,7 @@ export function ProfileCard({ profile, onEdit, onDelete, onActivate }: ProfileCa
   const primaryAgents = ['architect', 'developer', 'reviewer'] as const;
   const agentConfigs = primaryAgents.map(key => ({
     key,
-    driver: profile.agents?.[key]?.driver ?? 'cli:claude',
+    driver: profile.agents?.[key]?.driver ?? 'cli',
     model: profile.agents?.[key]?.model ?? 'unknown',
   }));
 

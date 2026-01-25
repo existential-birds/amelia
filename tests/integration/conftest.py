@@ -66,9 +66,9 @@ def make_issue(
 
 def make_profile(
     name: str = "test",
-    driver: DriverType = "api:openrouter",
+    driver: DriverType = "api",
     model: str = "anthropic/claude-sonnet-4-20250514",
-    tracker: TrackerType = "noop",
+    tracker: TrackerType = "none",
     plan_output_dir: str | None = None,
     validator_model: str | None = None,
     agents: dict[str, AgentConfig] | None = None,
@@ -395,13 +395,13 @@ def mock_profile_repo() -> AsyncMock:
     # ProfileRepository returns Profile objects, not ProfileRecord
     profile = Profile(
         name="test",
-        tracker="noop",
+        tracker="none",
         working_dir="/tmp/test",
         agents={
-            "architect": AgentConfig(driver="cli:claude", model="sonnet"),
-            "developer": AgentConfig(driver="cli:claude", model="sonnet"),
-            "reviewer": AgentConfig(driver="cli:claude", model="sonnet"),
-            "plan_validator": AgentConfig(driver="cli:claude", model="haiku"),
+            "architect": AgentConfig(driver="cli", model="sonnet"),
+            "developer": AgentConfig(driver="cli", model="sonnet"),
+            "reviewer": AgentConfig(driver="cli", model="sonnet"),
+            "plan_validator": AgentConfig(driver="cli", model="haiku"),
         },
     )
     repo.get_profile.return_value = profile

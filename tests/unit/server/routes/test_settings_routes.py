@@ -122,9 +122,9 @@ def profile_client(profile_app):
 
 def make_test_profile(
     name: str = "test-profile",
-    tracker: TrackerType = "noop",
+    tracker: TrackerType = "none",
     working_dir: str = "/path/to/repo",
-    driver: DriverType = "cli:claude",
+    driver: DriverType = "cli",
     model: str = "opus",
 ) -> Profile:
     """Create a Profile for testing with agents dict.
@@ -166,7 +166,7 @@ class TestProfileRoutes:
     def test_list_profiles(self, profile_client, mock_profile_repo):
         """GET /api/profiles returns all profiles with correct is_active."""
         dev_profile = make_test_profile(name="dev")
-        prod_profile = make_test_profile(name="prod", driver="api:openrouter")
+        prod_profile = make_test_profile(name="prod", driver="api")
         mock_profile_repo.list_profiles.return_value = [dev_profile, prod_profile]
         mock_profile_repo.get_active_profile.return_value = dev_profile
 
@@ -180,7 +180,7 @@ class TestProfileRoutes:
         assert data[1]["id"] == "prod"
         assert data[1]["is_active"] is False  # prod is not active
         # With agents dict, check agent configuration
-        assert data[1]["agents"]["developer"]["driver"] == "api:openrouter"
+        assert data[1]["agents"]["developer"]["driver"] == "api"
 
     def test_list_profiles_empty(self, profile_client, mock_profile_repo):
         """GET /api/profiles returns empty list when no profiles."""
@@ -202,8 +202,8 @@ class TestProfileRoutes:
                 "id": "new-profile",
                 "working_dir": "/path/to/repo",
                 "agents": {
-                    "developer": {"driver": "cli:claude", "model": "opus"},
-                    "reviewer": {"driver": "cli:claude", "model": "haiku"},
+                    "developer": {"driver": "cli", "model": "opus"},
+                    "reviewer": {"driver": "cli", "model": "haiku"},
                 },
             },
         )
@@ -215,7 +215,7 @@ class TestProfileRoutes:
     def test_create_profile_with_all_fields(self, profile_client, mock_profile_repo):
         """POST /api/profiles creates profile with all optional fields."""
         tracker: TrackerType = "jira"
-        driver: DriverType = "api:openrouter"
+        driver: DriverType = "api"
         mock_profile_repo.create_profile.return_value = Profile(
             name="full-profile",
             tracker=tracker,
@@ -238,7 +238,7 @@ class TestProfileRoutes:
                 "plan_path_pattern": "custom/{date}.md",
                 "auto_approve_reviews": True,
                 "agents": {
-                    "developer": {"driver": "api:openrouter", "model": "gpt-4"},
+                    "developer": {"driver": "api", "model": "gpt-4"},
                 },
             },
         )
@@ -282,8 +282,8 @@ class TestProfileRoutes:
 
     def test_update_profile_with_agents(self, profile_client, mock_profile_repo):
         """PUT /api/profiles/{id} updates agents configuration."""
-        tracker: TrackerType = "noop"
-        driver: DriverType = "api:openrouter"
+        tracker: TrackerType = "none"
+        driver: DriverType = "api"
         mock_profile_repo.update_profile.return_value = Profile(
             name="dev",
             tracker=tracker,
@@ -298,13 +298,13 @@ class TestProfileRoutes:
             json={
                 "tracker": "jira",
                 "agents": {
-                    "developer": {"driver": "api:openrouter", "model": "gpt-4"},
+                    "developer": {"driver": "api", "model": "gpt-4"},
                 },
             },
         )
         assert response.status_code == 200
         data = response.json()
-        assert data["agents"]["developer"]["driver"] == "api:openrouter"
+        assert data["agents"]["developer"]["driver"] == "api"
 
     def test_update_profile_not_found(self, profile_client, mock_profile_repo):
         """PUT /api/profiles/{id} returns 404 for missing profile."""

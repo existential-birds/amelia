@@ -79,7 +79,7 @@ def integration_profile(tmp_path: Path) -> Profile:
     """Create profile configured for task-based execution testing."""
     return make_profile(
         name="test-task-execution",
-        driver="api:openrouter",
+        driver="api",
         model="openrouter:anthropic/claude-sonnet-4-20250514",
         working_dir=str(tmp_path),
         plan_output_dir=str(tmp_path / "plans"),
@@ -332,7 +332,7 @@ class TestNextTaskNodeTransition:
         # Create profile with git_repo as working directory
         profile = make_profile(
             name="test-task-execution",
-            driver="api:openrouter",
+            driver="api",
             model="openrouter:anthropic/claude-sonnet-4-20250514",
             working_dir=str(git_repo),
             plan_output_dir=str(git_repo / "plans"),
@@ -377,7 +377,7 @@ class TestNextTaskNodeTransition:
         # Create profile with git_repo as working directory
         profile = make_profile(
             name="test-task-execution",
-            driver="api:openrouter",
+            driver="api",
             model="openrouter:anthropic/claude-sonnet-4-20250514",
             working_dir=str(git_repo),
             plan_output_dir=str(git_repo / "plans"),

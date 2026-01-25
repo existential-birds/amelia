@@ -7,15 +7,15 @@ from amelia.trackers.factory import create_tracker
 
 
 def test_tracker_factory_creates_noop_tracker():
-    """Factory creates NoopTracker for noop tracker type."""
+    """Factory creates NoopTracker for none tracker type."""
     profile = Profile(
         name="test",
-        tracker="noop",
+        tracker="none",
         working_dir="/tmp/test",
         agents={
-            "architect": AgentConfig(driver="cli:claude", model="sonnet"),
-            "developer": AgentConfig(driver="cli:claude", model="sonnet"),
-            "reviewer": AgentConfig(driver="cli:claude", model="sonnet"),
+            "architect": AgentConfig(driver="cli", model="sonnet"),
+            "developer": AgentConfig(driver="cli", model="sonnet"),
+            "reviewer": AgentConfig(driver="cli", model="sonnet"),
         },
     )
     tracker = create_tracker(profile)
@@ -36,9 +36,9 @@ def test_tracker_factory_creates_github_tracker():
             tracker="github",
             working_dir="/tmp/test",
             agents={
-                "architect": AgentConfig(driver="cli:claude", model="sonnet"),
-                "developer": AgentConfig(driver="cli:claude", model="sonnet"),
-                "reviewer": AgentConfig(driver="cli:claude", model="sonnet"),
+                "architect": AgentConfig(driver="cli", model="sonnet"),
+                "developer": AgentConfig(driver="cli", model="sonnet"),
+                "reviewer": AgentConfig(driver="cli", model="sonnet"),
             },
         )
         tracker = create_tracker(profile)
@@ -53,9 +53,9 @@ def test_tracker_factory_creates_none_tracker():
         tracker="none",
         working_dir="/tmp/test",
         agents={
-            "architect": AgentConfig(driver="cli:claude", model="sonnet"),
-            "developer": AgentConfig(driver="cli:claude", model="sonnet"),
-            "reviewer": AgentConfig(driver="cli:claude", model="sonnet"),
+            "architect": AgentConfig(driver="cli", model="sonnet"),
+            "developer": AgentConfig(driver="cli", model="sonnet"),
+            "reviewer": AgentConfig(driver="cli", model="sonnet"),
         },
     )
     tracker = create_tracker(profile)

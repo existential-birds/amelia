@@ -50,14 +50,14 @@ def mock_settings(tmp_path: Path) -> Settings:
     """Create mock settings for CLI tests."""
     profile = Profile(
         name="test",
-        tracker="noop",
+        tracker="none",
         working_dir=str(tmp_path),
         plan_output_dir=str(tmp_path / "plans"),
         agents={
-            "architect": AgentConfig(driver="api:openrouter", model="openrouter:anthropic/claude-sonnet-4"),
-            "developer": AgentConfig(driver="api:openrouter", model="openrouter:anthropic/claude-sonnet-4"),
-            "reviewer": AgentConfig(driver="api:openrouter", model="openrouter:anthropic/claude-sonnet-4"),
-            "plan_validator": AgentConfig(driver="api:openrouter", model="openrouter:anthropic/claude-sonnet-4"),
+            "architect": AgentConfig(driver="api", model="openrouter:anthropic/claude-sonnet-4"),
+            "developer": AgentConfig(driver="api", model="openrouter:anthropic/claude-sonnet-4"),
+            "reviewer": AgentConfig(driver="api", model="openrouter:anthropic/claude-sonnet-4"),
+            "plan_validator": AgentConfig(driver="api", model="openrouter:anthropic/claude-sonnet-4"),
         },
     )
     return Settings(active_profile="test", profiles={"test": profile})
@@ -124,12 +124,12 @@ class TestPlanCommand:
         # Create settings with multiple profiles
         test_profile = Profile(
             name="test",
-            tracker="noop",
+            tracker="none",
             working_dir=str(tmp_path),
             agents={
-                "architect": AgentConfig(driver="cli:claude", model="sonnet"),
-                "developer": AgentConfig(driver="cli:claude", model="sonnet"),
-                "reviewer": AgentConfig(driver="cli:claude", model="sonnet"),
+                "architect": AgentConfig(driver="cli", model="sonnet"),
+                "developer": AgentConfig(driver="cli", model="sonnet"),
+                "reviewer": AgentConfig(driver="cli", model="sonnet"),
             },
         )
         work_profile = Profile(
@@ -138,10 +138,10 @@ class TestPlanCommand:
             working_dir=str(tmp_path),
             plan_output_dir=str(plans_dir),
             agents={
-                "architect": AgentConfig(driver="api:openrouter", model="openrouter:anthropic/claude-sonnet-4"),
-                "developer": AgentConfig(driver="api:openrouter", model="openrouter:anthropic/claude-sonnet-4"),
-                "reviewer": AgentConfig(driver="api:openrouter", model="openrouter:anthropic/claude-sonnet-4"),
-                "plan_validator": AgentConfig(driver="api:openrouter", model="openrouter:anthropic/claude-sonnet-4"),
+                "architect": AgentConfig(driver="api", model="openrouter:anthropic/claude-sonnet-4"),
+                "developer": AgentConfig(driver="api", model="openrouter:anthropic/claude-sonnet-4"),
+                "reviewer": AgentConfig(driver="api", model="openrouter:anthropic/claude-sonnet-4"),
+                "plan_validator": AgentConfig(driver="api", model="openrouter:anthropic/claude-sonnet-4"),
             },
         )
         settings = Settings(

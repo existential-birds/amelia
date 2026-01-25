@@ -89,7 +89,7 @@ class TestGetConfig:
                 working_dir="/tmp/test-repo",
                 agents={
                     "developer": AgentConfig(
-                        driver="api:openrouter",
+                        driver="api",
                         model="claude-3-5-sonnet",
                     ),
                 },
@@ -105,7 +105,7 @@ class TestGetConfig:
         assert data["active_profile"] == "test"
         assert data["active_profile_info"] == {
             "name": "test",
-            "driver": "api:openrouter",
+            "driver": "api",
             "model": "claude-3-5-sonnet",
         }
 

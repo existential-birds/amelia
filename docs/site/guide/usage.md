@@ -13,7 +13,7 @@ active_profile: dev
 profiles:
   dev:
     name: dev
-    driver: api:openrouter
+    driver: api
     model: "minimax/minimax-m2"
     tracker: github
 ```
@@ -27,9 +27,9 @@ Amelia uses profile-based configuration in `settings.amelia.yaml`. See [Configur
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
 | `name` | Yes | - | Profile identifier (should match the key) |
-| `driver` | Yes | - | LLM driver: `api:openrouter`, `api`, `cli:claude`, or `cli` |
+| `driver` | Yes | - | LLM driver: `api`, `api`, `cli`, or `cli` |
 | `model` | API only | - | LLM model identifier (required for API drivers) |
-| `tracker` | No | `none` | Issue source: `github`, `jira`, `none`, or `noop` |
+| `tracker` | No | `none` | Issue source: `github`, `jira`, or `none` |
 | `plan_output_dir` | No | `docs/plans` | Directory for generated plans |
 | `working_dir` | No | `null` | Working directory for agentic execution |
 | `max_review_iterations` | No | `3` | Maximum review-fix loop iterations |
@@ -49,10 +49,10 @@ The `retry` parameter accepts these sub-fields:
 
 | Driver | Description | Requirements |
 |--------|-------------|--------------|
-| `api:openrouter` | Direct OpenRouter API calls | `OPENROUTER_API_KEY` env var, `model` field |
-| `api` | Alias for `api:openrouter` | Same as above |
-| `cli:claude` | Wraps Claude CLI tool | `claude` CLI installed and authenticated |
-| `cli` | Alias for `cli:claude` | Same as above |
+| `api` | Direct OpenRouter API calls | `OPENROUTER_API_KEY` env var, `model` field |
+| `api` | Alias for `api` | Same as above |
+| `cli` | Wraps Claude CLI tool | `claude` CLI installed and authenticated |
+| `cli` | Alias for `cli` | Same as above |
 
 ### Tracker Options
 
@@ -61,7 +61,7 @@ The `retry` parameter accepts these sub-fields:
 | `github` | GitHub Issues | `gh` CLI authenticated (`gh auth login`) |
 | `jira` | Jira issues | `JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN` |
 | `none` | No tracker (manual input) | None |
-| `noop` | Alias for `none` | None |
+| `none` | No tracker (manual input) | None |
 
 See [Driver Abstraction](/architecture/concepts#the-driver-abstraction) and [Tracker Abstraction](/architecture/concepts#the-tracker-abstraction) for architectural details.
 
@@ -73,7 +73,7 @@ active_profile: dev
 profiles:
   dev:
     name: dev
-    driver: api:openrouter
+    driver: api
     model: "minimax/minimax-m2"
     tracker: github
     plan_output_dir: "docs/plans"
@@ -85,7 +85,7 @@ profiles:
 
   work:
     name: work
-    driver: cli:claude
+    driver: cli
     tracker: jira
     max_review_iterations: 5
     retry:
@@ -340,7 +340,7 @@ curl -X POST http://localhost:8420/api/workflows \
 | `worktree_path` | string | Yes | Absolute path to worktree directory |
 | `worktree_name` | string | No | Custom worktree display name |
 | `profile` | string | No | Profile name from settings |
-| `driver` | string | No | Driver override (e.g., `api:openrouter`) |
+| `driver` | string | No | Driver override (e.g., `api`) |
 | `start` | boolean | No | Start workflow immediately (default: true). Set to false to queue. |
 | `plan_now` | boolean | No | Run Architect when queuing (requires `start: false`). |
 
@@ -795,7 +795,7 @@ done
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `OPENROUTER_API_KEY` | - | OpenRouter API key (required for `api:openrouter` driver) |
+| `OPENROUTER_API_KEY` | - | OpenRouter API key (required for `api` driver) |
 | `AMELIA_SETTINGS` | `./settings.amelia.yaml` | Path to settings file |
 | `AMELIA_PORT` | `8420` | Server port |
 | `AMELIA_HOST` | `127.0.0.1` | Server host |

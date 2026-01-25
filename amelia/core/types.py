@@ -14,8 +14,6 @@ from pydantic import BaseModel, ConfigDict, Field
 class DriverType(StrEnum):
     """LLM driver type for agent configuration."""
 
-    CLI_CLAUDE = "cli:claude"
-    API_OPENROUTER = "api:openrouter"
     CLI = "cli"
     API = "api"
 
@@ -26,14 +24,13 @@ class TrackerType(StrEnum):
     JIRA = "jira"
     GITHUB = "github"
     NONE = "none"
-    NOOP = "noop"
 
 
 class AgentConfig(BaseModel):
     """Per-agent driver and model configuration.
 
     Attributes:
-        driver: LLM driver type (e.g., 'api:openrouter', 'cli:claude').
+        driver: LLM driver type ('api' or 'cli').
         model: LLM model identifier.
         options: Agent-specific options (e.g., max_iterations).
     """

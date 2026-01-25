@@ -8,11 +8,11 @@ from amelia.server.orchestrator.service import OrchestratorService
 
 def _make_test_profile(
     name: str = "dev",
-    tracker: TrackerType = "noop",
+    tracker: TrackerType = "none",
     working_dir: str = "/repo",
 ) -> Profile:
     """Create a test Profile with default agents configuration."""
-    agent_config = AgentConfig(driver="cli:claude", model="opus")
+    agent_config = AgentConfig(driver="cli", model="opus")
     return Profile(
         name=name,
         tracker=tracker,
@@ -38,7 +38,7 @@ class TestOrchestratorProfileLoading:
         profile = await mock_profile_repo.get_profile("dev")
         assert profile is not None
         assert profile.name == "dev"
-        assert profile.agents["developer"].driver == "cli:claude"
+        assert profile.agents["developer"].driver == "cli"
 
     async def test_get_profile_or_fail_returns_profile(self):
         """Verify _get_profile_or_fail returns Profile from database."""
@@ -109,7 +109,7 @@ class TestOrchestratorProfileLoading:
         )
 
         # Create a profile with original working_dir
-        agent_config = AgentConfig(driver="api:openrouter", model="gpt-4")
+        agent_config = AgentConfig(driver="api", model="gpt-4")
         profile = Profile(
             name="test-profile",
             tracker="github",
@@ -133,4 +133,4 @@ class TestOrchestratorProfileLoading:
         assert updated_profile.plan_output_dir == "custom/plans"
         assert updated_profile.plan_path_pattern == "custom/{date}-{issue_key}.md"
         assert updated_profile.auto_approve_reviews is True
-        assert updated_profile.agents["developer"].driver == "api:openrouter"
+        assert updated_profile.agents["developer"].driver == "api"

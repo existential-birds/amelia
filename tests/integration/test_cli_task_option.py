@@ -18,7 +18,7 @@ class TestCliTaskOptionIntegration:
 
     @pytest.fixture
     def noop_worktree(self, tmp_path: Path) -> Path:
-        """Create a worktree with noop tracker settings."""
+        """Create a worktree with none tracker settings."""
         worktree = tmp_path / "noop-repo"
         worktree.mkdir()
         (worktree / ".git").touch()
@@ -27,10 +27,10 @@ active_profile: noop
 profiles:
   noop:
     name: noop
-    driver: cli:claude
+    driver: cli
     model: sonnet
     validator_model: sonnet
-    tracker: noop
+    tracker: none
 """
         (worktree / "settings.amelia.yaml").write_text(settings_content)
         return worktree
@@ -46,7 +46,7 @@ active_profile: github
 profiles:
   github:
     name: github
-    driver: cli:claude
+    driver: cli
     model: sonnet
     validator_model: sonnet
     tracker: github
@@ -59,7 +59,7 @@ profiles:
         runner: CliRunner,
         noop_worktree: Path,
     ) -> None:
-        """start with --title and noop tracker should succeed."""
+        """start with --title and none tracker should succeed."""
         with patch("amelia.client.cli.get_worktree_context") as mock_ctx, \
              patch("amelia.client.cli.AmeliaClient") as mock_client_class:
             mock_ctx.return_value = (str(noop_worktree), "noop-repo")
@@ -99,7 +99,7 @@ profiles:
             mock_ctx.return_value = (str(github_worktree), "github-repo")
             mock_client = mock_client_class.return_value
             mock_client.create_workflow = AsyncMock(
-                side_effect=InvalidRequestError("--title requires noop tracker")
+                side_effect=InvalidRequestError("--title requires none tracker")
             )
 
             result = runner.invoke(

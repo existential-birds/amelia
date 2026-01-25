@@ -77,7 +77,7 @@ describe("useBrainstormSession", () => {
         artifacts: [],
         profile: {
           name: "p1",
-          driver: "cli:claude",
+          driver: "cli",
           model: "sonnet",
         },
       };
@@ -109,7 +109,7 @@ describe("useBrainstormSession", () => {
       };
       const mockProfile = {
         name: "p1",
-        driver: "cli:claude",
+        driver: "cli",
         model: "sonnet",
       };
       vi.mocked(brainstormApi.createSession).mockResolvedValueOnce({
@@ -147,7 +147,7 @@ describe("useBrainstormSession", () => {
       };
       const mockProfile = {
         name: "p1",
-        driver: "cli:claude",
+        driver: "cli",
         model: "sonnet",
       };
       vi.mocked(brainstormApi.createSession).mockResolvedValueOnce({

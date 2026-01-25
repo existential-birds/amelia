@@ -16,7 +16,7 @@ profiles:
   # CLI profile - uses Claude CLI
   cli_opus:
     name: cli_opus
-    driver: cli:claude        # LLM via claude CLI
+    driver: cli        # LLM via claude CLI
     model: "opus"
     tracker: jira             # Issues from Jira
     plan_output_dir: "docs/plans"
@@ -29,7 +29,7 @@ profiles:
   # API profile - direct OpenRouter API access
   api_minimax:
     name: api_minimax
-    driver: api:openrouter    # LLM via OpenRouter API
+    driver: api    # LLM via OpenRouter API
     model: "minimax/minimax-m2"  # Required for API drivers
     tracker: github           # Issues from GitHub
     plan_output_dir: "docs/plans"
@@ -37,9 +37,9 @@ profiles:
   # Testing profile
   api_minimax_test:
     name: api_minimax_test
-    driver: api:openrouter
+    driver: api
     model: "minimax/minimax-m2"
-    tracker: noop             # No real tracker
+    tracker: none             # No real tracker
 ```
 
 ## Profile Structure
@@ -68,14 +68,14 @@ How Amelia communicates with LLMs.
 
 | Value | Description | Requirements | Notes |
 |-------|-------------|--------------|-------|
-| `api:openrouter` | Direct OpenRouter API calls | `OPENROUTER_API_KEY` env var, `model` field | Full functionality, structured outputs |
-| `api` | Alias for `api:openrouter` | Same as above | Shorthand |
-| `cli:claude` | Wraps claude CLI tool | `claude` CLI installed & authenticated | Agentic execution via CLI |
-| `cli` | Alias for `cli:claude` | Same as above | Shorthand |
+| `api` | Direct OpenRouter API calls | `OPENROUTER_API_KEY` env var, `model` field | Full functionality, structured outputs |
+| `api` | Alias for `api` | Same as above | Shorthand |
+| `cli` | Wraps claude CLI tool | `claude` CLI installed & authenticated | Agentic execution via CLI |
+| `cli` | Alias for `cli` | Same as above | Shorthand |
 
 ### `profiles.<name>.model` (required for API drivers)
 
-The LLM model identifier to use. Required when using `api:openrouter` or `api` drivers.
+The LLM model identifier to use. Required when using `api` or `api` drivers.
 
 ```yaml
 model: "minimax/minimax-m2"
@@ -99,7 +99,7 @@ Default: `"none"`
 | `jira` | Jira issues | `JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN` env vars |
 | `github` | GitHub issues | `gh` CLI authenticated (`gh auth login`) |
 | `none` | No tracker | None |
-| `noop` | Alias for `none` | None |
+| `none` | No tracker | None |
 
 ### `profiles.<name>.plan_output_dir` (optional)
 
@@ -222,8 +222,8 @@ gh auth login
 Amelia validates profiles on startup:
 
 - Required fields (`name`, `driver`) must be present
-- Driver values must be one of: `api`, `api:openrouter`, `cli`, `cli:claude`
-- Tracker values must be one of: `jira`, `github`, `none`, `noop`
+- Driver values must be one of: `api`, `api`, `cli`, `cli`
+- Tracker values must be one of: `jira`, `github`, `none`
 - API drivers require the `model` field
 - Retry values must be within allowed ranges
 
@@ -240,7 +240,7 @@ active_profile: cli_opus
 profiles:
   cli_opus:
     name: cli_opus
-    driver: cli:claude  # CLI driver doesn't require model field
+    driver: cli  # CLI driver doesn't require model field
 ```
 
 For API drivers, you must also specify the model:
@@ -250,7 +250,7 @@ active_profile: api_minimax
 profiles:
   api_minimax:
     name: api_minimax
-    driver: api:openrouter
+    driver: api
     model: "minimax/minimax-m2"
 ```
 
@@ -265,7 +265,7 @@ active_profile: cli_opus
 profiles:
   cli_opus:
     name: cli_opus
-    driver: cli:claude
+    driver: cli
     model: "opus"
     tracker: jira
     max_review_iterations: 5
@@ -281,21 +281,21 @@ active_profile: api_minimax
 profiles:
   cli_opus:
     name: cli_opus
-    driver: cli:claude
+    driver: cli
     model: "opus"
     tracker: jira
 
   api_minimax:
     name: api_minimax
-    driver: api:openrouter
+    driver: api
     model: "minimax/minimax-m2"
     tracker: github
 
   api_minimax_test:
     name: api_minimax_test
-    driver: api:openrouter
+    driver: api
     model: "minimax/minimax-m2"
-    tracker: noop
+    tracker: none
 ```
 
 Usage:
@@ -314,14 +314,14 @@ Ensure the profile name matches exactly (case-sensitive) in both `active_profile
 
 ### "Driver not recognized"
 
-Valid driver values are: `api`, `api:openrouter`, `cli`, `cli:claude`
+Valid driver values are: `api`, `api`, `cli`, `cli`
 
 ### "Missing model field"
 
-API drivers (`api:openrouter`, `api`) require the `model` field:
+API drivers (`api`, `api`) require the `model` field:
 
 ```yaml
-driver: api:openrouter
+driver: api
 model: "minimax/minimax-m2"
 ```
 

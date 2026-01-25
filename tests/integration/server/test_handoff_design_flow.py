@@ -14,10 +14,10 @@ from amelia.server.orchestrator.service import OrchestratorService
 def mock_profile_repo() -> AsyncMock:
     """Create mock ProfileRepository that returns test profile."""
     repo = AsyncMock()
-    agent_config = AgentConfig(driver="cli:claude", model="sonnet")
+    agent_config = AgentConfig(driver="cli", model="sonnet")
     profile = Profile(
         name="test",
-        tracker="noop",
+        tracker="none",
         working_dir="/tmp/test",
         agents={
             "architect": agent_config,
@@ -253,6 +253,47 @@ class TestHandoffDesignFlow:
                 task_title="Implement design",
                 artifact_path="/etc/passwd",
             )
+
+    async def test_prepare_workflow_state_handles_absolute_path_within_worktree(
+        self, tmp_path: Path, mock_profile_repo: AsyncMock
+    ) -> None:
+        """Absolute path within worktree is handled correctly without path duplication.
+
+        This tests the real-world scenario where the LLM calls write_design_doc
+        with an absolute path like /Users/ka/.../worktree/docs/plans/design.md.
+        The current bug causes path doubling: worktree + worktree + relative.
+        """
+        # Create nested design artifact file in worktree
+        design_dir = tmp_path / "docs" / "plans"
+        design_dir.mkdir(parents=True)
+        design_file = design_dir / "design.md"
+        design_file.write_text("# Design from absolute path")
+
+        orchestrator = OrchestratorService.__new__(OrchestratorService)
+        orchestrator._event_bus = MagicMock()
+        orchestrator._repository = MagicMock()
+        orchestrator._profile_repo = mock_profile_repo
+
+        with patch(
+            "amelia.server.orchestrator.service.get_git_head",
+            new_callable=AsyncMock,
+            return_value="abc123",
+        ):
+            # Pass artifact_path as absolute path within worktree
+            # This is what the LLM actually returns from write_design_doc
+            absolute_artifact_path = str(design_file)  # e.g., /tmp/pytest-xxx/docs/plans/design.md
+            _, _, state = await orchestrator._prepare_workflow_state(
+                workflow_id="wf-123",
+                worktree_path=str(tmp_path),
+                issue_id="issue-1",
+                task_title="Implement design",
+                artifact_path=absolute_artifact_path,
+            )
+
+        # Verify design was loaded correctly (not path duplication error)
+        assert state.design is not None
+        assert state.design.content == "# Design from absolute path"
+        assert state.design.source == "file"
 
     async def test_prepare_workflow_state_rejects_symlink_escape(
         self, tmp_path: Path, mock_profile_repo: AsyncMock

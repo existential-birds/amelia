@@ -17,11 +17,11 @@ from amelia.server.routes.files import router
 def _create_mock_profile_repo(working_dir: Path) -> MagicMock:
     """Create a mock profile repository with an active profile pointing to working_dir."""
     repo = MagicMock()
-    agent_config = AgentConfig(driver="cli:claude", model="claude-3-5-sonnet")
+    agent_config = AgentConfig(driver="cli", model="claude-3-5-sonnet")
     repo.get_active_profile = AsyncMock(
         return_value=Profile(
             name="test",
-            tracker="noop",
+            tracker="none",
             working_dir=str(working_dir),
             agents={
                 "architect": agent_config,

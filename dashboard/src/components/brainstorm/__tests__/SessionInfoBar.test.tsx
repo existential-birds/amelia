@@ -5,7 +5,7 @@ import type { ProfileInfo, SessionUsageSummary } from "@/types/api";
 
 const mockProfile: ProfileInfo = {
   name: "test-profile",
-  driver: "cli:claude",
+  driver: "cli",
   model: "claude-sonnet-4.5",
 };
 

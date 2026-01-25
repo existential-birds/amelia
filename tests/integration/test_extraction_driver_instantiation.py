@@ -42,10 +42,10 @@ class TestExtractStructuredWithRealDriver:
     async def test_extract_structured_with_cli_claude_driver_accepts_cwd(
         self,
     ) -> None:
-        """extract_structured should work with cli:claude driver without TypeError.
+        """extract_structured should work with cli driver without TypeError.
 
         This tests the full chain:
-        - extract_structured() calls get_driver(driver_key="cli:claude", cwd=".")
+        - extract_structured() calls get_driver(driver_key="cli", cwd=".")
         - get_driver() passes cwd to ClaudeCliDriver(**kwargs)
         - ClaudeCliDriver.__init__() must accept the cwd parameter
 
@@ -81,7 +81,7 @@ class TestExtractStructuredWithRealDriver:
                 prompt="Extract from this text",
                 schema=SampleExtractionSchema,
                 model="sonnet",
-                driver_type="cli:claude",
+                driver_type="cli",
             )
 
         # Verify the extraction worked
@@ -89,7 +89,7 @@ class TestExtractStructuredWithRealDriver:
         assert result.priority == 1
 
     async def test_extract_structured_with_api_driver_works(self) -> None:
-        """extract_structured should work with api:openrouter driver.
+        """extract_structured should work with api driver.
 
         This provides coverage parity and confirms the test pattern works
         for both driver types.
@@ -114,7 +114,7 @@ class TestExtractStructuredWithRealDriver:
                 prompt="Extract from this text",
                 schema=SampleExtractionSchema,
                 model="anthropic/claude-sonnet-4",
-                driver_type="api:openrouter",
+                driver_type="api",
             )
 
         assert result.goal == "Test goal from API"
@@ -167,7 +167,7 @@ class TestExtractStructuredWithRealDriver:
                 prompt="Test cwd passing",
                 schema=SampleExtractionSchema,
                 model="sonnet",
-                driver_type="cli:claude",
+                driver_type="cli",
             )
 
         # Verify the driver was instantiated with cwd="."

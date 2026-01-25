@@ -71,12 +71,12 @@ def mock_profile() -> Profile:
     """Create a mock Profile for testing."""
     return Profile(
         name="test",
-        tracker="noop",
+        tracker="none",
         working_dir="/tmp/test",
         agents={
-            "architect": AgentConfig(driver="cli:claude", model="sonnet"),
-            "developer": AgentConfig(driver="cli:claude", model="sonnet"),
-            "reviewer": AgentConfig(driver="cli:claude", model="sonnet"),
+            "architect": AgentConfig(driver="cli", model="sonnet"),
+            "developer": AgentConfig(driver="cli", model="sonnet"),
+            "reviewer": AgentConfig(driver="cli", model="sonnet"),
         },
     )
 

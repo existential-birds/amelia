@@ -122,7 +122,7 @@ class TestCreateWorkflowRequest:
 
     @pytest.mark.parametrize(
         "driver",
-        ["sdk:claude", "api:openrouter", "cli:claude", "custom:my-driver"],
+        ["sdk:claude", "api", "cli", "custom:my-driver"],
     )
     def test_driver_valid_patterns(self, driver: str) -> None:
         """Test driver accepts valid type:name patterns."""

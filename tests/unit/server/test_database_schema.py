@@ -57,16 +57,16 @@ class TestProfilesSchema:
         """Verify profile can be inserted."""
         import json
         agents_json = json.dumps({
-            "developer": {"driver": "cli:claude", "model": "opus", "options": {}},
-            "reviewer": {"driver": "cli:claude", "model": "haiku", "options": {}},
+            "developer": {"driver": "cli", "model": "opus", "options": {}},
+            "reviewer": {"driver": "cli", "model": "haiku", "options": {}},
         })
         await db.execute(
             """INSERT INTO profiles (id, tracker, working_dir, agents, is_active)
                VALUES (?, ?, ?, ?, ?)""",
-            ("dev", "noop", "/path/to/repo", agents_json, True),
+            ("dev", "none", "/path/to/repo", agents_json, True),
         )
         row = await db.fetch_one("SELECT * FROM profiles WHERE id = ?", ("dev",))
         assert row is not None
         agents = json.loads(row["agents"])
-        assert agents["developer"]["driver"] == "cli:claude"
+        assert agents["developer"]["driver"] == "cli"
         assert row["is_active"] == 1

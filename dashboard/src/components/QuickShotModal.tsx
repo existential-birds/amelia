@@ -1,5 +1,5 @@
 /**
- * @fileoverview Quick Shot modal for starting noop tracker workflows.
+ * @fileoverview Quick Shot modal for starting workflows without issue tracker.
  *
  * A "high-voltage command console" styled modal that allows users to
  * quickly launch workflows directly from the dashboard UI.

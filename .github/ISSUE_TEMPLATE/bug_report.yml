@@ -56,7 +56,7 @@ body:
       placeholder: |
         - OS: macOS 14.2
         - Python: 3.12.1
-        - Profile: work (driver: api:openrouter, tracker: github)
+        - Profile: work (driver: api, tracker: github)
         - Relevant config from settings.amelia.yaml
     validations:
       required: true

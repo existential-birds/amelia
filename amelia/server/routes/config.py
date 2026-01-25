@@ -17,7 +17,7 @@ class ProfileInfo(BaseModel):
     """
 
     name: str = Field(description="Profile name")
-    driver: str = Field(description="Driver type (e.g., 'api:openrouter', 'cli:claude')")
+    driver: str = Field(description="Driver type ('api' or 'cli')")
     model: str = Field(description="Model name")
 
 

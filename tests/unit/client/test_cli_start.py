@@ -44,7 +44,7 @@ class TestStartCommandTaskFlags:
 
             result = runner.invoke(
                 app,
-                ["start", "TASK-1", "-p", "noop", "--title", "Add logout button"],
+                ["start", "TASK-1", "-p", "none", "--title", "Add logout button"],
             )
 
             assert result.exit_code == 0, f"Command failed: {result.stdout}"
@@ -72,7 +72,7 @@ class TestStartCommandTaskFlags:
             runner.invoke(
                 app,
                 [
-                    "start", "TASK-1", "-p", "noop",
+                    "start", "TASK-1", "-p", "none",
                     "--title", "Add logout button",
                     "--description", "Implement logout functionality in the navbar",
                 ],
@@ -114,17 +114,17 @@ class TestPlanCommandTaskFlags:
         # Mock profile data returned from server API
         # Profile response with agents dict format
         mock_profile_response = {
-            "id": "noop",
-            "tracker": "noop",
+            "id": "none",
+            "tracker": "none",
             "working_dir": str(worktree),
             "plan_output_dir": "docs/plans",
             "plan_path_pattern": "docs/plans/{date}-{issue_key}.md",
             "auto_approve_reviews": False,
             "is_active": True,
             "agents": {
-                "architect": {"driver": "cli:claude", "model": "sonnet", "options": {}},
-                "developer": {"driver": "cli:claude", "model": "sonnet", "options": {}},
-                "reviewer": {"driver": "cli:claude", "model": "sonnet", "options": {}},
+                "architect": {"driver": "cli", "model": "sonnet", "options": {}},
+                "developer": {"driver": "cli", "model": "sonnet", "options": {}},
+                "reviewer": {"driver": "cli", "model": "sonnet", "options": {}},
             },
         }
 
@@ -158,10 +158,10 @@ class TestPlanCommandTaskFlags:
 
             runner.invoke(
                 app,
-                ["plan", "TASK-1", "-p", "noop", "--title", "Fix typo", "--description", "Fix README"],
+                ["plan", "TASK-1", "-p", "none", "--title", "Fix typo", "--description", "Fix README"],
             )
 
-            # Tracker should NOT be called when --title is provided with noop
+            # Tracker should NOT be called when --title is provided with none
             mock_create_tracker.assert_not_called()
 
             # State should have our custom issue

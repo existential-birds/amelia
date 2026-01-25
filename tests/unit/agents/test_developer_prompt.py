@@ -13,7 +13,7 @@ from amelia.pipelines.implementation.state import ImplementationState
 @pytest.fixture
 def mock_developer() -> Developer:
     """Create a Developer with a mocked driver for prompt tests."""
-    config = AgentConfig(driver="api:openrouter", model="test-model")
+    config = AgentConfig(driver="api", model="test-model")
     with patch("amelia.agents.developer.get_driver") as mock_get_driver:
         mock_get_driver.return_value = MagicMock()
         return Developer(config)

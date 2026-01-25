@@ -24,7 +24,7 @@ async def extract_structured[T: BaseModel](
         prompt: The prompt containing text to extract from.
         schema: Pydantic model class defining the expected structure.
         model: Model identifier to use for extraction.
-        driver_type: Driver type string (e.g., "api:openrouter").
+        driver_type: Driver type string ("api" or "cli").
 
     Returns:
         Instance of schema populated with extracted data.

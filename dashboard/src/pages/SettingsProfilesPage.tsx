@@ -201,10 +201,10 @@ export default function SettingsProfilesPage() {
       return false;
     }
     const driver = getPrimaryDriver(p);
-    if (driverFilter === 'api' && !driver?.startsWith('api:')) {
+    if (driverFilter === 'api' && driver !== 'api') {
       return false;
     }
-    if (driverFilter === 'cli' && !driver?.startsWith('cli:')) {
+    if (driverFilter === 'cli' && driver !== 'cli') {
       return false;
     }
     return true;
