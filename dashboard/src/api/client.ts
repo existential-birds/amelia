@@ -14,6 +14,8 @@ import type {
   StartWorkflowResponse,
   BatchStartRequest,
   BatchStartResponse,
+  SetPlanRequest,
+  SetPlanResponse,
   ConfigResponse,
   FileReadResponse,
   PathValidationResponse,
@@ -357,6 +359,45 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
     });
     return handleResponse<StartWorkflowResponse>(response);
+  },
+
+  /**
+   * Sets or replaces the plan for a queued workflow.
+   *
+   * Allows importing an external plan either from a file path or inline content.
+   * The workflow must be in 'queued' status. Use `force: true` to overwrite
+   * an existing plan.
+   *
+   * Note: `plan_file` and `plan_content` are mutually exclusive.
+   *
+   * @param id - The unique identifier of the workflow.
+   * @param request - The plan request with either plan_file or plan_content.
+   * @returns Response with extracted goal, key_files, and total_tasks.
+   * @throws {ApiError} When workflow not found, not queued, validation fails, or API request fails.
+   *
+   * @example
+   * ```typescript
+   * // Set plan from file
+   * const result = await api.setPlan('workflow-123', {
+   *   plan_file: 'docs/plans/feature.md',
+   * });
+   *
+   * // Set plan from inline content
+   * const result = await api.setPlan('workflow-123', {
+   *   plan_content: '# Plan\n\n### Task 1: Do thing',
+   *   force: true,
+   * });
+   *
+   * console.log(`Goal: ${result.goal}, Tasks: ${result.total_tasks}`);
+   * ```
+   */
+  async setPlan(id: string, request: SetPlanRequest): Promise<SetPlanResponse> {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/workflows/${id}/plan`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+    });
+    return handleResponse<SetPlanResponse>(response);
   },
 
   /**

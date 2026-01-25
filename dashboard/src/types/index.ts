@@ -531,6 +531,8 @@ export interface BatchStartResponse {
  * Request payload for setting or replacing the plan for a queued workflow.
  * Used by POST /api/workflows/:id/plan endpoint.
  *
+ * Note: `plan_file` and `plan_content` are mutually exclusive - provide one or the other, not both.
+ *
  * @example
  * ```typescript
  * // Set plan from file

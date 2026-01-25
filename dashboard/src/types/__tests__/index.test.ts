@@ -5,6 +5,8 @@ import type {
   CreateWorkflowRequest,
   BatchStartRequest,
   BatchStartResponse,
+  SetPlanRequest,
+  SetPlanResponse,
 } from '../index';
 
 describe('WorkflowEvent types', () => {
@@ -105,5 +107,44 @@ describe('BatchStartResponse', () => {
     };
     expect(response.started).toHaveLength(2);
     expect(response.errors['wf-3']).toBe('Worktree conflict');
+  });
+});
+
+describe('SetPlanRequest', () => {
+  it('should allow plan_file', () => {
+    const request: SetPlanRequest = {
+      plan_file: 'docs/plans/feature.md',
+    };
+    expect(request.plan_file).toBe('docs/plans/feature.md');
+    expect(request.plan_content).toBeUndefined();
+  });
+
+  it('should allow plan_content', () => {
+    const request: SetPlanRequest = {
+      plan_content: '# Plan\n\n### Task 1: Do thing',
+    };
+    expect(request.plan_content).toContain('# Plan');
+    expect(request.plan_file).toBeUndefined();
+  });
+
+  it('should allow force flag', () => {
+    const request: SetPlanRequest = {
+      plan_file: 'plan.md',
+      force: true,
+    };
+    expect(request.force).toBe(true);
+  });
+});
+
+describe('SetPlanResponse', () => {
+  it('should have goal, key_files, and total_tasks', () => {
+    const response: SetPlanResponse = {
+      goal: 'Implement feature X',
+      key_files: ['src/feature.ts', 'tests/feature.test.ts'],
+      total_tasks: 5,
+    };
+    expect(response.goal).toBe('Implement feature X');
+    expect(response.key_files).toHaveLength(2);
+    expect(response.total_tasks).toBe(5);
   });
 });
