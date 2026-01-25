@@ -17,7 +17,7 @@ class TestImportExternalPlan:
         """Create mock profile for testing."""
         return Profile(
             name="test",
-            tracker="none",
+            tracker="noop",
             working_dir=str(tmp_path / "worktree"),
             agents={
                 "plan_validator": AgentConfig(driver="cli", model="sonnet"),
@@ -155,7 +155,7 @@ Fix it.
 
         profile = Profile(
             name="test",
-            tracker="none",
+            tracker="noop",
             working_dir=str(worktree),
             agents={
                 "plan_validator": AgentConfig(driver="cli", model="sonnet"),
