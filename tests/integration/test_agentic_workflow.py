@@ -226,7 +226,7 @@ class TestReviewerNodeIntegration:
         mock_messages = make_reviewer_agentic_messages(
             approved=False,
             comments=["Still needs work"],
-            severity="high",
+            severity="major",
         )
 
         async def mock_execute_agentic(*_args: Any, **_kwargs: Any) -> Any:
@@ -269,7 +269,7 @@ class TestReviewerNodeIntegration:
         mock_messages_round1 = make_reviewer_agentic_messages(
             approved=False,
             comments=["Missing error handling", "No tests"],
-            severity="high",
+            severity="major",
         )
 
         async def mock_execute_round1(*_args: Any, **_kwargs: Any) -> Any:
@@ -280,7 +280,7 @@ class TestReviewerNodeIntegration:
             result1 = await call_reviewer_node(state, cast(RunnableConfig, config))
 
         assert result1["last_review"].approved is False
-        assert result1["last_review"].severity == "high"
+        assert result1["last_review"].severity == "major"
         assert len(result1["last_review"].comments) == 2
 
         # Round 2: Simulate developer fixed one issue, reviewer now returns different result
@@ -291,7 +291,7 @@ class TestReviewerNodeIntegration:
         mock_messages_round2 = make_reviewer_agentic_messages(
             approved=False,
             comments=["Still no tests"],
-            severity="medium",
+            severity="minor",
         )
 
         async def mock_execute_round2(*_args: Any, **_kwargs: Any) -> Any:

@@ -21,7 +21,7 @@ def _create_mock_profile_repo(working_dir: Path) -> MagicMock:
     repo.get_active_profile = AsyncMock(
         return_value=Profile(
             name="test",
-            tracker="none",
+            tracker="noop",
             working_dir=str(working_dir),
             agents={
                 "architect": agent_config,

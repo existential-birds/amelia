@@ -34,7 +34,7 @@ def test_profile_with_agents_dict():
 
     profile = Profile(
         name="test",
-        tracker="none",
+        tracker="noop",
         working_dir="/tmp/test",
         agents={
             "architect": AgentConfig(driver="cli", model="opus"),
@@ -51,7 +51,7 @@ def test_profile_get_agent_config():
 
     profile = Profile(
         name="test",
-        tracker="none",
+        tracker="noop",
         working_dir="/tmp/test",
         agents={
             "architect": AgentConfig(driver="cli", model="opus"),

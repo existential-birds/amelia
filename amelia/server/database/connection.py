@@ -525,7 +525,7 @@ class Database:
         await self.execute("""
             CREATE TABLE IF NOT EXISTS profiles (
                 id TEXT PRIMARY KEY,
-                tracker TEXT NOT NULL DEFAULT 'none',
+                tracker TEXT NOT NULL DEFAULT 'noop',
                 working_dir TEXT NOT NULL,
                 plan_output_dir TEXT NOT NULL DEFAULT 'docs/plans',
                 plan_path_pattern TEXT NOT NULL DEFAULT 'docs/plans/{date}-{issue_key}.md',
@@ -541,8 +541,8 @@ class Database:
         await self._check_old_profiles_schema()
 
         # Data migration: Convert legacy type values to new simplified values
-        # TrackerType: 'noop' -> 'none'
-        await self.execute("UPDATE profiles SET tracker = 'none' WHERE tracker = 'noop'")
+        # TrackerType: 'none' -> 'noop'
+        await self.execute("UPDATE profiles SET tracker = 'noop' WHERE tracker = 'none'")
 
         # DriverType in agents JSON: 'cli:claude' -> 'cli', 'api:openrouter' -> 'api'
         await self.execute("""

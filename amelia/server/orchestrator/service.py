@@ -292,7 +292,7 @@ class OrchestratorService:
             worktree_path: Resolved worktree path (already validated).
             issue_id: The issue ID to work on.
             profile_name: Optional profile name (defaults to active profile).
-            task_title: Optional task title for none tracker.
+            task_title: Optional task title for noop tracker.
             task_description: Optional task description (defaults to task_title).
             artifact_path: Optional path to design artifact file from brainstorming.
                 Can be worktree-relative (e.g., docs/plans/design.md or /docs/plans/design.md)
@@ -326,10 +326,10 @@ class OrchestratorService:
 
         # Fetch issue from tracker (or construct from task_title)
         if task_title is not None:
-            # Validate that tracker is none when using task_title
-            if profile.tracker != "none":
+            # Validate that tracker is noop when using task_title
+            if profile.tracker != "noop":
                 raise ValueError(
-                    f"task_title can only be used with none tracker, "
+                    f"task_title can only be used with noop tracker, "
                     f"but profile '{profile.name}' uses tracker '{profile.tracker}'"
                 )
             issue = Issue(

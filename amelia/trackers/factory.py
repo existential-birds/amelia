@@ -29,7 +29,7 @@ def create_tracker(profile: Profile) -> BaseTracker:
         return JiraTracker()
     elif profile.tracker == "github":
         return GithubTracker()
-    elif profile.tracker == "none" or profile.tracker == "noop":
+    elif profile.tracker == "noop":
         return NoopTracker()
     else:
         raise ValueError(f"Unknown tracker type: {profile.tracker}")

@@ -23,7 +23,7 @@ class TrackerType(StrEnum):
 
     JIRA = "jira"
     GITHUB = "github"
-    NONE = "none"
+    NOOP = "noop"
 
 
 class AgentConfig(BaseModel):
@@ -70,7 +70,7 @@ class Profile(BaseModel):
 
     Attributes:
         name: Profile name (e.g., 'work', 'personal').
-        tracker: Issue tracker type (jira, github, none, noop).
+        tracker: Issue tracker type (jira, github, noop).
         working_dir: Working directory for agentic execution.
         plan_output_dir: Directory for saving implementation plans.
         plan_path_pattern: Path pattern for plan files with {date} and {issue_key} placeholders.
@@ -82,7 +82,7 @@ class Profile(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     name: str
-    tracker: TrackerType = TrackerType.NONE
+    tracker: TrackerType = TrackerType.NOOP
     working_dir: str
     plan_output_dir: str = "docs/plans"
     plan_path_pattern: str = "docs/plans/{date}-{issue_key}.md"
@@ -153,12 +153,19 @@ class Design(BaseModel):
 
 
 class Severity(StrEnum):
-    """Severity level for review results."""
+    """Severity level for review results.
 
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
+    Uses standard code review terminology:
+    - CRITICAL: Blocking issues that must be fixed
+    - MAJOR: Should fix before merging
+    - MINOR: Nice to have, suggestions
+    - NONE: No issues found
+    """
+
     CRITICAL = "critical"
+    MAJOR = "major"
+    MINOR = "minor"
+    NONE = "none"
 
 
 class ReviewResult(BaseModel):
@@ -169,7 +176,7 @@ class ReviewResult(BaseModel):
         approved: Whether the review approved the changes.
         comments: List of actionable issues to fix. Filtered at creation time
             to exclude positive observations.
-        severity: Severity level of issues found (low, medium, high, critical).
+        severity: Severity level of issues found (none, minor, major, critical).
     """
 
     model_config = ConfigDict(frozen=True)

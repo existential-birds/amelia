@@ -324,7 +324,7 @@ class TestPlanValidatorNodeTotalTasks:
     def mock_profile(self) -> Profile:
         return Profile(
             name="test",
-            tracker="none",
+            tracker="noop",
             working_dir="/tmp/test",
             agents={
                 "architect": AgentConfig(driver="api", model="anthropic/claude-3.5-sonnet"),
@@ -376,7 +376,7 @@ Do second thing.
 
         profile = Profile(
             name="test",
-            tracker="none",
+            tracker="noop",
             working_dir=str(tmp_path),
             plan_path_pattern="docs/plans/test-plan.md",
             agents={
@@ -441,7 +441,7 @@ Do implementation.
 
         profile = Profile(
             name="test",
-            tracker="none",
+            tracker="noop",
             working_dir=str(tmp_path),
             plan_path_pattern="docs/plans/simple-plan.md",
             agents={

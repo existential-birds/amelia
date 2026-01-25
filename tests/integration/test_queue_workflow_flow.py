@@ -179,7 +179,7 @@ profiles:
     driver: "cli"
     model: sonnet
     validator_model: sonnet
-    tracker: none
+    tracker: noop
     strategy: single
 """
         (git_dir / "settings.amelia.yaml").write_text(settings_content)
@@ -517,7 +517,7 @@ profiles:
     driver: "cli"
     model: sonnet
     validator_model: sonnet
-    tracker: none
+    tracker: noop
     strategy: single
 """
         (git_dir / "settings.amelia.yaml").write_text(settings_content)
@@ -593,7 +593,7 @@ profiles:
     driver: "cli"
     model: sonnet
     validator_model: sonnet
-    tracker: none
+    tracker: noop
     strategy: single
 """
         (git_dir / "settings.amelia.yaml").write_text(settings_content)
@@ -667,7 +667,7 @@ profiles:
     driver: "cli"
     model: sonnet
     validator_model: sonnet
-    tracker: none
+    tracker: noop
     strategy: single
 """
         (git_dir / "settings.amelia.yaml").write_text(settings_content)
@@ -738,7 +738,7 @@ profiles:
     driver: "cli"
     model: sonnet
     validator_model: sonnet
-    tracker: none
+    tracker: noop
     strategy: single
 """
         (git_dir / "settings.amelia.yaml").write_text(settings_content)
@@ -824,7 +824,7 @@ profiles:
     driver: "cli"
     model: sonnet
     validator_model: sonnet
-    tracker: none
+    tracker: noop
     strategy: single
 """
         (git_dir / "settings.amelia.yaml").write_text(settings_content)
@@ -878,7 +878,7 @@ profiles:
     driver: "cli"
     model: sonnet
     validator_model: sonnet
-    tracker: none
+    tracker: noop
     strategy: single
 """
         (git_dir / "settings.amelia.yaml").write_text(settings_content)
@@ -964,7 +964,7 @@ profiles:
     driver: "cli"
     model: sonnet
     validator_model: sonnet
-    tracker: none
+    tracker: noop
     strategy: single
 """
         (git_dir / "settings.amelia.yaml").write_text(settings_content)

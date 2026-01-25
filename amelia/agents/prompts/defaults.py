@@ -141,7 +141,7 @@ Be specific with file paths and line numbers. Provide actionable feedback.""",
 {{
   "approved": true|false,
   "comments": ["comment 1", "comment 2"],
-  "severity": "low"|"medium"|"high"|"critical"
+  "severity": "none"|"minor"|"major"|"critical"
 }}
 ```
 

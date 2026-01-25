@@ -12,7 +12,7 @@ from amelia.pipelines.nodes import call_reviewer_node
 def profile_with_agents():
     return Profile(
         name="test",
-        tracker="none",
+        tracker="noop",
         working_dir="/tmp/test",
         agents={
             "reviewer": AgentConfig(driver="cli", model="opus", options={"max_iterations": 3}),
@@ -45,7 +45,7 @@ async def test_call_reviewer_node_uses_agent_config(profile_with_agents, mock_st
     }
 
     mock_review_result = ReviewResult(
-        severity="low",
+        severity="none",
         approved=True,
         comments=[],
         reviewer_persona="Senior Engineer",

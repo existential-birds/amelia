@@ -73,7 +73,7 @@ class TestProfileList:
         mock_profiles = [
             Profile(
                 name="test-profile",
-                tracker="none",
+                tracker="noop",
                 working_dir="/tmp/test",
                 agents={
                     "architect": AgentConfig(driver="cli", model="sonnet"),
@@ -191,7 +191,7 @@ class TestProfileCreate:
         # create_profile returns Profile, not ProfileRecord
         created_profile = Profile(
             name="new-profile",
-            tracker="none",
+            tracker="noop",
             working_dir="/tmp",
             agents={
                 "architect": AgentConfig(driver="cli", model="sonnet"),
@@ -211,7 +211,7 @@ class TestProfileCreate:
                 "config", "profile", "create", "new-profile",
                 "--driver", "cli",
                 "--model", "sonnet",
-                "--tracker", "none",
+                "--tracker", "noop",
                 "--working-dir", "/tmp",
             ])
 
@@ -226,7 +226,7 @@ class TestProfileCreate:
         # get_profile returns Profile, not ProfileRecord
         existing_profile = Profile(
             name="existing",
-            tracker="none",
+            tracker="noop",
             working_dir="/tmp",
             agents={
                 "architect": AgentConfig(driver="cli", model="sonnet"),

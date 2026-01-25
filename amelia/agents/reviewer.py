@@ -19,14 +19,6 @@ if TYPE_CHECKING:
     from amelia.server.events.bus import EventBus
 
 
-class ReviewItemSeverity(StrEnum):
-    """Severity level for individual review items (beagle format)."""
-
-    CRITICAL = "critical"
-    MAJOR = "major"
-    MINOR = "minor"
-
-
 class ReviewVerdict(StrEnum):
     """Verdict for structured review results."""
 
@@ -35,10 +27,10 @@ class ReviewVerdict(StrEnum):
     BLOCKED = "blocked"
 
 
-def normalize_severity(value: str | None, default: Severity = Severity.MEDIUM) -> Severity:
+def normalize_severity(value: str | None, default: Severity = Severity.MINOR) -> Severity:
     """Normalize a severity value to a valid Severity enum.
 
-    LLMs may return invalid severity values like "none" or other hallucinated
+    LLMs may return invalid severity values or other hallucinated
     values. This function ensures we always get a valid Severity.
 
     Args:
@@ -62,17 +54,12 @@ class ReviewItem(BaseModel):
 
     Follows beagle review skill format: [FILE:LINE] TITLE
 
-    Note on Severity:
-        Uses 'critical/major/minor' to match the beagle review skill format for
-        individual items. This differs from ReviewResult.severity which uses
-        'low/medium/high/critical' (Severity enum) for orchestrator integration.
-
     Attributes:
         number: Sequential issue number.
         title: Brief issue title.
         file_path: Path to the file containing the issue.
         line: Line number where the issue occurs.
-        severity: Issue severity level (critical/major/minor).
+        severity: Issue severity level (critical/major/minor/none).
         issue: Description of what's wrong.
         why: Explanation of why it matters.
         fix: Recommended fix.
@@ -85,7 +72,7 @@ class ReviewItem(BaseModel):
     title: str
     file_path: str
     line: int
-    severity: ReviewItemSeverity
+    severity: Severity
     issue: str  # What's wrong
     why: str  # Why it matters
     fix: str  # Recommended fix
@@ -418,7 +405,7 @@ The changes are in git - diff against commit: {base_commit}"""
                 reviewer_persona=result.reviewer_persona,
                 approved=False,
                 comments=result.comments,
-                severity=Severity.HIGH if result.severity in (Severity.LOW, Severity.MEDIUM) else result.severity,
+                severity=Severity.MAJOR if result.severity in (Severity.NONE, Severity.MINOR) else result.severity,
             )
 
         # Emit completion event
@@ -467,7 +454,7 @@ The changes are in git - diff against commit: {base_commit}"""
                 reviewer_persona="Agentic",
                 approved=False,
                 comments=["Review did not produce output"],
-                severity=Severity.HIGH,
+                severity=Severity.MAJOR,
             )
 
         # Parse verdict to determine approval
@@ -560,13 +547,13 @@ The changes are in git - diff against commit: {base_commit}"""
             max_severity_value = max(severity_priority.get(sev, 0) for sev, _ in issues)
             severity_map: dict[int, Severity] = {
                 3: Severity.CRITICAL,
-                2: Severity.HIGH,  # major maps to high
-                1: Severity.MEDIUM,  # minor maps to medium
-                0: Severity.LOW,
+                2: Severity.MAJOR,
+                1: Severity.MINOR,
+                0: Severity.NONE,
             }
             overall_severity = severity_map[max_severity_value]
         else:
-            overall_severity = Severity.LOW if approved else Severity.MEDIUM
+            overall_severity = Severity.NONE if approved else Severity.MINOR
 
         # Extract just the issue text for comments
         comments = [issue_text for _, issue_text in issues]

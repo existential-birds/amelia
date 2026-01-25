@@ -55,7 +55,7 @@ def mock_profile_repo() -> AsyncMock:
     agent_config = AgentConfig(driver="cli", model="sonnet")
     default_profile = Profile(
         name="test",
-        tracker="none",
+        tracker="noop",
         working_dir="/default/repo",
         agents={
             "architect": agent_config,

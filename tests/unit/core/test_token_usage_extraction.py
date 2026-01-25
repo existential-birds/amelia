@@ -263,7 +263,7 @@ class TestReviewerNodeTokenUsage(TestTokenUsageExtraction):
             reviewer_persona="General",
             approved=True,
             comments=["Looks good"],
-            severity="low",
+            severity="none",
         )
 
         with patch("amelia.pipelines.nodes.Reviewer") as mock_reviewer_class:

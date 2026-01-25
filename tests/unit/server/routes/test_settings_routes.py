@@ -122,7 +122,7 @@ def profile_client(profile_app):
 
 def make_test_profile(
     name: str = "test-profile",
-    tracker: TrackerType = "none",
+    tracker: TrackerType = "noop",
     working_dir: str = "/path/to/repo",
     driver: DriverType = "cli",
     model: str = "opus",
@@ -282,7 +282,7 @@ class TestProfileRoutes:
 
     def test_update_profile_with_agents(self, profile_client, mock_profile_repo):
         """PUT /api/profiles/{id} updates agents configuration."""
-        tracker: TrackerType = "none"
+        tracker: TrackerType = "noop"
         driver: DriverType = "api"
         mock_profile_repo.update_profile.return_value = Profile(
             name="dev",

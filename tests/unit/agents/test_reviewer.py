@@ -12,7 +12,7 @@ from amelia.agents.reviewer import (
     StructuredReviewResult,
     normalize_severity,
 )
-from amelia.core.types import AgentConfig, Profile
+from amelia.core.types import AgentConfig, Profile, Severity
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
 from amelia.pipelines.implementation.state import ImplementationState
 from amelia.server.models.events import EventType
@@ -69,27 +69,29 @@ class TestNormalizeSeverity:
     """Tests for normalize_severity helper function."""
 
     @pytest.mark.parametrize("input_val,expected", [
-        ("low", "low"),
-        ("medium", "medium"),
-        ("high", "high"),
         ("critical", "critical"),
-        ("none", "medium"),
-        ("invalid", "medium"),
-        ("", "medium"),
-        ("CRITICAL", "medium"),  # Case sensitive
+        ("major", "major"),
+        ("minor", "minor"),
+        ("none", "none"),
+        ("invalid", "minor"),  # Invalid falls back to default
+        ("", "minor"),  # Empty falls back to default
+        ("CRITICAL", "minor"),  # Case sensitive - uppercase is invalid
+        ("low", "minor"),  # Old value is now invalid
+        ("medium", "minor"),  # Old value is now invalid
+        ("high", "minor"),  # Old value is now invalid
     ])
     def test_normalize_severity(self, input_val: str, expected: str) -> None:
         """Test severity normalization with various inputs."""
         assert normalize_severity(input_val) == expected
 
     def test_none_value_returns_default(self) -> None:
-        """Test that None returns the default."""
-        assert normalize_severity(None) == "medium"
+        """Test that Python None returns the default."""
+        assert normalize_severity(None) == "minor"
 
     def test_custom_default(self) -> None:
         """Test that custom default is used for invalid values."""
-        assert normalize_severity("none", default="high") == "high"
-        assert normalize_severity(None, default="critical") == "critical"
+        assert normalize_severity("invalid", default=Severity.MAJOR) == "major"
+        assert normalize_severity(None, default=Severity.CRITICAL) == "critical"
 
 
 class TestReviewItem:
@@ -97,7 +99,7 @@ class TestReviewItem:
 
     def test_review_item_severity_values(self) -> None:
         """Test that severity accepts only valid values."""
-        for severity in ["critical", "major", "minor"]:
+        for severity in ["critical", "major", "minor", "none"]:
             item = ReviewItem(
                 number=1,
                 title="Test",
@@ -226,7 +228,7 @@ Rationale: No issues found, code is ready to merge.
 
         assert result.approved is True
         assert len(result.comments) == 0  # No issues found
-        assert result.severity == "low"
+        assert result.severity == "none"
         assert session_id == "session-789"
 
         # Verify execute_agentic was called
@@ -427,7 +429,7 @@ Rationale: Two major issues need to be fixed first.
         assert len(result.comments) == 2
         assert "[major]" in result.comments[0].lower()
         assert "file.py:42" in result.comments[0]
-        assert result.severity == "high"  # major maps to high
+        assert result.severity == "major"
 
     async def test_agentic_review_determines_severity_from_highest_issue(
         self,
@@ -437,10 +439,7 @@ Rationale: Two major issues need to be fixed first.
     ) -> None:
         """Test that agentic_review determines overall severity from highest issue severity.
 
-        The parser should map issue severities to ReviewResult severity:
-        - critical → critical
-        - major → high
-        - minor → medium
+        The parser directly uses the issue severity (critical/major/minor/none).
         """
         state, profile = mock_execution_state_factory(
             goal="Implement feature",

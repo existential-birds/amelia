@@ -15,7 +15,7 @@ def base_state():
     """Create a base ImplementationState for testing."""
     profile = Profile(
         name="test",
-        tracker="none",
+        tracker="noop",
         working_dir="/tmp/test",
         agents={
             "architect": AgentConfig(driver="cli", model="sonnet"),
