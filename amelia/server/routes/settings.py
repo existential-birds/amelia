@@ -5,7 +5,7 @@ import sqlite3
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel
 
 from amelia.core.types import AgentConfig, DriverType, Profile, TrackerType
 from amelia.server.database import (
@@ -78,19 +78,9 @@ class ProfileResponse(BaseModel):
 class AgentConfigCreate(BaseModel):
     """Agent configuration for profile creation."""
 
-    driver: str
+    driver: DriverType
     model: str
     options: dict[str, Any] = {}
-
-    @field_validator("driver")
-    @classmethod
-    def validate_driver(cls, v: str) -> str:
-        try:
-            DriverType(v)
-        except ValueError:
-            valid = [e.value for e in DriverType]
-            raise ValueError(f"Invalid driver '{v}'. Valid options: {sorted(valid)}") from None
-        return v
 
 
 class ProfileCreate(BaseModel):
@@ -100,22 +90,12 @@ class ProfileCreate(BaseModel):
     """
 
     id: str
-    tracker: str = "none"
+    tracker: TrackerType = TrackerType.NONE
     working_dir: str
     plan_output_dir: str = "docs/plans"
     plan_path_pattern: str = "docs/plans/{date}-{issue_key}.md"
     auto_approve_reviews: bool = False
     agents: dict[str, AgentConfigCreate]
-
-    @field_validator("tracker")
-    @classmethod
-    def validate_tracker(cls, v: str) -> str:
-        try:
-            TrackerType(v)
-        except ValueError:
-            valid = [e.value for e in TrackerType]
-            raise ValueError(f"Invalid tracker '{v}'. Valid options: {sorted(valid)}") from None
-        return v
 
 
 class ProfileUpdate(BaseModel):
@@ -124,23 +104,12 @@ class ProfileUpdate(BaseModel):
     All fields are optional. To update agents, provide the full agents dict.
     """
 
-    tracker: str | None = None
+    tracker: TrackerType | None = None
     working_dir: str | None = None
     plan_output_dir: str | None = None
     plan_path_pattern: str | None = None
     auto_approve_reviews: bool | None = None
     agents: dict[str, AgentConfigCreate] | None = None
-
-    @field_validator("tracker")
-    @classmethod
-    def validate_tracker(cls, v: str | None) -> str | None:
-        if v is not None:
-            try:
-                TrackerType(v)
-            except ValueError:
-                valid = [e.value for e in TrackerType]
-                raise ValueError(f"Invalid tracker '{v}'. Valid options: {sorted(valid)}") from None
-        return v
 
 
 # Server settings endpoints
@@ -205,7 +174,7 @@ async def create_profile(
     # Convert AgentConfigCreate to AgentConfig
     agents = {
         name: AgentConfig(
-            driver=DriverType(config.driver),
+            driver=config.driver,
             model=config.model,
             options=config.options,
         )
@@ -214,7 +183,7 @@ async def create_profile(
 
     profile = Profile(
         name=profile_req.id,
-        tracker=TrackerType(profile_req.tracker),
+        tracker=profile_req.tracker,
         working_dir=profile_req.working_dir,
         plan_output_dir=profile_req.plan_output_dir,
         plan_path_pattern=profile_req.plan_path_pattern,

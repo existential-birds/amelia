@@ -300,19 +300,16 @@ Plan file not found after architect completed
 
 **Solutions:**
 
-1. Use a model with strong tool-calling capabilities:
-   ```yaml
-   profiles:
-     dev:
-       driver: api
-       model: "anthropic/claude-sonnet-4"  # Reliable tool calling
+1. Create a new profile with a stronger model:
+   ```bash
+   amelia config profile create dev-strong --driver api --model "anthropic/claude-sonnet-4"
+   amelia config profile activate dev-strong
    ```
 
-2. Switch to the CLI driver (recommended for reliability):
-   ```yaml
-   profiles:
-     dev:
-       driver: cli  # Uses Claude CLI with native tool support
+2. Or switch to the CLI driver (recommended for reliability):
+   ```bash
+   amelia config profile create dev-cli --driver cli
+   amelia config profile activate dev-cli
    ```
 
 **Models known to work well:**
@@ -370,61 +367,53 @@ uv tool install --reinstall git+https://github.com/existential-birds/amelia.git
 Error: Profile 'production' not found in settings.
 ```
 
-**Cause:** Referenced profile doesn't exist in `settings.amelia.yaml`.
+**Cause:** Referenced profile doesn't exist in your configuration.
 
 **Solution:**
 
 1. Check available profiles:
    ```bash
-   cat settings.amelia.yaml
+   amelia config profile list
    ```
 
-2. Add missing profile or use existing one:
-   ```yaml
-   active_profile: dev
-   profiles:
-     dev:
-       name: dev
-       driver: cli
-       tracker: github
+2. Create the missing profile:
+   ```bash
+   amelia config profile create production --driver cli:claude --tracker github
    ```
 
-3. Use explicit profile flag:
+3. Or use an existing profile:
    ```bash
    amelia start ISSUE-123 --profile dev
    ```
 
-### Settings file not found
+### No profiles configured
 
 **Error:**
-```
-FileNotFoundError: Configuration file not found at settings.amelia.yaml
+```text
+Error: No profiles configured. Run 'amelia config profile create' to add one.
 ```
 
-**Cause:** No `settings.amelia.yaml` in current directory and `AMELIA_SETTINGS` not set.
+**Cause:** No profiles have been created yet.
 
 **Solutions:**
 
-1. Create settings file in current directory:
+1. Create a profile with CLI commands:
    ```bash
-   cat > settings.amelia.yaml <<EOF
-   active_profile: dev
-   profiles:
-     dev:
-       name: dev
-       driver: cli
-       tracker: none
-   EOF
+   # Create a profile with CLI driver (recommended for getting started)
+   amelia config profile create dev --driver cli:claude --tracker none
+
+   # Or with API driver
+   amelia config profile create dev --driver api:openrouter --model "anthropic/claude-sonnet-4" --tracker github
    ```
 
-2. Use environment variable to point to settings file:
+2. Set the active profile:
    ```bash
-   export AMELIA_SETTINGS=/path/to/settings.amelia.yaml
+   amelia config profile activate dev
    ```
 
-3. Copy from repository example:
+3. Verify configuration:
    ```bash
-   cp settings.amelia.example.yaml settings.amelia.yaml
+   amelia config profile show dev
    ```
 
 ### Invalid API key
@@ -447,11 +436,10 @@ Error: OPENROUTER_API_KEY environment variable not set
    export OPENROUTER_API_KEY=sk-...
    ```
 
-2. Or switch to CLI driver (no API key needed):
-   ```yaml
-   profiles:
-     dev:
-       driver: cli
+2. Or create a CLI-based profile (no API key needed):
+   ```bash
+   amelia config profile create dev-cli --driver cli
+   amelia config profile activate dev-cli
    ```
 
 ### Tracker authentication failed
@@ -484,10 +472,9 @@ gh auth login
 ```
 
 **For testing without real tracker:**
-```yaml
-profiles:
-  test:
-    tracker: none
+```bash
+amelia config profile create test --driver cli --tracker none
+amelia config profile activate test
 ```
 
 ### Issue not found
@@ -509,10 +496,9 @@ Error: Issue 'PROJ-999' not found
 2. Check tracker authentication (see above)
 
 3. For testing, use `none` tracker:
-   ```yaml
-   profiles:
-     test:
-       tracker: none
+   ```bash
+   amelia config profile create test --driver cli --tracker none
+   amelia config profile activate test
    ```
 
    The `none` tracker creates mock issues automatically for any ID.
@@ -623,9 +609,9 @@ await file_writer.write("/absolute/path/in/project/file.md", content)
 
 **Checklist:**
 1. Dependencies installed: `uv sync`
-2. Settings file created: `settings.amelia.yaml`
-3. Tracker configured (or use `tracker: none`)
-4. Driver credentials set (or use `cli`)
+2. Profile created: `amelia config profile create dev --driver cli:claude --activate`
+3. Tracker configured (or use `--tracker none`)
+4. Driver credentials set (or use `cli:claude`)
 5. Server started: `amelia dev`
 
 ### Can't start workflow

@@ -77,7 +77,6 @@ function SpecBuilderPageContent() {
     deleteSession,
     handoff,
     startNewSession,
-    startPrimedSession,
   } = useBrainstormSession();
 
   const { textInput } = usePromptInputController();
@@ -187,15 +186,6 @@ function SpecBuilderPageContent() {
     setHandoffArtifact(null);
   }, []);
 
-  const handleStartBrainstorming = useCallback(async () => {
-    if (isStreaming) return;
-    try {
-      await startPrimedSession(activeProfileRef.current);
-    } catch {
-      toast.error("Failed to start session");
-    }
-  }, [isStreaming, startPrimedSession]);
-
   const getStatus = () => {
     if (isStreaming) return "streaming";
     if (isSubmitting) return "submitted";
@@ -255,7 +245,7 @@ function SpecBuilderPageContent() {
                 <div className="space-y-1">
                   <h3 className="font-medium text-sm">Start a brainstorming session</h3>
                   <p className="text-muted-foreground text-sm">
-                    Select a session from the sidebar or start a new one to begin exploring ideas and producing design documents.
+                    Type your idea below to begin exploring and producing design documents.
                   </p>
                 </div>
                 {/* Profile Info Badge */}
@@ -275,15 +265,6 @@ function SpecBuilderPageContent() {
                     </div>
                   </div>
                 )}
-                {/* Start Brainstorming Button */}
-                <Button
-                  className="mt-6"
-                  onClick={handleStartBrainstorming}
-                  disabled={isStreaming}
-                >
-                  <Lightbulb className="h-4 w-4 mr-2" />
-                  Start Brainstorming
-                </Button>
               </>
             </ConversationEmptyState>
           ) : (
@@ -362,28 +343,26 @@ function SpecBuilderPageContent() {
         <ConversationScrollButton />
       </Conversation>
 
-      {/* Input Area - only shown when there's an active session */}
-      {activeSessionId && (
-        <div className="border-t bg-background p-2 sm:p-4">
-          <PromptInput
-            className="max-w-3xl mx-auto"
-            onSubmit={handleSubmit}
-          >
-            <PromptInputTextarea
-              ref={textareaRef}
-              placeholder="What would you like to design?"
-              disabled={isStreaming}
+      {/* Input Area - always visible */}
+      <div className="border-t bg-background p-2 sm:p-4">
+        <PromptInput
+          className="max-w-3xl mx-auto"
+          onSubmit={handleSubmit}
+        >
+          <PromptInputTextarea
+            ref={textareaRef}
+            placeholder="What would you like to design?"
+            disabled={isStreaming}
+          />
+          <PromptInputFooter>
+            <div />
+            <PromptInputSubmit
+              disabled={!textInput.value.trim() || isStreaming}
+              status={getStatus()}
             />
-            <PromptInputFooter>
-              <div />
-              <PromptInputSubmit
-                disabled={!textInput.value.trim() || isStreaming}
-                status={getStatus()}
-              />
-            </PromptInputFooter>
-          </PromptInput>
-        </div>
-      )}
+          </PromptInputFooter>
+        </PromptInput>
+      </div>
 
       {/* Handoff Dialog */}
       <HandoffDialog

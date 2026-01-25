@@ -1195,28 +1195,16 @@ class Profile(BaseModel):
     memory: MemoryConfig = Field(default_factory=MemoryConfig)
 ```
 
-### Settings File Example
+### Configuration Example
 
-```yaml
-# settings.amelia.yaml
+> **Note**: This plan was written before the migration to database-backed configuration (v0.10.0).
+> Memory configuration would be managed via CLI or dashboard rather than YAML files.
 
-active_profile: work
-profiles:
-  work:
-    name: work
-    driver: cli:claude
-    model: sonnet
-    tracker: github
-    strategy: single
-    memory:
-      enabled: true
-      org_id: "my-company"
-      scope: org
-      ollama_base_url: http://localhost:11434
-      ollama_model: llama3.1:latest
-      ollama_embed_model: nomic-embed-text:latest
-      qdrant_host: localhost
-      qdrant_port: 6333
+```bash
+# Create profile with memory settings
+amelia config profile create work --driver cli:claude --model sonnet --tracker github --activate
+
+# Memory configuration would be set via dashboard or future CLI commands
 ```
 
 ---

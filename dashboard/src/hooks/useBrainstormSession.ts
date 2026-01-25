@@ -185,49 +185,6 @@ export function useBrainstormSession() {
     setDrawerOpen(false);
   }, [setActiveSessionId, setActiveProfile, clearMessages, setArtifacts, setSessionUsage, setStreaming, setDrawerOpen]);
 
-  const startPrimedSession = useCallback(
-    async (profileId: string) => {
-      // Create session without a topic
-      const { session, profile } = await brainstormApi.createSession(profileId);
-      addSession(session);
-      setActiveSessionId(session.id);
-      setActiveProfile(profile ?? null);
-      clearMessages();
-      setArtifacts([]);
-      setSessionUsage({
-        total_input_tokens: 0,
-        total_output_tokens: 0,
-        total_cost_usd: 0,
-        message_count: 0,
-      });
-      setDrawerOpen(false);
-
-      // Prime the session to get the assistant's greeting
-      try {
-        setStreaming(true, null);
-        const response = await brainstormApi.primeSession(session.id);
-
-        // Create assistant placeholder for the greeting
-        const assistantMessage = {
-          id: response.message_id,
-          session_id: session.id,
-          sequence: 1,
-          role: "assistant" as const,
-          content: "",
-          parts: null,
-          created_at: new Date().toISOString(),
-          status: "streaming" as const,
-        };
-        addMessage(assistantMessage);
-        setStreaming(true, response.message_id);
-      } catch (error) {
-        setStreaming(false, null);
-        throw error;
-      }
-    },
-    [addSession, setActiveSessionId, setActiveProfile, clearMessages, setArtifacts, setSessionUsage, setDrawerOpen, addMessage, setStreaming]
-  );
-
   return {
     activeSessionId,
     loadSessions,
@@ -237,6 +194,5 @@ export function useBrainstormSession() {
     deleteSession,
     handoff,
     startNewSession,
-    startPrimedSession,
   };
 }
