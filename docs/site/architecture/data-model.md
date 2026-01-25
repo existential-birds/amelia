@@ -6,7 +6,7 @@ This document describes the core data structures used throughout the Amelia orch
 
 | Type | Definition | Description |
 |------|------------|-------------|
-| `DriverType` | `"cli" \| "api:openai" \| "api" \| "cli" \| "api"` | LLM driver type. |
+| `DriverType` | `"cli" \| "api"` | LLM driver type. |
 | `TrackerType` | `"jira" \| "github" \| "none"` | Issue tracker type. |
 | `AgenticStatus` | `"running" \| "awaiting_approval" \| "completed" \| "failed" \| "cancelled"` | Agentic execution status. |
 | `Severity` | `"low" \| "medium" \| "high" \| "critical"` | Review issue severity. |

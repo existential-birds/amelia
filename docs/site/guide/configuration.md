@@ -69,9 +69,7 @@ How Amelia communicates with LLMs.
 | Value | Description | Requirements | Notes |
 |-------|-------------|--------------|-------|
 | `api` | Direct OpenRouter API calls | `OPENROUTER_API_KEY` env var, `model` field | Full functionality, structured outputs |
-| `api` | Alias for `api` | Same as above | Shorthand |
 | `cli` | Wraps claude CLI tool | `claude` CLI installed & authenticated | Agentic execution via CLI |
-| `cli` | Alias for `cli` | Same as above | Shorthand |
 
 ### `profiles.<name>.model` (required for API drivers)
 
@@ -98,7 +96,6 @@ Default: `"none"`
 |-------|-------------|--------------|
 | `jira` | Jira issues | `JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN` env vars |
 | `github` | GitHub issues | `gh` CLI authenticated (`gh auth login`) |
-| `none` | No tracker | None |
 | `none` | No tracker | None |
 
 ### `profiles.<name>.plan_output_dir` (optional)
@@ -222,7 +219,7 @@ gh auth login
 Amelia validates profiles on startup:
 
 - Required fields (`name`, `driver`) must be present
-- Driver values must be one of: `api`, `api`, `cli`, `cli`
+- Driver values must be one of: `api`, `cli`
 - Tracker values must be one of: `jira`, `github`, `none`
 - API drivers require the `model` field
 - Retry values must be within allowed ranges
@@ -314,11 +311,11 @@ Ensure the profile name matches exactly (case-sensitive) in both `active_profile
 
 ### "Driver not recognized"
 
-Valid driver values are: `api`, `api`, `cli`, `cli`
+Valid driver values are: `api`, `cli`
 
 ### "Missing model field"
 
-API drivers (`api`, `api`) require the `model` field:
+API drivers (`api`) require the `model` field:
 
 ```yaml
 driver: api

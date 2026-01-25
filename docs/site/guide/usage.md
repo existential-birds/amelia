@@ -27,7 +27,7 @@ Amelia uses profile-based configuration in `settings.amelia.yaml`. See [Configur
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
 | `name` | Yes | - | Profile identifier (should match the key) |
-| `driver` | Yes | - | LLM driver: `api`, `api`, `cli`, or `cli` |
+| `driver` | Yes | - | LLM driver: `api` or `cli` |
 | `model` | API only | - | LLM model identifier (required for API drivers) |
 | `tracker` | No | `none` | Issue source: `github`, `jira`, or `none` |
 | `plan_output_dir` | No | `docs/plans` | Directory for generated plans |
@@ -50,9 +50,7 @@ The `retry` parameter accepts these sub-fields:
 | Driver | Description | Requirements |
 |--------|-------------|--------------|
 | `api` | Direct OpenRouter API calls | `OPENROUTER_API_KEY` env var, `model` field |
-| `api` | Alias for `api` | Same as above |
 | `cli` | Wraps Claude CLI tool | `claude` CLI installed and authenticated |
-| `cli` | Alias for `cli` | Same as above |
 
 ### Tracker Options
 
@@ -60,7 +58,6 @@ The `retry` parameter accepts these sub-fields:
 |---------|-------------|--------------|
 | `github` | GitHub Issues | `gh` CLI authenticated (`gh auth login`) |
 | `jira` | Jira issues | `JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN` |
-| `none` | No tracker (manual input) | None |
 | `none` | No tracker (manual input) | None |
 
 See [Driver Abstraction](/architecture/concepts#the-driver-abstraction) and [Tracker Abstraction](/architecture/concepts#the-tracker-abstraction) for architectural details.
