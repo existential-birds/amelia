@@ -531,6 +531,183 @@ Rationale: All checks pass.
             "(bold only on 'Ready' word, colon outside bold)"
         )
 
+    def test_approved_review_with_bullets_in_summary_returns_empty_comments(
+        self,
+        create_reviewer: Callable[..., Reviewer],
+    ) -> None:
+        """An approved review with bullet points in Review Summary should have empty comments.
+
+        Bug: Legacy parsing captures ANY bullet point from sections like Review Summary,
+        even when the review is approved and there are no actual issues.
+        """
+        beagle_output = """## Review Summary
+
+The implementation looks solid with the following highlights:
+
+- Clean separation of concerns between modules
+- Good use of dependency injection patterns
+- Well-structured error handling
+
+## Issues
+
+### Critical (Blocking)
+
+### Major (Should Fix)
+
+### Minor (Nice to Have)
+
+## Good Patterns
+
+- [config.py:25] Proper use of Pydantic validators
+
+## Verdict
+
+**Ready:** Yes
+Rationale: Code is production-ready with no issues.
+"""
+        reviewer = create_reviewer()
+        result = reviewer._parse_review_result(beagle_output, workflow_id="wf-test")
+
+        assert result.approved is True
+        # BUG: Legacy parsing incorrectly captures bullets from Review Summary
+        assert result.comments == [], (
+            "Approved review should have empty comments. "
+            "Bullet points in Review Summary are not issues."
+        )
+
+    def test_approved_review_with_verification_success_messages_returns_empty_comments(
+        self,
+        create_reviewer: Callable[..., Reviewer],
+    ) -> None:
+        """An approved review with success verification messages should have empty comments.
+
+        Bug: Legacy parsing captures verification success messages like
+        "- Compilation succeeded" as issues when they're actually success indicators.
+        """
+        beagle_output = """## Review Summary
+
+Verified the changes work correctly.
+
+## Verification
+
+- Compilation succeeded with no warnings
+- All 42 tests passed
+- Type checking completed successfully
+- Linting shows no issues
+
+## Issues
+
+### Critical (Blocking)
+
+### Major (Should Fix)
+
+### Minor (Nice to Have)
+
+## Good Patterns
+
+- [main.py:10] Good error handling
+
+## Verdict
+
+**Ready:** Yes
+Rationale: All verification checks pass.
+"""
+        reviewer = create_reviewer()
+        result = reviewer._parse_review_result(beagle_output, workflow_id="wf-test")
+
+        assert result.approved is True
+        # BUG: Legacy parsing captures verification success messages as issues
+        assert result.comments == [], (
+            "Approved review should have empty comments. "
+            "Verification success messages like 'Compilation succeeded' are not issues."
+        )
+
+    def test_not_approved_review_with_no_structured_issues_returns_fallback(
+        self,
+        create_reviewer: Callable[..., Reviewer],
+    ) -> None:
+        """A non-approved review with no structured issues should return fallback message.
+
+        Bug: Legacy parsing captures random bullets from other sections instead
+        of returning the fallback message "See review output for details".
+        """
+        beagle_output = """## Review Summary
+
+The changes introduce architectural concerns that need discussion:
+
+- The approach differs from our existing patterns
+- Consider using the established factory pattern instead
+
+## Issues
+
+### Critical (Blocking)
+
+### Major (Should Fix)
+
+### Minor (Nice to Have)
+
+## Good Patterns
+
+## Verdict
+
+**Ready:** No
+Rationale: Architectural approach needs team discussion before proceeding.
+"""
+        reviewer = create_reviewer()
+        result = reviewer._parse_review_result(beagle_output, workflow_id="wf-test")
+
+        assert result.approved is False
+        # BUG: Legacy parsing captures bullets from Review Summary instead of fallback
+        assert result.comments == ["See review output for details"], (
+            "Non-approved review with no structured issues should return fallback message, "
+            "not random bullets from Review Summary."
+        )
+
+    def test_bullets_from_verdict_section_not_captured(
+        self,
+        create_reviewer: Callable[..., Reviewer],
+    ) -> None:
+        """Bullet points in the Verdict section should not be captured as issues.
+
+        Bug: Legacy parsing captures ANY bullet point not in Good Patterns,
+        including those in the Verdict section explaining the rationale.
+        """
+        beagle_output = """## Review Summary
+
+Code review completed.
+
+## Issues
+
+### Critical (Blocking)
+
+### Major (Should Fix)
+
+### Minor (Nice to Have)
+
+## Good Patterns
+
+- [api.py:50] Good use of async patterns
+
+## Verdict
+
+**Ready:** Yes
+
+Rationale: The code is ready because:
+- All tests pass and coverage is adequate
+- No security vulnerabilities detected
+- Performance benchmarks show no regression
+- Documentation is complete and accurate
+"""
+        reviewer = create_reviewer()
+        result = reviewer._parse_review_result(beagle_output, workflow_id="wf-test")
+
+        assert result.approved is True
+        # BUG: Legacy parsing captures Verdict rationale bullets as issues
+        assert result.comments == [], (
+            "Approved review should have empty comments. "
+            "Bullet points in Verdict rationale are not issues."
+        )
+
 
 class TestExtractTaskContext:
     """Tests for Reviewer._extract_task_context task extraction."""

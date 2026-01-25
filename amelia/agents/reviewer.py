@@ -478,28 +478,6 @@ The changes are in git - diff against commit: {base_commit}"""
         # Extract just the issue text for comments
         comments = [issue_text for _, issue_text in issues]
 
-        # If no structured issues found, try legacy parsing
-        if not comments:
-            for raw_line in output.split("\n"):
-                line = raw_line.strip()
-                if line.startswith(("- ", "* ", "• ")) or re.match(r"^\d+\.", line):
-                    # Skip good patterns section items
-                    if "good pattern" in output.lower():
-                        good_patterns_pos = output.lower().find("## good patterns")
-                        verdict_pos = output.lower().find("## verdict")
-                        line_pos = output.find(line)
-                        in_good_patterns = (
-                            good_patterns_pos != -1
-                            and line_pos > good_patterns_pos
-                            and (verdict_pos == -1 or line_pos < verdict_pos)
-                        )
-                        if in_good_patterns:
-                            continue  # Skip good patterns
-
-                    comment = re.sub(r"^[-*•]\s*|\d+\.\s*", "", line).strip()
-                    if comment and len(comment) > 10:
-                        comments.append(comment)
-
         if not comments and not approved:
             comments = ["See review output for details"]
 
