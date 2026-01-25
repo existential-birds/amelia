@@ -219,9 +219,9 @@ class BraintrustTracingProvider:
         )
 
     def end_span(self, ctx: SpanContext, output: Any = None, error: str | None = None) -> None:
-        if output:
+        if output is not None:
             ctx.provider_data.log(output=output)
-        if error:
+        if error is not None:
             ctx.provider_data.log(error=error)
         ctx.provider_data.end()
 
