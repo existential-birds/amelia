@@ -12,8 +12,6 @@ Exports:
     EvaluatedItem: A single evaluated feedback item with disposition.
     EvaluationResult: Collection of evaluated items with summary.
     Reviewer: Review code changes and provide structured feedback.
-    ReviewItem: A single review comment with severity and location.
-    StructuredReviewResult: Parsed review output with approval status.
 """
 
 from amelia.agents.architect import Architect
@@ -24,7 +22,7 @@ from amelia.agents.evaluator import (
     EvaluationResult,
     Evaluator,
 )
-from amelia.agents.reviewer import Reviewer, ReviewItem, StructuredReviewResult
+from amelia.agents.reviewer import Reviewer
 
 
 __all__ = [
@@ -34,7 +32,5 @@ __all__ = [
     "EvaluatedItem",
     "EvaluationResult",
     "Evaluator",
-    "ReviewItem",
     "Reviewer",
-    "StructuredReviewResult",
 ]

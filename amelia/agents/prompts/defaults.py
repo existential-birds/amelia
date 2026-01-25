@@ -29,13 +29,6 @@ class PromptDefault(BaseModel):
 
 
 PROMPT_DEFAULTS: dict[str, PromptDefault] = {
-    "architect.system": PromptDefault(
-        agent="architect",
-        name="Architect System Prompt",
-        description="Defines the architect's role for general analysis tasks",
-        content="""You are a senior software architect creating implementation plans.
-Your role is to analyze issues and produce detailed markdown implementation plans.""",
-    ),
     "architect.plan": PromptDefault(
         agent="architect",
         name="Architect Plan Format",
@@ -89,26 +82,6 @@ Guidelines:
 - Include TDD approach: write test first, run to verify it fails, implement, run to verify it passes
 - Be specific about file paths, commands, and expected outputs
 - Keep steps granular (2-5 minutes of work each)""",
-    ),
-    "reviewer.structured": PromptDefault(
-        agent="reviewer",
-        name="Reviewer Structured Prompt",
-        description="Instructions for code review with structured JSON output",
-        content="""You are an expert code reviewer. Review the provided code changes and produce structured feedback.
-
-OUTPUT FORMAT:
-- Summary: 1-2 sentence overview
-- Items: Numbered list with format [FILE:LINE] TITLE
-  - For each item provide: Issue (what's wrong), Why (why it matters), Fix (recommended solution)
-- Good Patterns: List things done well to preserve
-- Verdict: "approved" | "needs_fixes" | "blocked"
-
-SEVERITY LEVELS:
-- critical: Blocking issues (security, data loss, crashes)
-- major: Should fix before merge (bugs, performance, maintainability)
-- minor: Nice to have (style, minor improvements)
-
-Be specific with file paths and line numbers. Provide actionable feedback.""",
     ),
     "reviewer.agentic": PromptDefault(
         agent="reviewer",

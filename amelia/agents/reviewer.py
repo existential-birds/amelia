@@ -2,12 +2,10 @@
 
 import re
 from datetime import UTC, datetime
-from enum import StrEnum
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from loguru import logger
-from pydantic import BaseModel, ConfigDict, Field
 
 from amelia.core.types import AgentConfig, Profile, ReviewResult, Severity
 from amelia.drivers.factory import get_driver
@@ -17,84 +15,6 @@ from amelia.server.models.events import EventLevel, EventType, WorkflowEvent
 if TYPE_CHECKING:
     from amelia.pipelines.implementation.state import ImplementationState
     from amelia.server.events.bus import EventBus
-
-
-class ReviewVerdict(StrEnum):
-    """Verdict for structured review results."""
-
-    APPROVED = "approved"
-    NEEDS_FIXES = "needs_fixes"
-    BLOCKED = "blocked"
-
-
-def normalize_severity(value: str | None, default: Severity = Severity.MINOR) -> Severity:
-    """Normalize a severity value to a valid Severity enum.
-
-    LLMs may return invalid severity values or other hallucinated
-    values. This function ensures we always get a valid Severity.
-
-    Args:
-        value: The severity value to normalize.
-        default: The default severity to use if value is invalid.
-
-    Returns:
-        A valid Severity enum member.
-
-    """
-    if value is not None:
-        try:
-            return Severity(value)
-        except ValueError:
-            pass
-    return default
-
-
-class ReviewItem(BaseModel):
-    """Single review item with full context.
-
-    Follows beagle review skill format: [FILE:LINE] TITLE
-
-    Attributes:
-        number: Sequential issue number.
-        title: Brief issue title.
-        file_path: Path to the file containing the issue.
-        line: Line number where the issue occurs.
-        severity: Issue severity level (critical/major/minor/none).
-        issue: Description of what's wrong.
-        why: Explanation of why it matters.
-        fix: Recommended fix.
-
-    """
-
-    model_config = ConfigDict(frozen=True)
-
-    number: int
-    title: str
-    file_path: str
-    line: int
-    severity: Severity
-    issue: str  # What's wrong
-    why: str  # Why it matters
-    fix: str  # Recommended fix
-
-
-class StructuredReviewResult(BaseModel):
-    """Structured review output matching beagle format.
-
-    Attributes:
-        summary: 1-2 sentence overview of the review.
-        items: List of all review items with full context.
-        good_patterns: Things done well that should be preserved.
-        verdict: Overall review verdict.
-
-    """
-
-    model_config = ConfigDict(frozen=True)
-
-    summary: str
-    items: list[ReviewItem]
-    good_patterns: list[str] = Field(default_factory=list)
-    verdict: ReviewVerdict
 
 
 class Reviewer:

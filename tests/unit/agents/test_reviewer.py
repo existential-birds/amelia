@@ -6,13 +6,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from amelia.agents.reviewer import (
-    Reviewer,
-    ReviewItem,
-    StructuredReviewResult,
-    normalize_severity,
-)
-from amelia.core.types import AgentConfig, Profile, Severity
+from amelia.agents.reviewer import Reviewer
+from amelia.core.types import AgentConfig, Profile
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
 from amelia.pipelines.implementation.state import ImplementationState
 from amelia.server.models.events import EventType
@@ -63,77 +58,6 @@ class TestReviewerInit:
             mock_get_driver.assert_called_once_with("cli", model="sonnet")
             assert reviewer.driver is mock_driver
             assert reviewer.options == {"max_iterations": 5}
-
-
-class TestNormalizeSeverity:
-    """Tests for normalize_severity helper function."""
-
-    @pytest.mark.parametrize("input_val,expected", [
-        ("critical", "critical"),
-        ("major", "major"),
-        ("minor", "minor"),
-        ("none", "none"),
-        ("invalid", "minor"),  # Invalid falls back to default
-        ("", "minor"),  # Empty falls back to default
-        ("CRITICAL", "minor"),  # Case sensitive - uppercase is invalid
-        ("low", "minor"),  # Old value is now invalid
-        ("medium", "minor"),  # Old value is now invalid
-        ("high", "minor"),  # Old value is now invalid
-    ])
-    def test_normalize_severity(self, input_val: str, expected: str) -> None:
-        """Test severity normalization with various inputs."""
-        assert normalize_severity(input_val) == expected
-
-    def test_none_value_returns_default(self) -> None:
-        """Test that Python None returns the default."""
-        assert normalize_severity(None) == "minor"
-
-    def test_custom_default(self) -> None:
-        """Test that custom default is used for invalid values."""
-        assert normalize_severity("invalid", default=Severity.MAJOR) == "major"
-        assert normalize_severity(None, default=Severity.CRITICAL) == "critical"
-
-
-class TestReviewItem:
-    """Tests for ReviewItem model."""
-
-    def test_review_item_severity_values(self) -> None:
-        """Test that severity accepts only valid values."""
-        for severity in ["critical", "major", "minor", "none"]:
-            item = ReviewItem(
-                number=1,
-                title="Test",
-                file_path="test.py",
-                line=1,
-                severity=severity,  # type: ignore[arg-type]  # Testing valid Literal values via iteration
-                issue="Issue",
-                why="Why",
-                fix="Fix",
-            )
-            assert item.severity == severity
-
-
-class TestStructuredReviewResult:
-    """Tests for StructuredReviewResult model."""
-
-    def test_structured_review_result_verdict_values(self) -> None:
-        """Test that verdict accepts only valid values."""
-        for verdict in ["approved", "needs_fixes", "blocked"]:
-            result = StructuredReviewResult(
-                summary="Review",
-                items=[],
-                verdict=verdict,  # type: ignore[arg-type]  # Testing valid Literal values via iteration
-            )
-            assert result.verdict == verdict
-
-    def test_structured_review_result_default_good_patterns(self) -> None:
-        """Test that good_patterns defaults to empty list."""
-        result = StructuredReviewResult(
-            summary="Review",
-            items=[],
-            verdict="approved",
-        )
-        assert result.good_patterns == []
 
 
 class TestAgenticReview:

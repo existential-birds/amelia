@@ -4,65 +4,23 @@ This module provides the Architect agent that analyzes issues and produces
 rich markdown implementation plans for agentic execution.
 """
 from collections.abc import AsyncIterator
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
-from uuid import uuid4
 
 from loguru import logger
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel
 
 from amelia.core.agentic_state import ToolCall, ToolResult
 from amelia.core.constants import ToolName, resolve_plan_path
 from amelia.core.types import AgentConfig, Profile
 from amelia.drivers.base import AgenticMessageType
 from amelia.drivers.factory import get_driver
-from amelia.server.models.events import EventLevel, EventType, WorkflowEvent
+from amelia.server.models.events import WorkflowEvent
 
 
 if TYPE_CHECKING:
     from amelia.pipelines.implementation.state import ImplementationState
     from amelia.server.events.bus import EventBus
-
-
-class PlanOutput(BaseModel):
-    """Output from Architect plan generation.
-
-    Attributes:
-        markdown_content: The full markdown plan content.
-        markdown_path: Path where the plan was saved.
-        goal: High-level goal extracted from the plan.
-        key_files: Files likely to be modified.
-
-    """
-
-    model_config = ConfigDict(frozen=True)
-
-    markdown_content: str
-    markdown_path: Path
-    goal: str
-    key_files: list[str] = []
-
-
-class ArchitectOutput(BaseModel):
-    """Output from Architect analysis (simplified form).
-
-    Used when only analysis is needed, not full plan generation.
-
-    Attributes:
-        goal: Clear description of what needs to be done.
-        strategy: High-level approach (not step-by-step).
-        key_files: Files likely to be modified.
-        risks: Potential risks to watch for.
-
-    """
-
-    model_config = ConfigDict(frozen=True)
-
-    goal: str
-    strategy: str
-    key_files: list[str] = []
-    risks: list[str] = []
 
 
 class MarkdownPlanOutput(BaseModel):
@@ -92,9 +50,6 @@ class Architect:
         driver: LLM driver interface for plan generation.
 
     """
-
-    SYSTEM_PROMPT = """You are a senior software architect creating implementation plans.
-Your role is to analyze issues and produce detailed markdown implementation plans."""
 
     SYSTEM_PROMPT_PLAN = """You are a senior software architect creating implementation plans.
 
@@ -141,53 +96,12 @@ Before planning, discover:
         self._prompts = prompts or {}
 
     @property
-    def system_prompt(self) -> str:
-        """Get the system prompt for analysis.
-
-        Returns custom prompt if injected, otherwise class default.
-        """
-        return self._prompts.get("architect.system", self.SYSTEM_PROMPT)
-
-    @property
     def plan_prompt(self) -> str:
         """Get the system prompt for plan generation.
 
         Returns custom prompt if injected, otherwise class default.
         """
         return self._prompts.get("architect.plan", self.SYSTEM_PROMPT_PLAN)
-
-    def _build_prompt(self, state: "ImplementationState", profile: Profile) -> str:
-        """Build user prompt from execution state and profile.
-
-        Combines issue information into a prompt string. Codebase structure
-        is not included; the agent explores via tools instead.
-
-        Args:
-            state: The current execution state.
-            profile: The profile containing working directory settings.
-
-        Returns:
-            Formatted prompt string with issue context.
-
-        Raises:
-            ValueError: If no issue is present in the state.
-
-        """
-        if not state.issue:
-            raise ValueError("Issue context is required for planning")
-
-        parts: list[str] = []
-
-        # Issue section (required)
-        issue_parts = []
-        if state.issue.title:
-            issue_parts.append(f"**{state.issue.title}**")
-        if state.issue.description:
-            issue_parts.append(state.issue.description)
-        issue_summary = "\n\n".join(issue_parts) if issue_parts else ""
-        parts.append(f"## Issue\n\n{issue_summary}")
-
-        return "\n\n".join(parts)
 
     async def plan(
         self,
@@ -461,79 +375,3 @@ git commit -m "feat: add specific feature"
 - Task dependencies and ordering""")
 
         return "\n".join(parts)
-
-    async def analyze(
-        self,
-        state: "ImplementationState",
-        profile: Profile,
-        *,
-        workflow_id: str,
-    ) -> ArchitectOutput:
-        """Analyze an issue and generate goal/strategy (simplified form).
-
-        Creates an ArchitectOutput with high-level goal and strategy
-        for quick analysis without full plan generation.
-
-        Args:
-            state: The execution state containing the issue.
-            profile: The profile containing working directory settings.
-            workflow_id: Workflow ID for stream events (required).
-
-        Returns:
-            ArchitectOutput containing goal, strategy, key files, and risks.
-
-        Raises:
-            ValueError: If no issue is present in the state.
-
-        """
-        if not state.issue:
-            raise ValueError("Cannot analyze: no issue in ImplementationState")
-
-        # Build prompt from state
-        context_prompt = self._build_prompt(state, profile)
-
-        # Build user prompt for analysis
-        user_prompt = f"""{context_prompt}
-
----
-
-Analyze this issue and provide:
-1. A clear goal statement describing what needs to be accomplished
-2. A high-level strategy for how to approach the implementation
-3. Key files that will likely need to be modified
-4. Any potential risks or considerations
-
-Respond with a structured ArchitectOutput."""
-
-        # Call driver with ArchitectOutput schema
-        raw_response, _ = await self.driver.generate(
-            prompt=user_prompt,
-            system_prompt=self.system_prompt,
-            schema=ArchitectOutput,
-            cwd=profile.working_dir,
-        )
-        response = ArchitectOutput.model_validate(raw_response)
-
-        logger.info(
-            "Architect analysis complete",
-            agent="architect",
-            goal=response.goal[:100] + "..." if len(response.goal) > 100 else response.goal,
-            key_files_count=len(response.key_files),
-            risks_count=len(response.risks),
-        )
-
-        # Emit completion event
-        if self._event_bus is not None:
-            event = WorkflowEvent(
-                id=str(uuid4()),
-                workflow_id=workflow_id,
-                sequence=0,
-                timestamp=datetime.now(UTC),
-                agent="architect",
-                event_type=EventType.AGENT_OUTPUT,
-                level=EventLevel.TRACE,
-                message=f"Analysis complete: {response.goal[:100]}...",
-            )
-            self._event_bus.emit(event)
-
-        return response

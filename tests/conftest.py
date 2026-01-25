@@ -31,8 +31,8 @@ from amelia.server.database import ProfileRecord
 from amelia.server.events.bus import EventBus
 
 
-# Rebuild state models to resolve forward references for StructuredReviewResult
-# and EvaluationResult. This must be called before any tests instantiate these states.
+# Rebuild state models to resolve forward references for EvaluationResult.
+# This must be called before any tests instantiate these states.
 rebuild_implementation_state()
 
 

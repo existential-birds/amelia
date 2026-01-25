@@ -25,35 +25,35 @@ class TestGetPrompt:
     async def test_returns_default_when_no_custom_version(self, mock_repository) -> None:
         """Should return default when no custom version set."""
         mock_repository.get_prompt.return_value = Prompt(
-            id="architect.system",
+            id="architect.plan",
             agent="architect",
-            name="Architect System Prompt",
+            name="Architect Plan Format",
             current_version_id=None,  # No custom version
         )
         resolver = PromptResolver(mock_repository)
-        result = await resolver.get_prompt("architect.system")
+        result = await resolver.get_prompt("architect.plan")
 
         assert result.is_default is True
         assert result.version_id is None
-        assert result.content == PROMPT_DEFAULTS["architect.system"].content
+        assert result.content == PROMPT_DEFAULTS["architect.plan"].content
 
     async def test_returns_custom_version_when_set(self, mock_repository) -> None:
         """Should return custom version content when active."""
         custom_content = "Custom architect prompt..."
         mock_repository.get_prompt.return_value = Prompt(
-            id="architect.system",
+            id="architect.plan",
             agent="architect",
-            name="Architect System Prompt",
+            name="Architect Plan Format",
             current_version_id="v-123",
         )
         mock_repository.get_version.return_value = PromptVersion(
             id="v-123",
-            prompt_id="architect.system",
+            prompt_id="architect.plan",
             version_number=3,
             content=custom_content,
         )
         resolver = PromptResolver(mock_repository)
-        result = await resolver.get_prompt("architect.system")
+        result = await resolver.get_prompt("architect.plan")
 
         assert result.is_default is False
         assert result.version_id == "v-123"
@@ -64,10 +64,10 @@ class TestGetPrompt:
         """Should return default when database fails."""
         mock_repository.get_prompt.side_effect = Exception("DB error")
         resolver = PromptResolver(mock_repository)
-        result = await resolver.get_prompt("architect.system")
+        result = await resolver.get_prompt("architect.plan")
 
         assert result.is_default is True
-        assert result.content == PROMPT_DEFAULTS["architect.system"].content
+        assert result.content == PROMPT_DEFAULTS["architect.plan"].content
 
     async def test_raises_for_unknown_prompt(self, mock_repository) -> None:
         """Should raise ValueError for unknown prompt ID."""
@@ -88,9 +88,9 @@ class TestGetAllActive:
         result = await resolver.get_all_active()
 
         assert len(result) == len(PROMPT_DEFAULTS)
-        assert "architect.system" in result
         assert "architect.plan" in result
-        assert "reviewer.structured" in result
+        assert "reviewer.agentic" in result
+        assert "evaluator.system" in result
 
 
 class TestRecordForWorkflow:
@@ -99,14 +99,14 @@ class TestRecordForWorkflow:
     async def test_records_custom_versions_only(self, mock_repository) -> None:
         """Should only record custom versions, not defaults."""
         mock_repository.get_prompt.return_value = Prompt(
-            id="architect.system",
+            id="architect.plan",
             agent="architect",
-            name="Test",
+            name="Architect Plan Format",
             current_version_id="v-123",
         )
         mock_repository.get_version.return_value = PromptVersion(
             id="v-123",
-            prompt_id="architect.system",
+            prompt_id="architect.plan",
             version_number=1,
             content="Custom content",
         )

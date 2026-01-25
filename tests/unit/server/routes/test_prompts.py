@@ -146,11 +146,11 @@ class TestResetToDefault:
     def test_reset_to_default(self, client, mock_repo):
         """Should reset prompt to default."""
         mock_repo.get_prompt.return_value = Prompt(
-            id="architect.system", agent="architect", name="Test"
+            id="architect.plan", agent="architect", name="Architect Plan Format"
         )
-        response = client.post("/api/prompts/architect.system/reset")
+        response = client.post("/api/prompts/architect.plan/reset")
         assert response.status_code == 200
-        mock_repo.reset_to_default.assert_called_once_with("architect.system")
+        mock_repo.reset_to_default.assert_called_once_with("architect.plan")
 
 
 class TestGetDefault:
@@ -158,10 +158,10 @@ class TestGetDefault:
 
     def test_get_default_content(self, client, mock_repo):
         """Should return hardcoded default content."""
-        response = client.get("/api/prompts/architect.system/default")
+        response = client.get("/api/prompts/architect.plan/default")
         assert response.status_code == 200
         data = response.json()
-        assert data["content"] == PROMPT_DEFAULTS["architect.system"].content
+        assert data["content"] == PROMPT_DEFAULTS["architect.plan"].content
 
     def test_get_default_unknown_prompt(self, client, mock_repo):
         """Should return 404 for unknown prompt."""

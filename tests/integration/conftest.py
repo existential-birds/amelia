@@ -29,7 +29,7 @@ from amelia.server.models.state import (
 )
 
 
-# Rebuild ImplementationState first (resolves StructuredReviewResult, EvaluationResult),
+# Rebuild ImplementationState first (resolves EvaluationResult),
 # then ServerExecutionState (resolves ImplementationState union member)
 rebuild_implementation_state()
 rebuild_server_execution_state()

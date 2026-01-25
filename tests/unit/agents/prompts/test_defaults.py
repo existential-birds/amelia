@@ -8,15 +8,13 @@ from amelia.agents.prompts.defaults import PROMPT_DEFAULTS
 
 def test_prompt_default_is_frozen() -> None:
     """PromptDefault should be immutable."""
-    default = PROMPT_DEFAULTS["architect.system"]
+    default = PROMPT_DEFAULTS["architect.plan"]
     with pytest.raises(ValidationError, match="Instance is frozen"):
         default.agent = "modified"  # type: ignore[misc]  # Intentional: testing frozen model rejects assignment
 
 
 @pytest.mark.parametrize("prompt_id,expected_agent", [
-    ("architect.system", "architect"),
     ("architect.plan", "architect"),
-    ("reviewer.structured", "reviewer"),
     ("reviewer.agentic", "reviewer"),
 ])
 def test_prompt_default_exists(prompt_id: str, expected_agent: str) -> None:

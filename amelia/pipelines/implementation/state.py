@@ -19,7 +19,6 @@ from amelia.pipelines.base import BasePipelineState
 
 if TYPE_CHECKING:
     from amelia.agents.evaluator import EvaluationResult
-    from amelia.agents.reviewer import StructuredReviewResult
 
 
 class ImplementationState(BasePipelineState):
@@ -67,7 +66,6 @@ class ImplementationState(BasePipelineState):
     task_review_iteration: int = 0
 
     # Structured review workflow
-    structured_review: StructuredReviewResult | None = None
     evaluation_result: EvaluationResult | None = None
     approved_items: list[int] = Field(default_factory=list)
     auto_approve: bool = False
@@ -82,8 +80,8 @@ class ImplementationState(BasePipelineState):
 def rebuild_implementation_state() -> None:
     """Rebuild ImplementationState to resolve forward references.
 
-    Must be called after importing StructuredReviewResult and EvaluationResult
-    to enable Pydantic validation and Python's get_type_hints() to work.
+    Must be called after importing EvaluationResult to enable Pydantic
+    validation and Python's get_type_hints() to work.
 
     This function:
     1. Imports the forward-referenced types
@@ -97,18 +95,15 @@ def rebuild_implementation_state() -> None:
     import sys  # noqa: PLC0415
 
     from amelia.agents.evaluator import EvaluationResult  # noqa: PLC0415
-    from amelia.agents.reviewer import StructuredReviewResult  # noqa: PLC0415
 
     # Inject types into this module's namespace for get_type_hints() compatibility.
     # These dynamic assignments are required for Python's typing.get_type_hints()
     # to resolve forward references when used by LangGraph's StateGraph.
     module = sys.modules[__name__]
-    module.StructuredReviewResult = StructuredReviewResult  # type: ignore[attr-defined]  # Dynamic module injection for LangGraph
     module.EvaluationResult = EvaluationResult  # type: ignore[attr-defined]  # Dynamic module injection for LangGraph
 
     ImplementationState.model_rebuild(
         _types_namespace={
-            "StructuredReviewResult": StructuredReviewResult,
             "EvaluationResult": EvaluationResult,
         }
     )

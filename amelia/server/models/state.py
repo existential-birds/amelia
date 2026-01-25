@@ -189,19 +189,16 @@ def rebuild_server_execution_state() -> None:
     import sys  # noqa: PLC0415
 
     from amelia.agents.evaluator import EvaluationResult  # noqa: PLC0415
-    from amelia.agents.reviewer import StructuredReviewResult  # noqa: PLC0415
     from amelia.pipelines.implementation.state import ImplementationState  # noqa: PLC0415
 
     # Inject types into this module's namespace for get_type_hints() compatibility
     module = sys.modules[__name__]
     module.ImplementationState = ImplementationState  # type: ignore[attr-defined]  # Dynamic module injection for LangGraph
-    module.StructuredReviewResult = StructuredReviewResult  # type: ignore[attr-defined]  # Dynamic module injection for LangGraph
     module.EvaluationResult = EvaluationResult  # type: ignore[attr-defined]  # Dynamic module injection for LangGraph
 
     ServerExecutionState.model_rebuild(
         _types_namespace={
             "ImplementationState": ImplementationState,
-            "StructuredReviewResult": StructuredReviewResult,
             "EvaluationResult": EvaluationResult,
         }
     )
