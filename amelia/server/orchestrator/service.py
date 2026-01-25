@@ -612,11 +612,11 @@ class OrchestratorService:
             execution_state = execution_state.model_copy(
                 update={
                     "external_plan": True,
-                    "goal": plan_result["goal"],
-                    "plan_markdown": plan_result["plan_markdown"],
-                    "plan_path": plan_result["plan_path"],
-                    "key_files": plan_result["key_files"],
-                    "total_tasks": plan_result["total_tasks"],
+                    "goal": plan_result.goal,
+                    "plan_markdown": plan_result.plan_markdown,
+                    "plan_path": plan_result.plan_path,
+                    "key_files": plan_result.key_files,
+                    "total_tasks": plan_result.total_tasks,
                 }
             )
 
@@ -2536,6 +2536,13 @@ class OrchestratorService:
                 f"Architect is currently running for workflow {workflow_id}"
             )
 
+        # Prevent updates once execution has started
+        if workflow.worktree_path in self._active_tasks:
+            existing_id, _ = self._active_tasks[workflow.worktree_path]
+            raise WorkflowConflictError(
+                f"Workflow {existing_id} is already running for worktree {workflow.worktree_path}"
+            )
+
         # Check existing plan - require force to overwrite
         execution_state = workflow.execution_state
         if execution_state is not None and execution_state.plan_markdown is not None and not force:
@@ -2543,10 +2550,17 @@ class OrchestratorService:
                 "Plan already exists. Use force=true to overwrite."
             )
 
+        # Ensure execution_state exists before importing plan
+        if execution_state is None:
+            raise InvalidStateError(
+                "Cannot set plan: workflow has no execution state",
+                workflow_id=workflow_id,
+            )
+
         # Get profile for plan path resolution
         profile = await self._get_profile_or_fail(
             workflow_id,
-            execution_state.profile_id if execution_state else "default",
+            execution_state.profile_id,
             workflow.worktree_path,
         )
         if profile is None:
@@ -2569,20 +2583,16 @@ class OrchestratorService:
         )
 
         # Update execution state with plan data
-        updated_execution_state: ImplementationState | None
-        if execution_state is not None:
-            updated_execution_state = execution_state.model_copy(
-                update={
-                    "external_plan": True,
-                    "goal": plan_result["goal"],
-                    "plan_markdown": plan_result["plan_markdown"],
-                    "plan_path": plan_result["plan_path"],
-                    "key_files": plan_result["key_files"],
-                    "total_tasks": plan_result["total_tasks"],
-                }
-            )
-        else:
-            updated_execution_state = None
+        updated_execution_state = execution_state.model_copy(
+            update={
+                "external_plan": True,
+                "goal": plan_result.goal,
+                "plan_markdown": plan_result.plan_markdown,
+                "plan_path": plan_result.plan_path,
+                "key_files": plan_result.key_files,
+                "total_tasks": plan_result.total_tasks,
+            }
+        )
 
         # Update workflow - transition from planning to pending if needed
         new_status = (
@@ -2603,24 +2613,24 @@ class OrchestratorService:
         await self._emit(
             workflow_id,
             EventType.AGENT_MESSAGE,
-            f"External plan set: {plan_result['goal']}",
+            f"External plan set: {plan_result.goal}",
             agent="system",
             data={
-                "goal": plan_result["goal"],
-                "key_files": plan_result["key_files"],
-                "total_tasks": plan_result["total_tasks"],
+                "goal": plan_result.goal,
+                "key_files": plan_result.key_files,
+                "total_tasks": plan_result.total_tasks,
             },
         )
 
         logger.info(
             "External plan set",
             workflow_id=workflow_id,
-            goal=plan_result["goal"],
-            total_tasks=plan_result["total_tasks"],
+            goal=plan_result.goal,
+            total_tasks=plan_result.total_tasks,
         )
 
         return {
-            "goal": plan_result["goal"],
-            "key_files": plan_result["key_files"],
-            "total_tasks": plan_result["total_tasks"],
+            "goal": plan_result.goal,
+            "key_files": plan_result.key_files,
+            "total_tasks": plan_result.total_tasks,
         }

@@ -354,24 +354,47 @@ class TestCreateWorkflowRequestPlanFields:
             )
 
     def test_plan_file_accepted_alone(self) -> None:
-        """plan_file can be provided without plan_content."""
+        """plan_file can be provided without plan_content (requires start=False)."""
         request = CreateWorkflowRequest(
             issue_id="TEST-001",
             worktree_path="/path/to/repo",
             plan_file="docs/plan.md",
+            start=False,
         )
         assert request.plan_file == "docs/plan.md"
         assert request.plan_content is None
 
     def test_plan_content_accepted_alone(self) -> None:
-        """plan_content can be provided without plan_file."""
+        """plan_content can be provided without plan_file (requires start=False)."""
         request = CreateWorkflowRequest(
             issue_id="TEST-001",
             worktree_path="/path/to/repo",
             plan_content="# My Plan\n\n### Task 1: Do thing",
+            start=False,
         )
         assert request.plan_content == "# My Plan\n\n### Task 1: Do thing"
         assert request.plan_file is None
+
+    def test_plan_file_rejected_with_start_true(self) -> None:
+        """plan_file cannot be provided when start=True."""
+        with pytest.raises(ValidationError, match="start=False"):
+            CreateWorkflowRequest(
+                issue_id="TEST-001",
+                worktree_path="/path/to/repo",
+                plan_file="docs/plan.md",
+                start=True,
+            )
+
+    def test_plan_content_rejected_with_plan_now_true(self) -> None:
+        """plan_content cannot be provided when plan_now=True."""
+        with pytest.raises(ValidationError, match="start=False"):
+            CreateWorkflowRequest(
+                issue_id="TEST-001",
+                worktree_path="/path/to/repo",
+                plan_content="# Plan",
+                start=False,
+                plan_now=True,
+            )
 
 
 class TestBatchStartRequest:

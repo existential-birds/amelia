@@ -6,9 +6,9 @@ used by both workflow creation and the POST /plan endpoint.
 
 import asyncio
 from pathlib import Path
-from typing import Any
 
 from loguru import logger
+from pydantic import BaseModel, Field
 
 from amelia.agents.architect import MarkdownPlanOutput
 from amelia.core.extraction import extract_structured
@@ -20,13 +20,23 @@ from amelia.pipelines.implementation.utils import (
 )
 
 
+class ExternalPlanImportResult(BaseModel):
+    """Result of importing an external plan."""
+
+    goal: str
+    plan_markdown: str
+    plan_path: Path
+    key_files: list[str] = Field(default_factory=list)
+    total_tasks: int
+
+
 async def import_external_plan(
     plan_file: str | None,
     plan_content: str | None,
     target_path: Path,
     profile: Profile,
     workflow_id: str,
-) -> dict[str, Any]:
+) -> ExternalPlanImportResult:
     """Import and validate an external plan.
 
     Args:
@@ -37,7 +47,8 @@ async def import_external_plan(
         workflow_id: For logging.
 
     Returns:
-        Dict with goal, plan_markdown, plan_path, key_files, total_tasks.
+        ExternalPlanImportResult with goal, plan_markdown, plan_path, key_files,
+        total_tasks.
 
     Raises:
         FileNotFoundError: If plan_file doesn't exist.
@@ -116,7 +127,7 @@ Return:
         goal = output.goal
         plan_markdown = output.plan_markdown
         key_files = output.key_files
-    except RuntimeError as e:
+    except (ValueError, RuntimeError) as e:
         # Fallback extraction without LLM
         logger.warning(
             "Structured extraction failed, using fallback",
@@ -138,10 +149,10 @@ Return:
         workflow_id=workflow_id,
     )
 
-    return {
-        "goal": goal,
-        "plan_markdown": plan_markdown,
-        "plan_path": target_path,
-        "key_files": key_files,
-        "total_tasks": total_tasks,
-    }
+    return ExternalPlanImportResult(
+        goal=goal,
+        plan_markdown=plan_markdown,
+        plan_path=target_path,
+        key_files=key_files,
+        total_tasks=total_tasks,
+    )

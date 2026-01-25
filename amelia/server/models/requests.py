@@ -148,9 +148,20 @@ class CreateWorkflowRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_plan_fields(self) -> "CreateWorkflowRequest":
-        """Validate plan_file and plan_content are mutually exclusive."""
+        """Validate plan_file and plan_content constraints.
+
+        Ensures:
+        - plan_file and plan_content are mutually exclusive
+        - plan_file/plan_content require start=False and plan_now=False
+        """
         if self.plan_file is not None and self.plan_content is not None:
             raise ValueError("plan_file and plan_content are mutually exclusive")
+        if (self.plan_file is not None or self.plan_content is not None) and (
+            self.start or self.plan_now
+        ):
+            raise ValueError(
+                "plan_file/plan_content require start=False and plan_now=False"
+            )
         return self
 
     @model_validator(mode="after")

@@ -93,13 +93,13 @@ class TestSetWorkflowPlan:
             ) as mock_update_profile,
             patch.object(mock_orchestrator, "_emit", new_callable=AsyncMock),
         ):
-            mock_import.return_value = {
-                "goal": "New goal",
-                "plan_markdown": "# New plan",
-                "plan_path": tmp_path / "plan.md",
-                "key_files": ["file.py"],
-                "total_tasks": 2,
-            }
+            mock_plan_result = MagicMock()
+            mock_plan_result.goal = "New goal"
+            mock_plan_result.plan_markdown = "# New plan"
+            mock_plan_result.plan_path = tmp_path / "plan.md"
+            mock_plan_result.key_files = ["file.py"]
+            mock_plan_result.total_tasks = 2
+            mock_import.return_value = mock_plan_result
             mock_get_profile.return_value = mock_profile
             mock_update_profile.return_value = mock_profile
 
@@ -138,13 +138,13 @@ class TestSetWorkflowPlan:
             ) as mock_update_profile,
             patch.object(mock_orchestrator, "_emit", new_callable=AsyncMock),
         ):
-            mock_import.return_value = {
-                "goal": "New goal",
-                "plan_markdown": "# New plan",
-                "plan_path": tmp_path / "plan.md",
-                "key_files": ["file.py"],
-                "total_tasks": 2,
-            }
+            mock_plan_result = MagicMock()
+            mock_plan_result.goal = "New goal"
+            mock_plan_result.plan_markdown = "# New plan"
+            mock_plan_result.plan_path = tmp_path / "plan.md"
+            mock_plan_result.key_files = ["file.py"]
+            mock_plan_result.total_tasks = 2
+            mock_import.return_value = mock_plan_result
             mock_get_profile.return_value = mock_profile
             mock_update_profile.return_value = mock_profile
 
@@ -216,13 +216,13 @@ class TestSetWorkflowPlan:
             ) as mock_update_profile,
             patch.object(mock_orchestrator, "_emit", new_callable=AsyncMock),
         ):
-            mock_import.return_value = {
-                "goal": "New goal",
-                "plan_markdown": "# New plan",
-                "plan_path": tmp_path / "plan.md",
-                "key_files": ["file.py"],
-                "total_tasks": 3,
-            }
+            mock_plan_result = MagicMock()
+            mock_plan_result.goal = "New goal"
+            mock_plan_result.plan_markdown = "# New plan"
+            mock_plan_result.plan_path = tmp_path / "plan.md"
+            mock_plan_result.key_files = ["file.py"]
+            mock_plan_result.total_tasks = 3
+            mock_import.return_value = mock_plan_result
             mock_get_profile.return_value = mock_profile
             mock_update_profile.return_value = mock_profile
 

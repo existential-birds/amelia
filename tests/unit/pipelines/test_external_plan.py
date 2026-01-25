@@ -65,10 +65,10 @@ Create the auth module.
                 workflow_id="wf-001",
             )
 
-        assert result["goal"] == "Add user authentication"
-        assert result["plan_markdown"] == plan_content
-        assert result["key_files"] == ["auth.py"]
-        assert result["total_tasks"] == 1
+        assert result.goal == "Add user authentication"
+        assert result.plan_markdown == plan_content
+        assert result.key_files == ["auth.py"]
+        assert result.total_tasks == 1
         assert target_path.read_text() == plan_content
 
     async def test_import_from_inline_content(
@@ -109,7 +109,7 @@ Fix it.
                 workflow_id="wf-001",
             )
 
-        assert result["goal"] == "Fix bug"
+        assert result.goal == "Fix bug"
         assert target_path.read_text() == plan_content
 
     async def test_import_file_not_found_raises(
@@ -199,7 +199,7 @@ Fix it.
                 workflow_id="wf-001",
             )
 
-        assert result["goal"] == "Do thing"
+        assert result.goal == "Do thing"
 
     async def test_import_fallback_when_extraction_fails(
         self, tmp_path: Path, mock_profile: Profile
@@ -239,11 +239,11 @@ Content here.
             )
 
         # Fallback should extract goal from **Goal:** pattern
-        assert result["goal"] == "Build feature"
-        assert result["plan_markdown"] == plan_content
+        assert result.goal == "Build feature"
+        assert result.plan_markdown == plan_content
         # Fallback should extract key files from Create: pattern
-        assert "src/feature.py" in result["key_files"]
-        assert result["total_tasks"] == 1
+        assert "src/feature.py" in result.key_files
+        assert result.total_tasks == 1
 
     async def test_import_plan_file_path_traversal_blocked(
         self, tmp_path: Path, mock_profile: Profile

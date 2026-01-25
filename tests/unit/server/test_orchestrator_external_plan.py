@@ -70,13 +70,13 @@ class TestQueueWorkflowWithExternalPlan:
             mock_profile.plan_path_pattern = "docs/plans/{issue_key}.md"
             mock_profile.working_dir = str(worktree)
             mock_prepare.return_value = (str(worktree), mock_profile, mock_state)
-            mock_import.return_value = {
-                "goal": "Do thing",
-                "plan_markdown": "# Test Plan",
-                "plan_path": tmp_path / "plan.md",
-                "key_files": [],
-                "total_tasks": 1,
-            }
+            mock_plan_result = MagicMock()
+            mock_plan_result.goal = "Do thing"
+            mock_plan_result.plan_markdown = "# Test Plan"
+            mock_plan_result.plan_path = tmp_path / "plan.md"
+            mock_plan_result.key_files = []
+            mock_plan_result.total_tasks = 1
+            mock_import.return_value = mock_plan_result
             mock_server_state.return_value = MagicMock()
 
             await mock_orchestrator.queue_workflow(request)
@@ -87,6 +87,11 @@ class TestQueueWorkflowWithExternalPlan:
             assert call_kwargs["plan_content"] == "# Test Plan\n\n### Task 1: Do thing"
             assert call_kwargs["plan_file"] is None
             assert call_kwargs["profile"] == mock_profile
+
+            # Verify external_plan flag was set
+            mock_state.model_copy.assert_called_once()
+            update_kwargs = mock_state.model_copy.call_args.kwargs["update"]
+            assert update_kwargs["external_plan"] is True
 
     async def test_queue_workflow_with_plan_file_calls_import(
         self, mock_orchestrator: OrchestratorService, tmp_path: Path
@@ -127,13 +132,13 @@ class TestQueueWorkflowWithExternalPlan:
             mock_profile.plan_path_pattern = "docs/plans/{issue_key}.md"
             mock_profile.working_dir = str(worktree)
             mock_prepare.return_value = (str(worktree), mock_profile, mock_state)
-            mock_import.return_value = {
-                "goal": "Do thing",
-                "plan_markdown": "# Test Plan",
-                "plan_path": tmp_path / "plan.md",
-                "key_files": [],
-                "total_tasks": 1,
-            }
+            mock_plan_result = MagicMock()
+            mock_plan_result.goal = "Do thing"
+            mock_plan_result.plan_markdown = "# Test Plan"
+            mock_plan_result.plan_path = tmp_path / "plan.md"
+            mock_plan_result.key_files = []
+            mock_plan_result.total_tasks = 1
+            mock_import.return_value = mock_plan_result
             mock_server_state.return_value = MagicMock()
 
             await mock_orchestrator.queue_workflow(request)
