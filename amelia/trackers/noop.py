@@ -17,7 +17,7 @@ class NoopTracker(BaseTracker):
     3. Manual task entry: When the issue ID is just a reference tag and the task
        description will be provided directly via CLI arguments or prompts.
 
-    The factory accepts both "noop" and "none" as aliases for this tracker.
+    Configure with `tracker: noop` in profile settings.
     """
 
     def get_issue(self, issue_id: str, *, cwd: str | None = None) -> Issue:

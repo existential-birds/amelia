@@ -114,8 +114,8 @@ class TestPlanCommandTaskFlags:
         # Mock profile data returned from server API
         # Profile response with agents dict format
         mock_profile_response = {
-            "id": "none",
-            "tracker": "none",
+            "id": "noop",
+            "tracker": "noop",
             "working_dir": str(worktree),
             "plan_output_dir": "docs/plans",
             "plan_path_pattern": "docs/plans/{date}-{issue_key}.md",
@@ -158,10 +158,10 @@ class TestPlanCommandTaskFlags:
 
             runner.invoke(
                 app,
-                ["plan", "TASK-1", "-p", "none", "--title", "Fix typo", "--description", "Fix README"],
+                ["plan", "TASK-1", "-p", "noop", "--title", "Fix typo", "--description", "Fix README"],
             )
 
-            # Tracker should NOT be called when --title is provided with none
+            # Tracker should NOT be called when --title is provided with noop
             mock_create_tracker.assert_not_called()
 
             # State should have our custom issue

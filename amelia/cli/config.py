@@ -85,7 +85,7 @@ VALID_DRIVERS: set[DriverType] = {
 VALID_TRACKERS: set[TrackerType] = {
     TrackerType.JIRA,
     TrackerType.GITHUB,
-    TrackerType.NONE,
+    TrackerType.NOOP,
 }
 
 
@@ -262,7 +262,7 @@ def profile_create(
     ] = None,
     tracker: Annotated[
         str | None,
-        typer.Option("--tracker", "-t", help="Issue tracker (none, github, jira)"),
+        typer.Option("--tracker", "-t", help="Issue tracker (noop, github, jira)"),
     ] = None,
     working_dir: Annotated[
         str | None,
@@ -294,7 +294,7 @@ def profile_create(
     if tracker is None:
         tracker = typer.prompt(
             "Tracker",
-            default="none",
+            default="noop",
             show_default=True,
         )
     if working_dir is None:
@@ -429,7 +429,7 @@ async def check_and_run_first_time_setup() -> bool:
 
         profile = Profile(
             name=name,
-            tracker=TrackerType.NONE,
+            tracker=TrackerType.NOOP,
             working_dir=working_dir,
             agents=agents,
         )

@@ -55,7 +55,7 @@ class TestCallReviewNodeBaseCommitFallback:
             reviewer_persona="Agentic",
             approved=True,
             comments=[],
-            severity="low",
+            severity="none",
         )
 
         # Track what base_commit was passed to agentic_review
@@ -122,7 +122,7 @@ class TestCallReviewNodeBaseCommitFallback:
             reviewer_persona="Agentic",
             approved=True,
             comments=[],
-            severity="low",
+            severity="none",
         )
 
         # Track what base_commit was passed to agentic_review
@@ -186,7 +186,7 @@ class TestCallReviewNodeBaseCommitFallback:
             reviewer_persona="Agentic",
             approved=True,
             comments=[],
-            severity="low",
+            severity="none",
         )
 
         # Track what base_commit was passed to agentic_review
@@ -245,7 +245,7 @@ class TestCallReviewNodeBaseCommitFallback:
             reviewer_persona="Agentic",
             approved=True,
             comments=[],
-            severity="low",
+            severity="none",
         )
 
         config = mock_runnable_config(profile=profile)

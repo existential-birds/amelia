@@ -185,7 +185,7 @@ class TestEvaluator:
             reviewer_persona="General",
             approved=False,
             comments=["Issue 1", "Issue 2", "Issue 3", "Issue 4"],
-            severity="medium",
+            severity="minor",
         )
         state, profile = mock_execution_state_factory(
             goal="Fix bugs",
@@ -228,7 +228,7 @@ class TestEvaluator:
             reviewer_persona="General",
             approved=True,
             comments=[],
-            severity="low",
+            severity="none",
         )
         state, profile = mock_execution_state_factory(
             goal="Fix bugs",
@@ -299,7 +299,7 @@ class TestEvaluator:
             reviewer_persona="General",
             approved=False,
             comments=["Comment 1", "Comment 2", "Comment 3"],
-            severity="medium",
+            severity="minor",
         )
         state, profile = mock_execution_state_factory(
             goal="Fix bugs",
@@ -353,7 +353,7 @@ class TestEvaluator:
             reviewer_persona="General",
             approved=False,
             comments=["Issue 1"],
-            severity="low",
+            severity="none",
         )
         state, profile = mock_execution_state_factory(
             goal="Fix bugs",
@@ -398,7 +398,7 @@ class TestEvaluator:
             reviewer_persona="General",
             approved=False,
             comments=["Check this"],
-            severity="low",
+            severity="none",
         )
         state, profile = mock_execution_state_factory(
             goal="Implement feature X",
@@ -432,7 +432,7 @@ class TestEvaluator:
             reviewer_persona="General",
             approved=False,
             comments=["Check this"],
-            severity="low",
+            severity="none",
         )
         state, profile = mock_execution_state_factory(
             goal=None,  # No goal

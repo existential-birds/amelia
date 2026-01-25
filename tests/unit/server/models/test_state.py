@@ -135,7 +135,7 @@ class TestServerExecutionStateComposition:
         """ServerExecutionState can hold an ImplementationState."""
         profile = Profile(
             name="test",
-            tracker="none",
+            tracker="noop",
             working_dir="/tmp/test",
             agents={
                 "architect": AgentConfig(driver="cli", model="sonnet"),

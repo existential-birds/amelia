@@ -50,7 +50,7 @@ def mock_settings(tmp_path: Path) -> Settings:
     """Create mock settings for CLI tests."""
     profile = Profile(
         name="test",
-        tracker="none",
+        tracker="noop",
         working_dir=str(tmp_path),
         plan_output_dir=str(tmp_path / "plans"),
         agents={
@@ -124,7 +124,7 @@ class TestPlanCommand:
         # Create settings with multiple profiles
         test_profile = Profile(
             name="test",
-            tracker="none",
+            tracker="noop",
             working_dir=str(tmp_path),
             agents={
                 "architect": AgentConfig(driver="cli", model="sonnet"),

@@ -15,7 +15,7 @@ from amelia.pipelines.review.nodes import call_evaluation_node
 def profile_with_agents():
     return Profile(
         name="test",
-        tracker="none",
+        tracker="noop",
         working_dir="/tmp/test",
         agents={
             "evaluator": AgentConfig(driver="cli", model="sonnet"),

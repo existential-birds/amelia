@@ -8,7 +8,7 @@ from amelia.server.orchestrator.service import OrchestratorService
 
 def _make_test_profile(
     name: str = "dev",
-    tracker: TrackerType = "none",
+    tracker: TrackerType = TrackerType.NOOP,
     working_dir: str = "/repo",
 ) -> Profile:
     """Create a test Profile with default agents configuration."""

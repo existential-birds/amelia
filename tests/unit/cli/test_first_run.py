@@ -27,7 +27,7 @@ class TestFirstRunDetection:
         # ProfileRepository.list_profiles returns Profile objects
         existing_profile = Profile(
             name="existing",
-            tracker="none",
+            tracker="noop",
             working_dir="/tmp",
             agents={
                 "architect": AgentConfig(driver="cli", model="sonnet"),
@@ -55,7 +55,7 @@ class TestFirstRunDetection:
         # create_profile returns Profile objects
         created_profile = Profile(
             name="dev",
-            tracker="none",
+            tracker="noop",
             working_dir="/tmp",
             agents={
                 "architect": AgentConfig(driver="cli", model="opus"),
@@ -107,7 +107,7 @@ class TestFirstRunProfileCreation:
         # create_profile returns Profile objects
         created_profile = Profile(
             name="myprofile",
-            tracker="none",
+            tracker="noop",
             working_dir="/home/user/project",
             agents={
                 "architect": AgentConfig(driver="api", model="sonnet"),
@@ -138,7 +138,7 @@ class TestFirstRunProfileCreation:
         created_profile_arg: Profile = call_args[0][0]
 
         assert created_profile_arg.name == "myprofile"
-        assert created_profile_arg.tracker == "none"
+        assert created_profile_arg.tracker == "noop"
         assert created_profile_arg.working_dir == "/home/user/project"
         # Check that agents were created with correct driver/model
         assert "architect" in created_profile_arg.agents
@@ -149,7 +149,7 @@ class TestFirstRunProfileCreation:
         """First-run sets created profile as active."""
         created_profile = Profile(
             name="testprofile",
-            tracker="none",
+            tracker="noop",
             working_dir="/tmp",
             agents={
                 "architect": AgentConfig(driver="cli", model="opus"),
@@ -181,7 +181,7 @@ class TestFirstRunProfileCreation:
         """Database connection is closed after first-run setup."""
         created_profile = Profile(
             name="dev",
-            tracker="none",
+            tracker="noop",
             working_dir="/tmp",
             agents={
                 "architect": AgentConfig(driver="cli", model="opus"),
@@ -210,7 +210,7 @@ class TestFirstRunProfileCreation:
         """Database connection is closed when profiles exist."""
         existing_profile = Profile(
             name="existing",
-            tracker="none",
+            tracker="noop",
             working_dir="/tmp",
             agents={
                 "architect": AgentConfig(driver="cli", model="sonnet"),

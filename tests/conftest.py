@@ -333,7 +333,7 @@ def mock_profile_record_factory() -> Callable[..., ProfileRecord]:
     """
     def _create(
         id: str = "test",
-        tracker: str = "none",
+        tracker: str = "noop",
         working_dir: str = "/tmp/test",
         driver: DriverType = "cli",
         model: str = "sonnet",
@@ -370,7 +370,7 @@ def mock_profile_factory(tmp_path_factory: TempPathFactory) -> Callable[..., Pro
     def _create(
         preset: str | None = None,
         name: str = "test",
-        tracker: TrackerType = "none",
+        tracker: TrackerType = "noop",
         agents: dict[str, AgentConfig] | None = None,
         **kwargs: Any
     ) -> Profile:
@@ -386,14 +386,14 @@ def mock_profile_factory(tmp_path_factory: TempPathFactory) -> Callable[..., Pro
                     "developer": AgentConfig(driver="cli", model="sonnet"),
                     "reviewer": AgentConfig(driver="cli", model="sonnet"),
                 }
-                return Profile(name="test_cli", tracker="none", agents=agents, **kwargs)
+                return Profile(name="test_cli", tracker="noop", agents=agents, **kwargs)
             elif preset == "api_single":
                 agents = {
                     "architect": AgentConfig(driver="api", model="anthropic/claude-sonnet-4-20250514"),
                     "developer": AgentConfig(driver="api", model="anthropic/claude-sonnet-4-20250514"),
                     "reviewer": AgentConfig(driver="api", model="anthropic/claude-sonnet-4-20250514"),
                 }
-                return Profile(name="test_api", tracker="none", agents=agents, **kwargs)
+                return Profile(name="test_api", tracker="noop", agents=agents, **kwargs)
             else:
                 # Default: all agents use cli
                 agents = {
@@ -408,7 +408,7 @@ def mock_profile_factory(tmp_path_factory: TempPathFactory) -> Callable[..., Pro
 @pytest.fixture
 def mock_settings(mock_profile_factory: Callable[..., Profile]) -> Settings:
     """Create mock Settings instance with test profiles."""
-    test_profile = mock_profile_factory(name="test", tracker="none")
+    test_profile = mock_profile_factory(name="test", tracker="noop")
     work_profile = mock_profile_factory(name="work", tracker="jira")
     return Settings(
         active_profile="test",

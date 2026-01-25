@@ -63,7 +63,7 @@ def mock_profile_repo() -> AsyncMock:
     agent_config = AgentConfig(driver="cli", model="sonnet")
     default_profile = Profile(
         name="test",
-        tracker="none",
+        tracker="noop",
         working_dir="/default/repo",
         agents={
             "architect": agent_config,
@@ -1199,7 +1199,7 @@ class TestRunWorkflowCheckpointResume:
 
         mock_profile = Profile(
             name="test",
-            tracker="none",
+            tracker="noop",
             working_dir="/tmp/test",
             agents={
                 "architect": AgentConfig(driver="cli", model="sonnet"),
@@ -1261,7 +1261,7 @@ class TestRunWorkflowCheckpointResume:
 
         mock_profile = Profile(
             name="test",
-            tracker="none",
+            tracker="noop",
             working_dir="/tmp/test",
             agents={
                 "architect": AgentConfig(driver="cli", model="sonnet"),
@@ -1323,7 +1323,7 @@ class TestTaskProgressEvents:
                 reviewer_persona="code-reviewer",
                 approved=False,
                 comments=["Fix the bug"],
-                severity="medium",
+                severity="minor",
             ),
         )
         mock_state = ServerExecutionState(
@@ -1367,7 +1367,7 @@ class TestTaskProgressEvents:
                 reviewer_persona="code-reviewer",
                 approved=True,
                 comments=[],
-                severity="low",
+                severity="none",
             ),
         )
         mock_state = ServerExecutionState(
@@ -1521,7 +1521,7 @@ class TestStartWorkflowWithTaskFields:
         worktree.mkdir()
         (worktree / ".git").touch()
 
-        # mock_profile_repo fixture already returns a profile with tracker="none"
+        # mock_profile_repo fixture already returns a profile with tracker="noop"
         with patch.object(orchestrator, "_run_workflow_with_retry", new=AsyncMock()):
             workflow_id = await orchestrator.start_workflow(
                 issue_id="TASK-1",
@@ -1571,7 +1571,7 @@ class TestStartWorkflowWithTaskFields:
                 task_title="Add logout button",
             )
 
-        assert "none" in str(exc_info.value).lower()
+        assert "noop" in str(exc_info.value).lower()
         assert "tracker" in str(exc_info.value).lower()
 
     async def test_task_title_defaults_description_to_title(
@@ -1587,7 +1587,7 @@ class TestStartWorkflowWithTaskFields:
         worktree.mkdir()
         (worktree / ".git").touch()
 
-        # mock_profile_repo fixture already returns a profile with tracker="none"
+        # mock_profile_repo fixture already returns a profile with tracker="noop"
         with patch.object(orchestrator, "_run_workflow_with_retry", new=AsyncMock()):
             await orchestrator.start_workflow(
                 issue_id="TASK-1",

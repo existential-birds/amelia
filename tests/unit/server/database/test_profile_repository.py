@@ -44,7 +44,7 @@ def test_profile_record_with_agents_json():
 
     record = ProfileRecord(
         id="test",
-        tracker="none",
+        tracker="noop",
         working_dir="/tmp/test",
         agents=json.dumps(agents),
     )
@@ -63,7 +63,7 @@ def test_row_to_profile_parses_agents_json():
 
     mock_row = {
         "id": "test",
-        "tracker": "none",
+        "tracker": "noop",
         "working_dir": "/tmp/test",
         "plan_output_dir": "docs/plans",
         "plan_path_pattern": "docs/plans/{date}-{issue_key}.md",
@@ -92,7 +92,7 @@ async def test_create_profile_stores_agents_json(temp_db_path):
 
         profile = Profile(
             name="test_agents",
-            tracker="none",
+            tracker="noop",
             working_dir="/tmp/test",
             agents={
                 "architect": AgentConfig(driver="cli", model="opus"),
@@ -129,7 +129,7 @@ class TestProfileRepository:
         profile = await repo.create_profile(
             Profile(
                 name="dev",
-                tracker="none",
+                tracker="noop",
                 working_dir="/path/to/repo",
                 agents=_make_agents(driver="cli", model="opus"),
             )
@@ -143,7 +143,7 @@ class TestProfileRepository:
         await repo.create_profile(
             Profile(
                 name="dev",
-                tracker="none",
+                tracker="noop",
                 working_dir="/path/to/repo",
                 agents=_make_agents(model="opus"),
             )
@@ -162,7 +162,7 @@ class TestProfileRepository:
         await repo.create_profile(
             Profile(
                 name="dev",
-                tracker="none",
+                tracker="noop",
                 working_dir="/repo1",
                 agents=_make_agents(driver="cli", model="opus"),
             )
@@ -185,7 +185,7 @@ class TestProfileRepository:
         await repo.create_profile(
             Profile(
                 name="dev",
-                tracker="none",
+                tracker="noop",
                 working_dir="/repo",
                 agents=_make_agents(model="opus"),
             )
@@ -204,7 +204,7 @@ class TestProfileRepository:
         await repo.create_profile(
             Profile(
                 name="dev",
-                tracker="none",
+                tracker="noop",
                 working_dir="/repo",
                 agents=_make_agents(),
             )
@@ -223,7 +223,7 @@ class TestProfileRepository:
         await repo.create_profile(
             Profile(
                 name="dev",
-                tracker="none",
+                tracker="noop",
                 working_dir="/repo",
                 agents=_make_agents(),
             )
@@ -239,7 +239,7 @@ class TestProfileRepository:
         await repo.create_profile(
             Profile(
                 name="dev",
-                tracker="none",
+                tracker="noop",
                 working_dir="/repo1",
                 agents=_make_agents(driver="cli", model="opus"),
             )
@@ -265,7 +265,7 @@ class TestProfileRepository:
         await repo.create_profile(
             Profile(
                 name="dev",
-                tracker="none",
+                tracker="noop",
                 working_dir="/repo",
                 agents=_make_agents(),
             )

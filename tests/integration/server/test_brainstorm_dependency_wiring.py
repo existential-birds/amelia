@@ -155,7 +155,7 @@ class TestBrainstormDependencyResolution:
                     "name": "test",
                     "driver": "cli",
                     "model": "sonnet",
-                    "tracker": "none",
+                    "tracker": "noop",
                     "working_dir": str(working_dir),
                     "validator_model": "sonnet",
                 }
@@ -215,7 +215,7 @@ class TestBrainstormDependencyResolution:
                     "name": "test",
                     "driver": "cli",
                     "model": "sonnet",
-                    "tracker": "none",
+                    "tracker": "noop",
                     "working_dir": str(working_dir),
                     "validator_model": "sonnet",
                 }
@@ -309,7 +309,7 @@ class TestBrainstormDependencyResolution:
                     "name": "test",
                     "driver": "cli",
                     "model": "sonnet",
-                    "tracker": "none",
+                    "tracker": "noop",
                     "working_dir": str(working_dir),
                     "validator_model": "sonnet",
                 }

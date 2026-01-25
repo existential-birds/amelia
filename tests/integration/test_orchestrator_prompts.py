@@ -198,7 +198,7 @@ class TestOrchestratorPromptInjection:
             reviewer_persona="General",
             approved=False,
             comments=["Issue 1: Check this function"],
-            severity="medium",
+            severity="minor",
         )
         state = make_execution_state(
             profile=profile,
@@ -242,7 +242,7 @@ class TestOrchestratorPromptInjection:
             reviewer_persona="General",
             approved=False,
             comments=["Issue 1: Check this"],
-            severity="medium",
+            severity="minor",
         )
         state = make_execution_state(
             profile=profile,

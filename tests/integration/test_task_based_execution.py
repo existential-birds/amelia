@@ -301,7 +301,7 @@ class TestReviewerNodeTaskIteration:
         mock_messages = make_reviewer_agentic_messages(
             approved=False,
             comments=["Needs work"],
-            severity="high",
+            severity="major",
         )
 
         async def mock_execute_agentic(*_args: Any, **_kwargs: Any) -> Any:

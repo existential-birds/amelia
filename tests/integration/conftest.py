@@ -68,7 +68,7 @@ def make_profile(
     name: str = "test",
     driver: DriverType = "api",
     model: str = "anthropic/claude-sonnet-4-20250514",
-    tracker: TrackerType = "none",
+    tracker: TrackerType = "noop",
     plan_output_dir: str | None = None,
     validator_model: str | None = None,
     agents: dict[str, AgentConfig] | None = None,
@@ -246,7 +246,7 @@ def make_reviewer_agentic_messages(
     *,
     approved: bool = True,
     comments: list[str] | None = None,
-    severity: str = "low",
+    severity: str = "none",
 ) -> list[AgenticMessage]:
     """Create mock agentic messages that produce reviewer-parseable output.
 
@@ -395,7 +395,7 @@ def mock_profile_repo() -> AsyncMock:
     # ProfileRepository returns Profile objects, not ProfileRecord
     profile = Profile(
         name="test",
-        tracker="none",
+        tracker="noop",
         working_dir="/tmp/test",
         agents={
             "architect": AgentConfig(driver="cli", model="sonnet"),

@@ -30,7 +30,7 @@ profiles:
     driver: cli
     model: sonnet
     validator_model: sonnet
-    tracker: none
+    tracker: noop
 """
         (worktree / "settings.amelia.yaml").write_text(settings_content)
         return worktree

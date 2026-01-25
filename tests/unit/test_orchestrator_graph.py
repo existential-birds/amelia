@@ -181,7 +181,7 @@ class TestRouteAfterTaskReview:
     def mock_profile_task_review(self) -> Profile:
         return Profile(
             name="test",
-            tracker="none",
+            tracker="noop",
             working_dir="/tmp/test",
             agents={
                 "architect": AgentConfig(driver="cli", model="sonnet"),
@@ -199,7 +199,7 @@ class TestRouteAfterTaskReview:
             reviewer_persona="test",
             approved=True,
             comments=[],
-            severity="low",
+            severity="none",
         )
 
     @pytest.fixture
@@ -208,7 +208,7 @@ class TestRouteAfterTaskReview:
             reviewer_persona="test",
             approved=False,
             comments=["Needs fixes"],
-            severity="medium",
+            severity="minor",
         )
 
     def test_route_after_task_review_ends_when_all_tasks_complete(
@@ -285,7 +285,7 @@ class TestRouteAfterTaskReview:
         """Should respect task_reviewer agent's options.max_iterations setting."""
         profile = Profile(
             name="test",
-            tracker="none",
+            tracker="noop",
             working_dir="/tmp/test",
             agents={
                 "architect": AgentConfig(driver="cli", model="sonnet"),
@@ -300,7 +300,7 @@ class TestRouteAfterTaskReview:
             reviewer_persona="test",
             approved=False,
             comments=["Needs fixes"],
-            severity="medium",
+            severity="minor",
         )
         state = ImplementationState(
             workflow_id="test-workflow",
@@ -429,7 +429,7 @@ class TestReviewerNodeTaskIteration:
         )
         profile = Profile(
             name="test",
-            tracker="none",
+            tracker="noop",
             working_dir="/tmp/test",
             agents={
                 "architect": AgentConfig(driver="cli", model="sonnet"),
@@ -445,7 +445,7 @@ class TestReviewerNodeTaskIteration:
             reviewer_persona="test",
             approved=False,
             comments=["Needs work"],
-            severity="medium",
+            severity="minor",
         )
 
         with patch("amelia.pipelines.nodes.Reviewer") as mock_reviewer_class:

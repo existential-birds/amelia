@@ -503,8 +503,8 @@ def plan_command(
         # Update profile with worktree path
         profile = profile.model_copy(update={"working_dir": worktree_path})
 
-        # Get issue: construct directly if title provided with none tracker, else use tracker
-        if title is not None and profile.tracker in ("noop", "none"):
+        # Get issue: construct directly if title provided with noop tracker, else use tracker
+        if title is not None and profile.tracker == "noop":
             issue = Issue(
                 id=issue_id,
                 title=title,
@@ -513,7 +513,7 @@ def plan_command(
         elif title is not None:
             # --title provided but tracker is not noop - reject like server does
             raise ValueError(
-                f"--title requires none tracker, but profile uses '{profile.tracker}'"
+                f"--title requires noop tracker, but profile uses '{profile.tracker}'"
             )
         else:
             # Fetch issue using tracker

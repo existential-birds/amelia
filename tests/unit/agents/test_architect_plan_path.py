@@ -27,7 +27,7 @@ class TestArchitectPlanPath:
         issue = Issue(id="TEST-123", title="Test Issue", description="Test description")
         profile = Profile(
             name="test",
-            tracker="none",
+            tracker="noop",
             working_dir="/tmp/test",
             agents={
                 "architect": AgentConfig(driver="cli", model="sonnet"),
