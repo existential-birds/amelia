@@ -55,7 +55,7 @@ Two environment variables:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `AMELIA_TRACING_PROVIDER` | `None` | Tracing backend: `braintrust` or unset to disable |
+| `AMELIA_TRACING_PROVIDER` | `None` | Tracing backend: `braintrust`; use `none` or unset to disable |
 | `AMELIA_TRACING_API_KEY` | `None` | API key for the tracing provider |
 
 Example:
