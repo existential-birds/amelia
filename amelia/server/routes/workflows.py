@@ -25,12 +25,14 @@ from amelia.server.models.requests import (
     CreateReviewWorkflowRequest,
     CreateWorkflowRequest,
     RejectRequest,
+    SetPlanRequest,
 )
 from amelia.server.models.responses import (
     ActionResponse,
     BatchStartResponse,
     CreateWorkflowResponse,
     ErrorResponse,
+    SetPlanResponse,
     WorkflowDetailResponse,
     WorkflowListResponse,
     WorkflowSummary,
@@ -478,6 +480,41 @@ async def start_workflow(
         raise HTTPException(status_code=404, detail="Workflow not found") from e
     except WorkflowConflictError as e:
         raise HTTPException(status_code=409, detail=str(e)) from e
+
+
+@router.post("/{workflow_id}/plan", response_model=SetPlanResponse)
+async def set_workflow_plan(
+    workflow_id: str,
+    request: SetPlanRequest,
+    orchestrator: OrchestratorService = Depends(get_orchestrator),
+) -> SetPlanResponse:
+    """Set or replace the plan for a queued workflow.
+
+    Args:
+        workflow_id: The workflow ID.
+        request: Plan content or file path.
+        orchestrator: Orchestrator service dependency.
+
+    Returns:
+        SetPlanResponse with extracted plan summary.
+
+    Raises:
+        WorkflowNotFoundError: If workflow doesn't exist (404).
+        InvalidStateError: If workflow not in pending/planning state (422).
+        WorkflowConflictError: If plan exists and force=False (409).
+    """
+    result = await orchestrator.set_workflow_plan(
+        workflow_id=workflow_id,
+        plan_file=request.plan_file,
+        plan_content=request.plan_content,
+        force=request.force,
+    )
+
+    return SetPlanResponse(
+        goal=result["goal"],
+        key_files=result["key_files"],
+        total_tasks=result["total_tasks"],
+    )
 
 
 def configure_exception_handlers(app: FastAPI) -> None:

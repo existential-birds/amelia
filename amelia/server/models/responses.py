@@ -228,3 +228,17 @@ class BatchStartResponse(BaseModel):
         dict[str, str],
         Field(description="Map of workflow_id to error message for failures"),
     ]
+
+
+class SetPlanResponse(BaseModel):
+    """Response from setting an external plan on a workflow.
+
+    Attributes:
+        goal: Extracted goal from the plan.
+        key_files: List of key files from the plan.
+        total_tasks: Number of tasks in the plan.
+    """
+
+    goal: Annotated[str, Field(description="Extracted goal from the plan")]
+    key_files: Annotated[list[str], Field(description="List of key files from the plan")]
+    total_tasks: Annotated[int, Field(description="Number of tasks in the plan")]
