@@ -2486,3 +2486,141 @@ class OrchestratorService:
         )
 
         return BatchStartResponse(started=started, errors=errors)
+
+    async def set_workflow_plan(
+        self,
+        workflow_id: str,
+        plan_file: str | None = None,
+        plan_content: str | None = None,
+        force: bool = False,
+    ) -> dict[str, Any]:
+        """Set or replace the plan for a queued workflow.
+
+        This method allows setting an external plan on a workflow that is
+        in pending or planning status. The plan will be validated and stored
+        in the standard plan location.
+
+        Args:
+            workflow_id: The workflow ID.
+            plan_file: Path to plan file (relative to worktree or absolute).
+            plan_content: Inline plan markdown content.
+            force: If True, overwrite existing plan.
+
+        Returns:
+            Dict with goal, key_files, total_tasks.
+
+        Raises:
+            WorkflowNotFoundError: If workflow doesn't exist.
+            InvalidStateError: If workflow not in pending/planning status.
+            WorkflowConflictError: If plan exists and force=False, or architect running.
+            FileNotFoundError: If plan_file doesn't exist.
+        """
+        # Load workflow
+        workflow = await self._repository.get(workflow_id)
+        if workflow is None:
+            raise WorkflowNotFoundError(workflow_id)
+
+        # Check status - only allow setting plan on pending or planning workflows
+        valid_statuses = {WorkflowStatus.PENDING, WorkflowStatus.PLANNING}
+        if workflow.workflow_status not in valid_statuses:
+            raise InvalidStateError(
+                f"Workflow must be in pending or planning status, "
+                f"but is in {workflow.workflow_status}",
+                workflow_id=workflow_id,
+                current_status=str(workflow.workflow_status),
+            )
+
+        # Check for active planning task - don't interfere with architect
+        if workflow_id in self._planning_tasks:
+            raise WorkflowConflictError(
+                f"Architect is currently running for workflow {workflow_id}"
+            )
+
+        # Check existing plan - require force to overwrite
+        execution_state = workflow.execution_state
+        if execution_state is not None and execution_state.plan_markdown is not None and not force:
+            raise WorkflowConflictError(
+                "Plan already exists. Use force=true to overwrite."
+            )
+
+        # Get profile for plan path resolution
+        profile = await self._get_profile_or_fail(
+            workflow_id,
+            execution_state.profile_id if execution_state else "default",
+            workflow.worktree_path,
+        )
+        if profile is None:
+            raise ValueError("Profile not found for workflow")
+
+        profile = self._update_profile_working_dir(profile, workflow.worktree_path)
+
+        # Resolve target plan path
+        plan_rel_path = resolve_plan_path(profile.plan_path_pattern, workflow.issue_id)
+        working_dir = Path(profile.working_dir) if profile.working_dir else Path(".")
+        target_path = working_dir / plan_rel_path
+
+        # Import and validate external plan
+        plan_result = await import_external_plan(
+            plan_file=plan_file,
+            plan_content=plan_content,
+            target_path=target_path,
+            profile=profile,
+            workflow_id=workflow_id,
+        )
+
+        # Update execution state with plan data
+        updated_execution_state: ImplementationState | None
+        if execution_state is not None:
+            updated_execution_state = execution_state.model_copy(
+                update={
+                    "external_plan": True,
+                    "goal": plan_result["goal"],
+                    "plan_markdown": plan_result["plan_markdown"],
+                    "plan_path": plan_result["plan_path"],
+                    "key_files": plan_result["key_files"],
+                    "total_tasks": plan_result["total_tasks"],
+                }
+            )
+        else:
+            updated_execution_state = None
+
+        # Update workflow - transition from planning to pending if needed
+        new_status = (
+            WorkflowStatus.PENDING
+            if workflow.workflow_status == WorkflowStatus.PLANNING
+            else workflow.workflow_status
+        )
+
+        updated_workflow = workflow.model_copy(
+            update={
+                "execution_state": updated_execution_state,
+                "workflow_status": new_status,
+            }
+        )
+        await self._repository.update(updated_workflow)
+
+        # Emit plan set event
+        await self._emit(
+            workflow_id,
+            EventType.AGENT_MESSAGE,
+            f"External plan set: {plan_result['goal']}",
+            agent="system",
+            data={
+                "goal": plan_result["goal"],
+                "key_files": plan_result["key_files"],
+                "total_tasks": plan_result["total_tasks"],
+            },
+        )
+
+        logger.info(
+            "External plan set",
+            workflow_id=workflow_id,
+            goal=plan_result["goal"],
+            total_tasks=plan_result["total_tasks"],
+        )
+
+        return {
+            "goal": plan_result["goal"],
+            "key_files": plan_result["key_files"],
+            "total_tasks": plan_result["total_tasks"],
+        }

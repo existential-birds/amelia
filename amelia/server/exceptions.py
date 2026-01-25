@@ -2,23 +2,42 @@
 
 
 class WorkflowConflictError(Exception):
-    """Raised when a workflow already exists for a worktree.
+    """Raised when a workflow conflict occurs.
 
     HTTP Status: 409 Conflict
+
+    Can be raised for:
+    - Worktree already has an active workflow
+    - Plan already exists (use force to overwrite)
+    - Architect is currently running
     """
 
-    def __init__(self, worktree_path: str, workflow_id: str):
+    worktree_path: str | None
+    workflow_id: str | None
+
+    def __init__(
+        self,
+        message_or_worktree: str,
+        workflow_id: str | None = None,
+    ):
         """Initialize WorkflowConflictError.
 
         Args:
-            worktree_path: Path to the conflicting worktree.
-            workflow_id: ID of the existing workflow.
+            message_or_worktree: Either a custom message, or the path to the
+                conflicting worktree (when workflow_id is provided).
+            workflow_id: ID of the existing workflow (when using worktree conflict mode).
         """
-        self.worktree_path = worktree_path
-        self.workflow_id = workflow_id
-        super().__init__(
-            f"Workflow {workflow_id} already active for worktree {worktree_path}"
-        )
+        if workflow_id is not None:
+            # Worktree conflict mode: (worktree_path, workflow_id)
+            self.worktree_path = message_or_worktree
+            self.workflow_id = workflow_id
+            message = f"Workflow {workflow_id} already active for worktree {message_or_worktree}"
+        else:
+            # Message-only mode: custom conflict message
+            self.worktree_path = None
+            self.workflow_id = None
+            message = message_or_worktree
+        super().__init__(message)
 
 
 class ConcurrencyLimitError(Exception):

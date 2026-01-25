@@ -175,10 +175,7 @@ class TestStartWorkflowEndpoint:
     ) -> None:
         """Return 409 when worktree has active workflow."""
         mock_orchestrator.start_pending_workflow = AsyncMock(
-            side_effect=WorkflowConflictError(
-                worktree_path="/tmp/worktree",
-                workflow_id="wf-existing",
-            )
+            side_effect=WorkflowConflictError("/tmp/worktree", "wf-existing")
         )
 
         response = client.post("/api/workflows/wf-123/start")
