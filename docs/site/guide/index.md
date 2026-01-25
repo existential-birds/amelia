@@ -15,14 +15,10 @@ Install, configure, and run your first multi-agent workflow in under five minute
    uv tool install git+https://github.com/existential-birds/amelia.git
    ```
 
-2. **Create configuration** in your project root:
-   ```yaml
-   # settings.amelia.yaml
-   active_profile: dev
-   profiles:
-     dev:
-       driver: api:openrouter
-       tracker: github
+2. **Create a profile**:
+   ```bash
+   # Create a profile
+   amelia config profile create dev --driver cli:claude --tracker none --activate
    ```
 
 3. **Run your first workflow**:

@@ -113,16 +113,4 @@ export const brainstormApi = {
     );
     return handleResponse<{ workflow_id: string; status: string }>(response);
   },
-
-  async primeSession(sessionId: string): Promise<{ message_id: string }> {
-    const response = await fetch(
-      `${API_BASE_URL}/sessions/${sessionId}/prime`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        signal: createTimeoutSignal(DEFAULT_TIMEOUT_MS),
-      }
-    );
-    return handleResponse<{ message_id: string }>(response);
-  },
 };

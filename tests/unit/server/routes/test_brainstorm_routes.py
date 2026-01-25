@@ -1,5 +1,6 @@
 """Tests for brainstorming API routes."""
 
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
@@ -220,7 +221,9 @@ class TestSendMessage(TestBrainstormRoutes):
         )
 
         # Mock send_message as async generator yielding WorkflowEvent (matches production type)
-        async def mock_send_message(*args, **kwargs):
+        async def mock_send_message(
+            *args: object, **kwargs: object
+        ) -> AsyncIterator[WorkflowEvent]:
             yield WorkflowEvent(
                 id="evt-1",
                 workflow_id="sess-123",
@@ -366,4 +369,15 @@ class TestHandoff:
             json={"artifact_path": "missing.md"},
         )
 
+        assert response.status_code == 404
+
+
+class TestNoPrimeEndpoint(TestBrainstormRoutes):
+    """Tests verifying prime endpoint is removed."""
+
+    def test_prime_endpoint_returns_404(
+        self, client: TestClient, mock_service: MagicMock
+    ) -> None:
+        """Prime endpoint should not exist (404)."""
+        response = client.post("/api/brainstorm/sessions/test-id/prime")
         assert response.status_code == 404

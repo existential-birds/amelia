@@ -212,8 +212,8 @@ class BrainstormRepository:
             """
             INSERT INTO brainstorm_messages (
                 id, session_id, sequence, role, content, parts_json, created_at,
-                input_tokens, output_tokens, cost_usd, is_system
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                input_tokens, output_tokens, cost_usd
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 message.id,
@@ -226,48 +226,32 @@ class BrainstormRepository:
                 input_tokens,
                 output_tokens,
                 cost_usd,
-                1 if message.is_system else 0,
             ),
         )
 
     async def get_messages(
-        self, session_id: str, limit: int = 100, include_system: bool = True
+        self, session_id: str, limit: int = 100
     ) -> list[Message]:
         """Get messages for a session.
 
         Args:
             session_id: Session to get messages for.
             limit: Maximum messages to return.
-            include_system: Whether to include system/priming messages.
-                When False, filters out messages where is_system = 1.
 
         Returns:
             List of messages in sequence order.
         """
-        if include_system:
-            rows = await self._db.fetch_all(
-                """
-                SELECT id, session_id, sequence, role, content, parts_json, created_at,
-                       input_tokens, output_tokens, cost_usd, is_system
-                FROM brainstorm_messages
-                WHERE session_id = ?
-                ORDER BY sequence ASC
-                LIMIT ?
-                """,
-                (session_id, limit),
-            )
-        else:
-            rows = await self._db.fetch_all(
-                """
-                SELECT id, session_id, sequence, role, content, parts_json, created_at,
-                       input_tokens, output_tokens, cost_usd, is_system
-                FROM brainstorm_messages
-                WHERE session_id = ? AND is_system = 0
-                ORDER BY sequence ASC
-                LIMIT ?
-                """,
-                (session_id, limit),
-            )
+        rows = await self._db.fetch_all(
+            """
+            SELECT id, session_id, sequence, role, content, parts_json, created_at,
+                   input_tokens, output_tokens, cost_usd
+            FROM brainstorm_messages
+            WHERE session_id = ?
+            ORDER BY sequence ASC
+            LIMIT ?
+            """,
+            (session_id, limit),
+        )
         return [self._row_to_message(row) for row in rows]
 
     async def get_max_sequence(self, session_id: str) -> int:
@@ -316,7 +300,6 @@ class BrainstormRepository:
             content=row["content"],
             parts=parts,
             usage=usage,
-            is_system=bool(row["is_system"]),
             created_at=datetime.fromisoformat(row["created_at"]),
         )
 

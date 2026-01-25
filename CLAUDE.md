@@ -101,14 +101,15 @@ The driver abstraction allows switching between direct API calls (`api`) and CLI
 
 ### Configuration
 
-Profile-based configuration via `settings.amelia.yaml`:
-- `driver`: Which LLM driver to use
-- `tracker`: Issue source
-- `strategy`: `single` or `competitive` review
+Configuration is stored in SQLite database (`~/.amelia/amelia.db`) and managed via:
+- **CLI**: `amelia config profile {list|show|create|delete|activate}` and `amelia config server {show|set}`
+- **Dashboard**: Settings page at `/settings` with Profiles and Server tabs
+
+Profile settings include: driver, model, tracker, working directory, plan output, and per-agent configurations.
 
 ### Server Configuration
 
-Server settings via environment variables (prefix `AMELIA_`):
+Server settings configurable via `amelia config server set` or dashboard. Environment variable overrides (prefix `AMELIA_`):
 
 | Variable | Default | Description |
 |----------|---------|-------------|

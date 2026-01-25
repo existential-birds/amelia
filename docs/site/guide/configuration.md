@@ -2,209 +2,219 @@
 
 Complete reference for Amelia's configuration system.
 
-## File Location
+## Overview
 
-Amelia looks for `settings.amelia.yaml` in the current working directory.
+Amelia stores all configuration in a SQLite database (`~/.amelia/amelia.db`). Configuration is managed through:
 
-## Full Example
+- **CLI**: `amelia config profile` and `amelia config server` commands
+- **Dashboard**: Settings page at `/settings` with Profiles and Server tabs
 
-```yaml
-# Which profile to use when --profile is not specified
-active_profile: api_minimax
+## Profile Management
 
-profiles:
-  # CLI profile - uses Claude CLI
-  cli_opus:
-    name: cli_opus
-    driver: cli        # LLM via claude CLI
-    model: "opus"
-    tracker: jira             # Issues from Jira
-    plan_output_dir: "docs/plans"
-    max_review_iterations: 5  # More iterations for complex reviews
-    retry:
-      max_retries: 5          # More retries for rate limits
-      base_delay: 2.0
-      max_delay: 120.0
+Profiles define how Amelia connects to LLMs and issue trackers for different projects or environments.
 
-  # API profile - direct OpenRouter API access
-  api_minimax:
-    name: api_minimax
-    driver: api    # LLM via OpenRouter API
-    model: "minimax/minimax-m2"  # Required for API drivers
-    tracker: github           # Issues from GitHub
-    plan_output_dir: "docs/plans"
+### List Profiles
 
-  # Testing profile
-  api_minimax_test:
-    name: api_minimax_test
-    driver: api
-    model: "minimax/minimax-m2"
-    tracker: none             # No real tracker
+```bash
+amelia config profile list
 ```
 
-## Profile Structure
+Shows all profiles with their driver, model, tracker, and agent count.
 
-### `active_profile` (required)
+### Show Profile Details
 
-The default profile to use when `--profile` is not specified.
-
-```yaml
-active_profile: api_minimax
+```bash
+amelia config profile show <name>
 ```
 
-### `profiles.<name>.name` (required)
+Displays full profile configuration including per-agent settings.
 
-Human-readable name for the profile. Should match the key.
+### Create Profile
 
-```yaml
-profiles:
-  api_minimax:
-    name: api_minimax
+```bash
+# Interactive mode (prompts for all options)
+amelia config profile create my-profile
+
+# With flags (non-interactive)
+amelia config profile create my-profile \
+  --driver api:openrouter \
+  --model "minimax/minimax-m2" \
+  --tracker github \
+  --working-dir /path/to/project \
+  --activate
 ```
 
-### `profiles.<name>.driver` (required)
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--driver` | `-d` | LLM driver (e.g., `cli:claude`, `api:openrouter`) |
+| `--model` | `-m` | Model name (required for API drivers) |
+| `--tracker` | `-t` | Issue tracker (`none`, `github`, `jira`) |
+| `--working-dir` | `-w` | Working directory for agent execution |
+| `--activate` | `-a` | Set as active profile after creation |
+
+### Activate Profile
+
+```bash
+amelia config profile activate <name>
+```
+
+Sets the default profile used when `--profile` is not specified.
+
+### Delete Profile
+
+```bash
+amelia config profile delete <name>
+```
+
+Removes a profile from the database.
+
+## Profile Fields
+
+### Driver (required)
 
 How Amelia communicates with LLMs.
 
-| Value | Description | Requirements | Notes |
-|-------|-------------|--------------|-------|
-| `api` | Direct OpenRouter API calls | `OPENROUTER_API_KEY` env var, `model` field | Full functionality, structured outputs |
-| `cli` | Wraps claude CLI tool | `claude` CLI installed & authenticated | Agentic execution via CLI |
+| Value | Description | Requirements |
+|-------|-------------|--------------|
+| `api:openrouter` | Direct OpenRouter API calls | `OPENROUTER_API_KEY` env var, `model` field |
+| `api` | Alias for `api:openrouter` | Same as above |
+| `cli:claude` | Wraps Claude CLI tool | `claude` CLI installed & authenticated |
+| `cli` | Alias for `cli:claude` | Same as above |
 
-### `profiles.<name>.model` (required for API drivers)
+### Model (required for API drivers)
 
-The LLM model identifier to use. Required when using `api` drivers.
-
-```yaml
-model: "minimax/minimax-m2"
-```
+The LLM model identifier. Required when using `api:openrouter` or `api` drivers.
 
 Common models:
 - `anthropic/claude-sonnet-4.5` - Claude Sonnet 4.5 (recommended)
 - `google/gemini-2.5-flash` - Gemini 2.5 Flash (cost-effective)
-- `openai/gpt-4o` - GPT-4o
+- `minimax/minimax-m2` - MiniMax M2
 
-For CLI drivers, specifying the model is optional but recommended for clarity.
+For CLI drivers, model is optional but helps with clarity.
 
-### `profiles.<name>.tracker` (optional)
+### Tracker
 
 Where Amelia fetches issue details from.
 
-Default: `"none"`
-
 | Value | Description | Requirements |
 |-------|-------------|--------------|
-| `jira` | Jira issues | `JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN` env vars |
 | `github` | GitHub issues | `gh` CLI authenticated (`gh auth login`) |
-| `none` | No tracker | None |
+| `jira` | Jira issues | `JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN` env vars |
+| `none` | No tracker | None (use `--task` for ad-hoc tasks) |
 
-### `profiles.<name>.plan_output_dir` (optional)
+### Working Directory
+
+The directory where agents execute. When set, the Developer agent operates from this path.
+
+Default: Current working directory where commands are run.
+
+### Plan Output Directory
 
 Directory for storing generated plans.
 
-Default: `"docs/plans"`
+Default: `docs/plans`
 
-```yaml
-plan_output_dir: "plans"
+### Auto Approve Reviews
+
+When enabled, automatically approves passing reviews without human intervention.
+
+Default: `false`
+
+## Per-Agent Configuration
+
+Each profile can configure individual agents with different drivers and models. This allows mixing CLI and API drivers within a single profile, or using different models for different agents.
+
+View agent configurations:
+
+```bash
+amelia config profile show <name>
 ```
 
-### `profiles.<name>.working_dir` (optional)
+Example output:
 
-Working directory for agentic execution. When set, the Developer agent operates from this directory.
-
-Default: `null` (uses current working directory)
-
-```yaml
-working_dir: "/path/to/project"
+```text
+Agent Configurations
+┏━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Agent          ┃ Driver         ┃ Model                  ┃
+┡━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ architect      │ cli:claude     │ opus                   │
+│ developer      │ api:openrouter │ qwen/qwen3-coder-flash │
+│ reviewer       │ cli:claude     │ opus                   │
+└────────────────┴────────────────┴────────────────────────┘
 ```
 
-### `profiles.<name>.max_review_iterations` (optional)
+Per-agent configuration can be edited via the dashboard at `/settings/profiles`.
 
-Maximum number of review-fix iterations before the workflow terminates. Prevents infinite loops when the Developer and Reviewer can't reach agreement.
+## Server Settings
 
-Default: `3`
+Server settings control runtime behavior and are separate from profile configuration.
 
-```yaml
-max_review_iterations: 5
+### Show Settings
+
+```bash
+amelia config server show
 ```
 
-### `profiles.<name>.max_task_review_iterations` (optional)
+### Set a Value
 
-Maximum review-fix iterations per task in task-based execution mode. When plans contain multiple tasks, each task has its own review cycle with this limit.
-
-Default: `5`
-
-```yaml
-max_task_review_iterations: 3
+```bash
+amelia config server set <key> <value>
 ```
 
-### `profiles.<name>.retry` (optional)
+### Available Settings
 
-Retry configuration for transient failures (e.g., API rate limits, network errors).
-
-Default values shown below:
-
-```yaml
-retry:
-  max_retries: 3      # Maximum retry attempts (0-10)
-  base_delay: 1.0     # Base delay in seconds for exponential backoff (0.1-30.0)
-  max_delay: 60.0     # Maximum delay cap in seconds (1.0-300.0)
-```
-
-Retries use exponential backoff: delay = min(base_delay * 2^attempt, max_delay)
-
-## Server Configuration
-
-The Amelia server (API + WebSocket) can be configured via environment variables with the `AMELIA_` prefix.
-
-| Variable | Type | Default | Description |
-|----------|------|---------|-------------|
-| `AMELIA_HOST` | string | `127.0.0.1` | Server bind address |
-| `AMELIA_PORT` | int | `8420` | Server port (1-65535) |
-| `AMELIA_DATABASE_PATH` | path | `~/.amelia/amelia.db` | SQLite database location |
-| `AMELIA_LOG_RETENTION_DAYS` | int | `30` | Days to retain event logs (minimum 1) |
-| `AMELIA_LOG_RETENTION_MAX_EVENTS` | int | `100000` | Max events per workflow (minimum 1000) |
-| `AMELIA_WEBSOCKET_IDLE_TIMEOUT_SECONDS` | float | `300.0` | WebSocket idle timeout in seconds |
-| `AMELIA_WORKFLOW_START_TIMEOUT_SECONDS` | float | `60.0` | Workflow start timeout in seconds |
-| `AMELIA_MAX_CONCURRENT` | int | `5` | Max concurrent workflows (minimum 1) |
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `log_retention_days` | int | `30` | Days to retain event logs |
+| `log_retention_max_events` | int | `100000` | Max events per workflow |
+| `trace_retention_days` | int | `7` | Days to retain trace-level events |
+| `checkpoint_retention_days` | int | `0` | Days to retain LangGraph checkpoints |
+| `checkpoint_path` | path | `~/.amelia/checkpoints.db` | Checkpoint database location |
+| `websocket_idle_timeout_seconds` | float | `300.0` | WebSocket idle timeout |
+| `workflow_start_timeout_seconds` | float | `60.0` | Workflow start timeout |
+| `max_concurrent` | int | `5` | Max concurrent workflows |
+| `stream_tool_results` | bool | `false` | Stream tool results to dashboard |
 
 Example:
 
 ```bash
-# Run server on a different port
-export AMELIA_PORT=9000
-amelia server
-
-# Use custom database location
-export AMELIA_DATABASE_PATH=/var/lib/amelia/db.sqlite
-amelia server
-
 # Allow more concurrent workflows
-export AMELIA_MAX_CONCURRENT=10
-amelia server
+amelia config server set max_concurrent 10
+
+# Enable tool result streaming for debugging
+amelia config server set stream_tool_results true
 ```
 
-## Environment Variables
+## Environment Variable Overrides
 
-### General
+Server settings can also be overridden via environment variables with the `AMELIA_` prefix:
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `AMELIA_SETTINGS` | No | Custom path to settings.amelia.yaml (default: `./settings.amelia.yaml`) |
+| Variable | Description |
+|----------|-------------|
+| `AMELIA_HOST` | Server bind address (default: `127.0.0.1`) |
+| `AMELIA_PORT` | Server port (default: `8420`) |
+| `AMELIA_DATABASE_PATH` | SQLite database location |
+| `AMELIA_LOG_RETENTION_DAYS` | Days to retain logs |
+| `AMELIA_MAX_CONCURRENT` | Max concurrent workflows |
+| `AMELIA_STREAM_TOOL_RESULTS` | Stream tool results (`true`/`false`) |
+
+Environment variables take precedence over database settings.
+
+## Required Environment Variables
 
 ### OpenRouter API Driver
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `OPENROUTER_API_KEY` | Yes | Your OpenRouter API key |
+| Variable | Description |
+|----------|-------------|
+| `OPENROUTER_API_KEY` | Your OpenRouter API key |
 
 ### Jira Tracker
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `JIRA_BASE_URL` | Yes | Jira instance URL (e.g., `https://company.atlassian.net`) |
-| `JIRA_EMAIL` | Yes | Your Jira email |
-| `JIRA_API_TOKEN` | Yes | Jira API token |
+| Variable | Description |
+|----------|-------------|
+| `JIRA_BASE_URL` | Jira instance URL (e.g., `https://company.atlassian.net`) |
+| `JIRA_EMAIL` | Your Jira email |
+| `JIRA_API_TOKEN` | Jira API token |
 
 ### GitHub Tracker
 
@@ -214,112 +224,66 @@ The GitHub tracker requires the `gh` CLI to be installed and authenticated:
 gh auth login
 ```
 
-## Validation
+## Dashboard Configuration
 
-Amelia validates profiles on startup:
+The dashboard provides a visual interface for managing configuration at `/settings`:
 
-- Required fields (`name`, `driver`) must be present
-- Driver values must be one of: `api`, `cli`
-- Tracker values must be one of: `jira`, `github`, `none`
-- API drivers require the `model` field
-- Retry values must be within allowed ranges
+### Profiles Tab
 
-Invalid configuration results in exit code 1 with descriptive error message.
+- View all profiles as cards showing driver, agents, and working directory
+- Filter profiles by CLI or API driver type
+- Create new profiles with the "+ Create Profile" button
+- Click a profile card to edit its settings
+- Set active profile
 
-## Example Configurations
+### Server Tab
 
-### Minimal
+- Adjust retention policies (log, trace)
+- Set execution limits (max concurrent workflows)
+- Toggle debugging options (stream tool results)
 
-Only `name` and `driver` are required. All other fields use sensible defaults:
-
-```yaml
-active_profile: cli_opus
-profiles:
-  cli_opus:
-    name: cli_opus
-    driver: cli  # CLI driver doesn't require model field
-```
-
-For API drivers, you must also specify the model:
-
-```yaml
-active_profile: api_minimax
-profiles:
-  api_minimax:
-    name: api_minimax
-    driver: api
-    model: "minimax/minimax-m2"
-```
-
-This uses: `tracker: none`, default retry settings.
-
-### CLI with Jira
-
-CLI driver with Jira issue tracking:
-
-```yaml
-active_profile: cli_opus
-profiles:
-  cli_opus:
-    name: cli_opus
-    driver: cli
-    model: "opus"
-    tracker: jira
-    max_review_iterations: 5
-```
-
-### Multi-Profile Setup
-
-For developers working across different contexts:
-
-```yaml
-active_profile: api_minimax
-
-profiles:
-  cli_opus:
-    name: cli_opus
-    driver: cli
-    model: "opus"
-    tracker: jira
-
-  api_minimax:
-    name: api_minimax
-    driver: api
-    model: "minimax/minimax-m2"
-    tracker: github
-
-  api_minimax_test:
-    name: api_minimax_test
-    driver: api
-    model: "minimax/minimax-m2"
-    tracker: none
-```
-
-Usage:
+## Example: Setting Up a New Project
 
 ```bash
-amelia start PROJ-123              # Uses active_profile: api_minimax
-amelia start PROJ-123 -p cli_opus  # Uses cli_opus profile
-amelia review --local -p api_minimax_test  # Uses api_minimax_test profile
+# Create a profile for your project
+amelia config profile create myproject \
+  --driver api:openrouter \
+  --model "minimax/minimax-m2" \
+  --tracker github \
+  --working-dir /path/to/myproject \
+  --activate
+
+# Verify the profile
+amelia config profile show myproject
+
+# Start the server
+amelia dev
+
+# Begin working
+cd /path/to/myproject
+amelia start 123  # Start workflow for issue #123
 ```
 
 ## Troubleshooting
 
 ### "Profile not found"
 
-Ensure the profile name matches exactly (case-sensitive) in both `active_profile` and `profiles` keys.
+Ensure the profile exists and the name matches exactly (case-sensitive):
+
+```bash
+amelia config profile list
+```
 
 ### "Driver not recognized"
 
-Valid driver values are: `api`, `cli`
+Valid driver values are: `api`, `cli`. You can also specify with provider (e.g., `api:openrouter`, `cli:claude`) but the base value (`api` or `cli`) is what's validated.
 
 ### "Missing model field"
 
-API drivers (`api`) require the `model` field:
+API drivers require the `model` field. Specify it during creation:
 
-```yaml
-driver: api
-model: "minimax/minimax-m2"
+```bash
+amelia config profile create myprofile --driver api:openrouter --model "minimax/minimax-m2"
 ```
 
 ### "Missing OPENROUTER_API_KEY"

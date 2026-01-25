@@ -80,14 +80,6 @@ describe("SpecBuilderPage", () => {
     ).toBeInTheDocument();
   });
 
-  it("hides input area when no active session", () => {
-    renderPage();
-
-    expect(
-      screen.queryByPlaceholderText(/what would you like to design/i)
-    ).not.toBeInTheDocument();
-  });
-
   it("sends message in active session", async () => {
     useBrainstormStore.setState({
       activeSessionId: "s1",
@@ -106,42 +98,6 @@ describe("SpecBuilderPage", () => {
         "s1",
         "Design a caching layer"
       );
-    });
-  });
-
-  it("creates session when Start Brainstorming is clicked", async () => {
-    const mockSession = {
-      id: "s1",
-      profile_id: "test",
-      driver_session_id: null,
-      status: "active" as const,
-      topic: null,
-      created_at: "2026-01-18T00:00:00Z",
-      updated_at: "2026-01-18T00:00:00Z",
-    };
-    const mockProfile = {
-      name: "test",
-      driver: "cli",
-      model: "sonnet",
-    };
-    vi.mocked(brainstormApi.createSession).mockResolvedValue({
-      session: mockSession,
-      profile: mockProfile,
-    });
-    vi.mocked(brainstormApi.primeSession).mockResolvedValue({ message_id: "m1" });
-
-    renderPage();
-
-    // Wait for the button to be present (handles any async rendering)
-    const startButton = await screen.findByRole("button", { name: /start brainstorming/i });
-    await userEvent.click(startButton);
-
-    await waitFor(() => {
-      expect(brainstormApi.createSession).toHaveBeenCalledWith("test");
-    });
-
-    await waitFor(() => {
-      expect(brainstormApi.primeSession).toHaveBeenCalledWith("s1");
     });
   });
 
@@ -212,19 +168,6 @@ describe("SpecBuilderPage", () => {
     // Should have the expandable Reasoning component
     const collapsible = document.querySelector('[data-slot="collapsible"]');
     expect(collapsible).toBeInTheDocument();
-  });
-
-  it("shows error toast when session creation fails", async () => {
-    vi.mocked(brainstormApi.createSession).mockRejectedValue(new Error("Network error"));
-
-    renderPage();
-
-    const startButton = await screen.findByRole("button", { name: /start brainstorming/i });
-    await userEvent.click(startButton);
-
-    await waitFor(() => {
-      expect(toast.error).toHaveBeenCalledWith("Failed to start session");
-    });
   });
 
   it("shows error toast when handoff fails", async () => {
@@ -370,5 +313,17 @@ describe("SpecBuilderPage", () => {
       expect(textarea).toHaveValue("");
       expect(document.activeElement).toBe(textarea);
     });
+  });
+
+  it("should not have Start Brainstorming button", () => {
+    renderPage();
+    expect(screen.queryByText("Start Brainstorming")).not.toBeInTheDocument();
+  });
+
+  it("shows prompt input in empty state", () => {
+    renderPage();
+    expect(
+      screen.getByPlaceholderText(/what would you like to design/i)
+    ).toBeInTheDocument();
   });
 });

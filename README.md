@@ -118,15 +118,8 @@ Create a new folder and run a task directly—no issue tracker needed:
 mkdir my-app && cd my-app
 git init
 
-# Create minimal config
-cat > settings.amelia.yaml << 'EOF'
-active_profile: dev
-profiles:
-  dev:
-    name: dev
-    driver: api
-    model: "minimax/minimax-m2"
-EOF
+# Create a profile (first run will prompt interactively, or use flags)
+amelia config profile create dev --driver api:openrouter --model "minimax/minimax-m2" --activate
 
 # Start the server (opens dashboard at localhost:8420)
 amelia dev
@@ -148,23 +141,14 @@ Watch the Architect plan, approve it in the dashboard, then watch the Developer 
 For real projects, connect to GitHub issues:
 
 ```bash
-# Update your config to use GitHub tracker
-cat > settings.amelia.yaml << 'EOF'
-active_profile: dev
-profiles:
-  dev:
-    name: dev
-    driver: api
-    model: "minimax/minimax-m2"
-    tracker: github
-    strategy: single
-EOF
+# Create a profile with GitHub tracker (or edit existing via dashboard)
+amelia config profile create github-dev --driver api:openrouter --model "minimax/minimax-m2" --tracker github --activate
 
 # Start a workflow for issue #123
 amelia start 123
 ```
 
-See **[Configuration](https://existential-birds.github.io/amelia/guide/configuration)** for all options including Jira integration and retry settings.
+See **[Configuration](https://existential-birds.github.io/amelia/guide/configuration)** for all options including Jira integration and per-agent model settings.
 
 ## Alternative Installation
 
@@ -183,15 +167,8 @@ cd /path/to/your/project
 /path/to/amelia/uv run amelia dev
 ```
 
-Or use the `AMELIA_SETTINGS` environment variable:
-
-```bash
-cd /path/to/amelia
-AMELIA_SETTINGS=/path/to/your/project/settings.amelia.yaml uv run amelia dev
-```
-
 > [!NOTE]
-> Amelia reads `settings.amelia.yaml` from the current working directory (or via `AMELIA_SETTINGS`). Run commands from your project root—agents can't help with code they can't see.
+> Run commands from your project root—agents can't help with code they can't see. Configuration is stored in `~/.amelia/amelia.db` and shared across all projects.
 
 ## How It Works
 
@@ -228,18 +205,21 @@ See the **[Usage Guide](https://existential-birds.github.io/amelia/guide/usage)*
 
 ## Configuration
 
-Basic `settings.amelia.yaml`:
+Configuration is stored in SQLite (`~/.amelia/amelia.db`) and managed via CLI or dashboard:
 
-```yaml
-active_profile: home
-profiles:
-  home:
-    name: home
-    driver: api
-    model: "minimax/minimax-m2"
-    tracker: github
-    strategy: single
+```bash
+# Profile management
+amelia config profile list                # List all profiles
+amelia config profile create <name>       # Create new profile (interactive)
+amelia config profile show <name>         # Show profile details
+amelia config profile activate <name>     # Set active profile
+
+# Server settings
+amelia config server show                 # Show server settings
+amelia config server set <key> <value>    # Update a setting
 ```
+
+Or use the dashboard at `localhost:8420/settings` to manage profiles and server settings visually.
 
 See [Configuration Reference](https://existential-birds.github.io/amelia/guide/configuration) for full details.
 

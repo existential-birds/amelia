@@ -3,7 +3,7 @@
 ## Project Structure & Module Organization
 - Source lives in `amelia/` (agents, drivers, trackers, CLI entry in `main.py`; shared utils in `core/`).
 - Tests mirror modules in `tests/` (`unit/`, `integration/`, `e2e/`, `perf/`).
-- Docs and design notes: `docs/` and `specs/`; top-level configs: `settings.amelia.yaml`, `data-model.md`, `pyproject.toml`.
+- Docs and design notes: `docs/` and `specs/`; top-level configs: `data-model.md`, `pyproject.toml`. Runtime config in `~/.amelia/amelia.db`.
 
 ## Build, Test, and Development Commands
 - Install deps: `uv sync` (uses `pyproject.toml`/`uv.lock`).
@@ -29,6 +29,6 @@
 - PRs: state problem, approach, tests executed; link issue/ticket and include screenshots if UX-facing (CLI output acceptable).
 
 ## Security & Configuration Tips
-- Repository runs locally; keep secrets out of code and logs. Use env vars referenced by `settings.amelia.yaml`.
+- Repository runs locally; keep secrets out of code and logs. Use env vars (e.g., `OPENROUTER_API_KEY`) for secrets.
 - Validate driver/tracker inputs at boundaries; avoid writing tokens to logs or files.
 - Treat `data-model.md` and config files as source of truth; update docs when interfaces change.
