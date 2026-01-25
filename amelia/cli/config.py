@@ -221,7 +221,6 @@ def profile_show(
             table.add_row("Working Dir", profile.working_dir)
             table.add_row("Plan Output Dir", profile.plan_output_dir)
             table.add_row("Plan Path Pattern", profile.plan_path_pattern)
-            table.add_row("Auto Approve Reviews", str(profile.auto_approve_reviews))
 
             console.print(table)
 

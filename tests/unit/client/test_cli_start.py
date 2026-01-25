@@ -119,7 +119,6 @@ class TestPlanCommandTaskFlags:
             "working_dir": str(worktree),
             "plan_output_dir": "docs/plans",
             "plan_path_pattern": "docs/plans/{date}-{issue_key}.md",
-            "auto_approve_reviews": False,
             "is_active": True,
             "agents": {
                 "architect": {"driver": "cli", "model": "sonnet", "options": {}},

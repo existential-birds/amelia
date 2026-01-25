@@ -11,34 +11,35 @@ from amelia.pipelines.implementation.state import ImplementationState
 
 
 def route_after_evaluation(state: ImplementationState) -> str:
-    """Route after evaluation node.
-
-    If auto_approve is set, skip to developer.
-    Otherwise, go to human approval.
+    """Route after evaluation based on items to implement.
 
     Args:
-        state: Current execution state with auto_approve flag.
+        state: Current execution state with evaluation_result.
 
     Returns:
-        "developer_node" if auto_approve is set, otherwise "review_approval_node".
+        END if no issues to fix, "developer_node" if there are items to implement.
     """
-    if state.auto_approve:
-        return "developer_node"
-    return "review_approval_node"
+    if not state.evaluation_result or not state.evaluation_result.items_to_implement:
+        logger.info("No items to implement, ending workflow")
+        return END
+
+    logger.info(
+        "Items to implement, routing to developer",
+        count=len(state.evaluation_result.items_to_implement),
+    )
+    return "developer_node"
 
 
 def route_after_fixes(state: ImplementationState) -> str:
     """Route after developer fixes.
 
-    Check if there are still critical/major items to fix.
-    If auto_approve, loop back for another review pass.
-    Otherwise, go to end approval.
+    Check if max passes reached, otherwise loop back to reviewer.
 
     Args:
-        state: Current execution state with review_pass and evaluation_result.
+        state: Current execution state with review_pass.
 
     Returns:
-        "reviewer_node" to loop back, "end_approval_node" for human approval, or END.
+        "reviewer_node" to continue review loop, or END if max passes reached.
     """
     max_passes = state.max_review_passes
 
@@ -50,25 +51,4 @@ def route_after_fixes(state: ImplementationState) -> str:
         )
         return END
 
-    if state.auto_approve:
-        if state.evaluation_result and state.evaluation_result.items_to_implement:
-            return "reviewer_node"
-        return END
-
-    return "end_approval_node"
-
-
-def route_after_end_approval(state: ImplementationState) -> str:
-    """Route after end approval.
-
-    If human approves, end. Otherwise, loop back to reviewer.
-
-    Args:
-        state: Current execution state with human_approved flag.
-
-    Returns:
-        END if human approved, otherwise "reviewer_node".
-    """
-    if state.human_approved:
-        return END
     return "reviewer_node"

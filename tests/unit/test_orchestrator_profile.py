@@ -116,7 +116,6 @@ class TestOrchestratorProfileLoading:
             working_dir="/original/dir",
             plan_output_dir="custom/plans",
             plan_path_pattern="custom/{date}-{issue_key}.md",
-            auto_approve_reviews=True,
             agents={
                 "architect": agent_config,
                 "developer": agent_config,
@@ -132,5 +131,4 @@ class TestOrchestratorProfileLoading:
         assert updated_profile.working_dir == "/override/dir"
         assert updated_profile.plan_output_dir == "custom/plans"
         assert updated_profile.plan_path_pattern == "custom/{date}-{issue_key}.md"
-        assert updated_profile.auto_approve_reviews is True
         assert updated_profile.agents["developer"].driver == "api"

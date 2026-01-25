@@ -67,7 +67,6 @@ def test_row_to_profile_parses_agents_json():
         "working_dir": "/tmp/test",
         "plan_output_dir": "docs/plans",
         "plan_path_pattern": "docs/plans/{date}-{issue_key}.md",
-        "auto_approve_reviews": 0,
         "agents": agents_json,
         "is_active": 1,
         "created_at": "2025-01-01T00:00:00",

@@ -39,7 +39,6 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { createProfile, updateProfile } from '@/api/settings';
-import { ToggleField } from './ToggleField';
 import type { Profile, ProfileCreate, ProfileUpdate } from '@/api/settings';
 import * as toast from '@/components/Toast';
 
@@ -149,7 +148,6 @@ interface FormData {
   working_dir: string;
   plan_output_dir: string;
   plan_path_pattern: string;
-  auto_approve_reviews: boolean;
   agents: Record<string, AgentFormData>;
 }
 
@@ -208,7 +206,6 @@ const DEFAULT_FORM_DATA: FormData = {
   working_dir: '',
   plan_output_dir: 'docs/plans',
   plan_path_pattern: 'docs/plans/{date}-{issue_key}.md',
-  auto_approve_reviews: false,
   agents: buildDefaultAgents(),
 };
 
@@ -247,7 +244,6 @@ const profileToFormData = (profile: Profile): FormData => {
     working_dir: profile.working_dir,
     plan_output_dir: profile.plan_output_dir,
     plan_path_pattern: profile.plan_path_pattern,
-    auto_approve_reviews: profile.auto_approve_reviews,
     agents,
   };
 };
@@ -471,8 +467,7 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
       formData.tracker !== original.tracker ||
       formData.working_dir !== original.working_dir ||
       formData.plan_output_dir !== original.plan_output_dir ||
-      formData.plan_path_pattern !== original.plan_path_pattern ||
-      formData.auto_approve_reviews !== original.auto_approve_reviews
+      formData.plan_path_pattern !== original.plan_path_pattern
     ) {
       return true;
     }
@@ -599,7 +594,6 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
           working_dir: formData.working_dir,
           plan_output_dir: formData.plan_output_dir,
           plan_path_pattern: formData.plan_path_pattern,
-          auto_approve_reviews: formData.auto_approve_reviews,
           agents: formAgentsToApi(),
         };
         await updateProfile(profile!.id, updates);
@@ -611,7 +605,6 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
           working_dir: formData.working_dir,
           plan_output_dir: formData.plan_output_dir,
           plan_path_pattern: formData.plan_path_pattern,
-          auto_approve_reviews: formData.auto_approve_reviews,
           agents: formAgentsToApi(),
         };
         await createProfile(newProfile);
@@ -789,15 +782,6 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
               </div>
             </CollapsibleContent>
           </Collapsible>
-
-          {/* Auto-approve toggle */}
-          <ToggleField
-            id="auto_approve"
-            label="Auto-approve Reviews"
-            description="Automatically approve all review iterations"
-            checked={formData.auto_approve_reviews}
-            onCheckedChange={(checked) => handleChange('auto_approve_reviews', checked)}
-          />
 
           {/* Advanced Settings */}
           <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>

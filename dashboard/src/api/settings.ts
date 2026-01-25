@@ -63,7 +63,6 @@ export interface Profile {
   working_dir: string;
   plan_output_dir: string;
   plan_path_pattern: string;
-  auto_approve_reviews: boolean;
   agents: Record<string, AgentConfig>;
   is_active: boolean;
 }
@@ -86,7 +85,6 @@ export interface ProfileCreate {
   working_dir: string;
   plan_output_dir?: string;
   plan_path_pattern?: string;
-  auto_approve_reviews?: boolean;
   agents: Record<string, AgentConfigInput>;
 }
 
@@ -98,7 +96,6 @@ export interface ProfileUpdate {
   working_dir?: string;
   plan_output_dir?: string;
   plan_path_pattern?: string;
-  auto_approve_reviews?: boolean;
   agents?: Record<string, AgentConfigInput>;
 }
 

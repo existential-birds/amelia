@@ -70,7 +70,6 @@ class ProfileResponse(BaseModel):
     working_dir: str
     plan_output_dir: str
     plan_path_pattern: str
-    auto_approve_reviews: bool
     agents: dict[str, AgentConfigResponse]
     is_active: bool = False
 
@@ -94,7 +93,6 @@ class ProfileCreate(BaseModel):
     working_dir: str
     plan_output_dir: str = "docs/plans"
     plan_path_pattern: str = "docs/plans/{date}-{issue_key}.md"
-    auto_approve_reviews: bool = False
     agents: dict[str, AgentConfigCreate]
 
 
@@ -108,7 +106,6 @@ class ProfileUpdate(BaseModel):
     working_dir: str | None = None
     plan_output_dir: str | None = None
     plan_path_pattern: str | None = None
-    auto_approve_reviews: bool | None = None
     agents: dict[str, AgentConfigCreate] | None = None
 
 
@@ -187,7 +184,6 @@ async def create_profile(
         working_dir=profile_req.working_dir,
         plan_output_dir=profile_req.plan_output_dir,
         plan_path_pattern=profile_req.plan_path_pattern,
-        auto_approve_reviews=profile_req.auto_approve_reviews,
         agents=agents,
     )
 
@@ -222,7 +218,7 @@ async def update_profile(
     update_dict: dict[str, Any] = {}
 
     # Handle simple fields
-    for field in ["tracker", "working_dir", "plan_output_dir", "plan_path_pattern", "auto_approve_reviews"]:
+    for field in ["tracker", "working_dir", "plan_output_dir", "plan_path_pattern"]:
         value = getattr(updates, field)
         if value is not None:
             update_dict[field] = value
@@ -291,7 +287,6 @@ def _profile_to_response(profile: Profile, is_active: bool = False) -> ProfileRe
         working_dir=profile.working_dir,
         plan_output_dir=profile.plan_output_dir,
         plan_path_pattern=profile.plan_path_pattern,
-        auto_approve_reviews=profile.auto_approve_reviews,
         agents={
             name: AgentConfigResponse(
                 driver=config.driver,

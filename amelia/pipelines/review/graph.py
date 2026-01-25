@@ -11,9 +11,8 @@ from langgraph.graph.state import CompiledStateGraph
 
 from amelia.pipelines.implementation.state import ImplementationState
 from amelia.pipelines.nodes import call_developer_node, call_reviewer_node
-from amelia.pipelines.review.nodes import call_evaluation_node, review_approval_node
+from amelia.pipelines.review.nodes import call_evaluation_node
 from amelia.pipelines.review.routing import (
-    route_after_end_approval,
     route_after_evaluation,
     route_after_fixes,
 )
@@ -29,18 +28,15 @@ def create_review_graph(
 ) -> CompiledStateGraph[Any]:
     """Creates review-fix workflow graph.
 
-    Flow: reviewer -> evaluation -> [approval] -> developer -> [end_approval] -> END
+    Flow: reviewer -> evaluation -> developer -> reviewer (loop) -> END
 
     The workflow loops between reviewer and developer until:
-    - No more critical/major items (auto mode), OR
-    - Human approves the fixes (manual mode), OR
+    - No more items to implement (evaluation finds no issues), OR
     - Max review passes reached
 
     Args:
         checkpointer: Optional checkpoint saver for persistence.
         interrupt_before: Optional list of nodes to interrupt before.
-            Defaults to ["review_approval_node", "end_approval_node"] when
-            checkpointer is provided.
 
     Returns:
         Compiled LangGraph state graph ready for execution.
@@ -50,9 +46,7 @@ def create_review_graph(
     # Add nodes
     workflow.add_node("reviewer_node", call_reviewer_node)
     workflow.add_node("evaluation_node", call_evaluation_node)
-    workflow.add_node("review_approval_node", review_approval_node)
     workflow.add_node("developer_node", call_developer_node)
-    workflow.add_node("end_approval_node", review_approval_node)  # Reuse approval node
 
     # Set entry point
     workflow.set_entry_point("reviewer_node")
@@ -62,23 +56,13 @@ def create_review_graph(
     workflow.add_conditional_edges(
         "evaluation_node",
         route_after_evaluation,
-        {"developer_node": "developer_node", "review_approval_node": "review_approval_node"},
+        {"developer_node": "developer_node", END: END},
     )
-    workflow.add_edge("review_approval_node", "developer_node")
     workflow.add_conditional_edges(
         "developer_node",
         route_after_fixes,
-        {"reviewer_node": "reviewer_node", "end_approval_node": "end_approval_node", END: END},
-    )
-    workflow.add_conditional_edges(
-        "end_approval_node",
-        route_after_end_approval,
         {"reviewer_node": "reviewer_node", END: END},
     )
-
-    # Set default interrupt_before for server mode
-    if interrupt_before is None and checkpointer is not None:
-        interrupt_before = ["review_approval_node", "end_approval_node"]
 
     return workflow.compile(
         checkpointer=checkpointer,

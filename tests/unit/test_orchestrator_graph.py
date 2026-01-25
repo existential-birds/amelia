@@ -17,7 +17,6 @@ from amelia.pipelines.implementation.state import ImplementationState
 from amelia.pipelines.nodes import call_reviewer_node
 from amelia.pipelines.review import create_review_graph
 from amelia.pipelines.review.routing import (
-    route_after_end_approval,
     route_after_evaluation,
     route_after_fixes,
 )
@@ -67,23 +66,6 @@ class TestGraphEdges:
 class TestReviewRoutingFunctions:
     """Tests for review workflow routing functions - these are actual business logic."""
 
-    @pytest.mark.parametrize(
-        "auto_approve,expected",
-        [
-            (True, "developer_node"),
-            (False, "review_approval_node"),
-        ],
-    )
-    def test_route_after_evaluation(
-        self,
-        mock_execution_state_factory: Callable[..., tuple[ImplementationState, Profile]],
-        auto_approve: bool,
-        expected: str,
-    ) -> None:
-        """Test routing after evaluation based on auto_approve setting."""
-        state, _ = mock_execution_state_factory(goal="Test", auto_approve=auto_approve)
-        assert route_after_evaluation(state) == expected
-
     def test_route_after_fixes_max_passes_ends(
         self,
         mock_execution_state_factory: Callable[..., tuple[ImplementationState, Profile]],
@@ -96,82 +78,69 @@ class TestReviewRoutingFunctions:
         )
         assert route_after_fixes(state) == END
 
-    def test_route_after_fixes_auto_approve_loops_when_items_remain(
+    def test_route_after_fixes_loops_to_reviewer(
         self,
         mock_execution_state_factory: Callable[..., tuple[ImplementationState, Profile]],
     ) -> None:
-        """Auto mode should loop back to reviewer if items remain."""
-        evaluation_result = EvaluationResult(
-            items_to_implement=[
-                EvaluatedItem(
-                    number=1,
-                    title="Bug",
-                    file_path="test.py",
-                    line=1,
-                    disposition=Disposition.IMPLEMENT,
-                    reason="Valid",
-                    original_issue="Bug",
-                    suggested_fix="Fix",
-                ),
-            ],
-            summary="Has items",
-        )
-
+        """Under max passes should loop back to reviewer."""
         state, _ = mock_execution_state_factory(
             goal="Test",
-            auto_approve=True,
             review_pass=1,
             max_review_passes=3,
-            evaluation_result=evaluation_result,
         )
         assert route_after_fixes(state) == "reviewer_node"
 
-    def test_route_after_fixes_auto_approve_ends_when_no_items(
+    def test_route_after_evaluation_ends_when_no_issues(
         self,
         mock_execution_state_factory: Callable[..., tuple[ImplementationState, Profile]],
     ) -> None:
-        """Auto mode should end when no items remain."""
-        evaluation_result = EvaluationResult(items_to_implement=[], summary="No items")
+        """Route after evaluation ends when no items to implement."""
+        state, _ = mock_execution_state_factory(goal="Test")
+        # No evaluation_result means no issues
+        assert route_after_evaluation(state) == END
 
+    def test_route_after_evaluation_ends_when_empty_items(
+        self,
+        mock_execution_state_factory: Callable[..., tuple[ImplementationState, Profile]],
+    ) -> None:
+        """Route after evaluation ends when items_to_implement is empty."""
         state, _ = mock_execution_state_factory(
             goal="Test",
-            auto_approve=True,
-            review_pass=1,
-            max_review_passes=3,
-            evaluation_result=evaluation_result,
+            evaluation_result=EvaluationResult(
+                items_to_implement=[],
+                items_rejected=[],
+                items_deferred=[],
+                summary="No issues found",
+            ),
         )
-        assert route_after_fixes(state) == END
+        assert route_after_evaluation(state) == END
 
-    def test_route_after_fixes_manual_goes_to_end_approval(
+    def test_route_after_evaluation_routes_to_developer_when_issues(
         self,
         mock_execution_state_factory: Callable[..., tuple[ImplementationState, Profile]],
     ) -> None:
-        """Manual mode should route to end_approval_node."""
+        """Route after evaluation goes to developer when there are items."""
         state, _ = mock_execution_state_factory(
             goal="Test",
-            auto_approve=False,
-            review_pass=1,
-            max_review_passes=3,
+            evaluation_result=EvaluationResult(
+                items_to_implement=[
+                    EvaluatedItem(
+                        number=1,
+                        title="Fix bug",
+                        file_path="src/main.py",
+                        line=42,
+                        disposition=Disposition.IMPLEMENT,
+                        reason="Valid bug report",
+                        original_issue="Fix this bug",
+                        suggested_fix="Use proper error handling",
+                    )
+                ],
+                items_rejected=[],
+                items_deferred=[],
+                summary="1 item to implement",
+            ),
         )
-        assert route_after_fixes(state) == "end_approval_node"
-
-    @pytest.mark.parametrize(
-        "human_approved,expected",
-        [
-            (True, END),
-            (False, "reviewer_node"),
-            (None, "reviewer_node"),
-        ],
-    )
-    def test_route_after_end_approval(
-        self,
-        mock_execution_state_factory: Callable[..., tuple[ImplementationState, Profile]],
-        human_approved: bool | None,
-        expected: str,
-    ) -> None:
-        """Test routing after end approval based on human_approved state."""
-        state, _ = mock_execution_state_factory(goal="Test", human_approved=human_approved)
-        assert route_after_end_approval(state) == expected
+        assert route_after_evaluation(state) == "developer_node"
 
 
 class TestRouteAfterTaskReview:

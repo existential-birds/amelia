@@ -58,18 +58,6 @@ class TestReviewPipelineProtocol:
         graph = pipeline.create_graph()
         assert "developer_node" in graph.nodes
 
-    def test_graph_has_review_approval_node(self) -> None:
-        """Graph should have review approval node."""
-        pipeline = ReviewPipeline()
-        graph = pipeline.create_graph()
-        assert "review_approval_node" in graph.nodes
-
-    def test_graph_has_end_approval_node(self) -> None:
-        """Graph should have end approval node."""
-        pipeline = ReviewPipeline()
-        graph = pipeline.create_graph()
-        assert "end_approval_node" in graph.nodes
-
 
 class TestReviewPipelineInitialState:
     """Tests for get_initial_state method."""
@@ -103,3 +91,10 @@ class TestReviewPipelineGraphStructure:
         pipeline = ReviewPipeline()
         graph = pipeline.create_graph(checkpointer=None)
         assert graph is not None
+
+    def test_graph_no_approval_nodes(self) -> None:
+        """Graph should not have approval nodes (fully automatic workflow)."""
+        pipeline = ReviewPipeline()
+        graph = pipeline.create_graph()
+        assert "review_approval_node" not in graph.nodes
+        assert "end_approval_node" not in graph.nodes

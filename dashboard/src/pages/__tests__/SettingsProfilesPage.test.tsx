@@ -41,7 +41,6 @@ const mockProfiles = [
     tracker: 'none',
     plan_output_dir: 'docs/plans',
     plan_path_pattern: 'docs/plans/{date}-{issue_key}.md',
-    auto_approve_reviews: false,
     agents: {
       architect: { driver: 'cli', model: 'opus', options: {} },
       developer: { driver: 'cli', model: 'opus', options: {} },
@@ -55,7 +54,6 @@ const mockProfiles = [
     tracker: 'jira',
     plan_output_dir: 'docs/plans',
     plan_path_pattern: 'docs/plans/{date}-{issue_key}.md',
-    auto_approve_reviews: false,
     agents: {
       architect: { driver: 'api', model: 'gpt-4', options: {} },
       developer: { driver: 'api', model: 'gpt-4', options: {} },

@@ -453,7 +453,6 @@ async def _get_profile_from_server(profile_name: str | None) -> Profile:
                 working_dir=data["working_dir"],
                 plan_output_dir=data["plan_output_dir"],
                 plan_path_pattern=data["plan_path_pattern"],
-                auto_approve_reviews=data["auto_approve_reviews"],
                 agents=agents,
             )
     except httpx.ConnectError as e:

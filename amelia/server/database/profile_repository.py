@@ -22,7 +22,6 @@ class ProfileRecord(BaseModel):
     working_dir: str
     plan_output_dir: str = "docs/plans"
     plan_path_pattern: str = "docs/plans/{date}-{issue_key}.md"
-    auto_approve_reviews: bool = False
     agents: str  # JSON blob of dict[str, AgentConfig]
     is_active: bool = False
     created_at: datetime | None = None
@@ -97,15 +96,14 @@ class ProfileRepository:
         await self._db.execute(
             """INSERT INTO profiles (
                 id, tracker, working_dir, plan_output_dir, plan_path_pattern,
-                auto_approve_reviews, agents, is_active
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                agents, is_active
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)""",
             (
                 profile.name,
                 profile.tracker,
                 profile.working_dir,
                 profile.plan_output_dir,
                 profile.plan_path_pattern,
-                1 if profile.auto_approve_reviews else 0,
                 agents_json,
                 0,
             ),
@@ -135,7 +133,6 @@ class ProfileRepository:
             "working_dir",
             "plan_output_dir",
             "plan_path_pattern",
-            "auto_approve_reviews",
             "agents",
         }
         invalid = set(updates.keys()) - valid_fields
@@ -226,6 +223,5 @@ class ProfileRepository:
             working_dir=row["working_dir"],
             plan_output_dir=row["plan_output_dir"],
             plan_path_pattern=row["plan_path_pattern"],
-            auto_approve_reviews=bool(row["auto_approve_reviews"]),
             agents=agents,
         )

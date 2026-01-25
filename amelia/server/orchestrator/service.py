@@ -1160,14 +1160,9 @@ class OrchestratorService:
         async with AsyncSqliteSaver.from_conn_string(
             str(self._checkpoint_path)
         ) as checkpointer:
-            # Determine interrupt settings based on auto_approve
-            auto_approve = state.execution_state.auto_approve or profile.auto_approve_reviews
-            interrupt_before: list[str] | None = [] if auto_approve else None  # None = use defaults
-
             # Use dedicated review graph for review workflows
             graph = create_review_graph(
                 checkpointer=checkpointer,
-                interrupt_before=interrupt_before,
             )
 
             # Pass event_bus via config
@@ -1196,9 +1191,6 @@ class OrchestratorService:
 
                 # Convert Pydantic model to JSON-serializable dict for checkpointing
                 initial_state = state.execution_state.model_dump(mode="json")
-                # Ensure auto_approve is set from profile if not already in state
-                if profile.auto_approve_reviews and not initial_state.get("auto_approve"):
-                    initial_state["auto_approve"] = True
 
                 async for chunk in graph.astream(
                     initial_state,

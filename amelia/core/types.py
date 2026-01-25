@@ -75,7 +75,6 @@ class Profile(BaseModel):
         plan_output_dir: Directory for saving implementation plans.
         plan_path_pattern: Path pattern for plan files with {date} and {issue_key} placeholders.
         retry: Retry configuration for transient failures.
-        auto_approve_reviews: Skip human approval steps in review workflow.
         agents: Per-agent driver and model configuration.
     """
 
@@ -87,7 +86,6 @@ class Profile(BaseModel):
     plan_output_dir: str = "docs/plans"
     plan_path_pattern: str = "docs/plans/{date}-{issue_key}.md"
     retry: RetryConfig = Field(default_factory=RetryConfig)
-    auto_approve_reviews: bool = False
     agents: dict[str, AgentConfig] = Field(default_factory=dict)
 
     def get_agent_config(self, agent_name: str) -> AgentConfig:

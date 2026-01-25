@@ -222,7 +222,6 @@ class TestProfileRoutes:
             working_dir="/custom/path",
             plan_output_dir="custom/plans",
             plan_path_pattern="custom/{date}.md",
-            auto_approve_reviews=True,
             agents={
                 "developer": AgentConfig(driver=driver, model="gpt-4"),
             },
@@ -236,7 +235,6 @@ class TestProfileRoutes:
                 "working_dir": "/custom/path",
                 "plan_output_dir": "custom/plans",
                 "plan_path_pattern": "custom/{date}.md",
-                "auto_approve_reviews": True,
                 "agents": {
                     "developer": {"driver": "api", "model": "gpt-4"},
                 },
@@ -246,7 +244,6 @@ class TestProfileRoutes:
         data = response.json()
         assert data["tracker"] == "jira"
         assert data["plan_output_dir"] == "custom/plans"
-        assert data["auto_approve_reviews"] is True
 
     def test_get_profile(self, profile_client, mock_profile_repo):
         """GET /api/profiles/{id} returns profile."""

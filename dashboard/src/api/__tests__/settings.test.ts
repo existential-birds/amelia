@@ -120,7 +120,6 @@ describe("settings API", () => {
           working_dir: "/Users/me/projects",
           plan_output_dir: "plans",
           plan_path_pattern: "{issue_id}.md",
-          auto_approve_reviews: false,
           agents: {
             architect: {
               driver: "api",
@@ -146,7 +145,6 @@ describe("settings API", () => {
           working_dir: "/Users/me/personal",
           plan_output_dir: "plans",
           plan_path_pattern: "{issue_id}.md",
-          auto_approve_reviews: false,
           agents: {
             architect: {
               driver: "cli",
@@ -208,7 +206,6 @@ describe("settings API", () => {
         working_dir: "/Users/me/projects",
         plan_output_dir: "plans",
         plan_path_pattern: "{issue_id}.md",
-        auto_approve_reviews: false,
         agents: {
           architect: {
             driver: "api",
@@ -279,7 +276,6 @@ describe("settings API", () => {
         working_dir: "/Users/me/projects",
         plan_output_dir: "plans",
         plan_path_pattern: "{issue_id}.md",
-        auto_approve_reviews: false,
         agents: {
           architect: {
             driver: "api",
@@ -346,7 +342,6 @@ describe("settings API", () => {
         working_dir: "/Users/me/projects",
         plan_output_dir: "plans",
         plan_path_pattern: "{issue_id}.md",
-        auto_approve_reviews: true,
         agents: {
           architect: {
             driver: "api",
@@ -372,14 +367,14 @@ describe("settings API", () => {
         json: async () => mockProfile,
       } as Response);
 
-      const result = await updateProfile("work", { auto_approve_reviews: true });
+      const result = await updateProfile("work", { tracker: "github" });
 
       expect(fetch).toHaveBeenCalledWith(
         "/api/profiles/work",
         expect.objectContaining({
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ auto_approve_reviews: true }),
+          body: JSON.stringify({ tracker: "github" }),
         })
       );
       expect(result).toEqual(mockProfile);
@@ -422,7 +417,6 @@ describe("settings API", () => {
         working_dir: "/Users/me/projects",
         plan_output_dir: "plans",
         plan_path_pattern: "{issue_id}.md",
-        auto_approve_reviews: false,
         agents: {
           architect: {
             driver: "api",
