@@ -9,8 +9,8 @@ def test_agent_config_creation():
     """AgentConfig should store driver, model, and optional options."""
     from amelia.core.types import AgentConfig
 
-    config = AgentConfig(driver="cli:claude", model="sonnet")
-    assert config.driver == "cli:claude"
+    config = AgentConfig(driver="cli", model="sonnet")
+    assert config.driver == "cli"
     assert config.model == "sonnet"
     assert config.options == {}
 
@@ -20,7 +20,7 @@ def test_agent_config_with_options():
     from amelia.core.types import AgentConfig
 
     config = AgentConfig(
-        driver="api:openrouter",
+        driver="api",
         model="anthropic/claude-sonnet-4",
         options={"max_iterations": 5, "temperature": 0.7},
     )
@@ -34,11 +34,11 @@ def test_profile_with_agents_dict():
 
     profile = Profile(
         name="test",
-        tracker="noop",
+        tracker="none",
         working_dir="/tmp/test",
         agents={
-            "architect": AgentConfig(driver="cli:claude", model="opus"),
-            "developer": AgentConfig(driver="cli:claude", model="sonnet"),
+            "architect": AgentConfig(driver="cli", model="opus"),
+            "developer": AgentConfig(driver="cli", model="sonnet"),
         },
     )
     assert profile.agents["architect"].model == "opus"
@@ -51,10 +51,10 @@ def test_profile_get_agent_config():
 
     profile = Profile(
         name="test",
-        tracker="noop",
+        tracker="none",
         working_dir="/tmp/test",
         agents={
-            "architect": AgentConfig(driver="cli:claude", model="opus"),
+            "architect": AgentConfig(driver="cli", model="opus"),
         },
     )
 

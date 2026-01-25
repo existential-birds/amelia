@@ -101,6 +101,42 @@ describe("SpecBuilderPage", () => {
     });
   });
 
+  it("creates session when Start Brainstorming is clicked", async () => {
+    const mockSession = {
+      id: "s1",
+      profile_id: "test",
+      driver_session_id: null,
+      status: "active" as const,
+      topic: null,
+      created_at: "2026-01-18T00:00:00Z",
+      updated_at: "2026-01-18T00:00:00Z",
+    };
+    const mockProfile = {
+      name: "test",
+      driver: "cli",
+      model: "sonnet",
+    };
+    vi.mocked(brainstormApi.createSession).mockResolvedValue({
+      session: mockSession,
+      profile: mockProfile,
+    });
+    vi.mocked(brainstormApi.primeSession).mockResolvedValue({ message_id: "m1" });
+
+    renderPage();
+
+    // Wait for the button to be present (handles any async rendering)
+    const startButton = await screen.findByRole("button", { name: /start brainstorming/i });
+    await userEvent.click(startButton);
+
+    await waitFor(() => {
+      expect(brainstormApi.createSession).toHaveBeenCalledWith("test");
+    });
+
+    await waitFor(() => {
+      expect(brainstormApi.primeSession).toHaveBeenCalledWith("s1");
+    });
+  });
+
   it("opens drawer when hamburger is clicked", async () => {
     renderPage();
 

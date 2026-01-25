@@ -331,7 +331,7 @@ Agent completed but required tool was never called
 
 **Solution:**
 
-The API driver includes retry logic (up to 3 attempts) and fallback extraction, but some models consistently fail. Use a different model or switch to `cli:claude`.
+The API driver includes retry logic (up to 3 attempts) and fallback extraction, but some models consistently fail. Use a different model or switch to `cli`.
 
 ---
 
@@ -421,13 +421,13 @@ Error: No profiles configured. Run 'amelia config profile create' to add one.
 Error: OPENROUTER_API_KEY environment variable not set
 ```
 
-**Cause:** Using `driver: api:openrouter` without credentials.
+**Cause:** Using `driver: api` without credentials.
 
 **Solutions:**
 
 **Driver → Required Credentials:**
-- `api:openrouter` → `OPENROUTER_API_KEY`
-- `cli:claude` → Claude CLI authenticated (`claude auth login`)
+- `api` → `OPENROUTER_API_KEY`
+- `cli` → Claude CLI authenticated (`claude auth login`)
 
 1. Set API key:
    ```bash
@@ -452,7 +452,7 @@ ConfigurationError: Missing required JIRA environment variables: JIRA_BASE_URL
 |---------|-------------------|
 | `jira` | `JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN` |
 | `github` | `gh` CLI authenticated (`gh auth login`) |
-| `noop` | None (for testing) |
+| `none` | None (for testing) |
 
 **Solutions:**
 
@@ -615,7 +615,7 @@ await file_writer.write("/absolute/path/in/project/file.md", content)
 1. Server running: `amelia dev`
 2. No existing workflow in worktree: `amelia status`
 3. Valid git repository: `git status`
-4. Issue ID valid (or use `tracker: noop`)
+4. Issue ID valid (or use `tracker: none`)
 
 ### Workflow stuck in pending_approval
 

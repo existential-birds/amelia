@@ -31,7 +31,7 @@ class TestArchitectPromptInjection:
         """Should use injected system prompt instead of default for analyze."""
         custom_prompt = "You are a custom architect..."
         prompts = {"architect.system": custom_prompt}
-        config = AgentConfig(driver="cli:claude", model="sonnet")
+        config = AgentConfig(driver="cli", model="sonnet")
 
         state, profile = mock_execution_state_factory()
         mock_driver.generate = AsyncMock(return_value=(
@@ -59,7 +59,7 @@ class TestArchitectPromptInjection:
         """
         custom_plan_prompt = "Custom plan format..."
         prompts = {"architect.plan": custom_plan_prompt}
-        config = AgentConfig(driver="cli:claude", model="sonnet")
+        config = AgentConfig(driver="cli", model="sonnet")
 
         state, profile = mock_execution_state_factory()
 
@@ -94,7 +94,7 @@ class TestArchitectPromptInjection:
         mock_execution_state_factory: Callable[..., tuple[ImplementationState, Profile]],
     ) -> None:
         """Should use class default when system prompt not injected."""
-        config = AgentConfig(driver="cli:claude", model="sonnet")
+        config = AgentConfig(driver="cli", model="sonnet")
         state, profile = mock_execution_state_factory()
         mock_driver.generate = AsyncMock(return_value=(
             {"goal": "Test goal", "strategy": "Test strategy", "key_files": [], "risks": []},
@@ -120,7 +120,7 @@ class TestArchitectPromptInjection:
 
         The architect.plan() now uses execute_agentic which takes instructions parameter.
         """
-        config = AgentConfig(driver="cli:claude", model="sonnet")
+        config = AgentConfig(driver="cli", model="sonnet")
         state, profile = mock_execution_state_factory()
 
         # Mock execute_agentic as async generator
@@ -157,7 +157,7 @@ class TestArchitectPromptInjection:
     ) -> None:
         """Test system_prompt property returns correct value."""
         custom_prompt = "Custom system prompt"
-        config = AgentConfig(driver="cli:claude", model="sonnet")
+        config = AgentConfig(driver="cli", model="sonnet")
 
         with patch("amelia.agents.architect.get_driver", return_value=mock_driver):
             # With custom prompt
@@ -175,7 +175,7 @@ class TestArchitectPromptInjection:
     ) -> None:
         """Test plan_prompt property returns correct value."""
         custom_prompt = "Custom plan prompt"
-        config = AgentConfig(driver="cli:claude", model="sonnet")
+        config = AgentConfig(driver="cli", model="sonnet")
 
         with patch("amelia.agents.architect.get_driver", return_value=mock_driver):
             # With custom prompt
@@ -193,7 +193,7 @@ class TestArchitectPromptInjection:
         mock_execution_state_factory: Callable[..., tuple[ImplementationState, Profile]],
     ) -> None:
         """Empty prompts dict should fall back to defaults."""
-        config = AgentConfig(driver="cli:claude", model="sonnet")
+        config = AgentConfig(driver="cli", model="sonnet")
         state, profile = mock_execution_state_factory()
         mock_driver.generate = AsyncMock(return_value=(
             {"goal": "Test goal", "strategy": "Test strategy", "key_files": [], "risks": []},

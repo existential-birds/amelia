@@ -60,10 +60,10 @@ def mock_repository() -> AsyncMock:
 def mock_profile_repo() -> AsyncMock:
     """Create mock profile repository."""
     repo = AsyncMock()
-    agent_config = AgentConfig(driver="cli:claude", model="sonnet")
+    agent_config = AgentConfig(driver="cli", model="sonnet")
     default_profile = Profile(
         name="test",
-        tracker="noop",
+        tracker="none",
         working_dir="/default/repo",
         agents={
             "architect": agent_config,
@@ -1199,12 +1199,12 @@ class TestRunWorkflowCheckpointResume:
 
         mock_profile = Profile(
             name="test",
-            tracker="noop",
+            tracker="none",
             working_dir="/tmp/test",
             agents={
-                "architect": AgentConfig(driver="cli:claude", model="sonnet"),
-                "developer": AgentConfig(driver="cli:claude", model="sonnet"),
-                "reviewer": AgentConfig(driver="cli:claude", model="sonnet"),
+                "architect": AgentConfig(driver="cli", model="sonnet"),
+                "developer": AgentConfig(driver="cli", model="sonnet"),
+                "reviewer": AgentConfig(driver="cli", model="sonnet"),
             },
         )
 
@@ -1261,12 +1261,12 @@ class TestRunWorkflowCheckpointResume:
 
         mock_profile = Profile(
             name="test",
-            tracker="noop",
+            tracker="none",
             working_dir="/tmp/test",
             agents={
-                "architect": AgentConfig(driver="cli:claude", model="sonnet"),
-                "developer": AgentConfig(driver="cli:claude", model="sonnet"),
-                "reviewer": AgentConfig(driver="cli:claude", model="sonnet"),
+                "architect": AgentConfig(driver="cli", model="sonnet"),
+                "developer": AgentConfig(driver="cli", model="sonnet"),
+                "reviewer": AgentConfig(driver="cli", model="sonnet"),
             },
         )
 
@@ -1508,20 +1508,20 @@ class TestTaskProgressEvents:
 class TestStartWorkflowWithTaskFields:
     """Tests for start_workflow with task_title/task_description."""
 
-    async def test_noop_tracker_with_task_title_constructs_issue(
+    async def test_none_tracker_with_task_title_constructs_issue(
         self,
         orchestrator: OrchestratorService,
         mock_repository: AsyncMock,
         mock_profile_repo: AsyncMock,
         tmp_path: Path,
     ) -> None:
-        """start_workflow with task_title and noop tracker constructs Issue directly."""
+        """start_workflow with task_title and none tracker constructs Issue directly."""
         # Create valid worktree (just needs .git, no settings.amelia.yaml needed)
         worktree = tmp_path / "worktree"
         worktree.mkdir()
         (worktree / ".git").touch()
 
-        # mock_profile_repo fixture already returns a profile with tracker="noop"
+        # mock_profile_repo fixture already returns a profile with tracker="none"
         with patch.object(orchestrator, "_run_workflow_with_retry", new=AsyncMock()):
             workflow_id = await orchestrator.start_workflow(
                 issue_id="TASK-1",
@@ -1538,20 +1538,20 @@ class TestStartWorkflowWithTaskFields:
             assert state.execution_state.issue.title == "Add logout button"
             assert state.execution_state.issue.description == "Add to navbar with confirmation"
 
-    async def test_task_title_with_non_noop_tracker_errors(
+    async def test_task_title_with_non_none_tracker_errors(
         self,
         orchestrator: OrchestratorService,
         mock_profile_repo: AsyncMock,
         tmp_path: Path,
     ) -> None:
-        """start_workflow with task_title and non-noop tracker should error."""
+        """start_workflow with task_title and non-none tracker should error."""
         # Create valid worktree
         worktree = tmp_path / "worktree"
         worktree.mkdir()
         (worktree / ".git").touch()
 
         # Override the mock profile to use github tracker
-        agent_config = AgentConfig(driver="cli:claude", model="sonnet")
+        agent_config = AgentConfig(driver="cli", model="sonnet")
         mock_profile_repo.get_profile.return_value = Profile(
             name="github",
             tracker="github",
@@ -1571,7 +1571,7 @@ class TestStartWorkflowWithTaskFields:
                 task_title="Add logout button",
             )
 
-        assert "noop" in str(exc_info.value).lower()
+        assert "none" in str(exc_info.value).lower()
         assert "tracker" in str(exc_info.value).lower()
 
     async def test_task_title_defaults_description_to_title(
@@ -1587,7 +1587,7 @@ class TestStartWorkflowWithTaskFields:
         worktree.mkdir()
         (worktree / ".git").touch()
 
-        # mock_profile_repo fixture already returns a profile with tracker="noop"
+        # mock_profile_repo fixture already returns a profile with tracker="none"
         with patch.object(orchestrator, "_run_workflow_with_retry", new=AsyncMock()):
             await orchestrator.start_workflow(
                 issue_id="TASK-1",

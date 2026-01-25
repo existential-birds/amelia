@@ -12,11 +12,11 @@ from amelia.pipelines.nodes import call_reviewer_node
 def profile_with_agents():
     return Profile(
         name="test",
-        tracker="noop",
+        tracker="none",
         working_dir="/tmp/test",
         agents={
-            "reviewer": AgentConfig(driver="cli:claude", model="opus", options={"max_iterations": 3}),
-            "task_reviewer": AgentConfig(driver="cli:claude", model="sonnet", options={"max_iterations": 5}),
+            "reviewer": AgentConfig(driver="cli", model="opus", options={"max_iterations": 3}),
+            "task_reviewer": AgentConfig(driver="cli", model="sonnet", options={"max_iterations": 5}),
         },
     )
 
@@ -65,5 +65,5 @@ async def test_call_reviewer_node_uses_agent_config(profile_with_agents, mock_st
         assert call_args is not None
         config_arg = call_args[0][0]  # First positional arg
         assert isinstance(config_arg, AgentConfig)
-        assert config_arg.driver == "cli:claude"
+        assert config_arg.driver == "cli"
         assert config_arg.model == "opus"  # reviewer, not task_reviewer

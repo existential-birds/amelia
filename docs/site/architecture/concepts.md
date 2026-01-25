@@ -221,8 +221,8 @@ Drivers abstract how Amelia communicates with LLMs. This separation enables flex
 
 | Driver | Use Case | Requirements |
 |--------|----------|--------------|
-| `api:openrouter` | Direct API calls, simple setup, fast prototyping | `OPENROUTER_API_KEY` env var |
-| `cli:claude` | Wraps authenticated CLI tools, policy-compliant | `claude` CLI installed |
+| `api` | Direct API calls, simple setup, fast prototyping | `OPENROUTER_API_KEY` env var |
+| `cli` | Wraps authenticated CLI tools, policy-compliant | `claude` CLI installed |
 
 ### Driver Interface
 
@@ -266,7 +266,7 @@ Trackers provide pluggable backends for fetching issues.
 |---------|--------|--------------|
 | `jira` | Jira issues | `JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN` |
 | `github` | GitHub issues | `gh` CLI authenticated (`gh auth login`) |
-| `noop` | Manual input | None |
+| `none` | Manual input | None |
 
 All implement the `BaseTracker` protocol:
 

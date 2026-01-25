@@ -27,10 +27,10 @@ class TestArchitectPlanPath:
         issue = Issue(id="TEST-123", title="Test Issue", description="Test description")
         profile = Profile(
             name="test",
-            tracker="noop",
+            tracker="none",
             working_dir="/tmp/test",
             agents={
-                "architect": AgentConfig(driver="cli:claude", model="sonnet"),
+                "architect": AgentConfig(driver="cli", model="sonnet"),
             },
         )
         state = ImplementationState(
@@ -49,7 +49,7 @@ class TestArchitectPlanPath:
     ) -> None:
         """Prompt should include the resolved plan path with Write instruction."""
         state, profile = state_and_profile
-        config = AgentConfig(driver="cli:claude", model="sonnet")
+        config = AgentConfig(driver="cli", model="sonnet")
 
         with patch("amelia.agents.architect.get_driver", return_value=mock_driver_local):
             architect = Architect(config)
@@ -70,7 +70,7 @@ class TestArchitectPlanPath:
     ) -> None:
         """Prompt should include today's date in the plan path."""
         state, profile = state_and_profile
-        config = AgentConfig(driver="cli:claude", model="sonnet")
+        config = AgentConfig(driver="cli", model="sonnet")
 
         with patch("amelia.agents.architect.get_driver", return_value=mock_driver_local):
             architect = Architect(config)
@@ -98,7 +98,7 @@ class TestArchitectPlanPath:
             profile_id="test",
             issue=issue,
         )
-        config = AgentConfig(driver="cli:claude", model="sonnet")
+        config = AgentConfig(driver="cli", model="sonnet")
 
         with patch("amelia.agents.architect.get_driver", return_value=mock_driver_local):
             architect = Architect(config)
@@ -114,7 +114,7 @@ class TestArchitectPlanPath:
     ) -> None:
         """Plan method should pass profile to _build_agentic_prompt."""
         state, profile = state_and_profile
-        config = AgentConfig(driver="cli:claude", model="sonnet")
+        config = AgentConfig(driver="cli", model="sonnet")
 
         # Capture the prompt passed to execute_agentic
         captured_prompts: list[str] = []
@@ -148,7 +148,7 @@ class TestArchitectPlanPath:
         from pathlib import Path
 
         state, profile = state_and_profile
-        config = AgentConfig(driver="cli:claude", model="sonnet")
+        config = AgentConfig(driver="cli", model="sonnet")
 
         async def mock_execute_agentic(*args: Any, **kwargs: Any) -> Any:
             # Simulate Write tool call followed by result

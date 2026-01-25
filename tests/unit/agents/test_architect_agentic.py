@@ -18,7 +18,7 @@ class TestArchitectInitWithAgentConfig:
 
     def test_architect_init_with_agent_config(self):
         """Architect should accept AgentConfig and create its own driver."""
-        config = AgentConfig(driver="cli:claude", model="sonnet")
+        config = AgentConfig(driver="cli", model="sonnet")
 
         with patch("amelia.agents.architect.get_driver") as mock_get_driver:
             mock_driver = MagicMock()
@@ -26,7 +26,7 @@ class TestArchitectInitWithAgentConfig:
 
             architect = Architect(config)
 
-            mock_get_driver.assert_called_once_with("cli:claude", model="sonnet")
+            mock_get_driver.assert_called_once_with("cli", model="sonnet")
             assert architect.driver is mock_driver
             assert architect.options == {}
 
@@ -62,7 +62,7 @@ class TestArchitectPlanAsyncGenerator:
     ) -> None:
         """plan() should return an async iterator."""
         state, profile = state_with_issue
-        config = AgentConfig(driver="cli:claude", model="sonnet")
+        config = AgentConfig(driver="cli", model="sonnet")
 
         # Mock empty stream
         async def mock_stream(*args: Any, **kwargs: Any) -> AsyncIterator[AgenticMessage]:
@@ -89,7 +89,7 @@ class TestArchitectPlanAsyncGenerator:
     ) -> None:
         """plan() should yield (ImplementationState, WorkflowEvent) tuples."""
         state, profile = state_with_issue
-        config = AgentConfig(driver="cli:claude", model="sonnet")
+        config = AgentConfig(driver="cli", model="sonnet")
 
         async def mock_stream(*args: Any, **kwargs: Any) -> AsyncIterator[AgenticMessage]:
             yield AgenticMessage(
@@ -140,7 +140,7 @@ class TestArchitectCwdPassing:
             profile_id="test",
             issue=issue,
         )
-        config = AgentConfig(driver="cli:claude", model="sonnet")
+        config = AgentConfig(driver="cli", model="sonnet")
 
         # Track the actual cwd passed to execute_agentic
         captured_cwd = None
@@ -187,7 +187,7 @@ class TestArchitectToolCallAccumulation:
             profile_id="test",
             issue=issue,
         )
-        config = AgentConfig(driver="cli:claude", model="sonnet")
+        config = AgentConfig(driver="cli", model="sonnet")
 
         async def mock_stream(*args, **kwargs):
             yield AgenticMessage(
@@ -227,3 +227,92 @@ class TestArchitectToolCallAccumulation:
         assert final_state.tool_calls[0].tool_name == "read_file"
         assert final_state.tool_calls[1].tool_name == "list_dir"
         assert len(final_state.tool_results) == 1
+
+
+class TestArchitectDesignDocumentInPrompt:
+    """Tests for design document inclusion in agentic prompt."""
+
+    async def test_agentic_prompt_includes_design_document(
+        self,
+        mock_driver,
+        mock_issue_factory,
+        mock_profile_factory,
+    ) -> None:
+        """When state.design is present, it should be included in the prompt."""
+        from amelia.core.types import Design
+
+        issue = mock_issue_factory(title="Implement feature", description="Feature desc")
+        profile = mock_profile_factory()
+        design_content = "# Feature Design\n\nThis is the brainstorming output."
+        state = ImplementationState(
+            workflow_id="test-workflow",
+            created_at=datetime.now(UTC),
+            status="running",
+            profile_id="test",
+            issue=issue,
+            design=Design(content=design_content, source="brainstorming"),
+        )
+        config = AgentConfig(driver="cli", model="sonnet")
+
+        # Capture the prompt passed to execute_agentic
+        captured_prompt = None
+
+        async def mock_stream(*args, **kwargs):
+            nonlocal captured_prompt
+            captured_prompt = kwargs.get("prompt")
+            yield AgenticMessage(
+                type=AgenticMessageType.RESULT,
+                content="**Goal:** Test",
+            )
+
+        mock_driver.execute_agentic = mock_stream
+
+        with patch("amelia.agents.architect.get_driver", return_value=mock_driver):
+            architect = Architect(config)
+
+            async for _ in architect.plan(state, profile, workflow_id="wf-1"):
+                pass
+
+        assert captured_prompt is not None
+        assert "## Design Document" in captured_prompt
+        assert design_content in captured_prompt
+
+    async def test_agentic_prompt_excludes_design_when_none(
+        self,
+        mock_driver,
+        mock_issue_factory,
+        mock_profile_factory,
+    ) -> None:
+        """When state.design is None, no design section should appear."""
+        issue = mock_issue_factory(title="Implement feature", description="Feature desc")
+        profile = mock_profile_factory()
+        state = ImplementationState(
+            workflow_id="test-workflow",
+            created_at=datetime.now(UTC),
+            status="running",
+            profile_id="test",
+            issue=issue,
+            design=None,
+        )
+        config = AgentConfig(driver="cli", model="sonnet")
+
+        captured_prompt = None
+
+        async def mock_stream(*args, **kwargs):
+            nonlocal captured_prompt
+            captured_prompt = kwargs.get("prompt")
+            yield AgenticMessage(
+                type=AgenticMessageType.RESULT,
+                content="**Goal:** Test",
+            )
+
+        mock_driver.execute_agentic = mock_stream
+
+        with patch("amelia.agents.architect.get_driver", return_value=mock_driver):
+            architect = Architect(config)
+
+            async for _ in architect.plan(state, profile, workflow_id="wf-1"):
+                pass
+
+        assert captured_prompt is not None
+        assert "## Design Document" not in captured_prompt

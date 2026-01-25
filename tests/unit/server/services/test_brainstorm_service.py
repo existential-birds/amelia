@@ -734,7 +734,7 @@ class TestHandoff(TestBrainstormService):
         service: BrainstormService,
         mock_repository: MagicMock,
     ) -> None:
-        """Should raise NotImplementedError for non-noop tracker."""
+        """Should raise ValueError for non-none tracker."""
         now = datetime.now(UTC)
         mock_session = BrainstormingSession(
             id="sess-1", profile_id="work", status="ready_for_handoff",
@@ -749,12 +749,12 @@ class TestHandoff(TestBrainstormService):
         ]
 
         mock_orchestrator = MagicMock()
-        # Simulate ValueError from orchestrator when tracker is not noop
+        # Simulate ValueError from orchestrator when tracker is not none
         mock_orchestrator.queue_workflow = AsyncMock(
-            side_effect=ValueError("task_title can only be used with noop tracker")
+            side_effect=ValueError("task_title can only be used with none tracker")
         )
 
-        with pytest.raises(ValueError, match="noop tracker"):
+        with pytest.raises(ValueError, match="none tracker"):
             await service.handoff_to_implementation(
                 session_id="sess-1",
                 artifact_path="docs/plans/design.md",
@@ -824,7 +824,7 @@ class TestDeleteSessionCleanup(TestBrainstormService):
         mock_session = BrainstormingSession(
             id="sess-1",
             profile_id="work",
-            driver_type="cli:claude",
+            driver_type="cli",
             driver_session_id="driver-sess-123",
             status="active",
             created_at=now,
@@ -834,7 +834,7 @@ class TestDeleteSessionCleanup(TestBrainstormService):
 
         await service_with_cleanup.delete_session("sess-1")
 
-        mock_cleanup.assert_called_once_with("cli:claude", "driver-sess-123")
+        mock_cleanup.assert_called_once_with("cli", "driver-sess-123")
 
     async def test_delete_session_skips_cleanup_without_driver_session(
         self,
@@ -873,7 +873,7 @@ class TestDeleteSessionCleanup(TestBrainstormService):
         mock_session = BrainstormingSession(
             id="sess-1",
             profile_id="work",
-            driver_type="cli:claude",
+            driver_type="cli",
             driver_session_id="driver-sess-123",
             status="active",
             created_at=now,
@@ -885,7 +885,7 @@ class TestDeleteSessionCleanup(TestBrainstormService):
         await service_with_cleanup.delete_session("sess-1")
 
         # Verify cleanup was attempted
-        mock_cleanup.assert_called_once_with("cli:claude", "driver-sess-123")
+        mock_cleanup.assert_called_once_with("cli", "driver-sess-123")
         # Verify session was still deleted despite cleanup failure
         mock_repository.delete_session.assert_called_once_with("sess-1")
 
@@ -906,7 +906,7 @@ class TestUpdateSessionStatusCleanup(TestBrainstormService):
         mock_session = BrainstormingSession(
             id="sess-1",
             profile_id="work",
-            driver_type="cli:claude",
+            driver_type="cli",
             driver_session_id="driver-sess-123",
             status="active",
             created_at=now,
@@ -916,7 +916,7 @@ class TestUpdateSessionStatusCleanup(TestBrainstormService):
 
         await service_with_cleanup.update_session_status("sess-1", terminal_status)
 
-        mock_cleanup.assert_called_once_with("cli:claude", "driver-sess-123")
+        mock_cleanup.assert_called_once_with("cli", "driver-sess-123")
 
     async def test_cleanup_not_called_on_active_status(
         self,

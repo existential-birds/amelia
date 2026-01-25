@@ -76,7 +76,6 @@ amelia config server set --port 9000 --host 0.0.0.0
 | `github` | GitHub Issues | `gh` CLI authenticated (`gh auth login`) |
 | `jira` | Jira issues | `JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN` |
 | `none` | No tracker (manual input) | None |
-| `noop` | Alias for `none` | None |
 
 See [Driver Abstraction](/architecture/concepts#the-driver-abstraction) and [Tracker Abstraction](/architecture/concepts#the-tracker-abstraction) for architectural details.
 
@@ -326,7 +325,7 @@ curl -X POST http://localhost:8420/api/workflows \
 | `worktree_path` | string | Yes | Absolute path to worktree directory |
 | `worktree_name` | string | No | Custom worktree display name |
 | `profile` | string | No | Profile name from settings |
-| `driver` | string | No | Driver override (e.g., `api:openrouter`) |
+| `driver` | string | No | Driver override (e.g., `api`) |
 | `start` | boolean | No | Start workflow immediately (default: true). Set to false to queue. |
 | `plan_now` | boolean | No | Run Architect when queuing (requires `start: false`). |
 

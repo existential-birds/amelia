@@ -13,9 +13,9 @@ class TestDriverFactory:
     @pytest.mark.parametrize(
         "driver_key,expected_type,model,expected_model",
         [
-            ("cli:claude", ClaudeCliDriver, None, None),
             ("cli", ClaudeCliDriver, None, None),
-            ("api:openrouter", ApiDriver, "anthropic/claude-sonnet-4-20250514", "anthropic/claude-sonnet-4-20250514"),
+            ("cli", ClaudeCliDriver, None, None),
+            ("api", ApiDriver, "anthropic/claude-sonnet-4-20250514", "anthropic/claude-sonnet-4-20250514"),
             ("api", ApiDriver, None, None),
         ],
     )
@@ -60,8 +60,8 @@ class TestDriverFactoryProviderPassing:
     """Tests for factory passing provider to ApiDriver."""
 
     def test_api_openrouter_passes_provider(self) -> None:
-        """Factory should pass provider='openrouter' to ApiDriver for api:openrouter."""
-        driver = DriverFactory.get_driver("api:openrouter")
+        """Factory should pass provider='openrouter' to ApiDriver for api."""
+        driver = DriverFactory.get_driver("api")
         assert isinstance(driver, ApiDriver)
         assert driver.provider == "openrouter"
 
@@ -116,7 +116,7 @@ class TestCleanupDriverSession:
         try:
             ApiDriver._sessions[test_session_id] = MemorySaver()
 
-            result = cleanup_driver_session("api:openrouter", test_session_id)
+            result = cleanup_driver_session("api", test_session_id)
 
             assert result is True
             assert test_session_id not in ApiDriver._sessions
@@ -125,7 +125,7 @@ class TestCleanupDriverSession:
 
     def test_cleanup_cli_driver_session_returns_false(self) -> None:
         """Should return False for CLI driver (no state)."""
-        result = cleanup_driver_session("cli:claude", "any-session")
+        result = cleanup_driver_session("cli", "any-session")
         assert result is False
 
     def test_cleanup_unknown_driver_raises(self) -> None:

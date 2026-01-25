@@ -73,12 +73,12 @@ class TestProfileList:
         mock_profiles = [
             Profile(
                 name="test-profile",
-                tracker="noop",
+                tracker="none",
                 working_dir="/tmp/test",
                 agents={
-                    "architect": AgentConfig(driver="cli:claude", model="sonnet"),
-                    "developer": AgentConfig(driver="cli:claude", model="sonnet"),
-                    "reviewer": AgentConfig(driver="cli:claude", model="sonnet"),
+                    "architect": AgentConfig(driver="cli", model="sonnet"),
+                    "developer": AgentConfig(driver="cli", model="sonnet"),
+                    "reviewer": AgentConfig(driver="cli", model="sonnet"),
                 },
             ),
             Profile(
@@ -86,9 +86,9 @@ class TestProfileList:
                 tracker="github",
                 working_dir="/home/user/project",
                 agents={
-                    "architect": AgentConfig(driver="api:openrouter", model="anthropic/claude-sonnet-4-20250514"),
-                    "developer": AgentConfig(driver="api:openrouter", model="anthropic/claude-sonnet-4-20250514"),
-                    "reviewer": AgentConfig(driver="api:openrouter", model="anthropic/claude-sonnet-4-20250514"),
+                    "architect": AgentConfig(driver="api", model="anthropic/claude-sonnet-4-20250514"),
+                    "developer": AgentConfig(driver="api", model="anthropic/claude-sonnet-4-20250514"),
+                    "reviewer": AgentConfig(driver="api", model="anthropic/claude-sonnet-4-20250514"),
                 },
             ),
         ]
@@ -103,8 +103,8 @@ class TestProfileList:
         assert result.exit_code == 0
         assert "test-profile" in result.stdout
         assert "prod-profile" in result.stdout
-        assert "cli:claude" in result.stdout
-        assert "api:openrouter" in result.stdout
+        assert "cli" in result.stdout
+        assert "api" in result.stdout
 
 
 class TestProfileShow:
@@ -147,10 +147,10 @@ class TestProfileShow:
             working_dir="/home/user/code",
             plan_output_dir="docs/plans",
             agents={
-                "architect": AgentConfig(driver="cli:claude", model="sonnet"),
-                "developer": AgentConfig(driver="cli:claude", model="sonnet"),
-                "reviewer": AgentConfig(driver="cli:claude", model="sonnet"),
-                "plan_validator": AgentConfig(driver="cli:claude", model="opus"),
+                "architect": AgentConfig(driver="cli", model="sonnet"),
+                "developer": AgentConfig(driver="cli", model="sonnet"),
+                "reviewer": AgentConfig(driver="cli", model="sonnet"),
+                "plan_validator": AgentConfig(driver="cli", model="opus"),
             },
         )
 
@@ -163,7 +163,7 @@ class TestProfileShow:
 
         assert result.exit_code == 0
         assert "my-profile" in result.stdout
-        assert "cli:claude" in result.stdout
+        assert "cli" in result.stdout
         assert "sonnet" in result.stdout
 
 
@@ -191,13 +191,13 @@ class TestProfileCreate:
         # create_profile returns Profile, not ProfileRecord
         created_profile = Profile(
             name="new-profile",
-            tracker="noop",
+            tracker="none",
             working_dir="/tmp",
             agents={
-                "architect": AgentConfig(driver="cli:claude", model="sonnet"),
-                "developer": AgentConfig(driver="cli:claude", model="sonnet"),
-                "reviewer": AgentConfig(driver="cli:claude", model="sonnet"),
-                "plan_validator": AgentConfig(driver="cli:claude", model="sonnet"),
+                "architect": AgentConfig(driver="cli", model="sonnet"),
+                "developer": AgentConfig(driver="cli", model="sonnet"),
+                "reviewer": AgentConfig(driver="cli", model="sonnet"),
+                "plan_validator": AgentConfig(driver="cli", model="sonnet"),
             },
         )
 
@@ -209,9 +209,9 @@ class TestProfileCreate:
              patch("amelia.cli.config.ProfileRepository", return_value=mock_repo):
             result = runner.invoke(app, [
                 "config", "profile", "create", "new-profile",
-                "--driver", "cli:claude",
+                "--driver", "cli",
                 "--model", "sonnet",
-                "--tracker", "noop",
+                "--tracker", "none",
                 "--working-dir", "/tmp",
             ])
 
@@ -226,12 +226,12 @@ class TestProfileCreate:
         # get_profile returns Profile, not ProfileRecord
         existing_profile = Profile(
             name="existing",
-            tracker="noop",
+            tracker="none",
             working_dir="/tmp",
             agents={
-                "architect": AgentConfig(driver="cli:claude", model="sonnet"),
-                "developer": AgentConfig(driver="cli:claude", model="sonnet"),
-                "reviewer": AgentConfig(driver="cli:claude", model="sonnet"),
+                "architect": AgentConfig(driver="cli", model="sonnet"),
+                "developer": AgentConfig(driver="cli", model="sonnet"),
+                "reviewer": AgentConfig(driver="cli", model="sonnet"),
             },
         )
 
@@ -242,9 +242,9 @@ class TestProfileCreate:
              patch("amelia.cli.config.ProfileRepository", return_value=mock_repo):
             result = runner.invoke(app, [
                 "config", "profile", "create", "existing",
-                "--driver", "cli:claude",
+                "--driver", "cli",
                 "--model", "sonnet",
-                "--tracker", "noop",
+                "--tracker", "none",
                 "--working-dir", "/tmp",
             ])
 

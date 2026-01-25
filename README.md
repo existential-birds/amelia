@@ -86,8 +86,8 @@ Track token usage, costs, and workflow trajectories across all your agent runs.
 - **Git** - For version control operations
 - **Beagle plugin** - Claude Code plugin with Amelia skills ([install guide](https://github.com/existential-birds/beagle?tab=readme-ov-file#installation))
 - **LLM access** - Either:
-  - OpenRouter API key (for `api:openrouter` driver)
-  - Claude CLI installed (for `cli:claude` driver)
+  - OpenRouter API key (for `api` driver)
+  - Claude CLI installed (for `cli` driver)
 
 > [!NOTE]
 > **Model selection matters.** The API driver requires models with reliable tool-calling capabilities. Models that don't consistently follow tool-calling instructions may fail to complete tasks. See [Troubleshooting](https://existential-birds.github.io/amelia/guide/troubleshooting#api-driver-agent-fails-to-create-plan-file) for details.

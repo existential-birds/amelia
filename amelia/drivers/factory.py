@@ -9,7 +9,7 @@ def get_driver(driver_key: str, **kwargs: Any) -> DriverInterface:
     """Get a concrete driver implementation.
 
     Args:
-        driver_key: Driver identifier (e.g., "cli:claude", "api:openrouter").
+        driver_key: Driver identifier ("cli" or "api").
         **kwargs: Driver-specific configuration passed to constructor.
 
     Returns:
@@ -18,6 +18,7 @@ def get_driver(driver_key: str, **kwargs: Any) -> DriverInterface:
     Raises:
         ValueError: If driver_key is not recognized.
     """
+    # Accept legacy values for backward compatibility
     if driver_key in ("cli:claude", "cli"):
         return ClaudeCliDriver(**kwargs)
     elif driver_key in ("api:openrouter", "api"):
@@ -33,7 +34,7 @@ def cleanup_driver_session(driver_key: str, session_id: str) -> bool:
     This allows cleaning up sessions without needing a configured driver instance.
 
     Args:
-        driver_key: Driver identifier (e.g., "cli:claude", "api:openrouter").
+        driver_key: Driver identifier ("cli" or "api").
         session_id: The driver session ID to clean up.
 
     Returns:
@@ -42,6 +43,7 @@ def cleanup_driver_session(driver_key: str, session_id: str) -> bool:
     Raises:
         ValueError: If driver_key is not recognized.
     """
+    # Accept legacy values for backward compatibility
     if driver_key in ("cli:claude", "cli"):
         return False  # ClaudeCliDriver has no session state to clean
     elif driver_key in ("api:openrouter", "api"):
@@ -63,7 +65,7 @@ class DriverFactory:
         """Factory method to get a concrete driver implementation.
 
         Args:
-            driver_key: Driver identifier (e.g., "cli:claude", "api:openrouter").
+            driver_key: Driver identifier ("cli" or "api").
             **kwargs: Driver-specific configuration passed to constructor.
 
         Returns:

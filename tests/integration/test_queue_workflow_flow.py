@@ -176,10 +176,10 @@ active_profile: test
 profiles:
   test:
     name: test
-    driver: "cli:claude"
+    driver: "cli"
     model: sonnet
     validator_model: sonnet
-    tracker: noop
+    tracker: none
     strategy: single
 """
         (git_dir / "settings.amelia.yaml").write_text(settings_content)
@@ -514,10 +514,10 @@ active_profile: test
 profiles:
   test:
     name: test
-    driver: "cli:claude"
+    driver: "cli"
     model: sonnet
     validator_model: sonnet
-    tracker: noop
+    tracker: none
     strategy: single
 """
         (git_dir / "settings.amelia.yaml").write_text(settings_content)
@@ -590,10 +590,10 @@ active_profile: test
 profiles:
   test:
     name: test
-    driver: "cli:claude"
+    driver: "cli"
     model: sonnet
     validator_model: sonnet
-    tracker: noop
+    tracker: none
     strategy: single
 """
         (git_dir / "settings.amelia.yaml").write_text(settings_content)
@@ -664,10 +664,10 @@ active_profile: test
 profiles:
   test:
     name: test
-    driver: "cli:claude"
+    driver: "cli"
     model: sonnet
     validator_model: sonnet
-    tracker: noop
+    tracker: none
     strategy: single
 """
         (git_dir / "settings.amelia.yaml").write_text(settings_content)
@@ -735,10 +735,10 @@ active_profile: test
 profiles:
   test:
     name: test
-    driver: "cli:claude"
+    driver: "cli"
     model: sonnet
     validator_model: sonnet
-    tracker: noop
+    tracker: none
     strategy: single
 """
         (git_dir / "settings.amelia.yaml").write_text(settings_content)
@@ -821,10 +821,10 @@ active_profile: test
 profiles:
   test:
     name: test
-    driver: "cli:claude"
+    driver: "cli"
     model: sonnet
     validator_model: sonnet
-    tracker: noop
+    tracker: none
     strategy: single
 """
         (git_dir / "settings.amelia.yaml").write_text(settings_content)
@@ -875,10 +875,10 @@ active_profile: test
 profiles:
   test:
     name: test
-    driver: "cli:claude"
+    driver: "cli"
     model: sonnet
     validator_model: sonnet
-    tracker: noop
+    tracker: none
     strategy: single
 """
         (git_dir / "settings.amelia.yaml").write_text(settings_content)
@@ -961,10 +961,10 @@ active_profile: test
 profiles:
   test:
     name: test
-    driver: "cli:claude"
+    driver: "cli"
     model: sonnet
     validator_model: sonnet
-    tracker: noop
+    tracker: none
     strategy: single
 """
         (git_dir / "settings.amelia.yaml").write_text(settings_content)

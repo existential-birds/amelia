@@ -210,7 +210,7 @@ export async function getProfile(id: string): Promise<Profile> {
  * ```typescript
  * const profile = await createProfile({
  *   id: 'work',
- *   driver: 'api:openrouter',
+ *   driver: 'api',
  *   model: 'anthropic/claude-3.5-sonnet',
  *   validator_model: 'anthropic/claude-3.5-sonnet',
  *   working_dir: '/Users/me/projects',

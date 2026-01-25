@@ -294,7 +294,7 @@ def mock_issue_factory() -> Callable[..., Issue]:
 
 
 def make_agents_json(
-    driver: DriverType = "cli:claude",
+    driver: DriverType = "cli",
     model: str = "sonnet",
     validator_model: str | None = None,
 ) -> str:
@@ -333,9 +333,9 @@ def mock_profile_record_factory() -> Callable[..., ProfileRecord]:
     """
     def _create(
         id: str = "test",
-        tracker: str = "noop",
+        tracker: str = "none",
         working_dir: str = "/tmp/test",
-        driver: DriverType = "cli:claude",
+        driver: DriverType = "cli",
         model: str = "sonnet",
         validator_model: str | None = None,
         agents: str | None = None,
@@ -370,7 +370,7 @@ def mock_profile_factory(tmp_path_factory: TempPathFactory) -> Callable[..., Pro
     def _create(
         preset: str | None = None,
         name: str = "test",
-        tracker: TrackerType = "noop",
+        tracker: TrackerType = "none",
         agents: dict[str, AgentConfig] | None = None,
         **kwargs: Any
     ) -> Profile:
@@ -382,24 +382,24 @@ def mock_profile_factory(tmp_path_factory: TempPathFactory) -> Callable[..., Pro
         if agents is None:
             if preset == "cli_single":
                 agents = {
-                    "architect": AgentConfig(driver="cli:claude", model="sonnet"),
-                    "developer": AgentConfig(driver="cli:claude", model="sonnet"),
-                    "reviewer": AgentConfig(driver="cli:claude", model="sonnet"),
+                    "architect": AgentConfig(driver="cli", model="sonnet"),
+                    "developer": AgentConfig(driver="cli", model="sonnet"),
+                    "reviewer": AgentConfig(driver="cli", model="sonnet"),
                 }
-                return Profile(name="test_cli", tracker="noop", agents=agents, **kwargs)
+                return Profile(name="test_cli", tracker="none", agents=agents, **kwargs)
             elif preset == "api_single":
                 agents = {
-                    "architect": AgentConfig(driver="api:openrouter", model="anthropic/claude-sonnet-4-20250514"),
-                    "developer": AgentConfig(driver="api:openrouter", model="anthropic/claude-sonnet-4-20250514"),
-                    "reviewer": AgentConfig(driver="api:openrouter", model="anthropic/claude-sonnet-4-20250514"),
+                    "architect": AgentConfig(driver="api", model="anthropic/claude-sonnet-4-20250514"),
+                    "developer": AgentConfig(driver="api", model="anthropic/claude-sonnet-4-20250514"),
+                    "reviewer": AgentConfig(driver="api", model="anthropic/claude-sonnet-4-20250514"),
                 }
-                return Profile(name="test_api", tracker="noop", agents=agents, **kwargs)
+                return Profile(name="test_api", tracker="none", agents=agents, **kwargs)
             else:
-                # Default: all agents use cli:claude
+                # Default: all agents use cli
                 agents = {
-                    "architect": AgentConfig(driver="cli:claude", model="sonnet"),
-                    "developer": AgentConfig(driver="cli:claude", model="sonnet"),
-                    "reviewer": AgentConfig(driver="cli:claude", model="sonnet"),
+                    "architect": AgentConfig(driver="cli", model="sonnet"),
+                    "developer": AgentConfig(driver="cli", model="sonnet"),
+                    "reviewer": AgentConfig(driver="cli", model="sonnet"),
                 }
         return Profile(name=name, tracker=tracker, agents=agents, **kwargs)
     return _create
@@ -408,7 +408,7 @@ def mock_profile_factory(tmp_path_factory: TempPathFactory) -> Callable[..., Pro
 @pytest.fixture
 def mock_settings(mock_profile_factory: Callable[..., Profile]) -> Settings:
     """Create mock Settings instance with test profiles."""
-    test_profile = mock_profile_factory(name="test", tracker="noop")
+    test_profile = mock_profile_factory(name="test", tracker="none")
     work_profile = mock_profile_factory(name="work", tracker="jira")
     return Settings(
         active_profile="test",

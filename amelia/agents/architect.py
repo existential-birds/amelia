@@ -350,6 +350,15 @@ Before planning, discover:
         parts.append(f"**Title:** {state.issue.title}")
         parts.append(f"**Description:**\n{state.issue.description}")
 
+        # Include design document if present (from brainstorming handoff)
+        if state.design is not None:
+            parts.append("\n## Design Document")
+            parts.append(
+                "The following design document was created during brainstorming. "
+                "Use it as the primary input for your implementation plan:"
+            )
+            parts.append(f"\n{state.design.content}")
+
         parts.append("\n## Your Task")
         parts.append(
             "Explore the codebase to understand relevant patterns and architecture, "

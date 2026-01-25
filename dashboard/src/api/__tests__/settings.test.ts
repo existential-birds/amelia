@@ -116,24 +116,24 @@ describe("settings API", () => {
       const mockProfiles: Profile[] = [
         {
           id: "work",
-          tracker: "noop",
+          tracker: "none",
           working_dir: "/Users/me/projects",
           plan_output_dir: "plans",
           plan_path_pattern: "{issue_id}.md",
           auto_approve_reviews: false,
           agents: {
             architect: {
-              driver: "api:openrouter",
+              driver: "api",
               model: "anthropic/claude-3.5-sonnet",
               options: {},
             },
             developer: {
-              driver: "api:openrouter",
+              driver: "api",
               model: "anthropic/claude-3.5-sonnet",
               options: {},
             },
             reviewer: {
-              driver: "api:openrouter",
+              driver: "api",
               model: "anthropic/claude-3.5-sonnet",
               options: {},
             },
@@ -149,17 +149,17 @@ describe("settings API", () => {
           auto_approve_reviews: false,
           agents: {
             architect: {
-              driver: "cli:claude",
+              driver: "cli",
               model: "claude-sonnet-4-20250514",
               options: {},
             },
             developer: {
-              driver: "cli:claude",
+              driver: "cli",
               model: "claude-sonnet-4-20250514",
               options: {},
             },
             reviewer: {
-              driver: "cli:claude",
+              driver: "cli",
               model: "claude-sonnet-4-20250514",
               options: {},
             },
@@ -204,24 +204,24 @@ describe("settings API", () => {
     it("fetches a single profile by ID", async () => {
       const mockProfile: Profile = {
         id: "work",
-        tracker: "noop",
+        tracker: "none",
         working_dir: "/Users/me/projects",
         plan_output_dir: "plans",
         plan_path_pattern: "{issue_id}.md",
         auto_approve_reviews: false,
         agents: {
           architect: {
-            driver: "api:openrouter",
+            driver: "api",
             model: "anthropic/claude-3.5-sonnet",
             options: {},
           },
           developer: {
-            driver: "api:openrouter",
+            driver: "api",
             model: "anthropic/claude-3.5-sonnet",
             options: {},
           },
           reviewer: {
-            driver: "api:openrouter",
+            driver: "api",
             model: "anthropic/claude-3.5-sonnet",
             options: {},
           },
@@ -275,24 +275,24 @@ describe("settings API", () => {
     it("creates a new profile", async () => {
       const mockProfile: Profile = {
         id: "new-profile",
-        tracker: "noop",
+        tracker: "none",
         working_dir: "/Users/me/projects",
         plan_output_dir: "plans",
         plan_path_pattern: "{issue_id}.md",
         auto_approve_reviews: false,
         agents: {
           architect: {
-            driver: "api:openrouter",
+            driver: "api",
             model: "anthropic/claude-3.5-sonnet",
             options: {},
           },
           developer: {
-            driver: "api:openrouter",
+            driver: "api",
             model: "anthropic/claude-3.5-sonnet",
             options: {},
           },
           reviewer: {
-            driver: "api:openrouter",
+            driver: "api",
             model: "anthropic/claude-3.5-sonnet",
             options: {},
           },
@@ -310,15 +310,15 @@ describe("settings API", () => {
         working_dir: "/Users/me/projects",
         agents: {
           architect: {
-            driver: "api:openrouter",
+            driver: "api",
             model: "anthropic/claude-3.5-sonnet",
           },
           developer: {
-            driver: "api:openrouter",
+            driver: "api",
             model: "anthropic/claude-3.5-sonnet",
           },
           reviewer: {
-            driver: "api:openrouter",
+            driver: "api",
             model: "anthropic/claude-3.5-sonnet",
           },
         },
@@ -342,24 +342,24 @@ describe("settings API", () => {
     it("updates an existing profile", async () => {
       const mockProfile: Profile = {
         id: "work",
-        tracker: "noop",
+        tracker: "none",
         working_dir: "/Users/me/projects",
         plan_output_dir: "plans",
         plan_path_pattern: "{issue_id}.md",
         auto_approve_reviews: true,
         agents: {
           architect: {
-            driver: "api:openrouter",
+            driver: "api",
             model: "anthropic/claude-3.5-sonnet",
             options: {},
           },
           developer: {
-            driver: "api:openrouter",
+            driver: "api",
             model: "anthropic/claude-3.5-sonnet",
             options: {},
           },
           reviewer: {
-            driver: "api:openrouter",
+            driver: "api",
             model: "anthropic/claude-3.5-sonnet",
             options: {},
           },
@@ -418,24 +418,24 @@ describe("settings API", () => {
     it("activates a profile", async () => {
       const mockProfile: Profile = {
         id: "work",
-        tracker: "noop",
+        tracker: "none",
         working_dir: "/Users/me/projects",
         plan_output_dir: "plans",
         plan_path_pattern: "{issue_id}.md",
         auto_approve_reviews: false,
         agents: {
           architect: {
-            driver: "api:openrouter",
+            driver: "api",
             model: "anthropic/claude-3.5-sonnet",
             options: {},
           },
           developer: {
-            driver: "api:openrouter",
+            driver: "api",
             model: "anthropic/claude-3.5-sonnet",
             options: {},
           },
           reviewer: {
-            driver: "api:openrouter",
+            driver: "api",
             model: "anthropic/claude-3.5-sonnet",
             options: {},
           },

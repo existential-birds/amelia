@@ -79,8 +79,6 @@ async def _get_settings_repository() -> tuple[Database, SettingsRepository]:
 
 
 VALID_DRIVERS: set[DriverType] = {
-    DriverType.CLI_CLAUDE,
-    DriverType.API_OPENROUTER,
     DriverType.CLI,
     DriverType.API,
 }
@@ -88,7 +86,6 @@ VALID_TRACKERS: set[TrackerType] = {
     TrackerType.JIRA,
     TrackerType.GITHUB,
     TrackerType.NONE,
-    TrackerType.NOOP,
 }
 
 
@@ -257,7 +254,7 @@ def profile_create(
     name: Annotated[str, typer.Argument(help="Profile name")],
     driver: Annotated[
         str | None,
-        typer.Option("--driver", "-d", help="Driver (e.g., cli:claude, api:openrouter)"),
+        typer.Option("--driver", "-d", help="Driver (cli or api)"),
     ] = None,
     model: Annotated[
         str | None,
@@ -265,7 +262,7 @@ def profile_create(
     ] = None,
     tracker: Annotated[
         str | None,
-        typer.Option("--tracker", "-t", help="Issue tracker (noop, github, jira)"),
+        typer.Option("--tracker", "-t", help="Issue tracker (none, github, jira)"),
     ] = None,
     working_dir: Annotated[
         str | None,
@@ -285,7 +282,7 @@ def profile_create(
     if driver is None:
         driver = typer.prompt(
             "Driver",
-            default="cli:claude",
+            default="cli",
             show_default=True,
         )
     if model is None:
@@ -297,7 +294,7 @@ def profile_create(
     if tracker is None:
         tracker = typer.prompt(
             "Tracker",
-            default="noop",
+            default="none",
             show_default=True,
         )
     if working_dir is None:
@@ -432,7 +429,7 @@ async def check_and_run_first_time_setup() -> bool:
 
         profile = Profile(
             name=name,
-            tracker=TrackerType.NOOP,
+            tracker=TrackerType.NONE,
             working_dir=working_dir,
             agents=agents,
         )

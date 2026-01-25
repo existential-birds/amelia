@@ -20,7 +20,7 @@ hero:
 uv tool install git+https://github.com/existential-birds/amelia.git
 
 # Create a profile
-amelia config profile create dev --driver api:openrouter --tracker github
+amelia config profile create dev --driver api --tracker github
 
 # Start the dashboard
 amelia dev

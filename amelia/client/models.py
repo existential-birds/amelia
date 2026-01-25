@@ -11,7 +11,7 @@ class CreateWorkflowRequest(BaseModel):
         issue_id: The issue identifier (e.g., PROJ-123).
         worktree_path: Absolute path to the git worktree directory.
         profile: Optional profile name from settings to use.
-        task_title: Optional task title for noop tracker (bypasses issue lookup).
+        task_title: Optional task title for none tracker (bypasses issue lookup).
         task_description: Optional task description (requires task_title).
         start: Whether to start workflow immediately (default True for backward compat).
         plan_now: Whether to run Architect before queueing (requires start=False).

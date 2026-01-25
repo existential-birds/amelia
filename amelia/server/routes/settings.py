@@ -90,7 +90,7 @@ class ProfileCreate(BaseModel):
     """
 
     id: str
-    tracker: TrackerType = TrackerType.NOOP
+    tracker: TrackerType = TrackerType.NONE
     working_dir: str
     plan_output_dir: str = "docs/plans"
     plan_path_pattern: str = "docs/plans/{date}-{issue_key}.md"

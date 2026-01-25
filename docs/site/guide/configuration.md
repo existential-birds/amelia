@@ -277,7 +277,7 @@ amelia config profile list
 
 ### "Driver not recognized"
 
-Valid driver values are: `api`, `api:openrouter`, `cli`, `cli:claude`
+Valid driver values are: `api`, `cli`
 
 ### "Missing model field"
 

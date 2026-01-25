@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **types:** Simplify DriverType (`cli:claude` → `cli`, `api:openrouter` → `api`) and TrackerType (`noop` → `none`) enums ([#333](https://github.com/existential-birds/amelia/issues/333))
+
+  **Migration:** Existing database values are automatically migrated on server startup. No manual action required.
+
 - **Breaking:** Per-agent driver configuration replaces global driver/model settings ([#279](https://github.com/existential-birds/amelia/pull/279))
 
   **Migration:** Delete your existing database file (`~/.amelia/amelia.db`) before starting Amelia. The database schema has changed - the `profiles` table now uses a single `agents` JSON column instead of `driver`, `model`, `validator_model`, `max_review_iterations`, and `max_task_review_iterations` columns. You will need to recreate your profiles using `amelia config profile create`.

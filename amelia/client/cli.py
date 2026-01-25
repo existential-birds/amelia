@@ -97,7 +97,7 @@ def start_command(
     ] = None,
     title: Annotated[
         str | None,
-        typer.Option("--title", help="Task title for noop tracker (bypasses issue lookup)"),
+        typer.Option("--title", help="Task title for none tracker (bypasses issue lookup)"),
     ] = None,
     description: Annotated[
         str | None,
@@ -120,7 +120,7 @@ def start_command(
     Args:
         issue_id: Issue identifier to work on (e.g., ISSUE-123).
         profile: Optional profile name for driver and tracker configuration.
-        title: Optional task title for noop tracker (bypasses issue lookup).
+        title: Optional task title for none tracker (bypasses issue lookup).
         description: Optional task description (requires --title to be set).
         queue: If True, queue workflow without starting immediately.
         plan: If True, run Architect before queueing (requires --queue).
@@ -470,7 +470,7 @@ def plan_command(
     ] = None,
     title: Annotated[
         str | None,
-        typer.Option("--title", help="Task title for noop tracker (bypasses issue lookup)"),
+        typer.Option("--title", help="Task title for none tracker (bypasses issue lookup)"),
     ] = None,
     description: Annotated[
         str | None,
@@ -486,7 +486,7 @@ def plan_command(
     Args:
         issue_id: Issue identifier to generate a plan for (e.g., ISSUE-123).
         profile_name: Optional profile name for driver and tracker configuration.
-        title: Optional task title for noop tracker (bypasses issue lookup).
+        title: Optional task title for none tracker (bypasses issue lookup).
         description: Optional task description (requires --title to be set).
     """
     # Validate --description requires --title
@@ -503,7 +503,7 @@ def plan_command(
         # Update profile with worktree path
         profile = profile.model_copy(update={"working_dir": worktree_path})
 
-        # Get issue: construct directly if title provided with noop tracker, else use tracker
+        # Get issue: construct directly if title provided with none tracker, else use tracker
         if title is not None and profile.tracker in ("noop", "none"):
             issue = Issue(
                 id=issue_id,
@@ -513,7 +513,7 @@ def plan_command(
         elif title is not None:
             # --title provided but tracker is not noop - reject like server does
             raise ValueError(
-                f"--title requires noop tracker, but profile uses '{profile.tracker}'"
+                f"--title requires none tracker, but profile uses '{profile.tracker}'"
             )
         else:
             # Fetch issue using tracker

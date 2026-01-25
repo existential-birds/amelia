@@ -20,10 +20,10 @@ class TestBrainstormDriverConfig:
         # Create profile with brainstormer agent config
         profile = Profile(
             name="test",
-            tracker="noop",
+            tracker="none",
             working_dir="/tmp/test",
             agents={
-                "brainstormer": AgentConfig(driver="cli:claude", model="sonnet"),
+                "brainstormer": AgentConfig(driver="cli", model="sonnet"),
             },
         )
 
@@ -58,12 +58,12 @@ class TestBrainstormDriverConfig:
             result = await get_brainstorm_driver()
 
             # Verify factory_get_driver was called with brainstormer config
-            mock_factory.assert_called_once_with("cli:claude", model="sonnet")
+            mock_factory.assert_called_once_with("cli", model="sonnet")
             assert result is mock_driver
 
     @pytest.mark.asyncio
     async def test_get_brainstorm_driver_fallback_without_active_profile(self) -> None:
-        """get_brainstorm_driver should fallback to cli:claude when no active profile."""
+        """get_brainstorm_driver should fallback to cli when no active profile."""
         # Mock the profile repository to return None (no active profile)
         mock_profile_repo = MagicMock()
         mock_profile_repo.get_active_profile = AsyncMock(return_value=None)
@@ -90,8 +90,8 @@ class TestBrainstormDriverConfig:
 
             result = await get_brainstorm_driver()
 
-            # Should fallback to cli:claude without model
-            mock_factory.assert_called_once_with("cli:claude")
+            # Should fallback to cli without model
+            mock_factory.assert_called_once_with("cli")
             assert result is mock_driver
 
 
@@ -105,10 +105,10 @@ class TestProfileInfoWithAgentConfig:
 
         profile = Profile(
             name="test",
-            tracker="noop",
+            tracker="none",
             working_dir="/tmp/test",
             agents={
-                "brainstormer": AgentConfig(driver="api:openrouter", model="gpt-4o"),
+                "brainstormer": AgentConfig(driver="api", model="gpt-4o"),
             },
         )
 
@@ -119,5 +119,5 @@ class TestProfileInfoWithAgentConfig:
 
         assert result is not None
         assert result.name == "test"
-        assert result.driver == "api:openrouter"
+        assert result.driver == "api"
         assert result.model == "gpt-4o"

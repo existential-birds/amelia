@@ -712,7 +712,7 @@ export interface ConfigProfileInfo {
   /** Profile name. */
   name: string;
 
-  /** Driver type (e.g., 'api:openrouter', 'cli:claude'). */
+  /** Driver type ('api' or 'cli'). */
   driver: string;
 
   /** Model name. */

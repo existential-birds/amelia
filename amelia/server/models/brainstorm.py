@@ -73,7 +73,7 @@ class BrainstormingSession(BaseModel):
         id: Unique session identifier (UUID).
         profile_id: Which profile/project this session belongs to.
         driver_session_id: Claude driver session for conversation continuity.
-        driver_type: Type of driver used for the session (e.g., 'cli:claude', 'api:openrouter').
+        driver_type: Type of driver used for the session ('cli' or 'api').
         status: Current session status.
         topic: Optional initial topic for the session.
         created_at: When the session was created.

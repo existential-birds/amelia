@@ -10,7 +10,7 @@ from amelia.server.database.profile_repository import ProfileRecord, ProfileRepo
 
 
 def _make_agents_json(
-    driver: str = "cli:claude",
+    driver: str = "cli",
     model: str = "opus",
     validator_model: str = "haiku",
 ) -> str:
@@ -23,7 +23,7 @@ def _make_agents_json(
 
 
 def _make_agents(
-    driver: str = "cli:claude",
+    driver: str = "cli",
     model: str = "opus",
     validator_model: str = "haiku",
 ) -> dict[str, AgentConfig]:
@@ -38,13 +38,13 @@ def _make_agents(
 def test_profile_record_with_agents_json():
     """ProfileRecord should store agents as JSON."""
     agents = {
-        "architect": {"driver": "cli:claude", "model": "opus", "options": {}},
-        "developer": {"driver": "cli:claude", "model": "sonnet", "options": {}},
+        "architect": {"driver": "cli", "model": "opus", "options": {}},
+        "developer": {"driver": "cli", "model": "sonnet", "options": {}},
     }
 
     record = ProfileRecord(
         id="test",
-        tracker="noop",
+        tracker="none",
         working_dir="/tmp/test",
         agents=json.dumps(agents),
     )
@@ -57,13 +57,13 @@ def test_profile_record_with_agents_json():
 def test_row_to_profile_parses_agents_json():
     """_row_to_profile should parse agents JSON into AgentConfig dict."""
     agents_json = json.dumps({
-        "architect": {"driver": "cli:claude", "model": "opus", "options": {}},
-        "developer": {"driver": "cli:claude", "model": "sonnet", "options": {}},
+        "architect": {"driver": "cli", "model": "opus", "options": {}},
+        "developer": {"driver": "cli", "model": "sonnet", "options": {}},
     })
 
     mock_row = {
         "id": "test",
-        "tracker": "noop",
+        "tracker": "none",
         "working_dir": "/tmp/test",
         "plan_output_dir": "docs/plans",
         "plan_path_pattern": "docs/plans/{date}-{issue_key}.md",
@@ -92,11 +92,11 @@ async def test_create_profile_stores_agents_json(temp_db_path):
 
         profile = Profile(
             name="test_agents",
-            tracker="noop",
+            tracker="none",
             working_dir="/tmp/test",
             agents={
-                "architect": AgentConfig(driver="cli:claude", model="opus"),
-                "developer": AgentConfig(driver="api:openrouter", model="anthropic/claude-sonnet-4"),
+                "architect": AgentConfig(driver="cli", model="opus"),
+                "developer": AgentConfig(driver="api", model="anthropic/claude-sonnet-4"),
             },
         )
 
@@ -106,7 +106,7 @@ async def test_create_profile_stores_agents_json(temp_db_path):
         retrieved = await repo.get_profile("test_agents")
         assert retrieved is not None
         assert retrieved.agents["architect"].model == "opus"
-        assert retrieved.agents["developer"].driver == "api:openrouter"
+        assert retrieved.agents["developer"].driver == "api"
 
 
 class TestProfileRepository:
@@ -129,21 +129,21 @@ class TestProfileRepository:
         profile = await repo.create_profile(
             Profile(
                 name="dev",
-                tracker="noop",
+                tracker="none",
                 working_dir="/path/to/repo",
-                agents=_make_agents(driver="cli:claude", model="opus"),
+                agents=_make_agents(driver="cli", model="opus"),
             )
         )
         # Repository returns Profile (converted from DB)
         assert profile.name == "dev"
-        assert profile.agents["architect"].driver == "cli:claude"
+        assert profile.agents["architect"].driver == "cli"
 
     async def test_get_profile(self, repo: ProfileRepository):
         """Verify profile retrieval."""
         await repo.create_profile(
             Profile(
                 name="dev",
-                tracker="noop",
+                tracker="none",
                 working_dir="/path/to/repo",
                 agents=_make_agents(model="opus"),
             )
@@ -162,9 +162,9 @@ class TestProfileRepository:
         await repo.create_profile(
             Profile(
                 name="dev",
-                tracker="noop",
+                tracker="none",
                 working_dir="/repo1",
-                agents=_make_agents(driver="cli:claude", model="opus"),
+                agents=_make_agents(driver="cli", model="opus"),
             )
         )
         await repo.create_profile(
@@ -172,7 +172,7 @@ class TestProfileRepository:
                 name="prod",
                 tracker="jira",
                 working_dir="/repo2",
-                agents=_make_agents(driver="api:openrouter", model="gpt-4"),
+                agents=_make_agents(driver="api", model="gpt-4"),
             )
         )
         profiles = await repo.list_profiles()
@@ -185,7 +185,7 @@ class TestProfileRepository:
         await repo.create_profile(
             Profile(
                 name="dev",
-                tracker="noop",
+                tracker="none",
                 working_dir="/repo",
                 agents=_make_agents(model="opus"),
             )
@@ -204,7 +204,7 @@ class TestProfileRepository:
         await repo.create_profile(
             Profile(
                 name="dev",
-                tracker="noop",
+                tracker="none",
                 working_dir="/repo",
                 agents=_make_agents(),
             )
@@ -223,7 +223,7 @@ class TestProfileRepository:
         await repo.create_profile(
             Profile(
                 name="dev",
-                tracker="noop",
+                tracker="none",
                 working_dir="/repo",
                 agents=_make_agents(),
             )
@@ -239,9 +239,9 @@ class TestProfileRepository:
         await repo.create_profile(
             Profile(
                 name="dev",
-                tracker="noop",
+                tracker="none",
                 working_dir="/repo1",
-                agents=_make_agents(driver="cli:claude", model="opus"),
+                agents=_make_agents(driver="cli", model="opus"),
             )
         )
         await repo.create_profile(
@@ -249,7 +249,7 @@ class TestProfileRepository:
                 name="prod",
                 tracker="jira",
                 working_dir="/repo2",
-                agents=_make_agents(driver="api:openrouter", model="gpt-4"),
+                agents=_make_agents(driver="api", model="gpt-4"),
             )
         )
         await repo.set_active("dev")
@@ -265,7 +265,7 @@ class TestProfileRepository:
         await repo.create_profile(
             Profile(
                 name="dev",
-                tracker="noop",
+                tracker="none",
                 working_dir="/repo",
                 agents=_make_agents(),
             )

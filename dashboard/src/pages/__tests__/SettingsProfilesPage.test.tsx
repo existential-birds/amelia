@@ -38,14 +38,14 @@ const mockProfiles = [
     id: 'dev',
     is_active: true,
     working_dir: '/repo',
-    tracker: 'noop',
+    tracker: 'none',
     plan_output_dir: 'docs/plans',
     plan_path_pattern: 'docs/plans/{date}-{issue_key}.md',
     auto_approve_reviews: false,
     agents: {
-      architect: { driver: 'cli:claude', model: 'opus', options: {} },
-      developer: { driver: 'cli:claude', model: 'opus', options: {} },
-      reviewer: { driver: 'cli:claude', model: 'haiku', options: {} },
+      architect: { driver: 'cli', model: 'opus', options: {} },
+      developer: { driver: 'cli', model: 'opus', options: {} },
+      reviewer: { driver: 'cli', model: 'haiku', options: {} },
     },
   },
   {
@@ -57,9 +57,9 @@ const mockProfiles = [
     plan_path_pattern: 'docs/plans/{date}-{issue_key}.md',
     auto_approve_reviews: false,
     agents: {
-      architect: { driver: 'api:openrouter', model: 'gpt-4', options: {} },
-      developer: { driver: 'api:openrouter', model: 'gpt-4', options: {} },
-      reviewer: { driver: 'api:openrouter', model: 'gpt-4', options: {} },
+      architect: { driver: 'api', model: 'gpt-4', options: {} },
+      developer: { driver: 'api', model: 'gpt-4', options: {} },
+      reviewer: { driver: 'api', model: 'gpt-4', options: {} },
     },
   },
 ];
@@ -132,9 +132,9 @@ describe('SettingsProfilesPage', () => {
     const cliButton = screen.getByRole('radio', { name: 'CLI' });
     fireEvent.click(cliButton);
 
-    // dev uses cli:claude, should be visible
+    // dev uses cli, should be visible
     expect(screen.getByText('dev')).toBeInTheDocument();
-    // prod uses api:openrouter, should be hidden after animation
+    // prod uses api, should be hidden after animation
     await waitFor(() => {
       expect(screen.queryByText('prod')).not.toBeInTheDocument();
     });
@@ -172,8 +172,8 @@ describe('SettingsProfilesPage', () => {
     );
 
     // Check that driver badges are rendered
-    expect(await screen.findByText('cli:claude')).toBeInTheDocument();
-    expect(screen.getByText('api:openrouter')).toBeInTheDocument();
+    expect(await screen.findByText('cli')).toBeInTheDocument();
+    expect(screen.getByText('api')).toBeInTheDocument();
   });
 
   it('sorts active profile first', async () => {

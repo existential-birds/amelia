@@ -27,12 +27,12 @@ class TestFirstRunDetection:
         # ProfileRepository.list_profiles returns Profile objects
         existing_profile = Profile(
             name="existing",
-            tracker="noop",
+            tracker="none",
             working_dir="/tmp",
             agents={
-                "architect": AgentConfig(driver="cli:claude", model="sonnet"),
-                "developer": AgentConfig(driver="cli:claude", model="sonnet"),
-                "reviewer": AgentConfig(driver="cli:claude", model="sonnet"),
+                "architect": AgentConfig(driver="cli", model="sonnet"),
+                "developer": AgentConfig(driver="cli", model="sonnet"),
+                "reviewer": AgentConfig(driver="cli", model="sonnet"),
             },
         )
 
@@ -55,12 +55,12 @@ class TestFirstRunDetection:
         # create_profile returns Profile objects
         created_profile = Profile(
             name="dev",
-            tracker="noop",
+            tracker="none",
             working_dir="/tmp",
             agents={
-                "architect": AgentConfig(driver="cli:claude", model="opus"),
-                "developer": AgentConfig(driver="cli:claude", model="opus"),
-                "reviewer": AgentConfig(driver="cli:claude", model="opus"),
+                "architect": AgentConfig(driver="cli", model="opus"),
+                "developer": AgentConfig(driver="cli", model="opus"),
+                "reviewer": AgentConfig(driver="cli", model="opus"),
             },
         )
 
@@ -75,7 +75,7 @@ class TestFirstRunDetection:
             # Simulate user input for prompts
             mock_prompt.side_effect = [
                 "dev",  # Profile name
-                "cli:claude",  # Driver
+                "cli",  # Driver
                 "opus",  # Model
                 "/tmp",  # Working directory
             ]
@@ -107,12 +107,12 @@ class TestFirstRunProfileCreation:
         # create_profile returns Profile objects
         created_profile = Profile(
             name="myprofile",
-            tracker="noop",
+            tracker="none",
             working_dir="/home/user/project",
             agents={
-                "architect": AgentConfig(driver="api:openrouter", model="sonnet"),
-                "developer": AgentConfig(driver="api:openrouter", model="sonnet"),
-                "reviewer": AgentConfig(driver="api:openrouter", model="sonnet"),
+                "architect": AgentConfig(driver="api", model="sonnet"),
+                "developer": AgentConfig(driver="api", model="sonnet"),
+                "reviewer": AgentConfig(driver="api", model="sonnet"),
             },
         )
 
@@ -126,7 +126,7 @@ class TestFirstRunProfileCreation:
              patch("typer.prompt") as mock_prompt:
             mock_prompt.side_effect = [
                 "myprofile",  # Profile name
-                "api:openrouter",  # Driver
+                "api",  # Driver
                 "sonnet",  # Model
                 "/home/user/project",  # Working directory
             ]
@@ -138,23 +138,23 @@ class TestFirstRunProfileCreation:
         created_profile_arg: Profile = call_args[0][0]
 
         assert created_profile_arg.name == "myprofile"
-        assert created_profile_arg.tracker == "noop"
+        assert created_profile_arg.tracker == "none"
         assert created_profile_arg.working_dir == "/home/user/project"
         # Check that agents were created with correct driver/model
         assert "architect" in created_profile_arg.agents
-        assert created_profile_arg.agents["architect"].driver == "api:openrouter"
+        assert created_profile_arg.agents["architect"].driver == "api"
         assert created_profile_arg.agents["architect"].model == "sonnet"
 
     async def test_profile_set_as_active(self, mock_db: MagicMock) -> None:
         """First-run sets created profile as active."""
         created_profile = Profile(
             name="testprofile",
-            tracker="noop",
+            tracker="none",
             working_dir="/tmp",
             agents={
-                "architect": AgentConfig(driver="cli:claude", model="opus"),
-                "developer": AgentConfig(driver="cli:claude", model="opus"),
-                "reviewer": AgentConfig(driver="cli:claude", model="opus"),
+                "architect": AgentConfig(driver="cli", model="opus"),
+                "developer": AgentConfig(driver="cli", model="opus"),
+                "reviewer": AgentConfig(driver="cli", model="opus"),
             },
         )
 
@@ -168,7 +168,7 @@ class TestFirstRunProfileCreation:
              patch("typer.prompt") as mock_prompt:
             mock_prompt.side_effect = [
                 "testprofile",
-                "cli:claude",
+                "cli",
                 "opus",
                 "/tmp",
             ]
@@ -181,12 +181,12 @@ class TestFirstRunProfileCreation:
         """Database connection is closed after first-run setup."""
         created_profile = Profile(
             name="dev",
-            tracker="noop",
+            tracker="none",
             working_dir="/tmp",
             agents={
-                "architect": AgentConfig(driver="cli:claude", model="opus"),
-                "developer": AgentConfig(driver="cli:claude", model="opus"),
-                "reviewer": AgentConfig(driver="cli:claude", model="opus"),
+                "architect": AgentConfig(driver="cli", model="opus"),
+                "developer": AgentConfig(driver="cli", model="opus"),
+                "reviewer": AgentConfig(driver="cli", model="opus"),
             },
         )
 
@@ -198,7 +198,7 @@ class TestFirstRunProfileCreation:
         with patch("amelia.cli.config.get_database", return_value=mock_db), \
              patch("amelia.cli.config.ProfileRepository", return_value=mock_repo), \
              patch("typer.prompt") as mock_prompt:
-            mock_prompt.side_effect = ["dev", "cli:claude", "opus", "/tmp"]
+            mock_prompt.side_effect = ["dev", "cli", "opus", "/tmp"]
 
             await check_and_run_first_time_setup()
 
@@ -210,12 +210,12 @@ class TestFirstRunProfileCreation:
         """Database connection is closed when profiles exist."""
         existing_profile = Profile(
             name="existing",
-            tracker="noop",
+            tracker="none",
             working_dir="/tmp",
             agents={
-                "architect": AgentConfig(driver="cli:claude", model="sonnet"),
-                "developer": AgentConfig(driver="cli:claude", model="sonnet"),
-                "reviewer": AgentConfig(driver="cli:claude", model="sonnet"),
+                "architect": AgentConfig(driver="cli", model="sonnet"),
+                "developer": AgentConfig(driver="cli", model="sonnet"),
+                "reviewer": AgentConfig(driver="cli", model="sonnet"),
             },
         )
 

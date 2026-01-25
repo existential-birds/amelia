@@ -32,7 +32,7 @@ class TestExtractStructured:
                 prompt="Extract from this text",
                 schema=SampleSchema,
                 model="gpt-4",
-                driver_type="api:openrouter",
+                driver_type="api",
             )
 
             assert result.goal == "Build feature"
@@ -52,11 +52,11 @@ class TestExtractStructured:
                 prompt="My prompt",
                 schema=SampleSchema,
                 model="test-model",
-                driver_type="api:openrouter",
+                driver_type="api",
             )
 
             mock_get_driver.assert_called_once_with(
-                driver_key="api:openrouter",
+                driver_key="api",
                 model="test-model",
                 cwd=".",
             )
@@ -79,13 +79,13 @@ class TestExtractStructured:
                 prompt="Test prompt",
                 schema=SampleSchema,
                 model="claude-3",
-                driver_type="cli:claude",
+                driver_type="cli",
             )
 
             assert result.goal == "CLI Test"
             assert result.priority == 3
             mock_get_driver.assert_called_once_with(
-                driver_key="cli:claude",
+                driver_key="cli",
                 model="claude-3",
                 cwd=".",
             )

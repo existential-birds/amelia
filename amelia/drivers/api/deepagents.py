@@ -123,7 +123,7 @@ def _create_chat_model(model: str, provider: str | None = None) -> BaseChatModel
     if model.startswith("openrouter:"):
         raise ValueError(
             "The 'openrouter:' prefix in model names is no longer supported. "
-            "Use driver='api:openrouter' with the model name directly "
+            "Use driver='api' with the model name directly "
             f"(e.g., model='{model[len('openrouter:'):]}')."
         )
 

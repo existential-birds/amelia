@@ -6,8 +6,8 @@ This document describes the core data structures used throughout the Amelia orch
 
 | Type | Definition | Description |
 |------|------------|-------------|
-| `DriverType` | `"cli:claude" \| "api:openai" \| "api:openrouter" \| "cli" \| "api"` | LLM driver type. |
-| `TrackerType` | `"jira" \| "github" \| "none" \| "noop"` | Issue tracker type. |
+| `DriverType` | `"cli" \| "api"` | LLM driver type. |
+| `TrackerType` | `"jira" \| "github" \| "none"` | Issue tracker type. |
 | `AgenticStatus` | `"running" \| "awaiting_approval" \| "completed" \| "failed" \| "cancelled"` | Agentic execution status. |
 | `Severity` | `"low" \| "medium" \| "high" \| "critical"` | Review issue severity. |
 
@@ -32,7 +32,7 @@ Defines the runtime environment and constraints.
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `name` | `str` | — | Profile name (e.g., "work", "personal"). |
-| `driver` | `DriverType` | — | LLM driver type (e.g., "api:openrouter", "cli:claude"). |
+| `driver` | `DriverType` | — | LLM driver type (e.g., "api", "cli"). |
 | `model` | `str \| None` | `None` | LLM model identifier. Required for API drivers (e.g., "minimax/minimax-m2"). |
 | `tracker` | `TrackerType` | `"none"` | Issue tracker type. |
 | `working_dir` | `str \| None` | `None` | Working directory for agentic execution. |
