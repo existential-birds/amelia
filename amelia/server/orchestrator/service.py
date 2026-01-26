@@ -1341,14 +1341,7 @@ class OrchestratorService:
             str(self._checkpoint_path)
         ) as saver:
             await saver.setup()
-            # Table names match AsyncSqliteSaver schema as of
-            # langgraph-checkpoint-sqlite 3.x — safe from SQL injection
-            for table in ("checkpoints", "writes", "checkpoint_blobs"):
-                await saver.conn.execute(
-                    f"DELETE FROM {table} WHERE thread_id = ?",  # noqa: S608
-                    (workflow_id,),
-                )
-            await saver.conn.commit()
+            await saver.adelete_thread(workflow_id)
             logger.info("Deleted checkpoint", workflow_id=workflow_id)
 
     async def approve_workflow(self, workflow_id: str) -> None:

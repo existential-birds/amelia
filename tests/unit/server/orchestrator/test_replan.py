@@ -115,11 +115,7 @@ class TestDeleteCheckpoint:
         orchestrator: OrchestratorService,
     ) -> None:
         """_delete_checkpoint should open sqlite and delete checkpoint data."""
-        mock_conn = AsyncMock()
-        mock_conn.execute = AsyncMock()
-
         mock_saver_instance = AsyncMock()
-        mock_saver_instance.conn = mock_conn
 
         mock_saver_ctx = AsyncMock()
         mock_saver_ctx.__aenter__ = AsyncMock(return_value=mock_saver_instance)
@@ -134,8 +130,8 @@ class TestDeleteCheckpoint:
 
             # Should have opened connection with checkpoint path
             mock_saver_class.from_conn_string.assert_called_once()
-            # Should have executed delete queries
-            assert mock_conn.execute.call_count >= 1
+            # Should have called adelete_thread with the workflow ID
+            mock_saver_instance.adelete_thread.assert_awaited_once_with("wf-123")
 
 
 class TestReplanWorkflow:
