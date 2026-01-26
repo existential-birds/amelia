@@ -10,193 +10,16 @@ directly (bypassing LangGraph), so no checkpoint was created. This caused
 approve_workflow to fail because there was nothing to resume from.
 """
 
-from collections.abc import AsyncGenerator
-from contextlib import asynccontextmanager
-from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from amelia.server.database.connection import Database
+from amelia.core.types import Profile
 from amelia.server.database.repository import WorkflowRepository
-from amelia.server.events.bus import EventBus
 from amelia.server.models.requests import CreateWorkflowRequest
 from amelia.server.orchestrator.service import OrchestratorService
-
-
-class AsyncIteratorMock:
-    """Mock async iterator for testing async generators."""
-
-    def __init__(self, items: list[Any]) -> None:
-        self.items = items
-        self.index = 0
-
-    def __aiter__(self) -> "AsyncIteratorMock":
-        return self
-
-    async def __anext__(self) -> Any:
-        if self.index >= len(self.items):
-            raise StopAsyncIteration
-        item = self.items[self.index]
-        self.index += 1
-        return item
-
-
-def create_planning_graph_mock(
-    goal: str = "Test goal from architect",
-    plan_markdown: str = "## Plan\n\n### Task 1: First task\n- Do something",
-) -> MagicMock:
-    """Create a mock LangGraph graph that simulates planning.
-
-    The mock graph yields chunks until it reaches an interrupt at human_approval_node.
-    """
-    mock_graph = MagicMock()
-
-    # Mock aget_state to return checkpoint with plan data
-    checkpoint_values = {
-        "goal": goal,
-        "plan_markdown": plan_markdown,
-        "profile_id": "test",
-    }
-    mock_checkpoint = MagicMock()
-    mock_checkpoint.values = checkpoint_values
-    mock_checkpoint.next = []
-    mock_graph.aget_state = AsyncMock(return_value=mock_checkpoint)
-
-    # Mock astream to yield chunks including interrupt
-    astream_items = [
-        ("updates", {"architect_node": {"goal": goal, "plan_markdown": plan_markdown}}),
-        ("updates", {"plan_validator_node": {}}),
-        ("updates", {"__interrupt__": ("Paused for approval",)}),
-    ]
-    mock_graph.astream = lambda *args, **kwargs: AsyncIteratorMock(astream_items)
-
-    # Mock aupdate_state for approve_workflow
-    mock_graph.aupdate_state = AsyncMock()
-
-    return mock_graph
-
-
-@asynccontextmanager
-async def mock_langgraph_for_planning(
-    goal: str = "Test goal from architect",
-    plan_markdown: str = "## Plan\n\n### Task 1: First task\n- Do something",
-) -> AsyncGenerator[MagicMock, None]:
-    """Context manager that mocks LangGraph for planning tests."""
-    mock_graph = create_planning_graph_mock(goal=goal, plan_markdown=plan_markdown)
-
-    mock_saver = AsyncMock()
-    mock_saver_class = MagicMock()
-    mock_saver_class.from_conn_string.return_value.__aenter__ = AsyncMock(
-        return_value=mock_saver
-    )
-    mock_saver_class.from_conn_string.return_value.__aexit__ = AsyncMock()
-
-    with (
-        patch(
-            "amelia.server.orchestrator.service.AsyncSqliteSaver", mock_saver_class
-        ),
-        patch.object(
-            OrchestratorService, "_create_server_graph", return_value=mock_graph
-        ),
-    ):
-        yield mock_graph
-
-
-@pytest.fixture
-async def test_db(temp_db_path: Path) -> AsyncGenerator[Database, None]:
-    """Create and initialize in-memory SQLite database."""
-    db = Database(temp_db_path)
-    await db.connect()
-    await db.ensure_schema()
-    yield db
-    await db.close()
-
-
-@pytest.fixture
-def test_repository(test_db: Database) -> WorkflowRepository:
-    """Create repository backed by test database."""
-    return WorkflowRepository(test_db)
-
-
-@pytest.fixture
-def test_event_bus() -> EventBus:
-    """Create event bus for testing."""
-    return EventBus()
-
-
-@pytest.fixture
-def temp_checkpoint_db(tmp_path: Path) -> str:
-    """Create temporary checkpoint database path."""
-    return str(tmp_path / "checkpoints.db")
-
-
-@pytest.fixture
-def test_orchestrator(
-    test_event_bus: EventBus,
-    test_repository: WorkflowRepository,
-    temp_checkpoint_db: str,
-) -> OrchestratorService:
-    """Create real OrchestratorService with test dependencies."""
-    return OrchestratorService(
-        event_bus=test_event_bus,
-        repository=test_repository,
-        checkpoint_path=temp_checkpoint_db,
-    )
-
-
-@pytest.fixture
-def valid_worktree(tmp_path: Path) -> str:
-    """Create a valid git worktree directory with required settings file."""
-    import subprocess
-
-    worktree = tmp_path / "worktree"
-    worktree.mkdir()
-
-    # Initialize git repo
-    subprocess.run(["git", "init"], cwd=worktree, capture_output=True, check=True)
-    subprocess.run(
-        ["git", "config", "user.email", "test@test.com"],
-        cwd=worktree,
-        capture_output=True,
-        check=True,
-    )
-    subprocess.run(
-        ["git", "config", "user.name", "Test"],
-        cwd=worktree,
-        capture_output=True,
-        check=True,
-    )
-    subprocess.run(
-        ["git", "config", "commit.gpgsign", "false"],
-        cwd=worktree,
-        capture_output=True,
-        check=True,
-    )
-    (worktree / "README.md").write_text("# Test")
-    subprocess.run(["git", "add", "."], cwd=worktree, capture_output=True, check=True)
-    subprocess.run(
-        ["git", "commit", "-m", "Initial"],
-        cwd=worktree,
-        capture_output=True,
-        check=True,
-    )
-
-    # Worktree settings are required (no fallback to server settings)
-    settings_content = """
-active_profile: test
-profiles:
-  test:
-    name: test
-    driver: cli
-    model: sonnet
-    validator_model: sonnet
-    tracker: noop
-    strategy: single
-"""
-    (worktree / "settings.amelia.yaml").write_text(settings_content)
-    return str(worktree)
+from tests.integration.conftest import mock_langgraph_for_planning
 
 
 @pytest.mark.integration
@@ -212,6 +35,7 @@ class TestPlanNowApproveFlow:
         test_orchestrator: OrchestratorService,
         test_repository: WorkflowRepository,
         valid_worktree: str,
+        active_test_profile: Profile,
     ) -> None:
         """queue_and_plan_workflow should create LangGraph checkpoint.
 
@@ -230,6 +54,7 @@ class TestPlanNowApproveFlow:
         async with mock_langgraph_for_planning(
             goal="Implement the test feature",
             plan_markdown="# Plan\n\n## Phase 1\n### Task 1: Do thing",
+            extra_stream_items=[("updates", {"plan_validator_node": {}})],
         ):
             workflow_id = await test_orchestrator.queue_and_plan_workflow(request)
 
@@ -250,6 +75,7 @@ class TestPlanNowApproveFlow:
         test_orchestrator: OrchestratorService,
         test_repository: WorkflowRepository,
         valid_worktree: str,
+        active_test_profile: Profile,
         langgraph_mock_factory: Any,
     ) -> None:
         """Complete flow: plan_now → blocked → approve → completion.
@@ -272,6 +98,7 @@ class TestPlanNowApproveFlow:
         async with mock_langgraph_for_planning(
             goal="Test goal",
             plan_markdown="## Plan\n\n### Task 1: Test",
+            extra_stream_items=[("updates", {"plan_validator_node": {}})],
         ):
             workflow_id = await test_orchestrator.queue_and_plan_workflow(request)
 
@@ -324,6 +151,7 @@ class TestPlanNowApproveFlow:
         test_orchestrator: OrchestratorService,
         test_repository: WorkflowRepository,
         valid_worktree: str,
+        active_test_profile: Profile,
     ) -> None:
         """Plan data should be synced from checkpoint to ServerExecutionState.
 
@@ -344,6 +172,7 @@ class TestPlanNowApproveFlow:
         async with mock_langgraph_for_planning(
             goal=goal,
             plan_markdown=plan_markdown,
+            extra_stream_items=[("updates", {"plan_validator_node": {}})],
         ):
             workflow_id = await test_orchestrator.queue_and_plan_workflow(request)
 

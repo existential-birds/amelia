@@ -6,10 +6,11 @@ This module provides:
 """
 
 import socket
-from collections.abc import Callable
+from collections.abc import AsyncGenerator, Callable
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, cast
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from langgraph.checkpoint.memory import MemorySaver
@@ -19,6 +20,8 @@ from amelia.core.types import AgentConfig, DriverType, Issue, Profile, TrackerTy
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
 from amelia.pipelines.implementation import create_implementation_graph
 from amelia.pipelines.implementation.state import ImplementationState, rebuild_implementation_state
+from amelia.server.database.connection import Database
+from amelia.server.database.profile_repository import ProfileRepository
 from amelia.server.database.repository import WorkflowRepository
 from amelia.server.events.bus import EventBus
 from amelia.server.events.connection_manager import ConnectionManager
@@ -27,6 +30,8 @@ from amelia.server.models.state import (
     ServerExecutionState,
     rebuild_server_execution_state,
 )
+from amelia.server.orchestrator.service import OrchestratorService
+from tests.conftest import AsyncIteratorMock, init_git_repo
 
 
 # Rebuild ImplementationState first (resolves EvaluationResult),
@@ -465,3 +470,201 @@ def orchestrator_graph() -> CompiledStateGraph[Any]:
         checkpointer=MemorySaver(),
         interrupt_before=["human_approval_node"],
     )
+
+
+# ---------------------------------------------------------------------------
+# Shared LangGraph planning mocks
+# ---------------------------------------------------------------------------
+
+
+def create_planning_graph_mock(
+    goal: str = "Test goal from architect",
+    plan_markdown: str = "## Plan\n\n### Task 1: First task\n- Do something",
+    extra_stream_items: list[tuple[str, dict[str, Any]]] | None = None,
+) -> MagicMock:
+    """Create a mock LangGraph graph that simulates planning with interrupt.
+
+    The mock graph yields architect output chunks, optional extra items
+    (e.g. plan_validator_node), and a final interrupt chunk.
+
+    Args:
+        goal: The goal value to include in checkpoint and stream output.
+        plan_markdown: The plan markdown for checkpoint and stream output.
+        extra_stream_items: Additional (mode, data) tuples to yield between
+            the architect output and the interrupt chunk.
+    """
+    mock_graph = MagicMock()
+
+    # Mock aget_state to return checkpoint with plan data
+    checkpoint_values = {
+        "goal": goal,
+        "plan_markdown": plan_markdown,
+        "profile_id": "test",
+    }
+    mock_checkpoint = MagicMock()
+    mock_checkpoint.values = checkpoint_values
+    mock_checkpoint.next = []
+    mock_graph.aget_state = AsyncMock(return_value=mock_checkpoint)
+
+    # Mock astream to yield chunks including interrupt
+    astream_items: list[tuple[str, dict[str, Any]]] = [
+        ("updates", {"architect_node": {"goal": goal, "plan_markdown": plan_markdown}}),
+    ]
+    if extra_stream_items:
+        astream_items.extend(extra_stream_items)
+    astream_items.append(("updates", {"__interrupt__": ("Paused for approval",)}))
+
+    mock_graph.astream = lambda *args, **kwargs: AsyncIteratorMock(astream_items)
+
+    # Mock aupdate_state for approve_workflow
+    mock_graph.aupdate_state = AsyncMock()
+
+    return mock_graph
+
+
+@asynccontextmanager
+async def mock_langgraph_for_planning(
+    goal: str = "Test goal from architect",
+    plan_markdown: str = "## Plan\n\n### Task 1: First task\n- Do something",
+    extra_stream_items: list[tuple[str, dict[str, Any]]] | None = None,
+) -> AsyncGenerator[MagicMock, None]:
+    """Context manager that mocks LangGraph for planning tests.
+
+    Patches AsyncSqliteSaver and _create_server_graph so that the
+    OrchestratorService runs against a mock graph instead of a real
+    LangGraph instance.
+
+    Args:
+        goal: Forwarded to create_planning_graph_mock.
+        plan_markdown: Forwarded to create_planning_graph_mock.
+        extra_stream_items: Forwarded to create_planning_graph_mock.
+    """
+    mock_graph = create_planning_graph_mock(
+        goal=goal,
+        plan_markdown=plan_markdown,
+        extra_stream_items=extra_stream_items,
+    )
+
+    mock_saver = AsyncMock()
+    mock_saver_class = MagicMock()
+    mock_saver_class.from_conn_string.return_value.__aenter__ = AsyncMock(
+        return_value=mock_saver
+    )
+    mock_saver_class.from_conn_string.return_value.__aexit__ = AsyncMock()
+
+    with (
+        patch(
+            "amelia.server.orchestrator.service.AsyncSqliteSaver", mock_saver_class
+        ),
+        patch.object(
+            OrchestratorService, "_create_server_graph", return_value=mock_graph
+        ),
+    ):
+        yield mock_graph
+
+
+# ---------------------------------------------------------------------------
+# Shared database & service fixtures for orchestrator integration tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+async def test_db(temp_db_path: Path) -> AsyncGenerator[Database, None]:
+    """Create and initialize test database."""
+    db = Database(temp_db_path)
+    await db.connect()
+    await db.ensure_schema()
+    yield db
+    await db.close()
+
+
+@pytest.fixture
+def test_repository(test_db: Database) -> WorkflowRepository:
+    """Create repository backed by test database."""
+    return WorkflowRepository(test_db)
+
+
+@pytest.fixture
+def test_profile_repository(test_db: Database) -> ProfileRepository:
+    """Create profile repository backed by test database."""
+    return ProfileRepository(test_db)
+
+
+@pytest.fixture
+def test_event_bus() -> EventBus:
+    """Create event bus for testing."""
+    return EventBus()
+
+
+@pytest.fixture
+def temp_checkpoint_db(tmp_path: Path) -> str:
+    """Temporary checkpoint database path."""
+    return str(tmp_path / "checkpoints.db")
+
+
+@pytest.fixture
+def test_orchestrator(
+    test_event_bus: EventBus,
+    test_repository: WorkflowRepository,
+    test_profile_repository: ProfileRepository,
+    temp_checkpoint_db: str,
+) -> OrchestratorService:
+    """Create real OrchestratorService with test dependencies.
+
+    Includes profile_repo so that replan and other profile-dependent
+    operations work correctly.
+    """
+    return OrchestratorService(
+        event_bus=test_event_bus,
+        repository=test_repository,
+        profile_repo=test_profile_repository,
+        checkpoint_path=temp_checkpoint_db,
+    )
+
+
+@pytest.fixture
+def valid_worktree(tmp_path: Path) -> str:
+    """Create a valid git worktree directory with required settings file."""
+    worktree = tmp_path / "worktree"
+    worktree.mkdir()
+    init_git_repo(worktree)
+
+    # Worktree settings are required (no fallback to server settings)
+    settings_content = """
+active_profile: test
+profiles:
+  test:
+    name: test
+    driver: cli
+    model: sonnet
+    validator_model: sonnet
+    tracker: noop
+    strategy: single
+"""
+    (worktree / "settings.amelia.yaml").write_text(settings_content)
+    return str(worktree)
+
+
+@pytest.fixture
+async def active_test_profile(
+    test_profile_repository: ProfileRepository,
+    valid_worktree: str,
+) -> Profile:
+    """Create and activate a test profile in the database."""
+    agent_config = AgentConfig(driver="cli", model="sonnet")
+    profile = Profile(
+        name="test",
+        tracker="noop",
+        working_dir=valid_worktree,
+        agents={
+            "architect": agent_config,
+            "developer": agent_config,
+            "reviewer": agent_config,
+            "plan_validator": agent_config,
+            "evaluator": agent_config,
+            "task_reviewer": agent_config,
+        },
+    )
+    await test_profile_repository.create_profile(profile)
+    await test_profile_repository.set_active("test")
+    return profile

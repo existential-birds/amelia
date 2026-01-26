@@ -1328,6 +1328,22 @@ class OrchestratorService:
 
         return event
 
+    async def _delete_checkpoint(self, workflow_id: str) -> None:
+        """Delete LangGraph checkpoint data for a workflow.
+
+        Removes all checkpoint records (checkpoints, writes, blobs) for
+        the given thread ID. Used by replan to start fresh.
+
+        Args:
+            workflow_id: The workflow/thread ID whose checkpoint to delete.
+        """
+        async with AsyncSqliteSaver.from_conn_string(
+            str(self._checkpoint_path)
+        ) as saver:
+            await saver.setup()
+            await saver.adelete_thread(workflow_id)
+            logger.info("Deleted checkpoint", workflow_id=workflow_id)
+
     async def approve_workflow(self, workflow_id: str) -> None:
         """Approve a blocked workflow and resume LangGraph execution.
 
@@ -1338,24 +1354,24 @@ class OrchestratorService:
             WorkflowNotFoundError: If workflow doesn't exist.
             InvalidStateError: If workflow is not in "blocked" state.
         """
-        workflow = await self._repository.get(workflow_id)
-        if not workflow:
-            raise WorkflowNotFoundError(workflow_id)
+        async with self._approval_lock:
+            workflow = await self._repository.get(workflow_id)
+            if not workflow:
+                raise WorkflowNotFoundError(workflow_id)
 
-        if workflow.workflow_status != WorkflowStatus.BLOCKED:
-            raise InvalidStateError(
-                f"Cannot approve workflow in '{workflow.workflow_status}' state",
+            if workflow.workflow_status != WorkflowStatus.BLOCKED:
+                raise InvalidStateError(
+                    f"Cannot approve workflow in '{workflow.workflow_status}' state",
+                    workflow_id=workflow_id,
+                    current_status=workflow.workflow_status,
+                )
+
+            # Emit RESUMED event for workflow being unblocked
+            await emit_workflow_event(
+                ExtWorkflowEventType.RESUMED,
                 workflow_id=workflow_id,
-                current_status=workflow.workflow_status,
             )
 
-        # Emit RESUMED event for workflow being unblocked
-        await emit_workflow_event(
-            ExtWorkflowEventType.RESUMED,
-            workflow_id=workflow_id,
-        )
-
-        async with self._approval_lock:
             await self._emit(
                 workflow_id,
                 EventType.APPROVAL_GRANTED,
@@ -2122,6 +2138,11 @@ class OrchestratorService:
         Runs the orchestrator graph until it interrupts at human_approval_node,
         creating a checkpoint that can be resumed by approve_workflow().
 
+        Note:
+            This task re-fetches workflow state from the repository before
+            any mutations, so the passed ``state`` and ``execution_state``
+            are only used for initial graph input — not for later updates.
+
         Args:
             workflow_id: The workflow ID being planned.
             state: The server execution state to update.
@@ -2191,7 +2212,11 @@ class OrchestratorService:
                             )
                             return
 
-                        # Set planned_at and status to blocked
+                        # Set planned_at and status to blocked.
+                        # Uses repository.update() instead of set_status()
+                        # because multiple fields change atomically (status,
+                        # planned_at, current_stage). The PLANNING status
+                        # guard is checked above.
                         fresh.planned_at = datetime.now(UTC)
                         fresh.workflow_status = WorkflowStatus.BLOCKED
                         fresh.current_stage = None  # Clear stage, waiting for approval
@@ -2626,3 +2651,130 @@ class OrchestratorService:
             "key_files": plan_result.key_files,
             "total_tasks": plan_result.total_tasks,
         }
+
+    async def replan_workflow(self, workflow_id: str) -> None:
+        """Regenerate the plan for a blocked workflow.
+
+        Deletes the stale LangGraph checkpoint, clears plan-related fields,
+        transitions the workflow back to PLANNING, and spawns a fresh
+        planning task using the same issue/profile.
+
+        Args:
+            workflow_id: The workflow to replan.
+
+        Raises:
+            WorkflowNotFoundError: If workflow doesn't exist.
+            InvalidStateError: If workflow is not in blocked status.
+            WorkflowConflictError: If a planning task is already running.
+            ValueError: If profile is not found.
+        """
+        async with self._approval_lock:
+            workflow = await self._repository.get(workflow_id)
+            if workflow is None:
+                raise WorkflowNotFoundError(workflow_id)
+
+            if workflow.workflow_status != WorkflowStatus.BLOCKED:
+                raise InvalidStateError(
+                    f"Workflow must be in blocked status to replan, but is in {workflow.workflow_status}",
+                    workflow_id=workflow_id,
+                    current_status=str(workflow.workflow_status),
+                )
+
+            # Defensive: reject if planning task is already running
+            if workflow_id in self._planning_tasks:
+                raise WorkflowConflictError(
+                    f"Planning task already running for workflow {workflow_id}"
+                )
+
+            if workflow.execution_state is None:
+                raise InvalidStateError(
+                    "Cannot replan workflow without execution state",
+                    workflow_id=workflow_id,
+                    current_status=str(workflow.workflow_status),
+                )
+
+            # Resolve profile without side-effects: replan is a user-initiated
+            # retry action, so a missing profile should raise an error to the
+            # caller without transitioning the workflow to FAILED. This keeps
+            # the workflow in BLOCKED so the user can fix the profile and retry.
+            if self._profile_repo is None:
+                raise ValueError(f"ProfileRepository not configured for workflow {workflow_id}")
+            record = await self._profile_repo.get_profile(
+                workflow.execution_state.profile_id,
+            )
+            if record is None:
+                raise ValueError(
+                    f"Profile '{workflow.execution_state.profile_id}' not found for workflow {workflow_id}"
+                )
+            profile = self._update_profile_working_dir(record, workflow.worktree_path)
+
+            # Delete stale checkpoint (best-effort: the checkpoint will be
+            # regenerated, so a failure here should not block replanning)
+            try:
+                await self._delete_checkpoint(workflow_id)
+            except Exception:
+                logger.warning(
+                    "Failed to delete stale checkpoint, continuing with replan",
+                    workflow_id=workflow_id,
+                    exc_info=True,
+                )
+
+            # Clear plan-related fields from execution_state
+            workflow.execution_state = workflow.execution_state.model_copy(
+                update={
+                    "external_plan": False,
+                    "goal": None,
+                    "plan_markdown": None,
+                    "raw_architect_output": None,
+                    "plan_path": None,
+                    "key_files": [],
+                    "total_tasks": 1,
+                    "tool_calls": [],
+                    "tool_results": [],
+                    "human_approved": None,
+                    "human_feedback": None,
+                }
+            )
+
+            # Transition to PLANNING.
+            # Design note: we use repository.update() instead of set_status()
+            # because multiple fields must change atomically (status,
+            # current_stage, planned_at, execution_state). The BLOCKED →
+            # PLANNING guard is enforced explicitly above. This is the same
+            # pattern used by _run_planning_task for PLANNING → BLOCKED.
+            workflow.workflow_status = WorkflowStatus.PLANNING
+            workflow.current_stage = "architect"
+            workflow.planned_at = None
+            await self._repository.update(workflow)
+
+            # Emit replanning event inside the lock, before spawning the task,
+            # to guarantee ordering: STAGE_STARTED always precedes any events
+            # emitted by _run_planning_task (e.g. APPROVAL_REQUIRED).
+            await self._emit(
+                workflow_id,
+                EventType.STAGE_STARTED,
+                "Replanning: regenerating plan with Architect",
+                agent="architect",
+                data={"stage": "architect", "replan": True},
+            )
+
+            # Spawn planning task in background (reuses existing _run_planning_task).
+            # Note: workflow/execution_state are only used as initial graph input
+            # (see _run_planning_task docstring). The cleared execution_state is
+            # intentional — it seeds a fresh planning run. The task re-fetches
+            # from the repository before any mutations, so staleness is safe.
+            task = asyncio.create_task(
+                self._run_planning_task(workflow_id, workflow, workflow.execution_state, profile)
+            )
+            self._planning_tasks[workflow_id] = task
+
+            def cleanup_planning(_: asyncio.Task[None]) -> None:
+                self._planning_tasks.pop(workflow_id, None)
+
+            task.add_done_callback(cleanup_planning)
+
+        logger.info(
+            "Replan started",
+            workflow_id=workflow_id,
+            issue_id=workflow.issue_id,
+        )

@@ -98,3 +98,31 @@ export async function cancelAction({ params }: ActionFunctionArgs): Promise<Acti
     return { success: false, action: 'cancelled', error: message };
   }
 }
+
+/**
+ * Replans a blocked workflow by regenerating the Architect plan.
+ *
+ * Handles the replan action for a workflow route, sending the request to the API.
+ *
+ * @param args - React Router action function arguments containing route params.
+ * @returns Action result indicating successful replan initiation or error details.
+ * @example
+ * ```typescript
+ * const result = await replanAction({ params: { id: 'workflow-123' } });
+ * // Success: { success: true, action: 'replanning' }
+ * // Error: { success: false, action: 'replanning', error: 'Workflow ID required' }
+ * ```
+ */
+export async function replanAction({ params }: ActionFunctionArgs): Promise<ActionResult> {
+  if (!params.id) {
+    return { success: false, action: 'replanning', error: 'Workflow ID required' };
+  }
+
+  try {
+    await api.replanWorkflow(params.id);
+    return { success: true, action: 'replanning' };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to replan workflow';
+    return { success: false, action: 'replanning', error: message };
+  }
+}

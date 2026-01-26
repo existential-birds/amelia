@@ -1,1 +1,1 @@
-export { approveAction, rejectAction, cancelAction } from './workflows';
+export { approveAction, rejectAction, cancelAction, replanAction } from './workflows';

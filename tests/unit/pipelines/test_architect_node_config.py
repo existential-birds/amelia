@@ -9,6 +9,7 @@ from langchain_core.runnables.config import RunnableConfig
 from amelia.core.types import AgentConfig, Issue, Profile
 from amelia.pipelines.implementation.nodes import call_architect_node
 from amelia.pipelines.implementation.state import ImplementationState
+from tests.conftest import AsyncIteratorMock
 
 
 @pytest.fixture
@@ -32,24 +33,6 @@ def mock_state() -> ImplementationState:
         status="pending",
         issue=Issue(id="TEST-1", title="Test", description="Test issue"),
     )
-
-
-class AsyncIteratorMock:
-    """Mock async iterator for testing async generators."""
-
-    def __init__(self, items: list[Any]) -> None:
-        self.items = items
-        self.index = 0
-
-    def __aiter__(self) -> "AsyncIteratorMock":
-        return self
-
-    async def __anext__(self) -> Any:
-        if self.index >= len(self.items):
-            raise StopAsyncIteration
-        item = self.items[self.index]
-        self.index += 1
-        return item
 
 
 @pytest.mark.asyncio

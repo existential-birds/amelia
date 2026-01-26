@@ -9,7 +9,7 @@ import { workflowsLoader, workflowDetailLoader, historyLoader } from '@/loaders/
 import { promptsLoader } from '@/loaders/prompts';
 import { costsLoader } from '@/loaders';
 import { profilesLoader, serverSettingsLoader } from '@/loaders/settings';
-import { approveAction, rejectAction, cancelAction } from '@/actions/workflows';
+import { approveAction, rejectAction, cancelAction, replanAction } from '@/actions/workflows';
 
 /**
  * Application router with route definitions, loaders, and actions.
@@ -22,6 +22,7 @@ import { approveAction, rejectAction, cancelAction } from '@/actions/workflows';
  * - `/workflows/:id/approve` → Approve workflow action
  * - `/workflows/:id/reject` → Reject workflow action
  * - `/workflows/:id/cancel` → Cancel workflow action
+ * - `/workflows/:id/replan` → Replan blocked workflow action
  * - `/history` → Completed workflows history (lazy-loaded)
  * - `/logs` → System logs view (lazy-loaded)
  * - `/prompts` → Prompts configuration page (lazy-loaded)
@@ -83,6 +84,10 @@ export const router = createBrowserRouter([
       {
         path: 'workflows/:id/cancel',
         action: cancelAction,
+      },
+      {
+        path: 'workflows/:id/replan',
+        action: replanAction,
       },
       {
         path: 'history',

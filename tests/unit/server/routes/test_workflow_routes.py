@@ -4,10 +4,7 @@ These are unit tests that mock the repository to test the route handlers
 in isolation. Integration tests with real database are in tests/integration/.
 """
 
-from collections.abc import AsyncGenerator
-from contextlib import asynccontextmanager
 from datetime import UTC, datetime
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -19,6 +16,8 @@ from amelia.server.dependencies import get_orchestrator, get_repository
 from amelia.server.main import create_app
 from amelia.server.models.state import ServerExecutionState
 from amelia.server.models.tokens import TokenSummary, TokenUsage
+
+from .conftest import patch_lifespan
 
 
 # =============================================================================
@@ -52,13 +51,7 @@ def test_client(
     mock_orchestrator: MagicMock,
 ) -> TestClient:
     """Create test client with mocked dependencies."""
-    app = create_app()
-
-    @asynccontextmanager
-    async def noop_lifespan(_app: Any) -> AsyncGenerator[None, None]:
-        yield
-
-    app.router.lifespan_context = noop_lifespan
+    app = patch_lifespan(create_app())
     app.dependency_overrides[get_repository] = lambda: mock_repository
     app.dependency_overrides[get_orchestrator] = lambda: mock_orchestrator
 
