@@ -1347,6 +1347,7 @@ class OrchestratorService:
                     f"DELETE FROM {table} WHERE thread_id = ?",  # noqa: S608
                     (workflow_id,),
                 )
+            await saver.conn.commit()
             logger.info("Deleted checkpoint", workflow_id=workflow_id)
 
     async def approve_workflow(self, workflow_id: str) -> None:
@@ -2690,29 +2691,28 @@ class OrchestratorService:
         # Resolve profile before any state mutation to avoid inconsistent state
         profile = await self._get_profile_or_fail(
             workflow_id,
-            workflow.execution_state.profile_id if workflow.execution_state else "default",
+            workflow.execution_state.profile_id,
             workflow.worktree_path,
         )
         if profile is None:
-            return
+            raise ValueError(f"Profile not found for workflow {workflow_id}")
 
         # Delete stale checkpoint
         await self._delete_checkpoint(workflow_id)
 
         # Clear plan-related fields from execution_state
-        if workflow.execution_state is not None:
-            workflow.execution_state = workflow.execution_state.model_copy(
-                update={
-                    "goal": None,
-                    "plan_markdown": None,
-                    "raw_architect_output": None,
-                    "plan_path": None,
-                    "key_files": [],
-                    "total_tasks": 1,
-                    "tool_calls": [],
-                    "tool_results": [],
-                }
-            )
+        workflow.execution_state = workflow.execution_state.model_copy(
+            update={
+                "goal": None,
+                "plan_markdown": None,
+                "raw_architect_output": None,
+                "plan_path": None,
+                "key_files": [],
+                "total_tasks": 1,
+                "tool_calls": [],
+                "tool_results": [],
+            }
+        )
 
         # Transition to PLANNING
         workflow.workflow_status = WorkflowStatus.PLANNING

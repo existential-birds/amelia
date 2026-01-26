@@ -8,7 +8,6 @@ Flow tested:
 2. replan_workflow → PLANNING → BLOCKED (new plan)
 3. Verify plan data is updated and events are emitted correctly
 """
-import subprocess
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -26,6 +25,7 @@ from amelia.server.models.events import EventType
 from amelia.server.models.requests import CreateWorkflowRequest
 from amelia.server.models.state import WorkflowStatus
 from amelia.server.orchestrator.service import OrchestratorService
+from tests.conftest import init_git_repo
 
 
 class AsyncIteratorMock:
@@ -138,26 +138,7 @@ def valid_worktree(tmp_path: Path) -> str:
     """Create a valid git worktree for testing."""
     worktree = tmp_path / "worktree"
     worktree.mkdir()
-
-    subprocess.run(["git", "init"], cwd=worktree, capture_output=True, check=True)
-    subprocess.run(
-        ["git", "config", "user.email", "test@test.com"],
-        cwd=worktree, capture_output=True, check=True,
-    )
-    subprocess.run(
-        ["git", "config", "user.name", "Test"],
-        cwd=worktree, capture_output=True, check=True,
-    )
-    subprocess.run(
-        ["git", "config", "commit.gpgsign", "false"],
-        cwd=worktree, capture_output=True, check=True,
-    )
-    (worktree / "README.md").write_text("# Test")
-    subprocess.run(["git", "add", "."], cwd=worktree, capture_output=True, check=True)
-    subprocess.run(
-        ["git", "commit", "-m", "Initial"],
-        cwd=worktree, capture_output=True, check=True,
-    )
+    init_git_repo(worktree)
     return str(worktree)
 
 
