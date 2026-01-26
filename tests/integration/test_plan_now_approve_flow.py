@@ -10,67 +10,16 @@ directly (bypassing LangGraph), so no checkpoint was created. This caused
 approve_workflow to fail because there was nothing to resume from.
 """
 
-from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from amelia.core.types import AgentConfig, Profile
-from amelia.server.database.profile_repository import ProfileRepository
+from amelia.core.types import Profile
 from amelia.server.database.repository import WorkflowRepository
 from amelia.server.models.requests import CreateWorkflowRequest
 from amelia.server.orchestrator.service import OrchestratorService
-from tests.conftest import init_git_repo
 from tests.integration.conftest import mock_langgraph_for_planning
-
-
-@pytest.fixture
-def valid_worktree(tmp_path: Path) -> str:
-    """Create a valid git worktree directory with required settings file."""
-    worktree = tmp_path / "worktree"
-    worktree.mkdir()
-    init_git_repo(worktree)
-
-    # Worktree settings are required (no fallback to server settings)
-    settings_content = """
-active_profile: test
-profiles:
-  test:
-    name: test
-    driver: cli
-    model: sonnet
-    validator_model: sonnet
-    tracker: noop
-    strategy: single
-"""
-    (worktree / "settings.amelia.yaml").write_text(settings_content)
-    return str(worktree)
-
-
-@pytest.fixture
-async def active_test_profile(
-    test_profile_repository: ProfileRepository,
-    valid_worktree: str,
-) -> Profile:
-    """Create and activate a test profile in the database."""
-    agent_config = AgentConfig(driver="cli", model="sonnet")
-    profile = Profile(
-        name="test",
-        tracker="noop",
-        working_dir=valid_worktree,
-        agents={
-            "architect": agent_config,
-            "developer": agent_config,
-            "reviewer": agent_config,
-            "plan_validator": agent_config,
-            "evaluator": agent_config,
-            "task_reviewer": agent_config,
-        },
-    )
-    await test_profile_repository.create_profile(profile)
-    await test_profile_repository.set_active("test")
-    return profile
 
 
 @pytest.mark.integration

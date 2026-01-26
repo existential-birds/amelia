@@ -2218,7 +2218,11 @@ class OrchestratorService:
                             )
                             return
 
-                        # Set planned_at and status to blocked
+                        # Set planned_at and status to blocked.
+                        # Uses repository.update() instead of set_status()
+                        # because multiple fields change atomically (status,
+                        # planned_at, current_stage). The PLANNING status
+                        # guard is checked above.
                         fresh.planned_at = datetime.now(UTC)
                         fresh.workflow_status = WorkflowStatus.BLOCKED
                         fresh.current_stage = None  # Clear stage, waiting for approval
@@ -2737,7 +2741,12 @@ class OrchestratorService:
                 }
             )
 
-            # Transition to PLANNING
+            # Transition to PLANNING.
+            # Design note: we use repository.update() instead of set_status()
+            # because multiple fields must change atomically (status,
+            # current_stage, planned_at, execution_state). The BLOCKED →
+            # PLANNING guard is enforced explicitly above. This is the same
+            # pattern used by _run_planning_task for PLANNING → BLOCKED.
             workflow.workflow_status = WorkflowStatus.PLANNING
             workflow.current_stage = "architect"
             workflow.planned_at = None

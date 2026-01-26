@@ -31,7 +31,7 @@ from amelia.server.models.state import (
     rebuild_server_execution_state,
 )
 from amelia.server.orchestrator.service import OrchestratorService
-from tests.conftest import AsyncIteratorMock
+from tests.conftest import AsyncIteratorMock, init_git_repo
 
 
 # Rebuild ImplementationState first (resolves EvaluationResult),
@@ -620,3 +620,51 @@ def test_orchestrator(
         profile_repo=test_profile_repository,
         checkpoint_path=temp_checkpoint_db,
     )
+
+
+@pytest.fixture
+def valid_worktree(tmp_path: Path) -> str:
+    """Create a valid git worktree directory with required settings file."""
+    worktree = tmp_path / "worktree"
+    worktree.mkdir()
+    init_git_repo(worktree)
+
+    # Worktree settings are required (no fallback to server settings)
+    settings_content = """
+active_profile: test
+profiles:
+  test:
+    name: test
+    driver: cli
+    model: sonnet
+    validator_model: sonnet
+    tracker: noop
+    strategy: single
+"""
+    (worktree / "settings.amelia.yaml").write_text(settings_content)
+    return str(worktree)
+
+
+@pytest.fixture
+async def active_test_profile(
+    test_profile_repository: ProfileRepository,
+    valid_worktree: str,
+) -> Profile:
+    """Create and activate a test profile in the database."""
+    agent_config = AgentConfig(driver="cli", model="sonnet")
+    profile = Profile(
+        name="test",
+        tracker="noop",
+        working_dir=valid_worktree,
+        agents={
+            "architect": agent_config,
+            "developer": agent_config,
+            "reviewer": agent_config,
+            "plan_validator": agent_config,
+            "evaluator": agent_config,
+            "task_reviewer": agent_config,
+        },
+    )
+    await test_profile_repository.create_profile(profile)
+    await test_profile_repository.set_active("test")
+    return profile
