@@ -80,6 +80,7 @@ async def bundle_files(
 - Estimates tokens using tiktoken (`cl100k_base` encoding)
 - Skips binary files (detected by null bytes in first 512 bytes)
 - Path traversal prevention: all resolved paths must be within `working_dir`
+- `working_dir` itself is validated at the API layer — must be within the profile's configured working directory
 
 ---
 
@@ -227,12 +228,13 @@ class OracleConsultResponse(BaseModel):
 ### Behavior
 
 1. Resolve profile from `profile_id` or active profile
-2. Get `oracle` agent config from profile
-3. Override model if provided in request
-4. Instantiate `Oracle(config=agent_config, event_bus=event_bus)`
-5. Call `oracle.consult(problem, working_dir, files)`
-6. Events stream via WebSocket in real-time (same pattern as brainstorm streaming)
-7. Return `OracleConsultResponse`
+2. Validate `working_dir`: must resolve to a path within the profile's configured `working_dir` (reject requests with paths outside the profile root)
+3. Get `oracle` agent config from profile
+4. Override model if provided in request
+5. Instantiate `Oracle(config=agent_config, event_bus=event_bus)`
+6. Call `oracle.consult(problem, working_dir, files)`
+7. Events stream via WebSocket in real-time (same pattern as brainstorm streaming)
+8. Return `OracleConsultResponse`
 
 ### Profile Config
 
