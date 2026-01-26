@@ -301,6 +301,7 @@ class ApiDriver(DriverInterface):
         session_id: str | None = None,
         instructions: str | None = None,
         schema: type[BaseModel] | None = None,
+        allowed_tools: list[str] | None = None,
         **kwargs: Any,
     ) -> AsyncIterator[AgenticMessage]:
         """Execute prompt with autonomous tool access using DeepAgents.
@@ -317,6 +318,7 @@ class ApiDriver(DriverInterface):
             instructions: Optional system prompt for the agent. Passed with
                 every request to preserve system-level guidance.
             schema: Unused (structured output not supported in agentic mode).
+            allowed_tools: Not supported. Raises NotImplementedError if set.
             tools: Optional list of tools to provide to the agent. If None,
                 uses default tools (ls, read_file, write_file, edit_file,
                 glob, grep, execute, write_todos).
@@ -335,6 +337,12 @@ class ApiDriver(DriverInterface):
 
         if not prompt or not prompt.strip():
             raise ValueError("Prompt cannot be empty")
+
+        if allowed_tools is not None:
+            raise NotImplementedError(
+                "allowed_tools is not supported by ApiDriver. "
+                "Use ClaudeCliDriver for tool-restricted execution."
+            )
 
         # Extract optional parameters from kwargs
         tools: list[Any] | None = kwargs.get("tools")
