@@ -78,7 +78,7 @@ def normalize_tool_name(raw_name: str) -> str:
     """Normalize driver-specific tool name to standard ToolName.
 
     Args:
-        raw_name: The raw tool name from a driver (e.g., "Write", "write").
+        raw_name: The raw tool name from a driver (e.g., "Write", "Bash").
 
     Returns:
         The normalized tool name (e.g., "write_file"), or raw_name if no alias exists.

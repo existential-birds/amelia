@@ -217,7 +217,7 @@ class ClaudeCliDriver:
             schema: Optional Pydantic model for structured output.
             bypass_permissions: Whether to bypass permission prompts for this call.
             allowed_tools: Optional list of canonical tool names. Mapped to CLI SDK
-                names via CANONICAL_TO_CLI. Unknown names are skipped.
+                names via CANONICAL_TO_CLI. Unknown names raise ValueError.
 
         Returns:
             Configured ClaudeAgentOptions instance.
