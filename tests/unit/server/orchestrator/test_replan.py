@@ -167,6 +167,30 @@ class TestReplanWorkflow:
         assert updated.execution_state.key_files == []
         assert updated.execution_state.total_tasks == 1
 
+    async def test_replan_resets_external_plan_flag(
+        self,
+        orchestrator: OrchestratorService,
+        mock_repository: AsyncMock,
+    ) -> None:
+        """replan_workflow should reset external_plan to False so Architect runs."""
+        workflow = make_blocked_workflow()
+        # Simulate a workflow that was originally created with an external plan
+        assert workflow.execution_state is not None
+        workflow.execution_state = workflow.execution_state.model_copy(
+            update={"external_plan": True},
+        )
+        mock_repository.get.return_value = workflow
+
+        with (
+            patch.object(orchestrator, "_delete_checkpoint", new_callable=AsyncMock),
+            patch.object(orchestrator, "_run_planning_task", new_callable=AsyncMock),
+        ):
+            await orchestrator.replan_workflow("wf-replan-1")
+
+        updated = mock_repository.update.call_args[0][0]
+        assert updated.execution_state is not None
+        assert updated.execution_state.external_plan is False
+
     async def test_replan_wrong_status_raises(
         self,
         orchestrator: OrchestratorService,

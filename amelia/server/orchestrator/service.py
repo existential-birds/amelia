@@ -2722,6 +2722,7 @@ class OrchestratorService:
             # Clear plan-related fields from execution_state
             workflow.execution_state = workflow.execution_state.model_copy(
                 update={
+                    "external_plan": False,
                     "goal": None,
                     "plan_markdown": None,
                     "raw_architect_output": None,
