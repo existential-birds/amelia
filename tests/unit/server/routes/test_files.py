@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 from amelia.core.types import AgentConfig, Profile
 from amelia.server.dependencies import get_profile_repository
 from amelia.server.routes.files import router
+from amelia.server.routes.workflows import configure_exception_handlers
 
 
 def _create_mock_profile_repo(working_dir: Path) -> MagicMock:
@@ -48,6 +49,7 @@ class TestReadFile:
         application = FastAPI()
         application.include_router(router, prefix="/api")
         application.dependency_overrides[get_profile_repository] = lambda: mock_profile_repo
+        configure_exception_handlers(application)
         return application
 
     @pytest.fixture
@@ -83,14 +85,14 @@ class TestReadFile:
         response = client.post("/api/files/read", json={"path": str(missing_file)})
 
         assert response.status_code == 404
-        assert "not found" in response.json()["detail"]["error"].lower()
+        assert "not found" in response.json()["error"].lower()
 
     def test_returns_400_for_relative_path(self, client: TestClient) -> None:
         """Should return 400 when path is not absolute."""
         response = client.post("/api/files/read", json={"path": "relative/path.md"})
 
         assert response.status_code == 400
-        assert "absolute" in response.json()["detail"]["error"].lower()
+        assert "absolute" in response.json()["error"].lower()
 
     def test_returns_400_for_path_outside_working_dir(
         self, app: FastAPI, temp_file: str
@@ -104,7 +106,7 @@ class TestReadFile:
         response = client.post("/api/files/read", json={"path": temp_file})
 
         assert response.status_code == 400
-        assert "not accessible" in response.json()["detail"]["error"].lower()
+        assert "not accessible" in response.json()["error"].lower()
 
     def test_allows_path_within_working_dir(self, app: FastAPI) -> None:
         """Should allow paths within working_dir subtree."""
@@ -134,7 +136,7 @@ class TestReadFile:
         response = client.post("/api/files/read", json={"path": temp_file})
 
         assert response.status_code == 400
-        assert "no active profile" in response.json()["detail"]["error"].lower()
+        assert "no active profile" in response.json()["error"].lower()
 
 
 class TestGetFile:
@@ -151,6 +153,7 @@ class TestGetFile:
         application = FastAPI()
         application.include_router(router, prefix="/api")
         application.dependency_overrides[get_profile_repository] = lambda: mock_profile_repo
+        configure_exception_handlers(application)
         return application
 
     @pytest.fixture
@@ -186,6 +189,7 @@ class TestGetFile:
         response = client.get(f"/api/files/{missing_file}")
 
         assert response.status_code == 404
+        assert "not found" in response.json()["error"].lower()
 
     def test_returns_400_for_path_outside_working_dir(
         self, app: FastAPI
@@ -210,4 +214,4 @@ class TestGetFile:
         response = client.get("/api/files//etc/passwd")
 
         assert response.status_code == 400
-        assert "no active profile" in response.json()["detail"]["error"].lower()
+        assert "no active profile" in response.json()["error"].lower()

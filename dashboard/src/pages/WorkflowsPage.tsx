@@ -168,6 +168,7 @@ export default function WorkflowsPage() {
                 w.worktree_path === detail.worktree_path &&
                 w.status === 'in_progress'
             )}
+            worktreePath={detail.worktree_path}
           />
         </div>
       )}

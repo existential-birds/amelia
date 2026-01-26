@@ -245,6 +245,8 @@ describe('QuickShotModal', () => {
           task_description: undefined,
           start: true,
           plan_now: false,
+          plan_file: undefined,
+          plan_content: undefined,
         });
       });
     });
@@ -528,6 +530,21 @@ describe('QuickShotModal', () => {
           })
         );
       });
+    });
+
+    it('passes worktree_path to PlanImportSection for file preview', async () => {
+      const user = userEvent.setup();
+      render(<QuickShotModal {...defaultProps} />);
+
+      // Fill worktree path field
+      await user.type(screen.getByLabelText(/worktree path/i), '/test/repo');
+
+      // Expand PlanImportSection and enter file path
+      await user.click(screen.getByText(/external plan/i));
+      await user.type(screen.getByPlaceholderText(/relative path/i), 'plan.md');
+
+      // Preview button should be visible (only appears when worktreePath is provided)
+      expect(screen.getByRole('button', { name: /preview/i })).toBeInTheDocument();
     });
   });
 });

@@ -15,6 +15,7 @@ from amelia.server.database import WorkflowRepository
 from amelia.server.dependencies import get_orchestrator, get_repository
 from amelia.server.exceptions import (
     ConcurrencyLimitError,
+    FileOperationError,
     InvalidStateError,
     InvalidWorktreeError,
     WorkflowConflictError,
@@ -630,6 +631,26 @@ def configure_exception_handlers(app: FastAPI) -> None:
         )
         return JSONResponse(
             status_code=404,
+            content=error.model_dump(),
+        )
+
+    @app.exception_handler(FileOperationError)
+    async def file_operation_handler(
+        request: Request, exc: FileOperationError
+    ) -> JSONResponse:
+        """Handle FileOperationError with appropriate status code.
+
+        Args:
+            request: The incoming request.
+            exc: The exception instance.
+
+        Returns:
+            JSONResponse with status code from the exception.
+        """
+        logger.warning("File operation error", code=exc.code, error=str(exc))
+        error = ErrorResponse(code=exc.code, error=str(exc))
+        return JSONResponse(
+            status_code=exc.status_code,
             content=error.model_dump(),
         )
 

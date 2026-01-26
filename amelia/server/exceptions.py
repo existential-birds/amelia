@@ -116,3 +116,15 @@ class InvalidWorktreeError(Exception):
         self.worktree_path = worktree_path
         self.reason = reason
         super().__init__(f"Invalid worktree '{worktree_path}': {reason}")
+
+
+class FileOperationError(Exception):
+    """Raised when a file operation fails.
+
+    HTTP Status: Varies (400 Bad Request or 404 Not Found)
+    """
+
+    def __init__(self, message: str, code: str, status_code: int = 400):
+        self.code = code
+        self.status_code = status_code
+        super().__init__(message)

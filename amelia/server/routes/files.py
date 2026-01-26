@@ -3,12 +3,13 @@ import asyncio
 import os
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from amelia.server.database import ProfileRepository
 from amelia.server.dependencies import get_profile_repository
+from amelia.server.exceptions import FileOperationError
 
 
 router = APIRouter(prefix="/files", tags=["files"])
@@ -31,26 +32,19 @@ def _validate_and_resolve_path(user_path: str, working_dir: Path) -> Path:
         - An existing file
 
     Raises:
-        HTTPException: 400 if path is invalid or outside working_dir.
-        HTTPException: 404 if file doesn't exist.
+        FileOperationError: If path is invalid, outside working_dir, or file doesn't exist.
     """
     path = Path(user_path)
 
     # Validate absolute path
     if not path.is_absolute():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"error": "Path must be absolute", "code": "INVALID_PATH"},
-        )
+        raise FileOperationError("Path must be absolute", "INVALID_PATH")
 
     # Resolve to handle symlinks and ..
     try:
         resolved_path = path.resolve()
     except (OSError, RuntimeError) as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"error": f"Invalid path: {e}", "code": "INVALID_PATH"},
-        ) from e
+        raise FileOperationError(f"Invalid path: {e}", "INVALID_PATH") from e
 
     # Check working_dir restriction using commonpath - this is the critical
     # security check that ensures the resolved path is within the allowed directory.
@@ -63,35 +57,21 @@ def _validate_and_resolve_path(user_path: str, working_dir: Path) -> Path:
         common = os.path.commonpath([resolved_str, working_dir_str])
     except ValueError as e:
         # Different drives on Windows
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                "error": "Path not accessible (outside working directory)",
-                "code": "PATH_NOT_ACCESSIBLE",
-            },
+        raise FileOperationError(
+            "Path not accessible (outside working directory)", "PATH_NOT_ACCESSIBLE"
         ) from e
 
     if common != working_dir_str:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                "error": "Path not accessible (outside working directory)",
-                "code": "PATH_NOT_ACCESSIBLE",
-            },
+        raise FileOperationError(
+            "Path not accessible (outside working directory)", "PATH_NOT_ACCESSIBLE"
         )
 
     # Check file exists
     if not resolved_path.exists():
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={"error": "File not found", "code": "FILE_NOT_FOUND"},
-        )
+        raise FileOperationError("File not found", "FILE_NOT_FOUND", status_code=404)
 
     if not resolved_path.is_file():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"error": "Path is not a file", "code": "NOT_A_FILE"},
-        )
+        raise FileOperationError("Path is not a file", "NOT_A_FILE")
 
     return resolved_path
 
@@ -119,14 +99,11 @@ async def _get_working_dir(profile_repo: ProfileRepository) -> Path:
         Working directory path.
 
     Raises:
-        HTTPException: 400 if no active profile is set.
+        FileOperationError: If no active profile is set.
     """
     active_profile = await profile_repo.get_active_profile()
     if active_profile is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"error": "No active profile set", "code": "NO_ACTIVE_PROFILE"},
-        )
+        raise FileOperationError("No active profile set", "NO_ACTIVE_PROFILE")
     return Path(active_profile.working_dir)
 
 
@@ -145,8 +122,7 @@ async def read_file(
         File content and filename.
 
     Raises:
-        HTTPException: 400 if path is invalid or outside working_dir.
-        HTTPException: 404 if file doesn't exist.
+        FileOperationError: If path is invalid, outside working_dir, or file doesn't exist.
     """
     # Get working_dir from active profile
     working_dir = await _get_working_dir(profile_repo)
@@ -158,10 +134,7 @@ async def read_file(
     try:
         content = await asyncio.to_thread(resolved_path.read_text, encoding="utf-8")
     except (OSError, UnicodeDecodeError) as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"error": f"Failed to read file: {e}", "code": "READ_ERROR"},
-        ) from e
+        raise FileOperationError(f"Failed to read file: {e}", "READ_ERROR") from e
 
     return FileReadResponse(
         content=content,
@@ -184,8 +157,7 @@ async def get_file(
         File content as plain text response.
 
     Raises:
-        HTTPException: 400 if path is invalid or outside working_dir.
-        HTTPException: 404 if file doesn't exist.
+        FileOperationError: If path is invalid, outside working_dir, or file doesn't exist.
     """
     # Get working_dir from active profile
     working_dir = await _get_working_dir(profile_repo)
@@ -197,10 +169,7 @@ async def get_file(
     try:
         content = await asyncio.to_thread(resolved_path.read_text, encoding="utf-8")
     except (OSError, UnicodeDecodeError) as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"error": f"Failed to read file: {e}", "code": "READ_ERROR"},
-        ) from e
+        raise FileOperationError(f"Failed to read file: {e}", "READ_ERROR") from e
 
     # Determine content type based on extension
     suffix = resolved_path.suffix.lower()

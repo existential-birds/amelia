@@ -5,6 +5,16 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { PlanImportSection } from '../PlanImportSection';
+import { api, ApiError } from '@/api/client';
+
+// Mock the API client
+vi.mock('@/api/client', async (importOriginal) => {
+  const mod = await importOriginal<typeof import('@/api/client')>();
+  return {
+    ...mod,
+    api: { readFile: vi.fn() },
+  };
+});
 
 describe('PlanImportSection', () => {
   const defaultProps = {
@@ -289,6 +299,165 @@ Add new feature.
       render(<PlanImportSection {...defaultProps} defaultExpanded />);
 
       // No preview should be visible
+      expect(screen.queryByTestId('plan-preview')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('file preview', () => {
+    const planContent = '## Goal\nBuild feature X\n\n## Tasks\n### Task 1\nDo thing\n### Task 2\nDo other thing\n\n## Key Files\n- src/foo.ts\n';
+
+    beforeEach(() => {
+      vi.mocked(api.readFile).mockResolvedValue({ content: planContent, filename: 'plan.md' });
+    });
+
+    it('shows Preview button when worktreePath provided and file path entered', async () => {
+      const user = userEvent.setup();
+      render(
+        <PlanImportSection
+          onPlanChange={vi.fn()}
+          defaultExpanded
+          worktreePath="/path/to/repo"
+        />
+      );
+
+      await user.type(screen.getByPlaceholderText(/relative path/i), 'docs/plan.md');
+      expect(screen.getByRole('button', { name: /preview/i })).toBeInTheDocument();
+    });
+
+    it('does not show Preview button when worktreePath not provided', async () => {
+      const user = userEvent.setup();
+      render(<PlanImportSection onPlanChange={vi.fn()} defaultExpanded />);
+
+      await user.type(screen.getByPlaceholderText(/relative path/i), 'docs/plan.md');
+      expect(screen.queryByRole('button', { name: /preview/i })).not.toBeInTheDocument();
+    });
+
+    it('disables Preview button when file path is empty', () => {
+      render(
+        <PlanImportSection
+          onPlanChange={vi.fn()}
+          defaultExpanded
+          worktreePath="/path/to/repo"
+        />
+      );
+
+      const previewBtn = screen.getByRole('button', { name: /preview/i });
+      expect(previewBtn).toBeDisabled();
+    });
+
+    it('calls api.readFile with resolved absolute path on Preview click', async () => {
+      const user = userEvent.setup();
+      render(
+        <PlanImportSection
+          onPlanChange={vi.fn()}
+          defaultExpanded
+          worktreePath="/path/to/repo"
+        />
+      );
+
+      await user.type(screen.getByPlaceholderText(/relative path/i), 'docs/plan.md');
+      await user.click(screen.getByRole('button', { name: /preview/i }));
+
+      expect(api.readFile).toHaveBeenCalledWith('/path/to/repo/docs/plan.md');
+    });
+
+    it('uses filePath directly when it starts with /', async () => {
+      const user = userEvent.setup();
+      render(
+        <PlanImportSection
+          onPlanChange={vi.fn()}
+          defaultExpanded
+          worktreePath="/path/to/repo"
+        />
+      );
+
+      await user.type(screen.getByPlaceholderText(/relative path/i), '/absolute/path/plan.md');
+      await user.click(screen.getByRole('button', { name: /preview/i }));
+
+      expect(api.readFile).toHaveBeenCalledWith('/absolute/path/plan.md');
+    });
+
+    it('shows plan preview card after successful file read', async () => {
+      const user = userEvent.setup();
+      render(
+        <PlanImportSection
+          onPlanChange={vi.fn()}
+          defaultExpanded
+          worktreePath="/path/to/repo"
+        />
+      );
+
+      await user.type(screen.getByPlaceholderText(/relative path/i), 'docs/plan.md');
+      await user.click(screen.getByRole('button', { name: /preview/i }));
+
+      await waitFor(() => {
+        expect(screen.getByTestId('plan-preview')).toBeInTheDocument();
+      });
+      expect(screen.getByText(/build feature x/i)).toBeInTheDocument();
+      expect(screen.getByText('2 tasks')).toBeInTheDocument();
+    });
+
+    it('shows inline error when file not found', async () => {
+      vi.mocked(api.readFile).mockRejectedValue(
+        new ApiError('File not found', 'NOT_FOUND', 404)
+      );
+
+      const user = userEvent.setup();
+      render(
+        <PlanImportSection
+          onPlanChange={vi.fn()}
+          defaultExpanded
+          worktreePath="/path/to/repo"
+        />
+      );
+
+      await user.type(screen.getByPlaceholderText(/relative path/i), 'missing.md');
+      await user.click(screen.getByRole('button', { name: /preview/i }));
+
+      await waitFor(() => {
+        expect(screen.getByText('File not found')).toBeInTheDocument();
+      });
+    });
+
+    it('shows error when file is empty', async () => {
+      vi.mocked(api.readFile).mockResolvedValue({ content: '', filename: 'empty.md' });
+
+      const user = userEvent.setup();
+      render(
+        <PlanImportSection
+          onPlanChange={vi.fn()}
+          defaultExpanded
+          worktreePath="/path/to/repo"
+        />
+      );
+
+      await user.type(screen.getByPlaceholderText(/relative path/i), 'empty.md');
+      await user.click(screen.getByRole('button', { name: /preview/i }));
+
+      await waitFor(() => {
+        expect(screen.getByText(/plan file is empty/i)).toBeInTheDocument();
+      });
+    });
+
+    it('clears preview and error when file path changes', async () => {
+      const user = userEvent.setup();
+      render(
+        <PlanImportSection
+          onPlanChange={vi.fn()}
+          defaultExpanded
+          worktreePath="/path/to/repo"
+        />
+      );
+
+      // First, get a preview
+      await user.type(screen.getByPlaceholderText(/relative path/i), 'docs/plan.md');
+      await user.click(screen.getByRole('button', { name: /preview/i }));
+      await waitFor(() => {
+        expect(screen.getByTestId('plan-preview')).toBeInTheDocument();
+      });
+
+      // Change path — preview should clear
+      await user.type(screen.getByPlaceholderText(/relative path/i), '-v2');
       expect(screen.queryByTestId('plan-preview')).not.toBeInTheDocument();
     });
   });
