@@ -1328,6 +1328,25 @@ class OrchestratorService:
 
         return event
 
+    async def _delete_checkpoint(self, workflow_id: str) -> None:
+        """Delete LangGraph checkpoint data for a workflow.
+
+        Removes all checkpoint records (checkpoints, writes, blobs) for
+        the given thread ID. Used by replan to start fresh.
+
+        Args:
+            workflow_id: The workflow/thread ID whose checkpoint to delete.
+        """
+        async with AsyncSqliteSaver.from_conn_string(
+            str(self._checkpoint_path)
+        ) as conn:
+            for table in ("checkpoints", "writes", "checkpoint_blobs"):
+                await conn.execute(
+                    f"DELETE FROM {table} WHERE thread_id = ?",  # noqa: S608
+                    (workflow_id,),
+                )
+            logger.info("Deleted checkpoint", workflow_id=workflow_id)
+
     async def approve_workflow(self, workflow_id: str) -> None:
         """Approve a blocked workflow and resume LangGraph execution.
 
