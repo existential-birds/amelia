@@ -6,12 +6,20 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from amelia.core.types import AgentConfig, Profile
-from amelia.pipelines.implementation.state import ImplementationState
+from amelia.pipelines.implementation.state import ImplementationState, rebuild_implementation_state
 from amelia.server.events.bus import EventBus
 from amelia.server.exceptions import InvalidStateError, WorkflowConflictError, WorkflowNotFoundError
 from amelia.server.models.events import EventType
-from amelia.server.models.state import ServerExecutionState, WorkflowStatus
+from amelia.server.models.state import (
+    ServerExecutionState,
+    WorkflowStatus,
+    rebuild_server_execution_state,
+)
 from amelia.server.orchestrator.service import OrchestratorService
+
+# Rebuild Pydantic models so forward references resolve correctly
+rebuild_implementation_state()
+rebuild_server_execution_state()
 
 
 @pytest.fixture
@@ -123,3 +131,96 @@ class TestDeleteCheckpoint:
             mock_saver_class.from_conn_string.assert_called_once()
             # Should have executed delete queries
             assert mock_conn.execute.call_count >= 1
+
+
+class TestReplanWorkflow:
+    """Tests for replan_workflow method."""
+
+    async def test_replan_happy_path(
+        self,
+        orchestrator: OrchestratorService,
+        mock_repository: AsyncMock,
+    ) -> None:
+        """replan_workflow should clear plan, delete checkpoint, and spawn planning task."""
+        workflow = make_blocked_workflow()
+        mock_repository.get.return_value = workflow
+
+        with patch.object(orchestrator, "_delete_checkpoint", new_callable=AsyncMock) as mock_delete:
+            with patch.object(orchestrator, "_run_planning_task", new_callable=AsyncMock):
+                await orchestrator.replan_workflow("wf-replan-1")
+
+        # Should have deleted checkpoint
+        mock_delete.assert_awaited_once_with("wf-replan-1")
+
+        # Should have updated workflow with cleared plan fields and PLANNING status
+        mock_repository.update.assert_called()
+        updated = mock_repository.update.call_args[0][0]
+        assert updated.workflow_status == WorkflowStatus.PLANNING
+        assert updated.current_stage == "architect"
+        assert updated.planned_at is None
+        assert updated.execution_state is not None
+        assert updated.execution_state.goal is None
+        assert updated.execution_state.plan_markdown is None
+        assert updated.execution_state.key_files == []
+        assert updated.execution_state.total_tasks == 1
+
+    async def test_replan_wrong_status_raises(
+        self,
+        orchestrator: OrchestratorService,
+        mock_repository: AsyncMock,
+    ) -> None:
+        """replan_workflow should reject non-blocked workflows."""
+        workflow = make_blocked_workflow()
+        workflow.workflow_status = WorkflowStatus.IN_PROGRESS
+        mock_repository.get.return_value = workflow
+
+        with pytest.raises(InvalidStateError, match="blocked"):
+            await orchestrator.replan_workflow("wf-replan-1")
+
+    async def test_replan_not_found_raises(
+        self,
+        orchestrator: OrchestratorService,
+        mock_repository: AsyncMock,
+    ) -> None:
+        """replan_workflow should raise for missing workflow."""
+        mock_repository.get.return_value = None
+
+        with pytest.raises(WorkflowNotFoundError):
+            await orchestrator.replan_workflow("nonexistent")
+
+    async def test_replan_conflict_when_planning_running(
+        self,
+        orchestrator: OrchestratorService,
+        mock_repository: AsyncMock,
+    ) -> None:
+        """replan_workflow should raise conflict if planning task already active."""
+        workflow = make_blocked_workflow()
+        mock_repository.get.return_value = workflow
+
+        # Simulate an active planning task
+        orchestrator._planning_tasks["wf-replan-1"] = MagicMock(spec=asyncio.Task)
+
+        with pytest.raises(WorkflowConflictError, match="already running"):
+            await orchestrator.replan_workflow("wf-replan-1")
+
+    async def test_replan_emits_event(
+        self,
+        orchestrator: OrchestratorService,
+        mock_repository: AsyncMock,
+        mock_event_bus: EventBus,
+    ) -> None:
+        """replan_workflow should emit a stage_started event."""
+        workflow = make_blocked_workflow()
+        mock_repository.get.return_value = workflow
+
+        received_events = []
+        mock_event_bus.subscribe(lambda e: received_events.append(e))
+
+        with patch.object(orchestrator, "_delete_checkpoint", new_callable=AsyncMock):
+            with patch.object(orchestrator, "_run_planning_task", new_callable=AsyncMock):
+                await orchestrator.replan_workflow("wf-replan-1")
+
+        # Should have emitted replanning event
+        stage_events = [e for e in received_events if e.event_type == EventType.STAGE_STARTED]
+        assert len(stage_events) >= 1
+        assert any("replan" in (e.message or "").lower() for e in stage_events)

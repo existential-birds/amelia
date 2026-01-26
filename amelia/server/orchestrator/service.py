@@ -2645,3 +2645,96 @@ class OrchestratorService:
             "key_files": plan_result.key_files,
             "total_tasks": plan_result.total_tasks,
         }
+
+    async def replan_workflow(self, workflow_id: str) -> None:
+        """Regenerate the plan for a blocked workflow.
+
+        Deletes the stale LangGraph checkpoint, clears plan-related fields,
+        transitions the workflow back to PLANNING, and spawns a fresh
+        planning task using the same issue/profile.
+
+        Args:
+            workflow_id: The workflow to replan.
+
+        Raises:
+            WorkflowNotFoundError: If workflow doesn't exist.
+            InvalidStateError: If workflow is not in blocked status.
+            WorkflowConflictError: If a planning task is already running.
+        """
+        workflow = await self._repository.get(workflow_id)
+        if workflow is None:
+            raise WorkflowNotFoundError(workflow_id)
+
+        if workflow.workflow_status != WorkflowStatus.BLOCKED:
+            raise InvalidStateError(
+                f"Workflow must be in blocked status to replan, but is in {workflow.workflow_status}",
+                workflow_id=workflow_id,
+                current_status=str(workflow.workflow_status),
+            )
+
+        # Defensive: reject if planning task is already running
+        if workflow_id in self._planning_tasks:
+            raise WorkflowConflictError(
+                f"Planning task already running for workflow {workflow_id}"
+            )
+
+        # Delete stale checkpoint
+        await self._delete_checkpoint(workflow_id)
+
+        # Clear plan-related fields from execution_state
+        if workflow.execution_state is not None:
+            workflow.execution_state = workflow.execution_state.model_copy(
+                update={
+                    "goal": None,
+                    "plan_markdown": None,
+                    "raw_architect_output": None,
+                    "plan_path": None,
+                    "key_files": [],
+                    "total_tasks": 1,
+                    "tool_calls": [],
+                    "tool_results": [],
+                }
+            )
+
+        # Transition to PLANNING
+        workflow.workflow_status = WorkflowStatus.PLANNING
+        workflow.current_stage = "architect"
+        workflow.planned_at = None
+        await self._repository.update(workflow)
+
+        # Emit replanning event
+        await self._emit(
+            workflow_id,
+            EventType.STAGE_STARTED,
+            "Replanning: regenerating plan with Architect",
+            agent="architect",
+            data={"stage": "architect", "replan": True},
+        )
+
+        # Resolve profile for planning task
+        profile = await self._get_profile_or_fail(
+            workflow_id,
+            workflow.execution_state.profile_id if workflow.execution_state else "default",
+            workflow.worktree_path,
+        )
+        if profile is None:
+            raise ValueError(f"Profile not found for workflow {workflow_id}")
+
+        profile = self._update_profile_working_dir(profile, workflow.worktree_path)
+
+        # Spawn planning task in background (reuses existing _run_planning_task)
+        task = asyncio.create_task(
+            self._run_planning_task(workflow_id, workflow, workflow.execution_state, profile)
+        )
+        self._planning_tasks[workflow_id] = task
+
+        def cleanup_planning(_: asyncio.Task[None]) -> None:
+            self._planning_tasks.pop(workflow_id, None)
+
+        task.add_done_callback(cleanup_planning)
+
+        logger.info(
+            "Replan started",
+            workflow_id=workflow_id,
+            issue_id=workflow.issue_id,
+        )
