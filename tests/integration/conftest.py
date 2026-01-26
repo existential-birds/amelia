@@ -20,6 +20,8 @@ from amelia.core.types import AgentConfig, DriverType, Issue, Profile, TrackerTy
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
 from amelia.pipelines.implementation import create_implementation_graph
 from amelia.pipelines.implementation.state import ImplementationState, rebuild_implementation_state
+from amelia.server.database.connection import Database
+from amelia.server.database.profile_repository import ProfileRepository
 from amelia.server.database.repository import WorkflowRepository
 from amelia.server.events.bus import EventBus
 from amelia.server.events.connection_manager import ConnectionManager
@@ -559,3 +561,62 @@ async def mock_langgraph_for_planning(
         ),
     ):
         yield mock_graph
+
+
+# ---------------------------------------------------------------------------
+# Shared database & service fixtures for orchestrator integration tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+async def test_db(temp_db_path: Path) -> AsyncGenerator[Database, None]:
+    """Create and initialize test database."""
+    db = Database(temp_db_path)
+    await db.connect()
+    await db.ensure_schema()
+    yield db
+    await db.close()
+
+
+@pytest.fixture
+def test_repository(test_db: Database) -> WorkflowRepository:
+    """Create repository backed by test database."""
+    return WorkflowRepository(test_db)
+
+
+@pytest.fixture
+def test_profile_repository(test_db: Database) -> ProfileRepository:
+    """Create profile repository backed by test database."""
+    return ProfileRepository(test_db)
+
+
+@pytest.fixture
+def test_event_bus() -> EventBus:
+    """Create event bus for testing."""
+    return EventBus()
+
+
+@pytest.fixture
+def temp_checkpoint_db(tmp_path: Path) -> str:
+    """Temporary checkpoint database path."""
+    return str(tmp_path / "checkpoints.db")
+
+
+@pytest.fixture
+def test_orchestrator(
+    test_event_bus: EventBus,
+    test_repository: WorkflowRepository,
+    test_profile_repository: ProfileRepository,
+    temp_checkpoint_db: str,
+) -> OrchestratorService:
+    """Create real OrchestratorService with test dependencies.
+
+    Includes profile_repo so that replan and other profile-dependent
+    operations work correctly.
+    """
+    return OrchestratorService(
+        event_bus=test_event_bus,
+        repository=test_repository,
+        profile_repo=test_profile_repository,
+        checkpoint_path=temp_checkpoint_db,
+    )

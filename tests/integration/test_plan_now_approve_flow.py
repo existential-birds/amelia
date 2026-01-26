@@ -10,99 +10,27 @@ directly (bypassing LangGraph), so no checkpoint was created. This caused
 approve_workflow to fail because there was nothing to resume from.
 """
 
-from collections.abc import AsyncGenerator
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from amelia.server.database.connection import Database
+from amelia.core.types import AgentConfig, Profile
+from amelia.server.database.profile_repository import ProfileRepository
 from amelia.server.database.repository import WorkflowRepository
-from amelia.server.events.bus import EventBus
 from amelia.server.models.requests import CreateWorkflowRequest
 from amelia.server.orchestrator.service import OrchestratorService
+from tests.conftest import init_git_repo
 from tests.integration.conftest import mock_langgraph_for_planning
-
-
-@pytest.fixture
-async def test_db(temp_db_path: Path) -> AsyncGenerator[Database, None]:
-    """Create and initialize in-memory SQLite database."""
-    db = Database(temp_db_path)
-    await db.connect()
-    await db.ensure_schema()
-    yield db
-    await db.close()
-
-
-@pytest.fixture
-def test_repository(test_db: Database) -> WorkflowRepository:
-    """Create repository backed by test database."""
-    return WorkflowRepository(test_db)
-
-
-@pytest.fixture
-def test_event_bus() -> EventBus:
-    """Create event bus for testing."""
-    return EventBus()
-
-
-@pytest.fixture
-def temp_checkpoint_db(tmp_path: Path) -> str:
-    """Create temporary checkpoint database path."""
-    return str(tmp_path / "checkpoints.db")
-
-
-@pytest.fixture
-def test_orchestrator(
-    test_event_bus: EventBus,
-    test_repository: WorkflowRepository,
-    temp_checkpoint_db: str,
-) -> OrchestratorService:
-    """Create real OrchestratorService with test dependencies."""
-    return OrchestratorService(
-        event_bus=test_event_bus,
-        repository=test_repository,
-        checkpoint_path=temp_checkpoint_db,
-    )
 
 
 @pytest.fixture
 def valid_worktree(tmp_path: Path) -> str:
     """Create a valid git worktree directory with required settings file."""
-    import subprocess
-
     worktree = tmp_path / "worktree"
     worktree.mkdir()
-
-    # Initialize git repo
-    subprocess.run(["git", "init"], cwd=worktree, capture_output=True, check=True)
-    subprocess.run(
-        ["git", "config", "user.email", "test@test.com"],
-        cwd=worktree,
-        capture_output=True,
-        check=True,
-    )
-    subprocess.run(
-        ["git", "config", "user.name", "Test"],
-        cwd=worktree,
-        capture_output=True,
-        check=True,
-    )
-    subprocess.run(
-        ["git", "config", "commit.gpgsign", "false"],
-        cwd=worktree,
-        capture_output=True,
-        check=True,
-    )
-    (worktree / "README.md").write_text("# Test")
-    subprocess.run(["git", "add", "."], cwd=worktree, capture_output=True, check=True)
-    subprocess.run(
-        ["git", "commit", "-m", "Initial"],
-        cwd=worktree,
-        capture_output=True,
-        check=True,
-    )
+    init_git_repo(worktree)
 
     # Worktree settings are required (no fallback to server settings)
     settings_content = """
@@ -120,6 +48,31 @@ profiles:
     return str(worktree)
 
 
+@pytest.fixture
+async def active_test_profile(
+    test_profile_repository: ProfileRepository,
+    valid_worktree: str,
+) -> Profile:
+    """Create and activate a test profile in the database."""
+    agent_config = AgentConfig(driver="cli", model="sonnet")
+    profile = Profile(
+        name="test",
+        tracker="noop",
+        working_dir=valid_worktree,
+        agents={
+            "architect": agent_config,
+            "developer": agent_config,
+            "reviewer": agent_config,
+            "plan_validator": agent_config,
+            "evaluator": agent_config,
+            "task_reviewer": agent_config,
+        },
+    )
+    await test_profile_repository.create_profile(profile)
+    await test_profile_repository.set_active("test")
+    return profile
+
+
 @pytest.mark.integration
 class TestPlanNowApproveFlow:
     """Tests for the complete plan_now → approve workflow flow.
@@ -133,6 +86,7 @@ class TestPlanNowApproveFlow:
         test_orchestrator: OrchestratorService,
         test_repository: WorkflowRepository,
         valid_worktree: str,
+        active_test_profile: Profile,
     ) -> None:
         """queue_and_plan_workflow should create LangGraph checkpoint.
 
@@ -172,6 +126,7 @@ class TestPlanNowApproveFlow:
         test_orchestrator: OrchestratorService,
         test_repository: WorkflowRepository,
         valid_worktree: str,
+        active_test_profile: Profile,
         langgraph_mock_factory: Any,
     ) -> None:
         """Complete flow: plan_now → blocked → approve → completion.
@@ -247,6 +202,7 @@ class TestPlanNowApproveFlow:
         test_orchestrator: OrchestratorService,
         test_repository: WorkflowRepository,
         valid_worktree: str,
+        active_test_profile: Profile,
     ) -> None:
         """Plan data should be synced from checkpoint to ServerExecutionState.
 

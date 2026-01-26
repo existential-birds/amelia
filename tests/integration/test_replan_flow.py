@@ -8,14 +8,12 @@ Flow tested:
 2. replan_workflow → PLANNING → BLOCKED (new plan)
 3. Verify plan data is updated and events are emitted correctly
 """
-from collections.abc import AsyncGenerator
 from pathlib import Path
 from typing import Any
 
 import pytest
 
 from amelia.core.types import AgentConfig, Profile
-from amelia.server.database.connection import Database
 from amelia.server.database.profile_repository import ProfileRepository
 from amelia.server.database.repository import WorkflowRepository
 from amelia.server.events.bus import EventBus
@@ -28,62 +26,12 @@ from tests.integration.conftest import mock_langgraph_for_planning
 
 
 @pytest.fixture
-async def test_db(tmp_path: Path) -> AsyncGenerator[Database, None]:
-    """Create and initialize test database."""
-    db = Database(tmp_path / "test.db")
-    await db.connect()
-    await db.ensure_schema()
-    yield db
-    await db.close()
-
-
-@pytest.fixture
-def test_repository(test_db: Database) -> WorkflowRepository:
-    """Create repository backed by test database."""
-    return WorkflowRepository(test_db)
-
-
-@pytest.fixture
-def test_profile_repository(test_db: Database) -> ProfileRepository:
-    """Create profile repository backed by test database."""
-    return ProfileRepository(test_db)
-
-
-@pytest.fixture
-def test_event_bus() -> EventBus:
-    """Create event bus for testing."""
-    return EventBus()
-
-
-@pytest.fixture
-def temp_checkpoint_db(tmp_path: Path) -> str:
-    """Temporary checkpoint database path."""
-    return str(tmp_path / "checkpoints.db")
-
-
-@pytest.fixture
 def valid_worktree(tmp_path: Path) -> str:
     """Create a valid git worktree for testing."""
     worktree = tmp_path / "worktree"
     worktree.mkdir()
     init_git_repo(worktree)
     return str(worktree)
-
-
-@pytest.fixture
-async def test_orchestrator(
-    test_event_bus: EventBus,
-    test_repository: WorkflowRepository,
-    test_profile_repository: ProfileRepository,
-    temp_checkpoint_db: str,
-) -> OrchestratorService:
-    """Create real OrchestratorService with test dependencies."""
-    return OrchestratorService(
-        event_bus=test_event_bus,
-        repository=test_repository,
-        profile_repo=test_profile_repository,
-        checkpoint_path=temp_checkpoint_db,
-    )
 
 
 @pytest.fixture
