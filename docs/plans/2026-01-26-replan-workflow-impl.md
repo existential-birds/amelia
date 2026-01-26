@@ -826,7 +826,7 @@ const replanFetcher = useFetcher<ActionResponse>();
 const isPending = approveFetcher.state !== 'idle' || rejectFetcher.state !== 'idle' || replanFetcher.state !== 'idle';
 ```
 
-3. Add a `RefreshCw` import from lucide-react:
+3. Add `RefreshCw` to the existing lucide-react import (the `Loader` component is already imported from `@/components/ai-elements/loader`):
 
 ```tsx
 import { Check, X, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react';
