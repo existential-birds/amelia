@@ -1,7 +1,11 @@
 """Unit tests for replan state transition."""
 import pytest
 
-from amelia.server.models.state import WorkflowStatus, validate_transition, InvalidStateTransitionError
+from amelia.server.models.state import (
+    InvalidStateTransitionError,
+    WorkflowStatus,
+    validate_transition,
+)
 
 
 class TestReplanTransition:

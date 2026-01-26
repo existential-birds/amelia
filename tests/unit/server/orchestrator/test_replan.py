@@ -17,6 +17,7 @@ from amelia.server.models.state import (
 )
 from amelia.server.orchestrator.service import OrchestratorService
 
+
 # Rebuild Pydantic models so forward references resolve correctly
 rebuild_implementation_state()
 rebuild_server_execution_state()
@@ -115,9 +116,11 @@ class TestDeleteCheckpoint:
         mock_conn = AsyncMock()
         mock_conn.execute = AsyncMock()
 
-        mock_saver = AsyncMock()
+        mock_saver_instance = AsyncMock()
+        mock_saver_instance.conn = mock_conn
+
         mock_saver_ctx = AsyncMock()
-        mock_saver_ctx.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_saver_ctx.__aenter__ = AsyncMock(return_value=mock_saver_instance)
         mock_saver_ctx.__aexit__ = AsyncMock(return_value=False)
 
         with patch(
@@ -145,9 +148,11 @@ class TestReplanWorkflow:
         workflow = make_blocked_workflow()
         mock_repository.get.return_value = workflow
 
-        with patch.object(orchestrator, "_delete_checkpoint", new_callable=AsyncMock) as mock_delete:
-            with patch.object(orchestrator, "_run_planning_task", new_callable=AsyncMock):
-                await orchestrator.replan_workflow("wf-replan-1")
+        with (
+            patch.object(orchestrator, "_delete_checkpoint", new_callable=AsyncMock) as mock_delete,
+            patch.object(orchestrator, "_run_planning_task", new_callable=AsyncMock),
+        ):
+            await orchestrator.replan_workflow("wf-replan-1")
 
         # Should have deleted checkpoint
         mock_delete.assert_awaited_once_with("wf-replan-1")
@@ -216,9 +221,11 @@ class TestReplanWorkflow:
         received_events = []
         mock_event_bus.subscribe(lambda e: received_events.append(e))
 
-        with patch.object(orchestrator, "_delete_checkpoint", new_callable=AsyncMock):
-            with patch.object(orchestrator, "_run_planning_task", new_callable=AsyncMock):
-                await orchestrator.replan_workflow("wf-replan-1")
+        with (
+            patch.object(orchestrator, "_delete_checkpoint", new_callable=AsyncMock),
+            patch.object(orchestrator, "_run_planning_task", new_callable=AsyncMock),
+        ):
+            await orchestrator.replan_workflow("wf-replan-1")
 
         # Should have emitted replanning event
         stage_events = [e for e in received_events if e.event_type == EventType.STAGE_STARTED]

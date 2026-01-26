@@ -1339,9 +1339,9 @@ class OrchestratorService:
         """
         async with AsyncSqliteSaver.from_conn_string(
             str(self._checkpoint_path)
-        ) as conn:
+        ) as saver:
             for table in ("checkpoints", "writes", "checkpoint_blobs"):
-                await conn.execute(
+                await saver.conn.execute(
                     f"DELETE FROM {table} WHERE thread_id = ?",  # noqa: S608
                     (workflow_id,),
                 )
@@ -2723,6 +2723,8 @@ class OrchestratorService:
         profile = self._update_profile_working_dir(profile, workflow.worktree_path)
 
         # Spawn planning task in background (reuses existing _run_planning_task)
+        if workflow.execution_state is None:
+            raise ValueError(f"Execution state missing for workflow {workflow_id}")
         task = asyncio.create_task(
             self._run_planning_task(workflow_id, workflow, workflow.execution_state, profile)
         )
