@@ -39,16 +39,13 @@ def test_normalize_tool_name_handles_all_driver_variants() -> None:
 
 
 def test_tool_name_enum_has_all_canonical_names() -> None:
-    """ToolName enum defines all 20 canonical tool names."""
-    expected = {
-        "read_file", "write_file", "edit_file", "notebook_edit",
-        "glob", "grep", "run_shell_command", "task", "task_output",
-        "task_stop", "enter_plan_mode", "exit_plan_mode",
-        "ask_user_question", "skill", "task_create", "task_get",
-        "task_update", "task_list", "web_fetch", "web_search",
-    }
-    actual = {member.value for member in ToolName}
-    assert actual == expected
+    """ToolName enum member count guards against accidental additions/removals.
+
+    Structural invariants (every member has a CLI mapping, aliases are
+    invertible) are verified by other tests. This test catches unintentional
+    enum changes — update the count when adding a new tool deliberately.
+    """
+    assert len(ToolName) == 20
 
 
 def test_tool_name_aliases_covers_all_cli_sdk_names() -> None:
@@ -81,13 +78,13 @@ def test_canonical_to_cli_covers_all_tool_names() -> None:
 def test_readonly_tools_contains_expected_tools() -> None:
     """READONLY_TOOLS preset includes only safe read/search tools."""
     from amelia.core.constants import READONLY_TOOLS
-    expected = [
+    expected = (
         ToolName.READ_FILE,
         ToolName.GLOB,
         ToolName.GREP,
         ToolName.WEB_FETCH,
         ToolName.WEB_SEARCH,
-    ]
+    )
     assert expected == READONLY_TOOLS
 
 

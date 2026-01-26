@@ -268,6 +268,8 @@ class ClaudeCliDriver:
             "output_format": output_format,
         }
         if cli_allowed_tools is not None:
+            if len(cli_allowed_tools) == 0:
+                logger.warning("allowed_tools resolved to empty list — agent will have no tools")
             kwargs["allowed_tools"] = cli_allowed_tools
 
         return ClaudeAgentOptions(**kwargs)

@@ -1151,7 +1151,8 @@ class TestBuildOptionsAllowedTools:
     def test_build_options_without_allowed_tools(self, driver: ClaudeCliDriver) -> None:
         """When allowed_tools is None, options should not set allowed_tools on SDK options."""
         options = driver._build_options(cwd="/test")
-        # SDK defaults allowed_tools to [] when not explicitly provided
+        # Asserts the SDK's default factory value ([]). This verifies Amelia does not
+        # inject an explicit allowed_tools when the caller passes None.
         assert options.allowed_tools == []
 
     def test_build_options_with_allowed_tools(self, driver: ClaudeCliDriver) -> None:
@@ -1169,6 +1170,15 @@ class TestBuildOptionsAllowedTools:
             allowed_tools=["read_file", "unknown_tool"],
         )
         assert options.allowed_tools == ["Read"]
+
+    def test_build_options_warns_on_empty_allowed_tools(
+        self, driver: ClaudeCliDriver
+    ) -> None:
+        """Empty allowed_tools list logs a warning about no tools being available."""
+        with patch("amelia.drivers.cli.claude.logger") as mock_logger:
+            options = driver._build_options(cwd="/test", allowed_tools=[])
+        mock_logger.warning.assert_called_once()
+        assert options.allowed_tools == []
 
 
 class TestExecuteAgenticAllowedTools:

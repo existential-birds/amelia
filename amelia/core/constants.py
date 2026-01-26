@@ -63,13 +63,13 @@ TOOL_NAME_ALIASES: dict[str, str] = {
 # Assumes 1:1 mapping — see test_canonical_to_cli_is_inverse_of_aliases
 CANONICAL_TO_CLI: dict[str, str] = {v: k for k, v in TOOL_NAME_ALIASES.items()}
 
-READONLY_TOOLS: list[ToolName] = [
+READONLY_TOOLS: tuple[ToolName, ...] = (
     ToolName.READ_FILE,
     ToolName.GLOB,
     ToolName.GREP,
     ToolName.WEB_FETCH,
     ToolName.WEB_SEARCH,
-]
+)
 
 
 def normalize_tool_name(raw_name: str) -> str:
