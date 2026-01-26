@@ -63,6 +63,7 @@ export function PlanImportSection({
   const [filePreview, setFilePreview] = useState<PlanPreview | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const isInitialMount = useRef(true);
+  const previewRequestId = useRef(0);
 
   // Update preview when content changes
   useEffect(() => {
@@ -109,6 +110,7 @@ export function PlanImportSection({
       setFilePath(e.target.value);
       setFilePreview(null);
       setFileError(null);
+      previewRequestId.current += 1;
     },
     []
   );
@@ -116,6 +118,7 @@ export function PlanImportSection({
   const handlePreview = useCallback(async () => {
     if (!filePath.trim() || !worktreePath) return;
 
+    const requestId = ++previewRequestId.current;
     setPreviewLoading(true);
     setFileError(null);
     setFilePreview(null);
@@ -126,6 +129,7 @@ export function PlanImportSection({
         : `${worktreePath.replace(/\/$/, '')}/${filePath}`;
 
       const response = await api.readFile(absolutePath);
+      if (requestId !== previewRequestId.current) return;
 
       if (!response.content.trim()) {
         setFileError('Plan file is empty');
@@ -139,13 +143,16 @@ export function PlanImportSection({
         setFileError('Could not extract plan information from file');
       }
     } catch (err) {
+      if (requestId !== previewRequestId.current) return;
       if (err instanceof ApiError) {
         setFileError(err.message);
       } else {
         setFileError('Failed to read plan file');
       }
     } finally {
-      setPreviewLoading(false);
+      if (requestId === previewRequestId.current) {
+        setPreviewLoading(false);
+      }
     }
   }, [filePath, worktreePath]);
 
