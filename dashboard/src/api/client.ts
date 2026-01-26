@@ -250,6 +250,30 @@ export const api = {
   },
 
   /**
+   * Requests re-planning for a blocked workflow.
+   *
+   * Sends the workflow back to the Architect for a new plan,
+   * preserving context from the previous attempt.
+   *
+   * @param id - The unique identifier of the workflow to replan.
+   * @returns Promise that resolves when the replan request is successful.
+   * @throws {ApiError} When the workflow is not found, not in a blocked state, or the API request fails.
+   *
+   * @example
+   * ```typescript
+   * await api.replanWorkflow('workflow-123');
+   * console.log('Workflow sent back for re-planning');
+   * ```
+   */
+  async replanWorkflow(id: string): Promise<void> {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/workflows/${id}/replan`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    await handleResponse(response);
+  },
+
+  /**
    * Cancels a running workflow.
    *
    * Canceling immediately stops workflow execution and transitions it

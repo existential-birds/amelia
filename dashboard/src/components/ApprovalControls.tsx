@@ -6,7 +6,7 @@ import { useState } from 'react';
 import Markdown from 'react-markdown';
 import { Button } from '@/components/ui/button';
 import { Loader } from '@/components/ai-elements/loader';
-import { Check, X, ChevronDown, ChevronUp } from 'lucide-react';
+import { Check, X, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 /**
@@ -69,7 +69,8 @@ export function ApprovalControls({
 }: ApprovalControlsProps) {
   const approveFetcher = useFetcher<ActionResponse>();
   const rejectFetcher = useFetcher<ActionResponse>();
-  const isPending = approveFetcher.state !== 'idle' || rejectFetcher.state !== 'idle';
+  const replanFetcher = useFetcher<ActionResponse>();
+  const isPending = approveFetcher.state !== 'idle' || rejectFetcher.state !== 'idle' || replanFetcher.state !== 'idle';
   const [showRejectForm, setShowRejectForm] = useState(false);
   const [rejectionFeedback, setRejectionFeedback] = useState('');
   const [showPlanDetails, setShowPlanDetails] = useState(true);
@@ -231,12 +232,32 @@ export function ApprovalControls({
             </rejectFetcher.Form>
           )}
 
+          <replanFetcher.Form method="post" action={`/workflows/${workflowId}/replan`}>
+            <Button
+              type="submit"
+              variant="outline"
+              disabled={isPending}
+              className="border-accent text-accent hover:bg-accent hover:text-foreground focus-visible:ring-accent/50"
+            >
+              {replanFetcher.state !== 'idle' ? (
+                <Loader className="w-4 h-4 mr-2" />
+              ) : (
+                <RefreshCw className="w-4 h-4 mr-2" />
+              )}
+              Replan
+            </Button>
+          </replanFetcher.Form>
+
           {approveFetcher.data?.error && (
             <p className="text-sm text-destructive mt-2">{approveFetcher.data.error}</p>
           )}
 
           {rejectFetcher.data?.error && (
             <p className="text-sm text-destructive mt-2">{rejectFetcher.data.error}</p>
+          )}
+
+          {replanFetcher.data?.error && (
+            <p className="text-sm text-destructive mt-2">{replanFetcher.data.error}</p>
           )}
         </div>
       )}

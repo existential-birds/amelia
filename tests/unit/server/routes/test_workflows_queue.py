@@ -1,9 +1,6 @@
 # tests/unit/server/routes/test_workflows_queue.py
 """Tests for queue-related workflow endpoints."""
 
-from collections.abc import AsyncGenerator
-from contextlib import asynccontextmanager
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -17,6 +14,8 @@ from amelia.server.exceptions import (
 )
 from amelia.server.main import create_app
 from amelia.server.models.responses import BatchStartResponse
+
+from .conftest import patch_lifespan
 
 
 @pytest.fixture
@@ -46,13 +45,7 @@ def mock_orchestrator() -> MagicMock:
 @pytest.fixture
 def client(mock_repository: MagicMock, mock_orchestrator: MagicMock) -> TestClient:
     """Create test client with mocked dependencies."""
-    app = create_app()
-
-    @asynccontextmanager
-    async def noop_lifespan(_app: Any) -> AsyncGenerator[None, None]:
-        yield
-
-    app.router.lifespan_context = noop_lifespan
+    app = patch_lifespan(create_app())
     app.dependency_overrides[get_repository] = lambda: mock_repository
     app.dependency_overrides[get_orchestrator] = lambda: mock_orchestrator
 

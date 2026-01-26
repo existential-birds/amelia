@@ -518,6 +518,33 @@ async def set_workflow_plan(
     )
 
 
+@router.post("/{workflow_id}/replan", response_model=ActionResponse)
+async def replan_workflow(
+    workflow_id: str,
+    orchestrator: OrchestratorService = Depends(get_orchestrator),
+) -> ActionResponse:
+    """Replan a blocked workflow by regenerating the Architect plan.
+
+    Deletes the stale checkpoint, clears plan fields, and spawns a
+    new planning task. The workflow transitions from blocked to planning.
+
+    Args:
+        workflow_id: Unique workflow identifier.
+        orchestrator: Orchestrator service dependency.
+
+    Returns:
+        ActionResponse with status "planning" and workflow_id.
+
+    Raises:
+        WorkflowNotFoundError: If workflow doesn't exist.
+        InvalidStateError: If workflow is not in blocked state.
+        WorkflowConflictError: If planning task is already running.
+    """
+    await orchestrator.replan_workflow(workflow_id)
+    logger.info("Replan started", workflow_id=workflow_id)
+    return ActionResponse(status="planning", workflow_id=workflow_id)
+
+
 def configure_exception_handlers(app: FastAPI) -> None:
     """Configure exception handlers for the FastAPI application.
 
