@@ -9,10 +9,8 @@ Flow tested:
 3. Verify plan data is updated and events are emitted correctly
 """
 from collections.abc import AsyncGenerator
-from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -25,60 +23,8 @@ from amelia.server.models.events import EventType
 from amelia.server.models.requests import CreateWorkflowRequest
 from amelia.server.models.state import WorkflowStatus
 from amelia.server.orchestrator.service import OrchestratorService
-from tests.conftest import AsyncIteratorMock, init_git_repo
-
-
-def create_planning_graph_mock(
-    goal: str = "Test goal",
-    plan_markdown: str = "## Plan\n\n### Task 1: Do thing\n- Step 1",
-) -> MagicMock:
-    """Create a mock LangGraph graph that simulates planning with interrupt."""
-    mock_graph = MagicMock()
-
-    checkpoint_values = {
-        "goal": goal,
-        "plan_markdown": plan_markdown,
-        "profile_id": "test",
-    }
-    mock_checkpoint = MagicMock()
-    mock_checkpoint.values = checkpoint_values
-    mock_checkpoint.next = []
-    mock_graph.aget_state = AsyncMock(return_value=mock_checkpoint)
-
-    astream_items = [
-        ("updates", {"architect_node": {"goal": goal, "plan_markdown": plan_markdown}}),
-        ("updates", {"__interrupt__": ("Paused for approval",)}),
-    ]
-    mock_graph.astream = lambda *args, **kwargs: AsyncIteratorMock(astream_items)
-    mock_graph.aupdate_state = AsyncMock()
-
-    return mock_graph
-
-
-@asynccontextmanager
-async def mock_langgraph_for_planning(
-    goal: str = "Test goal",
-    plan_markdown: str = "## Plan\n\n### Task 1: Do thing\n- Step 1",
-) -> AsyncGenerator[MagicMock, None]:
-    """Context manager that mocks LangGraph for planning tests."""
-    mock_graph = create_planning_graph_mock(goal=goal, plan_markdown=plan_markdown)
-
-    mock_saver = AsyncMock()
-    mock_saver_class = MagicMock()
-    mock_saver_class.from_conn_string.return_value.__aenter__ = AsyncMock(
-        return_value=mock_saver
-    )
-    mock_saver_class.from_conn_string.return_value.__aexit__ = AsyncMock()
-
-    with (
-        patch(
-            "amelia.server.orchestrator.service.AsyncSqliteSaver", mock_saver_class
-        ),
-        patch.object(
-            OrchestratorService, "_create_server_graph", return_value=mock_graph
-        ),
-    ):
-        yield mock_graph
+from tests.conftest import init_git_repo
+from tests.integration.conftest import mock_langgraph_for_planning
 
 
 @pytest.fixture

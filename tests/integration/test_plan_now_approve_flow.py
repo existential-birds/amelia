@@ -11,10 +11,9 @@ approve_workflow to fail because there was nothing to resume from.
 """
 
 from collections.abc import AsyncGenerator
-from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -23,68 +22,7 @@ from amelia.server.database.repository import WorkflowRepository
 from amelia.server.events.bus import EventBus
 from amelia.server.models.requests import CreateWorkflowRequest
 from amelia.server.orchestrator.service import OrchestratorService
-from tests.conftest import AsyncIteratorMock
-
-
-def create_planning_graph_mock(
-    goal: str = "Test goal from architect",
-    plan_markdown: str = "## Plan\n\n### Task 1: First task\n- Do something",
-) -> MagicMock:
-    """Create a mock LangGraph graph that simulates planning.
-
-    The mock graph yields chunks until it reaches an interrupt at human_approval_node.
-    """
-    mock_graph = MagicMock()
-
-    # Mock aget_state to return checkpoint with plan data
-    checkpoint_values = {
-        "goal": goal,
-        "plan_markdown": plan_markdown,
-        "profile_id": "test",
-    }
-    mock_checkpoint = MagicMock()
-    mock_checkpoint.values = checkpoint_values
-    mock_checkpoint.next = []
-    mock_graph.aget_state = AsyncMock(return_value=mock_checkpoint)
-
-    # Mock astream to yield chunks including interrupt
-    astream_items = [
-        ("updates", {"architect_node": {"goal": goal, "plan_markdown": plan_markdown}}),
-        ("updates", {"plan_validator_node": {}}),
-        ("updates", {"__interrupt__": ("Paused for approval",)}),
-    ]
-    mock_graph.astream = lambda *args, **kwargs: AsyncIteratorMock(astream_items)
-
-    # Mock aupdate_state for approve_workflow
-    mock_graph.aupdate_state = AsyncMock()
-
-    return mock_graph
-
-
-@asynccontextmanager
-async def mock_langgraph_for_planning(
-    goal: str = "Test goal from architect",
-    plan_markdown: str = "## Plan\n\n### Task 1: First task\n- Do something",
-) -> AsyncGenerator[MagicMock, None]:
-    """Context manager that mocks LangGraph for planning tests."""
-    mock_graph = create_planning_graph_mock(goal=goal, plan_markdown=plan_markdown)
-
-    mock_saver = AsyncMock()
-    mock_saver_class = MagicMock()
-    mock_saver_class.from_conn_string.return_value.__aenter__ = AsyncMock(
-        return_value=mock_saver
-    )
-    mock_saver_class.from_conn_string.return_value.__aexit__ = AsyncMock()
-
-    with (
-        patch(
-            "amelia.server.orchestrator.service.AsyncSqliteSaver", mock_saver_class
-        ),
-        patch.object(
-            OrchestratorService, "_create_server_graph", return_value=mock_graph
-        ),
-    ):
-        yield mock_graph
+from tests.integration.conftest import mock_langgraph_for_planning
 
 
 @pytest.fixture
@@ -213,6 +151,7 @@ class TestPlanNowApproveFlow:
         async with mock_langgraph_for_planning(
             goal="Implement the test feature",
             plan_markdown="# Plan\n\n## Phase 1\n### Task 1: Do thing",
+            extra_stream_items=[("updates", {"plan_validator_node": {}})],
         ):
             workflow_id = await test_orchestrator.queue_and_plan_workflow(request)
 
@@ -255,6 +194,7 @@ class TestPlanNowApproveFlow:
         async with mock_langgraph_for_planning(
             goal="Test goal",
             plan_markdown="## Plan\n\n### Task 1: Test",
+            extra_stream_items=[("updates", {"plan_validator_node": {}})],
         ):
             workflow_id = await test_orchestrator.queue_and_plan_workflow(request)
 
@@ -327,6 +267,7 @@ class TestPlanNowApproveFlow:
         async with mock_langgraph_for_planning(
             goal=goal,
             plan_markdown=plan_markdown,
+            extra_stream_items=[("updates", {"plan_validator_node": {}})],
         ):
             workflow_id = await test_orchestrator.queue_and_plan_workflow(request)
 

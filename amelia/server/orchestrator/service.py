@@ -2144,6 +2144,11 @@ class OrchestratorService:
         Runs the orchestrator graph until it interrupts at human_approval_node,
         creating a checkpoint that can be resumed by approve_workflow().
 
+        Note:
+            This task re-fetches workflow state from the repository before
+            any mutations, so the passed ``state`` and ``execution_state``
+            are only used for initial graph input — not for later updates.
+
         Args:
             workflow_id: The workflow ID being planned.
             state: The server execution state to update.
