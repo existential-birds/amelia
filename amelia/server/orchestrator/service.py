@@ -1341,7 +1341,8 @@ class OrchestratorService:
             str(self._checkpoint_path)
         ) as saver:
             await saver.setup()
-            # Table names are hardcoded above — safe from SQL injection
+            # Table names match AsyncSqliteSaver schema as of
+            # langgraph-checkpoint-sqlite 3.x — safe from SQL injection
             for table in ("checkpoints", "writes", "checkpoint_blobs"):
                 await saver.conn.execute(
                     f"DELETE FROM {table} WHERE thread_id = ?",  # noqa: S608
