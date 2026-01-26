@@ -6,17 +6,35 @@ from enum import StrEnum
 
 
 class ToolName(StrEnum):
-    """Standard tool names used across drivers.
+    """Standard tool names used across drivers."""
 
-    Attributes:
-        RUN_SHELL_COMMAND: Execute a shell command in the worktree.
-        WRITE_FILE: Write content to a file.
-        READ_FILE: Read content from a file.
-    """
-
-    RUN_SHELL_COMMAND = "run_shell_command"
-    WRITE_FILE = "write_file"
+    # File operations
     READ_FILE = "read_file"
+    WRITE_FILE = "write_file"
+    EDIT_FILE = "edit_file"
+    NOTEBOOK_EDIT = "notebook_edit"
+    GLOB = "glob"
+    GREP = "grep"
+    # Execution
+    RUN_SHELL_COMMAND = "run_shell_command"
+    # Agent orchestration
+    TASK = "task"
+    TASK_OUTPUT = "task_output"
+    TASK_STOP = "task_stop"
+    # Planning
+    ENTER_PLAN_MODE = "enter_plan_mode"
+    EXIT_PLAN_MODE = "exit_plan_mode"
+    # Interaction
+    ASK_USER_QUESTION = "ask_user_question"
+    SKILL = "skill"
+    # Task tracking
+    TASK_CREATE = "task_create"
+    TASK_GET = "task_get"
+    TASK_UPDATE = "task_update"
+    TASK_LIST = "task_list"
+    # Web
+    WEB_FETCH = "web_fetch"
+    WEB_SEARCH = "web_search"
 
 
 TOOL_NAME_ALIASES: dict[str, str] = {

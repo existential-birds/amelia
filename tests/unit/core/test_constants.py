@@ -41,3 +41,16 @@ def test_normalize_tool_name_handles_all_driver_variants() -> None:
     # Unknown names pass through unchanged
     assert normalize_tool_name("unknown_tool") == "unknown_tool"
     assert normalize_tool_name("custom") == "custom"
+
+
+def test_tool_name_enum_has_all_canonical_names() -> None:
+    """ToolName enum defines all 20 canonical tool names."""
+    expected = {
+        "read_file", "write_file", "edit_file", "notebook_edit",
+        "glob", "grep", "run_shell_command", "task", "task_output",
+        "task_stop", "enter_plan_mode", "exit_plan_mode",
+        "ask_user_question", "skill", "task_create", "task_get",
+        "task_update", "task_list", "web_fetch", "web_search",
+    }
+    actual = {member.value for member in ToolName}
+    assert actual == expected
