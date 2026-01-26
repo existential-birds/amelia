@@ -60,14 +60,13 @@ TOOL_NAME_ALIASES: dict[str, str] = {
     "WebSearch": ToolName.WEB_SEARCH,
 }
 
+# Assumes 1:1 mapping — see test_canonical_to_cli_is_inverse_of_aliases
 CANONICAL_TO_CLI: dict[str, str] = {v: k for k, v in TOOL_NAME_ALIASES.items()}
 
 READONLY_TOOLS: list[ToolName] = [
     ToolName.READ_FILE,
     ToolName.GLOB,
     ToolName.GREP,
-    ToolName.TASK,
-    ToolName.TASK_OUTPUT,
     ToolName.WEB_FETCH,
     ToolName.WEB_SEARCH,
 ]
