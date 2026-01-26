@@ -468,26 +468,6 @@ class TestClaudeCliDriverAgentic:
 
             assert len(collected) == 3
 
-    async def test_execute_agentic_tracks_tool_calls(self, driver: ClaudeCliDriver) -> None:
-        """Test that execute_agentic tracks tool calls in history."""
-        tool_block = MockToolUseBlock("Write", {"file_path": "/out.txt", "content": "data"})
-        messages = [
-            MockAssistantMessage([tool_block]),
-            MockResultMessage(result="Done", session_id="sess_tools"),
-        ]
-
-        with (
-            _patch_sdk_types(),
-            patch("amelia.drivers.cli.claude.ClaudeSDKClient", create_mock_sdk_client(messages)),
-        ):
-            driver.clear_tool_history()
-            async for _ in driver.execute_agentic("Write file", "/workspace"):
-                pass
-
-            # Tool should be tracked (mocking makes this tricky, verify the code path)
-            # In real usage, ToolUseBlock isinstance check would pass
-            assert driver.tool_call_history == [] or len(driver.tool_call_history) >= 0
-
     async def test_execute_agentic_bypasses_permissions(self) -> None:
         """Test that execute_agentic always bypasses permissions."""
         driver = ClaudeCliDriver(skip_permissions=False)  # Default is False

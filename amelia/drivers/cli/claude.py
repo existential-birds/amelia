@@ -257,7 +257,9 @@ class ClaudeCliDriver:
                 else:
                     logger.debug("Skipping unknown canonical tool name", tool_name=name)
 
-        options_kwargs: dict[str, Any] = {
+        # Build options kwargs. The SDK defaults allowed_tools to [] (no restriction),
+        # so we only include it when the caller explicitly provided a list.
+        kwargs: dict[str, Any] = {
             "model": self.model,
             "cwd": cwd,
             "permission_mode": permission_mode,
@@ -266,9 +268,9 @@ class ClaudeCliDriver:
             "output_format": output_format,
         }
         if cli_allowed_tools is not None:
-            options_kwargs["allowed_tools"] = cli_allowed_tools
+            kwargs["allowed_tools"] = cli_allowed_tools
 
-        return ClaudeAgentOptions(**options_kwargs)
+        return ClaudeAgentOptions(**kwargs)
 
     async def generate(
         self,
@@ -423,7 +425,7 @@ class ClaudeCliDriver:
             allowed_tools=allowed_tools,
         )
 
-        logger.info(f"Starting agentic execution in {cwd}")
+        logger.info("Starting agentic execution", cwd=cwd)
 
         last_tool_name: str | None = None  # Track for tool_result messages
 
@@ -504,8 +506,8 @@ class ClaudeCliDriver:
                             model=self.model,
                         )
 
-        except Exception as e:
-            logger.error(f"Error in agentic execution: {e}")
+        except Exception:
+            logger.exception("Error in agentic execution")
             raise
 
     def clear_tool_history(self) -> None:
