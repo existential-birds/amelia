@@ -3,22 +3,14 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+import typer
 
-from amelia.cli.config import check_and_run_first_time_setup
-from amelia.core.types import AgentConfig, Profile
+from amelia.cli.config import _validate_tracker, check_and_run_first_time_setup
+from amelia.core.types import AgentConfig, DriverType, Profile, TrackerType
 
 
 class TestFirstRunDetection:
     """Tests for first-run detection logic."""
-
-    @pytest.fixture
-    def mock_db(self) -> MagicMock:
-        """Create a mock Database."""
-        mock = MagicMock()
-        mock.connect = AsyncMock()
-        mock.close = AsyncMock()
-        mock.ensure_schema = AsyncMock()
-        return mock
 
     async def test_not_first_run_when_profiles_exist(
         self, mock_db: MagicMock
@@ -27,12 +19,12 @@ class TestFirstRunDetection:
         # ProfileRepository.list_profiles returns Profile objects
         existing_profile = Profile(
             name="existing",
-            tracker="noop",
+            tracker=TrackerType.NOOP,
             working_dir="/tmp",
             agents={
-                "architect": AgentConfig(driver="cli", model="sonnet"),
-                "developer": AgentConfig(driver="cli", model="sonnet"),
-                "reviewer": AgentConfig(driver="cli", model="sonnet"),
+                "architect": AgentConfig(driver=DriverType.CLI, model="sonnet"),
+                "developer": AgentConfig(driver=DriverType.CLI, model="sonnet"),
+                "reviewer": AgentConfig(driver=DriverType.CLI, model="sonnet"),
             },
         )
 
@@ -55,12 +47,12 @@ class TestFirstRunDetection:
         # create_profile returns Profile objects
         created_profile = Profile(
             name="dev",
-            tracker="noop",
+            tracker=TrackerType.NOOP,
             working_dir="/tmp",
             agents={
-                "architect": AgentConfig(driver="cli", model="opus"),
-                "developer": AgentConfig(driver="cli", model="opus"),
-                "reviewer": AgentConfig(driver="cli", model="opus"),
+                "architect": AgentConfig(driver=DriverType.CLI, model="opus"),
+                "developer": AgentConfig(driver=DriverType.CLI, model="opus"),
+                "reviewer": AgentConfig(driver=DriverType.CLI, model="opus"),
             },
         )
 
@@ -74,9 +66,10 @@ class TestFirstRunDetection:
              patch("typer.prompt") as mock_prompt:
             # Simulate user input for prompts
             mock_prompt.side_effect = [
-                "dev",  # Profile name
+                "local_opus",  # Profile name
                 "cli",  # Driver
                 "opus",  # Model
+                "noop",  # Tracker
                 "/tmp",  # Working directory
             ]
 
@@ -85,20 +78,11 @@ class TestFirstRunDetection:
         assert result is True
         mock_repo.list_profiles.assert_called_once()
         mock_repo.create_profile.assert_called_once()
-        mock_repo.set_active.assert_called_once_with("dev")
+        mock_repo.set_active.assert_called_once_with("local_opus")
 
 
 class TestFirstRunProfileCreation:
     """Tests for first-run profile creation."""
-
-    @pytest.fixture
-    def mock_db(self) -> MagicMock:
-        """Create a mock Database."""
-        mock = MagicMock()
-        mock.connect = AsyncMock()
-        mock.close = AsyncMock()
-        mock.ensure_schema = AsyncMock()
-        return mock
 
     async def test_profile_created_with_correct_values(
         self, mock_db: MagicMock
@@ -107,12 +91,12 @@ class TestFirstRunProfileCreation:
         # create_profile returns Profile objects
         created_profile = Profile(
             name="myprofile",
-            tracker="noop",
+            tracker=TrackerType.NOOP,
             working_dir="/home/user/project",
             agents={
-                "architect": AgentConfig(driver="api", model="sonnet"),
-                "developer": AgentConfig(driver="api", model="sonnet"),
-                "reviewer": AgentConfig(driver="api", model="sonnet"),
+                "architect": AgentConfig(driver=DriverType.API, model="sonnet"),
+                "developer": AgentConfig(driver=DriverType.API, model="sonnet"),
+                "reviewer": AgentConfig(driver=DriverType.API, model="sonnet"),
             },
         )
 
@@ -128,6 +112,7 @@ class TestFirstRunProfileCreation:
                 "myprofile",  # Profile name
                 "api",  # Driver
                 "sonnet",  # Model
+                "github",  # Tracker
                 "/home/user/project",  # Working directory
             ]
 
@@ -138,7 +123,7 @@ class TestFirstRunProfileCreation:
         created_profile_arg: Profile = call_args[0][0]
 
         assert created_profile_arg.name == "myprofile"
-        assert created_profile_arg.tracker == "noop"
+        assert created_profile_arg.tracker == "github"
         assert created_profile_arg.working_dir == "/home/user/project"
         # Check that agents were created with correct driver/model
         assert "architect" in created_profile_arg.agents
@@ -149,12 +134,12 @@ class TestFirstRunProfileCreation:
         """First-run sets created profile as active."""
         created_profile = Profile(
             name="testprofile",
-            tracker="noop",
+            tracker=TrackerType.NOOP,
             working_dir="/tmp",
             agents={
-                "architect": AgentConfig(driver="cli", model="opus"),
-                "developer": AgentConfig(driver="cli", model="opus"),
-                "reviewer": AgentConfig(driver="cli", model="opus"),
+                "architect": AgentConfig(driver=DriverType.CLI, model="opus"),
+                "developer": AgentConfig(driver=DriverType.CLI, model="opus"),
+                "reviewer": AgentConfig(driver=DriverType.CLI, model="opus"),
             },
         )
 
@@ -170,6 +155,7 @@ class TestFirstRunProfileCreation:
                 "testprofile",
                 "cli",
                 "opus",
+                "noop",
                 "/tmp",
             ]
 
@@ -181,12 +167,12 @@ class TestFirstRunProfileCreation:
         """Database connection is closed after first-run setup."""
         created_profile = Profile(
             name="dev",
-            tracker="noop",
+            tracker=TrackerType.NOOP,
             working_dir="/tmp",
             agents={
-                "architect": AgentConfig(driver="cli", model="opus"),
-                "developer": AgentConfig(driver="cli", model="opus"),
-                "reviewer": AgentConfig(driver="cli", model="opus"),
+                "architect": AgentConfig(driver=DriverType.CLI, model="opus"),
+                "developer": AgentConfig(driver=DriverType.CLI, model="opus"),
+                "reviewer": AgentConfig(driver=DriverType.CLI, model="opus"),
             },
         )
 
@@ -198,7 +184,7 @@ class TestFirstRunProfileCreation:
         with patch("amelia.cli.config.get_database", return_value=mock_db), \
              patch("amelia.cli.config.ProfileRepository", return_value=mock_repo), \
              patch("typer.prompt") as mock_prompt:
-            mock_prompt.side_effect = ["dev", "cli", "opus", "/tmp"]
+            mock_prompt.side_effect = ["local_opus", "cli", "opus", "noop", "/tmp"]
 
             await check_and_run_first_time_setup()
 
@@ -210,12 +196,12 @@ class TestFirstRunProfileCreation:
         """Database connection is closed when profiles exist."""
         existing_profile = Profile(
             name="existing",
-            tracker="noop",
+            tracker=TrackerType.NOOP,
             working_dir="/tmp",
             agents={
-                "architect": AgentConfig(driver="cli", model="sonnet"),
-                "developer": AgentConfig(driver="cli", model="sonnet"),
-                "reviewer": AgentConfig(driver="cli", model="sonnet"),
+                "architect": AgentConfig(driver=DriverType.CLI, model="sonnet"),
+                "developer": AgentConfig(driver=DriverType.CLI, model="sonnet"),
+                "reviewer": AgentConfig(driver=DriverType.CLI, model="sonnet"),
             },
         )
 
@@ -227,3 +213,21 @@ class TestFirstRunProfileCreation:
             await check_and_run_first_time_setup()
 
         mock_db.close.assert_called_once()
+
+
+class TestTrackerValidation:
+    """Tests for tracker input validation."""
+
+    @pytest.mark.parametrize("valid_tracker", ["noop", "github", "jira"])
+    def test_validate_tracker_accepts_valid_values(self, valid_tracker: str) -> None:
+        """_validate_tracker accepts all valid TrackerType values."""
+        result = _validate_tracker(valid_tracker)
+        assert result == valid_tracker
+
+    @pytest.mark.parametrize("invalid_tracker", ["invalid", "", "NOOP", "gitlab"])
+    def test_validate_tracker_rejects_invalid_values(
+        self, invalid_tracker: str
+    ) -> None:
+        """_validate_tracker raises BadParameter for invalid input."""
+        with pytest.raises(typer.BadParameter):
+            _validate_tracker(invalid_tracker)

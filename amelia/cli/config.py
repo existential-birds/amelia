@@ -415,20 +415,22 @@ async def check_and_run_first_time_setup() -> bool:
             "[yellow]No profiles configured. Let's create your first profile.[/yellow]\n"
         )
 
-        name = typer.prompt("Profile name", default="dev")
+        name = typer.prompt("Profile name", default="local_opus")
         driver_input = typer.prompt("Driver (cli or api)", default="cli")
         model = typer.prompt("Model", default="opus")
+        tracker = typer.prompt("Tracker (noop, github, jira)", default="noop")
         working_dir = typer.prompt("Working directory", default=str(Path.cwd()))
 
-        # Validate driver
+        # Validate driver and tracker
         validated_driver = _validate_driver(driver_input)
+        validated_tracker = _validate_tracker(tracker)
 
         # Build default agents configuration
         agents = _build_default_agents(validated_driver, model)
 
         profile = Profile(
             name=name,
-            tracker=TrackerType.NOOP,
+            tracker=validated_tracker,
             working_dir=working_dir,
             agents=agents,
         )
