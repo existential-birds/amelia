@@ -257,15 +257,18 @@ class ClaudeCliDriver:
                 else:
                     logger.debug("Skipping unknown canonical tool name", tool_name=name)
 
-        return ClaudeAgentOptions(
-            model=self.model,
-            cwd=cwd,
-            permission_mode=permission_mode,
-            system_prompt=effective_system_prompt,
-            resume=session_id,
-            output_format=output_format,
-            allowed_tools=cli_allowed_tools,
-        )
+        options_kwargs: dict[str, Any] = {
+            "model": self.model,
+            "cwd": cwd,
+            "permission_mode": permission_mode,
+            "system_prompt": effective_system_prompt,
+            "resume": session_id,
+            "output_format": output_format,
+        }
+        if cli_allowed_tools is not None:
+            options_kwargs["allowed_tools"] = cli_allowed_tools
+
+        return ClaudeAgentOptions(**options_kwargs)
 
     async def generate(
         self,

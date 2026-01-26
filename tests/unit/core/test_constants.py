@@ -89,7 +89,7 @@ def test_readonly_tools_contains_expected_tools() -> None:
         ToolName.WEB_FETCH,
         ToolName.WEB_SEARCH,
     ]
-    assert READONLY_TOOLS == expected
+    assert expected == READONLY_TOOLS
 
 
 def test_readonly_tools_excludes_write_and_exec() -> None:
