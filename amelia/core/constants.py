@@ -62,6 +62,8 @@ TOOL_NAME_ALIASES: dict[str, str] = {
 
 # Assumes 1:1 mapping — see test_canonical_to_cli_is_inverse_of_aliases
 CANONICAL_TO_CLI: dict[str, str] = {v: k for k, v in TOOL_NAME_ALIASES.items()}
+if len(CANONICAL_TO_CLI) != len(TOOL_NAME_ALIASES):
+    raise ValueError("Duplicate canonical names in TOOL_NAME_ALIASES")
 
 READONLY_TOOLS: tuple[ToolName, ...] = (
     ToolName.READ_FILE,

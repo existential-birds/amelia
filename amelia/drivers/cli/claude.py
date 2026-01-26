@@ -255,7 +255,7 @@ class ClaudeCliDriver:
                 if cli_name:
                     cli_allowed_tools.append(cli_name)
                 else:
-                    logger.debug("Skipping unknown canonical tool name", tool_name=name)
+                    logger.warning("Skipping unknown canonical tool name", tool_name=name)
 
         # Build options kwargs. The SDK defaults allowed_tools to [] (no restriction),
         # so we only include it when the caller explicitly provided a list.

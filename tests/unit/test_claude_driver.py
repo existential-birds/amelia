@@ -1177,7 +1177,9 @@ class TestBuildOptionsAllowedTools:
         """Empty allowed_tools list logs a warning about no tools being available."""
         with patch("amelia.drivers.cli.claude.logger") as mock_logger:
             options = driver._build_options(cwd="/test", allowed_tools=[])
-        mock_logger.warning.assert_called_once()
+        mock_logger.warning.assert_called_once_with(
+            "allowed_tools resolved to empty list — agent will have no tools"
+        )
         assert options.allowed_tools == []
 
 
