@@ -19,17 +19,20 @@ import json
 import subprocess
 import sys
 from collections import defaultdict
-from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
+
+from loguru import logger
+from pydantic import BaseModel
 
 
 REPO = "existential-birds/amelia"
 BOT_LOGIN = "coderabbitai[bot]"
 
 
-@dataclass
-class PRStats:
+class PRStats(BaseModel):
+    """Statistics for a single PR's CodeRabbit review activity."""
+
     number: int
     title: str
     author: str
@@ -119,7 +122,7 @@ def gh_api_paginated_list(endpoint: str) -> list[Any]:
         text=True,
     )
     if result.returncode != 0:
-        print(f"  Warning: failed to fetch {endpoint}: {result.stderr.strip()}", file=sys.stderr)
+        logger.warning("Failed to fetch {endpoint}: {error}", endpoint=endpoint, error=result.stderr.strip())
         return []
 
     # gh --paginate concatenates JSON arrays, which produces invalid JSON
@@ -157,9 +160,9 @@ def count_bot_items(items: list[dict[str, Any]], login: str = BOT_LOGIN) -> int:
     return sum(1 for item in items if item.get("user", {}).get("login") == login)
 
 
-@dataclass
-class ReactionCounts:
+class ReactionCounts(BaseModel):
     """Aggregate reaction counts across bot comments."""
+
     thumbs_up: int = 0
     thumbs_down: int = 0
     triaged_comments: int = 0
@@ -191,7 +194,7 @@ def count_bot_reactions(items: list[dict[str, Any]], login: str = BOT_LOGIN) -> 
 def fetch_pr_stats(pr: dict[str, Any]) -> PRStats:
     """Fetch coderabbitai comment counts and diff stats for a single PR."""
     number = pr["number"]
-    print(f"  Fetching PR #{number}...", file=sys.stderr, end="", flush=True)
+    logger.info("Fetching PR #{number}", number=number)
 
     # The list endpoint doesn't include diff stats — fetch the PR detail
     detail = gh_api(f"repos/{REPO}/pulls/{number}")
@@ -227,10 +230,16 @@ def fetch_pr_stats(pr: dict[str, Any]) -> PRStats:
         triaged_comments=reactions.triaged_comments,
         valuable_comments=reactions.valuable_comments,
     )
-    print(
-        f" {stats.total_bot_comments} comments, +{stats.additions}/-{stats.deletions} lines"
-        f", triage: {stats.thumbs_up}↑ {stats.thumbs_down}↓ {stats.untriaged}?",
-        file=sys.stderr,
+    logger.info(
+        "PR #{number}: {comments} comments, +{additions}/-{deletions} lines, "
+        "triage: {up}↑ {down}↓ {untriaged}?",
+        number=number,
+        comments=stats.total_bot_comments,
+        additions=stats.additions,
+        deletions=stats.deletions,
+        up=stats.thumbs_up,
+        down=stats.thumbs_down,
+        untriaged=stats.untriaged,
     )
     return stats
 
@@ -387,23 +396,23 @@ def main() -> None:
                         help="Show weekly summary instead of per-PR table")
     args = parser.parse_args()
 
-    print(f"Fetching PRs from {REPO} (state={args.state})...", file=sys.stderr)
+    logger.info("Fetching PRs from {repo} (state={state})", repo=REPO, state=args.state)
     prs = fetch_all_prs(state=args.state, limit=args.limit)
 
     if args.merged_only and args.state != "open":
         prs = [pr for pr in prs if pr.get("merged_at")]
 
     if not prs:
-        print("No PRs found matching criteria.", file=sys.stderr)
+        logger.info("No PRs found matching criteria")
         sys.exit(0)
 
-    print(f"Analyzing {len(prs)} PRs...", file=sys.stderr)
+    logger.info("Analyzing {count} PRs", count=len(prs))
     stats_list = [fetch_pr_stats(pr) for pr in prs]
 
     # Sort by date ascending for trend visibility
     stats_list.sort(key=lambda s: s.date)
 
-    print(file=sys.stderr)  # blank line separator
+    logger.info("Analysis complete")
 
     if args.csv_output:
         print_csv(stats_list)
