@@ -38,12 +38,29 @@ class ToolName(StrEnum):
 
 
 TOOL_NAME_ALIASES: dict[str, str] = {
-    "Write": ToolName.WRITE_FILE,
     "Read": ToolName.READ_FILE,
+    "Write": ToolName.WRITE_FILE,
+    "Edit": ToolName.EDIT_FILE,
+    "NotebookEdit": ToolName.NOTEBOOK_EDIT,
+    "Glob": ToolName.GLOB,
+    "Grep": ToolName.GREP,
     "Bash": ToolName.RUN_SHELL_COMMAND,
-    "write": ToolName.WRITE_FILE,
-    "read": ToolName.READ_FILE,
+    "Task": ToolName.TASK,
+    "TaskOutput": ToolName.TASK_OUTPUT,
+    "TaskStop": ToolName.TASK_STOP,
+    "EnterPlanMode": ToolName.ENTER_PLAN_MODE,
+    "ExitPlanMode": ToolName.EXIT_PLAN_MODE,
+    "AskUserQuestion": ToolName.ASK_USER_QUESTION,
+    "Skill": ToolName.SKILL,
+    "TaskCreate": ToolName.TASK_CREATE,
+    "TaskGet": ToolName.TASK_GET,
+    "TaskUpdate": ToolName.TASK_UPDATE,
+    "TaskList": ToolName.TASK_LIST,
+    "WebFetch": ToolName.WEB_FETCH,
+    "WebSearch": ToolName.WEB_SEARCH,
 }
+
+CANONICAL_TO_CLI: dict[str, str] = {v: k for k, v in TOOL_NAME_ALIASES.items()}
 
 
 def normalize_tool_name(raw_name: str) -> str:

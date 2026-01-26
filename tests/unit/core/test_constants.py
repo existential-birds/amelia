@@ -33,11 +33,6 @@ def test_normalize_tool_name_handles_all_driver_variants() -> None:
     assert normalize_tool_name("Read") == ToolName.READ_FILE
     assert normalize_tool_name("Bash") == ToolName.RUN_SHELL_COMMAND
 
-    # DeepAgents API driver uses lowercase
-    assert normalize_tool_name("write") == ToolName.WRITE_FILE
-    assert normalize_tool_name("read") == ToolName.READ_FILE
-    # Note: DeepAgents uses execute() backend, not a "bash" tool name
-
     # Unknown names pass through unchanged
     assert normalize_tool_name("unknown_tool") == "unknown_tool"
     assert normalize_tool_name("custom") == "custom"
@@ -54,3 +49,29 @@ def test_tool_name_enum_has_all_canonical_names() -> None:
     }
     actual = {member.value for member in ToolName}
     assert actual == expected
+
+
+def test_tool_name_aliases_covers_all_cli_sdk_names() -> None:
+    """TOOL_NAME_ALIASES maps every CLI SDK name to its canonical name."""
+    from amelia.core.constants import TOOL_NAME_ALIASES
+    expected_cli_names = {
+        "Read", "Write", "Edit", "NotebookEdit", "Glob", "Grep", "Bash",
+        "Task", "TaskOutput", "TaskStop", "EnterPlanMode", "ExitPlanMode",
+        "AskUserQuestion", "Skill", "TaskCreate", "TaskGet", "TaskUpdate",
+        "TaskList", "WebFetch", "WebSearch",
+    }
+    assert set(TOOL_NAME_ALIASES.keys()) == expected_cli_names
+
+
+def test_canonical_to_cli_is_inverse_of_aliases() -> None:
+    """CANONICAL_TO_CLI maps every canonical name back to its CLI SDK name."""
+    from amelia.core.constants import CANONICAL_TO_CLI, TOOL_NAME_ALIASES
+    for cli_name, canonical in TOOL_NAME_ALIASES.items():
+        assert CANONICAL_TO_CLI[canonical] == cli_name
+
+
+def test_canonical_to_cli_covers_all_tool_names() -> None:
+    """CANONICAL_TO_CLI has an entry for every ToolName enum member."""
+    from amelia.core.constants import CANONICAL_TO_CLI
+    for member in ToolName:
+        assert member.value in CANONICAL_TO_CLI, f"Missing CANONICAL_TO_CLI entry for {member}"
