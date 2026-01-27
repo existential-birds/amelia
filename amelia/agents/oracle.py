@@ -135,12 +135,40 @@ class Oracle:
         # Gather codebase context only when file patterns are specified
         files_consulted: list[str] = []
         bundle_tokens = 0
+        bundle = None
         if files:
-            bundle = await bundle_files(working_dir=working_dir, patterns=files)
-            files_consulted = [f.path for f in bundle.files]
-            bundle_tokens = bundle.total_tokens
+            try:
+                bundle = await bundle_files(working_dir=working_dir, patterns=files)
+                files_consulted = [f.path for f in bundle.files]
+                bundle_tokens = bundle.total_tokens
+            except Exception as exc:
+                logger.error(
+                    "Oracle file bundling failed",
+                    session_id=session_id,
+                    error=str(exc),
+                )
+
+                consultation = OracleConsultation(
+                    timestamp=timestamp,
+                    problem=problem,
+                    model=self._config.model,
+                    session_id=session_id,
+                    workflow_id=workflow_id,
+                    files_consulted=[],
+                    tokens={},
+                    outcome="error",
+                    error_message=f"File bundling failed: {exc}",
+                )
+
+                self._emit(self._make_event(
+                    EventType.ORACLE_CONSULTATION_FAILED,
+                    session_id=session_id,
+                    message=f"Oracle consultation failed: file bundling error: {exc}",
+                    workflow_id=workflow_id,
+                ))
+
+                return OracleConsultResult(advice="", consultation=consultation)
         else:
-            bundle = None
             logger.info(
                 "No file patterns specified, skipping file bundling",
                 session_id=session_id,

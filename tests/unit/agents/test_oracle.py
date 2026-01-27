@@ -220,3 +220,55 @@ class TestOracleConsult:
         assert "Driver crashed" in (result.consultation.error_message or "")
         assert result.advice == ""
         assert result.consultation.tokens == {"context": 0}
+
+    async def test_consult_handles_bundling_error(self, tmp_path):
+        """consult() should return error outcome on file bundling failure."""
+        config = AgentConfig(driver="cli", model="sonnet")
+
+        with (
+            patch("amelia.agents.oracle.get_driver") as mock_get_driver,
+            patch("amelia.agents.oracle.bundle_files") as mock_bundle,
+        ):
+            mock_driver = MagicMock()
+            mock_get_driver.return_value = mock_driver
+            mock_bundle.side_effect = OSError("Permission denied: /secret")
+
+            oracle = Oracle(config)
+            result = await oracle.consult(
+                problem="Test",
+                working_dir=str(tmp_path),
+                files=["*.py"],
+            )
+
+        assert result.consultation.outcome == "error"
+        assert "File bundling failed" in (result.consultation.error_message or "")
+        assert "Permission denied" in (result.consultation.error_message or "")
+        assert result.advice == ""
+        assert result.consultation.files_consulted == []
+
+    async def test_consult_emits_failed_event_on_bundling_error(self, tmp_path):
+        """consult() should emit STARTED and FAILED events on bundling failure."""
+        config = AgentConfig(driver="cli", model="sonnet")
+        event_bus = EventBus()
+        emitted: list[Any] = []
+        event_bus.subscribe(lambda e: emitted.append(e))
+
+        with (
+            patch("amelia.agents.oracle.get_driver") as mock_get_driver,
+            patch("amelia.agents.oracle.bundle_files") as mock_bundle,
+        ):
+            mock_driver = MagicMock()
+            mock_get_driver.return_value = mock_driver
+            mock_bundle.side_effect = OSError("Disk full")
+
+            oracle = Oracle(config, event_bus=event_bus)
+            await oracle.consult(
+                problem="Test",
+                working_dir=str(tmp_path),
+                files=["*.py"],
+            )
+
+        event_types = [e.event_type for e in emitted]
+        assert EventType.ORACLE_CONSULTATION_STARTED in event_types
+        assert EventType.ORACLE_CONSULTATION_FAILED in event_types
+        assert EventType.ORACLE_CONSULTATION_COMPLETED not in event_types
