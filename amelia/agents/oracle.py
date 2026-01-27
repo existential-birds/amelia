@@ -228,6 +228,7 @@ class Oracle:
                 session_id=session_id,
                 workflow_id=workflow_id,
                 files_consulted=files_consulted,
+                tokens={"context": bundle_tokens},
                 outcome="error",
                 error_message=str(driver_error),
             )

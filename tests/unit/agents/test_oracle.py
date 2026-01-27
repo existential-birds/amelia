@@ -219,3 +219,4 @@ class TestOracleConsult:
         assert result.consultation.outcome == "error"
         assert "Driver crashed" in (result.consultation.error_message or "")
         assert result.advice == ""
+        assert result.consultation.tokens == {"context": 0}
