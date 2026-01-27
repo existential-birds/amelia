@@ -14,6 +14,8 @@ from typing import TYPE_CHECKING, Annotated, Any, Literal, Protocol, TypeVar
 from langgraph.graph.state import CompiledStateGraph
 from pydantic import BaseModel, ConfigDict, Field
 
+from amelia.core.types import OracleConsultation
+
 
 if TYPE_CHECKING:
     from langgraph.checkpoint.base import BaseCheckpointSaver
@@ -93,6 +95,11 @@ class BasePipelineState(BaseModel):
     driver_session_id: str | None = None
     final_response: str | None = None
     error: str | None = None
+
+    # Oracle consultations (append-only)
+    oracle_consultations: Annotated[
+        list[OracleConsultation], operator.add
+    ] = Field(default_factory=list)
 
 
 StateT_co = TypeVar("StateT_co", bound=BasePipelineState, covariant=True)
