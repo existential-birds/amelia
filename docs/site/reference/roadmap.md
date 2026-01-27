@@ -73,8 +73,6 @@ Foundation for agents to query external knowledge sources with codebase context.
 
 **12-Factor Compliance:** F3 (Own Context Window)
 
-See [Oracle Phase 1 Design](../plans/2026-01-26-oracle-phase1-design.md).
-
 ---
 
 ## Phase 4: Knowledge Library [Planned]
