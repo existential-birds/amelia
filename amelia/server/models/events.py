@@ -13,6 +13,7 @@ class EventDomain(StrEnum):
     Attributes:
         WORKFLOW: Standard workflow events (orchestrator, agents).
         BRAINSTORM: Brainstorming session events (chat streaming).
+        ORACLE: Oracle consultation events.
     """
 
     WORKFLOW = "workflow"
