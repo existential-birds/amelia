@@ -99,14 +99,14 @@ def _is_git_repo(working_dir: Path) -> bool:
             cwd=working_dir,
             capture_output=True,
             text=True,
-            timeout=30,
+            timeout=5,
         )
         return result.returncode == 0
     except (subprocess.TimeoutExpired, OSError):
         return False
 
 
-def _get_git_tracked_files(working_dir: Path) -> set[str]:
+def _get_git_tracked_files(working_dir: Path) -> set[str] | None:
     """Get all git-tracked files (respects .gitignore).
 
     Uses ``git ls-files`` which excludes gitignored files.
@@ -115,7 +115,7 @@ def _get_git_tracked_files(working_dir: Path) -> set[str]:
         working_dir: Git repository root.
 
     Returns:
-        Set of relative file paths tracked by git.
+        Set of relative file paths tracked by git, or None on failure.
     """
     try:
         result = subprocess.run(
@@ -123,12 +123,12 @@ def _get_git_tracked_files(working_dir: Path) -> set[str]:
             cwd=working_dir,
             capture_output=True,
             text=True,
-            timeout=30,
+            timeout=5,
         )
     except (subprocess.TimeoutExpired, OSError):
-        return set()
+        return None
     if result.returncode != 0:
-        return set()
+        return None
     return {line for line in result.stdout.strip().split("\n") if line}
 
 
@@ -263,10 +263,11 @@ async def bundle_files(
     """
     wd = Path(working_dir)
     is_git = await asyncio.to_thread(_is_git_repo, wd)
-    tracked = await asyncio.to_thread(_get_git_tracked_files, wd) if is_git else None
-    if is_git and not tracked:
-        logger.warning("git ls-files returned no files, falling back to non-git mode")
-        tracked = None
+    tracked: set[str] | None = None
+    if is_git:
+        tracked = await asyncio.to_thread(_get_git_tracked_files, wd)
+        if tracked is None:
+            logger.warning("git ls-files failed, falling back to non-git mode")
 
     file_paths = await asyncio.to_thread(_resolve_globs, wd, patterns, tracked, exclude_patterns)
 

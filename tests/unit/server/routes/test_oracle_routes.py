@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from amelia.agents.oracle import OracleConsultResult
-from amelia.core.types import OracleConsultation
+from amelia.core.types import AgentConfig, OracleConsultation, Profile
 from amelia.server.database import ProfileRepository
 from amelia.server.dependencies import get_profile_repository
 from amelia.server.routes.oracle import get_event_bus, router
@@ -49,10 +49,10 @@ class TestOracleConsultRoute:
         self, client: TestClient, mock_profile_repo: AsyncMock
     ):
         """Consult endpoint should return 200 OK."""
-        mock_profile = MagicMock()
-        mock_profile.working_dir = "/tmp/work"
-        mock_profile.get_agent_config.return_value = MagicMock(
-            driver="cli", model="sonnet"
+        mock_profile = Profile(
+            name="test",
+            working_dir="/tmp/work",
+            agents={"oracle": AgentConfig(driver="cli", model="sonnet")},
         )
         mock_profile_repo.get_active_profile.return_value = mock_profile
 
@@ -87,8 +87,11 @@ class TestOracleConsultRoute:
         self, client: TestClient, mock_profile_repo: AsyncMock
     ):
         """Consult should reject working_dir outside profile root."""
-        mock_profile = MagicMock()
-        mock_profile.working_dir = "/home/user/projects"
+        mock_profile = Profile(
+            name="test",
+            working_dir="/home/user/projects",
+            agents={"oracle": AgentConfig(driver="cli", model="sonnet")},
+        )
         mock_profile_repo.get_active_profile.return_value = mock_profile
 
         response = client.post("/api/oracle/consult", json={
@@ -102,10 +105,10 @@ class TestOracleConsultRoute:
         self, client: TestClient, mock_profile_repo: AsyncMock
     ):
         """Consult should return 400 if profile lacks oracle agent config."""
-        mock_profile = MagicMock()
-        mock_profile.working_dir = "/tmp/work"
-        mock_profile.get_agent_config.side_effect = ValueError(
-            "Agent 'oracle' not configured"
+        mock_profile = Profile(
+            name="test",
+            working_dir="/tmp/work",
+            agents={},
         )
         mock_profile_repo.get_active_profile.return_value = mock_profile
 
