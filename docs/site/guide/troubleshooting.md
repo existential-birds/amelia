@@ -337,7 +337,7 @@ The API driver includes retry logic (up to 3 attempts) and fallback extraction, 
 
 ---
 
-## Configuration Issues
+## Installation Issues
 
 ### No module named 'amelia'
 
@@ -359,6 +359,10 @@ If using `uv tool install`, reinstall:
 ```bash
 uv tool install --reinstall git+https://github.com/existential-birds/amelia.git
 ```
+
+---
+
+## Configuration Issues
 
 ### Profile not found
 
@@ -507,7 +511,7 @@ Error: Issue 'PROJ-999' not found
 
 ## Security Errors
 
-These errors are raised by Amelia's security layers to prevent dangerous operations.
+Amelia includes security layers that block dangerous operations. These errors appear when an agent attempts a command that violates safety rules.
 
 ### ShellInjectionError
 
@@ -516,22 +520,9 @@ These errors are raised by Amelia's security layers to prevent dangerous operati
 ShellInjectionError: Blocked shell metacharacter detected: ';'
 ```
 
-**Cause:** Command contains shell metacharacters that could enable injection attacks.
+**Cause:** An agent tried to run a command containing shell metacharacters (`;`, `|`, `&`, `$`, `` ` ``, `(`, `)`, `<`, `>`, `{`, `}`). Amelia blocks these to prevent shell injection attacks.
 
-**Blocked characters:**
-`;` `|` `&` `$` `` ` `` `(` `)` `<` `>` `{` `}`
-
-**Solution:**
-
-Restructure commands to avoid chaining:
-```bash
-# Bad (blocked)
-"git add . && git commit -m 'message'"
-
-# Good (use separate commands)
-await shell_executor.execute("git add .")
-await shell_executor.execute("git commit -m 'message'")
-```
+**What to do:** This is expected behavior — Amelia's agents execute commands individually, not as chained shell expressions. If you see this error repeatedly, the LLM may be generating unsafe commands. Try switching to a stronger model or using the `cli` driver.
 
 ### BlockedCommandError
 
@@ -540,16 +531,11 @@ await shell_executor.execute("git commit -m 'message'")
 BlockedCommandError: Command 'sudo' is blocked for security reasons
 ```
 
-**Cause:** Command is in the blocklist of privileged/dangerous commands.
+**Cause:** An agent tried to run a privileged or dangerous command. Blocked commands include: `sudo`, `su`, `chmod +s`, `chown`, `chroot`, `systemctl`, `shutdown`, `reboot`, `mkfs`, `dd`, `fdisk`, and others.
 
-**Blocked commands:**
-`sudo`, `su`, `doas`, `pkexec`, `chmod +s`, `setuid`, `setgid`, `chown`, `chroot`, `systemctl`, `service`, `shutdown`, `reboot`, `halt`, `poweroff`, `mkfs`, `dd`, `fdisk`, `parted`, `cfdisk`
-
-**Solution:**
-
-These commands cannot be executed through Amelia for security reasons. If you need to perform privileged operations:
-1. Run them manually outside Amelia
-2. Configure your environment to not require them
+**What to do:** These commands cannot be executed through Amelia. If your workflow requires privileged operations:
+1. Run them manually before starting the workflow
+2. Configure your environment so agents don't need elevated permissions
 
 ### DangerousCommandError
 
@@ -558,27 +544,9 @@ These commands cannot be executed through Amelia for security reasons. If you ne
 DangerousCommandError: Dangerous command pattern detected
 ```
 
-**Cause:** Command matches a pattern known to be destructive or malicious.
+**Cause:** An agent tried to run a command matching a known destructive pattern, such as `rm -rf /`, `curl ... | sh`, or writing to raw devices.
 
-**Blocked patterns:**
-- `rm -rf /` (recursive deletion from root)
-- `:(){ :|:& };:` (fork bomb)
-- `curl ... | sh` (piped shell execution)
-- `wget ... | bash` (piped shell execution)
-- `> /dev/sda` (overwrite disk)
-
-**Solution:**
-
-Review the command carefully. If it's legitimate, break it into safer operations:
-```bash
-# Bad (blocked)
-"curl https://install.sh | sh"
-
-# Good (two-step verification)
-await shell_executor.execute("curl -o install.sh https://install.sh")
-# Review install.sh, then:
-await shell_executor.execute("sh install.sh")
-```
+**What to do:** This is a safety guardrail. If you see this error, the agent attempted something destructive — likely due to a poorly constrained task description. Refine your issue description to be more specific about the expected approach.
 
 ### PathTraversalError
 
@@ -587,19 +555,9 @@ await shell_executor.execute("sh install.sh")
 PathTraversalError: Path '../../../etc/passwd' resolves to '/etc/passwd' which is outside allowed directories
 ```
 
-**Cause:** File path attempts to escape the allowed directory (typically current working directory).
+**Cause:** An agent tried to read or write a file outside the allowed directory (the worktree root).
 
-**Solution:**
-
-Use absolute paths within the project:
-```python
-# Bad (blocked)
-await file_writer.write("../../../etc/passwd", content)
-
-# Good (within project)
-await file_writer.write("docs/file.md", content)
-await file_writer.write("/absolute/path/in/project/file.md", content)
-```
+**What to do:** Agents are sandboxed to the working directory. If you need files outside the project, copy them into the worktree before starting the workflow.
 
 ---
 

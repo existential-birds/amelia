@@ -31,7 +31,7 @@ amelia start 123
 
 <div class="research-link">
 
-Curious about the ideas and research that influenced Amelia? [Explore our research notes →](/ideas/)
+Curious about the ideas and research that influenced Amelia? [Explore our inspirations →](/architecture/inspiration)
 
 </div>
 

@@ -10,14 +10,13 @@ Install, configure, and run your first multi-agent workflow in under five minute
 
 ## Getting Started
 
-1. **Install Amelia** (the easy part)
+1. **Install Amelia**
    ```bash
    uv tool install git+https://github.com/existential-birds/amelia.git
    ```
 
 2. **Create a profile**:
    ```bash
-   # Create a profile
    amelia config profile create dev --driver cli:claude --tracker none --activate
    ```
 

@@ -50,22 +50,30 @@ Local web interface for workflow visibility, approvals, and real-time updates.
 
 ---
 
-## Phase 3: Oracle Consulting System [Planned]
+## Phase 3: Oracle Consulting System [In Progress]
 
 Foundation for agents to query external knowledge sources with codebase context.
 
-**Capabilities:**
+**Completed:**
 
-- `oracle_consult()` tool callable by any agent
-- FileBundler for gathering codebase files via glob patterns
-- Token estimation with tiktoken for context management
-- `OracleConsultation` state model with session metrics
-- FastAPI endpoint + WebSocket events for consultation visibility
-- Tool registration in driver abstraction
+- Oracle agent with agentic consultation via `driver.execute_agentic()`
+- FileBundler for gathering codebase files via glob patterns (git-aware, respects `.gitignore`)
+- Token estimation with tiktoken (`cl100k_base`) for context management
+- `OracleConsultation` state model with session metrics, cost tracking, and outcome recording
+- `POST /api/oracle/consult` endpoint with path traversal prevention
+- 6 WebSocket event types (`EventDomain.ORACLE`): started, thinking, tool call/result, completed, failed
+- Pipeline state integration via `oracle_consultations` append-only reducer
+- Comprehensive test suite (226+ test cases)
+
+**Remaining:**
+
+- Dashboard UI for consultation requests and real-time event streaming
+- Tool registration in driver abstraction for agent-initiated consultations
+- Integration with Architect/Developer/Reviewer agents
 
 **12-Factor Compliance:** F3 (Own Context Window)
 
-See [Oracle Consulting System Design](https://github.com/existential-birds/amelia/issues/TBD).
+See [Oracle Phase 1 Design](../plans/2026-01-26-oracle-phase1-design.md).
 
 ---
 
@@ -111,11 +119,20 @@ See [RLM Integration Design](../plans/2026-01-17-rlm-integration-design.md).
 
 ---
 
-## Phase 6: Spec Builder [Planned]
+## Phase 6: Spec Builder [In Progress]
 
 Document-assisted design tool for synthesizing specifications from research and requirements.
 
-**Capabilities:**
+**Completed:**
+
+- Brainstorming chat interface with streaming (SpecBuilderPage dashboard + BrainstormService backend)
+- Session management with persistence (create, list, delete, resume)
+- Artifact generation from brainstorming sessions (design documents)
+- Handoff from brainstorming to implementation pipeline via `Design` state
+- Token usage and cost tracking per message
+- Tool execution visualization (tool calls, results, reasoning blocks)
+
+**Remaining:**
 
 - Architect integration: Oracle consultation during `plan()` for library knowledge
 - Reviewer integration: Oracle consultation during `agentic_review()` for pattern validation
@@ -126,7 +143,7 @@ Document-assisted design tool for synthesizing specifications from research and 
   - Recent commits touching related code
   - CI pipeline status
 
-**Dependencies:** Phases 4, 5 (Knowledge Library + RLM processing)
+**Dependencies:** Phases 4, 5 (Knowledge Library + RLM processing) for full capability
 
 **12-Factor Compliance:** F3 (Own Context Window), F13 (Pre-fetch Context)
 
@@ -138,14 +155,22 @@ See [Spec Builder Design](https://github.com/existential-birds/amelia/issues/204
 
 Automated verification before code reaches human reviewers.
 
-**Capabilities:**
+**Foundation in place:**
 
-- Pre-review gates: lint, typecheck, test, security scan
+- Consecutive error tracking with automatic escalation (`consecutive_errors` in state)
+- Configurable iteration limits (`max_retries`, `max_iterations`) with auto-halt
+- Evaluator agent with decision matrix (IMPLEMENT, REJECT, DEFER, CLARIFY)
+- Extension hooks for policy enforcement (`PolicyHook`, `AuditExporter`)
+- Pre-push hook running lint, typecheck, test, and dashboard build
+
+**Remaining:**
+
+- Pre-review gates integrated into agent workflow (not just git hooks)
+- Security scan integration (SAST tools)
 - Browser automation (Playwright) for E2E verification
 - Self-reflection protocol: Developer self-reviews before Reviewer
 - Specialized reviewers (Security, Performance, Accessibility) in parallel
 - Configurable coverage thresholds with regression tracking
-- Consecutive error tracking with automatic escalation
 
 **12-Factor Compliance:** F9 (Compact Errors), F10 (Small Focused Agents)
 
@@ -180,18 +205,25 @@ PR management from creation through merge.
 
 ---
 
-## Phase 10: Parallel Execution [Planned]
+## Phase 10: Parallel Execution [In Progress]
 
 Concurrent workflows with resource management.
 
-**Capabilities:**
+**Completed:**
 
-- Concurrent workflows on independent issues, each in isolated worktree
+- Concurrent workflows with configurable `max_concurrent` limit (default: 5)
+- One-workflow-per-worktree constraint with path-based locking
+- Batch workflow API (`POST /workflows/start-batch`) for starting multiple queued workflows
+- Queue-and-execute pattern: `queue_workflow()` → `start_batch_workflows()`
+- Background asyncio task execution with proper state tracking
+
+**Remaining:**
+
 - DAG-aware task scheduling within workflows
 - Resource management (LLM rate limiting, compute allocation)
-- Fire-and-forget execution with notifications
 - **Sectioning pattern**: Parallel independent subtasks
 - **Voting pattern**: Run high-stakes tasks multiple times for consensus
+- Fire-and-forget completion notifications (currently WebSocket/dashboard only)
 
 **12-Factor Compliance:** F5 (Unified State), F6 (Launch/Pause/Resume), F12 (Stateless Reducer)
 
@@ -216,10 +248,15 @@ Slack/Discord interface for async workflow management.
 
 Metrics and feedback for agent quality improvement.
 
-**Capabilities:**
+**Foundation in place:**
 
-- Success/failure tracking per agent, project, and task type
-- Reviewer pattern detection for preemptive fixes
+- Success/failure tracking with `success_rate` in usage summaries
+- Token usage and cost tracking per agent, model, and workflow (15+ models supported)
+- Costs dashboard with trend charts, success rate badges, and model breakdown
+- Reviewer structured output with severity classification (Critical/Major/Minor)
+
+**Remaining:**
+
 - Project-specific knowledge base (idioms, pitfalls, decisions)
 - Prompt A/B testing with benchmark suite
 - Pre-merge evaluation CI for agent quality
@@ -279,12 +316,21 @@ Parallel execution on cloud infrastructure.
 
 Defense-in-depth security with per-agent permissions.
 
-**Capabilities:**
+**Foundation in place:**
+
+- Extension protocol system: `PolicyHook`, `AuthProvider`, `AuditExporter`, `AnalyticsSink`
+- `ExtensionRegistry` for registering enterprise security hooks
+- Policy enforcement at workflow start (`check_policy_workflow_start()`)
+- Audit event broadcasting to all registered exporters
+- Path traversal prevention in worktree and file operations
+- No-op implementations for graceful degradation without extensions
+
+**Remaining:**
 
 - Deterministic guardrails blocking high-risk operations
 - Per-agent tool allowlists (Architect: read-only, Developer: write, Reviewer: read+comment)
 - Reasoning-based defenses with optional guard model
-- Audit logging of all tool calls with agent identity
+- Tool-call-level audit logging with agent identity
 - MCP security: explicit allowlists, collision detection, taint tracking
 
 **12-Factor Compliance:** F7 (Contact Humans with Tools), F9 (Compact Errors), F10 (Small Focused Agents)
@@ -299,7 +345,7 @@ See [Security Guardrails Layer](https://github.com/existential-birds/amelia/issu
 |--------|--------|----------------|
 | F1: Natural Language → Tool Calls | ✅ Complete | Phase 1 |
 | F2: Own Your Prompts | ✅ Complete | Phase 12 |
-| F3: Own Your Context Window | 🔄 Planned | Phases 3, 4, 5, 6 |
+| F3: Own Your Context Window | 🚧 In Progress | Phases 3, 4, 5, 6 |
 | F4: Tools = Structured Outputs | ✅ Complete | Phase 1 |
 | F5: Unified State | ✅ Complete | Phase 2 |
 | F6: Launch/Pause/Resume | ✅ Complete | Phase 2 |
@@ -311,7 +357,7 @@ See [Security Guardrails Layer](https://github.com/existential-birds/amelia/issu
 | F12: Stateless Reducer | ✅ Complete | Phase 1 |
 | F13: Pre-fetch Context | 🔄 Planned | Phase 6 |
 
-**Current:** 9 Complete, 4 Planned
+**Current:** 9 Complete, 1 In Progress, 3 Planned
 
 ---
 

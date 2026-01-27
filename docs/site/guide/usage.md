@@ -25,59 +25,7 @@ amelia config profile create work \
 
 ## Configuration
 
-Amelia uses profile-based configuration managed through the CLI. See [Configuration Reference](/guide/configuration) for complete details.
-
-### Profile Management
-
-```bash
-# List all profiles
-amelia config profile list
-
-# Create a new profile
-amelia config profile create <name> \
-  --driver <driver> \
-  --model <model> \
-  --tracker <tracker> \
-  --activate
-
-# Show profile details
-amelia config profile show <name>
-
-# Set the active profile
-amelia config profile activate <name>
-
-# Delete a profile
-amelia config profile delete <name>
-```
-
-### Server Configuration
-
-```bash
-# Show server settings
-amelia config server show
-
-# Set server options
-amelia config server set --port 9000 --host 0.0.0.0
-```
-
-### Driver Options
-
-| Driver | Description | Requirements |
-|--------|-------------|--------------|
-| `api:openrouter` | Direct OpenRouter API calls | `OPENROUTER_API_KEY` env var, `--model` option |
-| `api` | Alias for `api:openrouter` | Same as above |
-| `cli:claude` | Wraps Claude CLI tool | `claude` CLI installed and authenticated |
-| `cli` | Alias for `cli:claude` | Same as above |
-
-### Tracker Options
-
-| Tracker | Description | Requirements |
-|---------|-------------|--------------|
-| `github` | GitHub Issues | `gh` CLI authenticated (`gh auth login`) |
-| `jira` | Jira issues | `JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN` |
-| `none` | No tracker (manual input) | None |
-
-See [Driver Abstraction](/architecture/concepts#the-driver-abstraction) and [Tracker Abstraction](/architecture/concepts#the-tracker-abstraction) for architectural details.
+Amelia uses profile-based configuration managed through the CLI or dashboard. See the [Configuration Reference](/guide/configuration) for profile setup, driver options, server settings, and environment variables.
 
 ## CLI Reference
 
@@ -778,58 +726,10 @@ done
 
 ## Environment Variables
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `OPENROUTER_API_KEY` | - | OpenRouter API key (required for `api:openrouter` driver) |
-| `AMELIA_PORT` | `8420` | Server port |
-| `AMELIA_HOST` | `127.0.0.1` | Server host |
+See [Configuration Reference — Environment Variable Overrides](/guide/configuration#environment-variable-overrides) for the full list of supported variables.
 
 ---
 
 ## Troubleshooting
 
-### Server won't start
-
-```
-Error: Port 8420 is already in use
-```
-
-Another process is using the port. Either:
-- Stop the existing process: `lsof -i :8420` then `kill <PID>`
-- Use a different port: `amelia dev --port 9000`
-
-### No active workflow
-
-```
-Error: No workflow active in /path/to/project
-```
-
-Ensure you:
-1. Started the server: `amelia dev`
-2. Started a workflow: `amelia start ISSUE-123`
-3. Are in the correct directory
-
-### Server unreachable
-
-```
-Error: Cannot connect to server at http://127.0.0.1:8420
-```
-
-Start the server first:
-```bash
-amelia dev
-# or
-amelia server
-```
-
-### Workflow conflict
-
-```
-Error: Workflow already active in /path/to/project
-```
-
-Each worktree can only have one active workflow. Either:
-- Cancel the existing workflow: `amelia cancel --force`
-- Use a different worktree: `git worktree add ../project-new`
-
-See [Troubleshooting](/guide/troubleshooting) for more solutions.
+See the [Troubleshooting guide](/guide/troubleshooting) for solutions to common issues including server startup, workflow conflicts, driver errors, and configuration problems.

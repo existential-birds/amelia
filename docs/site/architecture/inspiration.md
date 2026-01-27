@@ -117,7 +117,3 @@ Production-grade patterns for building reliable agentic systems. Amelia's archit
 | Branch/Return Primitives | Recursive agent decomposition |
 | RAPTOR Retrieval | Hierarchical code understanding |
 | 12-Factor Agents | Stateless, immutable, observable design |
-
-## Further Reading
-
-For detailed research notes on each paper and how concepts map to Amelia's codebase, see [Design Influences](./research/inspirations-research-notes.md).
