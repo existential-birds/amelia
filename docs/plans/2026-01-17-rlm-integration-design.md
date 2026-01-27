@@ -5,7 +5,7 @@
 **Related Issues:**
 - #203 - Knowledge Library (shared RAG infrastructure)
 - #204 - Spec Builder (document-assisted design tool)
-- Oracle Consulting System (existing implementation plan)
+- #290 - Oracle Consulting System (Phase 1 complete — PR #372)
 
 **References:**
 - `docs/research/recursive_language_models.md` - RLM paper analysis
@@ -260,16 +260,18 @@ request_capability() called
 
 ---
 
-## Relationship to Existing Oracle Plan
+## Relationship to Oracle Phase 1 (Complete)
 
-The existing Oracle implementation plan establishes:
-- FileBundler for gathering codebase files
-- Token estimation with tiktoken
-- OracleConsultation state model
-- FastAPI endpoint + WebSocket events
-- Tool registration in drivers
+Phase 1 delivered (PR #372, branch `docs/oracle-phase1-design`):
+- `amelia/tools/file_bundler.py` — FileBundler for gathering codebase files with git-awareness, token estimation via tiktoken, concurrent reads with semaphore-based fd protection
+- `amelia/agents/oracle.py` — Oracle agent with agentic consultation via `execute_agentic()`, event emission (started/thinking/completed/failed/tool_call/tool_result)
+- `amelia/core/types.py` — `OracleConsultation` Pydantic model
+- `amelia/pipelines/base.py` — `oracle_consultations` append-only field on `BasePipelineState`
+- `amelia/server/models/events.py` — `ORACLE` domain + 4 consultation event types + 2 trace-level tool events
+- `amelia/server/routes/oracle.py` — `POST /api/oracle/consult` endpoint with FastAPI DI, profile-based config, working_dir validation
+- `amelia/server/main.py` — Oracle router registered with dependency overrides
 
-### RLM Extensions
+### RLM Extensions (Phase 3)
 
 | Existing Component | RLM Extension |
 |--------------------|---------------|
@@ -279,47 +281,25 @@ The existing Oracle implementation plan establishes:
 | OracleConsultation model | Add `tools_used`, `recursive_calls`, `capability_requests` fields |
 | Event types | Add `ORACLE_RLM_TOOL_CALL`, `ORACLE_CAPABILITY_REQUESTED` |
 
-### Coordination with Pipeline Foundation
+### Pipeline Foundation Coordination (Done)
 
-The [Pipeline Foundation Design](./2026-01-10-pipeline-foundation-design.md) refactors Amelia's state management:
-
-| Oracle Plan References | Pipeline Foundation Changes To |
-|------------------------|-------------------------------|
-| `ExecutionState` | Replaced by `BasePipelineState` + `ImplementationState` |
-| `amelia/core/state.py` | Deleted; state moves to `amelia/pipelines/` |
-
-**Impact on Oracle integration:**
-
-The existing Oracle plan adds `oracle_consultations: list[OracleConsultation]` to `ExecutionState`. Since `ExecutionState` is being replaced:
-
-- Add `oracle_consultations` to `BasePipelineState` (not the old `ExecutionState`)
-- This allows all pipeline types (Implementation, Review, future pipelines) to use Oracle consultations
-- The field uses `Annotated[list[OracleConsultation], operator.add]` for append-only semantics
-
-```python
-# amelia/pipelines/base.py
-class BasePipelineState(BaseModel):
-    # ... existing fields ...
-
-    # Oracle consultations (append-only)
-    oracle_consultations: Annotated[
-        list[OracleConsultation], operator.add
-    ] = Field(default_factory=list)
-```
+`oracle_consultations` was added to `BasePipelineState` in `amelia/pipelines/base.py` using `Annotated[list[OracleConsultation], operator.add]` for append-only semantics. All pipeline types (Implementation, Review, future pipelines) can use Oracle consultations.
 
 ---
 
 ## Implementation Phases
 
-| Phase | What | Depends On |
-|-------|------|------------|
-| **Phase 1** | Current Oracle plan (foundation) | — |
-| **Phase 2** | Knowledge Library (#203) | Phase 1 |
-| **Phase 3** | RLM structured tools in Oracle | Phase 2 |
-| **Phase 4** | Agent integration (Architect, Reviewer) | Phase 3 |
-| **Phase 5** | Spec Builder integration (#204) | Phase 3, 4 |
+| Phase | What | Depends On | Status |
+|-------|------|------------|--------|
+| **Phase 1** | Oracle foundation (PR #372) | — | **Complete** |
+| **Phase 2** | Knowledge Library (#203) | Phase 1 | Planned |
+| **Phase 3** | RLM structured tools in Oracle | Phase 2 | Planned |
+| **Phase 4** | Agent integration (Architect, Reviewer) + driver tool registration | Phase 3 | Planned |
+| **Phase 5** | Spec Builder integration (#204) | Phase 3, 4 | Planned |
 
 **Key dependency:** Knowledge Library (#203) must be implemented before Phase 3, since Oracle queries it for docs.
+
+**Phase 4 scope:** Register `oracle_consult` as a tool in the driver abstraction so Architect, Reviewer, and Developer agents can invoke Oracle during agentic execution. Add trigger logic for when agents should consult Oracle (unfamiliar frameworks, library usage validation, API design decisions).
 
 ---
 

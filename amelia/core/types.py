@@ -4,9 +4,10 @@ Contains StrEnum types (DriverType, TrackerType, Severity) and
 Pydantic models (RetryConfig, Profile, Settings, Issue) used throughout
 the Amelia agentic coding orchestrator.
 """
+from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -183,3 +184,33 @@ class ReviewResult(BaseModel):
     approved: bool
     comments: list[str]
     severity: Severity
+
+
+class OracleConsultation(BaseModel):
+    """Record of an Oracle consultation for persistence and analytics.
+
+    Attributes:
+        timestamp: When the consultation occurred.
+        problem: The problem statement submitted.
+        advice: The Oracle's advice (None until complete).
+        model: LLM model used.
+        session_id: UUIDv4, generated per-consultation by Oracle.consult().
+        workflow_id: Optional workflow ID for cross-referencing with orchestrator runs.
+        tokens: Token counts (e.g., {"input": N, "output": M}).
+        cost_usd: Estimated cost in USD.
+        files_consulted: File paths included in context.
+        outcome: Whether consultation succeeded or errored.
+        error_message: Error details if outcome is "error".
+    """
+
+    timestamp: datetime
+    problem: str
+    advice: str | None = None
+    model: str
+    session_id: str
+    workflow_id: str | None = None
+    tokens: dict[str, int] = Field(default_factory=dict)
+    cost_usd: float | None = None
+    files_consulted: list[str] = Field(default_factory=list)
+    outcome: Literal["success", "error"] = "success"
+    error_message: str | None = None

@@ -90,6 +90,10 @@ from amelia.server.routes.brainstorm import (
     get_driver,
     router as brainstorm_router,
 )
+from amelia.server.routes.oracle import (
+    get_event_bus as oracle_get_event_bus,
+    router as oracle_router,
+)
 from amelia.server.routes.prompts import get_prompt_repository, router as prompts_router
 from amelia.server.routes.settings import router as settings_router
 from amelia.server.routes.websocket import connection_manager
@@ -176,6 +180,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         profile_repo=profile_repo,
     )
     app.state.brainstorm_service = brainstorm_service
+    app.state.event_bus = event_bus
 
     # Create lifecycle components
     log_retention = LogRetentionService(
@@ -245,6 +250,7 @@ def create_app() -> FastAPI:
     application.include_router(usage_router, prefix="/api")
     application.include_router(workflows_router, prefix="/api")
     application.include_router(brainstorm_router, prefix="/api/brainstorm")
+    application.include_router(oracle_router, prefix="/api/oracle")
     application.include_router(websocket_router)  # No prefix - route is /ws/events
     application.include_router(prompts_router)  # Already has /api/prompts prefix
     application.include_router(settings_router)  # Already has /api prefix
@@ -299,6 +305,14 @@ def create_app() -> FastAPI:
         return active_profile.working_dir
 
     application.dependency_overrides[get_cwd] = get_brainstorm_cwd
+
+    # Set up Oracle dependencies
+    def get_oracle_event_bus() -> EventBus:
+        """Get EventBus for Oracle consultations."""
+        bus: EventBus = application.state.event_bus
+        return bus
+
+    application.dependency_overrides[oracle_get_event_bus] = get_oracle_event_bus
 
     # Serve dashboard static files
     # Priority: bundled static files (installed package) > dev build (dashboard/dist)

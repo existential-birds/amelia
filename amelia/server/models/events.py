@@ -13,10 +13,12 @@ class EventDomain(StrEnum):
     Attributes:
         WORKFLOW: Standard workflow events (orchestrator, agents).
         BRAINSTORM: Brainstorming session events (chat streaming).
+        ORACLE: Oracle consultation events.
     """
 
     WORKFLOW = "workflow"
     BRAINSTORM = "brainstorm"
+    ORACLE = "oracle"
 
 
 class EventLevel(StrEnum):
@@ -119,6 +121,14 @@ class EventType(StrEnum):
     BRAINSTORM_ARTIFACT_CREATED = "brainstorm_artifact_created"
     BRAINSTORM_SESSION_COMPLETED = "brainstorm_session_completed"
 
+    # Oracle consultation events
+    ORACLE_CONSULTATION_STARTED = "oracle_consultation_started"
+    ORACLE_CONSULTATION_THINKING = "oracle_consultation_thinking"
+    ORACLE_TOOL_CALL = "oracle_tool_call"
+    ORACLE_TOOL_RESULT = "oracle_tool_result"
+    ORACLE_CONSULTATION_COMPLETED = "oracle_consultation_completed"
+    ORACLE_CONSULTATION_FAILED = "oracle_consultation_failed"
+
 
 # Event type to level mapping
 _INFO_TYPES: frozenset[EventType] = frozenset({
@@ -133,6 +143,9 @@ _INFO_TYPES: frozenset[EventType] = frozenset({
     EventType.APPROVAL_GRANTED,
     EventType.APPROVAL_REJECTED,
     EventType.REVIEW_COMPLETED,
+    EventType.ORACLE_CONSULTATION_STARTED,
+    EventType.ORACLE_CONSULTATION_COMPLETED,
+    EventType.ORACLE_CONSULTATION_FAILED,
 })
 
 _TRACE_TYPES: frozenset[EventType] = frozenset({
@@ -140,6 +153,9 @@ _TRACE_TYPES: frozenset[EventType] = frozenset({
     EventType.CLAUDE_TOOL_CALL,
     EventType.CLAUDE_TOOL_RESULT,
     EventType.AGENT_OUTPUT,
+    EventType.ORACLE_CONSULTATION_THINKING,
+    EventType.ORACLE_TOOL_CALL,
+    EventType.ORACLE_TOOL_RESULT,
 })
 
 
@@ -176,6 +192,7 @@ class WorkflowEvent(BaseModel):
         level: Event severity level (info, debug, trace).
         message: Human-readable summary.
         data: Optional structured payload (file paths, error details, etc.).
+        session_id: Per-consultation session ID (independent from workflow_id).
         correlation_id: Links related events (e.g., approval request -> granted).
         tool_name: Tool name for trace events (optional).
         tool_input: Tool input parameters for trace events (optional).
@@ -199,6 +216,10 @@ class WorkflowEvent(BaseModel):
     data: dict[str, Any] | None = Field(
         default=None,
         description="Optional structured payload",
+    )
+    session_id: str | None = Field(
+        default=None,
+        description="Per-consultation session ID (independent from workflow_id)",
     )
     correlation_id: str | None = Field(
         default=None,

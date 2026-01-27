@@ -195,7 +195,14 @@ export type EventType =
   | 'claude_thinking'
   | 'claude_tool_call'
   | 'claude_tool_result'
-  | 'agent_output';
+  | 'agent_output'
+  // Oracle consultation
+  | 'oracle_consultation_started'
+  | 'oracle_consultation_thinking'
+  | 'oracle_tool_call'
+  | 'oracle_tool_result'
+  | 'oracle_consultation_completed'
+  | 'oracle_consultation_failed';
 
 /**
  * A single event emitted during workflow execution.
@@ -249,6 +256,9 @@ export interface WorkflowEvent {
 
   /** LLM model used for this event (for trace events). */
   model?: string;
+
+  /** Per-consultation session ID (independent from workflow_id, used by Oracle events). */
+  session_id?: string;
 }
 
 // ============================================================================
