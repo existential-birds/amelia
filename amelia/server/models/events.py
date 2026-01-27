@@ -123,6 +123,8 @@ class EventType(StrEnum):
     # Oracle consultation events
     ORACLE_CONSULTATION_STARTED = "oracle_consultation_started"
     ORACLE_CONSULTATION_THINKING = "oracle_consultation_thinking"
+    ORACLE_TOOL_CALL = "oracle_tool_call"
+    ORACLE_TOOL_RESULT = "oracle_tool_result"
     ORACLE_CONSULTATION_COMPLETED = "oracle_consultation_completed"
     ORACLE_CONSULTATION_FAILED = "oracle_consultation_failed"
 
@@ -151,6 +153,8 @@ _TRACE_TYPES: frozenset[EventType] = frozenset({
     EventType.CLAUDE_TOOL_RESULT,
     EventType.AGENT_OUTPUT,
     EventType.ORACLE_CONSULTATION_THINKING,
+    EventType.ORACLE_TOOL_CALL,
+    EventType.ORACLE_TOOL_RESULT,
 })
 
 

@@ -197,6 +197,37 @@ class Oracle:
                     message=message.content or "",
                 ))
 
+            elif message.type == AgenticMessageType.TOOL_CALL:
+                tool_name = message.tool_name or "unknown"
+                logger.debug(
+                    "Oracle tool call",
+                    session_id=session_id,
+                    tool_name=tool_name,
+                )
+                self._emit(self._make_event(
+                    EventType.ORACLE_TOOL_CALL,
+                    session_id=session_id,
+                    message=f"Tool call: {tool_name}",
+                    tool_name=tool_name,
+                    tool_input=message.tool_input,
+                ))
+
+            elif message.type == AgenticMessageType.TOOL_RESULT:
+                tool_name = message.tool_name or "unknown"
+                logger.debug(
+                    "Oracle tool result",
+                    session_id=session_id,
+                    tool_name=tool_name,
+                    is_error=message.is_error,
+                )
+                self._emit(self._make_event(
+                    EventType.ORACLE_TOOL_RESULT,
+                    session_id=session_id,
+                    message=f"Tool result: {tool_name}",
+                    tool_name=tool_name,
+                    is_error=message.is_error,
+                ))
+
             elif message.type == AgenticMessageType.RESULT:
                 advice = message.content or ""
 

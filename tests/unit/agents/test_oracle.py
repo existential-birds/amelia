@@ -133,6 +133,67 @@ class TestOracleConsult:
         assert EventType.ORACLE_CONSULTATION_STARTED in event_types
         assert EventType.ORACLE_CONSULTATION_COMPLETED in event_types
 
+    async def test_consult_emits_tool_call_events(self, tmp_path):
+        """consult() should emit tool call and tool result events."""
+        config = AgentConfig(driver="cli", model="sonnet")
+        event_bus = EventBus()
+        emitted: list[Any] = []
+        event_bus.subscribe(lambda e: emitted.append(e))
+
+        with patch("amelia.agents.oracle.get_driver") as mock_get_driver:
+            mock_driver = MagicMock()
+            mock_driver.execute_agentic = create_mock_execute_agentic([
+                AgenticMessage(type=AgenticMessageType.THINKING, content="Let me check..."),
+                AgenticMessage(
+                    type=AgenticMessageType.TOOL_CALL,
+                    tool_name="read_file",
+                    tool_input={"path": "src/main.py"},
+                    tool_call_id="call-1",
+                ),
+                AgenticMessage(
+                    type=AgenticMessageType.TOOL_RESULT,
+                    tool_name="read_file",
+                    tool_output="file contents here",
+                    tool_call_id="call-1",
+                ),
+                AgenticMessage(type=AgenticMessageType.RESULT, content="Use injection."),
+            ])
+            mock_get_driver.return_value = mock_driver
+
+            with patch("amelia.agents.oracle.bundle_files", new_callable=AsyncMock) as mock_bundle:
+                from amelia.tools.file_bundler import FileBundle
+
+                mock_bundle.return_value = FileBundle(
+                    files=[], total_tokens=0, working_dir=str(tmp_path),
+                )
+
+                oracle = Oracle(config, event_bus=event_bus)
+                result = await oracle.consult(
+                    problem="How to refactor?",
+                    working_dir=str(tmp_path),
+                )
+
+        event_types = [e.event_type for e in emitted]
+        assert EventType.ORACLE_TOOL_CALL in event_types
+        assert EventType.ORACLE_TOOL_RESULT in event_types
+
+        # Verify tool call event details
+        tool_call_events = [e for e in emitted if e.event_type == EventType.ORACLE_TOOL_CALL]
+        assert len(tool_call_events) == 1
+        assert tool_call_events[0].message == "Tool call: read_file"
+        assert tool_call_events[0].tool_name == "read_file"
+        assert tool_call_events[0].tool_input == {"path": "src/main.py"}
+
+        # Verify tool result event details
+        tool_result_events = [e for e in emitted if e.event_type == EventType.ORACLE_TOOL_RESULT]
+        assert len(tool_result_events) == 1
+        assert tool_result_events[0].message == "Tool result: read_file"
+        assert tool_result_events[0].tool_name == "read_file"
+        assert tool_result_events[0].is_error is False
+
+        # Verify advice is still captured correctly
+        assert result.advice == "Use injection."
+
     async def test_consult_handles_driver_error(self, tmp_path):
         """consult() should return error outcome on driver failure."""
         config = AgentConfig(driver="cli", model="sonnet")
