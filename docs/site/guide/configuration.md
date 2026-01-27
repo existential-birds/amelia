@@ -242,7 +242,7 @@ The dashboard provides a visual interface for managing configuration at `/settin
 - Set execution limits (max concurrent workflows)
 - Toggle debugging options (stream tool results)
 
-## Example: Setting Up a New Project
+## Example
 
 ```bash
 # Create a profile for your project
@@ -255,53 +255,10 @@ amelia config profile create myproject \
 
 # Verify the profile
 amelia config profile show myproject
-
-# Start the server
-amelia dev
-
-# Begin working
-cd /path/to/myproject
-amelia start 123  # Start workflow for issue #123
 ```
+
+For a full walkthrough including server startup and workflow execution, see the [Usage Guide](/guide/usage).
 
 ## Troubleshooting
 
-### "Profile not found"
-
-Ensure the profile exists and the name matches exactly (case-sensitive):
-
-```bash
-amelia config profile list
-```
-
-### "Driver not recognized"
-
-Valid driver values are: `api`, `cli`. You can also specify with provider (e.g., `api:openrouter`, `cli:claude`) but the base value (`api` or `cli`) is what's validated.
-
-### "Missing model field"
-
-API drivers require the `model` field. Specify it during creation:
-
-```bash
-amelia config profile create myprofile --driver api:openrouter --model "minimax/minimax-m2"
-```
-
-### "Missing OPENROUTER_API_KEY"
-
-Set the environment variable:
-
-```bash
-export OPENROUTER_API_KEY="sk-..."
-```
-
-### "Jira authentication failed"
-
-Verify all three Jira environment variables are set correctly:
-
-```bash
-export JIRA_BASE_URL="https://your-company.atlassian.net"
-export JIRA_EMAIL="your.email@company.com"
-export JIRA_API_TOKEN="your-api-token"
-```
-
-Generate an API token at: https://id.atlassian.com/manage-profile/security/api-tokens
+For configuration-related errors ("Profile not found", "Driver not recognized", "Missing model field", "Missing API key"), see [Troubleshooting — Configuration Issues](/guide/troubleshooting#configuration-issues).

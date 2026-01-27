@@ -9,6 +9,7 @@ from amelia.main import app
 from amelia.server.banner import CREAM, GOLD, MOSS, RUST
 from amelia.server.dev import (
     _get_log_level_style,
+    check_dashboard_built,
     check_node_installed,
     check_node_modules_exist,
     check_pnpm_installed,
@@ -45,6 +46,16 @@ class TestModeDetection:
         with patch("amelia.server.dev.Path.cwd", return_value=tmp_path):
             assert is_amelia_dev_repo() is expected
 
+    def test_is_amelia_dev_repo_worktree(self, tmp_path: Path):
+        """Test repo detection in a git worktree where .git is a file."""
+        (tmp_path / "amelia").mkdir()
+        (tmp_path / "dashboard").mkdir()
+        (tmp_path / "dashboard" / "package.json").write_text("{}")
+        (tmp_path / ".git").write_text("gitdir: /some/path/.git/worktrees/feature")
+
+        with patch("amelia.server.dev.Path.cwd", return_value=tmp_path):
+            assert is_amelia_dev_repo() is True
+
 
 class TestDependencyChecks:
     """Tests for pnpm/node dependency checks."""
@@ -72,6 +83,20 @@ class TestDependencyChecks:
 
         with patch("amelia.server.dev.Path.cwd", return_value=tmp_path):
             assert check_node_modules_exist() is expected
+
+    @pytest.mark.parametrize("create_index_html,expected", [
+        (True, True),
+        (False, False),
+    ], ids=["built", "not_built"])
+    def test_check_dashboard_built(self, tmp_path: Path, create_index_html, expected):
+        """Test dashboard build detection via index.html."""
+        static_dir = tmp_path / "amelia" / "server" / "static"
+        static_dir.mkdir(parents=True)
+        if create_index_html:
+            (static_dir / "index.html").write_text("<html></html>")
+
+        with patch("amelia.server.dev.Path.cwd", return_value=tmp_path):
+            assert check_dashboard_built() is expected
 
 
 class TestPortCheck:
@@ -192,6 +217,28 @@ class TestAutoInstall:
 
         with patch("amelia.server.dev.asyncio.create_subprocess_exec", return_value=mock_process):
             result = await run_pnpm_install()
+            assert result is expected
+
+
+class TestAutoBuild:
+    """Tests for auto-build behavior."""
+
+    @pytest.mark.parametrize("return_code,expected", [
+        (0, True),
+        (1, False),
+    ], ids=["success", "failure"])
+    async def test_run_pnpm_build(self, return_code, expected) -> None:
+        """Test pnpm build handles exit codes correctly."""
+        from amelia.server.dev import run_pnpm_build
+
+        mock_process = AsyncMock()
+        mock_process.returncode = return_code
+        mock_process.stdout = AsyncMock()
+        mock_process.stdout.readline = AsyncMock(side_effect=[b"", None])
+        mock_process.wait = AsyncMock(return_value=return_code)
+
+        with patch("amelia.server.dev.asyncio.create_subprocess_exec", return_value=mock_process):
+            result = await run_pnpm_build()
             assert result is expected
 
 

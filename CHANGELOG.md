@@ -7,15 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-01-26
+
+### Added
+
+- **orchestrator:** Add replan workflow for blocked plans, allowing the Architect to revise rejected plans without restarting the workflow ([#361](https://github.com/existential-birds/amelia/pull/361))
+- **orchestrator:** Add external plan import capability to bypass Architect planning and supply a pre-written plan ([#347](https://github.com/existential-birds/amelia/pull/347))
+- **dashboard:** Add plan import UI with file preview for importing external plans into workflows ([#351](https://github.com/existential-birds/amelia/pull/351))
+- **drivers:** Add `allowed_tools` parameter for restricting which tools an agent can use ([#360](https://github.com/existential-birds/amelia/pull/360))
+- **cli:** Add tracker prompt to first-time setup for guided onboarding ([#352](https://github.com/existential-birds/amelia/pull/352))
+- **events:** Add task progress events for real-time dashboard activity log updates ([#336](https://github.com/existential-birds/amelia/pull/336))
+
 ### Changed
+
+- **Breaking:** Per-agent driver configuration replaces global driver/model settings ([#279](https://github.com/existential-birds/amelia/pull/279))
+
+  **Migration:** Delete your existing database file (`~/.amelia/amelia.db`) before starting Amelia. The database schema has changed - the `profiles` table now uses a single `agents` JSON column instead of `driver`, `model`, `validator_model`, `max_review_iterations`, and `max_task_review_iterations` columns. You will need to recreate your profiles using `amelia config profile create`.
 
 - **types:** Simplify DriverType (`cli:claude` → `cli`, `api:openrouter` → `api`) and TrackerType (`noop` → `none`) enums ([#333](https://github.com/existential-birds/amelia/issues/333))
 
   **Migration:** Existing database values are automatically migrated on server startup. No manual action required.
 
-- **Breaking:** Per-agent driver configuration replaces global driver/model settings ([#279](https://github.com/existential-birds/amelia/pull/279))
+### Fixed
 
-  **Migration:** Delete your existing database file (`~/.amelia/amelia.db`) before starting Amelia. The database schema has changed - the `profiles` table now uses a single `agents` JSON column instead of `driver`, `model`, `validator_model`, `max_review_iterations`, and `max_task_review_iterations` columns. You will need to recreate your profiles using `amelia config profile create`.
+- **reviewer:** Remove legacy parsing that incorrectly captured non-issue bullets as review findings ([#350](https://github.com/existential-birds/amelia/pull/350))
+- **dashboard:** Fix agent card layout in profile modal ([#331](https://github.com/existential-birds/amelia/pull/331))
+- **docs:** Remove broken Bebas Neue font symlink ([#329](https://github.com/existential-birds/amelia/pull/329))
+
+### Security
+
+- **deps:** Update python-multipart from 0.0.21 to 0.0.22 ([#362](https://github.com/existential-birds/amelia/pull/362))
 
 ## [0.10.0] - 2026-01-22
 
@@ -289,7 +310,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - FastAPI server with WebSocket support
 - React dashboard for workflow visualization
 
-[Unreleased]: https://github.com/existential-birds/amelia/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/existential-birds/amelia/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/existential-birds/amelia/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/existential-birds/amelia/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/existential-birds/amelia/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/existential-birds/amelia/compare/v0.7.0...v0.8.0

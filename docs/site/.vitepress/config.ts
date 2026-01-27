@@ -18,31 +18,17 @@ const guideSidebar = [
     items: [
       { text: 'Overview', link: '/architecture/overview' },
       { text: 'Concepts', link: '/architecture/concepts' },
-      { text: 'Data Model', link: '/architecture/data-model' }
+      { text: 'Data Model', link: '/architecture/data-model' },
+      { text: 'Inspiration', link: '/architecture/inspiration' }
     ]
   }
 ]
 
 /**
- * About sidebar - ideas, research, and reference content.
- * Used for /ideas/ and /reference/ URL prefixes.
+ * About sidebar - reference content.
+ * Used for /reference/ URL prefix.
  */
 const aboutSidebar = [
-  {
-    text: 'Ideas & Explorations',
-    items: [
-      { text: 'Overview', link: '/ideas/' }
-    ]
-  },
-  {
-    text: 'Research',
-    items: [
-      { text: 'AI Impact on Organizations', link: '/ideas/research/ai-impact-organizations' },
-      { text: 'Benchmarking Code Review', link: '/ideas/research/benchmarking-code-review-agents' },
-      { text: 'Knowledge Agents', link: '/ideas/research/knowledge-agents' },
-      { text: 'Design Influences', link: '/ideas/research/inspirations-research-notes' }
-    ]
-  },
   {
     text: 'Reference',
     items: [
@@ -77,15 +63,14 @@ export default defineConfig({
     // Navigation menu
     nav: [
       { text: 'Guide', link: '/guide/usage' },
-      { text: 'About', link: '/ideas/' }
+      { text: 'About', link: '/reference/roadmap' }
     ],
 
     // Sidebar navigation
     sidebar: {
       '/guide/': guideSidebar,
       '/architecture/': guideSidebar,
-      '/reference/': aboutSidebar,
-      '/ideas/': aboutSidebar
+      '/reference/': aboutSidebar
     },
 
     // Social links

@@ -6,78 +6,10 @@
 
 [Amelia](https://en.wikipedia.org/wiki/Amelia_Earhart) is multi-agent orchestration for software development with human-in-the-loop approval gates, defense-in-depth security, and end-to-end observability.
 
-See the [**Roadmap**](https://existential-birds.github.io/amelia/reference/roadmap) for where we're headed.
-
-## Current Status
-
 > [!WARNING]
 > This project is under active development. APIs and configuration may change between releases.
 
-- Full orchestrator loop with human approval gates (CLI and web dashboard)
-- CLI driver (Claude CLI wrapper) with structured outputs, streaming, and agentic execution
-- Local code review with competitive strategy
-- GitHub tracker integration (via `gh` CLI)
-- Real tool execution in Developer agent (shell commands, file writes)
-- FastAPI server with SQLite persistence and WebSocket event streaming
-- Web dashboard with workflow visualization, real-time activity log, and approval controls
-
-**Architecture:** Aligned with [12-Factor Agents](https://github.com/humanlayer/12-factor-agents) for reliable LLM-powered software.
-
-## Features
-
-### Quick Shot
-
-Start ad-hoc tasks directly from the sidebar without navigating away from your current workflow.
-
-![Quick Shot](docs/design/quick_shot_feature.png)
-
-### Spec Builder
-
-Brainstorm and refine feature specifications through an interactive chat interface before implementation.
-
-![Spec Builder](docs/design/spec-builder-chat.png)
-
-### Plan View
-
-Review and approve generated implementation plans before execution.
-
-![Plan View](docs/design/hugo_plan.png)
-
-### Prompt Editor
-
-Customize agent prompts directly in the dashboard to tune behavior for your workflow.
-
-![Prompt Editor](docs/design/amelia_prompt_editor.png)
-
-### Streaming Tool Calls and Thinking Tokens
-
-Watch agents work in real-time with streaming tool execution and visible reasoning.
-
-![Streaming Tool Calls](docs/design/hugo_logs_mixed.png)
-
-### Multi-Round Code Review
-
-Iterative review cycles between Developer and Reviewer agents until changes are approved.
-
-![Code Review](docs/design/hugo_logs_filter_agent.png)
-
-### Details View
-
-Inspect individual agent runs, tool calls, and outputs.
-
-![Details View](docs/design/hugo_details_opus.png)
-
-### Helpful Metrics
-
-Compare model performance and track token usage across runs.
-
-![Metrics](docs/design/hugo_opus_vs_gemini.jpeg)
-
-### Costs and Trajectory Analysis
-
-Track token usage, costs, and workflow trajectories across all your agent runs.
-
-![Costs Overview](docs/design/costs_view.png)
+See the [**Roadmap**](https://existential-birds.github.io/amelia/reference/roadmap) for where we're headed.
 
 ## Prerequisites
 
@@ -119,7 +51,7 @@ mkdir my-app && cd my-app
 git init
 
 # Create a profile (first run will prompt interactively, or use flags)
-amelia config profile create dev --driver api:openrouter --model "minimax/minimax-m2" --activate
+amelia config profile create dev --driver api --model "minimax/minimax-m2" --activate
 
 # Start the server (opens dashboard at localhost:8420)
 amelia dev
@@ -134,7 +66,7 @@ cd my-app
 amelia start --task "Create a Python CLI that fetches weather for a city using wttr.in"
 ```
 
-Watch the Architect plan, approve it in the dashboard, then watch the Developer build it. That's the full loop.
+Watch the Architect plan, approve it in the dashboard, then watch the Developer build it.
 
 ### 3. Working with Issues
 
@@ -142,7 +74,7 @@ For real projects, connect to GitHub issues:
 
 ```bash
 # Create a profile with GitHub tracker (or edit existing via dashboard)
-amelia config profile create github-dev --driver api:openrouter --model "minimax/minimax-m2" --tracker github --activate
+amelia config profile create github-dev --driver api --model "minimax/minimax-m2" --tracker github --activate
 
 # Start a workflow for issue #123
 amelia start 123
@@ -153,8 +85,6 @@ See **[Configuration](https://existential-birds.github.io/amelia/guide/configura
 ## Alternative Installation
 
 ### Run from Source
-
-If you prefer not to install globally:
 
 ```bash
 # Clone the repo
@@ -178,7 +108,63 @@ Amelia orchestrates specialized agents through a LangGraph state machine:
 Issue → Architect (plan) → Human Approval → Developer (execute) ↔ Reviewer (review) → Done
 ```
 
-See [Architecture](https://existential-birds.github.io/amelia/architecture/overview) for data flow and [Concepts](https://existential-birds.github.io/amelia/architecture/concepts) for how agents and drivers work.
+Architecture is aligned with [12-Factor Agents](https://github.com/humanlayer/12-factor-agents) for reliable LLM-powered software. See [Architecture](https://existential-birds.github.io/amelia/architecture/overview) for data flow and [Concepts](https://existential-birds.github.io/amelia/architecture/concepts) for how agents and drivers work.
+
+## Features
+
+### Quick Shot
+
+Start ad-hoc tasks directly from the sidebar without navigating away from your current workflow.
+
+![Quick Shot](docs/design/quick_shot_feature.png)
+
+### Spec Builder
+
+Brainstorm and refine feature specifications through an interactive chat interface before implementation.
+
+![Spec Builder](docs/design/spec-builder-chat.png)
+
+### Plan View
+
+Review and approve generated implementation plans before execution.
+
+![Plan View](docs/design/hugo_plan.png)
+
+### Prompt Editor
+
+Customize agent prompts directly in the dashboard to tune behavior for your workflow.
+
+![Prompt Editor](docs/design/amelia_prompt_editor.png)
+
+### Streaming Tool Calls and Thinking Tokens
+
+Watch agents work in real-time with streaming tool execution and visible reasoning.
+
+![Streaming Tool Calls](docs/design/hugo_logs_mixed.png)
+
+### Multi-Round Code Review
+
+Iterative review cycles between Developer and Reviewer agents until changes are approved.
+
+![Code Review](docs/design/hugo_logs_filter_agent.png)
+
+### Run Details
+
+Inspect individual agent runs, tool calls, and outputs.
+
+![Details View](docs/design/hugo_details_opus.png)
+
+### Model Comparison
+
+Compare model performance and track token usage across runs.
+
+![Metrics](docs/design/hugo_opus_vs_gemini.jpeg)
+
+### Cost Tracking
+
+Track token usage, costs, and workflow trajectories across all agent runs.
+
+![Costs Overview](docs/design/costs_view.png)
 
 ## CLI Commands
 
