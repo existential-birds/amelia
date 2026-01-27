@@ -118,6 +118,34 @@ class TestWorkflowEvent:
         assert event.tool_input == {"file": "test.py"}
         assert event.is_error is False
 
+    def test_workflow_event_session_id_field(self) -> None:
+        """WorkflowEvent includes optional session_id independent from workflow_id."""
+        event = WorkflowEvent(
+            id="evt-1",
+            workflow_id="wf-1",
+            sequence=1,
+            timestamp=datetime.now(UTC),
+            agent="oracle",
+            event_type=EventType.STAGE_STARTED,
+            message="Consultation started",
+            session_id="sess-abc-123",
+        )
+        assert event.session_id == "sess-abc-123"
+        assert event.workflow_id == "wf-1"
+
+    def test_workflow_event_session_id_defaults_to_none(self) -> None:
+        """WorkflowEvent session_id defaults to None when not provided."""
+        event = WorkflowEvent(
+            id="evt-1",
+            workflow_id="wf-1",
+            sequence=1,
+            timestamp=datetime.now(UTC),
+            agent="system",
+            event_type=EventType.WORKFLOW_STARTED,
+            message="Started",
+        )
+        assert event.session_id is None
+
     def test_workflow_event_distributed_tracing_fields(self) -> None:
         """WorkflowEvent includes trace_id and parent_id for distributed tracing."""
         event = WorkflowEvent(

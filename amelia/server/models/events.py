@@ -192,6 +192,7 @@ class WorkflowEvent(BaseModel):
         level: Event severity level (info, debug, trace).
         message: Human-readable summary.
         data: Optional structured payload (file paths, error details, etc.).
+        session_id: Per-consultation session ID (independent from workflow_id).
         correlation_id: Links related events (e.g., approval request -> granted).
         tool_name: Tool name for trace events (optional).
         tool_input: Tool input parameters for trace events (optional).
@@ -215,6 +216,10 @@ class WorkflowEvent(BaseModel):
     data: dict[str, Any] | None = Field(
         default=None,
         description="Optional structured payload",
+    )
+    session_id: str | None = Field(
+        default=None,
+        description="Per-consultation session ID (independent from workflow_id)",
     )
     correlation_id: str | None = Field(
         default=None,

@@ -142,6 +142,37 @@ class TestOracleConsult:
         assert EventType.ORACLE_CONSULTATION_STARTED in event_types
         assert EventType.ORACLE_CONSULTATION_COMPLETED in event_types
 
+    async def test_consult_events_carry_session_id(self, tmp_path):
+        """Emitted events should carry session_id independent from workflow_id."""
+        config = AgentConfig(driver="cli", model="sonnet")
+        event_bus = EventBus()
+        emitted: list[Any] = []
+        event_bus.subscribe(lambda e: emitted.append(e))
+
+        with patch("amelia.agents.oracle.get_driver") as mock_get_driver:
+            mock_driver = MagicMock()
+            mock_driver.execute_agentic = create_mock_execute_agentic([
+                AgenticMessage(type=AgenticMessageType.RESULT, content="Advice"),
+            ])
+            mock_get_driver.return_value = mock_driver
+
+            oracle = Oracle(config, event_bus=event_bus)
+            result = await oracle.consult(
+                problem="Test",
+                working_dir=str(tmp_path),
+            )
+
+        session_id = result.consultation.session_id
+        assert session_id  # Should be a UUID
+
+        # All emitted events should carry the session_id
+        for event in emitted:
+            assert event.session_id == session_id, (
+                f"Event {event.event_type} missing session_id"
+            )
+            # workflow_id should also be set (falls back to session_id)
+            assert event.workflow_id == session_id
+
     async def test_consult_emits_tool_call_events(self, tmp_path):
         """consult() should emit tool call and tool result events."""
         config = AgentConfig(driver="cli", model="sonnet")

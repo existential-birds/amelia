@@ -85,6 +85,7 @@ class Oracle:
             id=str(uuid4()),
             domain=EventDomain.ORACLE,
             workflow_id=workflow_id or session_id,
+            session_id=session_id,
             sequence=self._seq,
             timestamp=datetime.now(tz=UTC),
             agent="oracle",
