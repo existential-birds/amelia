@@ -326,7 +326,8 @@ def create_app() -> FastAPI:
 
     def get_oracle_event_bus() -> EventBus:
         """Get EventBus for Oracle consultations."""
-        return application.state.event_bus
+        bus: EventBus = application.state.event_bus
+        return bus
 
     application.dependency_overrides[oracle_get_event_bus] = get_oracle_event_bus
 

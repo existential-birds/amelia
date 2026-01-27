@@ -8,6 +8,7 @@ from amelia.pipelines.implementation.state import (
     rebuild_implementation_state,
 )
 
+
 # Resolve forward references
 rebuild_implementation_state()
 

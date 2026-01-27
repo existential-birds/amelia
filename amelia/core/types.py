@@ -4,9 +4,9 @@ Contains StrEnum types (DriverType, TrackerType, Severity) and
 Pydantic models (RetryConfig, Profile, Settings, Issue) used throughout
 the Amelia agentic coding orchestrator.
 """
+from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
-from datetime import datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
