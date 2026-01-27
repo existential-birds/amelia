@@ -150,9 +150,9 @@ def get_service_urls_display(
     display_host = "localhost" if api_host == "0.0.0.0" else api_host
     api_url = f"http://{display_host}:{api_port}"
 
-    # In dev mode, dashboard runs on Vite (port 5173)
+    # In dev mode, dashboard runs on Vite (port 8421)
     # In user mode, dashboard is served from API server
-    dashboard_url = "http://localhost:5173" if is_dev_mode else api_url
+    dashboard_url = "http://localhost:8421" if is_dev_mode else api_url
 
     text = Text()
 

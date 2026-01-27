@@ -46,7 +46,7 @@ def is_amelia_dev_repo() -> bool:
     """Detect if running in the Amelia development repository.
 
     Checks for presence of amelia/ directory, dashboard/package.json,
-    and .git/ directory to determine development mode.
+    and .git (directory or worktree file) to determine development mode.
 
     Returns:
         True if all three conditions are met, False otherwise.
@@ -55,7 +55,7 @@ def is_amelia_dev_repo() -> bool:
     return (
         (cwd / "amelia").is_dir()
         and (cwd / "dashboard" / "package.json").is_file()
-        and (cwd / ".git").is_dir()
+        and (cwd / ".git").exists()
     )
 
 
@@ -84,6 +84,15 @@ def check_node_modules_exist() -> bool:
         True if node_modules directory exists, False otherwise.
     """
     return (Path.cwd() / "dashboard" / "node_modules").is_dir()
+
+
+def check_dashboard_built() -> bool:
+    """Check if the dashboard has been built (static/index.html exists).
+
+    Returns:
+        True if the built dashboard exists, False otherwise.
+    """
+    return (Path.cwd() / "amelia" / "server" / "static" / "index.html").is_file()
 
 
 def check_port_available(host: str, port: int) -> bool:
@@ -123,6 +132,37 @@ async def run_pnpm_install() -> bool:
     process = await asyncio.create_subprocess_exec(
         "pnpm",
         "install",
+        cwd=Path.cwd() / "dashboard",
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.STDOUT,
+    )
+
+    assert process.stdout is not None
+    while True:
+        line = await process.stdout.readline()
+        if not line:
+            break
+        text = line.decode().rstrip()
+        console.print(DASHBOARD_PREFIX + Text(text, style=GRAY))
+
+    await process.wait()
+    return process.returncode == 0
+
+
+async def run_pnpm_build() -> bool:
+    """Run pnpm build in the dashboard directory.
+
+    Executes pnpm build asynchronously and streams output to console
+    with colored dashboard prefix.
+
+    Returns:
+        True if build succeeded (exit code 0), False otherwise.
+    """
+    console.print(DASHBOARD_PREFIX + Text("Building dashboard...", style=CREAM))
+
+    process = await asyncio.create_subprocess_exec(
+        "pnpm",
+        "build",
         cwd=Path.cwd() / "dashboard",
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.STDOUT,
@@ -252,7 +292,7 @@ class ProcessManager:
         """
         console.print(
             DASHBOARD_PREFIX
-            + Text("Starting vite on http://localhost:5173", style=CREAM)
+            + Text("Starting vite on http://localhost:8421", style=CREAM)
         )
 
         process = await asyncio.create_subprocess_exec(
@@ -395,17 +435,9 @@ async def run_dev_mode(
         loop.add_signal_handler(sig, signal_handler)
 
     try:
-        # Start server
-        server = await manager.start_server(host, port)
-        tasks: list[asyncio.Task[int]] = [
-            asyncio.create_task(
-                manager.wait_for_process(server, "server", SERVER_PREFIX)
-            )
-        ]
-
-        # Start dashboard if in dev mode and not disabled
+        # Pre-flight: install dependencies and build dashboard before starting
+        # the server, so that create_app() picks up the built static files.
         if is_dev_repo and not no_dashboard:
-            # Check dependencies
             if not check_node_modules_exist():
                 success = await run_pnpm_install()
                 if not success:
@@ -413,9 +445,27 @@ async def run_dev_mode(
                         DASHBOARD_PREFIX
                         + Text("Failed to install dependencies", style=RUST)
                     )
-                    await manager.shutdown()
                     return 1
 
+            if not check_dashboard_built():
+                success = await run_pnpm_build()
+                if not success:
+                    console.print(
+                        DASHBOARD_PREFIX
+                        + Text("Failed to build dashboard", style=RUST)
+                    )
+                    return 1
+
+        # Start server (now with dashboard files in place)
+        server = await manager.start_server(host, port)
+        tasks: list[asyncio.Task[int]] = [
+            asyncio.create_task(
+                manager.wait_for_process(server, "server", SERVER_PREFIX)
+            )
+        ]
+
+        # Start Vite dev server for HMR
+        if is_dev_repo and not no_dashboard:
             dashboard = await manager.start_dashboard()
             tasks.append(
                 asyncio.create_task(

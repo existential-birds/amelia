@@ -10,6 +10,7 @@ from amelia.server.banner import (
     NAVY,
     get_agi_banner,
     get_gradient_banner,
+    get_service_urls_display,
     print_banner,
 )
 
@@ -76,3 +77,20 @@ class TestGetAgiBanner:
         result = get_agi_banner()
         # Rich Text with styles will have spans
         assert len(result.spans) > 0
+
+
+class TestGetServiceUrlsDisplay:
+    """Tests for service URL display in banner."""
+
+    def test_dev_mode_shows_vite_port(self) -> None:
+        """Dev mode dashboard URL uses Vite port 8421."""
+        result = get_service_urls_display("127.0.0.1", 8420, is_dev_mode=True)
+        text = str(result)
+        assert "http://localhost:8421" in text
+        assert "http://localhost:5173" not in text
+
+    def test_user_mode_shows_api_port(self) -> None:
+        """User mode dashboard URL uses API port."""
+        result = get_service_urls_display("127.0.0.1", 8420, is_dev_mode=False)
+        text = str(result)
+        assert "http://127.0.0.1:8420" in text
