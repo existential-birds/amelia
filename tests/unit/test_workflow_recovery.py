@@ -4,12 +4,13 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from fastapi import FastAPI
 
 from amelia.server.exceptions import InvalidStateError, WorkflowNotFoundError
 from amelia.server.models.events import EventType
 from amelia.server.models.state import (
-    InvalidStateTransitionError,
     VALID_TRANSITIONS,
+    InvalidStateTransitionError,
     WorkflowStatus,
     validate_transition,
 )
@@ -289,10 +290,8 @@ class TestResumeWorkflow:
 class TestResumeEndpoint:
     """Tests for POST /api/workflows/{id}/resume endpoint."""
 
-    def _get_test_app(self) -> "FastAPI":
+    def _get_test_app(self) -> FastAPI:
         """Create a test app with mocked dependencies."""
-        from fastapi import FastAPI
-
         from amelia.server.routes.workflows import configure_exception_handlers, router
 
         app = FastAPI()
