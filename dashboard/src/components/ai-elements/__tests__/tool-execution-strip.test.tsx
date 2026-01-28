@@ -74,6 +74,20 @@ describe('ToolExecutionStrip', () => {
     });
   });
 
+  describe('pip cap', () => {
+    it('caps visible pips at 10 even with more active tool calls', () => {
+      const toolCalls = Array.from({ length: 15 }, (_, i) =>
+        createToolCall({ index: i, state: 'input-available' }),
+      );
+
+      render(<ToolExecutionStrip toolCalls={toolCalls} />);
+
+      const list = screen.getByRole('list', { name: 'Tool execution status' });
+      const pips = list.querySelectorAll('span.rounded-full');
+      expect(pips).toHaveLength(10);
+    });
+  });
+
   describe('summary stats', () => {
     it('shows total count reflecting all tools including completed', () => {
       const toolCalls = [
