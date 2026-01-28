@@ -56,6 +56,7 @@ class TestMigratePlanningToPending:
         row = await repository._db.fetch_one(
             "SELECT status FROM workflows WHERE id = ?", (wf_id,)
         )
+        assert row is not None
         assert row["status"] == "pending"
 
     async def test_migrates_state_json_workflow_status(
@@ -70,6 +71,7 @@ class TestMigratePlanningToPending:
         row = await repository._db.fetch_one(
             "SELECT state_json FROM workflows WHERE id = ?", (wf_id,)
         )
+        assert row is not None
         state = json.loads(row["state_json"])
         assert state["workflow_status"] == "pending"
 
@@ -107,11 +109,13 @@ class TestMigratePlanningToPending:
         pending_row = await repository._db.fetch_one(
             "SELECT status FROM workflows WHERE id = ?", (pending_id,)
         )
+        assert pending_row is not None
         assert pending_row["status"] == "pending"
 
         in_progress_row = await repository._db.fetch_one(
             "SELECT status FROM workflows WHERE id = ?", (in_progress_id,)
         )
+        assert in_progress_row is not None
         assert in_progress_row["status"] == "in_progress"
 
     async def test_migrates_multiple_planning_rows(
@@ -129,6 +133,7 @@ class TestMigratePlanningToPending:
             row = await repository._db.fetch_one(
                 "SELECT status, state_json FROM workflows WHERE id = ?", (wf_id,)
             )
+            assert row is not None
             assert row["status"] == "pending"
             state = json.loads(row["state_json"])
             assert state["workflow_status"] == "pending"

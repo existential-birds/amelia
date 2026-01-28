@@ -2614,11 +2614,10 @@ class OrchestratorService:
             }
         )
 
-        # Update workflow with plan data (status stays as-is)
+        # Update workflow with plan data
         updated_workflow = workflow.model_copy(
             update={
                 "execution_state": updated_execution_state,
-                "workflow_status": workflow.workflow_status,
             }
         )
         await self._repository.update(updated_workflow)
