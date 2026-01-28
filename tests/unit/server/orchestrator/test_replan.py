@@ -155,7 +155,7 @@ class TestReplanWorkflow:
         # Should have deleted checkpoint
         mock_delete.assert_awaited_once_with("wf-replan-1")
 
-        # Should have updated workflow with cleared plan fields and PLANNING status
+        # Should have updated workflow with cleared plan fields and PENDING status
         mock_repository.update.assert_called()
         updated = mock_repository.update.call_args[0][0]
         assert updated.workflow_status == WorkflowStatus.PENDING
