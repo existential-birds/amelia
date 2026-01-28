@@ -135,7 +135,11 @@ export const useBrainstormStore = create<BrainstormState>()((set) => ({
   setArtifacts: (artifacts) => set({ artifacts }),
 
   addArtifact: (artifact) =>
-    set((state) => ({ artifacts: [...state.artifacts, artifact] })),
+    set((state) => ({
+      artifacts: state.artifacts.some((a) => a.id === artifact.id)
+        ? state.artifacts
+        : [...state.artifacts, artifact],
+    })),
 
   // UI actions
   setStreaming: (streaming, messageId) =>

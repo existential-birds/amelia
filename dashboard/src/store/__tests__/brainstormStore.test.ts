@@ -245,4 +245,38 @@ describe("useBrainstormStore", () => {
       expect(messages[1]!.status).toBeUndefined();
     });
   });
+
+  describe("artifact management", () => {
+    const makeArtifact = (id: string) => ({
+      id,
+      session_id: "s1",
+      type: "spec",
+      path: `/specs/${id}.md`,
+      title: `Artifact ${id}`,
+      created_at: "2026-01-18T00:00:00Z",
+    });
+
+    it("adds an artifact", () => {
+      useBrainstormStore.getState().addArtifact(makeArtifact("a1"));
+
+      expect(useBrainstormStore.getState().artifacts).toHaveLength(1);
+      expect(useBrainstormStore.getState().artifacts[0]!.id).toBe("a1");
+    });
+
+    it("deduplicates artifacts by id", () => {
+      const artifact = makeArtifact("a1");
+
+      useBrainstormStore.getState().addArtifact(artifact);
+      useBrainstormStore.getState().addArtifact(artifact);
+
+      expect(useBrainstormStore.getState().artifacts).toHaveLength(1);
+    });
+
+    it("allows distinct artifacts", () => {
+      useBrainstormStore.getState().addArtifact(makeArtifact("a1"));
+      useBrainstormStore.getState().addArtifact(makeArtifact("a2"));
+
+      expect(useBrainstormStore.getState().artifacts).toHaveLength(2);
+    });
+  });
 });
