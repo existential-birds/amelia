@@ -395,6 +395,37 @@ def cancel_command(
         raise typer.Exit(1) from None
 
 
+def resume_command(
+    workflow_id: Annotated[str, typer.Argument(help="Workflow ID to resume")],
+) -> None:
+    """Resume a failed workflow from its last checkpoint.
+
+    Sends a resume request to the running Amelia server. The workflow must
+    be in FAILED status with a valid checkpoint to resume.
+
+    Args:
+        workflow_id: The workflow ID to resume.
+    """
+    client = AmeliaClient()
+
+    async def _resume() -> None:
+        await client.resume_workflow(workflow_id=workflow_id)
+
+    try:
+        asyncio.run(_resume())
+        console.print(f"[green]✓[/green] Workflow [bold]{workflow_id}[/bold] resumed")
+    except WorkflowNotFoundError:
+        console.print(f"[red]Error:[/red] Workflow {workflow_id} not found")
+        raise typer.Exit(1) from None
+    except InvalidRequestError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(1) from None
+    except ServerUnreachableError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        console.print("\n[yellow]Start the server:[/yellow] amelia server")
+        raise typer.Exit(1) from None
+
+
 async def _get_profile_from_server(profile_name: str | None) -> Profile:
     """Get profile from server API.
 

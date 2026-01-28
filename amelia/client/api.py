@@ -310,6 +310,32 @@ class AmeliaClient:
             else:
                 response.raise_for_status()
 
+    async def resume_workflow(self, workflow_id: str) -> None:
+        """Resume a failed workflow from its last checkpoint.
+
+        Args:
+            workflow_id: Workflow ID to resume.
+
+        Raises:
+            WorkflowNotFoundError: If workflow doesn't exist.
+            InvalidRequestError: If workflow cannot be resumed (wrong status, no checkpoint).
+            ServerUnreachableError: If server is not running.
+        """
+        async with self._http_client() as client:
+            response = await client.post(
+                f"{self.base_url}/api/workflows/{workflow_id}/resume"
+            )
+
+            if response.status_code == 200:
+                return
+            elif response.status_code == 404:
+                raise WorkflowNotFoundError(f"Workflow {workflow_id} not found")
+            elif response.status_code == 409:
+                data = response.json()
+                raise InvalidRequestError(data.get("detail", "Cannot resume workflow"))
+            else:
+                response.raise_for_status()
+
     async def get_active_workflows(
         self, worktree_path: str | None = None
     ) -> WorkflowListResponse:
