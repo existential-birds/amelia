@@ -375,7 +375,7 @@ tool_input_json  → tool_input
 
 ```sql
 -- workflows.status
-CHECK (status IN ('pending', 'planning', 'in_progress', 'blocked', 'completed', 'failed', 'cancelled'))
+CHECK (status IN ('pending', 'in_progress', 'blocked', 'completed', 'failed', 'cancelled'))
 
 -- events.level
 CHECK (level IN ('trace', 'debug', 'info', 'warning', 'error'))
