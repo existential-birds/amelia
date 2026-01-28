@@ -155,7 +155,6 @@ Automated verification before code reaches human reviewers.
 
 **Foundation in place:**
 
-- Consecutive error tracking with automatic escalation (`consecutive_errors` in state)
 - Configurable iteration limits (`max_retries`, `max_iterations`) with auto-halt
 - Evaluator agent with decision matrix (IMPLEMENT, REJECT, DEFER, CLARIFY)
 - Extension hooks for policy enforcement (`PolicyHook`, `AuditExporter`)

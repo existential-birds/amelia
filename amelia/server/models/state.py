@@ -93,8 +93,6 @@ class ServerExecutionState(BaseModel):
         stage_timestamps: When each stage started.
         current_stage: Currently executing stage.
         failure_reason: Error message when status is "failed".
-        consecutive_errors: Number of consecutive transient errors (resets on success).
-        last_error_context: Context from the most recent error (for debugging).
     """
 
     id: str = Field(..., description="Unique workflow identifier")
@@ -140,14 +138,6 @@ class ServerExecutionState(BaseModel):
     failure_reason: str | None = Field(
         default=None,
         description="Error message when failed",
-    )
-    consecutive_errors: int = Field(
-        default=0,
-        description="Number of consecutive transient errors (resets on success)",
-    )
-    last_error_context: str | None = Field(
-        default=None,
-        description="Context from the most recent error (for debugging)",
     )
 
     model_config = {
