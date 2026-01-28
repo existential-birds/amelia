@@ -1,6 +1,10 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { useBrainstormStore } from "../brainstormStore";
-import type { BrainstormingSession, BrainstormMessage } from "@/types/api";
+import type {
+  BrainstormArtifact,
+  BrainstormingSession,
+  BrainstormMessage,
+} from "@/types/api";
 
 describe("useBrainstormStore", () => {
   beforeEach(() => {
@@ -247,13 +251,17 @@ describe("useBrainstormStore", () => {
   });
 
   describe("artifact management", () => {
-    const makeArtifact = (id: string) => ({
+    const makeArtifact = (
+      id: string,
+      overrides?: Partial<BrainstormArtifact>,
+    ): BrainstormArtifact => ({
       id,
       session_id: "s1",
       type: "spec",
       path: `/specs/${id}.md`,
       title: `Artifact ${id}`,
       created_at: "2026-01-18T00:00:00Z",
+      ...overrides,
     });
 
     it("adds an artifact", () => {
@@ -270,6 +278,16 @@ describe("useBrainstormStore", () => {
       useBrainstormStore.getState().addArtifact(artifact);
 
       expect(useBrainstormStore.getState().artifacts).toHaveLength(1);
+    });
+
+    it("deduplicates artifacts with null title", () => {
+      const artifact = makeArtifact("a1", { title: null });
+
+      useBrainstormStore.getState().addArtifact(artifact);
+      useBrainstormStore.getState().addArtifact(artifact);
+
+      expect(useBrainstormStore.getState().artifacts).toHaveLength(1);
+      expect(useBrainstormStore.getState().artifacts[0]!.title).toBeNull();
     });
 
     it("allows distinct artifacts", () => {
