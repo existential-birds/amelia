@@ -150,28 +150,3 @@ class TestServerExecutionStateComposition:
         assert server_state.execution_state is not None
         assert server_state.execution_state.profile_id == "test"
 
-
-class TestServerExecutionStatePlannedAt:
-    """Tests for planned_at field."""
-
-    def test_planned_at_defaults_to_none(self) -> None:
-        """planned_at should default to None for new workflows."""
-        state = make_state()
-        assert state.planned_at is None
-
-    def test_planned_at_can_be_set(self) -> None:
-        """planned_at can be set to a datetime."""
-        now = datetime.now(UTC)
-        state = make_state(planned_at=now)
-        assert state.planned_at == now
-
-    def test_is_planned_property_false_when_no_plan(self) -> None:
-        """is_planned should return False when planned_at is None."""
-        state = make_state()
-        assert state.is_planned is False
-
-    def test_is_planned_property_true_when_planned(self) -> None:
-        """is_planned should return True when planned_at is set."""
-        state = make_state(planned_at=datetime.now(UTC))
-        assert state.is_planned is True
-

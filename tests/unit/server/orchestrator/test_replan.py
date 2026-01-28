@@ -92,7 +92,6 @@ def make_blocked_workflow(
         worktree_path="/tmp/test-repo",
         workflow_status=WorkflowStatus.BLOCKED,
         current_stage=None,
-        planned_at=datetime.now(UTC),
         execution_state=ImplementationState(
             workflow_id=workflow_id,
             created_at=datetime.now(UTC),
@@ -160,7 +159,6 @@ class TestReplanWorkflow:
         updated = mock_repository.update.call_args[0][0]
         assert updated.workflow_status == WorkflowStatus.PENDING
         assert updated.current_stage == "architect"
-        assert updated.planned_at is None
         assert updated.execution_state is not None
         assert updated.execution_state.goal is None
         assert updated.execution_state.plan_markdown is None

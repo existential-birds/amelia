@@ -62,12 +62,9 @@ class TestReplanFlow:
         workflow = await test_repository.get(workflow_id)
         assert workflow is not None
         assert workflow.workflow_status == WorkflowStatus.BLOCKED
-        assert workflow.planned_at is not None
         assert workflow.execution_state is not None
         assert workflow.execution_state.goal == "Original goal from architect"
         assert "Original Plan" in (workflow.execution_state.plan_markdown or "")
-
-        original_planned_at = workflow.planned_at
 
         # Phase 2: replan -> PENDING -> BLOCKED (with new plan)
         async with mock_langgraph_for_planning(
@@ -84,8 +81,6 @@ class TestReplanFlow:
         workflow = await test_repository.get(workflow_id)
         assert workflow is not None
         assert workflow.workflow_status == WorkflowStatus.BLOCKED
-        assert workflow.planned_at is not None
-        assert workflow.planned_at != original_planned_at  # New timestamp
         assert workflow.execution_state is not None
         assert workflow.execution_state.goal == "New goal after replan"
         assert "Revised Plan" in (workflow.execution_state.plan_markdown or "")

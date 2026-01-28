@@ -145,7 +145,7 @@ Options:
 #### Queue Workflow Lifecycle
 
 1. **Queue** - Workflow created in `pending` state, not executing
-2. **Plan (optional)** - Architect runs, `planned_at` set when complete
+2. **Plan (optional)** - Architect runs while workflow remains queued
 3. **Start** - Workflow transitions to `in_progress` and begins execution
 4. **Complete** - Normal completion flow
 

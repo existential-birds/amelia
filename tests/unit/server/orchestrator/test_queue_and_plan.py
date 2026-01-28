@@ -217,7 +217,6 @@ class TestQueueAndPlanWorkflow:
 
         assert workflow_id is not None
 
-        # Check state was saved with plan and planned_at
         # create() is called once for initial workflow creation
         # update() may be called multiple times (_sync_plan_from_checkpoint + status update)
         mock_repository.create.assert_called_once()
@@ -226,7 +225,6 @@ class TestQueueAndPlanWorkflow:
         # Check the final updated state (last call to update)
         updated_state = mock_repository.update.call_args[0][0]
         assert updated_state.workflow_status == "blocked"
-        assert updated_state.planned_at is not None
         # execution_state is synced from checkpoint via _sync_plan_from_checkpoint
         assert updated_state.execution_state is not None
 

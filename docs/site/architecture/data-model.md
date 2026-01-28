@@ -186,7 +186,6 @@ The central state object for the LangGraph orchestrator. This model is frozen (i
 | `tool_results` | `Annotated[list[ToolResult], operator.add]` | `[]` | History of tool results from agentic execution. Uses reducer. |
 | `agentic_status` | `AgenticStatus` | `"running"` | Current agentic execution status. |
 | `created_at` | `datetime` | — | When the workflow was created/queued. |
-| `planned_at` | `datetime \| None` | `None` | When Architect completed planning (null if not yet planned). |
 | `final_response` | `str \| None` | `None` | Final response from the agent when complete. |
 | `error` | `str \| None` | `None` | Error message if status is 'failed'. |
 | `review_iteration` | `int` | `0` | Current iteration in review-fix loop. |
@@ -206,7 +205,6 @@ The central state object for the LangGraph orchestrator. This model is frozen (i
 
 | Property | Return Type | Description |
 |----------|-------------|-------------|
-| `is_planned` | `bool` | `True` if Architect has run and `planned_at` is set. |
 | `is_queued` | `bool` | `True` if workflow is in `pending` status (not yet started). |
 
 ## Streaming Entities

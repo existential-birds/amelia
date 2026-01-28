@@ -68,7 +68,6 @@ class TestPlanNowApproveFlow:
         assert workflow.workflow_status == "blocked", (
             f"Expected 'blocked' but got '{workflow.workflow_status}'"
         )
-        assert workflow.planned_at is not None, "planned_at should be set after planning"
 
     async def test_plan_now_and_approve_completes_successfully(
         self,

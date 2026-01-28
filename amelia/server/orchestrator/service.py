@@ -628,7 +628,6 @@ class OrchestratorService:
             execution_state=execution_state,
             workflow_status=WorkflowStatus.PENDING,
             # No started_at - workflow hasn't started
-            # No planned_at - not planned yet
         )
 
         # Save to database
@@ -2194,12 +2193,10 @@ class OrchestratorService:
                             )
                             return
 
-                        # Set planned_at and status to blocked.
                         # Uses repository.update() instead of set_status()
                         # because multiple fields change atomically (status,
-                        # planned_at, current_stage). The PENDING status
-                        # guard is checked above.
-                        fresh.planned_at = datetime.now(UTC)
+                        # current_stage). The PENDING status guard is
+                        # checked above.
                         fresh.workflow_status = WorkflowStatus.BLOCKED
                         fresh.current_stage = None  # Clear stage, waiting for approval
                         await self._repository.update(fresh)
@@ -2714,12 +2711,11 @@ class OrchestratorService:
             # Transition to PENDING.
             # Design note: we use repository.update() instead of set_status()
             # because multiple fields must change atomically (status,
-            # current_stage, planned_at, execution_state). The BLOCKED →
-            # PENDING guard is enforced explicitly above. This is the same
-            # pattern used by _run_planning_task for PENDING → BLOCKED.
+            # current_stage, execution_state). The BLOCKED → PENDING guard
+            # is enforced explicitly above. This is the same pattern used
+            # by _run_planning_task for PENDING → BLOCKED.
             workflow.workflow_status = WorkflowStatus.PENDING
             workflow.current_stage = "architect"
-            workflow.planned_at = None
             await self._repository.update(workflow)
 
             # Emit replanning event inside the lock, before spawning the task,

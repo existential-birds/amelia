@@ -188,7 +188,7 @@ curl http://127.0.0.1:8420/api/workflows/<workflow-id>
 3. Check if the workflow has a plan ready:
    ```bash
    curl http://127.0.0.1:8420/api/workflows/<workflow-id>
-   # Look for planned_at field
+   # Look for workflow_status field
    ```
 
 #### Cannot start queued workflow (409)
@@ -250,7 +250,7 @@ WorkflowConflictError: Cannot start workflow - another workflow is active on thi
    gh issue view <issue-id>
    ```
 
-3. Note: If planning fails, the workflow transitions back to `pending` state (or fails). Check the `planned_at` field to see if planning completed.
+3. Note: If planning fails, the workflow transitions back to `pending` state (or fails). Check the `workflow_status` field to see if planning completed.
 
 ### Invalid worktree (400)
 

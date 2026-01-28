@@ -122,10 +122,6 @@ class ServerExecutionState(BaseModel):
         default=None,
         description="When workflow ended",
     )
-    planned_at: datetime | None = Field(
-        default=None,
-        description="When workflow planning (architect stage) completed",
-    )
     current_stage: str | None = Field(
         default=None,
         description="Currently executing stage",
@@ -149,11 +145,6 @@ class ServerExecutionState(BaseModel):
             ]
         }
     }
-
-    @property
-    def is_planned(self) -> bool:
-        """Return True if the workflow has completed planning."""
-        return self.planned_at is not None
 
 
 def rebuild_server_execution_state() -> None:
