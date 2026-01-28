@@ -84,7 +84,7 @@ export interface ActionResult {
   success: boolean;
 
   /** Which action was performed. */
-  action: 'approved' | 'rejected' | 'cancelled' | 'replanning';
+  action: 'approved' | 'rejected' | 'cancelled' | 'resumed' | 'replanning';
 
   /** Error message if the action failed, otherwise undefined. */
   error?: string;

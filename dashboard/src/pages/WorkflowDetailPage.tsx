@@ -1,7 +1,7 @@
 /**
  * @fileoverview Workflow detail page with full status display.
  */
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useLoaderData } from 'react-router-dom';
 import { RotateCcw } from 'lucide-react';
 import { PageHeader } from '@/components/PageHeader';
@@ -77,20 +77,15 @@ export default function WorkflowDetailPage() {
     const failedEvents = allEvents
       .filter((e: WorkflowEvent) => e.event_type === 'workflow_failed')
       .sort((a: WorkflowEvent, b: WorkflowEvent) => b.sequence - a.sequence);
-    return failedEvents.length > 0 && failedEvents[0].data?.recoverable === true;
+    const latest = failedEvents[0];
+    return latest !== undefined && latest.data?.recoverable === true;
   }, [workflow?.status, allEvents]);
 
   const { resumeWorkflow, isActionPending } = useWorkflowActions();
-  const [isResuming, setIsResuming] = useState(false);
 
   const handleResume = useCallback(async () => {
     if (!workflow) return;
-    setIsResuming(true);
-    try {
-      await resumeWorkflow(workflow.id);
-    } finally {
-      setIsResuming(false);
-    }
+    await resumeWorkflow(workflow.id);
   }, [workflow, resumeWorkflow]);
 
   if (!workflow) {
@@ -168,11 +163,11 @@ export default function WorkflowDetailPage() {
                 RECOVERY
               </h4>
               <p className="text-sm text-muted-foreground mb-3">
-                This workflow failed due to a server restart and can be resumed from its last checkpoint.
+                This workflow can be resumed from its last checkpoint.
               </p>
               <Button
                 onClick={handleResume}
-                disabled={isResuming || isActionPending(workflow.id)}
+                disabled={isActionPending(workflow.id)}
                 variant="outline"
               >
                 <RotateCcw className="w-4 h-4 mr-2" />
