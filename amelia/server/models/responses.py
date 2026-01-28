@@ -33,7 +33,6 @@ class WorkflowSummary(BaseModel):
         profile: Profile name used for this workflow (optional)
         status: Current workflow status
         started_at: When the workflow was started (optional)
-        current_stage: Current agent stage (optional)
         total_cost_usd: Total cost in USD (optional)
         total_tokens: Total tokens consumed (optional)
         total_duration_ms: Total execution duration in milliseconds (optional)
@@ -54,10 +53,6 @@ class WorkflowSummary(BaseModel):
     started_at: Annotated[
         datetime | None,
         Field(default=None, description="When the workflow was started"),
-    ] = None
-    current_stage: Annotated[
-        str | None,
-        Field(default=None, description="Current agent stage"),
     ] = None
     total_cost_usd: Annotated[
         float | None,
@@ -113,7 +108,6 @@ class WorkflowDetailResponse(BaseModel):
         started_at: When the workflow was started (optional)
         completed_at: When the workflow ended (optional)
         failure_reason: Error message when failed (optional)
-        current_stage: Current agent stage (optional)
         goal: High-level goal for agentic execution (optional)
         plan_markdown: Full plan markdown content from Architect (optional)
         plan_path: Path where the plan markdown was saved (optional)
@@ -143,10 +137,6 @@ class WorkflowDetailResponse(BaseModel):
     failure_reason: Annotated[
         str | None,
         Field(default=None, description="Error message when failed"),
-    ] = None
-    current_stage: Annotated[
-        str | None,
-        Field(default=None, description="Current agent stage"),
     ] = None
     goal: Annotated[
         str | None,

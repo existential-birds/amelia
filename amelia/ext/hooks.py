@@ -38,7 +38,6 @@ if TYPE_CHECKING:
 async def emit_workflow_event(
     event_type: WorkflowEventType,
     workflow_id: str,
-    stage: str | None = None,
     metadata: dict[str, JsonValue] | None = None,
 ) -> None:
     """Emit a workflow lifecycle event to all registered exporters and sinks.
@@ -49,14 +48,12 @@ async def emit_workflow_event(
     Args:
         event_type: Type of event that occurred.
         workflow_id: Unique identifier for the workflow.
-        stage: Current workflow stage (optional).
         metadata: Additional event data (optional).
     """
     event = WorkflowEvent(
         event_type=event_type,
         workflow_id=workflow_id,
         timestamp=datetime.now(UTC),
-        stage=stage,
         metadata=metadata,
     )
 
@@ -80,7 +77,6 @@ async def emit_workflow_event(
                 f"workflow.{event_type.value}",
                 properties={
                     "workflow_id": workflow_id,
-                    "stage": stage,
                     **(metadata or {}),
                 },
             )

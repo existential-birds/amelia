@@ -207,7 +207,6 @@ async def list_workflows(
                 status=w.workflow_status,
                 created_at=w.created_at,
                 started_at=w.started_at,
-                current_stage=w.current_stage,
                 total_cost_usd=token_summary.total_cost_usd if token_summary else None,
                 total_tokens=(
                     token_summary.total_input_tokens + token_summary.total_output_tokens
@@ -266,7 +265,6 @@ async def list_active_workflows(
                 status=w.workflow_status,
                 created_at=w.created_at,
                 started_at=w.started_at,
-                current_stage=w.current_stage,
                 total_cost_usd=token_summary.total_cost_usd if token_summary else None,
                 total_tokens=(
                     token_summary.total_input_tokens + token_summary.total_output_tokens
@@ -364,7 +362,6 @@ async def get_workflow(
         started_at=workflow.started_at,
         completed_at=workflow.completed_at,
         failure_reason=workflow.failure_reason,
-        current_stage=workflow.current_stage,
         goal=goal,
         plan_markdown=plan_markdown,
         plan_path=plan_path,

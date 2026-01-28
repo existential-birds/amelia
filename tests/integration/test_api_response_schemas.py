@@ -174,7 +174,6 @@ class TestAPIResponseSchemas:
         assert not hasattr(response, "issue_id")
         assert not hasattr(response, "worktree_path")
         assert not hasattr(response, "started_at")
-        assert not hasattr(response, "current_stage")
 
     async def test_create_workflow_raw_response_schema(
         self, server_with_real_db: str

@@ -415,7 +415,6 @@ class TestQueueAndPlanWorkflow:
             # Check the created state has planning status
             created_state = mock_repository.create.call_args[0][0]
             assert created_state.workflow_status == "pending"
-            assert created_state.current_stage == "architect"
 
             # Cancel the background task
             if workflow_id in orchestrator._planning_tasks:

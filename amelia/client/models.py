@@ -83,7 +83,6 @@ class WorkflowResponse(BaseModel):
         started_at: Timestamp when the workflow started (optional).
         completed_at: Timestamp when the workflow completed (if finished).
         failure_reason: Error message if the workflow failed.
-        current_stage: Current agent stage in the workflow.
     """
 
     id: str
@@ -93,7 +92,6 @@ class WorkflowResponse(BaseModel):
     started_at: datetime | None = None
     completed_at: datetime | None = None
     failure_reason: str | None = None
-    current_stage: str | None = None
 
 
 class WorkflowSummary(BaseModel):
@@ -105,7 +103,6 @@ class WorkflowSummary(BaseModel):
         status: Current workflow status.
         worktree_path: Absolute path to the git worktree directory.
         started_at: Timestamp when the workflow started.
-        current_stage: Current stage in the workflow pipeline (if in progress).
     """
 
     id: str
@@ -113,7 +110,6 @@ class WorkflowSummary(BaseModel):
     status: str
     worktree_path: str
     started_at: datetime | None = None
-    current_stage: str | None = None
 
 
 class WorkflowListResponse(BaseModel):

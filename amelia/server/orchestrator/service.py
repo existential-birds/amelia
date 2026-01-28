@@ -1003,14 +1003,12 @@ class OrchestratorService:
                         await emit_workflow_event(
                             ExtWorkflowEventType.APPROVAL_REQUESTED,
                             workflow_id=workflow_id,
-                            stage="human_approval_node",
                         )
                         await self._repository.set_status(workflow_id, WorkflowStatus.BLOCKED)
                         # Emit PAUSED event for workflow being blocked
                         await emit_workflow_event(
                             ExtWorkflowEventType.PAUSED,
                             workflow_id=workflow_id,
-                            stage="human_approval_node",
                         )
                         break
                     # Handle combined mode chunk
@@ -1025,20 +1023,14 @@ class OrchestratorService:
                     # Check for task failure before marking complete (multi-task mode)
                     await self._emit_task_failed_if_applicable(workflow_id)
 
-                    # Fetch fresh state from DB to get accurate current_stage
-                    # (the local state variable is stale - _handle_stream_chunk updates DB)
-                    fresh_state = await self._repository.get(workflow_id)
-                    final_stage = fresh_state.current_stage if fresh_state else None
                     await self._emit(
                         workflow_id,
                         EventType.WORKFLOW_COMPLETED,
                         "Workflow completed successfully",
-                        data={"final_stage": final_stage},
                     )
                     await emit_workflow_event(
                         ExtWorkflowEventType.COMPLETED,
                         workflow_id=workflow_id,
-                        stage=final_stage,
                     )
                     await self._repository.set_status(workflow_id, WorkflowStatus.COMPLETED)
 
@@ -1222,15 +1214,10 @@ class OrchestratorService:
                     # Emit stage events for each node
                     await self._handle_combined_stream_chunk(workflow_id, chunk_tuple)
 
-                # Fetch fresh state from DB to get accurate current_stage
-                # (the local state variable is stale - _handle_stream_chunk updates DB)
-                fresh_state = await self._repository.get(workflow_id)
-                final_stage = fresh_state.current_stage if fresh_state else None
                 await self._emit(
                     workflow_id,
                     EventType.WORKFLOW_COMPLETED,
                     "Review workflow completed",
-                    data={"final_stage": final_stage},
                 )
                 await self._repository.set_status(workflow_id, WorkflowStatus.COMPLETED)
 
@@ -1619,12 +1606,6 @@ class OrchestratorService:
         """
         for node_name, output in chunk.items():
             if node_name in STAGE_NODES:
-                # Update current_stage in workflow state
-                state = await self._repository.get(workflow_id)
-                if state is not None:
-                    state.current_stage = node_name
-                    await self._repository.update(state)
-
                 # Emit agent-specific messages based on node
                 await self._emit_agent_messages(workflow_id, node_name, output)
 
@@ -2193,12 +2174,7 @@ class OrchestratorService:
                             )
                             return
 
-                        # Uses repository.update() instead of set_status()
-                        # because multiple fields change atomically (status,
-                        # current_stage). The PENDING status guard is
-                        # checked above.
                         fresh.workflow_status = WorkflowStatus.BLOCKED
-                        fresh.current_stage = None  # Clear stage, waiting for approval
                         await self._repository.update(fresh)
 
                         await self._emit(
@@ -2301,7 +2277,6 @@ class OrchestratorService:
             worktree_path=resolved_path,
             execution_state=execution_state,
             workflow_status=WorkflowStatus.PENDING,
-            current_stage="architect",
             # Note: started_at is None - workflow hasn't started yet
         )
 
@@ -2711,11 +2686,9 @@ class OrchestratorService:
             # Transition to PENDING.
             # Design note: we use repository.update() instead of set_status()
             # because multiple fields must change atomically (status,
-            # current_stage, execution_state). The BLOCKED → PENDING guard
-            # is enforced explicitly above. This is the same pattern used
-            # by _run_planning_task for PENDING → BLOCKED.
+            # execution_state). The BLOCKED → PENDING guard is enforced
+            # explicitly above.
             workflow.workflow_status = WorkflowStatus.PENDING
-            workflow.current_stage = "architect"
             await self._repository.update(workflow)
 
             # Emit replanning event inside the lock, before spawning the task,
