@@ -7,6 +7,7 @@ bundles for use as LLM context. Respects .gitignore when in a git repo.
 import asyncio
 import fnmatch
 import functools
+import os
 import subprocess
 from pathlib import Path
 
@@ -94,12 +95,19 @@ def _is_git_repo(working_dir: Path) -> bool:
         True if inside a git repo.
     """
     try:
+        # Strip GIT_* env vars so the check reflects the actual directory,
+        # not inherited context from a parent process or hook.
+        clean_env = {
+            k: v for k, v in os.environ.items()
+            if not k.startswith("GIT_")
+        }
         result = subprocess.run(
             ["git", "rev-parse", "--git-dir"],
             cwd=working_dir,
             capture_output=True,
             text=True,
             timeout=5,
+            env=clean_env,
         )
         return result.returncode == 0
     except (subprocess.TimeoutExpired, OSError):
@@ -118,12 +126,17 @@ def _get_git_tracked_files(working_dir: Path) -> set[str] | None:
         Set of relative file paths tracked by git, or None on failure.
     """
     try:
+        clean_env = {
+            k: v for k, v in os.environ.items()
+            if not k.startswith("GIT_")
+        }
         result = subprocess.run(
             ["git", "ls-files"],
             cwd=working_dir,
             capture_output=True,
             text=True,
             timeout=5,
+            env=clean_env,
         )
     except (subprocess.TimeoutExpired, OSError):
         return None
