@@ -90,7 +90,6 @@ class ServerExecutionState(BaseModel):
         workflow_status: Current workflow status.
         started_at: When workflow started.
         completed_at: When workflow ended (success or failure).
-        stage_timestamps: When each stage started.
         current_stage: Currently executing stage.
         failure_reason: Error message when status is "failed".
         consecutive_errors: Number of consecutive transient errors (resets on success).
@@ -128,10 +127,6 @@ class ServerExecutionState(BaseModel):
     planned_at: datetime | None = Field(
         default=None,
         description="When workflow planning (architect stage) completed",
-    )
-    stage_timestamps: dict[str, datetime] = Field(
-        default_factory=dict,
-        description="When each stage started",
     )
     current_stage: str | None = Field(
         default=None,
