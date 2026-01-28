@@ -11,7 +11,6 @@
  * The current execution state of a workflow.
  *
  * - `pending`: Workflow has been created but not yet started
- * - `planning`: Architect agent is generating the implementation plan
  * - `in_progress`: Workflow is actively executing
  * - `blocked`: Workflow is waiting for human approval or input
  * - `completed`: Workflow finished successfully
@@ -25,7 +24,6 @@
  */
 export type WorkflowStatus =
   | 'pending'
-  | 'planning'
   | 'in_progress'
   | 'blocked'
   | 'completed'

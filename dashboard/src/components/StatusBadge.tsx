@@ -12,7 +12,6 @@ const statusBadgeVariants = cva(
     variants: {
       status: {
         pending: 'bg-status-pending/20 text-status-pending border border-status-pending/30',
-        planning: 'bg-status-pending/20 text-status-pending border border-status-pending/30 animate-pulse',
         running: 'bg-status-running/20 text-status-running border border-status-running/30',
         completed: 'bg-status-completed/20 text-status-completed border border-status-completed/30',
         failed: 'bg-status-failed/20 text-status-failed border border-status-failed/30',
@@ -39,7 +38,6 @@ interface StatusBadgeProps {
 /** Human-readable labels for each workflow status. */
 const statusLabels: Record<WorkflowStatus, string> = {
   pending: 'QUEUED',
-  planning: 'PLANNING',
   in_progress: 'RUNNING',
   blocked: 'BLOCKED',
   completed: 'DONE',
@@ -48,12 +46,11 @@ const statusLabels: Record<WorkflowStatus, string> = {
 };
 
 /** Internal status type for styling variants. */
-type IndicatorStatus = 'pending' | 'planning' | 'running' | 'completed' | 'failed' | 'blocked' | 'cancelled';
+type IndicatorStatus = 'pending' | 'running' | 'completed' | 'failed' | 'blocked' | 'cancelled';
 
 /** Maps workflow status to indicator status for styling. */
 const statusMapping: Record<WorkflowStatus, IndicatorStatus> = {
   pending: 'pending',
-  planning: 'planning',
   in_progress: 'running',
   blocked: 'blocked',
   completed: 'completed',

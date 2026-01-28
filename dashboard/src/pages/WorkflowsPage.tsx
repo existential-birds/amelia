@@ -146,7 +146,7 @@ export default function WorkflowsPage() {
       )}
 
       {/* Planning Indicator - shown when Architect is generating plan */}
-      {detail?.status === 'planning' && (
+      {detail?.status === 'pending' && detail?.current_stage === 'architect' && (
         <div className="px-4 pt-4">
           <PlanningIndicator
             workflowId={detail.id}
@@ -155,8 +155,8 @@ export default function WorkflowsPage() {
         </div>
       )}
 
-      {/* Pending Workflow Controls - shown when workflow is queued (not planning) */}
-      {detail?.status === 'pending' && (
+      {/* Pending Workflow Controls - shown when workflow is queued (not in architect stage) */}
+      {detail?.status === 'pending' && detail?.current_stage !== 'architect' && (
         <div className="px-4 pt-4">
           <PendingWorkflowControls
             workflowId={detail.id}

@@ -198,7 +198,7 @@ describe('WorkflowsPage planning status', () => {
     issue_id: 'ISSUE-456',
     worktree_path: '/tmp/worktrees/repo',
     profile: null,
-    status: 'planning',
+    status: 'pending',
     created_at: '2025-12-07T08:55:00Z',
     started_at: null,
     current_stage: 'architect',

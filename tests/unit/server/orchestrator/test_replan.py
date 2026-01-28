@@ -155,10 +155,10 @@ class TestReplanWorkflow:
         # Should have deleted checkpoint
         mock_delete.assert_awaited_once_with("wf-replan-1")
 
-        # Should have updated workflow with cleared plan fields and PLANNING status
+        # Should have updated workflow with cleared plan fields and PENDING status
         mock_repository.update.assert_called()
         updated = mock_repository.update.call_args[0][0]
-        assert updated.workflow_status == WorkflowStatus.PLANNING
+        assert updated.workflow_status == WorkflowStatus.PENDING
         assert updated.current_stage == "architect"
         assert updated.planned_at is None
         assert updated.execution_state is not None
@@ -271,3 +271,28 @@ class TestReplanWorkflow:
         # Workflow should NOT be set to FAILED — the user should be able to
         # fix the profile and retry since the workflow is still BLOCKED.
         mock_repository.set_status.assert_not_called()
+
+    async def test_cancel_terminates_planning_task(
+        self,
+        orchestrator: OrchestratorService,
+        mock_repository: AsyncMock,
+    ) -> None:
+        """cancel_workflow should cancel an active planning task."""
+        workflow = make_blocked_workflow()
+        # Set to PENDING (as if planning is in progress)
+        workflow.workflow_status = WorkflowStatus.PENDING
+        workflow.current_stage = "architect"
+        mock_repository.get.return_value = workflow
+
+        # Simulate an active planning task
+        mock_task = MagicMock(spec=asyncio.Task)
+        orchestrator._planning_tasks["wf-replan-1"] = mock_task
+
+        await orchestrator.cancel_workflow("wf-replan-1")
+
+        # Planning task should have been cancelled
+        mock_task.cancel.assert_called_once()
+        # Status should be set to cancelled
+        mock_repository.set_status.assert_awaited_once_with(
+            "wf-replan-1", WorkflowStatus.CANCELLED
+        )

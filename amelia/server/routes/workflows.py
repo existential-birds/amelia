@@ -233,7 +233,7 @@ async def list_active_workflows(
 ) -> WorkflowListResponse:
     """List all active workflows.
 
-    Active workflows are those in pending, planning, in_progress, or blocked status.
+    Active workflows are those in pending, in_progress, or blocked status.
 
     Args:
         worktree: Filter by worktree path.
@@ -501,7 +501,7 @@ async def set_workflow_plan(
 
     Raises:
         WorkflowNotFoundError: If workflow doesn't exist (404).
-        InvalidStateError: If workflow not in pending/planning state (422).
+        InvalidStateError: If workflow not in pending state (422).
         WorkflowConflictError: If plan exists and force=False (409).
     """
     result = await orchestrator.set_workflow_plan(
@@ -526,14 +526,14 @@ async def replan_workflow(
     """Replan a blocked workflow by regenerating the Architect plan.
 
     Deletes the stale checkpoint, clears plan fields, and spawns a
-    new planning task. The workflow transitions from blocked to planning.
+    new planning task. The workflow transitions from blocked to pending.
 
     Args:
         workflow_id: Unique workflow identifier.
         orchestrator: Orchestrator service dependency.
 
     Returns:
-        ActionResponse with status "planning" and workflow_id.
+        ActionResponse with status "replanning" and workflow_id.
 
     Raises:
         WorkflowNotFoundError: If workflow doesn't exist.
@@ -542,7 +542,7 @@ async def replan_workflow(
     """
     await orchestrator.replan_workflow(workflow_id)
     logger.info("Replan started", workflow_id=workflow_id)
-    return ActionResponse(status="planning", workflow_id=workflow_id)
+    return ActionResponse(status="replanning", workflow_id=workflow_id)
 
 
 def configure_exception_handlers(app: FastAPI) -> None:

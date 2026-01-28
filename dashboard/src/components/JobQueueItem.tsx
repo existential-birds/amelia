@@ -28,11 +28,6 @@ const statusStyles: Record<WorkflowStatus, { rail: string; dot: string; text: st
     dot: 'bg-status-pending',
     text: 'text-status-pending',
   },
-  planning: {
-    rail: 'bg-status-pending/60',
-    dot: 'bg-status-pending animate-pulse',
-    text: 'text-status-pending',
-  },
   in_progress: {
     rail: 'bg-status-running/80',
     dot: 'bg-status-running animate-pulse',
@@ -63,7 +58,6 @@ const statusStyles: Record<WorkflowStatus, { rail: string; dot: string; text: st
 /** Human-readable status labels. */
 const statusLabels: Record<WorkflowStatus, string> = {
   pending: 'QUEUED',
-  planning: 'PLANNING',
   in_progress: 'RUNNING',
   blocked: 'BLOCKED',
   completed: 'DONE',

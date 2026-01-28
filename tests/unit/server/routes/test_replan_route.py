@@ -49,7 +49,7 @@ class TestReplanRoute:
         assert response.status_code == 200
         data = response.json()
         assert data["workflow_id"] == "wf-123"
-        assert data["status"] == "planning"
+        assert data["status"] == "replanning"
         orch.replan_workflow.assert_awaited_once_with("wf-123")
 
     def test_replan_not_found(self) -> None:

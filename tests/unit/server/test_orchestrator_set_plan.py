@@ -112,53 +112,6 @@ class TestSetWorkflowPlan:
         assert result["total_tasks"] == 2
         mock_repository.update.assert_called_once()
 
-    async def test_set_plan_on_planning_workflow(
-        self,
-        mock_orchestrator: OrchestratorService,
-        mock_repository: MagicMock,
-        tmp_path: Path,
-    ) -> None:
-        """Setting plan on planning workflow succeeds and transitions to pending."""
-        workflow = self._create_workflow_mock(workflow_status=WorkflowStatus.PLANNING)
-        mock_repository.get.return_value = workflow
-
-        mock_profile = MagicMock()
-        mock_profile.plan_path_pattern = "docs/{issue_key}/plan.md"
-        mock_profile.working_dir = str(tmp_path)
-
-        with (
-            patch(
-                "amelia.server.orchestrator.service.import_external_plan"
-            ) as mock_import,
-            patch.object(
-                mock_orchestrator, "_get_profile_or_fail", new_callable=AsyncMock
-            ) as mock_get_profile,
-            patch.object(
-                mock_orchestrator, "_update_profile_working_dir"
-            ) as mock_update_profile,
-            patch.object(mock_orchestrator, "_emit", new_callable=AsyncMock),
-        ):
-            mock_plan_result = MagicMock()
-            mock_plan_result.goal = "New goal"
-            mock_plan_result.plan_markdown = "# New plan"
-            mock_plan_result.plan_path = tmp_path / "plan.md"
-            mock_plan_result.key_files = ["file.py"]
-            mock_plan_result.total_tasks = 2
-            mock_import.return_value = mock_plan_result
-            mock_get_profile.return_value = mock_profile
-            mock_update_profile.return_value = mock_profile
-
-            result = await mock_orchestrator.set_workflow_plan(
-                workflow_id="wf-001",
-                plan_content="# New plan",
-            )
-
-        assert result["goal"] == "New goal"
-        # Check that model_copy was called with status change
-        workflow.model_copy.assert_called()
-        call_kwargs = workflow.model_copy.call_args.kwargs
-        assert call_kwargs["update"]["workflow_status"] == WorkflowStatus.PENDING
-
     async def test_set_plan_on_running_workflow_fails(
         self, mock_orchestrator: OrchestratorService, mock_repository: MagicMock
     ) -> None:
@@ -166,7 +119,7 @@ class TestSetWorkflowPlan:
         workflow = self._create_workflow_mock(workflow_status=WorkflowStatus.IN_PROGRESS)
         mock_repository.get.return_value = workflow
 
-        with pytest.raises(InvalidStateError, match="pending or planning"):
+        with pytest.raises(InvalidStateError, match="pending"):
             await mock_orchestrator.set_workflow_plan(
                 workflow_id="wf-001",
                 plan_content="# Plan",
@@ -254,7 +207,7 @@ class TestSetWorkflowPlan:
         mock_repository: MagicMock,
     ) -> None:
         """Setting plan while architect is running raises WorkflowConflictError."""
-        workflow = self._create_workflow_mock(workflow_status=WorkflowStatus.PLANNING)
+        workflow = self._create_workflow_mock(workflow_status=WorkflowStatus.PENDING)
         mock_repository.get.return_value = workflow
 
         # Simulate an active planning task
@@ -273,7 +226,7 @@ class TestSetWorkflowPlan:
         workflow = self._create_workflow_mock(workflow_status=WorkflowStatus.BLOCKED)
         mock_repository.get.return_value = workflow
 
-        with pytest.raises(InvalidStateError, match="pending or planning"):
+        with pytest.raises(InvalidStateError, match="pending"):
             await mock_orchestrator.set_workflow_plan(
                 workflow_id="wf-001",
                 plan_content="# Plan",

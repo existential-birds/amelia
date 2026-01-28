@@ -789,7 +789,7 @@ class OrchestratorService:
             raise WorkflowNotFoundError(workflow_id)
 
         # Check if workflow is in a cancellable state (not terminal)
-        cancellable_states = {WorkflowStatus.PENDING, WorkflowStatus.PLANNING, WorkflowStatus.IN_PROGRESS, WorkflowStatus.BLOCKED}
+        cancellable_states = {WorkflowStatus.PENDING, WorkflowStatus.IN_PROGRESS, WorkflowStatus.BLOCKED}
         if workflow.workflow_status not in cancellable_states:
             raise InvalidStateError(
                 f"Cannot cancel workflow in '{workflow.workflow_status}' state",
@@ -801,6 +801,9 @@ class OrchestratorService:
         if workflow.worktree_path in self._active_tasks:
             _, task = self._active_tasks[workflow.worktree_path]
             task.cancel()
+
+        if workflow_id in self._planning_tasks:
+            self._planning_tasks[workflow_id].cancel()
 
         # Persist the cancelled status to database
         await self._repository.set_status(workflow_id, WorkflowStatus.CANCELLED)
@@ -2203,8 +2206,8 @@ class OrchestratorService:
                             )
                             return
 
-                        # Only update if still planning
-                        if fresh.workflow_status != WorkflowStatus.PLANNING:
+                        # Only update if still pending (planning in background)
+                        if fresh.workflow_status != WorkflowStatus.PENDING:
                             logger.info(
                                 "Planning finished but workflow status changed",
                                 workflow_id=workflow_id,
@@ -2215,7 +2218,7 @@ class OrchestratorService:
                         # Set planned_at and status to blocked.
                         # Uses repository.update() instead of set_status()
                         # because multiple fields change atomically (status,
-                        # planned_at, current_stage). The PLANNING status
+                        # planned_at, current_stage). The PENDING status
                         # guard is checked above.
                         fresh.planned_at = datetime.now(UTC)
                         fresh.workflow_status = WorkflowStatus.BLOCKED
@@ -2255,7 +2258,7 @@ class OrchestratorService:
                 # Mark workflow as failed using fresh state
                 try:
                     fresh = await self._repository.get(workflow_id)
-                    if fresh is not None and fresh.workflow_status == WorkflowStatus.PLANNING:
+                    if fresh is not None and fresh.workflow_status == WorkflowStatus.PENDING:
                         fresh.workflow_status = WorkflowStatus.FAILED
                         fresh.failure_reason = f"Planning failed: {e}"
                         await self._repository.update(fresh)
@@ -2315,13 +2318,13 @@ class OrchestratorService:
             task_description=request.task_description,
         )
 
-        # Create ServerExecutionState in planning status (architect running)
+        # Create ServerExecutionState in pending status (architect running)
         state = ServerExecutionState(
             id=workflow_id,
             issue_id=request.issue_id,
             worktree_path=resolved_path,
             execution_state=execution_state,
-            workflow_status=WorkflowStatus.PLANNING,
+            workflow_status=WorkflowStatus.PENDING,
             current_stage="architect",
             # Note: started_at is None - workflow hasn't started yet
         )
@@ -2514,7 +2517,7 @@ class OrchestratorService:
         """Set or replace the plan for a queued workflow.
 
         This method allows setting an external plan on a workflow that is
-        in pending or planning status. The plan will be validated and stored
+        in pending status. The plan will be validated and stored
         in the standard plan location.
 
         Args:
@@ -2528,7 +2531,7 @@ class OrchestratorService:
 
         Raises:
             WorkflowNotFoundError: If workflow doesn't exist.
-            InvalidStateError: If workflow not in pending/planning status.
+            InvalidStateError: If workflow not in pending status.
             WorkflowConflictError: If plan exists and force=False, or architect running.
             FileNotFoundError: If plan_file doesn't exist.
         """
@@ -2537,11 +2540,11 @@ class OrchestratorService:
         if workflow is None:
             raise WorkflowNotFoundError(workflow_id)
 
-        # Check status - only allow setting plan on pending or planning workflows
-        valid_statuses = {WorkflowStatus.PENDING, WorkflowStatus.PLANNING}
+        # Check status - only allow setting plan on pending workflows
+        valid_statuses = {WorkflowStatus.PENDING}
         if workflow.workflow_status not in valid_statuses:
             raise InvalidStateError(
-                f"Workflow must be in pending or planning status, "
+                f"Workflow must be in pending status, "
                 f"but is in {workflow.workflow_status}",
                 workflow_id=workflow_id,
                 current_status=str(workflow.workflow_status),
@@ -2611,17 +2614,10 @@ class OrchestratorService:
             }
         )
 
-        # Update workflow - transition from planning to pending if needed
-        new_status = (
-            WorkflowStatus.PENDING
-            if workflow.workflow_status == WorkflowStatus.PLANNING
-            else workflow.workflow_status
-        )
-
+        # Update workflow with plan data
         updated_workflow = workflow.model_copy(
             update={
                 "execution_state": updated_execution_state,
-                "workflow_status": new_status,
             }
         )
         await self._repository.update(updated_workflow)
@@ -2656,7 +2652,7 @@ class OrchestratorService:
         """Regenerate the plan for a blocked workflow.
 
         Deletes the stale LangGraph checkpoint, clears plan-related fields,
-        transitions the workflow back to PLANNING, and spawns a fresh
+        transitions the workflow back to PENDING, and spawns a fresh
         planning task using the same issue/profile.
 
         Args:
@@ -2736,13 +2732,13 @@ class OrchestratorService:
                 }
             )
 
-            # Transition to PLANNING.
+            # Transition to PENDING.
             # Design note: we use repository.update() instead of set_status()
             # because multiple fields must change atomically (status,
             # current_stage, planned_at, execution_state). The BLOCKED →
-            # PLANNING guard is enforced explicitly above. This is the same
-            # pattern used by _run_planning_task for PLANNING → BLOCKED.
-            workflow.workflow_status = WorkflowStatus.PLANNING
+            # PENDING guard is enforced explicitly above. This is the same
+            # pattern used by _run_planning_task for PENDING → BLOCKED.
+            workflow.workflow_status = WorkflowStatus.PENDING
             workflow.current_stage = "architect"
             workflow.planned_at = None
             await self._repository.update(workflow)

@@ -386,13 +386,13 @@ class TestQueueAndPlanWorkflow:
             assert mock_repository.update.call_count >= 1
 
     @pytest.mark.asyncio
-    async def test_queue_and_plan_sets_planning_status_immediately(
+    async def test_queue_and_plan_sets_pending_status_immediately(
         self,
         orchestrator: OrchestratorService,
         mock_repository: MagicMock,
         valid_worktree: str,
     ) -> None:
-        """Workflow status is 'planning' immediately after queue_and_plan_workflow."""
+        """Workflow status is 'pending' immediately after queue_and_plan_workflow."""
         request = CreateWorkflowRequest(
             issue_id="ISSUE-123",
             worktree_path=valid_worktree,
@@ -416,7 +416,7 @@ class TestQueueAndPlanWorkflow:
 
             # Check the created state has planning status
             created_state = mock_repository.create.call_args[0][0]
-            assert created_state.workflow_status == "planning"
+            assert created_state.workflow_status == "pending"
             assert created_state.current_stage == "architect"
 
             # Cancel the background task

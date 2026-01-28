@@ -17,7 +17,6 @@ class WorkflowStatus(StrEnum):
     """Status for server workflow execution."""
 
     PENDING = "pending"  # Not yet started
-    PLANNING = "planning"  # Architect generating plan
     IN_PROGRESS = "in_progress"  # Currently executing
     BLOCKED = "blocked"  # Awaiting human approval
     COMPLETED = "completed"  # Successfully finished
@@ -34,10 +33,9 @@ class WorkflowType(StrEnum):
 
 # State machine validation - prevents invalid transitions
 VALID_TRANSITIONS: dict[WorkflowStatus, set[WorkflowStatus]] = {
-    WorkflowStatus.PENDING: {WorkflowStatus.PLANNING, WorkflowStatus.IN_PROGRESS, WorkflowStatus.CANCELLED, WorkflowStatus.FAILED},
-    WorkflowStatus.PLANNING: {WorkflowStatus.BLOCKED, WorkflowStatus.FAILED, WorkflowStatus.CANCELLED},
+    WorkflowStatus.PENDING: {WorkflowStatus.BLOCKED, WorkflowStatus.IN_PROGRESS, WorkflowStatus.CANCELLED, WorkflowStatus.FAILED},
     WorkflowStatus.IN_PROGRESS: {WorkflowStatus.BLOCKED, WorkflowStatus.COMPLETED, WorkflowStatus.FAILED, WorkflowStatus.CANCELLED},
-    WorkflowStatus.BLOCKED: {WorkflowStatus.PLANNING, WorkflowStatus.IN_PROGRESS, WorkflowStatus.FAILED, WorkflowStatus.CANCELLED},
+    WorkflowStatus.BLOCKED: {WorkflowStatus.PENDING, WorkflowStatus.IN_PROGRESS, WorkflowStatus.FAILED, WorkflowStatus.CANCELLED},
     WorkflowStatus.COMPLETED: set(),  # Terminal state
     WorkflowStatus.FAILED: set(),  # Terminal state
     WorkflowStatus.CANCELLED: set(),  # Terminal state
