@@ -122,13 +122,15 @@ class TestBundleFiles:
         assert "text.py" in paths
         assert "binary.bin" not in paths
 
+    @patch("amelia.tools.file_bundler._get_git_tracked_files")
     @patch("amelia.tools.file_bundler._is_git_repo", return_value=True)
     async def test_bundle_path_traversal_blocked(
-        self, mock_is_git: object, tmp_path: Path
+        self, mock_is_git: object, mock_tracked: object, tmp_path: Path
     ):
         """bundle_files should reject paths that escape working_dir."""
         repo = tmp_path / "repo"
         repo.mkdir()
+        mock_tracked.return_value = set()  # type: ignore[union-attr]
 
         with pytest.raises(ValueError, match="outside working directory"):
             await bundle_files(

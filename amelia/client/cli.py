@@ -417,13 +417,8 @@ def resume_command(
     except WorkflowNotFoundError:
         console.print(f"[red]Error:[/red] Workflow {workflow_id} not found")
         raise typer.Exit(1) from None
-    except InvalidRequestError as e:
-        console.print(f"[red]Error:[/red] {e}")
-        raise typer.Exit(1) from None
-    except ServerUnreachableError as e:
-        console.print(f"[red]Error:[/red] {e}")
-        console.print("\n[yellow]Start the server:[/yellow] amelia server")
-        raise typer.Exit(1) from None
+    except (InvalidRequestError, ServerUnreachableError, RateLimitError) as e:
+        _handle_workflow_api_error(e)
 
 
 async def _get_profile_from_server(profile_name: str | None) -> Profile:
