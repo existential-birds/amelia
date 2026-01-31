@@ -93,7 +93,6 @@ The orchestrator loops between Developer and Reviewer until changes are approved
 | **Drivers** | `amelia/drivers/` | LLM abstraction - `api` (pydantic-ai) or `cli` (CLI wrapper) |
 | **Trackers** | `amelia/trackers/` | Issue source abstraction - `jira`, `github`, `none` |
 | **Tools** | `amelia/tools/` | Shell execution, git utilities |
-| **Extensions** | `amelia/ext/` | Protocols for optional integrations (policy hooks, audit exporters, analytics sinks) |
 
 ### Driver Abstraction
 

@@ -42,7 +42,6 @@ Amelia's architecture draws on industry research in agentic AI — orchestrator-
 | **Tools** | `amelia/tools/` | Git utilities and shell helpers | `git_utils`, `shell_executor` |
 | **Client** | `amelia/client/` | CLI commands and REST client for server communication | `AmeliaClient`, Typer commands |
 | **Server** | `amelia/server/` | FastAPI backend with WebSocket events, SQLite persistence | `OrchestratorService`, `EventBus`, `WorkflowRepository` |
-| **Extensions** | `amelia/ext/` | Protocols for optional integrations (policy hooks, audit exporters) | `ExtensionRegistry`, `protocols` |
 
 ## Data Flow: `amelia start PROJ-123`
 
