@@ -6,12 +6,8 @@ import pytest
 
 from amelia.server.database.connection import Database
 from amelia.server.database.repository import WorkflowRepository
-from amelia.server.models.state import ServerExecutionState, rebuild_server_execution_state
+from amelia.server.models.state import ServerExecutionState
 from amelia.server.models.tokens import TokenUsage
-
-
-# Rebuild state models to resolve forward references
-rebuild_server_execution_state()
 
 
 class TestUsageTrend:

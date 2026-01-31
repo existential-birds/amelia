@@ -13,10 +13,10 @@ async def seed_data(db_with_schema: Database) -> None:
     """Seed test data for usage queries."""
     # Create two workflows
     await db_with_schema.execute("""
-        INSERT INTO workflows (id, issue_id, worktree_path, status, created_at, started_at, state_json)
+        INSERT INTO workflows (id, issue_id, worktree_path, status, created_at, started_at)
         VALUES
-            ('wf-1', 'ISSUE-1', '/tmp/repo1', 'completed', '2026-01-10T10:00:00Z', '2026-01-10T10:00:00Z', '{}'),
-            ('wf-2', 'ISSUE-2', '/tmp/repo2', 'completed', '2026-01-15T10:00:00Z', '2026-01-15T10:00:00Z', '{}')
+            ('wf-1', 'ISSUE-1', '/tmp/repo1', 'completed', '2026-01-10T10:00:00Z', '2026-01-10T10:00:00Z'),
+            ('wf-2', 'ISSUE-2', '/tmp/repo2', 'completed', '2026-01-15T10:00:00Z', '2026-01-15T10:00:00Z')
     """)
 
     # Create token usage records

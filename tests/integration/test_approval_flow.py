@@ -15,7 +15,6 @@ from unittest.mock import patch
 
 import pytest
 
-from amelia.pipelines.implementation.state import ImplementationState
 from amelia.server.models.events import EventType, WorkflowEvent
 from amelia.server.models.state import ServerExecutionState
 from amelia.server.orchestrator.service import OrchestratorService
@@ -46,26 +45,26 @@ def event_tracker():
     return EventTracker()
 
 
-class TestMissingExecutionState:
-    """Test error handling for missing execution_state."""
+class TestMissingRequiredFields:
+    """Test error handling for missing required workflow fields."""
 
-    async def test_missing_execution_state_sets_status_to_failed(
+    async def test_missing_profile_id_sets_status_to_failed(
         self, event_tracker, mock_repository, temp_checkpoint_db
     ):
-        """When execution_state is None, status is set to failed."""
+        """When profile_id is None (and no execution_state), status is set to failed."""
         service = OrchestratorService(
             event_tracker,
             mock_repository,
             checkpoint_path=temp_checkpoint_db,
         )
 
-        # Create state without execution_state
+        # Create state without profile_id
         server_state = ServerExecutionState(
             id="wf-error-test",
             issue_id="TEST-ERR",
             worktree_path="/tmp/test-error",
             started_at=datetime.now(UTC),
-            execution_state=None,  # Missing - will cause error
+            profile_id=None,  # Missing - will cause error
         )
 
         await mock_repository.create(server_state)
@@ -76,7 +75,7 @@ class TestMissingExecutionState:
         assert persisted is not None
         assert persisted.workflow_status == "failed"
         assert persisted.failure_reason is not None
-        assert "Missing execution state" in persisted.failure_reason
+        assert "Missing profile_id" in persisted.failure_reason
 
 
 class TestLifecycleEvents:
@@ -109,18 +108,12 @@ class TestLifecycleEvents:
             checkpoint_path=temp_checkpoint_db,
         )
 
-        core_state = ImplementationState(
-            workflow_id="wf-lifecycle-test",
-            profile_id="test",
-            created_at=datetime.now(UTC),
-            status="pending",
-        )
         server_state = ServerExecutionState(
             id="wf-lifecycle-test",
             issue_id="TEST-123",
             worktree_path="/tmp/test-lifecycle",
             started_at=datetime.now(UTC),
-            execution_state=core_state,
+            profile_id="test",
         )
 
         await mock_repository.create(server_state)
@@ -166,18 +159,12 @@ class TestGraphInterruptHandling:
             checkpoint_path=temp_checkpoint_db,
         )
 
-        core_state = ImplementationState(
-            workflow_id="wf-interrupt-test",
-            profile_id="test",
-            created_at=datetime.now(UTC),
-            status="pending",
-        )
         server_state = ServerExecutionState(
             id="wf-interrupt-test",
             issue_id="TEST-456",
             worktree_path="/tmp/test-interrupt",
             started_at=datetime.now(UTC),
-            execution_state=core_state,
+            profile_id="test",
         )
 
         await mock_repository.create(server_state)

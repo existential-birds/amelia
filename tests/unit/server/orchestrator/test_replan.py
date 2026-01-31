@@ -1,26 +1,20 @@
 """Unit tests for replan_workflow orchestrator method."""
 import asyncio
-from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from amelia.core.types import AgentConfig, Profile
-from amelia.pipelines.implementation.state import ImplementationState, rebuild_implementation_state
+from amelia.pipelines.implementation.state import rebuild_implementation_state
 from amelia.server.events.bus import EventBus
 from amelia.server.exceptions import InvalidStateError, WorkflowConflictError, WorkflowNotFoundError
 from amelia.server.models.events import EventType
-from amelia.server.models.state import (
-    ServerExecutionState,
-    WorkflowStatus,
-    rebuild_server_execution_state,
-)
+from amelia.server.models.state import PlanCache, ServerExecutionState, WorkflowStatus
 from amelia.server.orchestrator.service import OrchestratorService
 
 
 # Rebuild Pydantic models so forward references resolve correctly
 rebuild_implementation_state()
-rebuild_server_execution_state()
 
 
 @pytest.fixture
@@ -36,6 +30,7 @@ def mock_repository() -> AsyncMock:
     repo.create = AsyncMock()
     repo.update = AsyncMock()
     repo.set_status = AsyncMock()
+    repo.update_plan_cache = AsyncMock()
     repo.save_event = AsyncMock()
     repo.get_max_event_sequence = AsyncMock(return_value=0)
     repo.get = AsyncMock(return_value=None)
@@ -91,15 +86,11 @@ def make_blocked_workflow(
         issue_id=issue_id,
         worktree_path="/tmp/test-repo",
         workflow_status=WorkflowStatus.BLOCKED,
-        execution_state=ImplementationState(
-            workflow_id=workflow_id,
-            created_at=datetime.now(UTC),
-            status="running",
-            profile_id="test",
+        profile_id="test",
+        plan_cache=PlanCache(
             goal="Original goal",
             plan_markdown="# Original plan",
             plan_path=None,
-            key_files=["original.py"],
             total_tasks=3,
         ),
     )
@@ -140,7 +131,7 @@ class TestReplanWorkflow:
         orchestrator: OrchestratorService,
         mock_repository: AsyncMock,
     ) -> None:
-        """replan_workflow should clear plan, delete checkpoint, and spawn planning task."""
+        """replan_workflow should clear plan_cache, delete checkpoint, and spawn planning task."""
         workflow = make_blocked_workflow()
         mock_repository.get.return_value = workflow
 
@@ -153,39 +144,17 @@ class TestReplanWorkflow:
         # Should have deleted checkpoint
         mock_delete.assert_awaited_once_with("wf-replan-1")
 
-        # Should have updated workflow with cleared plan fields and PENDING status
-        mock_repository.update.assert_called()
-        updated = mock_repository.update.call_args[0][0]
-        assert updated.workflow_status == WorkflowStatus.PENDING
-        assert updated.execution_state is not None
-        assert updated.execution_state.goal is None
-        assert updated.execution_state.plan_markdown is None
-        assert updated.execution_state.key_files == []
-        assert updated.execution_state.total_tasks == 1
+        # Should have cleared plan_cache
+        mock_repository.update_plan_cache.assert_awaited_once()
+        call_args = mock_repository.update_plan_cache.call_args
+        assert call_args[0][0] == "wf-replan-1"
+        cleared_cache = call_args[0][1]
+        assert isinstance(cleared_cache, PlanCache)
+        assert cleared_cache.goal is None
+        assert cleared_cache.plan_markdown is None
 
-    async def test_replan_resets_external_plan_flag(
-        self,
-        orchestrator: OrchestratorService,
-        mock_repository: AsyncMock,
-    ) -> None:
-        """replan_workflow should reset external_plan to False so Architect runs."""
-        workflow = make_blocked_workflow()
-        # Simulate a workflow that was originally created with an external plan
-        assert workflow.execution_state is not None
-        workflow.execution_state = workflow.execution_state.model_copy(
-            update={"external_plan": True},
-        )
-        mock_repository.get.return_value = workflow
-
-        with (
-            patch.object(orchestrator, "_delete_checkpoint", new_callable=AsyncMock),
-            patch.object(orchestrator, "_run_planning_task", new_callable=AsyncMock),
-        ):
-            await orchestrator.replan_workflow("wf-replan-1")
-
-        updated = mock_repository.update.call_args[0][0]
-        assert updated.execution_state is not None
-        assert updated.execution_state.external_plan is False
+        # Should have set status to PENDING
+        mock_repository.set_status.assert_awaited_once_with("wf-replan-1", WorkflowStatus.PENDING)
 
     async def test_replan_wrong_status_raises(
         self,

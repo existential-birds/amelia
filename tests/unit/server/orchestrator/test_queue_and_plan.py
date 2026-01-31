@@ -25,7 +25,7 @@ def mock_event_bus() -> MagicMock:
 @pytest.fixture
 def mock_repository() -> MagicMock:
     """Create a mock repository."""
-    from amelia.server.models.state import ServerExecutionState
+    from amelia.server.models.state import PlanCache, ServerExecutionState
 
     repo = MagicMock()
     # Track the created workflow so get() can return it
@@ -40,9 +40,14 @@ def mock_repository() -> MagicMock:
     async def mock_update(state: ServerExecutionState) -> None:
         created_workflow[state.id] = state
 
+    async def mock_update_plan_cache(workflow_id: str, plan_cache: PlanCache) -> None:
+        if workflow_id in created_workflow:
+            created_workflow[workflow_id].plan_cache = plan_cache
+
     repo.create = AsyncMock(side_effect=mock_create)
     repo.get = AsyncMock(side_effect=mock_get)
     repo.update = AsyncMock(side_effect=mock_update)
+    repo.update_plan_cache = AsyncMock(side_effect=mock_update_plan_cache)
     repo.save_event = AsyncMock()
     repo.get_max_event_sequence = AsyncMock(return_value=0)
     return repo
@@ -225,8 +230,11 @@ class TestQueueAndPlanWorkflow:
         # Check the final updated state (last call to update)
         updated_state = mock_repository.update.call_args[0][0]
         assert updated_state.workflow_status == "blocked"
-        # execution_state is synced from checkpoint via _sync_plan_from_checkpoint
-        assert updated_state.execution_state is not None
+        # profile_id should be set from the active profile
+        assert updated_state.profile_id is not None
+        # plan_cache is synced from checkpoint via _sync_plan_from_checkpoint
+        mock_repository.update_plan_cache.assert_called()
+        assert updated_state.plan_cache is not None
 
     @pytest.mark.asyncio
     async def test_queue_and_plan_transitions_to_blocked(

@@ -26,18 +26,13 @@ from amelia.server.database.repository import WorkflowRepository
 from amelia.server.events.bus import EventBus
 from amelia.server.events.connection_manager import ConnectionManager
 from amelia.server.models.events import WorkflowEvent
-from amelia.server.models.state import (
-    ServerExecutionState,
-    rebuild_server_execution_state,
-)
+from amelia.server.models.state import ServerExecutionState
 from amelia.server.orchestrator.service import OrchestratorService
 from tests.conftest import AsyncIteratorMock
 
 
-# Rebuild ImplementationState first (resolves EvaluationResult),
-# then ServerExecutionState (resolves ImplementationState union member)
+# Rebuild ImplementationState to resolve forward references (e.g., EvaluationResult)
 rebuild_implementation_state()
-rebuild_server_execution_state()
 
 
 # =============================================================================

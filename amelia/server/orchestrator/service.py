@@ -14,7 +14,7 @@ from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langgraph.graph.state import CompiledStateGraph
 from loguru import logger
 
-from amelia.core.constants import ToolName, resolve_plan_path
+from amelia.core.constants import resolve_plan_path
 from amelia.core.types import (
     Design,
     Issue,
@@ -39,7 +39,7 @@ from amelia.server.models import ServerExecutionState
 from amelia.server.models.events import EventType, WorkflowEvent
 from amelia.server.models.requests import BatchStartRequest, CreateWorkflowRequest
 from amelia.server.models.responses import BatchStartResponse
-from amelia.server.models.state import WorkflowStatus, WorkflowType
+from amelia.server.models.state import PlanCache, WorkflowStatus, WorkflowType
 from amelia.trackers.factory import create_tracker
 
 
@@ -483,11 +483,14 @@ class OrchestratorService:
                 task_description=task_description,
             )
 
+            # execution_state.issue is always set by _prepare_workflow_state
+            assert execution_state.issue is not None
             state = ServerExecutionState(
                 id=workflow_id,
                 issue_id=issue_id,
                 worktree_path=resolved_path,
-                execution_state=execution_state,
+                profile_id=loaded_profile.name,
+                issue_cache=execution_state.issue.model_dump_json(),
                 workflow_status=WorkflowStatus.PENDING,
                 started_at=datetime.now(UTC),
             )
@@ -594,11 +597,14 @@ class OrchestratorService:
             )
 
         # Create ServerExecutionState in pending status (not started)
+        # execution_state.issue is always set by _prepare_workflow_state
+        assert execution_state.issue is not None
         state = ServerExecutionState(
             id=workflow_id,
             issue_id=request.issue_id,
             worktree_path=resolved_path,
-            execution_state=execution_state,
+            profile_id=profile.name,
+            issue_cache=execution_state.issue.model_dump_json(),
             workflow_status=WorkflowStatus.PENDING,
             # No started_at - workflow hasn't started
         )
@@ -705,12 +711,15 @@ class OrchestratorService:
             )
 
             # Create server state with workflow_type="review"
+            # execution_state.issue is always set (constructed above)
+            assert execution_state.issue is not None
             state = ServerExecutionState(
                 id=workflow_id,
                 issue_id="LOCAL-REVIEW",
                 worktree_path=resolved_path,
                 workflow_type=WorkflowType.REVIEW,
-                execution_state=execution_state,
+                profile_id=loaded_profile.name,
+                issue_cache=execution_state.issue.model_dump_json(),
                 workflow_status=WorkflowStatus.PENDING,
                 started_at=datetime.now(UTC),
             )
@@ -718,7 +727,7 @@ class OrchestratorService:
             await self._repository.create(state)
 
             # Start with review graph instead of full graph
-            task = asyncio.create_task(self._run_review_workflow(workflow_id, state))
+            task = asyncio.create_task(self._run_review_workflow(workflow_id, state, execution_state))
             self._active_tasks[resolved_path] = (workflow_id, task)
 
         # Same cleanup callback as start_workflow
@@ -926,6 +935,76 @@ class OrchestratorService:
         workflow_id, _ = entry
         return await self._repository.get(workflow_id)
 
+
+    async def _reconstruct_initial_state(
+        self,
+        state: ServerExecutionState,
+        profile: Profile,
+    ) -> dict[str, Any]:
+        """Reconstruct ImplementationState from ServerExecutionState columns.
+
+        Used when no LangGraph checkpoint exists and execution_state is not
+        available. Reconstructs the minimal state needed to start the workflow.
+
+        Args:
+            state: ServerExecutionState with issue_cache and other fields.
+            profile: Resolved profile for the workflow.
+
+        Returns:
+            JSON-serializable dict for LangGraph initial state.
+
+        Raises:
+            ValueError: If required fields are missing.
+        """
+        # Parse issue from issue_cache
+        issue = None
+        if state.issue_cache:
+            issue = Issue.model_validate_json(state.issue_cache)
+        else:
+            # Fallback: fetch from tracker (shouldn't normally happen)
+            tracker = create_tracker(profile)
+            issue = tracker.get_issue(state.issue_id, cwd=state.worktree_path)
+
+        # Get current HEAD as base commit (we're starting fresh)
+        base_commit = await get_git_head(state.worktree_path)
+
+        # Hydrate plan fields from plan_cache if present (external plans)
+        plan_fields: dict[str, Any] = {}
+        if state.plan_cache is not None:
+            plan_cache = state.plan_cache
+            if plan_cache.goal is not None:
+                plan_fields["goal"] = plan_cache.goal
+            if plan_cache.plan_markdown is not None:
+                plan_fields["plan_markdown"] = plan_cache.plan_markdown
+            if plan_cache.plan_path is not None:
+                plan_fields["plan_path"] = plan_cache.plan_path
+                plan_fields["external_plan"] = True
+            if plan_cache.total_tasks is not None:
+                plan_fields["total_tasks"] = plan_cache.total_tasks
+            if plan_cache.current_task_index is not None:
+                plan_fields["current_task_index"] = plan_cache.current_task_index
+
+        # Reconstruct ImplementationState
+        impl_state = ImplementationState(
+            workflow_id=state.id,
+            profile_id=profile.name,
+            created_at=state.created_at,
+            status="pending",
+            issue=issue,
+            base_commit=base_commit,
+            **plan_fields,
+        )
+
+        logger.debug(
+            "Reconstructed ImplementationState from columns",
+            workflow_id=state.id,
+            issue_id=state.issue_id,
+            profile_id=profile.name,
+            has_plan_cache=state.plan_cache is not None,
+        )
+
+        return impl_state.model_dump(mode="json")
+
     async def _run_workflow(
         self,
         workflow_id: str,
@@ -943,16 +1022,17 @@ class OrchestratorService:
             APPROVAL_REQUIRED event is emitted. The workflow resumes when
             approve_workflow() is called.
         """
-        if state.execution_state is None:
-            logger.error("No execution_state in ServerExecutionState", workflow_id=workflow_id)
+        profile_id = state.profile_id
+        if profile_id is None:
+            logger.error("No profile_id in ServerExecutionState", workflow_id=workflow_id)
             await self._repository.set_status(
-                workflow_id, WorkflowStatus.FAILED, failure_reason="Missing execution state"
+                workflow_id, WorkflowStatus.FAILED, failure_reason="Missing profile_id"
             )
             return
 
         # Get profile from settings using profile_id (with worktree_path fallback)
         profile = await self._get_profile_or_fail(
-            workflow_id, state.execution_state.profile_id, state.worktree_path
+            workflow_id, profile_id, state.worktree_path
         )
         if profile is None:
             return
@@ -1015,10 +1095,9 @@ class OrchestratorService:
                     input_state = None
                 else:
                     # No checkpoint - start fresh with initial state
-                    # Convert Pydantic model to JSON-serializable dict for checkpointing.
-                    # LangGraph's AsyncSqliteSaver uses json.dumps() internally,
-                    # which fails on Pydantic BaseModel objects.
-                    input_state = state.execution_state.model_dump(mode="json")
+                    # Reconstruct ImplementationState from columns
+                    input_state = await self._reconstruct_initial_state(state, profile)
+
                     logger.debug(
                         "Starting workflow fresh (no checkpoint)",
                         workflow_id=workflow_id,
@@ -1088,15 +1167,16 @@ class OrchestratorService:
             workflow_id: The workflow ID.
             state: Server execution state.
         """
-        if state.execution_state is None:
+        profile_id = state.profile_id
+        if profile_id is None:
             await self._repository.set_status(
-                workflow_id, WorkflowStatus.FAILED, failure_reason="Missing execution state"
+                workflow_id, WorkflowStatus.FAILED, failure_reason="Missing profile_id"
             )
             return
 
         # Get profile from settings using profile_id (with worktree_path fallback)
         profile = await self._get_profile_or_fail(
-            workflow_id, state.execution_state.profile_id, state.worktree_path
+            workflow_id, profile_id, state.worktree_path
         )
         if profile is None:
             return
@@ -1158,6 +1238,7 @@ class OrchestratorService:
         self,
         workflow_id: str,
         state: ServerExecutionState,
+        execution_state: ImplementationState,
     ) -> None:
         """Run the review-fix workflow graph.
 
@@ -1166,18 +1247,19 @@ class OrchestratorService:
 
         Args:
             workflow_id: The workflow ID.
-            state: Server execution state with embedded core state.
+            state: Server execution state (for worktree path etc).
+            execution_state: The ImplementationState for graph input.
         """
-        if state.execution_state is None:
-            logger.error("No execution_state in ServerExecutionState", workflow_id=workflow_id)
+        # Get profile from settings using profile_id
+        if state.profile_id is None:
+            logger.error("No profile_id in ServerExecutionState", workflow_id=workflow_id)
             await self._repository.set_status(
-                workflow_id, WorkflowStatus.FAILED, failure_reason="Missing execution state"
+                workflow_id, WorkflowStatus.FAILED, failure_reason="Missing profile_id"
             )
             return
 
-        # Get profile from settings using profile_id (with worktree_path fallback)
         profile = await self._get_profile_or_fail(
-            workflow_id, state.execution_state.profile_id, state.worktree_path
+            workflow_id, state.profile_id, state.worktree_path
         )
         if profile is None:
             return
@@ -1218,7 +1300,7 @@ class OrchestratorService:
                 await self._repository.set_status(workflow_id, WorkflowStatus.IN_PROGRESS)
 
                 # Convert Pydantic model to JSON-serializable dict for checkpointing
-                initial_state = state.execution_state.model_dump(mode="json")
+                initial_state = execution_state.model_dump(mode="json")
 
                 async for chunk in graph.astream(
                     initial_state,
@@ -1369,12 +1451,15 @@ class OrchestratorService:
 
             logger.info("Workflow approved", workflow_id=workflow_id)
 
-        # Get profile from settings using profile_id (with worktree_path fallback)
-        if workflow.execution_state is None:
-            logger.error("No execution_state in workflow", workflow_id=workflow_id)
+        # Get profile from settings using profile_id
+        if workflow.profile_id is None:
+            logger.error("No profile_id in workflow", workflow_id=workflow_id)
+            await self._repository.set_status(
+                workflow_id, WorkflowStatus.FAILED, failure_reason="Missing profile_id"
+            )
             return
         profile = await self._get_profile_or_fail(
-            workflow_id, workflow.execution_state.profile_id, workflow.worktree_path
+            workflow_id, workflow.profile_id, workflow.worktree_path
         )
         if profile is None:
             return
@@ -1508,12 +1593,12 @@ class OrchestratorService:
                 feedback=feedback,
             )
 
-        # Get profile from settings using profile_id (with worktree_path fallback)
-        if workflow.execution_state is None:
-            logger.error("No execution_state in workflow", workflow_id=workflow_id)
+        # Get profile from settings using profile_id
+        if workflow.profile_id is None:
+            logger.error("No profile_id in workflow", workflow_id=workflow_id)
             return
         profile = await self._get_profile_or_fail(
-            workflow_id, workflow.execution_state.profile_id, workflow.worktree_path
+            workflow_id, workflow.profile_id, workflow.worktree_path
         )
         if profile is None:
             return
@@ -1740,42 +1825,32 @@ class OrchestratorService:
         Called when workflow completes to check if the final task was not approved
         (indicating failure due to max iterations).
 
+        Note: This requires data from LangGraph checkpoint (last_review, task_review_iteration)
+        which is not available in plan_cache. For now, this is a best-effort operation
+        that returns early if the data is not available.
+
         Args:
             workflow_id: The workflow to check.
         """
         state = await self._repository.get(workflow_id)
-        if state is None or state.execution_state is None:
+        if state is None:
             return
 
-        exec_state = state.execution_state
-        total_tasks = exec_state.total_tasks
+        # Get task progress from plan_cache
+        if state.plan_cache is None:
+            return
+
+        total_tasks = state.plan_cache.total_tasks
 
         # Only emit in task mode
         if total_tasks is None:
             return
 
-        # Check if last review was not approved
-        last_review = exec_state.last_review
-        if last_review is None:
-            return
-
-        if last_review.approved:
-            return
-
-        task_index = exec_state.current_task_index
-        iterations = exec_state.task_review_iteration
-
-        await self._emit(
-            workflow_id,
-            EventType.TASK_FAILED,
-            f"Task {task_index + 1}/{total_tasks} failed after {iterations} review iterations",
-            agent="system",
-            data={
-                "task_index": task_index,
-                "total_tasks": total_tasks,
-                "iterations": iterations,
-            },
-        )
+        # Note: last_review and task_review_iteration are only in LangGraph checkpoint.
+        # Without access to last_review, we can't reliably determine if the task failed.
+        # The TASK_FAILED event will be emitted by the graph nodes if needed.
+        # TODO: Consider fetching from checkpoint if this event is critical.
+        return
 
     async def _emit_agent_messages(
         self,
@@ -1967,10 +2042,13 @@ class OrchestratorService:
         graph: CompiledStateGraph[Any],
         config: RunnableConfig,
     ) -> None:
-        """Sync plan from LangGraph checkpoint to ServerExecutionState.
+        """Sync plan from LangGraph checkpoint to plan_cache column.
 
         Uses LangGraph's get_state() API to fetch the current checkpoint state,
         ensuring the plan is available via REST API when workflow is blocked.
+
+        This method writes directly to the plan_cache column for efficiency,
+        avoiding the need to load and re-serialize the entire ServerExecutionState.
 
         Args:
             workflow_id: The workflow ID.
@@ -1990,9 +2068,7 @@ class OrchestratorService:
             # Check for goal and plan_markdown from agentic execution
             goal = checkpoint_state.values.get("goal")
             plan_markdown = checkpoint_state.values.get("plan_markdown")
-            raw_architect_output = checkpoint_state.values.get("raw_architect_output")
             tool_calls = checkpoint_state.values.get("tool_calls", [])
-            tool_results = checkpoint_state.values.get("tool_results", [])
 
             # Log checkpoint values for debugging
             logger.info(
@@ -2002,7 +2078,6 @@ class OrchestratorService:
                 goal_preview=goal[:100] if goal else None,
                 has_plan_markdown=plan_markdown is not None,
                 plan_markdown_length=len(plan_markdown) if plan_markdown else 0,
-                has_raw_output=raw_architect_output is not None,
                 tool_calls_count=len(tool_calls),
             )
 
@@ -2014,52 +2089,17 @@ class OrchestratorService:
                 )
                 return
 
-            # Fetch ServerExecutionState
-            state = await self._repository.get(workflow_id)
-            if state is None or state.execution_state is None:
-                logger.warning(
-                    "Cannot sync plan - workflow or execution_state not found",
-                    workflow_id=workflow_id,
-                )
-                return
+            # Create PlanCache from checkpoint values
+            plan_cache = PlanCache.from_checkpoint_values(checkpoint_state.values)
 
-            # Build update dict with goal, plan_markdown, and tool_calls
-            update_dict: dict[str, Any] = {}
-            if goal is not None:
-                update_dict["goal"] = goal
-            if plan_markdown is not None:
-                update_dict["plan_markdown"] = plan_markdown
-            if tool_calls:
-                update_dict["tool_calls"] = tool_calls
-            if tool_results:
-                update_dict["tool_results"] = tool_results
+            # Update plan_cache column directly (efficient, no full state load)
+            await self._repository.update_plan_cache(workflow_id, plan_cache)
 
-            # Extract plan_path from Write tool calls
-            for tc in tool_calls:
-                tool_name = getattr(tc, "tool_name", None) or tc.get("tool_name")
-                tool_input = getattr(tc, "tool_input", None) or tc.get("tool_input", {})
-                if tool_name == ToolName.WRITE_FILE and "file_path" in tool_input:
-                    update_dict["plan_path"] = Path(tool_input["file_path"])
-                    logger.debug(
-                        "Extracted plan_path from tool calls",
-                        plan_path=str(update_dict["plan_path"]),
-                    )
-                    break
-
-            if not update_dict:
-                return
-
-            # Update the execution_state with synced fields
-            # ExecutionState is frozen, so we use model_copy to create an updated instance
-            state.execution_state = state.execution_state.model_copy(update=update_dict)
-
-            # Save back to repository
-            await self._repository.update(state)
             logger.debug(
-                "Synced plan to ServerExecutionState",
+                "Synced plan to plan_cache column",
                 workflow_id=workflow_id,
-                tool_calls_count=len(tool_calls),
-                has_plan_path="plan_path" in update_dict,
+                tool_calls_count=len(plan_cache.tool_calls),
+                has_plan_path=plan_cache.plan_path is not None,
             )
 
         except Exception as e:
@@ -2299,11 +2339,14 @@ class OrchestratorService:
         )
 
         # Create ServerExecutionState in pending status (architect running)
+        # execution_state.issue is always set by _prepare_workflow_state
+        assert execution_state.issue is not None
         state = ServerExecutionState(
             id=workflow_id,
             issue_id=request.issue_id,
             worktree_path=resolved_path,
-            execution_state=execution_state,
+            profile_id=profile.name,
+            issue_cache=execution_state.issue.model_dump_json(),
             workflow_status=WorkflowStatus.PENDING,
             # Note: started_at is None - workflow hasn't started yet
         )
@@ -2543,23 +2586,22 @@ class OrchestratorService:
             )
 
         # Check existing plan - require force to overwrite
-        execution_state = workflow.execution_state
-        if execution_state is not None and execution_state.plan_markdown is not None and not force:
+        if workflow.plan_cache is not None and workflow.plan_cache.plan_markdown is not None and not force:
             raise WorkflowConflictError(
                 "Plan already exists. Use force=true to overwrite."
             )
 
-        # Ensure execution_state exists before importing plan
-        if execution_state is None:
+        # Ensure profile_id exists
+        if workflow.profile_id is None:
             raise InvalidStateError(
-                "Cannot set plan: workflow has no execution state",
+                "Cannot set plan: workflow has no profile_id",
                 workflow_id=workflow_id,
             )
 
         # Get profile for plan path resolution
         profile = await self._get_profile_or_fail(
             workflow_id,
-            execution_state.profile_id,
+            workflow.profile_id,
             workflow.worktree_path,
         )
         if profile is None:
@@ -2581,25 +2623,15 @@ class OrchestratorService:
             workflow_id=workflow_id,
         )
 
-        # Update execution state with plan data
-        updated_execution_state = execution_state.model_copy(
-            update={
-                "external_plan": True,
-                "goal": plan_result.goal,
-                "plan_markdown": plan_result.plan_markdown,
-                "plan_path": plan_result.plan_path,
-                "key_files": plan_result.key_files,
-                "total_tasks": plan_result.total_tasks,
-            }
+        # Update plan_cache with plan data
+        plan_cache = PlanCache(
+            goal=plan_result.goal,
+            plan_markdown=plan_result.plan_markdown,
+            plan_path=str(plan_result.plan_path) if plan_result.plan_path else None,
+            total_tasks=plan_result.total_tasks,
+            tool_calls=[],
         )
-
-        # Update workflow with plan data
-        updated_workflow = workflow.model_copy(
-            update={
-                "execution_state": updated_execution_state,
-            }
-        )
-        await self._repository.update(updated_workflow)
+        await self._repository.update_plan_cache(workflow_id, plan_cache)
 
         # Emit plan set event
         await self._emit(
@@ -2661,9 +2693,9 @@ class OrchestratorService:
                     f"Planning task already running for workflow {workflow_id}"
                 )
 
-            if workflow.execution_state is None:
+            if workflow.profile_id is None:
                 raise InvalidStateError(
-                    "Cannot replan workflow without execution state",
+                    "Cannot replan workflow without profile_id",
                     workflow_id=workflow_id,
                     current_status=str(workflow.workflow_status),
                 )
@@ -2674,12 +2706,10 @@ class OrchestratorService:
             # the workflow in BLOCKED so the user can fix the profile and retry.
             if self._profile_repo is None:
                 raise ValueError(f"ProfileRepository not configured for workflow {workflow_id}")
-            record = await self._profile_repo.get_profile(
-                workflow.execution_state.profile_id,
-            )
+            record = await self._profile_repo.get_profile(workflow.profile_id)
             if record is None:
                 raise ValueError(
-                    f"Profile '{workflow.execution_state.profile_id}' not found for workflow {workflow_id}"
+                    f"Profile '{workflow.profile_id}' not found for workflow {workflow_id}"
                 )
             profile = self._update_profile_working_dir(record, workflow.worktree_path)
 
@@ -2694,30 +2724,34 @@ class OrchestratorService:
                     exc_info=True,
                 )
 
-            # Clear plan-related fields from execution_state
-            workflow.execution_state = workflow.execution_state.model_copy(
-                update={
-                    "external_plan": False,
-                    "goal": None,
-                    "plan_markdown": None,
-                    "raw_architect_output": None,
-                    "plan_path": None,
-                    "key_files": [],
-                    "total_tasks": 1,
-                    "tool_calls": [],
-                    "tool_results": [],
-                    "human_approved": None,
-                    "human_feedback": None,
-                }
-            )
+            # Clear plan_cache by setting empty values
+            empty_plan_cache = PlanCache()
+            await self._repository.update_plan_cache(workflow_id, empty_plan_cache)
 
-            # Transition to PENDING.
-            # Design note: we use repository.update() instead of set_status()
-            # because multiple fields must change atomically (status,
-            # execution_state). The BLOCKED → PENDING guard is enforced
-            # explicitly above.
-            workflow.workflow_status = WorkflowStatus.PENDING
-            await self._repository.update(workflow)
+            # Transition to PENDING
+            await self._repository.set_status(workflow_id, WorkflowStatus.PENDING)
+
+            # Reconstruct ImplementationState for graph input
+            # Parse issue from issue_cache
+            issue = None
+            if workflow.issue_cache:
+                issue = Issue.model_validate_json(workflow.issue_cache)
+            else:
+                # Fallback: fetch from tracker
+                tracker = create_tracker(profile)
+                issue = tracker.get_issue(workflow.issue_id, cwd=workflow.worktree_path)
+
+            # Get current HEAD as base commit
+            base_commit = await get_git_head(workflow.worktree_path)
+
+            execution_state = ImplementationState(
+                workflow_id=workflow_id,
+                profile_id=profile.name,
+                created_at=workflow.created_at,
+                status="pending",
+                issue=issue,
+                base_commit=base_commit,
+            )
 
             # Emit replanning event inside the lock, before spawning the task,
             # to guarantee ordering: STAGE_STARTED always precedes any events
@@ -2732,11 +2766,11 @@ class OrchestratorService:
 
             # Spawn planning task in background (reuses existing _run_planning_task).
             # Note: workflow/execution_state are only used as initial graph input
-            # (see _run_planning_task docstring). The cleared execution_state is
-            # intentional — it seeds a fresh planning run. The task re-fetches
-            # from the repository before any mutations, so staleness is safe.
+            # (see _run_planning_task docstring). The reconstructed execution_state
+            # seeds a fresh planning run. The task re-fetches from the repository
+            # before any mutations, so staleness is safe.
             task = asyncio.create_task(
-                self._run_planning_task(workflow_id, workflow, workflow.execution_state, profile)
+                self._run_planning_task(workflow_id, workflow, execution_state, profile)
             )
             self._planning_tasks[workflow_id] = task
 

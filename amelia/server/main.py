@@ -73,7 +73,6 @@ from amelia.server.events.bus import EventBus
 from amelia.server.lifecycle.health_checker import WorktreeHealthChecker
 from amelia.server.lifecycle.retention import LogRetentionService
 from amelia.server.lifecycle.server import ServerLifecycle
-from amelia.server.models.state import rebuild_server_execution_state
 from amelia.server.orchestrator.service import OrchestratorService
 from amelia.server.routes import (
     config_router,
@@ -121,11 +120,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     Sets start_time on startup for uptime calculation.
     Initializes configuration, database, orchestrator, and lifecycle components.
     """
-    # Rebuild Pydantic models with forward references before any instantiation.
-    # ImplementationState is used by the orchestrator service.
-    # ServerExecutionState has ImplementationState in its union type.
+    # Rebuild ImplementationState forward references before any instantiation.
+    # ServerExecutionState no longer has forward refs (execution_state field removed).
     rebuild_implementation_state()
-    rebuild_server_execution_state()
 
     # Configure logging (needed when uvicorn loads app directly, e.g. with --reload)
     log_level = os.environ.get("AMELIA_LOG_LEVEL", "INFO").upper()

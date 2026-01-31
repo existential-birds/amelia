@@ -24,6 +24,7 @@ class TestSetWorkflowPlan:
         mock = MagicMock(spec=WorkflowRepository)
         mock.get = AsyncMock()
         mock.update = AsyncMock()
+        mock.update_plan_cache = AsyncMock()
         return mock
 
     @pytest.fixture
@@ -48,20 +49,21 @@ class TestSetWorkflowPlan:
         has_plan: bool = False,
     ) -> MagicMock:
         """Create mock workflow."""
-        # Create mock execution state
-        mock_execution_state = MagicMock()
-        mock_execution_state.profile_id = "test"
-        mock_execution_state.plan_markdown = "# Existing plan" if has_plan else None
-        mock_execution_state.goal = "Existing goal" if has_plan else None
-        mock_execution_state.model_copy = MagicMock(return_value=MagicMock())
+        # Create mock plan_cache if has_plan is True
+        mock_plan_cache = None
+        if has_plan:
+            mock_plan_cache = MagicMock()
+            mock_plan_cache.plan_markdown = "# Existing plan"
+            mock_plan_cache.goal = "Existing goal"
 
         # Create mock workflow
         mock_workflow = MagicMock()
         mock_workflow.id = workflow_id
         mock_workflow.issue_id = "TEST-001"
+        mock_workflow.profile_id = "test"
         mock_workflow.worktree_path = "/tmp/worktree"
         mock_workflow.workflow_status = workflow_status
-        mock_workflow.execution_state = mock_execution_state
+        mock_workflow.plan_cache = mock_plan_cache
         mock_workflow.model_copy = MagicMock(return_value=MagicMock())
 
         return mock_workflow
@@ -110,7 +112,7 @@ class TestSetWorkflowPlan:
 
         assert result["goal"] == "New goal"
         assert result["total_tasks"] == 2
-        mock_repository.update.assert_called_once()
+        mock_repository.update_plan_cache.assert_called_once()
 
     async def test_set_plan_on_running_workflow_fails(
         self, mock_orchestrator: OrchestratorService, mock_repository: MagicMock
@@ -187,7 +189,7 @@ class TestSetWorkflowPlan:
 
         assert result["goal"] == "New goal"
         assert result["total_tasks"] == 3
-        mock_repository.update.assert_called_once()
+        mock_repository.update_plan_cache.assert_called_once()
 
     async def test_set_plan_on_nonexistent_workflow_fails(
         self, mock_orchestrator: OrchestratorService, mock_repository: MagicMock
