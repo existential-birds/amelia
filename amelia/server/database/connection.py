@@ -268,7 +268,6 @@ class Database:
                 started_at TIMESTAMP,
                 completed_at TIMESTAMP,
                 failure_reason TEXT,
-                state_json TEXT NOT NULL,
                 workflow_type TEXT NOT NULL DEFAULT 'full',
                 profile_id TEXT,
                 plan_cache TEXT,
@@ -360,7 +359,7 @@ class Database:
         )
 
         # Migration: Add new columns to existing workflows tables
-        # These columns support the transition away from state_json
+        # These columns replaced state_json for discrete field storage
         for column, col_type, default in [
             ("workflow_type", "TEXT NOT NULL", "'full'"),
             ("profile_id", "TEXT", None),
@@ -381,6 +380,13 @@ class Database:
                 if "duplicate column" not in str(e).lower():
                     raise
                 logger.debug("Column already exists, skipping", column=column, error=str(e))
+
+        # Migration: Drop state_json column (no longer used)
+        # ImplementationState now lives in LangGraph checkpoints, not our DB
+        try:
+            await self.execute("ALTER TABLE workflows DROP COLUMN state_json")
+        except Exception:
+            pass  # Column already dropped or SQLite version doesn't support DROP COLUMN
 
         # Unique constraint: one active workflow per worktree
         # Note: 'pending' is intentionally excluded - multiple pending workflows
