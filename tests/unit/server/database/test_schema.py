@@ -63,8 +63,8 @@ class TestWorkflowsSchema:
         """workflow_type column has default value 'full'."""
         # Insert without specifying workflow_type
         await db_with_schema.execute("""
-            INSERT INTO workflows (id, issue_id, worktree_path, status, state_json)
-            VALUES ('test-id', 'ISSUE-1', '/path', 'pending', '{}')
+            INSERT INTO workflows (id, issue_id, worktree_path, status)
+            VALUES ('test-id', 'ISSUE-1', '/path', 'pending')
         """)
 
         row = await db_with_schema.fetch_one(
@@ -81,15 +81,15 @@ class TestWorktreeConstraints:
         """Two in_progress workflows on same worktree should fail."""
         # Insert first in_progress workflow
         await db_with_schema.execute("""
-            INSERT INTO workflows (id, issue_id, worktree_path, status, state_json)
-            VALUES ('id1', 'ISSUE-1', '/path/to/worktree', 'in_progress', '{}')
+            INSERT INTO workflows (id, issue_id, worktree_path, status)
+            VALUES ('id1', 'ISSUE-1', '/path/to/worktree', 'in_progress')
         """)
 
         # Second in_progress workflow in same worktree should fail
         with pytest.raises(aiosqlite.IntegrityError):
             await db_with_schema.execute("""
-                INSERT INTO workflows (id, issue_id, worktree_path, status, state_json)
-                VALUES ('id2', 'ISSUE-2', '/path/to/worktree', 'in_progress', '{}')
+                INSERT INTO workflows (id, issue_id, worktree_path, status)
+                VALUES ('id2', 'ISSUE-2', '/path/to/worktree', 'in_progress')
             """)
 
     async def test_pending_workflows_dont_conflict(self, db_with_schema) -> None:
@@ -100,14 +100,14 @@ class TestWorktreeConstraints:
         """
         # Insert first pending workflow
         await db_with_schema.execute("""
-            INSERT INTO workflows (id, issue_id, worktree_path, status, state_json)
-            VALUES ('id1', 'ISSUE-1', '/path/to/worktree', 'pending', '{}')
+            INSERT INTO workflows (id, issue_id, worktree_path, status)
+            VALUES ('id1', 'ISSUE-1', '/path/to/worktree', 'pending')
         """)
 
         # Second pending workflow in same worktree should succeed
         await db_with_schema.execute("""
-            INSERT INTO workflows (id, issue_id, worktree_path, status, state_json)
-            VALUES ('id2', 'ISSUE-2', '/path/to/worktree', 'pending', '{}')
+            INSERT INTO workflows (id, issue_id, worktree_path, status)
+            VALUES ('id2', 'ISSUE-2', '/path/to/worktree', 'pending')
         """)
 
         # Verify both exist
@@ -118,14 +118,14 @@ class TestWorktreeConstraints:
         """One in_progress + one pending on same worktree should be allowed."""
         # Insert in_progress workflow
         await db_with_schema.execute("""
-            INSERT INTO workflows (id, issue_id, worktree_path, status, state_json)
-            VALUES ('id1', 'ISSUE-1', '/path/to/worktree', 'in_progress', '{}')
+            INSERT INTO workflows (id, issue_id, worktree_path, status)
+            VALUES ('id1', 'ISSUE-1', '/path/to/worktree', 'in_progress')
         """)
 
         # Pending workflow in same worktree should succeed
         await db_with_schema.execute("""
-            INSERT INTO workflows (id, issue_id, worktree_path, status, state_json)
-            VALUES ('id2', 'ISSUE-2', '/path/to/worktree', 'pending', '{}')
+            INSERT INTO workflows (id, issue_id, worktree_path, status)
+            VALUES ('id2', 'ISSUE-2', '/path/to/worktree', 'pending')
         """)
 
         # Verify both exist
@@ -136,14 +136,14 @@ class TestWorktreeConstraints:
         """Completed workflows don't block new workflows in same worktree."""
         # Insert completed workflow
         await db_with_schema.execute("""
-            INSERT INTO workflows (id, issue_id, worktree_path, status, state_json)
-            VALUES ('id1', 'ISSUE-1', '/path/to/worktree', 'completed', '{}')
+            INSERT INTO workflows (id, issue_id, worktree_path, status)
+            VALUES ('id1', 'ISSUE-1', '/path/to/worktree', 'completed')
         """)
 
         # New workflow in same worktree should succeed
         await db_with_schema.execute("""
-            INSERT INTO workflows (id, issue_id, worktree_path, status, state_json)
-            VALUES ('id2', 'ISSUE-2', '/path/to/worktree', 'in_progress', '{}')
+            INSERT INTO workflows (id, issue_id, worktree_path, status)
+            VALUES ('id2', 'ISSUE-2', '/path/to/worktree', 'in_progress')
         """)
 
         # Verify both exist
