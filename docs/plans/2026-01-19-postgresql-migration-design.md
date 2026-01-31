@@ -53,10 +53,26 @@ Connection URL examples:
 ### JSONB columns
 
 These columns become JSONB for queryability:
-- `state_json` → `state JSONB`
-- `data_json` → `data JSONB`
-- `parts_json` → `parts JSONB`
-- `tool_input_json` → `tool_input JSONB`
+- `data_json` → `data JSONB` (events table)
+- `parts_json` → `parts JSONB` (brainstorm_messages table)
+- `tool_input_json` → `tool_input JSONB` (events table)
+- `plan_cache` → `plan_cache JSONB` (workflows table - denormalized plan data for API fast path)
+- `agents` → `agents JSONB` (profiles table)
+
+> **Note:** `state_json` was removed in #389. Execution state now lives in LangGraph checkpoints. The `plan_cache` column is a strategic denormalization that keeps essential plan fields available for REST API responses without checkpoint deserialization.
+
+### Additional schema improvements
+
+The following improvements will be included in the initial PostgreSQL schema (see [Schema Review](./2026-01-27-schema-review.md) for details):
+
+| Change | Description |
+|--------|-------------|
+| Native types | `UUID` for IDs, `BOOLEAN` for flags, `NUMERIC(10,6)` for costs, `TIMESTAMPTZ` for timestamps |
+| CHECK constraints | Enum validation for `status`, `workflow_type`, `level`, `role`, `tracker` columns |
+| Missing FKs | Add `prompts.current_version_id` → `prompt_versions(id)` (deferred), `brainstorm_sessions.profile_id` → `profiles(id)` |
+| `events.parent_id` FK | Add `REFERENCES events(id) ON DELETE SET NULL` |
+| `workflows.updated_at` | Add column for general status change tracking |
+| Replace triggers | Replace active-profile triggers with partial unique index |
 
 ## Migration System
 
@@ -101,6 +117,8 @@ On startup:
 | `amelia/server/database/repository.py` | Update `?` → `$1` parameter syntax |
 | `amelia/server/database/brainstorm_repository.py` | Update `?` → `$1` parameter syntax |
 | `amelia/server/database/prompt_repository.py` | Update `?` → `$1` parameter syntax |
+| `amelia/server/database/profile_repository.py` | Update `?` → `$1` parameter syntax |
+| `amelia/server/database/settings_repository.py` | Update `?` → `$1` parameter syntax |
 | `tests/conftest.py` | PostgreSQL test fixtures |
 | `docker-compose.yml` | Add PostgreSQL service |
 | `.github/workflows/*.yml` | Add GitHub Actions PostgreSQL service container |
@@ -150,7 +168,12 @@ When ready (after Knowledge Library/Oracle data model is defined):
 
 This is a separate migration, not part of initial PostgreSQL work.
 
+## Related Documents
+
+- [Schema Review](./2026-01-27-schema-review.md) - Detailed audit of current schema with proposed improvements (CHECK constraints, FK additions, type changes)
+
 ## Related Issues
 
 - #280 - Oracle Consulting System
 - #290 - RLM Integration (Knowledge Library, RAG)
+- #308 - Migrate from SQLite to PostgreSQL

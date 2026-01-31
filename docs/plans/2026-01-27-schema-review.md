@@ -30,7 +30,10 @@ CREATE TABLE workflows (
     started_at        TIMESTAMP,
     completed_at      TIMESTAMP,
     failure_reason    TEXT,
-    state_json        TEXT NOT NULL             -- full ServerExecutionState as JSON
+    workflow_type     TEXT NOT NULL DEFAULT 'full',  -- 'full' or 'review'
+    profile_id        TEXT,                     -- active profile at time of creation
+    plan_cache        TEXT,                     -- cached plan data (JSON-serialized PlanCache)
+    issue_cache       TEXT                      -- cached issue data
 );
 ```
 
@@ -45,7 +48,8 @@ CREATE TABLE workflows (
 
 **Notes:**
 - Partial unique index allows multiple pending workflows per worktree but only one active.
-- `state_json` contains the full LangGraph execution state — can be large.
+- `plan_cache` contains a JSON-serialized `PlanCache` Pydantic model.
+- Execution state now lives in LangGraph checkpoints, not in the database.
 
 ---
 
@@ -214,7 +218,7 @@ CREATE TABLE brainstorm_messages (
     id            TEXT PRIMARY KEY,
     session_id    TEXT NOT NULL REFERENCES brainstorm_sessions(id) ON DELETE CASCADE,
     sequence      INTEGER NOT NULL,
-    role          TEXT NOT NULL,              -- user | assistant | system
+    role          TEXT NOT NULL,              -- user | assistant
     content       TEXT NOT NULL,
     parts_json    TEXT,                       -- structured message parts
     created_at    TIMESTAMP NOT NULL,         -- no default (app-provided)
@@ -315,6 +319,8 @@ The following ad-hoc migrations run inside `ensure_schema()` on every startup:
 
 | Migration | Description |
 |-----------|-------------|
+| `ALTER TABLE workflows ADD COLUMN workflow_type/profile_id/plan_cache/issue_cache` | Phase 1: discrete columns replacing `state_json` |
+| `ALTER TABLE workflows DROP COLUMN state_json` | Removed monolithic state blob (execution state now in LangGraph checkpoints) |
 | `ALTER TABLE brainstorm_sessions ADD COLUMN driver_type` | Added driver type tracking |
 | `ALTER TABLE brainstorm_messages ADD COLUMN input_tokens/output_tokens/cost_usd/is_system` | Added token tracking and system message flag |
 | `UPDATE brainstorm_messages SET is_system = 1 WHERE ...` | Data migration for existing priming messages |
@@ -351,7 +357,7 @@ Changes to make before or during the PostgreSQL migration. Grouped by category.
 | Column(s) | Current | Proposed | Rationale |
 |-----------|---------|----------|-----------|
 | All `id` PKs, all `*_id` FKs | `TEXT` | `UUID` | 16 bytes vs 36, native validation, better index performance |
-| `state_json`, `data_json`, `parts_json`, `tool_input_json`, `agents` | `TEXT` | `JSONB` | Queryable, indexable, validated on INSERT. Also drop `_json` suffix. |
+| `data_json`, `parts_json`, `tool_input_json`, `agents`, `plan_cache` | `TEXT` | `JSONB` | Queryable, indexable, validated on INSERT. Also drop `_json` suffix where applicable. |
 | `is_error`, `is_active`, `is_system`, `stream_tool_results` | `INTEGER` | `BOOLEAN` | Native type with `TRUE`/`FALSE` |
 | `cost_usd` (token_usage, brainstorm_messages) | `REAL` | `NUMERIC(10,6)` | No floating-point rounding for monetary values |
 | All `TIMESTAMP` / `TEXT` timestamp columns | Mixed | `TIMESTAMPTZ` | Timezone-aware, consistent across all tables |
@@ -359,11 +365,12 @@ Changes to make before or during the PostgreSQL migration. Grouped by category.
 **JSONB column renames:**
 
 ```
-state_json       → state
 data_json        → data
 parts_json       → parts
 tool_input_json  → tool_input
 ```
+
+> **Note:** `state_json` was removed in #389. Execution state now lives in LangGraph checkpoints. The new `plan_cache` column stores focused JSON (PlanCache model) and should become JSONB.
 
 ---
 
@@ -371,32 +378,44 @@ tool_input_json  → tool_input
 
 **Problem:** Status and type columns accept arbitrary text. Invalid values are only caught by application code.
 
-**Changes:**
+**Changes (verified against codebase 2026-01-31):**
 
 ```sql
--- workflows.status
+-- workflows.status (from WorkflowStatus Literal type)
 CHECK (status IN ('pending', 'in_progress', 'blocked', 'completed', 'failed', 'cancelled'))
 
--- events.level
-CHECK (level IN ('trace', 'debug', 'info', 'warning', 'error'))
+-- workflows.workflow_type (from WorkflowType Literal type)
+CHECK (workflow_type IN ('full', 'review'))
 
--- events.event_type
-CHECK (event_type IN ('log', 'tool_call', 'tool_result', 'state_update', 'decision', 'human_input'))
+-- events.level (from EventLevel Literal type)
+CHECK (level IN ('info', 'debug', 'trace'))
 
--- brainstorm_sessions.status
-CHECK (status IN ('active', 'archived'))
+-- events.event_type (from EventType - many values for different domains)
+-- Note: Event types are extensible; consider NOT adding a CHECK constraint here.
+-- Current values include: workflow_created, workflow_started, workflow_completed, workflow_failed,
+-- workflow_cancelled, stage_started, stage_completed, approval_required, approval_granted,
+-- approval_rejected, file_created, file_modified, file_deleted, review_requested, review_completed,
+-- revision_requested, agent_message, task_started, task_completed, task_failed, system_error,
+-- system_warning, stream, claude_thinking, claude_tool_call, claude_tool_result, agent_output,
+-- brainstorm_session_created, brainstorm_reasoning, brainstorm_tool_call, brainstorm_tool_result,
+-- brainstorm_text, brainstorm_message_complete, brainstorm_artifact_created, brainstorm_session_completed,
+-- oracle_consultation_started, oracle_consultation_thinking, oracle_tool_call, oracle_tool_result,
+-- oracle_consultation_completed, oracle_consultation_failed
 
--- brainstorm_messages.role
-CHECK (role IN ('user', 'assistant', 'system'))
+-- brainstorm_sessions.status (from BrainstormStatus Literal type)
+CHECK (status IN ('active', 'ready_for_handoff', 'completed', 'failed'))
 
--- brainstorm_artifacts.type
-CHECK (type IN ('spec', 'design', 'code', 'document'))
+-- brainstorm_messages.role (actual stored values - no 'system' role)
+CHECK (role IN ('user', 'assistant'))
 
--- profiles.tracker
+-- brainstorm_artifacts.type (from _infer_artifact_type logic)
+CHECK (type IN ('adr', 'spec', 'readme', 'design', 'document'))
+
+-- profiles.tracker (from TrackerType Literal type)
 CHECK (tracker IN ('noop', 'github', 'jira'))
 ```
 
-> **Note:** Verify these enum values against the codebase before committing. The values above are inferred from usage patterns.
+> **Note:** `events.event_type` has many values across different domains (workflow, brainstorm, oracle). Consider using a PostgreSQL `text` type without CHECK constraint, or creating an enum type that can be extended via ALTER TYPE.
 
 ---
 
@@ -523,16 +542,30 @@ With a `schema_migrations` tracking table. The `ensure_schema()` method is repla
 
 ## Summary of Changes
 
-| # | Change | Impact | Effort |
-|---|--------|--------|--------|
-| 1 | Native PostgreSQL types (UUID, JSONB, BOOLEAN, NUMERIC, TIMESTAMPTZ) | All tables, all repositories | Part of migration rewrite |
-| 2 | CHECK constraints for enums | All status/type columns | Low — add to CREATE TABLE |
-| 3 | Missing FK constraints | `prompts`, `brainstorm_sessions` | Low |
-| 4 | Partial unique index replaces triggers | `profiles` | Low |
-| 5 | Add `workflows.updated_at` | `workflows` table + repository | Low |
-| 6 | Remove model default | `token_usage` | Trivial |
-| 7 | `events.parent_id` FK | `events` table | Low |
-| 8 | Keep `agents` as JSONB (no normalize) | None | None |
-| 9 | Standardize timestamp defaults | All tables | Low — part of migration |
-| 10 | Events partitioning | Deferred | — |
-| 11 | Migration system | New `migrations/` directory | Medium — already planned |
+| # | Change | Impact | Effort | Status |
+|---|--------|--------|--------|--------|
+| 1 | Native PostgreSQL types (UUID, JSONB, BOOLEAN, NUMERIC, TIMESTAMPTZ) | All tables, all repositories | Part of migration rewrite | Pending |
+| 2 | CHECK constraints for enums | All status/type columns | Low — add to CREATE TABLE | Pending (values verified) |
+| 3 | Missing FK constraints | `prompts`, `brainstorm_sessions` | Low | Pending |
+| 4 | Partial unique index replaces triggers | `profiles` | Low | Pending |
+| 5 | Add `workflows.updated_at` | `workflows` table + repository | Low | Pending |
+| 6 | Remove model default | `token_usage` | Trivial | Pending |
+| 7 | `events.parent_id` FK | `events` table | Low | Pending |
+| 8 | Keep `agents` as JSONB (no normalize) | None | None | N/A |
+| 9 | Standardize timestamp defaults | All tables | Low — part of migration | Pending |
+| 10 | Events partitioning | Deferred | — | Deferred |
+| 11 | Migration system | New `migrations/` directory | Medium — already planned | Pending |
+
+---
+
+## Recent Schema Changes
+
+Changes made since this review was created:
+
+| PR | Change | Date |
+|----|--------|------|
+| #389 | Removed `state_json` blob, added discrete columns (`workflow_type`, `profile_id`, `plan_cache`, `issue_cache`) | 2026-01-31 |
+| #386 | Removed `current_stage` from ServerExecutionState | 2026-01-30 |
+| #385 | Removed `planned_at` field from ServerExecutionState | 2026-01-30 |
+
+These changes align with the goal of moving away from monolithic JSON blobs. Execution state now lives in LangGraph checkpoints rather than the database.
