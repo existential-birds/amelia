@@ -374,29 +374,43 @@ tool_input_json  → tool_input
 **Changes:**
 
 ```sql
--- workflows.status
+-- workflows.status (from amelia/server/models/state.py WorkflowStatus)
 CHECK (status IN ('pending', 'in_progress', 'blocked', 'completed', 'failed', 'cancelled'))
 
--- events.level
-CHECK (level IN ('trace', 'debug', 'info', 'warning', 'error'))
+-- events.level (from amelia/server/models/events.py EventLevel)
+CHECK (level IN ('info', 'debug', 'trace'))
 
--- events.event_type
-CHECK (event_type IN ('log', 'tool_call', 'tool_result', 'state_update', 'decision', 'human_input'))
+-- events.event_type (from amelia/server/models/events.py EventType)
+-- Note: 40+ values, consider using a separate enum table or no constraint
+CHECK (event_type IN (
+    'workflow_created', 'workflow_started', 'workflow_completed', 'workflow_failed', 'workflow_cancelled',
+    'stage_started', 'stage_completed',
+    'approval_required', 'approval_granted', 'approval_rejected',
+    'file_created', 'file_modified', 'file_deleted',
+    'review_requested', 'review_completed', 'revision_requested',
+    'agent_message', 'task_started', 'task_completed', 'task_failed',
+    'system_error', 'system_warning',
+    'stream', 'claude_thinking', 'claude_tool_call', 'claude_tool_result', 'agent_output',
+    'brainstorm_session_created', 'brainstorm_reasoning', 'brainstorm_tool_call', 'brainstorm_tool_result',
+    'brainstorm_text', 'brainstorm_message_complete', 'brainstorm_artifact_created', 'brainstorm_session_completed',
+    'oracle_consultation_started', 'oracle_consultation_thinking', 'oracle_tool_call', 'oracle_tool_result',
+    'oracle_consultation_completed', 'oracle_consultation_failed'
+))
 
--- brainstorm_sessions.status
-CHECK (status IN ('active', 'archived'))
+-- brainstorm_sessions.status (from amelia/server/models/brainstorm.py SessionStatus)
+CHECK (status IN ('active', 'ready_for_handoff', 'completed', 'failed'))
 
--- brainstorm_messages.role
-CHECK (role IN ('user', 'assistant', 'system'))
+-- brainstorm_messages.role (from amelia/server/models/brainstorm.py MessageRole)
+CHECK (role IN ('user', 'assistant'))
 
--- brainstorm_artifacts.type
-CHECK (type IN ('spec', 'design', 'code', 'document'))
+-- brainstorm_artifacts.type (from amelia/server/services/brainstorm.py _infer_artifact_type)
+CHECK (type IN ('adr', 'spec', 'readme', 'design', 'document'))
 
--- profiles.tracker
+-- profiles.tracker (from amelia/core/types.py TrackerType)
 CHECK (tracker IN ('noop', 'github', 'jira'))
 ```
 
-> **Note:** Verify these enum values against the codebase before committing. The values above are inferred from usage patterns.
+> **Verified:** These enum values match the StrEnum definitions in the codebase as of 2026-01-31.
 
 ---
 

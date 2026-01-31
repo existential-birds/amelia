@@ -297,7 +297,7 @@ class Database:
                 id TEXT PRIMARY KEY,
                 workflow_id TEXT NOT NULL REFERENCES workflows(id) ON DELETE CASCADE,
                 agent TEXT NOT NULL,
-                model TEXT NOT NULL DEFAULT 'claude-sonnet-4-20250514',
+                model TEXT NOT NULL,
                 input_tokens INTEGER NOT NULL,
                 output_tokens INTEGER NOT NULL,
                 cache_read_tokens INTEGER DEFAULT 0,
