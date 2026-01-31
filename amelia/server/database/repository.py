@@ -43,38 +43,52 @@ class WorkflowRepository:
         """
         return self._db
 
+    def _row_to_state(self, row: aiosqlite.Row) -> ServerExecutionState:
+        """Convert database row to ServerExecutionState.
+
+        Args:
+            row: Database row with workflow columns.
+
+        Returns:
+            ServerExecutionState instance.
+        """
+        plan_cache = None
+        if row["plan_cache"]:
+            plan_cache = PlanCache.model_validate_json(row["plan_cache"])
+
+        return ServerExecutionState(
+            id=row["id"],
+            issue_id=row["issue_id"],
+            worktree_path=row["worktree_path"],
+            workflow_type=WorkflowType(row["workflow_type"]) if row["workflow_type"] else WorkflowType.FULL,
+            profile_id=row["profile_id"],
+            plan_cache=plan_cache,
+            issue_cache=row["issue_cache"],
+            workflow_status=row["status"],
+            created_at=row["created_at"],
+            started_at=row["started_at"],
+            completed_at=row["completed_at"],
+            failure_reason=row["failure_reason"],
+        )
+
     async def create(self, state: ServerExecutionState) -> None:
         """Create a new workflow.
 
         Args:
             state: Initial workflow state.
         """
-        # Extract profile_id from execution_state if available, fall back to state field
-        profile_id = state.profile_id
-        if profile_id is None and state.execution_state is not None:
-            profile_id = state.execution_state.profile_id
-
         # Serialize plan_cache if present
         plan_cache_json: str | None = None
         if state.plan_cache is not None:
             plan_cache_json = state.plan_cache.model_dump_json()
 
-        # Extract issue_cache from execution_state if available
-        issue_cache_json = state.issue_cache
-        if (
-            issue_cache_json is None
-            and state.execution_state is not None
-            and state.execution_state.issue is not None
-        ):
-            issue_cache_json = state.execution_state.issue.model_dump_json()
-
         await self._db.execute(
             """
             INSERT INTO workflows (
                 id, issue_id, worktree_path,
-                status, created_at, started_at, completed_at, failure_reason, state_json,
+                status, created_at, started_at, completed_at, failure_reason,
                 workflow_type, profile_id, plan_cache, issue_cache
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 state.id,
@@ -85,11 +99,10 @@ class WorkflowRepository:
                 state.started_at,
                 state.completed_at,
                 state.failure_reason,
-                state.model_dump_json(),
                 state.workflow_type,
-                profile_id,
+                state.profile_id,
                 plan_cache_json,
-                issue_cache_json,
+                state.issue_cache,
             ),
         )
 
@@ -107,8 +120,7 @@ class WorkflowRepository:
             SELECT
                 id, issue_id, worktree_path, status,
                 created_at, started_at, completed_at, failure_reason,
-                workflow_type, profile_id, plan_cache, issue_cache,
-                state_json
+                workflow_type, profile_id, plan_cache, issue_cache
             FROM workflows WHERE id = ?
             """,
             (workflow_id,),
@@ -116,36 +128,7 @@ class WorkflowRepository:
         if row is None:
             return None
 
-        # Parse plan_cache from JSON if present
-        plan_cache = None
-        if row["plan_cache"]:
-            plan_cache = PlanCache.model_validate_json(row["plan_cache"])
-
-        # Build ServerExecutionState from columns
-        # Fall back to state_json for execution_state during transition
-        execution_state = None
-        if row["state_json"]:
-            try:
-                full_state = ServerExecutionState.model_validate_json(row["state_json"])
-                execution_state = full_state.execution_state
-            except Exception:
-                pass  # Ignore parsing errors, execution_state is optional during transition
-
-        return ServerExecutionState(
-            id=row["id"],
-            issue_id=row["issue_id"],
-            worktree_path=row["worktree_path"],
-            workflow_type=WorkflowType(row["workflow_type"]) if row["workflow_type"] else WorkflowType.FULL,
-            profile_id=row["profile_id"],
-            plan_cache=plan_cache,
-            issue_cache=row["issue_cache"],
-            execution_state=execution_state,
-            workflow_status=row["status"],
-            created_at=row["created_at"],
-            started_at=row["started_at"],
-            completed_at=row["completed_at"],
-            failure_reason=row["failure_reason"],
-        )
+        return self._row_to_state(row)
 
     async def get_by_worktree(
         self,
@@ -168,7 +151,11 @@ class WorkflowRepository:
         placeholders = ",".join("?" for _ in statuses)
         row = await self._db.fetch_one(
             f"""
-            SELECT state_json FROM workflows
+            SELECT
+                id, issue_id, worktree_path, status,
+                created_at, started_at, completed_at, failure_reason,
+                workflow_type, profile_id, plan_cache, issue_cache
+            FROM workflows
             WHERE worktree_path = ?
             AND status IN ({placeholders})
             """,
@@ -176,7 +163,8 @@ class WorkflowRepository:
         )
         if row is None:
             return None
-        return ServerExecutionState.model_validate_json(row[0])
+
+        return self._row_to_state(row)
 
     async def update(self, state: ServerExecutionState) -> None:
         """Update workflow state.
@@ -184,24 +172,10 @@ class WorkflowRepository:
         Args:
             state: Updated workflow state.
         """
-        # Extract profile_id from execution_state if available, fall back to state field
-        profile_id = state.profile_id
-        if profile_id is None and state.execution_state is not None:
-            profile_id = state.execution_state.profile_id
-
         # Serialize plan_cache if present
         plan_cache_json: str | None = None
         if state.plan_cache is not None:
             plan_cache_json = state.plan_cache.model_dump_json()
-
-        # Extract issue_cache from execution_state if available
-        issue_cache_json = state.issue_cache
-        if (
-            issue_cache_json is None
-            and state.execution_state is not None
-            and state.execution_state.issue is not None
-        ):
-            issue_cache_json = state.execution_state.issue.model_dump_json()
 
         await self._db.execute(
             """
@@ -210,7 +184,6 @@ class WorkflowRepository:
                 started_at = ?,
                 completed_at = ?,
                 failure_reason = ?,
-                state_json = ?,
                 workflow_type = ?,
                 profile_id = ?,
                 plan_cache = ?,
@@ -222,11 +195,10 @@ class WorkflowRepository:
                 state.started_at,
                 state.completed_at,
                 state.failure_reason,
-                state.model_dump_json(),
                 state.workflow_type,
-                profile_id,
+                state.profile_id,
                 plan_cache_json,
-                issue_cache_json,
+                state.issue_cache,
                 state.id,
             ),
         )
@@ -259,26 +231,15 @@ class WorkflowRepository:
         if new_status in ("completed", "failed", "cancelled"):
             completed_at = datetime.now(UTC)
 
-        # NOTE: We update both indexed columns AND the JSON blob in one query.
-        # This is more efficient than loading the full state and re-serializing.
-        # If adding new fields, update both places to prevent drift.
         await self._db.execute(
             """
             UPDATE workflows SET
                 status = ?,
                 completed_at = ?,
-                failure_reason = ?,
-                state_json = json_set(state_json,
-                    '$.workflow_status', ?,
-                    '$.completed_at', ?,
-                    '$.failure_reason', ?
-                )
+                failure_reason = ?
             WHERE id = ?
             """,
             (
-                new_status,
-                completed_at.isoformat() if completed_at else None,
-                failure_reason,
                 new_status,
                 completed_at.isoformat() if completed_at else None,
                 failure_reason,
@@ -330,7 +291,11 @@ class WorkflowRepository:
         if worktree_path:
             rows = await self._db.fetch_all(
                 """
-                SELECT state_json FROM workflows
+                SELECT
+                    id, issue_id, worktree_path, status,
+                    created_at, started_at, completed_at, failure_reason,
+                    workflow_type, profile_id, plan_cache, issue_cache
+                FROM workflows
                 WHERE status IN ('pending', 'in_progress', 'blocked')
                 AND worktree_path = ?
                 ORDER BY started_at DESC
@@ -340,12 +305,16 @@ class WorkflowRepository:
         else:
             rows = await self._db.fetch_all(
                 """
-                SELECT state_json FROM workflows
+                SELECT
+                    id, issue_id, worktree_path, status,
+                    created_at, started_at, completed_at, failure_reason,
+                    workflow_type, profile_id, plan_cache, issue_cache
+                FROM workflows
                 WHERE status IN ('pending', 'in_progress', 'blocked')
                 ORDER BY started_at DESC
                 """
             )
-        return [ServerExecutionState.model_validate_json(row[0]) for row in rows]
+        return [self._row_to_state(row) for row in rows]
 
     async def count_active(self) -> int:
         """Count active workflows.
@@ -377,12 +346,16 @@ class WorkflowRepository:
         placeholders = ",".join("?" for _ in statuses)
         rows = await self._db.fetch_all(
             f"""
-            SELECT state_json FROM workflows
+            SELECT
+                id, issue_id, worktree_path, status,
+                created_at, started_at, completed_at, failure_reason,
+                workflow_type, profile_id, plan_cache, issue_cache
+            FROM workflows
             WHERE status IN ({placeholders})
             """,
             statuses,
         )
-        return [ServerExecutionState.model_validate_json(row[0]) for row in rows]
+        return [self._row_to_state(row) for row in rows]
 
     async def list_workflows(
         self,
@@ -425,7 +398,11 @@ class WorkflowRepository:
         where_clause = " AND ".join(conditions) if conditions else "1=1"
 
         query = f"""
-            SELECT state_json FROM workflows
+            SELECT
+                id, issue_id, worktree_path, status,
+                created_at, started_at, completed_at, failure_reason,
+                workflow_type, profile_id, plan_cache, issue_cache
+            FROM workflows
             WHERE {where_clause}
             ORDER BY started_at DESC NULLS LAST, id DESC
             LIMIT ?
@@ -433,7 +410,7 @@ class WorkflowRepository:
         params.append(limit)
 
         rows = await self._db.fetch_all(query, params)
-        return [ServerExecutionState.model_validate_json(row[0]) for row in rows]
+        return [self._row_to_state(row) for row in rows]
 
     async def count_workflows(
         self,
