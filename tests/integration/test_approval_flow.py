@@ -15,7 +15,6 @@ from unittest.mock import patch
 
 import pytest
 
-from amelia.pipelines.implementation.state import ImplementationState
 from amelia.server.models.events import EventType, WorkflowEvent
 from amelia.server.models.state import ServerExecutionState
 from amelia.server.orchestrator.service import OrchestratorService
@@ -59,14 +58,13 @@ class TestMissingRequiredFields:
             checkpoint_path=temp_checkpoint_db,
         )
 
-        # Create state without profile_id or execution_state
+        # Create state without profile_id
         server_state = ServerExecutionState(
             id="wf-error-test",
             issue_id="TEST-ERR",
             worktree_path="/tmp/test-error",
             started_at=datetime.now(UTC),
             profile_id=None,  # Missing - will cause error
-            execution_state=None,
         )
 
         await mock_repository.create(server_state)
@@ -110,18 +108,12 @@ class TestLifecycleEvents:
             checkpoint_path=temp_checkpoint_db,
         )
 
-        core_state = ImplementationState(
-            workflow_id="wf-lifecycle-test",
-            profile_id="test",
-            created_at=datetime.now(UTC),
-            status="pending",
-        )
         server_state = ServerExecutionState(
             id="wf-lifecycle-test",
             issue_id="TEST-123",
             worktree_path="/tmp/test-lifecycle",
             started_at=datetime.now(UTC),
-            execution_state=core_state,
+            profile_id="test",
         )
 
         await mock_repository.create(server_state)
@@ -167,18 +159,12 @@ class TestGraphInterruptHandling:
             checkpoint_path=temp_checkpoint_db,
         )
 
-        core_state = ImplementationState(
-            workflow_id="wf-interrupt-test",
-            profile_id="test",
-            created_at=datetime.now(UTC),
-            status="pending",
-        )
         server_state = ServerExecutionState(
             id="wf-interrupt-test",
             issue_id="TEST-456",
             worktree_path="/tmp/test-interrupt",
             started_at=datetime.now(UTC),
-            execution_state=core_state,
+            profile_id="test",
         )
 
         await mock_repository.create(server_state)
