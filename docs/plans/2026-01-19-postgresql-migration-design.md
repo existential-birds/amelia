@@ -6,6 +6,8 @@ Replace SQLite with PostgreSQL to enable distributed workers and shared dashboar
 
 **No migration:** Delete `~/.amelia/` and start fresh. No data conversion, no backwards compatibility.
 
+**Prerequisite:** [Events to Workflow Log Refactor](2026-01-31-events-to-workflow-log.md) — must be completed first to establish the `workflow_log` table schema on SQLite.
+
 ## Motivation
 
 | Driver | Priority |
