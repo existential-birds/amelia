@@ -216,6 +216,16 @@ When ready (after Knowledge Library/Oracle data model is defined):
 2. Create embeddings table with `vector(N)` column
 3. Register vector type in connection pool setup
 
+## Completed Prep Work
+
+The following schema changes have already been completed on `main` to prepare for PostgreSQL:
+
+| PR | Change |
+|----|--------|
+| #389 | Removed `state_json` blob from `workflows` table, replaced with discrete columns: `workflow_type`, `profile_id`, `plan_cache`, `issue_cache` |
+
+The PostgreSQL migration should use the current schema as the starting point (no `state_json` column).
+
 ## Related Issues
 
 - #280 - Oracle Consulting System

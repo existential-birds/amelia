@@ -10,8 +10,10 @@ from amelia.server.database.connection import Database, SqliteValue
 from amelia.server.exceptions import WorkflowNotFoundError
 from amelia.server.models.events import WorkflowEvent
 from amelia.server.models.state import (
+    PlanCache,
     ServerExecutionState,
     WorkflowStatus,
+    WorkflowType,
     validate_transition,
 )
 from amelia.server.models.tokens import TokenSummary, TokenUsage
@@ -41,18 +43,52 @@ class WorkflowRepository:
         """
         return self._db
 
+    def _row_to_state(self, row: aiosqlite.Row) -> ServerExecutionState:
+        """Convert database row to ServerExecutionState.
+
+        Args:
+            row: Database row with workflow columns.
+
+        Returns:
+            ServerExecutionState instance.
+        """
+        plan_cache = None
+        if row["plan_cache"]:
+            plan_cache = PlanCache.model_validate_json(row["plan_cache"])
+
+        return ServerExecutionState(
+            id=row["id"],
+            issue_id=row["issue_id"],
+            worktree_path=row["worktree_path"],
+            workflow_type=WorkflowType(row["workflow_type"]) if row["workflow_type"] else WorkflowType.FULL,
+            profile_id=row["profile_id"],
+            plan_cache=plan_cache,
+            issue_cache=row["issue_cache"],
+            workflow_status=row["status"],
+            created_at=row["created_at"],
+            started_at=row["started_at"],
+            completed_at=row["completed_at"],
+            failure_reason=row["failure_reason"],
+        )
+
     async def create(self, state: ServerExecutionState) -> None:
         """Create a new workflow.
 
         Args:
             state: Initial workflow state.
         """
+        # Serialize plan_cache if present
+        plan_cache_json: str | None = None
+        if state.plan_cache is not None:
+            plan_cache_json = state.plan_cache.model_dump_json()
+
         await self._db.execute(
             """
             INSERT INTO workflows (
                 id, issue_id, worktree_path,
-                status, created_at, started_at, completed_at, failure_reason, state_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                status, created_at, started_at, completed_at, failure_reason,
+                workflow_type, profile_id, plan_cache, issue_cache
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 state.id,
@@ -63,7 +99,10 @@ class WorkflowRepository:
                 state.started_at,
                 state.completed_at,
                 state.failure_reason,
-                state.model_dump_json(),
+                state.workflow_type,
+                state.profile_id,
+                plan_cache_json,
+                state.issue_cache,
             ),
         )
 
@@ -77,12 +116,19 @@ class WorkflowRepository:
             Workflow state or None if not found.
         """
         row = await self._db.fetch_one(
-            "SELECT state_json FROM workflows WHERE id = ?",
+            """
+            SELECT
+                id, issue_id, worktree_path, status,
+                created_at, started_at, completed_at, failure_reason,
+                workflow_type, profile_id, plan_cache, issue_cache
+            FROM workflows WHERE id = ?
+            """,
             (workflow_id,),
         )
         if row is None:
             return None
-        return ServerExecutionState.model_validate_json(row[0])
+
+        return self._row_to_state(row)
 
     async def get_by_worktree(
         self,
@@ -105,7 +151,11 @@ class WorkflowRepository:
         placeholders = ",".join("?" for _ in statuses)
         row = await self._db.fetch_one(
             f"""
-            SELECT state_json FROM workflows
+            SELECT
+                id, issue_id, worktree_path, status,
+                created_at, started_at, completed_at, failure_reason,
+                workflow_type, profile_id, plan_cache, issue_cache
+            FROM workflows
             WHERE worktree_path = ?
             AND status IN ({placeholders})
             """,
@@ -113,7 +163,8 @@ class WorkflowRepository:
         )
         if row is None:
             return None
-        return ServerExecutionState.model_validate_json(row[0])
+
+        return self._row_to_state(row)
 
     async def update(self, state: ServerExecutionState) -> None:
         """Update workflow state.
@@ -121,6 +172,11 @@ class WorkflowRepository:
         Args:
             state: Updated workflow state.
         """
+        # Serialize plan_cache if present
+        plan_cache_json: str | None = None
+        if state.plan_cache is not None:
+            plan_cache_json = state.plan_cache.model_dump_json()
+
         await self._db.execute(
             """
             UPDATE workflows SET
@@ -128,7 +184,10 @@ class WorkflowRepository:
                 started_at = ?,
                 completed_at = ?,
                 failure_reason = ?,
-                state_json = ?
+                workflow_type = ?,
+                profile_id = ?,
+                plan_cache = ?,
+                issue_cache = ?
             WHERE id = ?
             """,
             (
@@ -136,7 +195,10 @@ class WorkflowRepository:
                 state.started_at,
                 state.completed_at,
                 state.failure_reason,
-                state.model_dump_json(),
+                state.workflow_type,
+                state.profile_id,
+                plan_cache_json,
+                state.issue_cache,
                 state.id,
             ),
         )
@@ -169,31 +231,50 @@ class WorkflowRepository:
         if new_status in ("completed", "failed", "cancelled"):
             completed_at = datetime.now(UTC)
 
-        # NOTE: We update both indexed columns AND the JSON blob in one query.
-        # This is more efficient than loading the full state and re-serializing.
-        # If adding new fields, update both places to prevent drift.
         await self._db.execute(
             """
             UPDATE workflows SET
                 status = ?,
                 completed_at = ?,
-                failure_reason = ?,
-                state_json = json_set(state_json,
-                    '$.workflow_status', ?,
-                    '$.completed_at', ?,
-                    '$.failure_reason', ?
-                )
+                failure_reason = ?
             WHERE id = ?
             """,
             (
                 new_status,
                 completed_at.isoformat() if completed_at else None,
                 failure_reason,
-                new_status,
-                completed_at.isoformat() if completed_at else None,
-                failure_reason,
                 workflow_id,
             ),
+        )
+
+    async def update_plan_cache(
+        self,
+        workflow_id: str,
+        plan_cache: PlanCache,
+    ) -> None:
+        """Update plan_cache column directly without loading full state.
+
+        This is used by _sync_plan_from_checkpoint to efficiently update
+        plan data from the LangGraph checkpoint without re-serializing
+        the entire ServerExecutionState.
+
+        Args:
+            workflow_id: Workflow to update.
+            plan_cache: PlanCache instance to serialize and store.
+
+        Raises:
+            WorkflowNotFoundError: If workflow doesn't exist.
+        """
+        result = await self._db.fetch_one(
+            "SELECT id FROM workflows WHERE id = ?",
+            (workflow_id,),
+        )
+        if result is None:
+            raise WorkflowNotFoundError(workflow_id)
+
+        await self._db.execute(
+            "UPDATE workflows SET plan_cache = ? WHERE id = ?",
+            (plan_cache.model_dump_json(), workflow_id),
         )
 
     async def list_active(
@@ -210,7 +291,11 @@ class WorkflowRepository:
         if worktree_path:
             rows = await self._db.fetch_all(
                 """
-                SELECT state_json FROM workflows
+                SELECT
+                    id, issue_id, worktree_path, status,
+                    created_at, started_at, completed_at, failure_reason,
+                    workflow_type, profile_id, plan_cache, issue_cache
+                FROM workflows
                 WHERE status IN ('pending', 'in_progress', 'blocked')
                 AND worktree_path = ?
                 ORDER BY started_at DESC
@@ -220,12 +305,16 @@ class WorkflowRepository:
         else:
             rows = await self._db.fetch_all(
                 """
-                SELECT state_json FROM workflows
+                SELECT
+                    id, issue_id, worktree_path, status,
+                    created_at, started_at, completed_at, failure_reason,
+                    workflow_type, profile_id, plan_cache, issue_cache
+                FROM workflows
                 WHERE status IN ('pending', 'in_progress', 'blocked')
                 ORDER BY started_at DESC
                 """
             )
-        return [ServerExecutionState.model_validate_json(row[0]) for row in rows]
+        return [self._row_to_state(row) for row in rows]
 
     async def count_active(self) -> int:
         """Count active workflows.
@@ -257,12 +346,16 @@ class WorkflowRepository:
         placeholders = ",".join("?" for _ in statuses)
         rows = await self._db.fetch_all(
             f"""
-            SELECT state_json FROM workflows
+            SELECT
+                id, issue_id, worktree_path, status,
+                created_at, started_at, completed_at, failure_reason,
+                workflow_type, profile_id, plan_cache, issue_cache
+            FROM workflows
             WHERE status IN ({placeholders})
             """,
             statuses,
         )
-        return [ServerExecutionState.model_validate_json(row[0]) for row in rows]
+        return [self._row_to_state(row) for row in rows]
 
     async def list_workflows(
         self,
@@ -305,7 +398,11 @@ class WorkflowRepository:
         where_clause = " AND ".join(conditions) if conditions else "1=1"
 
         query = f"""
-            SELECT state_json FROM workflows
+            SELECT
+                id, issue_id, worktree_path, status,
+                created_at, started_at, completed_at, failure_reason,
+                workflow_type, profile_id, plan_cache, issue_cache
+            FROM workflows
             WHERE {where_clause}
             ORDER BY started_at DESC NULLS LAST, id DESC
             LIMIT ?
@@ -313,7 +410,7 @@ class WorkflowRepository:
         params.append(limit)
 
         rows = await self._db.fetch_all(query, params)
-        return [ServerExecutionState.model_validate_json(row[0]) for row in rows]
+        return [self._row_to_state(row) for row in rows]
 
     async def count_workflows(
         self,

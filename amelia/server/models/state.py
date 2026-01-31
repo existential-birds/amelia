@@ -4,13 +4,9 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import TYPE_CHECKING
+from typing import Any
 
 from pydantic import BaseModel, Field
-
-
-if TYPE_CHECKING:
-    from amelia.pipelines.implementation.state import ImplementationState
 
 
 class WorkflowStatus(StrEnum):
@@ -76,17 +72,59 @@ def validate_transition(current: WorkflowStatus, target: WorkflowStatus) -> None
         raise InvalidStateTransitionError(current, target)
 
 
-class ServerExecutionState(BaseModel):
-    """Extended ExecutionState for server-side workflow tracking.
+class PlanCache(BaseModel):
+    """Cached plan data synced from LangGraph checkpoint.
 
-    This model extends the core ExecutionState with server-specific fields
-    for persistence and tracking.
+    This model stores plan-related fields from ImplementationState
+    for efficient access without deserializing the full checkpoint.
+
+    Attributes:
+        goal: The high-level goal for the implementation.
+        plan_markdown: The full plan in markdown format.
+        plan_path: Path to the plan file on disk.
+        total_tasks: Total number of tasks in the plan.
+        current_task_index: Index of the current task being executed.
+    """
+
+    goal: str | None = None
+    plan_markdown: str | None = None
+    plan_path: str | None = None
+    total_tasks: int | None = None
+    current_task_index: int | None = None
+
+    @classmethod
+    def from_checkpoint_values(cls, values: dict[str, Any]) -> PlanCache:
+        """Create PlanCache from LangGraph checkpoint values.
+
+        Args:
+            values: Checkpoint values dict from graph.aget_state().
+
+        Returns:
+            PlanCache instance with extracted plan data.
+        """
+        plan_path = values.get("plan_path")
+        if plan_path is not None:
+            plan_path = str(plan_path)
+
+        return cls(
+            goal=values.get("goal"),
+            plan_markdown=values.get("plan_markdown"),
+            plan_path=plan_path,
+            total_tasks=values.get("total_tasks"),
+            current_task_index=values.get("current_task_index"),
+        )
+
+
+class ServerExecutionState(BaseModel):
+    """Server-side workflow tracking state.
+
+    This model stores workflow metadata for persistence and tracking.
+    The actual ImplementationState lives in LangGraph checkpoints.
 
     Attributes:
         id: Unique workflow identifier (UUID).
         issue_id: Issue being worked on.
         worktree_path: Absolute path to git worktree root.
-        execution_state: Core orchestration state.
         workflow_status: Current workflow status.
         started_at: When workflow started.
         completed_at: When workflow ended (success or failure).
@@ -100,10 +138,17 @@ class ServerExecutionState(BaseModel):
         default=WorkflowType.FULL,
         description="Type of workflow: 'full' for standard, 'review' for review-only",
     )
-
-    execution_state: ImplementationState | None = Field(
+    profile_id: str | None = Field(
         default=None,
-        description="Core orchestration state",
+        description="Profile ID used to configure the workflow",
+    )
+    plan_cache: PlanCache | None = Field(
+        default=None,
+        description="Cached plan data synced from LangGraph checkpoint",
+    )
+    issue_cache: str | None = Field(
+        default=None,
+        description="Serialized Issue JSON for reconstructing initial state",
     )
     workflow_status: WorkflowStatus = Field(
         default=WorkflowStatus.PENDING,
@@ -139,34 +184,3 @@ class ServerExecutionState(BaseModel):
             ]
         }
     }
-
-
-def rebuild_server_execution_state() -> None:
-    """Rebuild ServerExecutionState to resolve forward references.
-
-    Must be called after the application has finished importing to enable
-    Pydantic validation of ImplementationState in execution_state field.
-
-    This function imports ImplementationState and its TYPE_CHECKING dependencies,
-    then calls model_rebuild() to refresh Pydantic's type resolution.
-
-    Example:
-        from amelia.server.models.state import rebuild_server_execution_state
-        rebuild_server_execution_state()
-    """
-    import sys  # noqa: PLC0415
-
-    from amelia.agents.evaluator import EvaluationResult  # noqa: PLC0415
-    from amelia.pipelines.implementation.state import ImplementationState  # noqa: PLC0415
-
-    # Inject types into this module's namespace for get_type_hints() compatibility
-    module = sys.modules[__name__]
-    module.ImplementationState = ImplementationState  # type: ignore[attr-defined]  # Dynamic module injection for LangGraph
-    module.EvaluationResult = EvaluationResult  # type: ignore[attr-defined]  # Dynamic module injection for LangGraph
-
-    ServerExecutionState.model_rebuild(
-        _types_namespace={
-            "ImplementationState": ImplementationState,
-            "EvaluationResult": EvaluationResult,
-        }
-    )

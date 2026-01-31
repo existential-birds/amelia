@@ -113,8 +113,6 @@ class WorkflowDetailResponse(BaseModel):
         plan_path: Path where the plan markdown was saved (optional)
         token_usage: Token usage summary (optional)
         recent_events: Recent workflow events
-        tool_calls: History of tool calls made during agentic execution
-        tool_results: History of tool results from agentic execution
         final_response: Final response from the agent when complete (optional)
     """
 
@@ -157,15 +155,6 @@ class WorkflowDetailResponse(BaseModel):
     recent_events: Annotated[
         list[dict[str, Any]],
         Field(description="Recent workflow events"),
-    ]
-    # Agentic execution fields
-    tool_calls: Annotated[
-        list[dict[str, Any]],
-        Field(default_factory=list, description="History of tool calls"),
-    ]
-    tool_results: Annotated[
-        list[dict[str, Any]],
-        Field(default_factory=list, description="History of tool results"),
     ]
     final_response: Annotated[
         str | None,

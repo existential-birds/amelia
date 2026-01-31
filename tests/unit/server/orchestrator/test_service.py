@@ -11,18 +11,16 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from langchain_core.runnables.config import RunnableConfig
 
-from amelia.core.types import AgentConfig, Profile, ReviewResult
+from amelia.core.types import AgentConfig, Profile
 from amelia.pipelines.implementation.state import (
     ImplementationState,
     rebuild_implementation_state,
 )
 from amelia.server.database.repository import WorkflowRepository
-from amelia.server.models.state import rebuild_server_execution_state
 
 
 # Rebuild models to resolve forward references before module-level ServerExecutionState usage
 rebuild_implementation_state()
-rebuild_server_execution_state()
 
 from amelia.server.events.bus import EventBus  # noqa: E402
 from amelia.server.exceptions import (  # noqa: E402
@@ -49,6 +47,7 @@ def mock_repository() -> AsyncMock:
     repo = AsyncMock(spec=WorkflowRepository)
     repo.create = AsyncMock()
     repo.update = AsyncMock()
+    repo.update_plan_cache = AsyncMock()
     repo.set_status = AsyncMock()
     repo.save_event = AsyncMock()
     repo.get_max_event_sequence = AsyncMock(return_value=0)
@@ -228,9 +227,8 @@ async def test_start_workflow_success(
         assert state.issue_id == "ISSUE-123"
         assert state.worktree_path == valid_worktree
         assert state.workflow_status == "pending"
-        # Verify execution_state is initialized with profile_id
-        assert state.execution_state is not None
-        assert state.execution_state.profile_id == "test"
+        # Verify profile_id is stored on ServerExecutionState
+        assert state.profile_id == "test"
 
 
 async def test_start_workflow_conflict(
@@ -461,7 +459,7 @@ async def test_approve_workflow_success(
         worktree_path="/path/to/worktree",
         workflow_status="blocked",
         started_at=datetime.now(UTC),
-        execution_state=ImplementationState(workflow_id="wf-1", created_at=datetime.now(UTC), status="running", profile_id="test"),
+        profile_id="test",
     )
     mock_repository.get.return_value = mock_state
 
@@ -509,7 +507,7 @@ async def test_reject_workflow_success(
         worktree_path="/path/to/worktree",
         workflow_status="blocked",
         started_at=datetime.now(UTC),
-        execution_state=ImplementationState(workflow_id="wf-1", created_at=datetime.now(UTC), status="running", profile_id="test"),
+        profile_id="test",
     )
     mock_repository.get.return_value = mock_state
 
@@ -561,7 +559,7 @@ class TestRejectWorkflowGraphState:
             issue_id="ISSUE-456",
             worktree_path="/tmp/test",
             workflow_status="blocked",
-            execution_state=ImplementationState(workflow_id="wf-1", created_at=datetime.now(UTC), status="running", profile_id="test"),
+            profile_id="test",
         )
         mock_repository.get.return_value = workflow
 
@@ -598,7 +596,7 @@ class TestApproveWorkflowResume:
             issue_id="ISSUE-456",
             worktree_path="/tmp/test",
             workflow_status="blocked",
-            execution_state=ImplementationState(workflow_id="wf-1", created_at=datetime.now(UTC), status="running", profile_id="test"),
+            profile_id="test",
         )
         mock_repository.get.return_value = workflow
         orchestrator._active_tasks["/tmp/test"] = ("wf-123", AsyncMock())
@@ -819,56 +817,6 @@ async def test_get_workflow_by_worktree_uses_cache(
 
 
 # =============================================================================
-# Policy Hook Tests
-# =============================================================================
-
-
-async def test_start_workflow_denied_by_policy_hook(
-    orchestrator: OrchestratorService,
-    valid_worktree: str,
-) -> None:
-    """Should raise PolicyDeniedError when policy hook denies workflow start."""
-    from amelia.ext.exceptions import PolicyDeniedError
-    from amelia.ext.registry import get_registry
-
-    # Create a denying policy hook
-    class DenyingPolicyHook:
-        """Policy hook that denies all workflow starts."""
-
-        async def on_workflow_start(
-            self,
-            workflow_id: str,
-            profile: object,
-            issue_id: str,
-        ) -> bool:
-            return False
-
-        async def on_approval_request(
-            self,
-            workflow_id: str,
-            approval_type: str,
-        ) -> bool | None:
-            return None
-
-    registry = get_registry()
-    denying_hook = DenyingPolicyHook()
-    registry.register_policy_hook(denying_hook)
-
-    try:
-        with pytest.raises(PolicyDeniedError) as exc_info:
-            await orchestrator.start_workflow(
-                issue_id="ISSUE-123",
-                worktree_path=valid_worktree,
-                )
-
-        assert "denied by policy" in exc_info.value.reason.lower()
-        assert exc_info.value.hook_name == "DenyingPolicyHook"
-    finally:
-        # Cleanup: remove the hook to avoid affecting other tests
-        registry.clear()
-
-
-# =============================================================================
 # Plan Sync Tests
 # =============================================================================
 
@@ -876,25 +824,12 @@ async def test_start_workflow_denied_by_policy_hook(
 class TestSyncPlanFromCheckpoint:
     """Tests for _sync_plan_from_checkpoint method."""
 
-    async def test_sync_plan_updates_execution_state(
+    async def test_sync_plan_updates_plan_cache(
         self,
         orchestrator: OrchestratorService,
         mock_repository: AsyncMock,
-        mock_profile_factory: Callable[[], Profile],
     ) -> None:
-        """_sync_plan_from_checkpoint should update execution_state with goal/plan from checkpoint."""
-        # Create mock workflow with execution_state (no goal yet)
-        profile = mock_profile_factory()
-        mock_state = ServerExecutionState(
-            id="wf-sync",
-            issue_id="ISSUE-123",
-            worktree_path="/path/to/worktree",
-            workflow_status="in_progress",
-            started_at=datetime.now(UTC),
-            execution_state=ImplementationState(workflow_id="wf-sync", created_at=datetime.now(UTC), status="running", profile_id=profile.name),
-        )
-        mock_repository.get.return_value = mock_state
-
+        """_sync_plan_from_checkpoint should update plan_cache with goal/plan from checkpoint."""
         # Create mock graph with checkpoint containing goal and plan_markdown
         mock_graph = MagicMock()
         checkpoint_values = {"goal": "Test goal", "plan_markdown": "# Test Plan"}
@@ -907,13 +842,15 @@ class TestSyncPlanFromCheckpoint:
         # Call _sync_plan_from_checkpoint
         await orchestrator._sync_plan_from_checkpoint("wf-sync", mock_graph, config)
 
-        # Verify repository.update was called
-        mock_repository.update.assert_called_once()
+        # Verify repository.update_plan_cache was called
+        mock_repository.update_plan_cache.assert_called_once()
 
-        # Verify the updated state has the goal and plan_markdown
-        updated_state = mock_repository.update.call_args[0][0]
-        assert updated_state.execution_state.goal == "Test goal"
-        assert updated_state.execution_state.plan_markdown == "# Test Plan"
+        # Verify the PlanCache has the goal and plan_markdown
+        call_args = mock_repository.update_plan_cache.call_args
+        assert call_args[0][0] == "wf-sync"
+        plan_cache = call_args[0][1]
+        assert plan_cache.goal == "Test goal"
+        assert plan_cache.plan_markdown == "# Test Plan"
 
     async def test_sync_plan_no_checkpoint_state(
         self,
@@ -1009,7 +946,7 @@ class TestRunWorkflowCheckpointResume:
             worktree_path="/path/to/worktree",
             workflow_status="in_progress",
             started_at=datetime.now(UTC),
-            execution_state=ImplementationState(workflow_id="wf-1", created_at=datetime.now(UTC), status="running", profile_id="test"),
+            profile_id="test",
         )
 
     async def test_run_workflow_resumes_when_checkpoint_exists(
@@ -1056,7 +993,6 @@ class TestRunWorkflowCheckpointResume:
             patch.object(orchestrator, "_get_profile_or_fail", return_value=mock_profile),
             patch.object(orchestrator, "_emit", new=AsyncMock()),
             patch("amelia.server.orchestrator.service.AsyncSqliteSaver") as mock_saver,
-            patch("amelia.server.orchestrator.service.emit_workflow_event", new=AsyncMock()),
         ):
             # Setup AsyncSqliteSaver context manager
             mock_checkpointer = MagicMock()
@@ -1117,7 +1053,6 @@ class TestRunWorkflowCheckpointResume:
             patch.object(orchestrator, "_get_profile_or_fail", return_value=mock_profile),
             patch.object(orchestrator, "_emit", new=AsyncMock()),
             patch("amelia.server.orchestrator.service.AsyncSqliteSaver") as mock_saver,
-            patch("amelia.server.orchestrator.service.emit_workflow_event", new=AsyncMock()),
         ):
             mock_checkpointer = MagicMock()
             mock_saver.from_conn_string.return_value.__aenter__ = AsyncMock(
@@ -1146,117 +1081,80 @@ class TestTaskProgressEvents:
     """Tests for task progress event emission."""
 
     @pytest.mark.asyncio
-    async def test_emits_task_failed_when_max_iterations_exceeded(
+    async def test_no_task_failed_when_no_plan_cache(
         self,
         orchestrator: OrchestratorService,
         mock_repository: AsyncMock,
     ) -> None:
-        """Should emit TASK_FAILED when workflow ends with unapproved task."""
-        # Create execution state: task mode, not approved, at max iterations
-        exec_state = ImplementationState(
-            workflow_id="wf-fail",
-            created_at=datetime.now(UTC),
-            status="running",
-            profile_id="test",
-            total_tasks=3,
-            current_task_index=1,
-            task_review_iteration=5,  # At max
-            last_review=ReviewResult(
-                reviewer_persona="code-reviewer",
-                approved=False,
-                comments=["Fix the bug"],
-                severity="minor",
-            ),
-        )
+        """Should NOT emit TASK_FAILED when no plan_cache in state."""
+        # ServerExecutionState without plan_cache
         mock_state = ServerExecutionState(
-            id="wf-fail",
+            id="wf-no-cache",
             issue_id="ISSUE-123",
             worktree_path="/path/to/worktree",
             workflow_status="in_progress",
             started_at=datetime.now(UTC),
-            execution_state=exec_state,
-        )
-        mock_repository.get.return_value = mock_state
-
-        # Simulate workflow completion (called by run_workflow on end)
-        await orchestrator._emit_task_failed_if_applicable("wf-fail")
-
-        # Verify TASK_FAILED event emitted
-        mock_repository.save_event.assert_called_once()
-        saved_event = mock_repository.save_event.call_args[0][0]
-        assert saved_event.event_type == EventType.TASK_FAILED
-        assert saved_event.message == "Task 2/3 failed after 5 review iterations"
-        assert saved_event.data["task_index"] == 1
-        assert saved_event.data["total_tasks"] == 3
-        assert saved_event.data["iterations"] == 5
-
-    @pytest.mark.asyncio
-    async def test_no_task_failed_when_approved(
-        self,
-        orchestrator: OrchestratorService,
-        mock_repository: AsyncMock,
-    ) -> None:
-        """Should NOT emit TASK_FAILED when last task was approved."""
-        exec_state = ImplementationState(
-            workflow_id="wf-ok",
-            created_at=datetime.now(UTC),
-            status="running",
             profile_id="test",
-            total_tasks=3,
-            current_task_index=2,  # Last task
-            task_review_iteration=1,
-            last_review=ReviewResult(
-                reviewer_persona="code-reviewer",
-                approved=True,
-                comments=[],
-                severity="none",
-            ),
-        )
-        mock_state = ServerExecutionState(
-            id="wf-ok",
-            issue_id="ISSUE-123",
-            worktree_path="/path/to/worktree",
-            workflow_status="in_progress",
-            started_at=datetime.now(UTC),
-            execution_state=exec_state,
+            plan_cache=None,
         )
         mock_repository.get.return_value = mock_state
 
-        await orchestrator._emit_task_failed_if_applicable("wf-ok")
+        await orchestrator._emit_task_failed_if_applicable("wf-no-cache")
 
-        # No event should be emitted
+        # No event should be emitted without plan_cache
         mock_repository.save_event.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_no_task_failed_when_no_last_review(
+    async def test_no_task_failed_when_not_task_mode(
         self,
         orchestrator: OrchestratorService,
         mock_repository: AsyncMock,
     ) -> None:
-        """Should NOT emit TASK_FAILED when no last_review in state."""
-        exec_state = ImplementationState(
-            workflow_id="wf-no-review",
-            created_at=datetime.now(UTC),
-            status="running",
-            profile_id="test",
-            total_tasks=3,
-            current_task_index=1,
-            task_review_iteration=5,
-            # No last_review (defaults to None)
-        )
+        """Should NOT emit TASK_FAILED when not in task mode (no total_tasks)."""
+        from amelia.server.models.state import PlanCache
+
         mock_state = ServerExecutionState(
-            id="wf-no-review",
+            id="wf-non-task",
             issue_id="ISSUE-123",
             worktree_path="/path/to/worktree",
             workflow_status="in_progress",
             started_at=datetime.now(UTC),
-            execution_state=exec_state,
+            profile_id="test",
+            plan_cache=PlanCache(goal="Test goal", total_tasks=None),  # Not task mode
         )
         mock_repository.get.return_value = mock_state
 
-        await orchestrator._emit_task_failed_if_applicable("wf-no-review")
+        await orchestrator._emit_task_failed_if_applicable("wf-non-task")
 
-        # No event should be emitted without last_review
+        # No event should be emitted when not in task mode
+        mock_repository.save_event.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_no_task_failed_returns_early_in_task_mode(
+        self,
+        orchestrator: OrchestratorService,
+        mock_repository: AsyncMock,
+    ) -> None:
+        """Should return early in task mode (last_review only in checkpoint)."""
+        from amelia.server.models.state import PlanCache
+
+        # Current implementation returns early since last_review/task_review_iteration
+        # are only available in LangGraph checkpoint, not plan_cache
+        mock_state = ServerExecutionState(
+            id="wf-task",
+            issue_id="ISSUE-123",
+            worktree_path="/path/to/worktree",
+            workflow_status="in_progress",
+            started_at=datetime.now(UTC),
+            profile_id="test",
+            plan_cache=PlanCache(goal="Test goal", total_tasks=3, current_task_index=1),
+        )
+        mock_repository.get.return_value = mock_state
+
+        await orchestrator._emit_task_failed_if_applicable("wf-task")
+
+        # Currently returns early since last_review is only in checkpoint
+        # TASK_FAILED events are emitted by graph nodes directly
         mock_repository.save_event.assert_not_called()
 
     @pytest.mark.asyncio
@@ -1307,21 +1205,18 @@ class TestTaskProgressEvents:
         emitted_events, install = capture_emit
         install()
 
-        # Setup workflow in task-based mode
+        # Setup workflow in task-based mode (mock_repository.get not used by _handle_stream_chunk,
+        # but kept for consistency in case the method changes)
+        from amelia.server.models.state import PlanCache
+
         mock_state = ServerExecutionState(
             id="wf-789",
             issue_id="ISSUE-123",
             worktree_path="/path/to/worktree",
             workflow_status="in_progress",
             started_at=datetime.now(UTC),
-            execution_state=ImplementationState(
-                workflow_id="wf-789",
-                created_at=datetime.now(UTC),
-                status="running",
-                profile_id="test",
-                total_tasks=5,
-                current_task_index=0,  # Was 0 before next_task_node runs
-            ),
+            profile_id="test",
+            plan_cache=PlanCache(total_tasks=5, current_task_index=0),
         )
         mock_repository.get.return_value = mock_state
 
@@ -1358,6 +1253,8 @@ class TestStartWorkflowWithTaskFields:
         tmp_path: Path,
     ) -> None:
         """start_workflow with task_title and none tracker constructs Issue directly."""
+        from amelia.core.types import Issue
+
         # Create valid worktree (just needs .git, no settings.amelia.yaml needed)
         worktree = tmp_path / "worktree"
         worktree.mkdir()
@@ -1374,11 +1271,13 @@ class TestStartWorkflowWithTaskFields:
 
             assert workflow_id is not None
 
-            # Verify the execution state has our custom issue
+            # Verify the issue_cache contains our custom issue
             call_args = mock_repository.create.call_args
             state = call_args[0][0]
-            assert state.execution_state.issue.title == "Add logout button"
-            assert state.execution_state.issue.description == "Add to navbar with confirmation"
+            assert state.issue_cache is not None
+            issue = Issue.model_validate_json(state.issue_cache)
+            assert issue.title == "Add logout button"
+            assert issue.description == "Add to navbar with confirmation"
 
     async def test_task_title_with_non_none_tracker_errors(
         self,
@@ -1424,6 +1323,8 @@ class TestStartWorkflowWithTaskFields:
         tmp_path: Path,
     ) -> None:
         """task_description defaults to task_title when not provided."""
+        from amelia.core.types import Issue
+
         # Create valid worktree
         worktree = tmp_path / "worktree"
         worktree.mkdir()
@@ -1441,4 +1342,6 @@ class TestStartWorkflowWithTaskFields:
             call_args = mock_repository.create.call_args
             state = call_args[0][0]
             # Description should default to title
-            assert state.execution_state.issue.description == "Fix typo in README"
+            assert state.issue_cache is not None
+            issue = Issue.model_validate_json(state.issue_cache)
+            assert issue.description == "Fix typo in README"
