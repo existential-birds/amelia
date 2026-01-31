@@ -90,7 +90,6 @@ class ServerExecutionState(BaseModel):
         workflow_status: Current workflow status.
         started_at: When workflow started.
         completed_at: When workflow ended (success or failure).
-        current_stage: Currently executing stage.
         failure_reason: Error message when status is "failed".
     """
 
@@ -122,10 +121,6 @@ class ServerExecutionState(BaseModel):
         default=None,
         description="When workflow ended",
     )
-    current_stage: str | None = Field(
-        default=None,
-        description="Currently executing stage",
-    )
     failure_reason: str | None = Field(
         default=None,
         description="Error message when failed",
@@ -140,7 +135,6 @@ class ServerExecutionState(BaseModel):
                     "worktree_path": "/home/user/project",
                     "workflow_status": "in_progress",
                     "started_at": "2025-01-01T12:00:00Z",
-                    "current_stage": "development",
                 }
             ]
         }

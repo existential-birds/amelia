@@ -76,7 +76,7 @@ function extractAgentFromStageEvent(event: WorkflowEvent): string {
  * Build pipeline visualization from workflow events.
  *
  * This function derives node status directly from events rather than
- * relying on stale `current_stage` data, enabling real-time updates.
+ * relying on stale cached state, enabling real-time updates.
  */
 export function buildPipelineFromEvents(
   events: WorkflowEvent[],

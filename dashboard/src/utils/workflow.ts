@@ -74,8 +74,8 @@ function sortByStartTimeDesc(a: WorkflowSummary, b: WorkflowSummary): number {
  *
  * Priority:
  * 1. Most recently started running workflow (status === 'in_progress')
- * 2. Most recently created planning workflow (pending with current_stage === 'architect')
- * 3. Most recently started blocked workflow (status === 'blocked')
+ * 2. Most recently started blocked workflow (status === 'blocked')
+ * 3. Most recently created pending workflow
  * 4. Most recently started completed workflow
  *
  * @param workflows - List of workflow summaries
@@ -88,17 +88,17 @@ export function getActiveWorkflow(workflows: WorkflowSummary[]): WorkflowSummary
     .sort(sortByStartTimeDesc);
   if (running[0]) return running[0];
 
-  // Priority 2: Most recently created pending+architect workflow (uses created_at since started_at is null)
-  const planning = workflows
-    .filter(w => w.status === 'pending' && w.current_stage === 'architect')
-    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-  if (planning[0]) return planning[0];
-
-  // Priority 3: Most recently started blocked workflow
+  // Priority 2: Most recently started blocked workflow
   const blocked = workflows
     .filter(w => w.status === 'blocked')
     .sort(sortByStartTimeDesc);
   if (blocked[0]) return blocked[0];
+
+  // Priority 3: Most recently created pending workflow (uses created_at since started_at is null)
+  const pending = workflows
+    .filter(w => w.status === 'pending')
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  if (pending[0]) return pending[0];
 
   // Priority 4: Most recently started completed workflow
   const completed = workflows

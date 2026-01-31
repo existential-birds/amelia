@@ -331,8 +331,7 @@ curl "http://localhost:8420/api/workflows?limit=10&cursor=abc123"
       "issue_id": "123",
       "worktree_name": "my-project",
       "status": "in_progress",
-      "started_at": "2025-01-15T10:30:00Z",
-      "current_stage": "developer"
+      "started_at": "2025-01-15T10:30:00Z"
     }
   ],
   "total": 1,
@@ -378,7 +377,6 @@ curl http://localhost:8420/api/workflows/550e8400-e29b-41d4-a716-446655440000
   "started_at": "2025-01-15T10:30:00Z",
   "completed_at": null,
   "failure_reason": null,
-  "current_stage": "architect",
   "plan": null,
   "token_usage": null,
   "recent_events": []

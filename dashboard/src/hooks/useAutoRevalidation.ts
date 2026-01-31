@@ -4,7 +4,6 @@ import { useWorkflowStore } from '../store/workflowStore';
 
 /**
  * Event types that indicate a workflow status change requiring UI refresh.
- * Includes stage events to ensure current_stage updates are reflected in the UI.
  */
 const STATUS_EVENTS = [
   'workflow_created',
@@ -25,7 +24,7 @@ const STATUS_EVENTS = [
  * Watches the Zustand store for events and triggers revalidation when:
  * - workflow_created (for plan_now workflows), workflow_started, workflow_completed, workflow_failed
  * - approval_required, approval_granted, approval_rejected
- * - stage_started, stage_completed (for current_stage updates)
+ * - stage_started, stage_completed
  *
  * Only processes events from the last 5 seconds to avoid revalidating
  * on old events during initial page load.

@@ -175,7 +175,7 @@ export function getMockActiveWorkflows(): WorkflowSummary[] {
       status: 'completed',
       created_at: getCreatedAt(24),
       started_at: getTimestamp(24),
-      current_stage: null,
+
       total_cost_usd: 17.50,
       total_tokens: 350000,
       total_duration_ms: 138000,
@@ -188,7 +188,7 @@ export function getMockActiveWorkflows(): WorkflowSummary[] {
       status: 'completed',
       created_at: getCreatedAt(48),
       started_at: getTimestamp(48),
-      current_stage: null,
+
       total_cost_usd: 25.00,
       total_tokens: 500000,
       total_duration_ms: 252000,
@@ -201,7 +201,7 @@ export function getMockActiveWorkflows(): WorkflowSummary[] {
       status: 'completed',
       created_at: getCreatedAt(72),
       started_at: getTimestamp(72),
-      current_stage: null,
+
       total_cost_usd: 12.00,
       total_tokens: 240000,
       total_duration_ms: 90000,
@@ -215,7 +215,7 @@ export function getMockActiveWorkflows(): WorkflowSummary[] {
       status: 'in_progress',
       created_at: getCreatedAt(3),
       started_at: getTimestamp(3),
-      current_stage: 'developer',
+
       total_cost_usd: 48.52,
       total_tokens: 970456,
       total_duration_ms: 180000,
@@ -228,7 +228,7 @@ export function getMockActiveWorkflows(): WorkflowSummary[] {
       status: 'completed',
       created_at: getCreatedAt(5),
       started_at: getTimestamp(5),
-      current_stage: 'done',
+
       total_cost_usd: 71.00,
       total_tokens: 1420042,
       total_duration_ms: 300000,
@@ -241,7 +241,7 @@ export function getMockActiveWorkflows(): WorkflowSummary[] {
       status: 'in_progress',
       created_at: getCreatedAt(1),
       started_at: getTimestamp(1),
-      current_stage: 'developer',
+
       total_cost_usd: 41.10,
       total_tokens: 822000,
       total_duration_ms: 154000,
@@ -255,7 +255,7 @@ export function getMockActiveWorkflows(): WorkflowSummary[] {
       status: 'blocked',
       created_at: getCreatedAt(2),
       started_at: getTimestamp(2),
-      current_stage: 'architect',
+
       total_cost_usd: 47.00,
       total_tokens: 999999,
       total_duration_ms: 120000,
@@ -268,7 +268,7 @@ export function getMockActiveWorkflows(): WorkflowSummary[] {
       status: 'blocked',
       created_at: getCreatedAt(8),
       started_at: getTimestamp(8),
-      current_stage: 'architect',
+
       total_cost_usd: 45.00,
       total_tokens: 900000,
       total_duration_ms: 210000,
@@ -290,7 +290,7 @@ export function getMockHistoryWorkflows(): WorkflowSummary[] {
       status: 'completed',
       created_at: getPastCreatedAt(1),
       started_at: getPastTimestamp(1),
-      current_stage: null,
+
       total_cost_usd: 5.00,
       total_tokens: 100000,
       total_duration_ms: 120000,
@@ -303,7 +303,7 @@ export function getMockHistoryWorkflows(): WorkflowSummary[] {
       status: 'completed',
       created_at: getPastCreatedAt(1.5),
       started_at: getPastTimestamp(1.5),
-      current_stage: null,
+
       total_cost_usd: 42.35,
       total_tokens: 847000,
       total_duration_ms: 360000,
@@ -316,7 +316,7 @@ export function getMockHistoryWorkflows(): WorkflowSummary[] {
       status: 'completed',
       created_at: getPastCreatedAt(2),
       started_at: getPastTimestamp(2),
-      current_stage: null,
+
       total_cost_usd: 90.01,
       total_tokens: 1800200,
       total_duration_ms: 480000,
@@ -329,7 +329,7 @@ export function getMockHistoryWorkflows(): WorkflowSummary[] {
       status: 'completed',
       created_at: getPastCreatedAt(3),
       started_at: getPastTimestamp(3),
-      current_stage: null,
+
       total_cost_usd: 10.00,
       total_tokens: 200000,
       total_duration_ms: 150000,
@@ -342,7 +342,7 @@ export function getMockHistoryWorkflows(): WorkflowSummary[] {
       status: 'completed',
       created_at: getPastCreatedAt(3.5),
       started_at: getPastTimestamp(3.5),
-      current_stage: null,
+
       total_cost_usd: 0.42,
       total_tokens: 8400,
       total_duration_ms: 5000,
@@ -355,7 +355,7 @@ export function getMockHistoryWorkflows(): WorkflowSummary[] {
       status: 'failed',
       created_at: getPastCreatedAt(4),
       started_at: getPastTimestamp(4),
-      current_stage: null,
+
       total_cost_usd: 99.99,
       total_tokens: 1999800,
       total_duration_ms: 1800000,
@@ -368,7 +368,7 @@ export function getMockHistoryWorkflows(): WorkflowSummary[] {
       status: 'cancelled',
       created_at: getPastCreatedAt(5),
       started_at: getPastTimestamp(5),
-      current_stage: null,
+
       total_cost_usd: 0.01,
       total_tokens: 200,
       total_duration_ms: 1000,
@@ -381,7 +381,7 @@ export function getMockHistoryWorkflows(): WorkflowSummary[] {
       status: 'completed',
       created_at: getPastCreatedAt(5.5),
       started_at: getPastTimestamp(5.5),
-      current_stage: null,
+
       total_cost_usd: 42.00,
       total_tokens: 840000,
       total_duration_ms: 420000,
@@ -394,7 +394,7 @@ export function getMockHistoryWorkflows(): WorkflowSummary[] {
       status: 'failed',
       created_at: getPastCreatedAt(6),
       started_at: getPastTimestamp(6),
-      current_stage: null,
+
       total_cost_usd: 150.00,
       total_tokens: 3000000,
       total_duration_ms: 18000000,
@@ -407,7 +407,7 @@ export function getMockHistoryWorkflows(): WorkflowSummary[] {
       status: 'completed',
       created_at: getPastCreatedAt(7),
       started_at: getPastTimestamp(7),
-      current_stage: null,
+
       total_cost_usd: 84.70,
       total_tokens: 1694000,
       total_duration_ms: 180000,

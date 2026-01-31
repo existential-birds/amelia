@@ -104,7 +104,6 @@ async def test_emit_workflow_event_success_with_exporters_and_sinks(
         await emit_workflow_event(
             event_type=WorkflowEventType.STARTED,
             workflow_id="test-workflow-123",
-            stage="architect",
             metadata={"issue_id": "TEST-456", "profile": "work"},
         )
 
@@ -116,7 +115,6 @@ async def test_emit_workflow_event_success_with_exporters_and_sinks(
     assert isinstance(event, WorkflowEvent)
     assert event.event_type == WorkflowEventType.STARTED
     assert event.workflow_id == "test-workflow-123"
-    assert event.stage == "architect"
     assert event.metadata == {"issue_id": "TEST-456", "profile": "work"}
 
     # Verify sinks called with event name and properties
@@ -127,7 +125,6 @@ async def test_emit_workflow_event_success_with_exporters_and_sinks(
         "workflow.started",
         properties={
             "workflow_id": "test-workflow-123",
-            "stage": "architect",
             "issue_id": "TEST-456",
             "profile": "work",
         },
@@ -204,7 +201,6 @@ async def test_emit_workflow_event_with_no_metadata() -> None:
         "workflow.started",
         properties={
             "workflow_id": "test-workflow",
-            "stage": None,
         },
     )
 

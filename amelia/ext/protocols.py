@@ -51,7 +51,6 @@ class WorkflowEvent(BaseModel):
         event_type: The type of event that occurred.
         workflow_id: Unique identifier for the workflow.
         timestamp: When the event occurred.
-        stage: Current workflow stage (if applicable).
         metadata: Additional event-specific data (immutable mapping).
     """
 
@@ -60,7 +59,6 @@ class WorkflowEvent(BaseModel):
     event_type: WorkflowEventType
     workflow_id: str
     timestamp: datetime
-    stage: str | None = None
     metadata: Mapping[str, JsonValue] | None = None
 
     @model_validator(mode="before")

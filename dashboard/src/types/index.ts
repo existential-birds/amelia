@@ -56,9 +56,6 @@ export interface WorkflowSummary {
   /** ISO 8601 timestamp when the workflow started, or null if not yet started. */
   started_at: string | null;
 
-  /** Name of the current execution stage (e.g., 'architect', 'developer', 'reviewer'). */
-  current_stage: string | null;
-
   /** Total cost in USD for all token usage, or null if not available. */
   total_cost_usd: number | null;
 

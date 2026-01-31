@@ -8,7 +8,6 @@ import { PageHeader } from '@/components/PageHeader';
 import { StatusBadge } from '@/components/StatusBadge';
 import { ActivityLog } from '@/components/ActivityLog';
 import { ApprovalControls } from '@/components/ApprovalControls';
-import { AgentProgressBar, type AgentStage } from '@/components/AgentProgressBar';
 import { UsageCard } from '@/components/UsageCard';
 import { Button } from '@/components/ui/button';
 import { useElapsedTime, useAutoRevalidation } from '@/hooks';
@@ -18,18 +17,6 @@ import { workflowDetailLoader } from '@/loaders';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useWorkflowStore } from '@/store/workflowStore';
 import type { WorkflowEvent } from '@/types';
-
-/**
- * Determines completed stages based on current stage.
- * Stages progress: pm -> architect -> developer -> reviewer
- */
-function getCompletedStages(currentStage: string | null): AgentStage[] {
-  const stageOrder: AgentStage[] = ['pm', 'architect', 'developer', 'reviewer'];
-  if (!currentStage) return [];
-  const currentIndex = stageOrder.indexOf(currentStage as AgentStage);
-  if (currentIndex === -1) return [];
-  return stageOrder.slice(0, currentIndex);
-}
 
 /**
  * Displays comprehensive workflow details with progress and activity.
@@ -105,10 +92,6 @@ export default function WorkflowDetailPage() {
   const needsApproval = workflow.status === 'blocked';
   const goalSummary = workflow.goal || 'Awaiting plan generation';
 
-  // Determine agent progress
-  const currentStage = workflow.current_stage as AgentStage | null;
-  const completedStages = getCompletedStages(workflow.current_stage);
-
   return (
     <div className="flex flex-col h-full w-full">
       <PageHeader>
@@ -131,16 +114,6 @@ export default function WorkflowDetailPage() {
           <StatusBadge status={workflow.status} />
         </PageHeader.Right>
       </PageHeader>
-
-      {/* Agent Progress Bar - shows workflow stage progress */}
-      {workflow.status === 'in_progress' && currentStage && (
-        <div className="px-6 py-3 border-b border-border bg-muted/10">
-          <AgentProgressBar
-            currentStage={currentStage}
-            completedStages={completedStages}
-          />
-        </div>
-      )}
 
       <div className="flex-1 overflow-hidden grid grid-cols-2 gap-4 p-6 min-h-0">
         {/* Left column: Plan Review (when blocked) or Pipeline Canvas */}

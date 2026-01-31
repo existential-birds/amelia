@@ -377,7 +377,7 @@ describe('API Client', () => {
             status: 'completed',
             created_at: '2025-01-01T09:00:00Z',
             started_at: '2025-01-01T10:00:00Z',
-            current_stage: null,
+
             total_cost_usd: null,
             total_tokens: null,
             total_duration_ms: null,
@@ -425,7 +425,7 @@ describe('API Client', () => {
             status: 'completed',
             created_at: '2025-01-01T09:00:00Z',
             started_at: '2025-01-01T10:00:00Z',
-            current_stage: null,
+
             total_cost_usd: null,
             total_tokens: null,
             total_duration_ms: null,

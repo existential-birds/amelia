@@ -18,10 +18,8 @@ export { JobQueue } from './JobQueue';
 export { ActivityLog } from './ActivityLog';
 
 // Workflow components
-export { AgentProgressBar } from './AgentProgressBar';
 export { ApprovalControls } from './ApprovalControls';
 export { WorkflowCanvas } from './WorkflowCanvas';
-export { WorkflowProgress } from './WorkflowProgress';
 export { WorkflowEmptyState } from './WorkflowEmptyState';
 
 // Layout components
@@ -45,7 +43,6 @@ export * from './ui/card';
 export * from './ui/collapsible';
 export * from './ui/scroll-area';
 export * from './ui/tooltip';
-export * from './ui/progress';
 export * from './ui/skeleton';
 export * from './ui/alert';
 export * from './ui/empty';

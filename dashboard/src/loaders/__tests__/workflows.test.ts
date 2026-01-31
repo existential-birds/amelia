@@ -33,7 +33,6 @@ describe('Workflow Loaders', () => {
         worktree_path: '/tmp/worktrees/main',
         status: 'in_progress',
         started_at: '2025-12-01T10:00:00Z',
-        current_stage: 'architect',
       });
       const mockWorkflowDetail = createMockWorkflowDetail({
         id: 'wf-1',
@@ -41,7 +40,6 @@ describe('Workflow Loaders', () => {
         worktree_path: '/tmp/worktrees/main',
         status: 'in_progress',
         started_at: '2025-12-01T10:00:00Z',
-        current_stage: 'architect',
       });
 
       vi.mocked(api.getWorkflows).mockResolvedValueOnce([mockWorkflowSummary]);
@@ -80,7 +78,6 @@ describe('Workflow Loaders', () => {
         worktree_path: '/tmp/worktrees/main',
         status: 'in_progress',
         started_at: '2025-12-01T10:00:00Z',
-        current_stage: 'architect',
       });
 
       vi.mocked(api.getWorkflows).mockResolvedValueOnce([mockWorkflowSummary]);
@@ -179,7 +176,6 @@ describe('Workflow Loaders', () => {
         worktree_path: '/tmp/worktrees/old-branch',
         status: 'completed',
         started_at: '2025-11-01T10:00:00Z',
-        current_stage: null,
       });
 
       vi.mocked(api.getWorkflowHistory).mockResolvedValueOnce([mockWorkflowHistory]);

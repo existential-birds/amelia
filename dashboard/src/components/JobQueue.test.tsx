@@ -5,9 +5,9 @@ import { createMockWorkflowSummary } from '@/__tests__/fixtures';
 
 describe('JobQueue', () => {
   const mockWorkflows = [
-    createMockWorkflowSummary({ id: 'wf-001', issue_id: '#8', worktree_path: '/tmp/worktrees/feature-a', status: 'in_progress', current_stage: 'Developer' }),
-    createMockWorkflowSummary({ id: 'wf-002', issue_id: '#7', worktree_path: '/tmp/worktrees/feature-b', status: 'completed', current_stage: null }),
-    createMockWorkflowSummary({ id: 'wf-003', issue_id: '#9', worktree_path: '/tmp/worktrees/feature-c', status: 'pending', current_stage: null }),
+    createMockWorkflowSummary({ id: 'wf-001', issue_id: '#8', worktree_path: '/tmp/worktrees/feature-a', status: 'in_progress' }),
+    createMockWorkflowSummary({ id: 'wf-002', issue_id: '#7', worktree_path: '/tmp/worktrees/feature-b', status: 'completed' }),
+    createMockWorkflowSummary({ id: 'wf-003', issue_id: '#9', worktree_path: '/tmp/worktrees/feature-c', status: 'pending' }),
   ];
 
   it('renders all workflows', () => {

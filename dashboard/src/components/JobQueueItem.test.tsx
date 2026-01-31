@@ -10,7 +10,6 @@ describe('JobQueueItem', () => {
     issue_id: '#8',
     worktree_path: '/tmp/worktrees/feature-benchmark',
     status: 'in_progress',
-    current_stage: 'Developer',
   });
 
   it('renders issue ID and repo name (extracted from worktree path)', () => {
@@ -24,11 +23,6 @@ describe('JobQueueItem', () => {
     render(<JobQueueItem workflow={mockWorkflow} selected={false} onSelect={() => {}} />);
     // New design uses inline status text instead of StatusBadge
     expect(screen.getByText('RUNNING')).toBeInTheDocument();
-  });
-
-  it('renders current stage when available', () => {
-    render(<JobQueueItem workflow={mockWorkflow} selected={false} onSelect={() => {}} />);
-    expect(screen.getByText('Developer')).toBeInTheDocument();
   });
 
   it('shows selected state with data-selected attribute', () => {

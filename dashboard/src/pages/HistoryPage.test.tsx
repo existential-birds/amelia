@@ -13,7 +13,7 @@ const mockWorkflows: WorkflowSummary[] = [
     status: 'completed',
     created_at: '2025-12-07T08:55:00Z',
     started_at: '2025-12-07T09:00:00Z',
-    current_stage: null,
+
     total_duration_ms: 154000, // 2m 34s
     total_tokens: 15200, // 15.2K
     total_cost_usd: 0.42, // $0.42
@@ -26,7 +26,7 @@ const mockWorkflows: WorkflowSummary[] = [
     status: 'failed',
     created_at: '2025-12-07T07:55:00Z',
     started_at: '2025-12-07T08:00:00Z',
-    current_stage: null,
+
     total_duration_ms: null,
     total_tokens: null,
     total_cost_usd: null,

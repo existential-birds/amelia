@@ -114,7 +114,7 @@ export const ToolExecutionStrip = memo(
         <div className="flex items-center gap-1.5" role="list" aria-label="Tool execution status">
           {toolCalls
             .filter((tc) => tc.state !== "output-available")
-            .slice(0, 20)
+            .slice(0, 10)
             .map((toolCall) => (
               <ToolPip key={toolCall.tool_call_id} toolCall={toolCall} />
             ))}

@@ -41,7 +41,6 @@ const mockWorkflow = createMockWorkflowDetail({
   worktree_path: '/tmp/worktrees/proj-123-feature',
   status: 'in_progress',
   started_at: '2025-12-07T09:00:00Z',
-  current_stage: 'developer',
 });
 
 /**
@@ -126,7 +125,6 @@ describe('WorkflowDetailPage event merging', () => {
       issue_id: 'MERGE-TEST',
       worktree_path: '/tmp/worktrees/merge-test',
       status: 'in_progress',
-      current_stage: 'developer',
       recent_events: loaderEvents,
     });
 
@@ -173,7 +171,6 @@ describe('WorkflowDetailPage event merging', () => {
       issue_id: 'DUP-TEST',
       worktree_path: '/tmp/worktrees/dup-test',
       status: 'in_progress',
-      current_stage: 'architect',
       recent_events: [duplicateEvent],
     });
 
@@ -241,7 +238,6 @@ describe('WorkflowDetailPage event merging', () => {
       issue_id: 'SORT-TEST',
       worktree_path: '/tmp/worktrees/sort-test',
       status: 'in_progress',
-      current_stage: 'developer',
       recent_events: loaderEvents,
     });
 
@@ -364,7 +360,6 @@ describe('WorkflowDetailPage resume button', () => {
       issue_id: 'ACTIVE-TEST',
       worktree_path: '/tmp/worktrees/active-test',
       status: 'in_progress',
-      current_stage: 'developer',
     });
 
     const router = createMemoryRouter(

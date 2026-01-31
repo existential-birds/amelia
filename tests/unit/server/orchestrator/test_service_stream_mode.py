@@ -10,7 +10,7 @@ import pytest
 def mock_repository():
     """Create mock workflow repository."""
     repo = AsyncMock()
-    repo.get.return_value = MagicMock(current_stage=None)
+    repo.get.return_value = MagicMock()
     repo.update = AsyncMock()
     repo.set_status = AsyncMock()
     return repo

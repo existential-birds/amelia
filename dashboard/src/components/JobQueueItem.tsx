@@ -15,7 +15,7 @@ import type { WorkflowSummary, WorkflowStatus } from '@/types';
  * @property className - Optional additional CSS classes
  */
 interface JobQueueItemProps {
-  workflow: Pick<WorkflowSummary, 'id' | 'issue_id' | 'worktree_path' | 'status' | 'current_stage'>;
+  workflow: Pick<WorkflowSummary, 'id' | 'issue_id' | 'worktree_path' | 'status'>;
   selected: boolean;
   onSelect: (id: string) => void;
   className?: string;
@@ -83,7 +83,6 @@ function getRepoName(path: string): string {
  * - Colored status rail on left edge
  * - Issue ID as primary identifier
  * - Repository name (extracted from worktree path)
- * - Current stage indicator
  * - Compact status dot with label
  *
  * Supports keyboard navigation and visual selection state.
@@ -130,16 +129,11 @@ export function JobQueueItem({ workflow, selected, onSelect, className }: JobQue
           </div>
         </div>
 
-        {/* Row 2: Repo name and current stage */}
+        {/* Row 2: Repo name */}
         <div className="flex items-center justify-between gap-2 text-xs">
           <span className="font-body text-foreground/80 truncate">
             {repoName}
           </span>
-          {workflow.current_stage && (
-            <span className="font-mono text-muted-foreground uppercase tracking-wide shrink-0">
-              {workflow.current_stage}
-            </span>
-          )}
         </div>
       </div>
     </button>
