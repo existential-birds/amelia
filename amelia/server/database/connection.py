@@ -268,7 +268,11 @@ class Database:
                 started_at TIMESTAMP,
                 completed_at TIMESTAMP,
                 failure_reason TEXT,
-                state_json TEXT NOT NULL
+                state_json TEXT NOT NULL,
+                workflow_type TEXT NOT NULL DEFAULT 'full',
+                profile_id TEXT,
+                plan_cache TEXT,
+                issue_cache TEXT
             )
         """)
 
@@ -354,6 +358,30 @@ class Database:
         await self.execute(
             "CREATE INDEX IF NOT EXISTS idx_workflows_started_at ON workflows(started_at DESC)"
         )
+
+        # Migration: Add new columns to existing workflows tables
+        # These columns support the transition away from state_json
+        for column, col_type, default in [
+            ("workflow_type", "TEXT NOT NULL", "'full'"),
+            ("profile_id", "TEXT", None),
+            ("plan_cache", "TEXT", None),
+            ("issue_cache", "TEXT", None),
+        ]:
+            try:
+                if default is not None:
+                    await self.execute(
+                        f"ALTER TABLE workflows ADD COLUMN {column} {col_type} DEFAULT {default}"
+                    )
+                else:
+                    await self.execute(
+                        f"ALTER TABLE workflows ADD COLUMN {column} {col_type}"
+                    )
+            except Exception as e:
+                # SQLite "duplicate column" error - safe to ignore for idempotent migrations
+                if "duplicate column" not in str(e).lower():
+                    raise
+                logger.debug("Column already exists, skipping", column=column, error=str(e))
+
         # Unique constraint: one active workflow per worktree
         # Note: 'pending' is intentionally excluded - multiple pending workflows
         # are allowed per worktree (per queue workflows design doc). Only

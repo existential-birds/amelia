@@ -9,6 +9,7 @@ from amelia.core.types import AgentConfig, Profile
 from amelia.pipelines.implementation.state import ImplementationState
 from amelia.server.models.state import (
     InvalidStateTransitionError,
+    PlanCache,
     ServerExecutionState,
     WorkflowStatus,
     rebuild_server_execution_state,
@@ -165,4 +166,131 @@ class TestServerExecutionStateComposition:
         )
         assert server_state.execution_state is not None
         assert server_state.execution_state.profile_id == "test"
+
+
+class TestPlanCache:
+    """Tests for PlanCache model."""
+
+    def test_create_plan_cache_with_defaults(self) -> None:
+        """PlanCache can be created with all defaults."""
+        cache = PlanCache()
+
+        assert cache.goal is None
+        assert cache.plan_markdown is None
+        assert cache.plan_path is None
+        assert cache.tool_calls == []
+        assert cache.tool_results == []
+        assert cache.total_tasks is None
+        assert cache.current_task_index is None
+
+    def test_create_plan_cache_with_values(self) -> None:
+        """PlanCache can be created with explicit values."""
+        cache = PlanCache(
+            goal="Implement feature X",
+            plan_markdown="# Plan\n- Step 1",
+            plan_path="/path/to/plan.md",
+            tool_calls=[{"tool_name": "write_file", "tool_input": {"file_path": "/plan.md"}}],
+            tool_results=[{"output": "success"}],
+            total_tasks=5,
+            current_task_index=2,
+        )
+
+        assert cache.goal == "Implement feature X"
+        assert cache.plan_markdown == "# Plan\n- Step 1"
+        assert cache.plan_path == "/path/to/plan.md"
+        assert len(cache.tool_calls) == 1
+        assert len(cache.tool_results) == 1
+        assert cache.total_tasks == 5
+        assert cache.current_task_index == 2
+
+    def test_plan_cache_json_round_trip(self) -> None:
+        """PlanCache survives JSON serialization round-trip."""
+        original = PlanCache(
+            goal="Test goal",
+            plan_markdown="# Test Plan",
+            total_tasks=3,
+        )
+
+        json_str = original.model_dump_json()
+        restored = PlanCache.model_validate_json(json_str)
+
+        assert restored.goal == original.goal
+        assert restored.plan_markdown == original.plan_markdown
+        assert restored.total_tasks == original.total_tasks
+
+    def test_from_checkpoint_values_extracts_plan_path(self) -> None:
+        """from_checkpoint_values extracts plan_path from write_file tool calls."""
+        values = {
+            "goal": "Test goal",
+            "plan_markdown": "# Plan",
+            "tool_calls": [
+                {"tool_name": "write_file", "tool_input": {"file_path": "/path/to/plan.md"}},
+            ],
+            "tool_results": [{"output": "success"}],
+            "total_tasks": 5,
+            "current_task_index": 1,
+        }
+
+        cache = PlanCache.from_checkpoint_values(values)
+
+        assert cache.goal == "Test goal"
+        assert cache.plan_markdown == "# Plan"
+        assert cache.plan_path == "/path/to/plan.md"
+        assert cache.total_tasks == 5
+        assert cache.current_task_index == 1
+
+    def test_from_checkpoint_values_handles_missing_values(self) -> None:
+        """from_checkpoint_values handles missing values gracefully."""
+        values: dict[str, Any] = {}
+
+        cache = PlanCache.from_checkpoint_values(values)
+
+        assert cache.goal is None
+        assert cache.plan_markdown is None
+        assert cache.plan_path is None
+        assert cache.tool_calls == []
+        assert cache.tool_results == []
+
+
+class TestServerExecutionStateWithNewFields:
+    """Tests for ServerExecutionState new fields (profile_id, plan_cache, issue_cache)."""
+
+    def test_state_with_profile_id(self) -> None:
+        """ServerExecutionState accepts profile_id field."""
+        state = make_state(profile_id="test-profile")
+
+        assert state.profile_id == "test-profile"
+
+    def test_state_with_plan_cache(self) -> None:
+        """ServerExecutionState accepts plan_cache field."""
+        plan_cache = PlanCache(goal="Test goal", plan_markdown="# Plan")
+        state = make_state(plan_cache=plan_cache)
+
+        assert state.plan_cache is not None
+        assert state.plan_cache.goal == "Test goal"
+        assert state.plan_cache.plan_markdown == "# Plan"
+
+    def test_state_with_issue_cache(self) -> None:
+        """ServerExecutionState accepts issue_cache field."""
+        issue_json = '{"key": "TEST-1", "summary": "Test issue"}'
+        state = make_state(issue_cache=issue_json)
+
+        assert state.issue_cache == issue_json
+
+    def test_state_json_round_trip_with_new_fields(self) -> None:
+        """State with new fields survives JSON serialization round-trip."""
+        plan_cache = PlanCache(goal="Test goal", total_tasks=3)
+        original = make_state(
+            profile_id="my-profile",
+            plan_cache=plan_cache,
+            issue_cache='{"key": "TEST-1"}',
+        )
+
+        json_str = original.model_dump_json()
+        restored = ServerExecutionState.model_validate_json(json_str)
+
+        assert restored.profile_id == "my-profile"
+        assert restored.plan_cache is not None
+        assert restored.plan_cache.goal == "Test goal"
+        assert restored.issue_cache == '{"key": "TEST-1"}'
 

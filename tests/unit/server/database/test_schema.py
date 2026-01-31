@@ -45,6 +45,35 @@ class TestEventsSchema:
         assert "idx_events_trace_id" in index_names
 
 
+class TestWorkflowsSchema:
+    """Tests for workflows table schema."""
+
+    async def test_workflows_table_has_new_columns(self, db_with_schema: Database) -> None:
+        """Workflows table has new columns for state_json replacement."""
+        columns = await db_with_schema.fetch_all("PRAGMA table_info(workflows)")
+        column_names = [col["name"] for col in columns]
+
+        # New columns added in Phase 1
+        assert "workflow_type" in column_names
+        assert "profile_id" in column_names
+        assert "plan_cache" in column_names
+        assert "issue_cache" in column_names
+
+    async def test_workflow_type_has_default(self, db_with_schema: Database) -> None:
+        """workflow_type column has default value 'full'."""
+        # Insert without specifying workflow_type
+        await db_with_schema.execute("""
+            INSERT INTO workflows (id, issue_id, worktree_path, status, state_json)
+            VALUES ('test-id', 'ISSUE-1', '/path', 'pending', '{}')
+        """)
+
+        row = await db_with_schema.fetch_one(
+            "SELECT workflow_type FROM workflows WHERE id = 'test-id'"
+        )
+        assert row is not None
+        assert row["workflow_type"] == "full"
+
+
 class TestWorktreeConstraints:
     """Tests for worktree uniqueness constraints."""
 

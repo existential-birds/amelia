@@ -8,7 +8,15 @@ import pytest
 from amelia.server.database.repository import WorkflowRepository
 from amelia.server.models import EventType
 from amelia.server.models.events import EventLevel, WorkflowEvent
-from amelia.server.models.state import InvalidStateTransitionError, ServerExecutionState
+from amelia.server.models.state import (
+    InvalidStateTransitionError,
+    ServerExecutionState,
+    rebuild_server_execution_state,
+)
+
+
+# Resolve forward references for ImplementationState
+rebuild_server_execution_state()
 
 
 class TestWorkflowRepository:
@@ -447,6 +455,107 @@ class TestWorkflowRepository:
         events = await repository.get_recent_events("any-workflow", limit=limit)
 
         assert events == []
+
+    async def test_update_plan_cache(self, repository) -> None:
+        """Can update plan_cache column directly."""
+        from amelia.server.models.state import PlanCache
+
+        state = ServerExecutionState(
+            id=str(uuid4()),
+            issue_id="ISSUE-123",
+            worktree_path="/path/to/repo",
+            workflow_status="in_progress",
+        )
+        await repository.create(state)
+
+        # Update plan cache
+        plan_cache = PlanCache(
+            goal="Test goal",
+            plan_markdown="# Test Plan",
+            total_tasks=5,
+            current_task_index=2,
+        )
+        await repository.update_plan_cache(state.id, plan_cache)
+
+        # Verify by querying the column directly
+        row = await repository._db.fetch_one(
+            "SELECT plan_cache FROM workflows WHERE id = ?", (state.id,)
+        )
+        assert row is not None
+        restored = PlanCache.model_validate_json(row[0])
+        assert restored.goal == "Test goal"
+        assert restored.plan_markdown == "# Test Plan"
+        assert restored.total_tasks == 5
+        assert restored.current_task_index == 2
+
+    async def test_update_plan_cache_workflow_not_found(self, repository) -> None:
+        """update_plan_cache raises WorkflowNotFoundError for missing workflow."""
+        from amelia.server.exceptions import WorkflowNotFoundError
+        from amelia.server.models.state import PlanCache
+
+        plan_cache = PlanCache(goal="Test goal")
+
+        with pytest.raises(WorkflowNotFoundError):
+            await repository.update_plan_cache("nonexistent-id", plan_cache)
+
+    async def test_create_workflow_writes_new_columns(self, repository) -> None:
+        """create() dual-writes to new columns (workflow_type, profile_id, plan_cache)."""
+        from amelia.server.models.state import PlanCache
+
+        plan_cache = PlanCache(goal="Test goal", plan_markdown="# Plan")
+        state = ServerExecutionState(
+            id=str(uuid4()),
+            issue_id="ISSUE-123",
+            worktree_path="/path/to/repo",
+            profile_id="test-profile",
+            plan_cache=plan_cache,
+            issue_cache='{"key": "TEST-1"}',
+        )
+        await repository.create(state)
+
+        # Verify columns directly
+        row = await repository._db.fetch_one(
+            "SELECT workflow_type, profile_id, plan_cache, issue_cache FROM workflows WHERE id = ?",
+            (state.id,),
+        )
+        assert row is not None
+        assert row[0] == "full"  # workflow_type
+        assert row[1] == "test-profile"  # profile_id
+        assert row[2] is not None  # plan_cache is populated
+        assert row[3] == '{"key": "TEST-1"}'  # issue_cache
+
+        # Verify plan_cache deserialization
+        restored = PlanCache.model_validate_json(row[2])
+        assert restored.goal == "Test goal"
+
+    async def test_update_workflow_writes_new_columns(self, repository) -> None:
+        """update() dual-writes to new columns."""
+        from amelia.server.models.state import PlanCache
+
+        # Create workflow
+        state = ServerExecutionState(
+            id=str(uuid4()),
+            issue_id="ISSUE-123",
+            worktree_path="/path/to/repo",
+        )
+        await repository.create(state)
+
+        # Update with new fields
+        state.profile_id = "updated-profile"
+        state.plan_cache = PlanCache(goal="Updated goal")
+        state.issue_cache = '{"key": "UPDATED-1"}'
+        await repository.update(state)
+
+        # Verify columns
+        row = await repository._db.fetch_one(
+            "SELECT profile_id, plan_cache, issue_cache FROM workflows WHERE id = ?",
+            (state.id,),
+        )
+        assert row is not None
+        assert row[0] == "updated-profile"
+        restored = PlanCache.model_validate_json(row[1])
+        assert restored.goal == "Updated goal"
+        assert row[2] == '{"key": "UPDATED-1"}'
 
 
 class TestRepositoryEvents:

@@ -46,26 +46,27 @@ def event_tracker():
     return EventTracker()
 
 
-class TestMissingExecutionState:
-    """Test error handling for missing execution_state."""
+class TestMissingRequiredFields:
+    """Test error handling for missing required workflow fields."""
 
-    async def test_missing_execution_state_sets_status_to_failed(
+    async def test_missing_profile_id_sets_status_to_failed(
         self, event_tracker, mock_repository, temp_checkpoint_db
     ):
-        """When execution_state is None, status is set to failed."""
+        """When profile_id is None (and no execution_state), status is set to failed."""
         service = OrchestratorService(
             event_tracker,
             mock_repository,
             checkpoint_path=temp_checkpoint_db,
         )
 
-        # Create state without execution_state
+        # Create state without profile_id or execution_state
         server_state = ServerExecutionState(
             id="wf-error-test",
             issue_id="TEST-ERR",
             worktree_path="/tmp/test-error",
             started_at=datetime.now(UTC),
-            execution_state=None,  # Missing - will cause error
+            profile_id=None,  # Missing - will cause error
+            execution_state=None,
         )
 
         await mock_repository.create(server_state)
@@ -76,7 +77,7 @@ class TestMissingExecutionState:
         assert persisted is not None
         assert persisted.workflow_status == "failed"
         assert persisted.failure_reason is not None
-        assert "Missing execution state" in persisted.failure_reason
+        assert "Missing profile_id" in persisted.failure_reason
 
 
 class TestLifecycleEvents:

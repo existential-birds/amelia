@@ -10,8 +10,10 @@ from amelia.server.database.connection import Database, SqliteValue
 from amelia.server.exceptions import WorkflowNotFoundError
 from amelia.server.models.events import WorkflowEvent
 from amelia.server.models.state import (
+    PlanCache,
     ServerExecutionState,
     WorkflowStatus,
+    WorkflowType,
     validate_transition,
 )
 from amelia.server.models.tokens import TokenSummary, TokenUsage
@@ -47,12 +49,32 @@ class WorkflowRepository:
         Args:
             state: Initial workflow state.
         """
+        # Extract profile_id from execution_state if available, fall back to state field
+        profile_id = state.profile_id
+        if profile_id is None and state.execution_state is not None:
+            profile_id = state.execution_state.profile_id
+
+        # Serialize plan_cache if present
+        plan_cache_json: str | None = None
+        if state.plan_cache is not None:
+            plan_cache_json = state.plan_cache.model_dump_json()
+
+        # Extract issue_cache from execution_state if available
+        issue_cache_json = state.issue_cache
+        if (
+            issue_cache_json is None
+            and state.execution_state is not None
+            and state.execution_state.issue is not None
+        ):
+            issue_cache_json = state.execution_state.issue.model_dump_json()
+
         await self._db.execute(
             """
             INSERT INTO workflows (
                 id, issue_id, worktree_path,
-                status, created_at, started_at, completed_at, failure_reason, state_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                status, created_at, started_at, completed_at, failure_reason, state_json,
+                workflow_type, profile_id, plan_cache, issue_cache
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 state.id,
@@ -64,6 +86,10 @@ class WorkflowRepository:
                 state.completed_at,
                 state.failure_reason,
                 state.model_dump_json(),
+                state.workflow_type,
+                profile_id,
+                plan_cache_json,
+                issue_cache_json,
             ),
         )
 
@@ -77,12 +103,49 @@ class WorkflowRepository:
             Workflow state or None if not found.
         """
         row = await self._db.fetch_one(
-            "SELECT state_json FROM workflows WHERE id = ?",
+            """
+            SELECT
+                id, issue_id, worktree_path, status,
+                created_at, started_at, completed_at, failure_reason,
+                workflow_type, profile_id, plan_cache, issue_cache,
+                state_json
+            FROM workflows WHERE id = ?
+            """,
             (workflow_id,),
         )
         if row is None:
             return None
-        return ServerExecutionState.model_validate_json(row[0])
+
+        # Parse plan_cache from JSON if present
+        plan_cache = None
+        if row["plan_cache"]:
+            plan_cache = PlanCache.model_validate_json(row["plan_cache"])
+
+        # Build ServerExecutionState from columns
+        # Fall back to state_json for execution_state during transition
+        execution_state = None
+        if row["state_json"]:
+            try:
+                full_state = ServerExecutionState.model_validate_json(row["state_json"])
+                execution_state = full_state.execution_state
+            except Exception:
+                pass  # Ignore parsing errors, execution_state is optional during transition
+
+        return ServerExecutionState(
+            id=row["id"],
+            issue_id=row["issue_id"],
+            worktree_path=row["worktree_path"],
+            workflow_type=WorkflowType(row["workflow_type"]) if row["workflow_type"] else WorkflowType.FULL,
+            profile_id=row["profile_id"],
+            plan_cache=plan_cache,
+            issue_cache=row["issue_cache"],
+            execution_state=execution_state,
+            workflow_status=row["status"],
+            created_at=row["created_at"],
+            started_at=row["started_at"],
+            completed_at=row["completed_at"],
+            failure_reason=row["failure_reason"],
+        )
 
     async def get_by_worktree(
         self,
@@ -121,6 +184,25 @@ class WorkflowRepository:
         Args:
             state: Updated workflow state.
         """
+        # Extract profile_id from execution_state if available, fall back to state field
+        profile_id = state.profile_id
+        if profile_id is None and state.execution_state is not None:
+            profile_id = state.execution_state.profile_id
+
+        # Serialize plan_cache if present
+        plan_cache_json: str | None = None
+        if state.plan_cache is not None:
+            plan_cache_json = state.plan_cache.model_dump_json()
+
+        # Extract issue_cache from execution_state if available
+        issue_cache_json = state.issue_cache
+        if (
+            issue_cache_json is None
+            and state.execution_state is not None
+            and state.execution_state.issue is not None
+        ):
+            issue_cache_json = state.execution_state.issue.model_dump_json()
+
         await self._db.execute(
             """
             UPDATE workflows SET
@@ -128,7 +210,11 @@ class WorkflowRepository:
                 started_at = ?,
                 completed_at = ?,
                 failure_reason = ?,
-                state_json = ?
+                state_json = ?,
+                workflow_type = ?,
+                profile_id = ?,
+                plan_cache = ?,
+                issue_cache = ?
             WHERE id = ?
             """,
             (
@@ -137,6 +223,10 @@ class WorkflowRepository:
                 state.completed_at,
                 state.failure_reason,
                 state.model_dump_json(),
+                state.workflow_type,
+                profile_id,
+                plan_cache_json,
+                issue_cache_json,
                 state.id,
             ),
         )
@@ -194,6 +284,36 @@ class WorkflowRepository:
                 failure_reason,
                 workflow_id,
             ),
+        )
+
+    async def update_plan_cache(
+        self,
+        workflow_id: str,
+        plan_cache: PlanCache,
+    ) -> None:
+        """Update plan_cache column directly without loading full state.
+
+        This is used by _sync_plan_from_checkpoint to efficiently update
+        plan data from the LangGraph checkpoint without re-serializing
+        the entire ServerExecutionState.
+
+        Args:
+            workflow_id: Workflow to update.
+            plan_cache: PlanCache instance to serialize and store.
+
+        Raises:
+            WorkflowNotFoundError: If workflow doesn't exist.
+        """
+        result = await self._db.fetch_one(
+            "SELECT id FROM workflows WHERE id = ?",
+            (workflow_id,),
+        )
+        if result is None:
+            raise WorkflowNotFoundError(workflow_id)
+
+        await self._db.execute(
+            "UPDATE workflows SET plan_cache = ? WHERE id = ?",
+            (plan_cache.model_dump_json(), workflow_id),
         )
 
     async def list_active(

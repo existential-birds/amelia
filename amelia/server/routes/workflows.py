@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request, status
 from fastapi.responses import JSONResponse
@@ -330,28 +331,40 @@ async def get_workflow(
     events = await repository.get_recent_events(workflow_id, limit=50)
     recent_events = [event.model_dump(mode="json") for event in events]
 
-    # Extract agentic execution fields from execution_state
-    goal = workflow.execution_state.goal if workflow.execution_state else None
-    plan_markdown = workflow.execution_state.plan_markdown if workflow.execution_state else None
-    plan_path = str(workflow.execution_state.plan_path) if workflow.execution_state and workflow.execution_state.plan_path else None
+    # Extract plan data - prefer plan_cache, fall back to execution_state
+    goal: str | None = None
+    plan_markdown: str | None = None
+    plan_path: str | None = None
+    tool_calls: list[dict[str, Any]] = []
+    tool_results: list[dict[str, Any]] = []
+    final_response: str | None = None
+
+    if workflow.plan_cache is not None:
+        # Use plan_cache column (preferred)
+        goal = workflow.plan_cache.goal
+        plan_markdown = workflow.plan_cache.plan_markdown
+        plan_path = workflow.plan_cache.plan_path
+        tool_calls = workflow.plan_cache.tool_calls
+        tool_results = workflow.plan_cache.tool_results
+    elif workflow.execution_state is not None:
+        # Fall back to execution_state (backwards compatibility during transition)
+        goal = workflow.execution_state.goal
+        plan_markdown = workflow.execution_state.plan_markdown
+        plan_path = str(workflow.execution_state.plan_path) if workflow.execution_state.plan_path else None
+        tool_calls = [tc.model_dump(mode="json") for tc in workflow.execution_state.tool_calls]
+        tool_results = [tr.model_dump(mode="json") for tr in workflow.execution_state.tool_results]
+        final_response = workflow.execution_state.final_response
 
     # DEBUG: Log what API sees from database
     logger.info(
         "API returning workflow detail",
         workflow_id=workflow_id,
+        has_plan_cache=workflow.plan_cache is not None,
         has_execution_state=workflow.execution_state is not None,
         goal=goal[:100] if goal else None,
         has_plan=plan_markdown is not None,
         plan_len=len(plan_markdown) if plan_markdown else 0,
     )
-    tool_calls = []
-    tool_results = []
-    final_response = None
-
-    if workflow.execution_state:
-        tool_calls = [tc.model_dump(mode="json") for tc in workflow.execution_state.tool_calls]
-        tool_results = [tr.model_dump(mode="json") for tr in workflow.execution_state.tool_results]
-        final_response = workflow.execution_state.final_response
 
     return WorkflowDetailResponse(
         id=workflow.id,

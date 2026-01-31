@@ -39,7 +39,7 @@ from amelia.server.models import ServerExecutionState
 from amelia.server.models.events import EventType, WorkflowEvent
 from amelia.server.models.requests import BatchStartRequest, CreateWorkflowRequest
 from amelia.server.models.responses import BatchStartResponse
-from amelia.server.models.state import WorkflowStatus, WorkflowType
+from amelia.server.models.state import PlanCache, WorkflowStatus, WorkflowType
 from amelia.trackers.factory import create_tracker
 
 
@@ -926,6 +926,58 @@ class OrchestratorService:
         workflow_id, _ = entry
         return await self._repository.get(workflow_id)
 
+
+    async def _reconstruct_initial_state(
+        self,
+        state: ServerExecutionState,
+        profile: Profile,
+    ) -> dict[str, Any]:
+        """Reconstruct ImplementationState from ServerExecutionState columns.
+
+        Used when no LangGraph checkpoint exists and execution_state is not
+        available. Reconstructs the minimal state needed to start the workflow.
+
+        Args:
+            state: ServerExecutionState with issue_cache and other fields.
+            profile: Resolved profile for the workflow.
+
+        Returns:
+            JSON-serializable dict for LangGraph initial state.
+
+        Raises:
+            ValueError: If required fields are missing.
+        """
+        # Parse issue from issue_cache
+        issue = None
+        if state.issue_cache:
+            issue = Issue.model_validate_json(state.issue_cache)
+        else:
+            # Fallback: fetch from tracker (shouldn't normally happen)
+            tracker = create_tracker(profile)
+            issue = tracker.get_issue(state.issue_id, cwd=state.worktree_path)
+
+        # Get current HEAD as base commit (we're starting fresh)
+        base_commit = await get_git_head(state.worktree_path)
+
+        # Reconstruct ImplementationState
+        impl_state = ImplementationState(
+            workflow_id=state.id,
+            profile_id=profile.name,
+            created_at=state.created_at,
+            status="pending",
+            issue=issue,
+            base_commit=base_commit,
+        )
+
+        logger.debug(
+            "Reconstructed ImplementationState from columns",
+            workflow_id=state.id,
+            issue_id=state.issue_id,
+            profile_id=profile.name,
+        )
+
+        return impl_state.model_dump(mode="json")
+
     async def _run_workflow(
         self,
         workflow_id: str,
@@ -943,16 +995,21 @@ class OrchestratorService:
             APPROVAL_REQUIRED event is emitted. The workflow resumes when
             approve_workflow() is called.
         """
-        if state.execution_state is None:
-            logger.error("No execution_state in ServerExecutionState", workflow_id=workflow_id)
+        # Get profile_id from state or execution_state (backwards compatibility)
+        profile_id = state.profile_id
+        if profile_id is None and state.execution_state is not None:
+            profile_id = state.execution_state.profile_id
+
+        if profile_id is None:
+            logger.error("No profile_id in ServerExecutionState", workflow_id=workflow_id)
             await self._repository.set_status(
-                workflow_id, WorkflowStatus.FAILED, failure_reason="Missing execution state"
+                workflow_id, WorkflowStatus.FAILED, failure_reason="Missing profile_id"
             )
             return
 
         # Get profile from settings using profile_id (with worktree_path fallback)
         profile = await self._get_profile_or_fail(
-            workflow_id, state.execution_state.profile_id, state.worktree_path
+            workflow_id, profile_id, state.worktree_path
         )
         if profile is None:
             return
@@ -1015,13 +1072,18 @@ class OrchestratorService:
                     input_state = None
                 else:
                     # No checkpoint - start fresh with initial state
-                    # Convert Pydantic model to JSON-serializable dict for checkpointing.
-                    # LangGraph's AsyncSqliteSaver uses json.dumps() internally,
-                    # which fails on Pydantic BaseModel objects.
-                    input_state = state.execution_state.model_dump(mode="json")
+                    # Prefer execution_state if available (backwards compatibility)
+                    # Otherwise reconstruct from columns
+                    if state.execution_state is not None:
+                        input_state = state.execution_state.model_dump(mode="json")
+                    else:
+                        # Reconstruct ImplementationState from columns
+                        input_state = await self._reconstruct_initial_state(state, profile)
+
                     logger.debug(
                         "Starting workflow fresh (no checkpoint)",
                         workflow_id=workflow_id,
+                        from_execution_state=state.execution_state is not None,
                     )
 
                 async for chunk in graph.astream(
@@ -1088,15 +1150,20 @@ class OrchestratorService:
             workflow_id: The workflow ID.
             state: Server execution state.
         """
-        if state.execution_state is None:
+        # Get profile_id from state or execution_state (backwards compatibility)
+        profile_id = state.profile_id
+        if profile_id is None and state.execution_state is not None:
+            profile_id = state.execution_state.profile_id
+
+        if profile_id is None:
             await self._repository.set_status(
-                workflow_id, WorkflowStatus.FAILED, failure_reason="Missing execution state"
+                workflow_id, WorkflowStatus.FAILED, failure_reason="Missing profile_id"
             )
             return
 
         # Get profile from settings using profile_id (with worktree_path fallback)
         profile = await self._get_profile_or_fail(
-            workflow_id, state.execution_state.profile_id, state.worktree_path
+            workflow_id, profile_id, state.worktree_path
         )
         if profile is None:
             return
@@ -1967,10 +2034,13 @@ class OrchestratorService:
         graph: CompiledStateGraph[Any],
         config: RunnableConfig,
     ) -> None:
-        """Sync plan from LangGraph checkpoint to ServerExecutionState.
+        """Sync plan from LangGraph checkpoint to plan_cache column.
 
         Uses LangGraph's get_state() API to fetch the current checkpoint state,
         ensuring the plan is available via REST API when workflow is blocked.
+
+        This method writes directly to the plan_cache column for efficiency,
+        avoiding the need to load and re-serialize the entire ServerExecutionState.
 
         Args:
             workflow_id: The workflow ID.
@@ -1990,9 +2060,7 @@ class OrchestratorService:
             # Check for goal and plan_markdown from agentic execution
             goal = checkpoint_state.values.get("goal")
             plan_markdown = checkpoint_state.values.get("plan_markdown")
-            raw_architect_output = checkpoint_state.values.get("raw_architect_output")
             tool_calls = checkpoint_state.values.get("tool_calls", [])
-            tool_results = checkpoint_state.values.get("tool_results", [])
 
             # Log checkpoint values for debugging
             logger.info(
@@ -2002,7 +2070,6 @@ class OrchestratorService:
                 goal_preview=goal[:100] if goal else None,
                 has_plan_markdown=plan_markdown is not None,
                 plan_markdown_length=len(plan_markdown) if plan_markdown else 0,
-                has_raw_output=raw_architect_output is not None,
                 tool_calls_count=len(tool_calls),
             )
 
@@ -2014,53 +2081,45 @@ class OrchestratorService:
                 )
                 return
 
-            # Fetch ServerExecutionState
-            state = await self._repository.get(workflow_id)
-            if state is None or state.execution_state is None:
-                logger.warning(
-                    "Cannot sync plan - workflow or execution_state not found",
-                    workflow_id=workflow_id,
-                )
-                return
+            # Create PlanCache from checkpoint values
+            plan_cache = PlanCache.from_checkpoint_values(checkpoint_state.values)
 
-            # Build update dict with goal, plan_markdown, and tool_calls
-            update_dict: dict[str, Any] = {}
-            if goal is not None:
-                update_dict["goal"] = goal
-            if plan_markdown is not None:
-                update_dict["plan_markdown"] = plan_markdown
-            if tool_calls:
-                update_dict["tool_calls"] = tool_calls
-            if tool_results:
-                update_dict["tool_results"] = tool_results
+            # Update plan_cache column directly (efficient, no full state load)
+            await self._repository.update_plan_cache(workflow_id, plan_cache)
 
-            # Extract plan_path from Write tool calls
-            for tc in tool_calls:
-                tool_name = getattr(tc, "tool_name", None) or tc.get("tool_name")
-                tool_input = getattr(tc, "tool_input", None) or tc.get("tool_input", {})
-                if tool_name == ToolName.WRITE_FILE and "file_path" in tool_input:
-                    update_dict["plan_path"] = Path(tool_input["file_path"])
-                    logger.debug(
-                        "Extracted plan_path from tool calls",
-                        plan_path=str(update_dict["plan_path"]),
-                    )
-                    break
-
-            if not update_dict:
-                return
-
-            # Update the execution_state with synced fields
-            # ExecutionState is frozen, so we use model_copy to create an updated instance
-            state.execution_state = state.execution_state.model_copy(update=update_dict)
-
-            # Save back to repository
-            await self._repository.update(state)
             logger.debug(
-                "Synced plan to ServerExecutionState",
+                "Synced plan to plan_cache column",
                 workflow_id=workflow_id,
-                tool_calls_count=len(tool_calls),
-                has_plan_path="plan_path" in update_dict,
+                tool_calls_count=len(plan_cache.tool_calls),
+                has_plan_path=plan_cache.plan_path is not None,
             )
+
+            # Also update execution_state for backwards compatibility during transition
+            # TODO: Remove this block after Phase 3 when execution_state is removed
+            state = await self._repository.get(workflow_id)
+            if state is not None and state.execution_state is not None:
+                update_dict: dict[str, Any] = {}
+                if goal is not None:
+                    update_dict["goal"] = goal
+                if plan_markdown is not None:
+                    update_dict["plan_markdown"] = plan_markdown
+                if tool_calls:
+                    update_dict["tool_calls"] = tool_calls
+                tool_results = checkpoint_state.values.get("tool_results", [])
+                if tool_results:
+                    update_dict["tool_results"] = tool_results
+
+                # Extract plan_path from Write tool calls
+                for tc in tool_calls:
+                    tool_name = getattr(tc, "tool_name", None) or tc.get("tool_name")
+                    tool_input = getattr(tc, "tool_input", None) or tc.get("tool_input", {})
+                    if tool_name == ToolName.WRITE_FILE and "file_path" in tool_input:
+                        update_dict["plan_path"] = Path(tool_input["file_path"])
+                        break
+
+                if update_dict:
+                    state.execution_state = state.execution_state.model_copy(update=update_dict)
+                    await self._repository.update(state)
 
         except Exception as e:
             # Log but don't fail the workflow - plan sync is best-effort
