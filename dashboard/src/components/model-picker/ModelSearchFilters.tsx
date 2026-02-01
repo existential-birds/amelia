@@ -1,0 +1,203 @@
+import { Search, X } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+
+interface ModelSearchFiltersProps {
+  searchQuery: string;
+  onSearchChange: (query: string) => void;
+  selectedCapabilities: string[];
+  onCapabilitiesChange: (capabilities: string[]) => void;
+  selectedPriceTier: string | null;
+  onPriceTierChange: (tier: string | null) => void;
+  minContextSize: number | null;
+  onMinContextChange: (size: number | null) => void;
+  onClearFilters: () => void;
+}
+
+const CAPABILITY_OPTIONS = [
+  { value: 'reasoning', label: 'Reasoning' },
+  { value: 'structured_output', label: 'Structured Output' },
+];
+
+const PRICE_TIER_OPTIONS = [
+  { value: 'budget', label: 'Budget (< $1)' },
+  { value: 'standard', label: 'Standard ($1-$10)' },
+  { value: 'premium', label: 'Premium (> $10)' },
+];
+
+const CONTEXT_SIZE_OPTIONS = [
+  { value: '32000', label: '32K+' },
+  { value: '64000', label: '64K+' },
+  { value: '128000', label: '128K+' },
+  { value: '200000', label: '200K+' },
+];
+
+/**
+ * Search and filter controls for model picker.
+ */
+export function ModelSearchFilters({
+  searchQuery,
+  onSearchChange,
+  selectedCapabilities,
+  onCapabilitiesChange,
+  selectedPriceTier,
+  onPriceTierChange,
+  minContextSize,
+  onMinContextChange,
+  onClearFilters,
+}: ModelSearchFiltersProps) {
+  const hasActiveFilters =
+    selectedCapabilities.length > 0 ||
+    selectedPriceTier !== null ||
+    minContextSize !== null;
+
+  const handleCapabilityToggle = (capability: string) => {
+    if (selectedCapabilities.includes(capability)) {
+      onCapabilitiesChange(selectedCapabilities.filter((c) => c !== capability));
+    } else {
+      onCapabilitiesChange([...selectedCapabilities, capability]);
+    }
+  };
+
+  const removeCapability = (capability: string) => {
+    onCapabilitiesChange(selectedCapabilities.filter((c) => c !== capability));
+  };
+
+  return (
+    <div className="space-y-3">
+      {/* Search input */}
+      <div className="relative">
+        <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          placeholder="Search models..."
+          value={searchQuery}
+          onChange={(e) => onSearchChange(e.target.value)}
+          className="pl-8"
+        />
+      </div>
+
+      {/* Filter dropdowns */}
+      <div className="flex flex-wrap gap-2">
+        {/* Capabilities (multi-select via repeated clicks) */}
+        <Select
+          value=""
+          onValueChange={handleCapabilityToggle}
+          aria-label="Capabilities"
+        >
+          <SelectTrigger className="w-[130px] h-8 text-xs">
+            <SelectValue placeholder="Capabilities" />
+          </SelectTrigger>
+          <SelectContent>
+            {CAPABILITY_OPTIONS.map((opt) => (
+              <SelectItem key={opt.value} value={opt.value}>
+                <span className="flex items-center gap-2">
+                  {selectedCapabilities.includes(opt.value) && '✓'}
+                  {opt.label}
+                </span>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        {/* Price tier */}
+        <Select
+          value={selectedPriceTier ?? ''}
+          onValueChange={(v) => onPriceTierChange(v || null)}
+          aria-label="Price tier"
+        >
+          <SelectTrigger className="w-[130px] h-8 text-xs">
+            <SelectValue placeholder="Price tier" />
+          </SelectTrigger>
+          <SelectContent>
+            {PRICE_TIER_OPTIONS.map((opt) => (
+              <SelectItem key={opt.value} value={opt.value}>
+                {opt.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        {/* Context size */}
+        <Select
+          value={minContextSize?.toString() ?? ''}
+          onValueChange={(v) => onMinContextChange(v ? parseInt(v, 10) : null)}
+          aria-label="Context size"
+        >
+          <SelectTrigger className="w-[100px] h-8 text-xs">
+            <SelectValue placeholder="Context" />
+          </SelectTrigger>
+          <SelectContent>
+            {CONTEXT_SIZE_OPTIONS.map((opt) => (
+              <SelectItem key={opt.value} value={opt.value}>
+                {opt.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Active filter chips */}
+      {hasActiveFilters && (
+        <div className="flex flex-wrap items-center gap-2">
+          {selectedCapabilities.map((cap) => (
+            <Badge
+              key={cap}
+              variant="secondary"
+              className="text-xs gap-1 pr-1"
+            >
+              {cap}
+              <button
+                type="button"
+                onClick={() => removeCapability(cap)}
+                className="ml-1 hover:text-destructive"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </Badge>
+          ))}
+          {selectedPriceTier && (
+            <Badge variant="secondary" className="text-xs gap-1 pr-1">
+              {selectedPriceTier}
+              <button
+                type="button"
+                onClick={() => onPriceTierChange(null)}
+                className="ml-1 hover:text-destructive"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </Badge>
+          )}
+          {minContextSize && (
+            <Badge variant="secondary" className="text-xs gap-1 pr-1">
+              {minContextSize / 1000}K+
+              <button
+                type="button"
+                onClick={() => onMinContextChange(null)}
+                className="ml-1 hover:text-destructive"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </Badge>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onClearFilters}
+            className="h-6 px-2 text-xs"
+            aria-label="Clear filters"
+          >
+            Clear filters
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
