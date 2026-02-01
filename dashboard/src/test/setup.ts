@@ -1,4 +1,8 @@
 import '@testing-library/jest-dom';
+import { vi } from 'vitest';
+
+// Mock scrollIntoView for Radix UI Select tests
+Element.prototype.scrollIntoView = vi.fn();
 
 // Mock ResizeObserver for React Flow tests
 global.ResizeObserver = class ResizeObserver {
