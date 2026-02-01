@@ -23,7 +23,7 @@ def mock_retention() -> AsyncMock:
     """Create mock retention service."""
     retention = AsyncMock()
     retention.cleanup_on_shutdown = AsyncMock(
-        return_value=CleanupResult(events_deleted=10, workflows_deleted=2)
+        return_value=CleanupResult(log_entries_deleted=10, workflows_deleted=2)
     )
     return retention
 

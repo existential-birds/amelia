@@ -158,6 +158,47 @@ _TRACE_TYPES: frozenset[EventType] = frozenset({
     EventType.ORACLE_TOOL_RESULT,
 })
 
+# Event types that are persisted to the workflow_log table.
+# Trace events (thinking, tool calls) are stream-only and not persisted.
+PERSISTED_TYPES: frozenset[EventType] = frozenset({
+    # Lifecycle
+    EventType.WORKFLOW_CREATED,
+    EventType.WORKFLOW_STARTED,
+    EventType.WORKFLOW_COMPLETED,
+    EventType.WORKFLOW_FAILED,
+    EventType.WORKFLOW_CANCELLED,
+    # Stages
+    EventType.STAGE_STARTED,
+    EventType.STAGE_COMPLETED,
+    # Approval
+    EventType.APPROVAL_REQUIRED,
+    EventType.APPROVAL_GRANTED,
+    EventType.APPROVAL_REJECTED,
+    # Artifacts
+    EventType.FILE_CREATED,
+    EventType.FILE_MODIFIED,
+    EventType.FILE_DELETED,
+    # Review
+    EventType.REVIEW_REQUESTED,
+    EventType.REVIEW_COMPLETED,
+    EventType.REVISION_REQUESTED,
+    # Tasks
+    EventType.TASK_STARTED,
+    EventType.TASK_COMPLETED,
+    EventType.TASK_FAILED,
+    # System
+    EventType.SYSTEM_ERROR,
+    EventType.SYSTEM_WARNING,
+    # Oracle
+    EventType.ORACLE_CONSULTATION_STARTED,
+    EventType.ORACLE_CONSULTATION_COMPLETED,
+    EventType.ORACLE_CONSULTATION_FAILED,
+    # Brainstorm
+    EventType.BRAINSTORM_SESSION_CREATED,
+    EventType.BRAINSTORM_SESSION_COMPLETED,
+    EventType.BRAINSTORM_ARTIFACT_CREATED,
+})
+
 
 def get_event_level(event_type: EventType) -> EventLevel:
     """Get the level for an event type.

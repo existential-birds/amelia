@@ -101,11 +101,12 @@ def _validate_driver(value: str) -> DriverType:
     Raises:
         typer.BadParameter: If the driver is invalid.
     """
-    if value not in VALID_DRIVERS:
+    try:
+        return DriverType(value)
+    except ValueError:
         raise typer.BadParameter(
             f"Invalid driver '{value}'. Valid options: {sorted(VALID_DRIVERS)}"
-        )
-    return value  # type: ignore[return-value]
+        ) from None
 
 
 def _validate_tracker(value: str) -> TrackerType:
@@ -120,11 +121,12 @@ def _validate_tracker(value: str) -> TrackerType:
     Raises:
         typer.BadParameter: If the tracker is invalid.
     """
-    if value not in VALID_TRACKERS:
+    try:
+        return TrackerType(value)
+    except ValueError:
         raise typer.BadParameter(
             f"Invalid tracker '{value}'. Valid options: {sorted(VALID_TRACKERS)}"
-        )
-    return value  # type: ignore[return-value]
+        ) from None
 
 
 def _build_default_agents(driver: DriverType, model: str) -> dict[str, AgentConfig]:
@@ -474,7 +476,6 @@ def server_show() -> None:
             table.add_row(
                 "Log Retention Max Events", str(settings.log_retention_max_events)
             )
-            table.add_row("Trace Retention Days", str(settings.trace_retention_days))
             table.add_row(
                 "Checkpoint Retention Days", str(settings.checkpoint_retention_days)
             )
@@ -509,7 +510,6 @@ def server_set(
     Valid settings:
     - log_retention_days (int)
     - log_retention_max_events (int)
-    - trace_retention_days (int)
     - checkpoint_retention_days (int)
     - checkpoint_path (str)
     - websocket_idle_timeout_seconds (float)
@@ -521,7 +521,6 @@ def server_set(
     int_fields = {
         "log_retention_days",
         "log_retention_max_events",
-        "trace_retention_days",
         "checkpoint_retention_days",
         "max_concurrent",
     }

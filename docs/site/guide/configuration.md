@@ -165,9 +165,8 @@ amelia config server set <key> <value>
 
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
-| `log_retention_days` | int | `30` | Days to retain event logs |
+| `log_retention_days` | int | `30` | Days to retain workflow logs |
 | `log_retention_max_events` | int | `100000` | Max events per workflow |
-| `trace_retention_days` | int | `7` | Days to retain trace-level events |
 | `checkpoint_retention_days` | int | `0` | Days to retain LangGraph checkpoints |
 | `checkpoint_path` | path | `~/.amelia/checkpoints.db` | Checkpoint database location |
 | `websocket_idle_timeout_seconds` | float | `300.0` | WebSocket idle timeout |

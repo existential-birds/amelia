@@ -6,43 +6,59 @@ import pytest
 from amelia.server.database.connection import Database
 
 
-class TestEventsSchema:
-    """Tests for events table schema."""
+class TestWorkflowLogSchema:
+    """Tests for workflow_log table schema."""
 
-    async def test_events_table_has_level_column(self, db_with_schema: Database) -> None:
-        """Events table has level column."""
-        columns = await db_with_schema.fetch_all("PRAGMA table_info(events)")
-        column_names = [col["name"] for col in columns]
-        assert "level" in column_names
-
-    async def test_events_table_has_trace_columns(self, db_with_schema: Database) -> None:
-        """Events table has trace-specific columns."""
-        columns = await db_with_schema.fetch_all("PRAGMA table_info(events)")
-        column_names = [col["name"] for col in columns]
-        assert "tool_name" in column_names
-        assert "tool_input_json" in column_names
-        assert "is_error" in column_names
-
-    async def test_events_level_index_exists(self, db_with_schema: Database) -> None:
-        """Events table has index on level column."""
-        indexes = await db_with_schema.fetch_all("PRAGMA index_list(events)")
-        index_names = [idx["name"] for idx in indexes]
-        assert "idx_events_level" in index_names
-
-    async def test_events_table_has_distributed_tracing_columns(
+    async def test_workflow_log_table_has_expected_columns(
         self, db_with_schema: Database
     ) -> None:
-        """Events table has trace_id and parent_id columns."""
-        columns = await db_with_schema.fetch_all("PRAGMA table_info(events)")
+        """workflow_log table has all expected columns."""
+        columns = await db_with_schema.fetch_all("PRAGMA table_info(workflow_log)")
         column_names = [col["name"] for col in columns]
-        assert "trace_id" in column_names
-        assert "parent_id" in column_names
 
-    async def test_events_trace_id_index_exists(self, db_with_schema: Database) -> None:
-        """Events table has index on trace_id column."""
-        indexes = await db_with_schema.fetch_all("PRAGMA index_list(events)")
+        # Core columns
+        assert "id" in column_names
+        assert "workflow_id" in column_names
+        assert "sequence" in column_names
+        assert "timestamp" in column_names
+        assert "event_type" in column_names
+        assert "level" in column_names
+        assert "agent" in column_names
+        assert "message" in column_names
+        assert "data_json" in column_names
+        assert "is_error" in column_names
+
+    async def test_workflow_log_level_check_constraint(
+        self, db_with_schema: Database
+    ) -> None:
+        """workflow_log level column only accepts info/warning/error."""
+        # First insert a workflow (required for foreign key)
+        await db_with_schema.execute("""
+            INSERT INTO workflows (id, issue_id, worktree_path, status)
+            VALUES ('test-wf', 'ISSUE-1', '/path', 'in_progress')
+        """)
+
+        # Valid level should work
+        await db_with_schema.execute("""
+            INSERT INTO workflow_log (id, workflow_id, sequence, event_type, level, message)
+            VALUES ('evt-1', 'test-wf', 1, 'workflow_started', 'info', 'Test')
+        """)
+
+        # Invalid level should fail
+        import aiosqlite
+        import pytest
+        with pytest.raises(aiosqlite.IntegrityError):
+            await db_with_schema.execute("""
+                INSERT INTO workflow_log (id, workflow_id, sequence, event_type, level, message)
+                VALUES ('evt-2', 'test-wf', 2, 'workflow_started', 'debug', 'Test')
+            """)
+
+    async def test_workflow_log_indexes_exist(self, db_with_schema: Database) -> None:
+        """workflow_log table has required indexes."""
+        indexes = await db_with_schema.fetch_all("PRAGMA index_list(workflow_log)")
         index_names = [idx["name"] for idx in indexes]
-        assert "idx_events_trace_id" in index_names
+        assert "idx_workflow_log_workflow" in index_names
+        assert "idx_workflow_log_errors" in index_names
 
 
 class TestWorkflowsSchema:

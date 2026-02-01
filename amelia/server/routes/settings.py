@@ -27,7 +27,6 @@ class ServerSettingsResponse(BaseModel):
 
     log_retention_days: int
     log_retention_max_events: int
-    trace_retention_days: int
     checkpoint_retention_days: int
     checkpoint_path: str
     websocket_idle_timeout_seconds: float
@@ -41,7 +40,6 @@ class ServerSettingsUpdate(BaseModel):
 
     log_retention_days: int | None = None
     log_retention_max_events: int | None = None
-    trace_retention_days: int | None = None
     checkpoint_retention_days: int | None = None
     checkpoint_path: str | None = None
     websocket_idle_timeout_seconds: float | None = None
@@ -119,7 +117,6 @@ async def get_server_settings(
     return ServerSettingsResponse(
         log_retention_days=settings.log_retention_days,
         log_retention_max_events=settings.log_retention_max_events,
-        trace_retention_days=settings.trace_retention_days,
         checkpoint_retention_days=settings.checkpoint_retention_days,
         checkpoint_path=settings.checkpoint_path,
         websocket_idle_timeout_seconds=settings.websocket_idle_timeout_seconds,
@@ -140,7 +137,6 @@ async def update_server_settings(
     return ServerSettingsResponse(
         log_retention_days=settings.log_retention_days,
         log_retention_max_events=settings.log_retention_max_events,
-        trace_retention_days=settings.trace_retention_days,
         checkpoint_retention_days=settings.checkpoint_retention_days,
         checkpoint_path=settings.checkpoint_path,
         websocket_idle_timeout_seconds=settings.websocket_idle_timeout_seconds,

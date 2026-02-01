@@ -191,27 +191,31 @@ class TestEventBusTraceEvents:
 
         mock_manager.broadcast.assert_called_once()
 
-    @pytest.mark.asyncio
-    async def test_emit_trace_skips_persistence_when_disabled(self) -> None:
-        """emit() skips subscriber notification for trace events when retention=0."""
-        from amelia.server.models.events import EventLevel, EventType
+    def test_emit_without_connection_manager(self) -> None:
+        """emit() works when no connection manager is set."""
+        from amelia.server.models.events import EventType
 
         bus = EventBus()
-        bus.configure(trace_retention_days=0)
-        captured: list[WorkflowEvent] = []
-        bus.subscribe(lambda e: captured.append(e))
+        received = []
 
-        trace_event = WorkflowEvent(
+        def callback(event: WorkflowEvent) -> None:
+            received.append(event)
+
+        bus.subscribe(callback)
+
+        event = WorkflowEvent(
             id="evt-1",
             workflow_id="wf-1",
             sequence=1,
             timestamp=datetime.now(UTC),
-            agent="developer",
-            event_type=EventType.CLAUDE_TOOL_CALL,
-            level=EventLevel.TRACE,
-            message="Tool call",
+            agent="system",
+            event_type=EventType.WORKFLOW_STARTED,
+            message="Test event",
         )
 
-        bus.emit(trace_event)
+        # Should not raise when no connection manager is set
+        bus.emit(event)
 
-        assert len(captured) == 0  # Not persisted
+        # Subscribers should still receive the event
+        assert len(received) == 1
+        assert received[0] == event

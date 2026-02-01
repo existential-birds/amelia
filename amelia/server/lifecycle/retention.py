@@ -29,16 +29,14 @@ class ConfigProtocol(Protocol):
     log_retention_days: int
     log_retention_max_events: int
     checkpoint_retention_days: int
-    trace_retention_days: int
 
 
 class CleanupResult(BaseModel):
     """Result of cleanup operation."""
 
-    events_deleted: int
+    log_entries_deleted: int
     workflows_deleted: int
     checkpoints_deleted: int = 0
-    trace_events_deleted: int = 0
 
 
 class LogRetentionService:
@@ -76,9 +74,9 @@ class LogRetentionService:
         """Execute retention policy cleanup during server shutdown.
 
         Deletes:
-        1. Events from workflows completed/failed/cancelled more than
+        1. Log entries from workflows completed/failed/cancelled more than
            retention_days ago
-        2. Workflows that are past retention and have no remaining events
+        2. Workflows that are past retention and have no remaining log entries
         3. LangGraph checkpoints for completed/failed/cancelled workflows
 
         Returns:
@@ -94,10 +92,10 @@ class LogRetentionService:
             days=self._config.log_retention_days
         )
 
-        # Delete old events from completed/failed/cancelled workflows
-        events_deleted = await self._db.execute(
+        # Delete old log entries from completed/failed/cancelled workflows
+        log_entries_deleted = await self._db.execute(
             """
-            DELETE FROM events
+            DELETE FROM workflow_log
             WHERE workflow_id IN (
                 SELECT id FROM workflows
                 WHERE status IN ('completed', 'failed', 'cancelled')
@@ -107,13 +105,13 @@ class LogRetentionService:
             (cutoff_date.isoformat(),),
         )
 
-        # Delete workflows past retention with no remaining events
+        # Delete workflows past retention with no remaining log entries
         # Only delete workflows that are also past the retention cutoff
-        # to avoid purging recent workflows that haven't emitted events yet
+        # to avoid purging recent workflows that haven't emitted log entries yet
         workflows_deleted = await self._db.execute(
             """
             DELETE FROM workflows
-            WHERE id NOT IN (SELECT DISTINCT workflow_id FROM events)
+            WHERE id NOT IN (SELECT DISTINCT workflow_id FROM workflow_log)
             AND status IN ('completed', 'failed', 'cancelled')
             AND completed_at < ?
             """,
@@ -123,22 +121,17 @@ class LogRetentionService:
         # Clean up checkpoints based on checkpoint_retention_days setting
         checkpoints_deleted = await self._cleanup_checkpoints()
 
-        # Clean up trace events (uses separate, shorter retention period)
-        trace_events_deleted = await self._cleanup_trace_events()
-
         logger.info(
             "Cleanup complete",
-            events_deleted=events_deleted,
+            log_entries_deleted=log_entries_deleted,
             workflows_deleted=workflows_deleted,
             checkpoints_deleted=checkpoints_deleted,
-            trace_events_deleted=trace_events_deleted,
         )
 
         return CleanupResult(
-            events_deleted=events_deleted,
+            log_entries_deleted=log_entries_deleted,
             workflows_deleted=workflows_deleted,
             checkpoints_deleted=checkpoints_deleted,
-            trace_events_deleted=trace_events_deleted,
         )
 
     async def _cleanup_checkpoints(self) -> int:
@@ -219,35 +212,3 @@ class LogRetentionService:
             logger.warning("Failed to cleanup checkpoints", error=str(e))
 
         return total_deleted
-
-    async def _cleanup_trace_events(self) -> int:
-        """Delete trace-level events older than trace_retention_days.
-
-        Trace events are high-volume, low-value-for-debugging events
-        (tool calls, raw output) that should be retained for a shorter
-        period than regular events.
-
-        Returns:
-            Number of trace events deleted.
-        """
-        trace_retention_days = self._config.trace_retention_days
-        trace_cutoff_date = datetime.now(UTC) - timedelta(days=trace_retention_days)
-
-        logger.debug(
-            "Cleaning up trace events",
-            trace_retention_days=trace_retention_days,
-            cutoff_date=trace_cutoff_date.isoformat(),
-        )
-
-        # Delete trace events older than trace_retention_days
-        # This applies to all workflows regardless of status
-        deleted: int = await self._db.execute(
-            """
-            DELETE FROM events
-            WHERE level = 'trace'
-            AND timestamp < ?
-            """,
-            (trace_cutoff_date.isoformat(),),
-        )
-
-        return deleted

@@ -12,7 +12,6 @@ class ServerSettings(BaseModel):
 
     log_retention_days: int
     log_retention_max_events: int
-    trace_retention_days: int
     checkpoint_retention_days: int
     checkpoint_path: str
     websocket_idle_timeout_seconds: float
@@ -74,7 +73,6 @@ class SettingsRepository:
         valid_fields = {
             "log_retention_days",
             "log_retention_max_events",
-            "trace_retention_days",
             "checkpoint_retention_days",
             "checkpoint_path",
             "websocket_idle_timeout_seconds",
@@ -112,7 +110,6 @@ class SettingsRepository:
         return ServerSettings(
             log_retention_days=row["log_retention_days"],
             log_retention_max_events=row["log_retention_max_events"],
-            trace_retention_days=row["trace_retention_days"],
             checkpoint_retention_days=row["checkpoint_retention_days"],
             checkpoint_path=row["checkpoint_path"],
             websocket_idle_timeout_seconds=row["websocket_idle_timeout_seconds"],

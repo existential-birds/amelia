@@ -382,7 +382,6 @@ class TestServerShow:
         mock_settings = ServerSettings(
             log_retention_days=30,
             log_retention_max_events=100000,
-            trace_retention_days=7,
             checkpoint_retention_days=0,
             checkpoint_path="~/.amelia/checkpoints.db",
             websocket_idle_timeout_seconds=300.0,

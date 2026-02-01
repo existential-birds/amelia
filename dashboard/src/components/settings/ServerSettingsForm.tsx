@@ -55,7 +55,7 @@ export function ServerSettingsForm({ settings, onSave, isSaving }: ServerSetting
         <div>
           <h3 className="text-lg font-medium">Retention Policies</h3>
           <p className="text-sm text-muted-foreground">
-            Configure how long to keep logs, traces, and checkpoints.
+            Configure how long to keep logs and checkpoints.
           </p>
         </div>
 
@@ -79,25 +79,6 @@ export function ServerSettingsForm({ settings, onSave, isSaving }: ServerSetting
             </Select>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="trace_retention_days">Trace Retention</Label>
-            <Select
-              value={String(formData.trace_retention_days)}
-              onValueChange={(v) => handleChange('trace_retention_days', Number(v))}
-            >
-              <SelectTrigger id="trace_retention_days">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="0">Disabled</SelectItem>
-                {RETENTION_OPTIONS.map((days) => (
-                  <SelectItem key={days} value={String(days)}>
-                    {days} days
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
         </div>
       </section>
 
