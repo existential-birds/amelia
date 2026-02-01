@@ -1928,9 +1928,7 @@ class LiveToolPanel:
             else:
                 content = Group(
                     header,
-                    Text("\n"),
                     result_title,
-                    Text("\n"),
                     result_content,
                 )
 
@@ -1941,6 +1939,10 @@ class LiveToolPanel:
             style=Style(bgcolor="#1e1e2e"),
             padding=(0, 1),
         )
+
+    def __rich__(self) -> Panel:
+        """Return renderable for Rich Live refresh."""
+        return self._render_panel()
 
     def start(self) -> None:
         """
@@ -1956,7 +1958,7 @@ class LiveToolPanel:
         self._console.print()
 
         self._live = Live(
-            self._render_panel(),
+            self,  # Pass self so __rich__() is called each refresh frame
             console=self._console,
             refresh_per_second=10,
             transient=True,
