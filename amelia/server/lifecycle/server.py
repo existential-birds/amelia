@@ -73,7 +73,7 @@ class ServerLifecycle:
         # Wait for blocked workflows with timeout
         active = self._orchestrator.get_active_workflows()
         if active:
-            logger.info(f"Waiting for {len(active)} active workflows...")
+            logger.info("Waiting for active workflows...", count=len(active))
             try:
                 await asyncio.wait_for(
                     self._wait_for_workflows_to_finish(),

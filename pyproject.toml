@@ -55,6 +55,14 @@ addopts = "-m 'not integration'"
 markers = [
     "integration: marks tests as integration tests requiring external services (deselect with '-m \"not integration\"')",
 ]
+filterwarnings = [
+    # External dependencies we can't fix
+    "ignore:websockets.legacy is deprecated:DeprecationWarning",
+    "ignore:websockets.server.WebSocketServerProtocol is deprecated:DeprecationWarning",
+    # Test isolation issues - event loops/connections from previous tests
+    "ignore:unclosed event loop:ResourceWarning",
+    "ignore:unclosed database:ResourceWarning",
+]
 
 [tool.ruff]
 target-version = "py312"

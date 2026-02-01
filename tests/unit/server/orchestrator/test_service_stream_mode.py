@@ -20,7 +20,7 @@ def mock_repository():
 def mock_event_bus():
     """Create mock event bus."""
     bus = MagicMock()
-    bus.emit = AsyncMock()
+    bus.emit = MagicMock()  # emit is sync, not async
     bus.emit_stream = MagicMock()
     return bus
 

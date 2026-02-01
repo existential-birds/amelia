@@ -11,7 +11,7 @@ from amelia.agents.prompts.models import (
     PromptVersion,
     WorkflowPromptVersion,
 )
-from amelia.server.database.connection import Database
+from amelia.server.database.connection import Database, parse_timestamp
 
 
 class PromptRepository:
@@ -106,7 +106,7 @@ class PromptRepository:
                 prompt_id=row["prompt_id"],
                 version_number=row["version_number"],
                 content=row["content"],
-                created_at=datetime.fromisoformat(row["created_at"]) if row["created_at"] else datetime.now(UTC),
+                created_at=parse_timestamp(row["created_at"]) if row["created_at"] else datetime.now(UTC),
                 change_note=row["change_note"],
             )
             for row in rows
@@ -131,7 +131,7 @@ class PromptRepository:
             prompt_id=row["prompt_id"],
             version_number=row["version_number"],
             content=row["content"],
-            created_at=datetime.fromisoformat(row["created_at"]) if row["created_at"] else datetime.now(UTC),
+            created_at=parse_timestamp(row["created_at"]) if row["created_at"] else datetime.now(UTC),
             change_note=row["change_note"],
         )
 

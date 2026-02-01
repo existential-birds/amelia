@@ -31,7 +31,7 @@ class TestSetWorkflowPlan:
     def mock_orchestrator(self, mock_repository: MagicMock) -> OrchestratorService:
         """Create orchestrator with mocked dependencies."""
         mock_event_bus = MagicMock()
-        mock_event_bus.emit = AsyncMock()
+        mock_event_bus.emit = MagicMock()  # emit is sync, not async
         mock_profile_repo = MagicMock()
         mock_profile_repo.get_profile = AsyncMock()
 

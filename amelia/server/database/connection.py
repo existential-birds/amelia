@@ -13,6 +13,35 @@ from loguru import logger
 from amelia.agents.prompts.defaults import PROMPT_DEFAULTS
 
 
+# Register custom datetime adapters/converters for Python 3.12+
+# The default adapters are deprecated as of Python 3.12
+def _adapt_datetime(val: datetime) -> str:
+    """Convert datetime to ISO 8601 string for SQLite storage."""
+    return val.isoformat(" ")
+
+
+def _convert_datetime(val: bytes) -> datetime:
+    """Convert SQLite timestamp bytes to datetime object."""
+    return datetime.fromisoformat(val.decode())
+
+
+# Register globally before any connections are made
+sqlite3.register_adapter(datetime, _adapt_datetime)
+sqlite3.register_converter("TIMESTAMP", _convert_datetime)
+
+
+def parse_timestamp(val: str | datetime) -> datetime:
+    """Parse a timestamp value that may be a string or already a datetime.
+
+    With detect_types=PARSE_DECLTYPES, SQLite auto-converts TIMESTAMP columns
+    to datetime. This helper handles both the converted case (datetime) and
+    the legacy case (string) for backwards compatibility.
+    """
+    if isinstance(val, datetime):
+        return val
+    return datetime.fromisoformat(val)
+
+
 # Type alias for SQLite-compatible values
 SqliteValue = None | int | float | str | bytes | datetime
 
@@ -48,6 +77,7 @@ class Database:
         self._connection = await aiosqlite.connect(
             self._db_path,
             isolation_level=None,  # Autocommit mode (we manage transactions)
+            detect_types=sqlite3.PARSE_DECLTYPES,  # Enable datetime converters
         )
 
         # Enable row factory for dict-like access
@@ -623,7 +653,7 @@ class Database:
                     "To delete the database, run: rm {database_path}",
                     database_path=str(self._db_path),
                 )
-        except Exception as e:
+        except sqlite3.Error as e:
             logger.debug("Failed to check profiles schema", error=str(e))
 
     async def initialize_prompts(self) -> None:

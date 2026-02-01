@@ -236,7 +236,7 @@ async def update_profile(
         active = await repo.get_active_profile()
         return _profile_to_response(updated, is_active=(active is not None and active.name == profile_id))
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from None
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
 
 @router.delete("/profiles/{profile_id}", status_code=204)
@@ -264,7 +264,7 @@ async def activate_profile(
         # After activation, this profile is definitely active
         return _profile_to_response(profile, is_active=True)
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from None
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
 
 def _profile_to_response(profile: Profile, is_active: bool = False) -> ProfileResponse:

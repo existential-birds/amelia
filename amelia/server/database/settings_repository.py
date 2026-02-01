@@ -5,7 +5,7 @@ from typing import Any
 import aiosqlite
 from pydantic import BaseModel
 
-from amelia.server.database.connection import Database
+from amelia.server.database.connection import Database, parse_timestamp
 
 
 class ServerSettings(BaseModel):
@@ -117,6 +117,6 @@ class SettingsRepository:
             workflow_start_timeout_seconds=row["workflow_start_timeout_seconds"],
             max_concurrent=row["max_concurrent"],
             stream_tool_results=bool(row["stream_tool_results"]),
-            created_at=datetime.fromisoformat(row["created_at"]),
-            updated_at=datetime.fromisoformat(row["updated_at"]),
+            created_at=parse_timestamp(row["created_at"]),
+            updated_at=parse_timestamp(row["updated_at"]),
         )

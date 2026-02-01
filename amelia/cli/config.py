@@ -105,7 +105,7 @@ def _validate_driver(value: str) -> DriverType:
         return DriverType(value)
     except ValueError:
         raise typer.BadParameter(
-            f"Invalid driver '{value}'. Valid options: {sorted(VALID_DRIVERS)}"
+            f"Invalid driver '{value}'. Valid options: {sorted(d.value for d in VALID_DRIVERS)}"
         ) from None
 
 
@@ -125,7 +125,7 @@ def _validate_tracker(value: str) -> TrackerType:
         return TrackerType(value)
     except ValueError:
         raise typer.BadParameter(
-            f"Invalid tracker '{value}'. Valid options: {sorted(VALID_TRACKERS)}"
+            f"Invalid tracker '{value}'. Valid options: {sorted(t.value for t in VALID_TRACKERS)}"
         ) from None
 
 
@@ -387,7 +387,7 @@ def profile_activate(
             console.print(f"[green]Profile '{name}' is now active.[/green]")
         except ValueError as e:
             console.print(f"[red]{e}[/red]")
-            raise typer.Exit(code=1) from None
+            raise typer.Exit(code=1) from e
         finally:
             await db.close()
 
@@ -565,7 +565,7 @@ def server_set(
             console.print(f"[green]Set {setting} = {parsed_value}[/green]")
         except ValueError as e:
             console.print(f"[red]{e}[/red]")
-            raise typer.Exit(code=1) from None
+            raise typer.Exit(code=1) from e
         finally:
             await db.close()
 

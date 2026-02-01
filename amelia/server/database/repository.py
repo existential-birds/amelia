@@ -6,7 +6,7 @@ from typing import Any
 
 import aiosqlite
 
-from amelia.server.database.connection import Database, SqliteValue
+from amelia.server.database.connection import Database, SqliteValue, parse_timestamp
 from amelia.server.exceptions import WorkflowNotFoundError
 from amelia.server.models.events import PERSISTED_TYPES, WorkflowEvent
 from amelia.server.models.state import (
@@ -790,7 +790,7 @@ class WorkflowRepository:
             cost_usd=row["cost_usd"],
             duration_ms=row["duration_ms"],
             num_turns=row["num_turns"],
-            timestamp=datetime.fromisoformat(row["timestamp"]),
+            timestamp=parse_timestamp(row["timestamp"]),
         )
 
     # =========================================================================

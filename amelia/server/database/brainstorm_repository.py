@@ -5,11 +5,10 @@ messages, and artifacts.
 """
 
 import json
-from datetime import datetime
 
 import aiosqlite
 
-from amelia.server.database.connection import Database
+from amelia.server.database.connection import Database, parse_timestamp
 from amelia.server.models.brainstorm import (
     Artifact,
     BrainstormingSession,
@@ -185,8 +184,8 @@ class BrainstormRepository:
             driver_type=row["driver_type"],
             status=row["status"],
             topic=row["topic"],
-            created_at=datetime.fromisoformat(row["created_at"]),
-            updated_at=datetime.fromisoformat(row["updated_at"]),
+            created_at=parse_timestamp(row["created_at"]),
+            updated_at=parse_timestamp(row["updated_at"]),
         )
 
     # =========================================================================
@@ -300,7 +299,7 @@ class BrainstormRepository:
             content=row["content"],
             parts=parts,
             usage=usage,
-            created_at=datetime.fromisoformat(row["created_at"]),
+            created_at=parse_timestamp(row["created_at"]),
         )
 
     # =========================================================================
@@ -364,7 +363,7 @@ class BrainstormRepository:
             type=row["type"],
             path=row["path"],
             title=row["title"],
-            created_at=datetime.fromisoformat(row["created_at"]),
+            created_at=parse_timestamp(row["created_at"]),
         )
 
     # =========================================================================
