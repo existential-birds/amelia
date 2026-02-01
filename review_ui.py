@@ -1995,6 +1995,103 @@ class LiveToolPanel:
 
 
 # =============================================================================
+# LiveToolPanelRegistry Class
+# =============================================================================
+
+
+class LiveToolPanelRegistry:
+    """
+    Registry for tracking multiple concurrent tool panels.
+
+    Provides a central registry for LiveToolPanel instances, indexed by
+    tool_use_id. This enables correlation between ToolUseBlock and
+    ToolResultBlock events when processing streaming responses.
+
+    Usage:
+        registry = LiveToolPanelRegistry(console, quiet_mode=False)
+        panel = registry.create("tool-123", "Bash", {"command": "ls"})
+        # ... tool executes ...
+        panel.set_result("file1.txt", is_error=False)
+        panel.finish()
+        registry.remove("tool-123")
+    """
+
+    def __init__(self, console: Console, quiet_mode: bool = False) -> None:
+        """
+        Initialize the registry.
+
+        Args:
+            console: Rich Console instance for creating panels.
+            quiet_mode: If True, panels use static display instead of Live updates.
+        """
+        self._console = console
+        self._quiet_mode = quiet_mode
+        self._panels: dict[str, LiveToolPanel] = {}
+
+    def create(
+        self,
+        tool_use_id: str,
+        name: str,
+        args: dict[str, object],
+    ) -> LiveToolPanel:
+        """
+        Create and register a new panel, then start it.
+
+        Args:
+            tool_use_id: Unique identifier for the tool use.
+            name: Name of the tool being called.
+            args: Dictionary of arguments passed to the tool.
+
+        Returns:
+            The created and started LiveToolPanel.
+        """
+        panel = LiveToolPanel(
+            console=self._console,
+            tool_use_id=tool_use_id,
+            name=name,
+            args=args,
+            quiet_mode=self._quiet_mode,
+        )
+        self._panels[tool_use_id] = panel
+        panel.start()
+        return panel
+
+    def get(self, tool_use_id: str) -> LiveToolPanel | None:
+        """
+        Get a panel by its tool_use_id.
+
+        Args:
+            tool_use_id: The unique identifier of the tool use.
+
+        Returns:
+            The LiveToolPanel if found, None otherwise.
+        """
+        return self._panels.get(tool_use_id)
+
+    def remove(self, tool_use_id: str) -> None:
+        """
+        Remove a panel from the registry.
+
+        Call this after finishing a panel to clean up the registry.
+
+        Args:
+            tool_use_id: The unique identifier of the tool use to remove.
+        """
+        self._panels.pop(tool_use_id, None)
+
+    def finish_all(self) -> None:
+        """
+        Finalize all remaining panels.
+
+        Calls finish() on each panel and clears the registry.
+        Use this for cleanup when a response ends unexpectedly.
+        """
+        for panel in self._panels.values():
+            panel.finish()
+        self._panels.clear()
+
+
+# =============================================================================
 # NeonProgress Context Manager
 # =============================================================================
 

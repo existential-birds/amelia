@@ -1,18 +1,16 @@
-"""Tests for LiveToolPanel in review_ui.py."""
+"""Tests for LiveToolPanel and LiveToolPanelRegistry in review_ui.py."""
 
 from unittest.mock import MagicMock, patch
 
-import pytest
 from rich.console import Console
 from rich.live import Live
 from rich.panel import Panel
-from rich.text import Text
 
 from review_ui import (
-    LiveToolPanel,
-    NeonThrobber,
     NEON_COLORS,
-    print_tool_call,
+    LiveToolPanel,
+    LiveToolPanelRegistry,
+    NeonThrobber,
 )
 
 
@@ -318,3 +316,212 @@ class TestLiveToolPanelResultTruncation:
         rendered = panel._render_panel()
         assert isinstance(rendered, Panel)
         # Content should show truncation indicator
+
+
+# =============================================================================
+# LiveToolPanelRegistry Tests
+# =============================================================================
+
+
+class TestLiveToolPanelRegistryInit:
+    """Tests for LiveToolPanelRegistry initialization."""
+
+    def test_init_stores_console_and_quiet_mode(self) -> None:
+        """Registry should store console and quiet_mode for creating panels."""
+        console = Console()
+        registry = LiveToolPanelRegistry(console=console, quiet_mode=True)
+
+        assert registry._console is console
+        assert registry._quiet_mode is True
+        assert registry._panels == {}
+
+    def test_init_defaults_quiet_mode_false(self) -> None:
+        """quiet_mode should default to False."""
+        console = Console()
+        registry = LiveToolPanelRegistry(console=console)
+
+        assert registry._quiet_mode is False
+
+
+class TestLiveToolPanelRegistryCreate:
+    """Tests for LiveToolPanelRegistry.create method."""
+
+    def test_create_returns_new_panel(self) -> None:
+        """create() should return a new LiveToolPanel."""
+        console = Console(force_terminal=True)
+        registry = LiveToolPanelRegistry(console=console, quiet_mode=True)
+
+        panel = registry.create(
+            tool_use_id="tool-123",
+            name="Bash",
+            args={"command": "ls", "description": "List files"},
+        )
+
+        assert isinstance(panel, LiveToolPanel)
+        assert panel._tool_use_id == "tool-123"
+        assert panel._name == "Bash"
+        assert panel._args == {"command": "ls", "description": "List files"}
+
+    def test_create_registers_panel(self) -> None:
+        """create() should register the panel in _panels dict."""
+        console = Console(force_terminal=True)
+        registry = LiveToolPanelRegistry(console=console, quiet_mode=True)
+
+        panel = registry.create(
+            tool_use_id="tool-123",
+            name="Bash",
+            args={"command": "ls"},
+        )
+
+        assert registry._panels["tool-123"] is panel
+
+    def test_create_starts_panel_automatically(self) -> None:
+        """create() should call start() on the panel."""
+        console = Console(force_terminal=True)
+        registry = LiveToolPanelRegistry(console=console, quiet_mode=True)
+
+        with patch("review_ui.print_tool_call") as mock_print:
+            registry.create(
+                tool_use_id="tool-123",
+                name="Bash",
+                args={"command": "ls"},
+            )
+
+        # In quiet mode, start() calls print_tool_call
+        mock_print.assert_called_once_with(
+            console, "Bash", {"command": "ls"}, quiet_mode=True
+        )
+
+    def test_create_inherits_quiet_mode(self) -> None:
+        """Created panels should inherit quiet_mode from registry."""
+        console = Console(force_terminal=True)
+        registry = LiveToolPanelRegistry(console=console, quiet_mode=True)
+
+        panel = registry.create(
+            tool_use_id="tool-123",
+            name="Read",
+            args={"file_path": "/test.py"},
+        )
+
+        assert panel._quiet_mode is True
+
+    def test_create_multiple_concurrent_panels(self) -> None:
+        """Registry should track multiple concurrent panels."""
+        console = Console(force_terminal=True)
+        registry = LiveToolPanelRegistry(console=console, quiet_mode=True)
+
+        panel1 = registry.create("tool-1", "Bash", {"command": "ls"})
+        panel2 = registry.create("tool-2", "Read", {"file_path": "/test.py"})
+        panel3 = registry.create("tool-3", "Write", {"file_path": "/out.py", "content": ""})
+
+        assert len(registry._panels) == 3
+        assert registry._panels["tool-1"] is panel1
+        assert registry._panels["tool-2"] is panel2
+        assert registry._panels["tool-3"] is panel3
+
+
+class TestLiveToolPanelRegistryGet:
+    """Tests for LiveToolPanelRegistry.get method."""
+
+    def test_get_returns_panel_by_id(self) -> None:
+        """get() should return the panel with the given tool_use_id."""
+        console = Console(force_terminal=True)
+        registry = LiveToolPanelRegistry(console=console, quiet_mode=True)
+
+        panel = registry.create("tool-123", "Bash", {"command": "ls"})
+
+        assert registry.get("tool-123") is panel
+
+    def test_get_returns_none_for_unknown_id(self) -> None:
+        """get() should return None for unknown tool_use_id."""
+        console = Console(force_terminal=True)
+        registry = LiveToolPanelRegistry(console=console, quiet_mode=True)
+
+        assert registry.get("unknown-id") is None
+
+
+class TestLiveToolPanelRegistryRemove:
+    """Tests for LiveToolPanelRegistry.remove method."""
+
+    def test_remove_removes_panel_from_registry(self) -> None:
+        """remove() should remove the panel from _panels dict."""
+        console = Console(force_terminal=True)
+        registry = LiveToolPanelRegistry(console=console, quiet_mode=True)
+
+        registry.create("tool-123", "Bash", {"command": "ls"})
+        registry.remove("tool-123")
+
+        assert "tool-123" not in registry._panels
+
+    def test_remove_unknown_id_is_noop(self) -> None:
+        """remove() with unknown id should not raise."""
+        console = Console(force_terminal=True)
+        registry = LiveToolPanelRegistry(console=console, quiet_mode=True)
+
+        # Should not raise
+        registry.remove("unknown-id")
+
+
+class TestLiveToolPanelRegistryFinishAll:
+    """Tests for LiveToolPanelRegistry.finish_all method."""
+
+    def test_finish_all_finishes_all_panels(self) -> None:
+        """finish_all() should call finish() on all remaining panels."""
+        console = Console(force_terminal=True)
+        registry = LiveToolPanelRegistry(console=console, quiet_mode=True)
+
+        panel1 = registry.create("tool-1", "Bash", {"command": "ls"})
+        panel2 = registry.create("tool-2", "Read", {"file_path": "/test.py"})
+
+        # Mock finish method on panels
+        panel1.finish = MagicMock()
+        panel2.finish = MagicMock()
+
+        registry.finish_all()
+
+        panel1.finish.assert_called_once()
+        panel2.finish.assert_called_once()
+
+    def test_finish_all_clears_panels_dict(self) -> None:
+        """finish_all() should clear the _panels dict."""
+        console = Console(force_terminal=True)
+        registry = LiveToolPanelRegistry(console=console, quiet_mode=True)
+
+        registry.create("tool-1", "Bash", {"command": "ls"})
+        registry.create("tool-2", "Read", {"file_path": "/test.py"})
+
+        registry.finish_all()
+
+        assert registry._panels == {}
+
+    def test_finish_all_with_no_panels_is_noop(self) -> None:
+        """finish_all() with no panels should not raise."""
+        console = Console(force_terminal=True)
+        registry = LiveToolPanelRegistry(console=console, quiet_mode=True)
+
+        # Should not raise
+        registry.finish_all()
+
+
+class TestLiveToolPanelRegistryQuietMode:
+    """Tests for quiet mode behavior in LiveToolPanelRegistry."""
+
+    def test_quiet_mode_creates_quiet_panels(self) -> None:
+        """In quiet mode, created panels should use static display."""
+        console = Console(force_terminal=True)
+        registry = LiveToolPanelRegistry(console=console, quiet_mode=True)
+
+        panel = registry.create("tool-123", "Bash", {"command": "ls"})
+
+        assert panel._quiet_mode is True
+        assert panel._live is None  # No Live context in quiet mode
+
+    def test_non_quiet_mode_creates_live_panels(self) -> None:
+        """In non-quiet mode, created panels should use Live updates."""
+        console = Console(force_terminal=True)
+        registry = LiveToolPanelRegistry(console=console, quiet_mode=False)
+
+        with patch.object(Live, "start"):
+            panel = registry.create("tool-123", "Bash", {"command": "ls"})
+
+        assert panel._quiet_mode is False
