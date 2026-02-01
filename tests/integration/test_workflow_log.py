@@ -487,10 +487,6 @@ class TestReasonableRowCount:
             "This suggests trace events may be leaking into persistence."
         )
 
-        # Log actual count for visibility
-        print(f"Persisted event count: {len(events)}")
-        print(f"Event types: {[e.event_type.value for e in events]}")
-
     async def test_persisted_types_is_bounded(self) -> None:
         """Verify PERSISTED_TYPES has a reasonable number of event types.
 

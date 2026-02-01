@@ -50,8 +50,8 @@ class LogRetentionService:
 
     def __init__(
         self,
-        db: Any,
-        config: Any,
+        db: DatabaseProtocol,
+        config: ConfigProtocol,
         checkpoint_path: Path | str | None = None,
     ) -> None:
         """Initialize retention service.
@@ -207,7 +207,7 @@ class LogRetentionService:
                 total_deleted += cursor.rowcount
 
                 await conn.commit()
-        except Exception as e:
+        except aiosqlite.Error as e:
             # Log but don't fail shutdown on checkpoint cleanup errors
             logger.warning("Failed to cleanup checkpoints", error=str(e))
 

@@ -108,7 +108,7 @@ class Database:
             cursor = await self._connection.execute("SELECT 1")
             result = await cursor.fetchone()
             return result is not None and result[0] == 1
-        except Exception:
+        except aiosqlite.Error:
             return False
 
     async def execute(
