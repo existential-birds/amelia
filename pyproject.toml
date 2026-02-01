@@ -38,6 +38,7 @@ dev = [
     "mypy>=1.13.0",
     "types-PyYAML>=6.0.0",
     "types-psutil>=6.1.0",
+    "pyfiglet>=1.0.4",
 ]
 
 [build-system]
