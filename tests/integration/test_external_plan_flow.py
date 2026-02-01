@@ -72,7 +72,7 @@ async def setup_test_profile(test_profile_repository: ProfileRepository) -> Prof
     """
     profile = Profile(
         name="test",
-        tracker=TrackerType.NONE,
+        tracker=TrackerType.NOOP,
         working_dir="/tmp/test",  # Will be overridden by worktree_path
         agents={
             "architect": AgentConfig(driver=DriverType.CLI, model="sonnet"),
@@ -205,10 +205,10 @@ class TestExternalPlanAtCreation:
         # Verify workflow was created with external plan flag
         workflow = await test_repository.get(workflow_id)
         assert workflow is not None
-        assert workflow.execution_state is not None
-        assert workflow.execution_state.external_plan is True
-        assert workflow.execution_state.goal == "Do thing"
-        assert workflow.execution_state.plan_markdown == plan_content
+        assert workflow.plan_cache is not None
+        assert workflow.plan_cache.plan_path is not None  # plan_path presence indicates external plan
+        assert workflow.plan_cache.goal == "Do thing"
+        assert workflow.plan_cache.plan_markdown == plan_content
 
     async def test_create_workflow_with_plan_file_sets_external_flag(
         self,
@@ -257,9 +257,9 @@ class TestExternalPlanAtCreation:
         # Verify workflow was created with external plan flag
         workflow = await test_repository.get(workflow_id)
         assert workflow is not None
-        assert workflow.execution_state is not None
-        assert workflow.execution_state.external_plan is True
-        assert workflow.execution_state.goal == "Create module"
+        assert workflow.plan_cache is not None
+        assert workflow.plan_cache.plan_path is not None  # plan_path presence indicates external plan
+        assert workflow.plan_cache.goal == "Create module"
 
     async def test_create_workflow_without_plan_has_external_flag_false(
         self,
@@ -292,8 +292,8 @@ class TestExternalPlanAtCreation:
         # Verify workflow was created without external plan flag
         workflow = await test_repository.get(workflow_id)
         assert workflow is not None
-        assert workflow.execution_state is not None
-        assert workflow.execution_state.external_plan is False
+        # No plan_cache means no external plan was set
+        assert workflow.plan_cache is None
 
     async def test_create_workflow_with_both_plan_file_and_content_returns_422(
         self,
@@ -360,8 +360,8 @@ class TestSetPlanEndpoint:
         # Verify workflow starts without external plan
         workflow = await test_repository.get(workflow_id)
         assert workflow is not None
-        assert workflow.execution_state is not None
-        assert workflow.execution_state.external_plan is False
+        # No plan_cache means no external plan was set yet
+        assert workflow.plan_cache is None
 
         # Now set the plan
         plan_content = "# Plan\n\n### Task 1: Implement feature\n\nDo it."
@@ -389,9 +389,9 @@ class TestSetPlanEndpoint:
         # Verify workflow now has external plan
         workflow = await test_repository.get(workflow_id)
         assert workflow is not None
-        assert workflow.execution_state is not None
-        assert workflow.execution_state.external_plan is True
-        assert workflow.execution_state.goal == "Implement feature"
+        assert workflow.plan_cache is not None
+        assert workflow.plan_cache.plan_path is not None  # plan_path presence indicates external plan
+        assert workflow.plan_cache.goal == "Implement feature"
 
     async def test_set_plan_on_nonexistent_workflow_returns_404(
         self,
@@ -507,8 +507,8 @@ class TestSetPlanEndpoint:
         # Verify plan was updated
         workflow = await test_repository.get(workflow_id)
         assert workflow is not None
-        assert workflow.execution_state is not None
-        assert workflow.execution_state.goal == "Second thing"
+        assert workflow.plan_cache is not None
+        assert workflow.plan_cache.goal == "Second thing"
 
 
 @pytest.mark.integration
@@ -646,5 +646,5 @@ Write unit tests.
         # Verify task count
         workflow = await test_repository.get(workflow_id)
         assert workflow is not None
-        assert workflow.execution_state is not None
-        assert workflow.execution_state.total_tasks == 3
+        assert workflow.plan_cache is not None
+        assert workflow.plan_cache.total_tasks == 3

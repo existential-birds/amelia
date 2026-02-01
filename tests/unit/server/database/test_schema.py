@@ -91,7 +91,7 @@ class TestWorkflowsSchema:
 class TestWorktreeConstraints:
     """Tests for worktree uniqueness constraints."""
 
-    async def test_unique_constraint_blocks_two_in_progress(self, db_with_schema) -> None:
+    async def test_unique_constraint_blocks_two_in_progress(self, db_with_schema: Database) -> None:
         """Two in_progress workflows on same worktree should fail."""
         # Insert first in_progress workflow
         await db_with_schema.execute("""

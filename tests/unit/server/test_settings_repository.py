@@ -1,5 +1,6 @@
 """Tests for SettingsRepository."""
 import tempfile
+from collections.abc import AsyncGenerator
 from pathlib import Path
 
 import pytest
@@ -9,7 +10,7 @@ from amelia.server.database.settings_repository import ServerSettings, SettingsR
 
 
 @pytest.fixture
-async def db():
+async def db() -> AsyncGenerator[Database, None]:
     """Create an in-memory database for testing."""
     with tempfile.TemporaryDirectory() as tmpdir:
         db = Database(Path(tmpdir) / "test.db")

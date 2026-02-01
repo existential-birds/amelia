@@ -6,6 +6,7 @@ claude_thinking, claude_tool_call, etc.) are stream-only and not persisted
 to the workflow_log table.
 """
 
+from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
 from uuid import uuid4
 
@@ -20,7 +21,7 @@ from amelia.server.models.events import (
     EventLevel,
     WorkflowEvent,
 )
-from amelia.server.models.state import ServerExecutionState
+from amelia.server.models.state import ServerExecutionState, WorkflowStatus
 
 
 # Stream-only event types that should NOT be persisted
@@ -47,7 +48,7 @@ class TestEventFiltering:
     """Tests for save_event filtering based on PERSISTED_TYPES."""
 
     @pytest.fixture
-    async def db(self, temp_db_path) -> Database:
+    async def db(self, temp_db_path) -> AsyncGenerator[Database, None]:
         """Database with schema initialized."""
         async with Database(temp_db_path) as db:
             await db.ensure_schema()
@@ -65,7 +66,7 @@ class TestEventFiltering:
             id=f"wf-{uuid4().hex[:8]}",
             issue_id="ISSUE-FILTER-TEST",
             worktree_path="/path/to/filter-test",
-            workflow_status="in_progress",
+            workflow_status=WorkflowStatus.IN_PROGRESS,
             started_at=datetime.now(UTC),
         )
         await repository.create(state)
@@ -159,7 +160,7 @@ class TestWorkflowLogSchemaConstraints:
     """Tests for workflow_log table CHECK constraints."""
 
     @pytest.fixture
-    async def db(self, temp_db_path) -> Database:
+    async def db(self, temp_db_path) -> AsyncGenerator[Database, None]:
         """Database with schema initialized."""
         async with Database(temp_db_path) as db:
             await db.ensure_schema()
@@ -274,7 +275,7 @@ class TestEventLevelMapping:
     """Tests for EventLevel to workflow_log level mapping."""
 
     @pytest.fixture
-    async def db(self, temp_db_path) -> Database:
+    async def db(self, temp_db_path) -> AsyncGenerator[Database, None]:
         """Database with schema initialized."""
         async with Database(temp_db_path) as db:
             await db.ensure_schema()

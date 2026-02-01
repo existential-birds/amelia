@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from typer.testing import CliRunner
 
-from amelia.core.types import AgentConfig, Profile
+from amelia.core.types import AgentConfig, DriverType, Profile, TrackerType
 from amelia.main import app
 
 
@@ -73,22 +73,22 @@ class TestProfileList:
         mock_profiles = [
             Profile(
                 name="test-profile",
-                tracker="noop",
+                tracker=TrackerType.NOOP,
                 working_dir="/tmp/test",
                 agents={
-                    "architect": AgentConfig(driver="cli", model="sonnet"),
-                    "developer": AgentConfig(driver="cli", model="sonnet"),
-                    "reviewer": AgentConfig(driver="cli", model="sonnet"),
+                    "architect": AgentConfig(driver=DriverType.CLI, model="sonnet"),
+                    "developer": AgentConfig(driver=DriverType.CLI, model="sonnet"),
+                    "reviewer": AgentConfig(driver=DriverType.CLI, model="sonnet"),
                 },
             ),
             Profile(
                 name="prod-profile",
-                tracker="github",
+                tracker=TrackerType.GITHUB,
                 working_dir="/home/user/project",
                 agents={
-                    "architect": AgentConfig(driver="api", model="anthropic/claude-sonnet-4-20250514"),
-                    "developer": AgentConfig(driver="api", model="anthropic/claude-sonnet-4-20250514"),
-                    "reviewer": AgentConfig(driver="api", model="anthropic/claude-sonnet-4-20250514"),
+                    "architect": AgentConfig(driver=DriverType.API, model="anthropic/claude-sonnet-4-20250514"),
+                    "developer": AgentConfig(driver=DriverType.API, model="anthropic/claude-sonnet-4-20250514"),
+                    "reviewer": AgentConfig(driver=DriverType.API, model="anthropic/claude-sonnet-4-20250514"),
                 },
             ),
         ]
@@ -143,14 +143,14 @@ class TestProfileShow:
         # ProfileRepository.get_profile returns Profile object, not ProfileRecord
         mock_profile = Profile(
             name="my-profile",
-            tracker="github",
+            tracker=TrackerType.GITHUB,
             working_dir="/home/user/code",
             plan_output_dir="docs/plans",
             agents={
-                "architect": AgentConfig(driver="cli", model="sonnet"),
-                "developer": AgentConfig(driver="cli", model="sonnet"),
-                "reviewer": AgentConfig(driver="cli", model="sonnet"),
-                "plan_validator": AgentConfig(driver="cli", model="opus"),
+                "architect": AgentConfig(driver=DriverType.CLI, model="sonnet"),
+                "developer": AgentConfig(driver=DriverType.CLI, model="sonnet"),
+                "reviewer": AgentConfig(driver=DriverType.CLI, model="sonnet"),
+                "plan_validator": AgentConfig(driver=DriverType.CLI, model="opus"),
             },
         )
 
@@ -191,13 +191,13 @@ class TestProfileCreate:
         # create_profile returns Profile, not ProfileRecord
         created_profile = Profile(
             name="new-profile",
-            tracker="noop",
+            tracker=TrackerType.NOOP,
             working_dir="/tmp",
             agents={
-                "architect": AgentConfig(driver="cli", model="sonnet"),
-                "developer": AgentConfig(driver="cli", model="sonnet"),
-                "reviewer": AgentConfig(driver="cli", model="sonnet"),
-                "plan_validator": AgentConfig(driver="cli", model="sonnet"),
+                "architect": AgentConfig(driver=DriverType.CLI, model="sonnet"),
+                "developer": AgentConfig(driver=DriverType.CLI, model="sonnet"),
+                "reviewer": AgentConfig(driver=DriverType.CLI, model="sonnet"),
+                "plan_validator": AgentConfig(driver=DriverType.CLI, model="sonnet"),
             },
         )
 
@@ -226,12 +226,12 @@ class TestProfileCreate:
         # get_profile returns Profile, not ProfileRecord
         existing_profile = Profile(
             name="existing",
-            tracker="noop",
+            tracker=TrackerType.NOOP,
             working_dir="/tmp",
             agents={
-                "architect": AgentConfig(driver="cli", model="sonnet"),
-                "developer": AgentConfig(driver="cli", model="sonnet"),
-                "reviewer": AgentConfig(driver="cli", model="sonnet"),
+                "architect": AgentConfig(driver=DriverType.CLI, model="sonnet"),
+                "developer": AgentConfig(driver=DriverType.CLI, model="sonnet"),
+                "reviewer": AgentConfig(driver=DriverType.CLI, model="sonnet"),
             },
         )
 

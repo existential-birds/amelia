@@ -27,7 +27,7 @@ import signal
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import TextIO
+from typing import Any, TextIO
 
 import anyio
 from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient
@@ -258,17 +258,17 @@ async def run_agent(cwd: Path, prompt: str) -> str:
 
                 elif isinstance(msg, UserMessage):
                     # User messages contain tool results
-                    for block in msg.content:
-                        if isinstance(block, ToolResultBlock):
-                            content_str = str(block.content) if block.content else ""
-                            panel = tool_registry.get(block.tool_use_id)
+                    for user_block in msg.content:
+                        if isinstance(user_block, ToolResultBlock):
+                            content_str = str(user_block.content) if user_block.content else ""
+                            panel = tool_registry.get(user_block.tool_use_id)
                             if panel:
-                                panel.set_result(content_str, block.is_error or False)
+                                panel.set_result(content_str, user_block.is_error or False)
                                 panel.finish()
-                                tool_registry.remove(block.tool_use_id)
+                                tool_registry.remove(user_block.tool_use_id)
                             else:
-                                _log_debug(f"[WARN] No panel found for tool_use_id={block.tool_use_id}\n")
-                            error_marker = " [ERROR]" if block.is_error else ""
+                                _log_debug(f"[WARN] No panel found for tool_use_id={user_block.tool_use_id}\n")
+                            error_marker = " [ERROR]" if user_block.is_error else ""
                             _log_debug(f"[TOOL_RESULT{error_marker}] {content_str}\n")
 
                 elif isinstance(msg, ResultMessage) and msg.total_cost_usd:
@@ -293,7 +293,7 @@ async def run_agent(cwd: Path, prompt: str) -> str:
     return "".join(output_parts)
 
 
-def extract_json_from_output(output: str) -> list[dict]:
+def extract_json_from_output(output: str) -> list[dict[str, Any]]:
     """Extract JSON array from agent output, handling markdown code fences.
 
     Args:
@@ -363,7 +363,7 @@ Write the full review output to {REVIEW_OUTPUT_FILE} in the project root.
         print_warning(console, "Review output file was not created")
 
 
-async def phase_parse_feedback(cwd: Path) -> list[dict]:
+async def phase_parse_feedback(cwd: Path) -> list[dict[str, Any]]:
     """Phase 2: Parse feedback from review output and return validated items.
 
     Args:
@@ -407,7 +407,7 @@ Output ONLY the JSON array, no other text.
         raise
 
 
-async def phase_fix(cwd: Path, item: dict, item_num: int, total: int) -> None:
+async def phase_fix(cwd: Path, item: dict[str, Any], item_num: int, total: int) -> None:
     """Phase 3: Apply a single fix for one feedback item.
 
     Args:
