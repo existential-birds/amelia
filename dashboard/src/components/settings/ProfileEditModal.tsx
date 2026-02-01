@@ -41,6 +41,7 @@ import { cn } from '@/lib/utils';
 import { createProfile, updateProfile } from '@/api/settings';
 import type { Profile, ProfileCreate, ProfileUpdate } from '@/api/settings';
 import * as toast from '@/components/Toast';
+import { ApiModelSelect } from '@/components/model-picker';
 
 // =============================================================================
 // Agent Definitions
@@ -294,23 +295,31 @@ function AgentCard({ agent, config, onChange }: AgentCardProps) {
         </SelectContent>
       </Select>
 
-      {/* Model select */}
-      <Select
-        key={`${agent.key}-model-${config.driver}`}
-        value={config.model}
-        onValueChange={(v) => onChange('model', v)}
-      >
-        <SelectTrigger className="h-7 w-full sm:w-[90px] text-xs bg-background/50">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {availableModels.map((m) => (
-            <SelectItem key={m} value={m}>
-              {m}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      {/* Model select - ApiModelSelect for api driver, simple Select for cli */}
+      {config.driver === 'api' ? (
+        <ApiModelSelect
+          agentKey={agent.key}
+          value={config.model}
+          onChange={(v) => onChange('model', v)}
+        />
+      ) : (
+        <Select
+          key={`${agent.key}-model-${config.driver}`}
+          value={config.model}
+          onValueChange={(v) => onChange('model', v)}
+        >
+          <SelectTrigger className="h-7 w-full sm:w-[90px] text-xs bg-background/50">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {availableModels.map((m) => (
+              <SelectItem key={m} value={m}>
+                {m}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
     </div>
   );
 }
