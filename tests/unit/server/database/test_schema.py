@@ -45,8 +45,6 @@ class TestWorkflowLogSchema:
         """)
 
         # Invalid level should fail
-        import aiosqlite
-        import pytest
         with pytest.raises(aiosqlite.IntegrityError):
             await db_with_schema.execute("""
                 INSERT INTO workflow_log (id, workflow_id, sequence, event_type, level, message)

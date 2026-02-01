@@ -133,21 +133,20 @@ def _build_default_agents(driver: DriverType, model: str) -> dict[str, AgentConf
     """Build default agents dict for a profile.
 
     Args:
-        driver: Driver to use for all agents (converted to DriverType enum).
+        driver: Driver type to use for all agents.
         model: Model to use for all agents.
 
     Returns:
         Dict mapping agent names to AgentConfig.
     """
-    driver_type = DriverType(driver)
     return {
-        "architect": AgentConfig(driver=driver_type, model=model),
-        "developer": AgentConfig(driver=driver_type, model=model),
-        "reviewer": AgentConfig(driver=driver_type, model=model),
-        "task_reviewer": AgentConfig(driver=driver_type, model=model),
-        "evaluator": AgentConfig(driver=driver_type, model=model),
-        "brainstormer": AgentConfig(driver=driver_type, model=model),
-        "plan_validator": AgentConfig(driver=driver_type, model=model),
+        "architect": AgentConfig(driver=driver, model=model),
+        "developer": AgentConfig(driver=driver, model=model),
+        "reviewer": AgentConfig(driver=driver, model=model),
+        "task_reviewer": AgentConfig(driver=driver, model=model),
+        "evaluator": AgentConfig(driver=driver, model=model),
+        "brainstormer": AgentConfig(driver=driver, model=model),
+        "plan_validator": AgentConfig(driver=driver, model=model),
     }
 
 
