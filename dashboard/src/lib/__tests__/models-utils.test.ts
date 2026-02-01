@@ -61,7 +61,7 @@ describe('models-utils', () => {
         limit: { context: 200000, output: 16000 },
         modalities: { input: ['text', 'image'], output: ['text'] },
       });
-      expect(result[1].provider).toBe('openai');
+      expect(result[1]?.provider).toBe('openai');
     });
 
     it('should handle empty providers', () => {
@@ -143,7 +143,7 @@ describe('models-utils', () => {
 
       const result = filterModelsByRequirements(models, requirements);
       expect(result).toHaveLength(1);
-      expect(result[0].id).toBe('model-a');
+      expect(result[0]?.id).toBe('model-a');
     });
 
     it('should filter by minimum context size', () => {
@@ -155,7 +155,7 @@ describe('models-utils', () => {
 
       const result = filterModelsByRequirements(models, requirements);
       expect(result).toHaveLength(1);
-      expect(result[0].id).toBe('model-a');
+      expect(result[0]?.id).toBe('model-a');
     });
 
     it('should filter by price tier', () => {
@@ -167,7 +167,7 @@ describe('models-utils', () => {
 
       const result = filterModelsByRequirements(models, requirements);
       expect(result).toHaveLength(1);
-      expect(result[0].id).toBe('model-b');
+      expect(result[0]?.id).toBe('model-b');
     });
 
     it('should return all matching models when priceTier is any', () => {

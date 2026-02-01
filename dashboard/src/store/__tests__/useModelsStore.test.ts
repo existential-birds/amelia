@@ -53,7 +53,7 @@ describe('useModelsStore', () => {
 
       const state = useModelsStore.getState();
       expect(state.models).toHaveLength(1);
-      expect(state.models[0].id).toBe('claude-sonnet-4');
+      expect(state.models[0]?.id).toBe('claude-sonnet-4');
       expect(state.providers).toEqual(['anthropic']);
       expect(state.isLoading).toBe(false);
       expect(state.error).toBeNull();
@@ -139,7 +139,7 @@ describe('useModelsStore', () => {
 
       const state = useModelsStore.getState();
       expect(state.models).toHaveLength(1);
-      expect(state.models[0].id).toBe('new-model');
+      expect(state.models[0]?.id).toBe('new-model');
     });
   });
 
@@ -171,12 +171,12 @@ describe('useModelsStore', () => {
       // Architect requires reasoning
       const architectModels = useModelsStore.getState().getModelsForAgent('architect');
       expect(architectModels).toHaveLength(1);
-      expect(architectModels[0].id).toBe('model-a');
+      expect(architectModels[0]?.id).toBe('model-a');
 
       // Developer doesn't require reasoning
       const developerModels = useModelsStore.getState().getModelsForAgent('developer');
       expect(developerModels).toHaveLength(1);
-      expect(developerModels[0].id).toBe('model-a'); // model-b fails context requirement
+      expect(developerModels[0]?.id).toBe('model-a'); // model-b fails context requirement
     });
 
     it('should return all models for unknown agent', () => {

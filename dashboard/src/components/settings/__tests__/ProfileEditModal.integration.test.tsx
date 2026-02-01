@@ -70,13 +70,13 @@ describe('ProfileEditModal model selection', () => {
       plan_path_pattern: 'docs/plans/{date}-{issue_key}.md',
       is_active: false,
       agents: {
-        architect: { driver: 'api', model: 'claude-sonnet-4' },
-        developer: { driver: 'cli', model: 'opus' },
-        reviewer: { driver: 'cli', model: 'sonnet' },
-        plan_validator: { driver: 'cli', model: 'haiku' },
-        task_reviewer: { driver: 'cli', model: 'haiku' },
-        evaluator: { driver: 'cli', model: 'haiku' },
-        brainstormer: { driver: 'cli', model: 'haiku' },
+        architect: { driver: 'api', model: 'claude-sonnet-4', options: {} },
+        developer: { driver: 'cli', model: 'opus', options: {} },
+        reviewer: { driver: 'cli', model: 'sonnet', options: {} },
+        plan_validator: { driver: 'cli', model: 'haiku', options: {} },
+        task_reviewer: { driver: 'cli', model: 'haiku', options: {} },
+        evaluator: { driver: 'cli', model: 'haiku', options: {} },
+        brainstormer: { driver: 'cli', model: 'haiku', options: {} },
       },
     };
 
@@ -104,13 +104,13 @@ describe('ProfileEditModal model selection', () => {
       plan_path_pattern: 'docs/plans/{date}-{issue_key}.md',
       is_active: false,
       agents: {
-        architect: { driver: 'api', model: 'claude-sonnet-4' },
-        developer: { driver: 'api', model: 'claude-sonnet-4' },
-        reviewer: { driver: 'api', model: 'claude-sonnet-4' },
-        plan_validator: { driver: 'cli', model: 'haiku' },
-        task_reviewer: { driver: 'cli', model: 'haiku' },
-        evaluator: { driver: 'cli', model: 'haiku' },
-        brainstormer: { driver: 'cli', model: 'haiku' },
+        architect: { driver: 'api', model: 'claude-sonnet-4', options: {} },
+        developer: { driver: 'api', model: 'claude-sonnet-4', options: {} },
+        reviewer: { driver: 'api', model: 'claude-sonnet-4', options: {} },
+        plan_validator: { driver: 'cli', model: 'haiku', options: {} },
+        task_reviewer: { driver: 'cli', model: 'haiku', options: {} },
+        evaluator: { driver: 'cli', model: 'haiku', options: {} },
+        brainstormer: { driver: 'cli', model: 'haiku', options: {} },
       },
     };
 
