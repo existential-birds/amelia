@@ -103,6 +103,10 @@ export function ModelList({
 
   const hasRecentModels = recentModels.length > 0;
 
+  // Filter out recent models from all models section to avoid duplicates
+  const recentIdSet = new Set(recentModelIds);
+  const nonRecentModels = models.filter((m) => !recentIdSet.has(m.id));
+
   return (
     <ScrollArea className="flex-1">
       <div className="divide-y divide-border/30">
@@ -135,7 +139,7 @@ export function ModelList({
               </span>
             </div>
           )}
-          {models.map((model) => (
+          {nonRecentModels.map((model) => (
             <ModelListItem
               key={model.id}
               model={model}

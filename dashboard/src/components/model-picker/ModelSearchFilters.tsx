@@ -1,4 +1,4 @@
-import { Search, X } from 'lucide-react';
+import { Search, X, ChevronDown } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -9,6 +9,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 interface ModelSearchFiltersProps {
   searchQuery: string;
@@ -86,26 +92,33 @@ export function ModelSearchFilters({
 
       {/* Filter dropdowns */}
       <div className="flex flex-wrap gap-2">
-        {/* Capabilities (multi-select via repeated clicks) */}
-        <Select
-          value=""
-          onValueChange={handleCapabilityToggle}
-          aria-label="Capabilities"
-        >
-          <SelectTrigger className="w-[130px] h-8 text-xs">
-            <SelectValue placeholder="Capabilities" />
-          </SelectTrigger>
-          <SelectContent>
+        {/* Capabilities (multi-select with checkboxes) */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-[130px] h-8 text-xs justify-between font-normal"
+              aria-label="Capabilities"
+            >
+              {selectedCapabilities.length > 0
+                ? `${selectedCapabilities.length} selected`
+                : 'Capabilities'}
+              <ChevronDown className="ml-1 h-3 w-3 opacity-50" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-[150px]">
             {CAPABILITY_OPTIONS.map((opt) => (
-              <SelectItem key={opt.value} value={opt.value}>
-                <span className="flex items-center gap-2">
-                  {selectedCapabilities.includes(opt.value) && '✓'}
-                  {opt.label}
-                </span>
-              </SelectItem>
+              <DropdownMenuCheckboxItem
+                key={opt.value}
+                checked={selectedCapabilities.includes(opt.value)}
+                onCheckedChange={() => handleCapabilityToggle(opt.value)}
+              >
+                {opt.label}
+              </DropdownMenuCheckboxItem>
             ))}
-          </SelectContent>
-        </Select>
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         {/* Price tier */}
         <Select

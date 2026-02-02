@@ -43,6 +43,22 @@ export function ApiModelSelect({ agentKey, value, onChange }: ApiModelSelectProp
     onChange(modelId);
   };
 
+  // Skip dropdown when no recent models - go straight to browse
+  if (recentModels.length === 0) {
+    return (
+      <ModelPickerSheet
+        agentKey={agentKey}
+        currentModel={value}
+        onSelect={handleSelect}
+        trigger={
+          <Button variant="outline" size="sm" className="h-7 w-full sm:w-[180px] text-xs">
+            {value || 'Select model...'}
+          </Button>
+        }
+      />
+    );
+  }
+
   return (
     <div className="space-y-1">
       <Select value={value} onValueChange={handleSelect}>
@@ -50,23 +66,15 @@ export function ApiModelSelect({ agentKey, value, onChange }: ApiModelSelectProp
           <SelectValue placeholder="Select model..." />
         </SelectTrigger>
         <SelectContent>
-          {recentModels.length > 0 ? (
-            <>
-              {recentModels.map((model) => (
-                <SelectItem key={model.id} value={model.id}>
-                  <span className="flex items-center gap-2">
-                    <ProviderLogo provider={model.provider} className="h-3.5 w-3.5 shrink-0" />
-                    <span className="truncate">{model.name}</span>
-                  </span>
-                </SelectItem>
-              ))}
-              <Separator className="my-1" />
-            </>
-          ) : (
-            <SelectItem value={value || '_placeholder'} disabled={!value}>
-              {value || 'No recent models'}
+          {recentModels.map((model) => (
+            <SelectItem key={model.id} value={model.id}>
+              <span className="flex items-center gap-2">
+                <ProviderLogo provider={model.provider} className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate">{model.name}</span>
+              </span>
             </SelectItem>
-          )}
+          ))}
+          <Separator className="my-1" />
         </SelectContent>
       </Select>
 

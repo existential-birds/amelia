@@ -62,6 +62,7 @@ function CapabilityIcon({
 
   return (
     <span
+      title={labels[capability]}
       aria-label={labels[capability]}
       className={cn(
         'inline-flex',
