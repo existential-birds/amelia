@@ -344,7 +344,10 @@ function BulkApply({ onApply }: BulkApplyProps) {
     if (!availableModels.includes(model)) {
       setModel(availableModels[0] ?? 'sonnet');
     }
-  }, [driver, availableModels, model]);
+    // availableModels is derived from driver, so only depend on driver to avoid
+    // unnecessary runs from array reference changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [driver]);
 
   const handleApply = (targets: 'all' | 'primary' | 'utility') => {
     onApply(driver, model, targets);

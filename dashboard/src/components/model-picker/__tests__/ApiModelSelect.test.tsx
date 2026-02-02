@@ -39,7 +39,7 @@ describe('ApiModelSelect', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(useModelsStore).mockReturnValue({
+    const mockStore = {
       models: mockModels,
       providers: ['anthropic', 'openai'],
       isLoading: false,
@@ -48,7 +48,11 @@ describe('ApiModelSelect', () => {
       fetchModels: vi.fn(),
       refreshModels: vi.fn(),
       getModelsForAgent: vi.fn().mockReturnValue(mockModels),
-    });
+    };
+    // Support both selector pattern and direct call pattern
+    vi.mocked(useModelsStore).mockImplementation((selector?: unknown) =>
+      typeof selector === 'function' ? selector(mockStore) : mockStore
+    );
   });
 
   it('should render current model value', () => {

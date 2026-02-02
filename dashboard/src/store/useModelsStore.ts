@@ -50,6 +50,9 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
 
     try {
       const response = await fetch(MODELS_API_URL);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
       const data = await response.json();
 
       const models = flattenModelsData(data);

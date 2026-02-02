@@ -27,14 +27,8 @@ export interface ModelInfo {
   knowledge?: string;
 }
 
-/**
- * Agent capability requirements for model filtering.
- */
-export interface AgentRequirements {
-  capabilities: ('tool_call' | 'reasoning' | 'structured_output')[];
-  minContext: number;
-  priceTier: 'budget' | 'standard' | 'premium' | 'any';
-}
+// Re-export from lib/constants for backward compatibility
+export type { AgentRequirements } from '@/lib/constants';
 
 /**
  * Price tier classification based on output cost per 1M tokens.

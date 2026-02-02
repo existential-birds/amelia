@@ -4,29 +4,13 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { formatContextSize, getPriceTier } from '@/lib/models-utils';
+import { ProviderLogo } from './ProviderLogo';
 import type { ModelInfo } from './types';
 
 interface ModelListItemProps {
   model: ModelInfo;
   onSelect: (modelId: string) => void;
   isSelected?: boolean;
-}
-
-/**
- * Provider logo from models.dev CDN.
- */
-function ProviderLogo({ provider }: { provider: string }) {
-  return (
-    <img
-      src={`https://models.dev/logos/${provider}.svg`}
-      alt={provider}
-      className="h-4 w-4 rounded-sm"
-      onError={(e) => {
-        // Hide broken images
-        (e.target as HTMLImageElement).style.display = 'none';
-      }}
-    />
-  );
 }
 
 /**

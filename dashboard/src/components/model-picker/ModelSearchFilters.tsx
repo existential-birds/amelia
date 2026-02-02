@@ -158,8 +158,9 @@ export function ModelSearchFilters({
                 type="button"
                 onClick={() => removeCapability(cap)}
                 className="ml-1 hover:text-destructive"
+                aria-label={`Remove ${cap} filter`}
               >
-                <X className="h-3 w-3" />
+                <X className="h-3 w-3" aria-hidden="true" />
               </button>
             </Badge>
           ))}
@@ -170,8 +171,9 @@ export function ModelSearchFilters({
                 type="button"
                 onClick={() => onPriceTierChange(null)}
                 className="ml-1 hover:text-destructive"
+                aria-label={`Remove ${selectedPriceTier} filter`}
               >
-                <X className="h-3 w-3" />
+                <X className="h-3 w-3" aria-hidden="true" />
               </button>
             </Badge>
           )}
@@ -182,8 +184,9 @@ export function ModelSearchFilters({
                 type="button"
                 onClick={() => onMinContextChange(null)}
                 className="ml-1 hover:text-destructive"
+                aria-label={`Remove ${minContextSize / 1000}K+ context filter`}
               >
-                <X className="h-3 w-3" />
+                <X className="h-3 w-3" aria-hidden="true" />
               </button>
             </Badge>
           )}

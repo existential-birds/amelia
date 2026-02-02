@@ -11,28 +11,13 @@ import { Separator } from '@/components/ui/separator';
 import { useModelsStore } from '@/store/useModelsStore';
 import { useRecentModels } from '@/hooks/useRecentModels';
 import { ModelPickerSheet } from './ModelPickerSheet';
+import { ProviderLogo } from './ProviderLogo';
 import type { ModelInfo } from './types';
 
 interface ApiModelSelectProps {
   agentKey: string;
   value: string;
   onChange: (modelId: string) => void;
-}
-
-/**
- * Provider logo from models.dev CDN.
- */
-function ProviderLogo({ provider }: { provider: string }) {
-  return (
-    <img
-      src={`https://models.dev/logos/${provider}.svg`}
-      alt=""
-      className="h-3.5 w-3.5 rounded-sm shrink-0"
-      onError={(e) => {
-        (e.target as HTMLImageElement).style.display = 'none';
-      }}
-    />
-  );
 }
 
 /**
@@ -70,7 +55,7 @@ export function ApiModelSelect({ agentKey, value, onChange }: ApiModelSelectProp
               {recentModels.map((model) => (
                 <SelectItem key={model.id} value={model.id}>
                   <span className="flex items-center gap-2">
-                    <ProviderLogo provider={model.provider} />
+                    <ProviderLogo provider={model.provider} className="h-3.5 w-3.5 shrink-0" />
                     <span className="truncate">{model.name}</span>
                   </span>
                 </SelectItem>

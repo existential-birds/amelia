@@ -12,7 +12,8 @@ import { useModelsStore } from '@/store/useModelsStore';
 import { useRecentModels } from '@/hooks/useRecentModels';
 import { ModelSearchFilters } from './ModelSearchFilters';
 import { ModelList } from './ModelList';
-import { getPriceTier } from '@/lib/models-utils';
+import { getPriceTier, filterModelsByRequirements } from '@/lib/models-utils';
+import { AGENT_MODEL_REQUIREMENTS } from './constants';
 import type { ModelInfo } from './types';
 
 interface ModelPickerSheetProps {
@@ -90,13 +91,11 @@ export function ModelPickerSheet({
   const [minContextSize, setMinContextSize] = useState<number | null>(null);
 
   const { recentModelIds, addRecentModel } = useRecentModels();
-  // Select models array to ensure re-render when data loads
   const models = useModelsStore((state) => state.models);
   const isLoading = useModelsStore((state) => state.isLoading);
   const error = useModelsStore((state) => state.error);
   const fetchModels = useModelsStore((state) => state.fetchModels);
   const refreshModels = useModelsStore((state) => state.refreshModels);
-  const getModelsForAgent = useModelsStore((state) => state.getModelsForAgent);
 
   // Fetch models when sheet opens
   useEffect(() => {
@@ -106,12 +105,13 @@ export function ModelPickerSheet({
   }, [open, fetchModels]);
 
   // Get agent-filtered models
-  // Note: include models.length in deps to recompute when store updates after async fetch
-  const agentModels = useMemo(
-    () => getModelsForAgent(agentKey),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [getModelsForAgent, agentKey, models.length]
-  );
+  const agentModels = useMemo(() => {
+    const requirements = AGENT_MODEL_REQUIREMENTS[agentKey];
+    if (!requirements) {
+      return models;
+    }
+    return filterModelsByRequirements(models, requirements);
+  }, [agentKey, models]);
 
   // Apply user filters
   const filteredModels = useMemo(
