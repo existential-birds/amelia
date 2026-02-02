@@ -90,13 +90,13 @@ export function ModelPickerSheet({
   const [minContextSize, setMinContextSize] = useState<number | null>(null);
 
   const { recentModelIds, addRecentModel } = useRecentModels();
-  const {
-    isLoading,
-    error,
-    fetchModels,
-    refreshModels,
-    getModelsForAgent,
-  } = useModelsStore();
+  // Select models array to ensure re-render when data loads
+  const models = useModelsStore((state) => state.models);
+  const isLoading = useModelsStore((state) => state.isLoading);
+  const error = useModelsStore((state) => state.error);
+  const fetchModels = useModelsStore((state) => state.fetchModels);
+  const refreshModels = useModelsStore((state) => state.refreshModels);
+  const getModelsForAgent = useModelsStore((state) => state.getModelsForAgent);
 
   // Fetch models when sheet opens
   useEffect(() => {
@@ -106,9 +106,11 @@ export function ModelPickerSheet({
   }, [open, fetchModels]);
 
   // Get agent-filtered models
+  // Note: include models.length in deps to recompute when store updates after async fetch
   const agentModels = useMemo(
     () => getModelsForAgent(agentKey),
-    [getModelsForAgent, agentKey]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [getModelsForAgent, agentKey, models.length]
   );
 
   // Apply user filters

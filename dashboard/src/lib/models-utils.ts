@@ -42,6 +42,9 @@ export function flattenModelsData(
       // Skip models without tool_call - all agents require it
       if (!rawModel.tool_call) continue;
 
+      // Skip models with missing required fields
+      if (!rawModel.cost || !rawModel.limit) continue;
+
       models.push({
         id: rawModel.id,
         name: rawModel.name,
