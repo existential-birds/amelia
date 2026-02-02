@@ -54,8 +54,11 @@ describe('ProfileEditModal model selection', () => {
       getModelsForAgent: vi.fn().mockReturnValue(mockModels),
       ...overrides,
     };
-    // Return a function that handles selector calls
-    return (selector: (s: typeof state) => unknown) => selector(state);
+    // Return a function that handles both selector calls and no-selector calls
+    // useModelsStore(selector) returns selector(state)
+    // useModelsStore() returns the full state object
+    return (selector?: (s: typeof state) => unknown) =>
+      selector ? selector(state) : state;
   };
 
   beforeEach(() => {

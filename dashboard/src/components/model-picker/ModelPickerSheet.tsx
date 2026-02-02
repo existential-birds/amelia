@@ -3,6 +3,7 @@ import { RefreshCw } from 'lucide-react';
 import {
   Sheet,
   SheetContent,
+  SheetDescription,
   SheetHeader,
   SheetTitle,
   SheetTrigger,
@@ -151,6 +152,9 @@ export function ModelPickerSheet({
           <SheetTitle className="text-base">
             Select Model for {formatAgentName(agentKey)}
           </SheetTitle>
+          <SheetDescription className="sr-only">
+            Browse and select a model for the {formatAgentName(agentKey)} agent
+          </SheetDescription>
           <Button
             variant="ghost"
             size="icon"

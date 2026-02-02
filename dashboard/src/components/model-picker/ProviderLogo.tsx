@@ -15,8 +15,8 @@ export function ProviderLogo({ provider, className }: ProviderLogoProps) {
       alt={provider}
       className={cn('h-4 w-4 rounded-sm', className)}
       onError={(e) => {
-        // Hide broken images
-        (e.target as HTMLImageElement).style.display = 'none';
+        // Preserve layout space but hide broken image
+        (e.target as HTMLImageElement).style.visibility = 'hidden';
       }}
     />
   );
