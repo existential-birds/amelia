@@ -17,8 +17,9 @@ export function useRecentModels() {
           setRecentModelIds(parsed);
         }
       }
-    } catch {
+    } catch (error) {
       // Invalid JSON, start fresh
+      console.warn('Failed to load recent models from localStorage:', error);
       setRecentModelIds([]);
     }
   }, []);

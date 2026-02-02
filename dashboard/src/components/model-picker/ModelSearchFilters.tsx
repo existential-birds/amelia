@@ -122,14 +122,15 @@ export function ModelSearchFilters({
 
         {/* Price tier */}
         <Select
-          value={selectedPriceTier ?? ''}
-          onValueChange={(v) => onPriceTierChange(v || null)}
+          value={selectedPriceTier ?? 'all'}
+          onValueChange={(v) => onPriceTierChange(v === 'all' ? null : v)}
           aria-label="Price tier"
         >
           <SelectTrigger className="w-[130px] h-8 text-xs">
             <SelectValue placeholder="Price tier" />
           </SelectTrigger>
           <SelectContent>
+            <SelectItem value="all">All prices</SelectItem>
             {PRICE_TIER_OPTIONS.map((opt) => (
               <SelectItem key={opt.value} value={opt.value}>
                 {opt.label}

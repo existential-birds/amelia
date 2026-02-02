@@ -37,9 +37,9 @@ describe('ModelSearchFilters', () => {
   it('should render filter dropdowns', () => {
     render(<ModelSearchFilters {...defaultProps} />);
 
-    // Verify all three filter dropdowns are rendered by their placeholder text
+    // Verify all three filter dropdowns are rendered
     expect(screen.getByText('Capabilities')).toBeInTheDocument();
-    expect(screen.getByText('Price tier')).toBeInTheDocument();
+    expect(screen.getByText('All prices')).toBeInTheDocument();
     expect(screen.getByText('Context')).toBeInTheDocument();
   });
 

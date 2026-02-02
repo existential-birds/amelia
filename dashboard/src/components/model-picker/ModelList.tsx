@@ -1,3 +1,4 @@
+import { useState, useCallback } from 'react';
 import { AlertCircle, RefreshCw } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
@@ -24,7 +25,7 @@ function ModelListSkeleton() {
   return (
     <div className="space-y-2 p-3">
       {Array.from({ length: 5 }).map((_, i) => (
-        <div key={i} className="flex items-center gap-2" data-testid="model-skeleton">
+        <div key={`skeleton-${i}`} className="flex items-center gap-2" data-testid="model-skeleton">
           <Skeleton className="h-4 w-4 rounded" />
           <div className="flex-1 space-y-1">
             <Skeleton className="h-4 w-32" />
@@ -84,6 +85,20 @@ export function ModelList({
   error,
   onRetry,
 }: ModelListProps) {
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+
+  const handleToggleExpand = useCallback((modelId: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(modelId)) {
+        next.delete(modelId);
+      } else {
+        next.add(modelId);
+      }
+      return next;
+    });
+  }, []);
+
   if (isLoading) {
     return <ModelListSkeleton />;
   }
@@ -124,6 +139,8 @@ export function ModelList({
                 model={model}
                 onSelect={onSelect}
                 isSelected={selectedModelId === model.id}
+                isExpanded={expandedIds.has(model.id)}
+                onToggleExpand={handleToggleExpand}
               />
             ))}
             <Separator />
@@ -145,6 +162,8 @@ export function ModelList({
               model={model}
               onSelect={onSelect}
               isSelected={selectedModelId === model.id}
+              isExpanded={expandedIds.has(model.id)}
+              onToggleExpand={handleToggleExpand}
             />
           ))}
         </div>

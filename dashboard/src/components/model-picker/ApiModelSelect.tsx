@@ -7,7 +7,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { Separator } from '@/components/ui/separator';
 import { useModelsStore } from '@/store/useModelsStore';
 import { useRecentModels } from '@/hooks/useRecentModels';
 import { ModelPickerSheet } from './ModelPickerSheet';
@@ -74,7 +73,6 @@ export function ApiModelSelect({ agentKey, value, onChange }: ApiModelSelectProp
               </span>
             </SelectItem>
           ))}
-          <Separator className="my-1" />
         </SelectContent>
       </Select>
 

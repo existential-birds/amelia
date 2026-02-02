@@ -45,28 +45,30 @@ describe('ModelListItem', () => {
     expect(screen.getByLabelText('Structured output')).toBeInTheDocument();
   });
 
-  it('should expand on click to show details', () => {
-    render(<ModelListItem model={mockModel} onSelect={vi.fn()} />);
+  it('should show details when expanded', () => {
+    render(<ModelListItem model={mockModel} onSelect={vi.fn()} isExpanded />);
 
-    // Initially collapsed - no pricing visible
-    expect(screen.queryByText('$3.00 / 1M')).not.toBeInTheDocument();
-
-    // Click to expand
-    fireEvent.click(screen.getByRole('button', { name: /expand/i }));
-
-    // Now shows pricing details
+    // Shows pricing details when expanded
     expect(screen.getByText('$3.00 / 1M')).toBeInTheDocument();
     expect(screen.getByText('$15.00 / 1M')).toBeInTheDocument();
   });
 
-  it('should call onSelect when select button clicked', () => {
-    const onSelect = vi.fn();
-    render(<ModelListItem model={mockModel} onSelect={onSelect} />);
+  it('should call onToggleExpand when clicked', () => {
+    const onToggleExpand = vi.fn();
+    render(
+      <ModelListItem model={mockModel} onSelect={vi.fn()} onToggleExpand={onToggleExpand} />
+    );
 
-    // Expand first
     fireEvent.click(screen.getByRole('button', { name: /expand/i }));
 
-    // Click select
+    expect(onToggleExpand).toHaveBeenCalledWith('claude-sonnet-4');
+  });
+
+  it('should call onSelect when select button clicked', () => {
+    const onSelect = vi.fn();
+    render(<ModelListItem model={mockModel} onSelect={onSelect} isExpanded />);
+
+    // Click select (already expanded)
     fireEvent.click(screen.getByRole('button', { name: /select/i }));
 
     expect(onSelect).toHaveBeenCalledWith('claude-sonnet-4');

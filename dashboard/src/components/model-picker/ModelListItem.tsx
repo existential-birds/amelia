@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { ChevronDown, Wrench, Brain, Braces } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -11,6 +10,8 @@ interface ModelListItemProps {
   model: ModelInfo;
   onSelect: (modelId: string) => void;
   isSelected?: boolean;
+  isExpanded?: boolean;
+  onToggleExpand?: (modelId: string) => void;
 }
 
 /**
@@ -84,8 +85,13 @@ function formatCost(cost: number): string {
 /**
  * Compact model list item with expandable details.
  */
-export function ModelListItem({ model, onSelect, isSelected }: ModelListItemProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
+export function ModelListItem({
+  model,
+  onSelect,
+  isSelected,
+  isExpanded = false,
+  onToggleExpand,
+}: ModelListItemProps) {
   const priceTier = getPriceTier(model.cost.output);
 
   return (
@@ -98,7 +104,7 @@ export function ModelListItem({ model, onSelect, isSelected }: ModelListItemProp
       {/* Compact row */}
       <button
         type="button"
-        onClick={() => setIsExpanded(!isExpanded)}
+        onClick={() => onToggleExpand?.(model.id)}
         data-selected={isSelected}
         aria-label={isExpanded ? 'Collapse model details' : 'Expand model details'}
         aria-expanded={isExpanded}
