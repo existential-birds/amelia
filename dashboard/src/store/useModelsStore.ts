@@ -64,7 +64,8 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
         isLoading: false,
         lastFetched: Date.now(),
       });
-    } catch {
+    } catch (err) {
+      console.error('Failed to fetch models:', err);
       set({
         error: 'Failed to load models. Check your connection.',
         isLoading: false,

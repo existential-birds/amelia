@@ -9,10 +9,10 @@ import type { ModelInfo } from '@/components/model-picker/types';
 // Mock the models store
 vi.mock('@/store/useModelsStore');
 
-// Mock useRecentModels
+// Mock useRecentModels with a recent model to show dropdown with "Browse all models" link
 vi.mock('@/hooks/useRecentModels', () => ({
   useRecentModels: () => ({
-    recentModelIds: [],
+    recentModelIds: ['claude-sonnet-4'],
     addRecentModel: vi.fn(),
   }),
 }));
