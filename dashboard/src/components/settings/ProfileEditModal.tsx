@@ -162,7 +162,7 @@ const DRIVER_OPTIONS = [
 ];
 
 const TRACKER_OPTIONS = [
-  { value: 'none', label: 'None' },
+  { value: 'noop', label: 'None' },
   { value: 'jira', label: 'Jira' },
   { value: 'github', label: 'GitHub' },
 ];
@@ -203,7 +203,7 @@ const buildDefaultAgents = (): Record<string, AgentFormData> => {
 
 const DEFAULT_FORM_DATA: FormData = {
   id: '',
-  tracker: 'none',
+  tracker: 'noop',
   working_dir: '',
   plan_output_dir: 'docs/plans',
   plan_path_pattern: 'docs/plans/{date}-{issue_key}.md',
