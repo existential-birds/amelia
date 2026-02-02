@@ -52,6 +52,21 @@ describe('ModelList', () => {
     expect(screen.getByText('Recent')).toBeInTheDocument();
   });
 
+  it('should not duplicate models in Recent and All Models sections', () => {
+    render(
+      <ModelList
+        models={mockModels}
+        recentModelIds={['claude-sonnet-4']}
+        onSelect={vi.fn()}
+        selectedModelId={null}
+      />
+    );
+
+    // Model should only appear once (in Recent section, not in All Models)
+    const sonnetItems = screen.getAllByText('Claude Sonnet 4');
+    expect(sonnetItems).toHaveLength(1);
+  });
+
   it('should not show recent models section when empty', () => {
     render(
       <ModelList
