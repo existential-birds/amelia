@@ -3,9 +3,11 @@ import { RECENT_MODELS_KEY, MAX_RECENT_MODELS } from '@/components/model-picker/
 
 /**
  * Hook for managing recently used model IDs in localStorage.
+ * Returns hasParseError if localStorage data was corrupted/invalid.
  */
 export function useRecentModels() {
   const [recentModelIds, setRecentModelIds] = useState<string[]>([]);
+  const [hasParseError, setHasParseError] = useState(false);
 
   // Load from localStorage on mount
   useEffect(() => {
@@ -21,6 +23,7 @@ export function useRecentModels() {
       // Invalid JSON, start fresh
       console.warn('Failed to load recent models from localStorage:', error);
       setRecentModelIds([]);
+      setHasParseError(true);
     }
   }, []);
 
@@ -38,5 +41,5 @@ export function useRecentModels() {
     });
   }, []);
 
-  return { recentModelIds, addRecentModel };
+  return { recentModelIds, addRecentModel, hasParseError };
 }

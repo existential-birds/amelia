@@ -5,7 +5,7 @@
  * Primary agents (architect, developer, reviewer) are always visible.
  * Utility agents are collapsed by default but easily accessible.
  */
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion } from 'motion/react';
 import {
   Dialog,
@@ -337,17 +337,14 @@ function BulkApply({ onApply }: BulkApplyProps) {
   const [model, setModel] = useState('sonnet');
   const [showSuccess, setShowSuccess] = useState(false);
 
-  const availableModels = getModelsForDriver(driver);
+  const availableModels = useMemo(() => getModelsForDriver(driver), [driver]);
 
   // Reset model when driver changes if current model isn't available
   useEffect(() => {
     if (!availableModels.includes(model)) {
       setModel(availableModels[0] ?? 'sonnet');
     }
-    // availableModels is derived from driver, so only depend on driver to avoid
-    // unnecessary runs from array reference changes
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [driver]);
+  }, [availableModels, model]);
 
   const handleApply = (targets: 'all' | 'primary' | 'utility') => {
     onApply(driver, model, targets);

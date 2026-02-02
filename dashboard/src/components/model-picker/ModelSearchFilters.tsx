@@ -141,14 +141,15 @@ export function ModelSearchFilters({
 
         {/* Context size */}
         <Select
-          value={minContextSize?.toString() ?? ''}
-          onValueChange={(v) => onMinContextChange(v ? parseInt(v, 10) : null)}
+          value={minContextSize?.toString() ?? 'any'}
+          onValueChange={(v) => onMinContextChange(v === 'any' ? null : parseInt(v, 10))}
           aria-label="Context size"
         >
           <SelectTrigger className="w-[100px] h-8 text-xs">
             <SelectValue placeholder="Context" />
           </SelectTrigger>
           <SelectContent>
+            <SelectItem value="any">Any context</SelectItem>
             {CONTEXT_SIZE_OPTIONS.map((opt) => (
               <SelectItem key={opt.value} value={opt.value}>
                 {opt.label}

@@ -1,4 +1,3 @@
-import { useEffect } from 'react';
 import {
   Select,
   SelectContent,
@@ -23,13 +22,8 @@ interface ApiModelSelectProps {
  * Dropdown with recent models + browse link for API driver model selection.
  */
 export function ApiModelSelect({ agentKey, value, onChange }: ApiModelSelectProps) {
-  const { models, fetchModels } = useModelsStore();
+  const models = useModelsStore((state) => state.models);
   const { recentModelIds, addRecentModel } = useRecentModels();
-
-  // Fetch models on mount to populate recent models display
-  useEffect(() => {
-    fetchModels();
-  }, [fetchModels]);
 
   // Get recent models that exist in the store
   const recentModels = recentModelIds

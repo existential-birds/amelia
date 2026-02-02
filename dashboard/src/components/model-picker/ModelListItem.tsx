@@ -108,7 +108,7 @@ export function ModelListItem({
         data-selected={isSelected}
         aria-label={isExpanded ? 'Collapse model details' : 'Expand model details'}
         aria-expanded={isExpanded}
-        className="flex w-full items-center gap-2 px-3 py-2.5 text-left hover:bg-accent/20 transition-colors min-h-[44px]"
+        className="flex w-full items-center gap-2 px-3 py-2.5 text-left hover:bg-accent/20 transition-colors min-h-[44px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
       >
         {/* Provider logo */}
         <ProviderLogo provider={model.provider} />
