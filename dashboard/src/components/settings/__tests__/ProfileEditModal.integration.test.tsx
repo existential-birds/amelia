@@ -30,18 +30,37 @@ describe('ProfileEditModal model selection', () => {
     },
   ];
 
-  beforeEach(() => {
-    vi.clearAllMocks();
-    vi.mocked(useModelsStore).mockReturnValue({
+  // Create a mock store that supports selector functions
+  const createMockStore = (
+    overrides: Partial<{
+      models: ModelInfo[];
+      providers: string[];
+      isLoading: boolean;
+      error: string | null;
+      lastFetched: number | null;
+      fetchModels: () => Promise<void>;
+      refreshModels: () => Promise<void>;
+      getModelsForAgent: (agentKey: string) => ModelInfo[];
+    }> = {}
+  ) => {
+    const state = {
       models: mockModels,
       providers: ['anthropic'],
       isLoading: false,
       error: null,
       lastFetched: Date.now(),
-      fetchModels: vi.fn(),
-      refreshModels: vi.fn(),
+      fetchModels: vi.fn().mockResolvedValue(undefined),
+      refreshModels: vi.fn().mockResolvedValue(undefined),
       getModelsForAgent: vi.fn().mockReturnValue(mockModels),
-    });
+      ...overrides,
+    };
+    // Return a function that handles selector calls
+    return (selector: (s: typeof state) => unknown) => selector(state);
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(useModelsStore).mockImplementation(createMockStore());
   });
 
   it('should show simple select with CLI model options when driver is cli (default)', () => {
