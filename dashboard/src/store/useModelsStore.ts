@@ -53,7 +53,13 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }
-      const data = await response.json();
+
+      let data;
+      try {
+        data = await response.json();
+      } catch {
+        throw new Error('Invalid JSON response from models API');
+      }
 
       const models = flattenModelsData(data);
       const providers = [...new Set(models.map((m) => m.provider))];

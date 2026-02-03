@@ -40,10 +40,10 @@ const PRICE_TIER_OPTIONS = [
 ];
 
 const CONTEXT_SIZE_OPTIONS = [
-  { value: '32000', label: '32K+' },
-  { value: '64000', label: '64K+' },
-  { value: '128000', label: '128K+' },
-  { value: '200000', label: '200K+' },
+  { value: 32000, label: '32K+' },
+  { value: 64000, label: '64K+' },
+  { value: 128000, label: '128K+' },
+  { value: 200000, label: '200K+' },
 ];
 
 /**
@@ -151,7 +151,7 @@ export function ModelSearchFilters({
           <SelectContent>
             <SelectItem value="any">Any context</SelectItem>
             {CONTEXT_SIZE_OPTIONS.map((opt) => (
-              <SelectItem key={opt.value} value={opt.value}>
+              <SelectItem key={opt.value} value={String(opt.value)}>
                 {opt.label}
               </SelectItem>
             ))}

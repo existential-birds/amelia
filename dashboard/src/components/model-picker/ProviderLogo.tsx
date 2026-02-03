@@ -1,5 +1,4 @@
 import type { ComponentType, SVGProps } from 'react';
-import { useState } from 'react';
 
 import { cn } from '@/lib/utils';
 
@@ -98,33 +97,26 @@ const BUNDLED_LOGOS: Record<string, SvgComponent> = {
  * Falls back to provider initial if logo unavailable.
  */
 export function ProviderLogo({ provider, className }: ProviderLogoProps) {
-  const [loaded, setLoaded] = useState(false);
-  const [hasError, setHasError] = useState(false);
-
   const LogoComponent = BUNDLED_LOGOS[provider];
-  const showFallback = !LogoComponent && (hasError || !loaded);
 
   return (
-    <div className={cn('relative h-4 w-4', className)}>
+    <div className={cn('group relative h-4 w-4', className)}>
       {/* Bundled SVG for common providers */}
       {LogoComponent && <LogoComponent className="h-full w-full" />}
-      {/* Fallback shown while loading or on error for non-bundled providers */}
-      {!LogoComponent && showFallback && (
-        <div className="flex h-full w-full items-center justify-center rounded-sm bg-muted text-[10px] font-medium uppercase text-muted-foreground">
+      {/* Fallback initial shown for non-bundled providers */}
+      {!LogoComponent && (
+        <div className="flex h-full w-full items-center justify-center rounded-sm bg-muted text-[10px] font-medium uppercase text-muted-foreground group-has-[img:not(.error)]:hidden">
           {provider.charAt(0)}
         </div>
       )}
-      {/* CDN image for non-bundled providers, hidden until loaded */}
-      {!LogoComponent && !hasError && (
+      {/* CDN image for non-bundled providers with lazy loading */}
+      {!LogoComponent && (
         <img
           src={`https://models.dev/logos/${provider}.svg`}
           alt={provider}
-          className={cn(
-            'absolute inset-0 h-full w-full rounded-sm',
-            !loaded && 'invisible'
-          )}
-          onLoad={() => setLoaded(true)}
-          onError={() => setHasError(true)}
+          loading="lazy"
+          className="absolute inset-0 h-full w-full rounded-sm [&.error]:hidden"
+          onError={(e) => e.currentTarget.classList.add('error')}
         />
       )}
     </div>

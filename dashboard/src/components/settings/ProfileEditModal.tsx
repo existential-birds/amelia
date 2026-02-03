@@ -170,14 +170,9 @@ const TRACKER_OPTIONS = [
 /** Default models (Claude CLI) */
 const CLAUDE_MODELS = ['opus', 'sonnet', 'haiku'] as const;
 
-/** Model options vary by driver */
+/** Model options by driver - API models fetched dynamically via ApiModelSelect */
 const MODEL_OPTIONS_BY_DRIVER: Record<string, readonly string[]> = {
   'cli': CLAUDE_MODELS,
-  'api': [
-    'qwen/qwen3-coder-flash',
-    'minimax/minimax-m2',
-    'google/gemini-3-flash-preview',
-  ],
 };
 
 // =============================================================================

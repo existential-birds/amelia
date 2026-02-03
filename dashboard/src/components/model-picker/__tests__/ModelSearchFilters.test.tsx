@@ -40,7 +40,7 @@ describe('ModelSearchFilters', () => {
     // Verify all three filter dropdowns are rendered
     expect(screen.getByText('Capabilities')).toBeInTheDocument();
     expect(screen.getByText('All prices')).toBeInTheDocument();
-    expect(screen.getByText('Context')).toBeInTheDocument();
+    expect(screen.getByText('Any context')).toBeInTheDocument();
   });
 
   it('should show active filter chips', () => {

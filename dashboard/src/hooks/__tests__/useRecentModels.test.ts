@@ -1,31 +1,23 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi, type MockInstance } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useRecentModels } from '../useRecentModels';
 import { RECENT_MODELS_KEY, MAX_RECENT_MODELS } from '@/components/model-picker/constants';
 
-// Mock localStorage
-const localStorageMock = (() => {
-  let store: Record<string, string> = {};
-  return {
-    getItem: vi.fn((key: string) => store[key] ?? null),
-    setItem: vi.fn((key: string, value: string) => {
-      store[key] = value;
-    }),
-    removeItem: vi.fn((key: string) => {
-      delete store[key];
-    }),
-    clear: () => {
-      store = {};
-    },
-  };
-})();
-
-Object.defineProperty(window, 'localStorage', { value: localStorageMock });
-
 describe('useRecentModels', () => {
+  let store: Record<string, string> = {};
+  let getItemSpy: MockInstance<(key: string) => string | null>;
+  let setItemSpy: MockInstance<(key: string, value: string) => void>;
+
   beforeEach(() => {
-    localStorageMock.clear();
-    vi.clearAllMocks();
+    store = {};
+    getItemSpy = vi.spyOn(Storage.prototype, 'getItem').mockImplementation((key: string) => store[key] ?? null);
+    setItemSpy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation((key: string, value: string) => {
+      store[key] = value;
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it('should return empty array when no recent models', () => {
@@ -35,7 +27,7 @@ describe('useRecentModels', () => {
   });
 
   it('should load recent models from localStorage', () => {
-    localStorageMock.getItem.mockReturnValueOnce(JSON.stringify(['model-a', 'model-b']));
+    getItemSpy.mockReturnValueOnce(JSON.stringify(['model-a', 'model-b']));
 
     const { result } = renderHook(() => useRecentModels());
 
@@ -50,14 +42,14 @@ describe('useRecentModels', () => {
     });
 
     expect(result.current.recentModelIds).toEqual(['model-a']);
-    expect(localStorageMock.setItem).toHaveBeenCalledWith(
+    expect(setItemSpy).toHaveBeenCalledWith(
       RECENT_MODELS_KEY,
       JSON.stringify(['model-a'])
     );
   });
 
   it('should move existing model to front', () => {
-    localStorageMock.getItem.mockReturnValueOnce(JSON.stringify(['model-a', 'model-b', 'model-c']));
+    getItemSpy.mockReturnValueOnce(JSON.stringify(['model-a', 'model-b', 'model-c']));
 
     const { result } = renderHook(() => useRecentModels());
 
@@ -70,7 +62,7 @@ describe('useRecentModels', () => {
 
   it('should limit to MAX_RECENT_MODELS', () => {
     const existingModels = Array.from({ length: MAX_RECENT_MODELS }, (_, i) => `model-${i}`);
-    localStorageMock.getItem.mockReturnValueOnce(JSON.stringify(existingModels));
+    getItemSpy.mockReturnValueOnce(JSON.stringify(existingModels));
 
     const { result } = renderHook(() => useRecentModels());
 
@@ -84,7 +76,7 @@ describe('useRecentModels', () => {
   });
 
   it('should handle invalid JSON in localStorage', () => {
-    localStorageMock.getItem.mockReturnValueOnce('invalid json');
+    getItemSpy.mockReturnValueOnce('invalid json');
 
     const { result } = renderHook(() => useRecentModels());
 
