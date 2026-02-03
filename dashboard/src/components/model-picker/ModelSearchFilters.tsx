@@ -124,9 +124,8 @@ export function ModelSearchFilters({
         <Select
           value={selectedPriceTier ?? 'all'}
           onValueChange={(v) => onPriceTierChange(v === 'all' ? null : v)}
-          aria-label="Price tier"
         >
-          <SelectTrigger className="w-[130px] h-8 text-xs">
+          <SelectTrigger className="w-[130px] h-8 text-xs" aria-label="Price tier">
             <SelectValue placeholder="Price tier" />
           </SelectTrigger>
           <SelectContent>
@@ -143,9 +142,8 @@ export function ModelSearchFilters({
         <Select
           value={minContextSize?.toString() ?? 'any'}
           onValueChange={(v) => onMinContextChange(v === 'any' ? null : parseInt(v, 10))}
-          aria-label="Context size"
         >
-          <SelectTrigger className="w-[100px] h-8 text-xs">
+          <SelectTrigger className="w-[100px] h-8 text-xs" aria-label="Context size">
             <SelectValue placeholder="Context" />
           </SelectTrigger>
           <SelectContent>

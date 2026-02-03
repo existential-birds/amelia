@@ -81,5 +81,6 @@ describe('useRecentModels', () => {
     const { result } = renderHook(() => useRecentModels());
 
     expect(result.current.recentModelIds).toEqual([]);
+    expect(result.current.hasParseError).toBe(true);
   });
 });

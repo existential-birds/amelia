@@ -3,7 +3,6 @@ import { RECENT_MODELS_KEY, MAX_RECENT_MODELS } from '@/components/model-picker/
 
 /**
  * Hook for managing recently used model IDs in localStorage.
- * Returns hasParseError if localStorage data was corrupted/invalid.
  */
 export function useRecentModels() {
   const [recentModelIds, setRecentModelIds] = useState<string[]>([]);

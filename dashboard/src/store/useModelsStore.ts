@@ -57,8 +57,8 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
       let data;
       try {
         data = await response.json();
-      } catch {
-        throw new Error('Invalid JSON response from models API');
+      } catch (parseError) {
+        throw new Error(`Invalid JSON response from models API: ${parseError}`);
       }
 
       const models = flattenModelsData(data);
