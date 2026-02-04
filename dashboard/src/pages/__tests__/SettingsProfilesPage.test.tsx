@@ -206,8 +206,7 @@ describe('SettingsProfilesPage actions', () => {
     );
 
     // Click on the prod profile card (inactive) to activate it
-    const prodCard = screen.getByText('prod').closest('[class*="cursor-pointer"]');
-    if (!prodCard) throw new Error('Test setup error: prod card not found');
+    const prodCard = screen.getByRole('button', { name: /activate profile prod/i });
     await user.click(prodCard);
 
     await waitFor(() => {
@@ -226,13 +225,8 @@ describe('SettingsProfilesPage actions', () => {
       </MemoryRouter>
     );
 
-    // Find the dev profile card, then find the trash button within it
-    const devCard = screen.getByText('dev').closest('[class*="cursor-pointer"]');
-    if (!devCard) throw new Error('Test setup error: dev card not found');
-
-    // Find the button with hover:text-destructive class (trash button)
-    const trashButton = devCard.querySelector('button[class*="hover:text-destructive"]');
-    if (!trashButton) throw new Error('Test setup error: trash button not found');
+    // Find the delete button using accessible query
+    const trashButton = screen.getByRole('button', { name: /delete profile dev/i });
     await user.click(trashButton);
 
     // Wait for the AlertDialog to appear and click the Delete button
@@ -254,13 +248,8 @@ describe('SettingsProfilesPage actions', () => {
       </MemoryRouter>
     );
 
-    // Find the dev profile card, then find the trash button within it
-    const devCard = screen.getByText('dev').closest('[class*="cursor-pointer"]');
-    if (!devCard) throw new Error('Test setup error: dev card not found');
-
-    // Find the button with hover:text-destructive class (trash button)
-    const trashButton = devCard.querySelector('button[class*="hover:text-destructive"]');
-    if (!trashButton) throw new Error('Test setup error: trash button not found');
+    // Find the delete button using accessible query
+    const trashButton = screen.getByRole('button', { name: /delete profile dev/i });
     await user.click(trashButton);
 
     // Wait for the AlertDialog to appear and click the Cancel button
@@ -300,13 +289,8 @@ describe('SettingsProfilesPage actions', () => {
       </MemoryRouter>
     );
 
-    // Find the dev profile card, then find the trash button within it
-    const devCard = screen.getByText('dev').closest('[class*="cursor-pointer"]');
-    if (!devCard) throw new Error('Test setup error: dev card not found');
-
-    // Find the button with hover:text-destructive class (trash button)
-    const trashButton = devCard.querySelector('button[class*="hover:text-destructive"]');
-    if (!trashButton) throw new Error('Test setup error: trash button not found');
+    // Find the delete button using accessible query
+    const trashButton = screen.getByRole('button', { name: /delete profile dev/i });
     await user.click(trashButton);
 
     // Wait for the AlertDialog to appear and click the Delete button

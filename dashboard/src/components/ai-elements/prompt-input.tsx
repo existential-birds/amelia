@@ -1135,6 +1135,12 @@ export const PromptInputSpeechButton = ({
     null
   );
   const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const onTranscriptionChangeRef = useRef(onTranscriptionChange);
+
+  // Keep the callback ref up to date without triggering effect re-runs
+  useEffect(() => {
+    onTranscriptionChangeRef.current = onTranscriptionChange;
+  }, [onTranscriptionChange]);
 
   useEffect(() => {
     if (
@@ -1175,7 +1181,7 @@ export const PromptInputSpeechButton = ({
 
           textarea.value = newValue;
           textarea.dispatchEvent(new Event("input", { bubbles: true }));
-          onTranscriptionChange?.(newValue);
+          onTranscriptionChangeRef.current?.(newValue);
         }
       };
 
@@ -1193,7 +1199,7 @@ export const PromptInputSpeechButton = ({
         recognitionRef.current.stop();
       }
     };
-  }, [textareaRef, onTranscriptionChange]);
+  }, [textareaRef]);
 
   const toggleListening = useCallback(() => {
     if (!recognition) {
