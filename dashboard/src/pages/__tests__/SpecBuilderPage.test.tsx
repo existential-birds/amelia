@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { render, screen, waitFor, cleanup } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { toast } from "sonner";
@@ -27,6 +27,19 @@ function renderPage() {
   );
 }
 
+/**
+ * Renders the page and waits for async initialization (loadSessions, getConfig) to complete.
+ * This prevents act() warnings from state updates after render.
+ */
+async function renderPageAndWaitForInit() {
+  const result = renderPage();
+  // Wait for loadSessions to be called (which means the init effect ran)
+  await waitFor(() => {
+    expect(brainstormApi.listSessions).toHaveBeenCalled();
+  });
+  return result;
+}
+
 describe("SpecBuilderPage", () => {
   beforeEach(() => {
     useBrainstormStore.setState({
@@ -42,8 +55,12 @@ describe("SpecBuilderPage", () => {
     vi.mocked(brainstormApi.listSessions).mockResolvedValue([]);
   });
 
+  afterEach(() => {
+    cleanup();
+  });
+
   it("renders page header", async () => {
-    renderPage();
+    await renderPageAndWaitForInit();
 
     expect(screen.getByText("Spec Builder")).toBeInTheDocument();
   });
@@ -66,14 +83,14 @@ describe("SpecBuilderPage", () => {
     });
   });
 
-  it("shows input area when session is active", () => {
+  it("shows input area when session is active", async () => {
     useBrainstormStore.setState({
       activeSessionId: "s1",
       sessions: [{ id: "s1", profile_id: "test", driver_session_id: null, status: "active" as const, topic: "Test", created_at: "2026-01-18T00:00:00Z", updated_at: "2026-01-18T00:00:00Z" }],
       messages: [{ id: "m1", session_id: "s1", sequence: 1, role: "user" as const, content: "Hello", parts: null, created_at: "2026-01-18T00:00:00Z" }],
     });
 
-    renderPage();
+    await renderPageAndWaitForInit();
 
     expect(
       screen.getByPlaceholderText(/what would you like to design/i)
@@ -102,7 +119,7 @@ describe("SpecBuilderPage", () => {
   });
 
   it("opens drawer when hamburger is clicked", async () => {
-    renderPage();
+    await renderPageAndWaitForInit();
 
     await userEvent.click(screen.getByRole("button", { name: /open sessions/i }));
 
@@ -315,13 +332,13 @@ describe("SpecBuilderPage", () => {
     });
   });
 
-  it("should not have Start Brainstorming button", () => {
-    renderPage();
+  it("should not have Start Brainstorming button", async () => {
+    await renderPageAndWaitForInit();
     expect(screen.queryByText("Start Brainstorming")).not.toBeInTheDocument();
   });
 
-  it("shows prompt input in empty state", () => {
-    renderPage();
+  it("shows prompt input in empty state", async () => {
+    await renderPageAndWaitForInit();
     expect(
       screen.getByPlaceholderText(/what would you like to design/i)
     ).toBeInTheDocument();
