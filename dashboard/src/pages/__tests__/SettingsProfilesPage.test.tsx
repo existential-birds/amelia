@@ -2,7 +2,7 @@
  * @fileoverview Tests for SettingsProfilesPage.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import SettingsProfilesPage from '../SettingsProfilesPage';
@@ -103,6 +103,7 @@ describe('SettingsProfilesPage', () => {
   });
 
   it('filters profiles by search', async () => {
+    const user = userEvent.setup();
     render(
       <MemoryRouter>
         <SettingsProfilesPage />
@@ -110,7 +111,7 @@ describe('SettingsProfilesPage', () => {
     );
 
     const searchInput = screen.getByPlaceholderText('Search profiles...');
-    fireEvent.change(searchInput, { target: { value: 'dev' } });
+    await user.type(searchInput, 'dev');
 
     expect(screen.getByText('dev')).toBeInTheDocument();
     // Wait for animation to complete - filtered items are removed after exit animation
@@ -127,8 +128,9 @@ describe('SettingsProfilesPage', () => {
     );
 
     // Click the CLI filter
+    const user = userEvent.setup();
     const cliButton = screen.getByRole('radio', { name: 'CLI' });
-    fireEvent.click(cliButton);
+    await user.click(cliButton);
 
     // dev uses cli, should be visible
     expect(screen.getByText('dev')).toBeInTheDocument();
@@ -139,6 +141,7 @@ describe('SettingsProfilesPage', () => {
   });
 
   it('shows no match message when search has no results', async () => {
+    const user = userEvent.setup();
     render(
       <MemoryRouter>
         <SettingsProfilesPage />
@@ -146,7 +149,7 @@ describe('SettingsProfilesPage', () => {
     );
 
     const searchInput = screen.getByPlaceholderText('Search profiles...');
-    fireEvent.change(searchInput, { target: { value: 'nonexistent' } });
+    await user.type(searchInput, 'nonexistent');
 
     expect(screen.getByText(/No profiles found/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Clear filters/i })).toBeInTheDocument();

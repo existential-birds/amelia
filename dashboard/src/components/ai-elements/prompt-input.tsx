@@ -610,7 +610,7 @@ export const PromptInput = ({
   useEffect(() => {
     const form = formRef.current;
     if (!form) return;
-    if (globalDrop) return // when global drop is on, let the document-level handler own drops
+    if (globalDrop) return; // when global drop is on, let the document-level handler own drops
 
     const onDragOver = (e: DragEvent) => {
       if (e.dataTransfer?.types?.includes("Files")) {
@@ -705,7 +705,7 @@ export const PromptInput = ({
     [files, add, remove, clear, openFileDialog]
   );
 
-  const handleSubmit: FormEventHandler<HTMLFormElement> = (event) => {
+  const handleSubmit: FormEventHandler<HTMLFormElement> = async (event) => {
     event.preventDefault();
 
     const form = event.currentTarget;
@@ -722,50 +722,45 @@ export const PromptInput = ({
       form.reset();
     }
 
-    // Convert blob URLs to data URLs asynchronously
-    Promise.all(
-      files.map(async ({ id: _id, ...item }) => {
-        if (item.url && item.url.startsWith("blob:")) {
-          const dataUrl = await convertBlobUrlToDataUrl(item.url);
-          // If conversion failed, keep the original blob URL
-          return {
-            ...item,
-            url: dataUrl ?? item.url,
-          };
-        }
-        return item;
-      })
-    )
-      .then((convertedFiles: FileUIPart[]) => {
-        try {
-          const result = onSubmit({ text, files: convertedFiles }, event);
+    try {
+      // Convert blob URLs to data URLs asynchronously
+      const convertedFiles: FileUIPart[] = await Promise.all(
+        files.map(async ({ id: _id, ...item }) => {
+          if (item.url && item.url.startsWith("blob:")) {
+            const dataUrl = await convertBlobUrlToDataUrl(item.url);
+            // If conversion failed, keep the original blob URL
+            return {
+              ...item,
+              url: dataUrl ?? item.url,
+            };
+          }
+          return item;
+        })
+      );
 
-          // Handle both sync and async onSubmit
-          if (result instanceof Promise) {
-            result
-              .then(() => {
-                clear();
-                if (usingProvider) {
-                  controller.textInput.clear();
-                }
-              })
-              .catch(() => {
-                // Don't clear on error - user may want to retry
-              });
-          } else {
-            // Sync function completed without throwing, clear attachments
-            clear();
-            if (usingProvider) {
-              controller.textInput.clear();
-            }
+      const result = onSubmit({ text, files: convertedFiles }, event);
+
+      // Handle both sync and async onSubmit
+      if (result instanceof Promise) {
+        try {
+          await result;
+          clear();
+          if (usingProvider) {
+            controller.textInput.clear();
           }
         } catch {
           // Don't clear on error - user may want to retry
         }
-      })
-      .catch(() => {
-        // Don't clear on error - user may want to retry
-      });
+      } else {
+        // Sync function completed without throwing, clear attachments
+        clear();
+        if (usingProvider) {
+          controller.textInput.clear();
+        }
+      }
+    } catch {
+      // Don't clear on error - user may want to retry
+    }
   };
 
   // Render with or without local provider

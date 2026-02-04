@@ -5,6 +5,7 @@
  * driver type and model tier. Supports activation, editing, and deletion.
  */
 import { forwardRef } from 'react';
+import { cn } from '@/lib/utils';
 import { motion } from 'motion/react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -189,11 +190,12 @@ export const ProfileCard = forwardRef<HTMLDivElement, ProfileCardProps>(
           <div className="flex items-center gap-2">
             <Badge
               variant="outline"
-              className={`text-xs ${
+              className={cn(
+                'text-xs',
                 primaryDriver.startsWith('cli:')
                   ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/30'
                   : 'bg-blue-500/10 text-blue-500 border-blue-500/30'
-              }`}
+              )}
             >
               <DriverIcon className="mr-1 h-3 w-3" />
               {primaryDriver}
