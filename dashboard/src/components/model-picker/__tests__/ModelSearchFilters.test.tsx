@@ -43,7 +43,7 @@ describe('ModelSearchFilters', () => {
     expect(screen.getByText('Any context')).toBeInTheDocument();
   });
 
-  it('should show active filter chips', () => {
+  it('should show active filter chips with user-friendly labels', () => {
     render(
       <ModelSearchFilters
         {...defaultProps}
@@ -52,8 +52,10 @@ describe('ModelSearchFilters', () => {
       />
     );
 
-    expect(screen.getByText('reasoning')).toBeInTheDocument();
-    expect(screen.getByText('budget')).toBeInTheDocument();
+    // Chips show human-readable labels, not raw values
+    // Use getAllByText since labels also appear in dropdown options
+    expect(screen.getAllByText('Reasoning').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Budget (< $1)').length).toBeGreaterThan(0);
   });
 
   it('should show clear filters button when filters active', () => {

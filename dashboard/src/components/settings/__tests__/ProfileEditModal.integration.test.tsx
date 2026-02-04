@@ -86,7 +86,7 @@ describe('ProfileEditModal model selection', () => {
   it('should show ApiModelSelect with browse link when driver is api', async () => {
     const profileWithApiDriver = {
       id: 'test-profile',
-      tracker: 'none',
+      tracker: 'noop',
       working_dir: '/test',
       plan_output_dir: 'docs/plans',
       plan_path_pattern: 'docs/plans/{date}-{issue_key}.md',
@@ -120,7 +120,7 @@ describe('ProfileEditModal model selection', () => {
   it('should show multiple ApiModelSelect components when multiple agents use api driver', async () => {
     const profileWithMultipleApiDrivers = {
       id: 'multi-api-profile',
-      tracker: 'none',
+      tracker: 'noop',
       working_dir: '/test',
       plan_output_dir: 'docs/plans',
       plan_path_pattern: 'docs/plans/{date}-{issue_key}.md',

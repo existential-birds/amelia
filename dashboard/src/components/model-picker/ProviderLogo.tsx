@@ -1,4 +1,4 @@
-import { useState, type ComponentType, type SVGProps } from 'react';
+import { useState, useEffect, type ComponentType, type SVGProps } from 'react';
 
 import { cn } from '@/lib/utils';
 
@@ -99,6 +99,11 @@ const BUNDLED_LOGOS: Record<string, SvgComponent> = {
 export function ProviderLogo({ provider, className }: ProviderLogoProps) {
   const LogoComponent = BUNDLED_LOGOS[provider];
   const [imageError, setImageError] = useState(false);
+
+  // Reset error state when provider changes
+  useEffect(() => {
+    setImageError(false);
+  }, [provider]);
 
   return (
     <div className={cn('relative h-4 w-4', className)}>

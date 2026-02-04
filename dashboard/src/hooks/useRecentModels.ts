@@ -34,7 +34,11 @@ export function useRecentModels() {
       const updated = [modelId, ...filtered].slice(0, MAX_RECENT_MODELS);
 
       // Persist to localStorage
-      localStorage.setItem(RECENT_MODELS_KEY, JSON.stringify(updated));
+      try {
+        localStorage.setItem(RECENT_MODELS_KEY, JSON.stringify(updated));
+      } catch (error) {
+        console.warn('Failed to persist recent models to localStorage:', error);
+      }
 
       return updated;
     });

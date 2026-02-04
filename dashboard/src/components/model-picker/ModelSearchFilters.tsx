@@ -49,6 +49,23 @@ const CONTEXT_SIZE_OPTIONS = [
 /**
  * Search and filter controls for model picker.
  */
+/**
+ * Get display label for a capability value.
+ */
+function getCapabilityLabel(value: string): string {
+  return CAPABILITY_OPTIONS.find((opt) => opt.value === value)?.label ?? value;
+}
+
+/**
+ * Get display label for a price tier value.
+ */
+function getPriceTierLabel(value: string): string {
+  return PRICE_TIER_OPTIONS.find((opt) => opt.value === value)?.label ?? value;
+}
+
+/**
+ * Search and filter controls for model picker.
+ */
 export function ModelSearchFilters({
   searchQuery,
   onSearchChange,
@@ -166,12 +183,12 @@ export function ModelSearchFilters({
               variant="secondary"
               className="text-xs gap-1 pr-1"
             >
-              {cap}
+              {getCapabilityLabel(cap)}
               <button
                 type="button"
                 onClick={() => removeCapability(cap)}
                 className="ml-1 hover:text-destructive"
-                aria-label={`Remove ${cap} filter`}
+                aria-label={`Remove ${getCapabilityLabel(cap)} filter`}
               >
                 <X className="h-3 w-3" aria-hidden="true" />
               </button>
@@ -179,12 +196,12 @@ export function ModelSearchFilters({
           ))}
           {selectedPriceTier && (
             <Badge variant="secondary" className="text-xs gap-1 pr-1">
-              {selectedPriceTier}
+              {getPriceTierLabel(selectedPriceTier)}
               <button
                 type="button"
                 onClick={() => onPriceTierChange(null)}
                 className="ml-1 hover:text-destructive"
-                aria-label={`Remove ${selectedPriceTier} filter`}
+                aria-label={`Remove ${getPriceTierLabel(selectedPriceTier)} filter`}
               >
                 <X className="h-3 w-3" aria-hidden="true" />
               </button>

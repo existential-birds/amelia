@@ -81,23 +81,31 @@ export function getPriceTier(outputCost: number): PriceTier {
 
 /**
  * Check if a model's price tier matches the required tier.
+ *
+ * Tier matching uses inclusive semantics for higher tiers:
+ * - 'budget': only budget models (strict cost constraint)
+ * - 'standard': budget + standard models (moderate cost constraint)
+ * - 'premium': all models (no cost constraint - premium agents can afford anything)
+ *
+ * This allows agents with higher price tiers to use cheaper models when appropriate,
+ * while agents with budget constraints are limited to cost-effective options.
  */
 function matchesPriceTier(model: ModelInfo, requiredTier: AgentRequirements['priceTier']): boolean {
   if (requiredTier === 'any') return true;
 
   const modelTier = getPriceTier(model.cost.output);
 
-  // Budget tier only matches budget models
+  // Budget tier only matches budget models (strict cost constraint)
   if (requiredTier === 'budget') {
     return modelTier === 'budget';
   }
 
-  // Standard tier matches budget and standard
+  // Standard tier matches budget and standard (moderate cost constraint)
   if (requiredTier === 'standard') {
     return modelTier === 'budget' || modelTier === 'standard';
   }
 
-  // Premium tier matches all
+  // Premium tier matches all models (no cost constraint)
   return true;
 }
 
