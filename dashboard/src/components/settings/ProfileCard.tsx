@@ -4,6 +4,8 @@
  * Shows primary agent configuration at a glance with visual indicators for
  * driver type and model tier. Supports activation, editing, and deletion.
  */
+import { forwardRef } from 'react';
+import { cn } from '@/lib/utils';
 import { motion } from 'motion/react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -66,7 +68,7 @@ const getModelColor = (model: string): string => {
   if (model.includes('opus') || model.includes('gpt-4')) return MODEL_COLORS.opus;
   if (model.includes('sonnet') || model.includes('gpt-3.5')) return MODEL_COLORS.sonnet;
   // Default to haiku styling for unknown models
-  return MODEL_COLORS.haiku as string;
+  return MODEL_COLORS.haiku;
 };
 
 /** Truncate model name for display */
@@ -80,7 +82,8 @@ const formatModel = (model: string): string => {
   return model;
 };
 
-export function ProfileCard({ profile, onEdit, onDelete, onActivate }: ProfileCardProps) {
+export const ProfileCard = forwardRef<HTMLDivElement, ProfileCardProps>(
+  function ProfileCard({ profile, onEdit, onDelete, onActivate }, ref) {
   // Get primary agents configuration
   const primaryAgents = ['architect', 'developer', 'reviewer'] as const;
   const agentConfigs = primaryAgents.map(key => ({
@@ -118,6 +121,7 @@ export function ProfileCard({ profile, onEdit, onDelete, onActivate }: ProfileCa
 
   return (
     <motion.div
+      ref={ref}
       layout
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
@@ -132,12 +136,12 @@ export function ProfileCard({ profile, onEdit, onDelete, onActivate }: ProfileCa
         role="button"
         aria-pressed={profile.is_active}
         aria-label={`${profile.is_active ? 'Active profile' : 'Activate profile'} ${profile.id}`}
-        className={`
-          group relative cursor-pointer overflow-hidden transition-all duration-200
-          hover:translate-y-[-2px] hover:shadow-lg hover:shadow-primary/5
-          focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2
-          ${profile.is_active ? 'border-primary shadow-md shadow-primary/10' : 'border-border/50'}
-        `}
+        className={cn(
+          'group relative cursor-pointer overflow-hidden transition-all duration-200',
+          'hover:translate-y-[-2px] hover:shadow-lg hover:shadow-primary/5',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+          profile.is_active ? 'border-primary shadow-md shadow-primary/10' : 'border-border/50'
+        )}
       >
         {/* Active indicator accent line */}
         {profile.is_active && (
@@ -186,11 +190,12 @@ export function ProfileCard({ profile, onEdit, onDelete, onActivate }: ProfileCa
           <div className="flex items-center gap-2">
             <Badge
               variant="outline"
-              className={`text-xs ${
+              className={cn(
+                'text-xs',
                 primaryDriver.startsWith('cli:')
                   ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/30'
                   : 'bg-blue-500/10 text-blue-500 border-blue-500/30'
-              }`}
+              )}
             >
               <DriverIcon className="mr-1 h-3 w-3" />
               {primaryDriver}
@@ -259,4 +264,4 @@ export function ProfileCard({ profile, onEdit, onDelete, onActivate }: ProfileCa
       </Card>
     </motion.div>
   );
-}
+});

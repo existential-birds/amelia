@@ -52,6 +52,7 @@ import {
   type ClipboardEventHandler,
   type ComponentProps,
   createContext,
+  forwardRef,
   type FormEvent,
   type FormEventHandler,
   Fragment,
@@ -609,7 +610,7 @@ export const PromptInput = ({
   useEffect(() => {
     const form = formRef.current;
     if (!form) return;
-    if (globalDrop) return // when global drop is on, let the document-level handler own drops
+    if (globalDrop) return; // when global drop is on, let the document-level handler own drops
 
     const onDragOver = (e: DragEvent) => {
       if (e.dataTransfer?.types?.includes("Files")) {
@@ -664,7 +665,6 @@ export const PromptInput = ({
         }
       }
     },
-     
     [usingProvider]
   );
 
@@ -705,7 +705,7 @@ export const PromptInput = ({
     [files, add, remove, clear, openFileDialog]
   );
 
-  const handleSubmit: FormEventHandler<HTMLFormElement> = (event) => {
+  const handleSubmit: FormEventHandler<HTMLFormElement> = async (event) => {
     event.preventDefault();
 
     const form = event.currentTarget;
@@ -722,50 +722,45 @@ export const PromptInput = ({
       form.reset();
     }
 
-    // Convert blob URLs to data URLs asynchronously
-    Promise.all(
-      files.map(async ({ id: _id, ...item }) => {
-        if (item.url && item.url.startsWith("blob:")) {
-          const dataUrl = await convertBlobUrlToDataUrl(item.url);
-          // If conversion failed, keep the original blob URL
-          return {
-            ...item,
-            url: dataUrl ?? item.url,
-          };
-        }
-        return item;
-      })
-    )
-      .then((convertedFiles: FileUIPart[]) => {
-        try {
-          const result = onSubmit({ text, files: convertedFiles }, event);
+    try {
+      // Convert blob URLs to data URLs asynchronously
+      const convertedFiles: FileUIPart[] = await Promise.all(
+        files.map(async ({ id: _id, ...item }) => {
+          if (item.url && item.url.startsWith("blob:")) {
+            const dataUrl = await convertBlobUrlToDataUrl(item.url);
+            // If conversion failed, keep the original blob URL
+            return {
+              ...item,
+              url: dataUrl ?? item.url,
+            };
+          }
+          return item;
+        })
+      );
 
-          // Handle both sync and async onSubmit
-          if (result instanceof Promise) {
-            result
-              .then(() => {
-                clear();
-                if (usingProvider) {
-                  controller.textInput.clear();
-                }
-              })
-              .catch(() => {
-                // Don't clear on error - user may want to retry
-              });
-          } else {
-            // Sync function completed without throwing, clear attachments
-            clear();
-            if (usingProvider) {
-              controller.textInput.clear();
-            }
+      const result = onSubmit({ text, files: convertedFiles }, event);
+
+      // Handle both sync and async onSubmit
+      if (result instanceof Promise) {
+        try {
+          await result;
+          clear();
+          if (usingProvider) {
+            controller.textInput.clear();
           }
         } catch {
           // Don't clear on error - user may want to retry
         }
-      })
-      .catch(() => {
-        // Don't clear on error - user may want to retry
-      });
+      } else {
+        // Sync function completed without throwing, clear attachments
+        clear();
+        if (usingProvider) {
+          controller.textInput.clear();
+        }
+      }
+    } catch {
+      // Don't clear on error - user may want to retry
+    }
   };
 
   // Render with or without local provider
@@ -814,102 +809,112 @@ export type PromptInputTextareaProps = ComponentProps<
   typeof InputGroupTextarea
 >;
 
-export const PromptInputTextarea = ({
-  onChange,
-  className,
-  placeholder = "What would you like to know?",
-  ...props
-}: PromptInputTextareaProps) => {
-  const controller = useOptionalPromptInputController();
-  const attachments = usePromptInputAttachments();
-  const [isComposing, setIsComposing] = useState(false);
+export const PromptInputTextarea = forwardRef<
+  HTMLTextAreaElement,
+  PromptInputTextareaProps
+>(
+  (
+    {
+      onChange,
+      className,
+      placeholder = "What would you like to know?",
+      ...props
+    },
+    ref
+  ) => {
+    const controller = useOptionalPromptInputController();
+    const attachments = usePromptInputAttachments();
+    const [isComposing, setIsComposing] = useState(false);
 
-  const handleKeyDown: KeyboardEventHandler<HTMLTextAreaElement> = (e) => {
-    if (e.key === "Enter") {
-      if (isComposing || e.nativeEvent.isComposing) {
-        return;
+    const handleKeyDown: KeyboardEventHandler<HTMLTextAreaElement> = (e) => {
+      if (e.key === "Enter") {
+        if (isComposing || e.nativeEvent.isComposing) {
+          return;
+        }
+        if (e.shiftKey) {
+          return;
+        }
+        e.preventDefault();
+
+        // Check if the submit button is disabled before submitting
+        const form = e.currentTarget.form;
+        const submitButton = form?.querySelector(
+          'button[type="submit"]'
+        ) as HTMLButtonElement | null;
+        if (submitButton?.disabled) {
+          return;
+        }
+
+        form?.requestSubmit();
       }
-      if (e.shiftKey) {
-        return;
-      }
-      e.preventDefault();
 
-      // Check if the submit button is disabled before submitting
-      const form = e.currentTarget.form;
-      const submitButton = form?.querySelector(
-        'button[type="submit"]'
-      ) as HTMLButtonElement | null;
-      if (submitButton?.disabled) {
-        return;
-      }
-
-      form?.requestSubmit();
-    }
-
-    // Remove last attachment when Backspace is pressed and textarea is empty
-    if (
-      e.key === "Backspace" &&
-      e.currentTarget.value === "" &&
-      attachments.files.length > 0
-    ) {
-      e.preventDefault();
-      const lastAttachment = attachments.files.at(-1);
-      if (lastAttachment) {
-        attachments.remove(lastAttachment.id);
-      }
-    }
-  };
-
-  const handlePaste: ClipboardEventHandler<HTMLTextAreaElement> = (event) => {
-    const items = event.clipboardData?.items;
-
-    if (!items) {
-      return;
-    }
-
-    const files: File[] = [];
-
-    for (const item of items) {
-      if (item.kind === "file") {
-        const file = item.getAsFile();
-        if (file) {
-          files.push(file);
+      // Remove last attachment when Backspace is pressed and textarea is empty
+      if (
+        e.key === "Backspace" &&
+        e.currentTarget.value === "" &&
+        attachments.files.length > 0
+      ) {
+        e.preventDefault();
+        const lastAttachment = attachments.files.at(-1);
+        if (lastAttachment) {
+          attachments.remove(lastAttachment.id);
         }
       }
-    }
+    };
 
-    if (files.length > 0) {
-      event.preventDefault();
-      attachments.add(files);
-    }
-  };
+    const handlePaste: ClipboardEventHandler<HTMLTextAreaElement> = (event) => {
+      const items = event.clipboardData?.items;
 
-  const controlledProps = controller
-    ? {
-        value: controller.textInput.value,
-        onChange: (e: ChangeEvent<HTMLTextAreaElement>) => {
-          controller.textInput.setInput(e.currentTarget.value);
-          onChange?.(e);
-        },
+      if (!items) {
+        return;
       }
-    : {
-        onChange,
-      };
 
-  return (
-    <InputGroupTextarea
-      className={cn("field-sizing-content max-h-48 min-h-16", className)}
-      name="message"
-      onCompositionEnd={() => setIsComposing(false)}
-      onCompositionStart={() => setIsComposing(true)}
-      onKeyDown={handleKeyDown}
-      onPaste={handlePaste}
-      placeholder={placeholder}
-      {...props}
-      {...controlledProps}
-    />
-  );
-};
+      const files: File[] = [];
+
+      for (const item of items) {
+        if (item.kind === "file") {
+          const file = item.getAsFile();
+          if (file) {
+            files.push(file);
+          }
+        }
+      }
+
+      if (files.length > 0) {
+        event.preventDefault();
+        attachments.add(files);
+      }
+    };
+
+    const controlledProps = controller
+      ? {
+          value: controller.textInput.value,
+          onChange: (e: ChangeEvent<HTMLTextAreaElement>) => {
+            controller.textInput.setInput(e.currentTarget.value);
+            onChange?.(e);
+          },
+        }
+      : {
+          onChange,
+        };
+
+    return (
+      <InputGroupTextarea
+        ref={ref}
+        className={cn("field-sizing-content max-h-48 min-h-16", className)}
+        name="message"
+        onCompositionEnd={() => setIsComposing(false)}
+        onCompositionStart={() => setIsComposing(true)}
+        onKeyDown={handleKeyDown}
+        onPaste={handlePaste}
+        placeholder={placeholder}
+        {...props}
+        {...controlledProps}
+      />
+    );
+  }
+);
+PromptInputTextarea.displayName = "PromptInputTextarea";
 
 export type PromptInputHeaderProps = Omit<
   ComponentProps<typeof InputGroupAddon>,
@@ -1124,6 +1129,12 @@ export const PromptInputSpeechButton = ({
     null
   );
   const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const onTranscriptionChangeRef = useRef(onTranscriptionChange);
+
+  // Keep the callback ref up to date without triggering effect re-runs
+  useEffect(() => {
+    onTranscriptionChangeRef.current = onTranscriptionChange;
+  }, [onTranscriptionChange]);
 
   useEffect(() => {
     if (
@@ -1164,12 +1175,11 @@ export const PromptInputSpeechButton = ({
 
           textarea.value = newValue;
           textarea.dispatchEvent(new Event("input", { bubbles: true }));
-          onTranscriptionChange?.(newValue);
+          onTranscriptionChangeRef.current?.(newValue);
         }
       };
 
-      speechRecognition.onerror = (event) => {
-        console.error("Speech recognition error:", event.error);
+      speechRecognition.onerror = () => {
         setIsListening(false);
       };
 
@@ -1182,7 +1192,7 @@ export const PromptInputSpeechButton = ({
         recognitionRef.current.stop();
       }
     };
-  }, [textareaRef, onTranscriptionChange]);
+  }, [textareaRef]);
 
   const toggleListening = useCallback(() => {
     if (!recognition) {

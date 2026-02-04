@@ -16,8 +16,11 @@ describe('useElapsedTime', () => {
     vi.useFakeTimers();
   });
 
-  afterEach(() => {
-    vi.runOnlyPendingTimers();
+  afterEach(async () => {
+    // Run all pending timers within act to avoid warnings
+    await act(async () => {
+      vi.runOnlyPendingTimers();
+    });
     vi.useRealTimers();
     vi.restoreAllMocks();
   });
