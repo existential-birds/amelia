@@ -4,6 +4,7 @@
  * Shows primary agent configuration at a glance with visual indicators for
  * driver type and model tier. Supports activation, editing, and deletion.
  */
+import { forwardRef } from 'react';
 import { motion } from 'motion/react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -80,7 +81,8 @@ const formatModel = (model: string): string => {
   return model;
 };
 
-export function ProfileCard({ profile, onEdit, onDelete, onActivate }: ProfileCardProps) {
+export const ProfileCard = forwardRef<HTMLDivElement, ProfileCardProps>(
+  function ProfileCard({ profile, onEdit, onDelete, onActivate }, ref) {
   // Get primary agents configuration
   const primaryAgents = ['architect', 'developer', 'reviewer'] as const;
   const agentConfigs = primaryAgents.map(key => ({
@@ -118,6 +120,7 @@ export function ProfileCard({ profile, onEdit, onDelete, onActivate }: ProfileCa
 
   return (
     <motion.div
+      ref={ref}
       layout
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
@@ -259,4 +262,4 @@ export function ProfileCard({ profile, onEdit, onDelete, onActivate }: ProfileCa
       </Card>
     </motion.div>
   );
-}
+});

@@ -1,8 +1,8 @@
 /**
  * @fileoverview Tests for SetPlanModal component.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, waitFor, cleanup, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { SetPlanModal } from '../SetPlanModal';
 import { api, ApiError } from '@/api/client';
@@ -49,67 +49,92 @@ describe('SetPlanModal', () => {
     });
   });
 
+  afterEach(() => {
+    // Ensure cleanup happens before moving to next test
+    cleanup();
+  });
+
+  /**
+   * Helper to render the modal and wait for initial effects to settle.
+   * This prevents act() warnings from useEffect in PlanImportSection.
+   */
+  async function renderAndWaitForInit(props = defaultProps) {
+    const result = render(<SetPlanModal {...props} />);
+    // Wait for PlanImportSection's useEffect to run (the one that updates on mount)
+    // If open, the component renders and effects run
+    if (props.open !== false) {
+      await waitFor(() => {
+        // Just waiting a tick for effects to settle
+        expect(result.container).toBeInTheDocument();
+      });
+    }
+    return result;
+  }
+
   describe('rendering', () => {
-    it('renders modal with title when open', () => {
-      render(<SetPlanModal {...defaultProps} />);
+    it('renders modal with title when open', async () => {
+      await renderAndWaitForInit();
       expect(screen.getByText(/set plan/i)).toBeInTheDocument();
     });
 
     it('does not render when closed', () => {
+      // When modal is closed, no async operations occur
       render(<SetPlanModal {...defaultProps} open={false} />);
       expect(screen.queryByText(/set plan/i)).not.toBeInTheDocument();
     });
 
-    it('renders PlanImportSection expanded', () => {
-      render(<SetPlanModal {...defaultProps} />);
+    it('renders PlanImportSection expanded', async () => {
+      await renderAndWaitForInit();
       // PlanImportSection content should be visible
       expect(screen.getByPlaceholderText(/relative path/i)).toBeInTheDocument();
     });
 
-    it('renders Cancel and Apply buttons', () => {
-      render(<SetPlanModal {...defaultProps} />);
+    it('renders Cancel and Apply buttons', async () => {
+      await renderAndWaitForInit();
       expect(screen.getByRole('button', { name: /cancel/i })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /apply/i })).toBeInTheDocument();
     });
   });
 
   describe('overwrite checkbox', () => {
-    it('does not show overwrite checkbox when hasPlan is false', () => {
-      render(<SetPlanModal {...defaultProps} hasPlan={false} />);
+    it('does not show overwrite checkbox when hasPlan is false', async () => {
+      await renderAndWaitForInit({ ...defaultProps, hasPlan: false });
       expect(screen.queryByLabelText(/overwrite/i)).not.toBeInTheDocument();
     });
 
-    it('shows overwrite checkbox when hasPlan is true', () => {
-      render(<SetPlanModal {...defaultProps} hasPlan={true} />);
+    it('shows overwrite checkbox when hasPlan is true', async () => {
+      await renderAndWaitForInit({ ...defaultProps, hasPlan: true });
       expect(screen.getByLabelText(/overwrite/i)).toBeInTheDocument();
     });
 
-    it('overwrite checkbox is unchecked by default', () => {
-      render(<SetPlanModal {...defaultProps} hasPlan={true} />);
+    it('overwrite checkbox is unchecked by default', async () => {
+      await renderAndWaitForInit({ ...defaultProps, hasPlan: true });
       const checkbox = screen.getByLabelText(/overwrite/i);
       expect(checkbox).not.toBeChecked();
     });
   });
 
   describe('submission', () => {
-    it('Apply button is disabled when no plan data entered', () => {
-      render(<SetPlanModal {...defaultProps} />);
+    it('Apply button is disabled when no plan data entered', async () => {
+      await renderAndWaitForInit();
       expect(screen.getByRole('button', { name: /apply/i })).toBeDisabled();
     });
 
     it('Apply button is enabled when plan file path is entered', async () => {
       const user = userEvent.setup();
-      render(<SetPlanModal {...defaultProps} />);
+      await renderAndWaitForInit();
 
       const input = screen.getByPlaceholderText(/relative path/i);
       await user.type(input, 'docs/plan.md');
 
-      expect(screen.getByRole('button', { name: /apply/i })).not.toBeDisabled();
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /apply/i })).not.toBeDisabled();
+      });
     });
 
     it('calls api.setPlan with plan_file when file path is provided', async () => {
       const user = userEvent.setup();
-      render(<SetPlanModal {...defaultProps} />);
+      await renderAndWaitForInit();
 
       const input = screen.getByPlaceholderText(/relative path/i);
       await user.type(input, 'docs/plan.md');
@@ -125,7 +150,7 @@ describe('SetPlanModal', () => {
 
     it('calls api.setPlan with plan_content when content is pasted', async () => {
       const user = userEvent.setup();
-      render(<SetPlanModal {...defaultProps} />);
+      await renderAndWaitForInit();
 
       // Switch to paste mode
       await user.click(screen.getByRole('radio', { name: /paste/i }));
@@ -144,7 +169,7 @@ describe('SetPlanModal', () => {
 
     it('includes force=true when overwrite is checked', async () => {
       const user = userEvent.setup();
-      render(<SetPlanModal {...defaultProps} hasPlan={true} />);
+      await renderAndWaitForInit({ ...defaultProps, hasPlan: true });
 
       const input = screen.getByPlaceholderText(/relative path/i);
       await user.type(input, 'docs/plan.md');
@@ -171,7 +196,7 @@ describe('SetPlanModal', () => {
 
       const user = userEvent.setup();
       const onOpenChange = vi.fn();
-      render(<SetPlanModal {...defaultProps} onOpenChange={onOpenChange} />);
+      await renderAndWaitForInit({ ...defaultProps, onOpenChange });
 
       const input = screen.getByPlaceholderText(/relative path/i);
       await user.type(input, 'docs/plan.md');
@@ -193,7 +218,7 @@ describe('SetPlanModal', () => {
       });
 
       const user = userEvent.setup();
-      render(<SetPlanModal {...defaultProps} />);
+      await renderAndWaitForInit();
 
       const input = screen.getByPlaceholderText(/relative path/i);
       await user.type(input, 'docs/plan.md');
@@ -210,7 +235,7 @@ describe('SetPlanModal', () => {
         new ApiError('Plan file not found', 'PLAN_NOT_FOUND', 404)
       );
 
-      render(<SetPlanModal {...defaultProps} />);
+      await renderAndWaitForInit();
 
       const input = screen.getByPlaceholderText(/relative path/i);
       await user.type(input, 'docs/plan.md');
@@ -230,7 +255,7 @@ describe('SetPlanModal', () => {
         })
       );
 
-      render(<SetPlanModal {...defaultProps} />);
+      await renderAndWaitForInit();
 
       const input = screen.getByPlaceholderText(/relative path/i);
       await user.type(input, 'docs/plan.md');
@@ -241,7 +266,10 @@ describe('SetPlanModal', () => {
         expect(screen.getByRole('button', { name: /applying/i })).toBeInTheDocument();
       });
 
-      resolvePromise!({ goal: 'Test', key_files: [], total_tasks: 1 });
+      // Resolve the promise and wait for the submission to complete
+      await act(async () => {
+        resolvePromise!({ goal: 'Test', key_files: [], total_tasks: 1 });
+      });
     });
   });
 
@@ -249,22 +277,26 @@ describe('SetPlanModal', () => {
     it('closes modal when Cancel button is clicked', async () => {
       const user = userEvent.setup();
       const onOpenChange = vi.fn();
-      render(<SetPlanModal {...defaultProps} onOpenChange={onOpenChange} />);
+      await renderAndWaitForInit({ ...defaultProps, onOpenChange });
 
       await user.click(screen.getByRole('button', { name: /cancel/i }));
 
-      expect(onOpenChange).toHaveBeenCalledWith(false);
+      await waitFor(() => {
+        expect(onOpenChange).toHaveBeenCalledWith(false);
+      });
     });
 
     it('closes modal when close button is clicked', async () => {
       const user = userEvent.setup();
       const onOpenChange = vi.fn();
-      render(<SetPlanModal {...defaultProps} onOpenChange={onOpenChange} />);
+      await renderAndWaitForInit({ ...defaultProps, onOpenChange });
 
       // Close button has sr-only text "Close"
       await user.click(screen.getByRole('button', { name: /close/i }));
 
-      expect(onOpenChange).toHaveBeenCalledWith(false);
+      await waitFor(() => {
+        expect(onOpenChange).toHaveBeenCalledWith(false);
+      });
     });
   });
 });
