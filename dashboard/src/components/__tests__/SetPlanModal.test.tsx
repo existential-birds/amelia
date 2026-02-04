@@ -1,6 +1,7 @@
 /**
  * @fileoverview Tests for SetPlanModal component.
  */
+import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, cleanup, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -33,7 +34,7 @@ vi.mock('sonner', () => ({
 }));
 
 describe('SetPlanModal', () => {
-  const defaultProps = {
+  const defaultProps: React.ComponentProps<typeof SetPlanModal> = {
     open: true,
     onOpenChange: vi.fn(),
     workflowId: 'wf-123',
