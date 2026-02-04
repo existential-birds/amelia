@@ -5,7 +5,7 @@
  * Primary agents (architect, developer, reviewer) are always visible.
  * Utility agents are collapsed by default but easily accessible.
  */
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion } from 'motion/react';
 import {
   Dialog,
@@ -41,6 +41,7 @@ import { cn } from '@/lib/utils';
 import { createProfile, updateProfile } from '@/api/settings';
 import type { Profile, ProfileCreate, ProfileUpdate } from '@/api/settings';
 import * as toast from '@/components/Toast';
+import { ApiModelSelect } from '@/components/model-picker';
 
 // =============================================================================
 // Agent Definitions
@@ -161,7 +162,7 @@ const DRIVER_OPTIONS = [
 ];
 
 const TRACKER_OPTIONS = [
-  { value: 'none', label: 'None' },
+  { value: 'noop', label: 'None' },
   { value: 'jira', label: 'Jira' },
   { value: 'github', label: 'GitHub' },
 ];
@@ -169,14 +170,9 @@ const TRACKER_OPTIONS = [
 /** Default models (Claude CLI) */
 const CLAUDE_MODELS = ['opus', 'sonnet', 'haiku'] as const;
 
-/** Model options vary by driver */
+/** Model options by driver - API models fetched dynamically via ApiModelSelect */
 const MODEL_OPTIONS_BY_DRIVER: Record<string, readonly string[]> = {
   'cli': CLAUDE_MODELS,
-  'api': [
-    'qwen/qwen3-coder-flash',
-    'minimax/minimax-m2',
-    'google/gemini-3-flash-preview',
-  ],
 };
 
 // =============================================================================
@@ -202,7 +198,7 @@ const buildDefaultAgents = (): Record<string, AgentFormData> => {
 
 const DEFAULT_FORM_DATA: FormData = {
   id: '',
-  tracker: 'none',
+  tracker: 'noop',
   working_dir: '',
   plan_output_dir: 'docs/plans',
   plan_path_pattern: 'docs/plans/{date}-{issue_key}.md',
@@ -294,23 +290,31 @@ function AgentCard({ agent, config, onChange }: AgentCardProps) {
         </SelectContent>
       </Select>
 
-      {/* Model select */}
-      <Select
-        key={`${agent.key}-model-${config.driver}`}
-        value={config.model}
-        onValueChange={(v) => onChange('model', v)}
-      >
-        <SelectTrigger className="h-7 w-full sm:w-[90px] text-xs bg-background/50">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {availableModels.map((m) => (
-            <SelectItem key={m} value={m}>
-              {m}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      {/* Model select - ApiModelSelect for api driver, simple Select for cli */}
+      {config.driver === 'api' ? (
+        <ApiModelSelect
+          agentKey={agent.key}
+          value={config.model}
+          onChange={(v) => onChange('model', v)}
+        />
+      ) : (
+        <Select
+          key={`${agent.key}-model-${config.driver}`}
+          value={config.model}
+          onValueChange={(v) => onChange('model', v)}
+        >
+          <SelectTrigger className="h-7 w-full sm:w-[90px] text-xs bg-background/50">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {availableModels.map((m) => (
+              <SelectItem key={m} value={m}>
+                {m}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
     </div>
   );
 }
@@ -328,14 +332,14 @@ function BulkApply({ onApply }: BulkApplyProps) {
   const [model, setModel] = useState('sonnet');
   const [showSuccess, setShowSuccess] = useState(false);
 
-  const availableModels = getModelsForDriver(driver);
+  const availableModels = useMemo(() => getModelsForDriver(driver), [driver]);
 
   // Reset model when driver changes if current model isn't available
   useEffect(() => {
     if (!availableModels.includes(model)) {
       setModel(availableModels[0] ?? 'sonnet');
     }
-  }, [driver, availableModels, model]);
+  }, [availableModels, model]);
 
   const handleApply = (targets: 'all' | 'primary' | 'utility') => {
     onApply(driver, model, targets);

@@ -15,3 +15,4 @@ export { useWorkflowActions } from './useWorkflowActions';
 export { useElapsedTime } from './useElapsedTime';
 export { useAutoRevalidation } from './useAutoRevalidation';
 export { useBrainstormSession } from './useBrainstormSession';
+export { useRecentModels } from './useRecentModels';

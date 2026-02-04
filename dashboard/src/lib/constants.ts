@@ -1,13 +1,64 @@
 /**
  * @fileoverview Application-wide constants and configuration values.
  *
- * Centralizes version info and other constants derived from package.json.
+ * Centralizes version info, agent definitions, and other constants.
  */
 
 import packageJson from '../../package.json';
 
 /** Current application version from package.json. */
 export const APP_VERSION = packageJson.version;
+
+/**
+ * Agent capability requirements for model filtering.
+ */
+export interface AgentRequirements {
+  capabilities: ('tool_call' | 'reasoning' | 'structured_output')[];
+  minContext: number;
+  priceTier: 'budget' | 'standard' | 'premium' | 'any';
+}
+
+/**
+ * Agent-specific model requirements.
+ * All agents require tool_call. Secondary capabilities vary.
+ */
+export const AGENT_MODEL_REQUIREMENTS: Record<string, AgentRequirements> = {
+  architect: {
+    capabilities: ['tool_call', 'reasoning', 'structured_output'],
+    minContext: 200_000,
+    priceTier: 'any',
+  },
+  developer: {
+    capabilities: ['tool_call', 'structured_output'],
+    minContext: 200_000,
+    priceTier: 'any',
+  },
+  reviewer: {
+    capabilities: ['tool_call', 'reasoning'],
+    minContext: 128_000,
+    priceTier: 'any',
+  },
+  plan_validator: {
+    capabilities: ['tool_call', 'structured_output'],
+    minContext: 64_000,
+    priceTier: 'budget',
+  },
+  task_reviewer: {
+    capabilities: ['tool_call', 'reasoning'],
+    minContext: 64_000,
+    priceTier: 'budget',
+  },
+  evaluator: {
+    capabilities: ['tool_call', 'structured_output'],
+    minContext: 64_000,
+    priceTier: 'budget',
+  },
+  brainstormer: {
+    capabilities: ['tool_call', 'reasoning'],
+    minContext: 64_000,
+    priceTier: 'standard',
+  },
+};
 
 /** Style mapping for different agent types in activity logs and UI. */
 export const AGENT_STYLES: Record<string, { text: string; bg: string }> = {
