@@ -136,12 +136,12 @@ export const ProfileCard = forwardRef<HTMLDivElement, ProfileCardProps>(
         role="button"
         aria-pressed={profile.is_active}
         aria-label={`${profile.is_active ? 'Active profile' : 'Activate profile'} ${profile.id}`}
-        className={`
-          group relative cursor-pointer overflow-hidden transition-all duration-200
-          hover:translate-y-[-2px] hover:shadow-lg hover:shadow-primary/5
-          focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2
-          ${profile.is_active ? 'border-primary shadow-md shadow-primary/10' : 'border-border/50'}
-        `}
+        className={cn(
+          'group relative cursor-pointer overflow-hidden transition-all duration-200',
+          'hover:translate-y-[-2px] hover:shadow-lg hover:shadow-primary/5',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+          profile.is_active ? 'border-primary shadow-md shadow-primary/10' : 'border-border/50'
+        )}
       >
         {/* Active indicator accent line */}
         {profile.is_active && (

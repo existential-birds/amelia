@@ -39,8 +39,9 @@ function FitViewOnNodeCountChange({ nodeCount }: { nodeCount: number }) {
   useEffect(() => {
     // Only trigger fitView when:
     // 1. Nodes are initialized (measured)
-    // 2. Node count has increased since we last fitted
-    if (nodesInitialized && nodeCount > lastFittedCountRef.current) {
+    // 2. There are nodes to fit
+    // 3. Node count has increased since we last fitted
+    if (nodesInitialized && nodeCount > 0 && nodeCount > lastFittedCountRef.current) {
       fitView({ padding: 0.2 });
       lastFittedCountRef.current = nodeCount;
     }
