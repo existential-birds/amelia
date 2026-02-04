@@ -116,7 +116,7 @@ describe("settings API", () => {
       const mockProfiles: Profile[] = [
         {
           id: "work",
-          tracker: "none",
+          tracker: "noop",
           working_dir: "/Users/me/projects",
           plan_output_dir: "plans",
           plan_path_pattern: "{issue_id}.md",
@@ -202,7 +202,7 @@ describe("settings API", () => {
     it("fetches a single profile by ID", async () => {
       const mockProfile: Profile = {
         id: "work",
-        tracker: "none",
+        tracker: "noop",
         working_dir: "/Users/me/projects",
         plan_output_dir: "plans",
         plan_path_pattern: "{issue_id}.md",
@@ -272,7 +272,7 @@ describe("settings API", () => {
     it("creates a new profile", async () => {
       const mockProfile: Profile = {
         id: "new-profile",
-        tracker: "none",
+        tracker: "noop",
         working_dir: "/Users/me/projects",
         plan_output_dir: "plans",
         plan_path_pattern: "{issue_id}.md",
@@ -338,7 +338,7 @@ describe("settings API", () => {
     it("updates an existing profile", async () => {
       const mockProfile: Profile = {
         id: "work",
-        tracker: "none",
+        tracker: "noop",
         working_dir: "/Users/me/projects",
         plan_output_dir: "plans",
         plan_path_pattern: "{issue_id}.md",
@@ -413,7 +413,7 @@ describe("settings API", () => {
     it("activates a profile", async () => {
       const mockProfile: Profile = {
         id: "work",
-        tracker: "none",
+        tracker: "noop",
         working_dir: "/Users/me/projects",
         plan_output_dir: "plans",
         plan_path_pattern: "{issue_id}.md",

@@ -38,7 +38,7 @@ const mockProfiles = [
     id: 'dev',
     is_active: true,
     working_dir: '/repo',
-    tracker: 'none',
+    tracker: 'noop',
     plan_output_dir: 'docs/plans',
     plan_path_pattern: 'docs/plans/{date}-{issue_key}.md',
     agents: {

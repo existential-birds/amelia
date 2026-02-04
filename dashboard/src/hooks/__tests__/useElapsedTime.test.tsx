@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { renderHook, act } from '@testing-library/react';
+import { renderHook, act, waitFor } from '@testing-library/react';
 import { useElapsedTime } from '../useElapsedTime';
 import { createMockWorkflowDetail } from '../../__tests__/fixtures';
 import type { WorkflowDetail } from '../../types';
@@ -16,8 +16,11 @@ describe('useElapsedTime', () => {
     vi.useFakeTimers();
   });
 
-  afterEach(() => {
-    vi.runOnlyPendingTimers();
+  afterEach(async () => {
+    // Run all pending timers within act to avoid warnings
+    await act(async () => {
+      vi.runOnlyPendingTimers();
+    });
     vi.useRealTimers();
     vi.restoreAllMocks();
   });

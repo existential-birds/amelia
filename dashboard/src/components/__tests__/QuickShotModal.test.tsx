@@ -1,8 +1,8 @@
 /**
  * @fileoverview Tests for QuickShotModal functionality.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QuickShotModal } from '../QuickShotModal';
 import { api, ApiError } from '@/api/client';
@@ -60,6 +60,24 @@ describe('QuickShotModal', () => {
     });
   });
 
+  afterEach(() => {
+    // Ensure cleanup happens before moving to next test
+    cleanup();
+  });
+
+  /**
+   * Helper to render the modal and wait for initial async operations to complete.
+   * This prevents act() warnings from the useEffect that fetches server config.
+   */
+  async function renderAndWaitForInit(props = defaultProps) {
+    const result = render(<QuickShotModal {...props} />);
+    // Wait for the async useEffect (api.getConfig) to complete
+    await waitFor(() => {
+      expect(api.getConfig).toHaveBeenCalled();
+    });
+    return result;
+  }
+
   /**
    * Create a mock markdown file with File.text() support (not available in jsdom).
    */
@@ -98,13 +116,13 @@ describe('QuickShotModal', () => {
   }
 
   describe('rendering', () => {
-    it('renders modal with title when open', () => {
-      render(<QuickShotModal {...defaultProps} />);
+    it('renders modal with title when open', async () => {
+      await renderAndWaitForInit();
       expect(screen.getByText('QUICK SHOT')).toBeInTheDocument();
     });
 
-    it('renders all form fields', () => {
-      render(<QuickShotModal {...defaultProps} />);
+    it('renders all form fields', async () => {
+      await renderAndWaitForInit();
       expect(screen.getByLabelText(/task id/i)).toBeInTheDocument();
       expect(screen.getByLabelText(/worktree path/i)).toBeInTheDocument();
       expect(screen.getByLabelText(/profile/i)).toBeInTheDocument();
@@ -112,8 +130,8 @@ describe('QuickShotModal', () => {
       expect(screen.getByLabelText(/description/i)).toBeInTheDocument();
     });
 
-    it('renders Cancel, Queue, Plan & Queue, and Start buttons', () => {
-      render(<QuickShotModal {...defaultProps} />);
+    it('renders Cancel, Queue, Plan & Queue, and Start buttons', async () => {
+      await renderAndWaitForInit();
       expect(screen.getByRole('button', { name: /cancel/i })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /^queue$/i })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /plan.*queue/i })).toBeInTheDocument();
@@ -121,6 +139,7 @@ describe('QuickShotModal', () => {
     });
 
     it('does not render when closed', () => {
+      // When modal is closed, no async operations occur
       render(<QuickShotModal open={false} onOpenChange={vi.fn()} />);
       expect(screen.queryByText('QUICK SHOT')).not.toBeInTheDocument();
     });
@@ -129,7 +148,7 @@ describe('QuickShotModal', () => {
   describe('validation', () => {
     it('shows error when task ID is empty after focusing and leaving field', async () => {
       const user = userEvent.setup();
-      render(<QuickShotModal {...defaultProps} />);
+      await renderAndWaitForInit();
 
       // Focus task ID and then blur without entering anything
       const taskIdField = screen.getByLabelText(/task id/i);
@@ -143,7 +162,7 @@ describe('QuickShotModal', () => {
 
     it('shows error when worktree path is not absolute', async () => {
       const user = userEvent.setup();
-      render(<QuickShotModal {...defaultProps} />);
+      await renderAndWaitForInit();
 
       await user.type(screen.getByLabelText(/worktree path/i), 'relative/path');
       // Blur to trigger validation
@@ -156,7 +175,7 @@ describe('QuickShotModal', () => {
 
     it('shows error when task ID has invalid characters', async () => {
       const user = userEvent.setup();
-      render(<QuickShotModal {...defaultProps} />);
+      await renderAndWaitForInit();
 
       await user.type(screen.getByLabelText(/task id/i), 'TASK@001!');
       // Blur to trigger validation
@@ -167,8 +186,8 @@ describe('QuickShotModal', () => {
       });
     });
 
-    it('disables all submit buttons when form is invalid', () => {
-      render(<QuickShotModal {...defaultProps} />);
+    it('disables all submit buttons when form is invalid', async () => {
+      await renderAndWaitForInit();
 
       // Form is initially invalid (empty required fields)
       expect(screen.getByRole('button', { name: /^queue$/i })).toBeDisabled();
@@ -177,7 +196,7 @@ describe('QuickShotModal', () => {
     });
 
     it('enables submit buttons when form is valid', async () => {
-      render(<QuickShotModal {...defaultProps} />);
+      await renderAndWaitForInit();
 
       await fillRequiredFields();
 
@@ -190,7 +209,7 @@ describe('QuickShotModal', () => {
   describe('submission', () => {
     it('calls api.createWorkflow with start=false for Queue button', async () => {
       const user = userEvent.setup();
-      render(<QuickShotModal {...defaultProps} />);
+      await renderAndWaitForInit();
 
       await fillRequiredFields();
 
@@ -209,7 +228,7 @@ describe('QuickShotModal', () => {
 
     it('calls api.createWorkflow with plan_now=true for Plan & Queue button', async () => {
       const user = userEvent.setup();
-      render(<QuickShotModal {...defaultProps} />);
+      await renderAndWaitForInit();
 
       await fillRequiredFields();
 
@@ -228,7 +247,7 @@ describe('QuickShotModal', () => {
 
     it('calls api.createWorkflow with start=true and all fields on Start button click', async () => {
       const user = userEvent.setup();
-      render(<QuickShotModal {...defaultProps} />);
+      await renderAndWaitForInit();
 
       await user.type(screen.getByLabelText(/task id/i), 'TASK-001');
       await user.type(screen.getByLabelText(/worktree path/i), '/Users/me/repo');
@@ -261,6 +280,9 @@ describe('QuickShotModal', () => {
       });
 
       render(<QuickShotModal open={true} onOpenChange={onOpenChange} />);
+      await waitFor(() => {
+        expect(api.getConfig).toHaveBeenCalled();
+      });
 
       await user.type(screen.getByLabelText(/task id/i), 'TASK-001');
       await user.type(screen.getByLabelText(/worktree path/i), '/Users/me/repo');
@@ -278,6 +300,9 @@ describe('QuickShotModal', () => {
       const user = userEvent.setup();
       const onOpenChange = vi.fn();
       render(<QuickShotModal open={true} onOpenChange={onOpenChange} />);
+      await waitFor(() => {
+        expect(api.getConfig).toHaveBeenCalled();
+      });
 
       await fillRequiredFields();
 
@@ -294,6 +319,9 @@ describe('QuickShotModal', () => {
       const user = userEvent.setup();
       const onOpenChange = vi.fn();
       render(<QuickShotModal open={true} onOpenChange={onOpenChange} />);
+      await waitFor(() => {
+        expect(api.getConfig).toHaveBeenCalled();
+      });
 
       await fillRequiredFields();
 
@@ -312,7 +340,7 @@ describe('QuickShotModal', () => {
         new ApiError('Worktree in use', 'WORKTREE_IN_USE', 409)
       );
 
-      render(<QuickShotModal {...defaultProps} />);
+      await renderAndWaitForInit();
 
       await user.type(screen.getByLabelText(/task id/i), 'TASK-001');
       await user.type(screen.getByLabelText(/worktree path/i), '/Users/me/repo');
@@ -334,7 +362,7 @@ describe('QuickShotModal', () => {
         })
       );
 
-      render(<QuickShotModal {...defaultProps} />);
+      await renderAndWaitForInit();
 
       await user.type(screen.getByLabelText(/task id/i), 'TASK-001');
       await user.type(screen.getByLabelText(/worktree path/i), '/Users/me/repo');
@@ -347,7 +375,10 @@ describe('QuickShotModal', () => {
         expect(screen.getByText(/launching/i)).toBeInTheDocument();
       });
 
-      resolvePromise!({ id: 'wf-123', status: 'pending', message: 'ok' });
+      // Resolve the promise and wait for the submission to complete
+      await waitFor(async () => {
+        resolvePromise!({ id: 'wf-123', status: 'pending', message: 'ok' });
+      });
     });
   });
 
@@ -360,14 +391,14 @@ describe('QuickShotModal', () => {
       });
     });
 
-    it('renders drop zone for design doc import', () => {
-      render(<QuickShotModal {...defaultProps} />);
+    it('renders drop zone for design doc import', async () => {
+      await renderAndWaitForInit();
 
       expect(screen.getByText(/drop or click to import design doc/i)).toBeInTheDocument();
     });
 
     it('populates form fields when importing via drag-drop', async () => {
-      render(<QuickShotModal {...defaultProps} />);
+      await renderAndWaitForInit();
 
       const dropZone = screen.getByTestId('import-zone');
 
@@ -386,7 +417,7 @@ describe('QuickShotModal', () => {
     });
 
     it('shows error toast for non-markdown files on drag-drop', async () => {
-      render(<QuickShotModal {...defaultProps} />);
+      await renderAndWaitForInit();
 
       const dropZone = screen.getByTestId('import-zone');
 
@@ -402,7 +433,7 @@ describe('QuickShotModal', () => {
     });
 
     it('shows filename in drop zone after successful drag-drop', async () => {
-      render(<QuickShotModal {...defaultProps} />);
+      await renderAndWaitForInit();
 
       // Get the Card element with the drop handler (parent of the inner content)
       const dropZone = screen.getByTestId('import-zone');
@@ -434,20 +465,20 @@ describe('QuickShotModal', () => {
   });
 
   describe('External Plan', () => {
-    it('renders External Plan collapsible section', () => {
-      render(<QuickShotModal {...defaultProps} />);
+    it('renders External Plan collapsible section', async () => {
+      await renderAndWaitForInit();
       expect(screen.getByText(/external plan/i)).toBeInTheDocument();
     });
 
-    it('External Plan section is collapsed by default', () => {
-      render(<QuickShotModal {...defaultProps} />);
+    it('External Plan section is collapsed by default', async () => {
+      await renderAndWaitForInit();
       // The plan file input should not be visible when collapsed
       expect(screen.queryByPlaceholderText(/relative path to plan file/i)).not.toBeInTheDocument();
     });
 
     it('expands External Plan section when clicked', async () => {
       const user = userEvent.setup();
-      render(<QuickShotModal {...defaultProps} />);
+      await renderAndWaitForInit();
 
       await user.click(screen.getByText(/external plan/i));
 
@@ -458,7 +489,7 @@ describe('QuickShotModal', () => {
 
     it('disables Plan & Queue button when external plan is provided', async () => {
       const user = userEvent.setup();
-      render(<QuickShotModal {...defaultProps} />);
+      await renderAndWaitForInit();
 
       // Fill required fields
       await fillRequiredFields();
@@ -480,7 +511,7 @@ describe('QuickShotModal', () => {
 
     it('passes plan_file to api.createWorkflow when provided', async () => {
       const user = userEvent.setup();
-      render(<QuickShotModal {...defaultProps} />);
+      await renderAndWaitForInit();
 
       // Fill required fields
       await user.type(screen.getByLabelText(/task id/i), 'TASK-001');
@@ -506,7 +537,7 @@ describe('QuickShotModal', () => {
 
     it('passes plan_content to api.createWorkflow when pasting content', async () => {
       const user = userEvent.setup();
-      render(<QuickShotModal {...defaultProps} />);
+      await renderAndWaitForInit();
 
       // Fill required fields
       await user.type(screen.getByLabelText(/task id/i), 'TASK-001');
@@ -534,7 +565,7 @@ describe('QuickShotModal', () => {
 
     it('passes worktree_path to PlanImportSection for file preview', async () => {
       const user = userEvent.setup();
-      render(<QuickShotModal {...defaultProps} />);
+      await renderAndWaitForInit();
 
       // Fill worktree path field
       await user.type(screen.getByLabelText(/worktree path/i), '/test/repo');
