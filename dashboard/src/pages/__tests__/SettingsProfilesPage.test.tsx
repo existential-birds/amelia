@@ -270,8 +270,7 @@ describe('SettingsProfilesPage actions', () => {
     );
 
     // Click on the prod profile card (inactive) to try activating it
-    const prodCard = screen.getByText('prod').closest('[class*="cursor-pointer"]');
-    if (!prodCard) throw new Error('Test setup error: prod card not found');
+    const prodCard = screen.getByRole('button', { name: /activate profile prod/i });
     await user.click(prodCard);
 
     await waitFor(() => {

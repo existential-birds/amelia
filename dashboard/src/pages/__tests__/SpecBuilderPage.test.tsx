@@ -147,12 +147,12 @@ describe("SpecBuilderPage", () => {
       isStreaming: true,
     });
 
-    renderPage();
+    const { container } = renderPage();
 
     // Should show the expandable Reasoning component (not just plain Shimmer)
     // The Reasoning component uses a Collapsible with data-slot="collapsible"
     await waitFor(() => {
-      const collapsible = document.querySelector('[data-slot="collapsible"]');
+      const collapsible = container.querySelector('[data-slot="collapsible"]');
       expect(collapsible).toBeInTheDocument();
     });
   });
@@ -176,14 +176,14 @@ describe("SpecBuilderPage", () => {
       isStreaming: false,
     });
 
-    renderPage();
+    const { container } = renderPage();
 
     // Should show the message content
     await waitFor(() => {
       expect(screen.getByText(/Here is my response/)).toBeInTheDocument();
     });
     // Should have the expandable Reasoning component
-    const collapsible = document.querySelector('[data-slot="collapsible"]');
+    const collapsible = container.querySelector('[data-slot="collapsible"]');
     expect(collapsible).toBeInTheDocument();
   });
 

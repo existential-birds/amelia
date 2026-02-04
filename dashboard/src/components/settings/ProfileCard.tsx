@@ -67,7 +67,7 @@ const getModelColor = (model: string): string => {
   if (model.includes('opus') || model.includes('gpt-4')) return MODEL_COLORS.opus;
   if (model.includes('sonnet') || model.includes('gpt-3.5')) return MODEL_COLORS.sonnet;
   // Default to haiku styling for unknown models
-  return MODEL_COLORS.haiku as string;
+  return MODEL_COLORS.haiku;
 };
 
 /** Truncate model name for display */
