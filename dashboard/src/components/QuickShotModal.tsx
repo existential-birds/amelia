@@ -363,6 +363,7 @@ export function QuickShotModal({ open, onOpenChange, defaults }: QuickShotModalP
 
   const handleClose = () => {
     reset();
+    setPlanData({});
     onOpenChange(false);
   };
 

@@ -54,22 +54,21 @@ export function ProfileSelect({
   const [fetchError, setFetchError] = useState<string | null>(null);
 
   useEffect(() => {
-    let mounted = true;
+    const controller = new AbortController();
 
     async function fetchProfiles() {
       try {
-        const result = await getProfiles();
-        if (mounted) {
-          setProfiles(result);
-          setFetchError(null);
-        }
+        const result = await getProfiles(controller.signal);
+        setProfiles(result);
+        setFetchError(null);
       } catch (err) {
-        if (mounted) {
-          console.error('Failed to fetch profiles:', err);
-          setFetchError('Failed to load profiles');
+        if (err instanceof Error && err.name === 'AbortError') {
+          return; // Ignore aborted requests
         }
+        console.error('Failed to fetch profiles:', err);
+        setFetchError('Failed to load profiles');
       } finally {
-        if (mounted) {
+        if (!controller.signal.aborted) {
           setIsLoading(false);
         }
       }
@@ -78,7 +77,7 @@ export function ProfileSelect({
     fetchProfiles();
 
     return () => {
-      mounted = false;
+      controller.abort();
     };
   }, []);
 

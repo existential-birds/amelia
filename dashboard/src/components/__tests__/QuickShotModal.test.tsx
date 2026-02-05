@@ -1,8 +1,8 @@
 /**
  * @fileoverview Tests for QuickShotModal functionality.
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QuickShotModal } from '../QuickShotModal';
 import { api, ApiError } from '@/api/client';
@@ -66,11 +66,6 @@ describe('QuickShotModal', () => {
       status: 'pending',
       message: 'Workflow created',
     });
-  });
-
-  afterEach(() => {
-    // Ensure cleanup happens before moving to next test
-    cleanup();
   });
 
   /**

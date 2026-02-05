@@ -200,24 +200,26 @@ describe('ProfileSelect', () => {
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
       vi.mocked(getProfiles).mockRejectedValue(new Error('Network error'));
 
-      render(<ProfileSelect {...defaultProps} />);
+      try {
+        render(<ProfileSelect {...defaultProps} />);
 
-      await waitFor(() => {
-        expect(getProfiles).toHaveBeenCalled();
-      });
+        await waitFor(() => {
+          expect(getProfiles).toHaveBeenCalled();
+        });
 
-      // Wait for the error to be processed - the component should still be functional
-      await waitFor(() => {
-        // The select should be enabled after loading fails
-        expect(screen.getByRole('combobox')).not.toBeDisabled();
-      });
+        // Wait for the error to be processed - the component should still be functional
+        await waitFor(() => {
+          // The select should be enabled after loading fails
+          expect(screen.getByRole('combobox')).not.toBeDisabled();
+        });
 
-      expect(consoleSpy).toHaveBeenCalledWith(
-        'Failed to fetch profiles:',
-        expect.any(Error)
-      );
-
-      consoleSpy.mockRestore();
+        expect(consoleSpy).toHaveBeenCalledWith(
+          'Failed to fetch profiles:',
+          expect.any(Error)
+        );
+      } finally {
+        consoleSpy.mockRestore();
+      }
     });
   });
 
