@@ -348,6 +348,7 @@ export function QuickShotModal({ open, onOpenChange, defaults }: QuickShotModalP
           </span>
         );
         reset();
+        setPlanData({});
         onOpenChange(false);
       } catch (error) {
         if (error instanceof ApiError) {

@@ -5,7 +5,7 @@
  * with active indicator and tracker type information.
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { getProfiles, type Profile } from '@/api/settings';
 import {
   Select,
@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 /**
@@ -53,33 +54,33 @@ export function ProfileSelect({
   const [isLoading, setIsLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
+  const fetchProfiles = useCallback(async (signal?: AbortSignal) => {
+    setIsLoading(true);
+    setFetchError(null);
+    try {
+      const result = await getProfiles(signal);
+      setProfiles(result);
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') {
+        return; // Ignore aborted requests
+      }
+      console.error('Failed to fetch profiles:', err);
+      setFetchError('Failed to load profiles');
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     const controller = new AbortController();
+    fetchProfiles(controller.signal);
+    return () => controller.abort();
+  }, [fetchProfiles]);
 
-    async function fetchProfiles() {
-      try {
-        const result = await getProfiles(controller.signal);
-        setProfiles(result);
-        setFetchError(null);
-      } catch (err) {
-        if (err instanceof Error && err.name === 'AbortError') {
-          return; // Ignore aborted requests
-        }
-        console.error('Failed to fetch profiles:', err);
-        setFetchError('Failed to load profiles');
-      } finally {
-        if (!controller.signal.aborted) {
-          setIsLoading(false);
-        }
-      }
-    }
-
+  /** Retry fetching profiles after an error. */
+  const handleRetry = () => {
     fetchProfiles();
-
-    return () => {
-      controller.abort();
-    };
-  }, []);
+  };
 
   /**
    * Handles selection change from the Select component.
@@ -142,6 +143,20 @@ export function ProfileSelect({
           ))}
         </SelectContent>
       </Select>
+      {fetchError && (
+        <div className="mt-1 flex items-center gap-2">
+          <span className="text-xs text-destructive">{fetchError}</span>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={handleRetry}
+            className="h-5 px-2 text-xs"
+          >
+            Retry
+          </Button>
+        </div>
+      )}
       {error && (
         <p id={`${id}-error`} className="mt-1 text-xs text-destructive">
           {error}
