@@ -45,6 +45,14 @@ vi.mock('sonner', () => ({
   },
 }));
 
+// Mock settings API for ProfileSelect
+vi.mock('@/api/settings', () => ({
+  getProfiles: vi.fn().mockResolvedValue([
+    { id: 'work', tracker: 'github', working_dir: '/work', plan_output_dir: '', plan_path_pattern: '', agents: {}, is_active: true },
+    { id: 'personal', tracker: 'jira', working_dir: '/personal', plan_output_dir: '', plan_path_pattern: '', agents: {}, is_active: false },
+  ]),
+}));
+
 describe('QuickShotModal', () => {
   const defaultProps = {
     open: true,
@@ -375,10 +383,8 @@ describe('QuickShotModal', () => {
         expect(screen.getByText(/launching/i)).toBeInTheDocument();
       });
 
-      // Resolve the promise and wait for the submission to complete
-      await waitFor(async () => {
-        resolvePromise!({ id: 'wf-123', status: 'pending', message: 'ok' });
-      });
+      // Resolve the promise to complete the test cleanly
+      resolvePromise!({ id: 'wf-123', status: 'pending', message: 'ok' });
     });
   });
 
