@@ -2584,7 +2584,14 @@ class OrchestratorService:
             )
 
         # Check existing plan - require force to overwrite
-        if workflow.plan_cache is not None and (workflow.plan_cache.plan_markdown is not None or workflow.plan_cache.plan_path is not None) and not force:
+        has_existing_plan = (
+            workflow.plan_cache is not None
+            and (
+                workflow.plan_cache.plan_markdown is not None
+                or workflow.plan_cache.plan_path is not None
+            )
+        )
+        if has_existing_plan and not force:
             raise WorkflowConflictError(
                 "Plan already exists. Use force=true to overwrite."
             )

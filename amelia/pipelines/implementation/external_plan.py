@@ -66,7 +66,7 @@ async def import_external_plan(
         plan_path = plan_path.expanduser().resolve()
 
         # Check if source and target are the same file
-        file_already_at_target = (plan_file is not None) and (plan_path == target_path)
+        file_already_at_target = plan_path == target_path
 
         # Validate plan_path is within working directory (prevent path traversal)
         try:
