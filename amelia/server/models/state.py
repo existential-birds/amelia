@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime
 from enum import StrEnum
+from pathlib import Path
 from typing import Any
 
+from loguru import logger
 from pydantic import BaseModel, Field
 
 
@@ -113,6 +116,27 @@ class PlanCache(BaseModel):
             total_tasks=values.get("total_tasks"),
             current_task_index=values.get("current_task_index"),
         )
+
+    async def get_plan_markdown(self) -> str | None:
+        """Get plan markdown, loading from file if needed.
+
+        Returns:
+            The plan markdown content, or None if no plan exists.
+
+        Raises:
+            FileNotFoundError: If plan_path is set but file doesn't exist.
+        """
+        if self.plan_markdown is not None:
+            return self.plan_markdown
+        if self.plan_path is None:
+            return None
+
+        plan_path = Path(self.plan_path)
+        if not plan_path.exists():
+            raise FileNotFoundError(f"Plan file not found: {self.plan_path}")
+
+        logger.debug("Loading plan markdown from file", plan_path=self.plan_path)
+        return await asyncio.to_thread(plan_path.read_text)
 
 
 class ServerExecutionState(BaseModel):

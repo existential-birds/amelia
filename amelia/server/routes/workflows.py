@@ -333,7 +333,11 @@ async def get_workflow(
 
     if workflow.plan_cache is not None:
         goal = workflow.plan_cache.goal
-        plan_markdown = workflow.plan_cache.plan_markdown
+        try:
+            plan_markdown = await workflow.plan_cache.get_plan_markdown()
+        except FileNotFoundError:
+            logger.warning("Plan file not found", workflow_id=workflow_id)
+            plan_markdown = None
         plan_path = workflow.plan_cache.plan_path
 
     logger.info(

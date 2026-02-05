@@ -974,8 +974,9 @@ class OrchestratorService:
             plan_cache = state.plan_cache
             if plan_cache.goal is not None:
                 plan_fields["goal"] = plan_cache.goal
-            if plan_cache.plan_markdown is not None:
-                plan_fields["plan_markdown"] = plan_cache.plan_markdown
+            plan_markdown = await plan_cache.get_plan_markdown()
+            if plan_markdown is not None:
+                plan_fields["plan_markdown"] = plan_markdown
             if plan_cache.plan_path is not None:
                 plan_fields["plan_path"] = plan_cache.plan_path
                 plan_fields["external_plan"] = True
@@ -2583,7 +2584,7 @@ class OrchestratorService:
             )
 
         # Check existing plan - require force to overwrite
-        if workflow.plan_cache is not None and workflow.plan_cache.plan_markdown is not None and not force:
+        if workflow.plan_cache is not None and (workflow.plan_cache.plan_markdown is not None or workflow.plan_cache.plan_path is not None) and not force:
             raise WorkflowConflictError(
                 "Plan already exists. Use force=true to overwrite."
             )

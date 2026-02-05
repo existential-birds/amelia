@@ -37,7 +37,7 @@ Amelia's architecture draws on industry research in agentic AI — orchestrator-
 | **Core** | `amelia/core/` | Shared types and agentic state | `AgenticStatus`, `ToolCall`, `ToolResult`, `Profile`, `Issue` |
 | **Pipelines** | `amelia/pipelines/` | LangGraph state machines and workflow logic | `BasePipelineState`, `ImplementationState`, `Pipeline` |
 | **Agents** | `amelia/agents/` | Specialized AI agents for planning, execution, review, and evaluation | `Architect`, `Developer`, `Reviewer`, `Evaluator` |
-| **Drivers** | `amelia/drivers/` | LLM abstraction supporting API and CLI backends | `DriverInterface`, `DriverFactory` |
+| **Drivers** | `amelia/drivers/` | LLM abstraction supporting API and CLI backends | `DriverInterface`, `get_driver()` |
 | **Trackers** | `amelia/trackers/` | Issue source abstraction for different platforms | `BaseTracker` (Jira, GitHub, NoOp) |
 | **Tools** | `amelia/tools/` | Git utilities and shell helpers | `git_utils`, `shell_executor` |
 | **Client** | `amelia/client/` | CLI commands and REST client for server communication | `AmeliaClient`, Typer commands |

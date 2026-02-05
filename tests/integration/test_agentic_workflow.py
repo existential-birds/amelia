@@ -43,7 +43,7 @@ class TestArchitectNodeIntegration:
     async def test_architect_node_returns_raw_output(self, tmp_path: Path) -> None:
         """Architect node should return raw output; plan extraction is done by plan_validator_node.
 
-        Real components: DriverFactory, ApiDriver, Architect
+        Real components: get_driver, ApiDriver, Architect
         Mock boundary: ApiDriver.execute_agentic (LLM call)
         """
         plans_dir = tmp_path / "plans"
@@ -105,7 +105,7 @@ class TestDeveloperNodeIntegration:
     async def test_developer_node_collects_tool_calls(self, tmp_path: Path) -> None:
         """Developer node should track tool calls/results from driver.
 
-        Real components: DriverFactory, ApiDriver, Developer
+        Real components: get_driver, ApiDriver, Developer
         Mock boundary: ApiDriver.execute_agentic (HTTP/LLM call)
         """
         profile = make_profile(working_dir=str(tmp_path))
@@ -152,7 +152,7 @@ class TestReviewerNodeIntegration:
     async def test_reviewer_node_returns_review_result(self, tmp_path: Path) -> None:
         """Reviewer node should return ReviewResult from driver.
 
-        Real components: DriverFactory, ApiDriver, Reviewer
+        Real components: get_driver, ApiDriver, Reviewer
         Mock boundary: ApiDriver.execute_agentic (LLM call)
         """
         profile = make_profile(working_dir=str(tmp_path))
@@ -178,7 +178,7 @@ class TestReviewerNodeIntegration:
     async def test_reviewer_node_rejection(self, tmp_path: Path) -> None:
         """Reviewer node should return rejection with feedback.
 
-        Real components: DriverFactory, ApiDriver, Reviewer
+        Real components: get_driver, ApiDriver, Reviewer
         Mock boundary: ApiDriver.execute_agentic (LLM call)
         """
         profile = make_profile(working_dir=str(tmp_path))
@@ -211,7 +211,7 @@ class TestReviewerNodeIntegration:
         This prevents infinite loops when review is rejected - the iteration
         counter ensures we eventually hit max_review_iterations and terminate.
 
-        Real components: DriverFactory, ApiDriver, Reviewer
+        Real components: get_driver, ApiDriver, Reviewer
         Mock boundary: ApiDriver.execute_agentic (LLM call)
         """
         profile = make_profile(working_dir=str(tmp_path), max_review_iterations=3)
@@ -253,7 +253,7 @@ class TestReviewerNodeIntegration:
         This verifies that the review results are different after developer
         makes changes, preventing the "same review message" infinite loop bug.
 
-        Real components: DriverFactory, ApiDriver, Reviewer
+        Real components: get_driver, ApiDriver, Reviewer
         Mock boundary: ApiDriver.execute_agentic (LLM call)
         """
         profile = make_profile(working_dir=str(tmp_path), max_review_iterations=3)
@@ -331,7 +331,7 @@ class TestArchitectValidatorFlowIntegration:
     async def test_architect_to_validator_handoff(self, tmp_path: Path) -> None:
         """Verify architect creates plan file and validator extracts structured data.
 
-        Real components: DriverFactory, ApiDriver, Architect, plan_validator_node
+        Real components: get_driver, ApiDriver, Architect, plan_validator_node
         Mock boundary: ApiDriver.execute_agentic (architect), ApiDriver.generate (validator)
 
         This tests the complete handoff:

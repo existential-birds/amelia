@@ -8,7 +8,7 @@ For CLI tests, the proper mock boundaries are:
 - pydantic_ai.Agent: LLM API boundary (for plan command which runs locally)
 - get_worktree_context: Git context detection (needed for test isolation)
 
-Internal components like DriverFactory and Architect should NOT be mocked.
+Internal components like Architect should NOT be mocked.
 """
 from collections.abc import Generator
 from datetime import UTC, datetime
@@ -67,7 +67,7 @@ def mock_settings(tmp_path: Path) -> Settings:
 class TestPlanCommand:
     """Test the `amelia plan` command with real components.
 
-    Real components: DriverFactory, ApiDriver, Architect
+    Real components: get_driver, ApiDriver, Architect
     Mock boundaries:
     - get_worktree_context (git detection)
     - load_settings (config file)
