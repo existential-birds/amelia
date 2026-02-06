@@ -63,13 +63,12 @@ export function ProfileSelect({
       setProfiles(result);
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') {
-        return; // Ignore aborted requests
+        return; // Don't touch state for aborted requests
       }
       console.error('Failed to fetch profiles:', err);
       setFetchError('Failed to load profiles');
-    } finally {
-      setIsLoading(false);
     }
+    setIsLoading(false);
   }, []);
 
   useEffect(() => {
