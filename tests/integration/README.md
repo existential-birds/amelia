@@ -13,7 +13,7 @@ Per CLAUDE.md, we only mock at **external boundaries**:
 
 ### NOT Acceptable (Use Unit Tests Instead)
 - `Architect`, `Developer`, `Reviewer` classes
-- `DriverFactory` or driver instantiation
+- Driver instantiation
 - Internal orchestrator functions
 
 ## Test Categories
