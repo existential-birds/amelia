@@ -4,33 +4,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import { ProfileSelect } from '../ProfileSelect';
-import { getProfiles, type Profile } from '@/api/settings';
+import { getProfiles } from '@/api/settings';
+import { mockProfiles } from '@/__tests__/fixtures';
 
 // Mock the settings API
 vi.mock('@/api/settings', () => ({
   getProfiles: vi.fn(),
 }));
-
-const mockProfiles: Profile[] = [
-  {
-    id: 'work',
-    tracker: 'github',
-    working_dir: '/work',
-    plan_output_dir: '',
-    plan_path_pattern: '',
-    agents: {},
-    is_active: true,
-  },
-  {
-    id: 'personal',
-    tracker: 'jira',
-    working_dir: '/personal',
-    plan_output_dir: '',
-    plan_path_pattern: '',
-    agents: {},
-    is_active: false,
-  },
-];
 
 describe('ProfileSelect', () => {
   const defaultProps = {
@@ -213,10 +193,55 @@ describe('ProfileSelect', () => {
           expect(screen.getByRole('combobox')).not.toBeDisabled();
         });
 
+        // Verify error message is displayed to the user
+        expect(screen.getByText('Failed to load profiles')).toBeInTheDocument();
+
         expect(consoleSpy).toHaveBeenCalledWith(
           'Failed to fetch profiles:',
           expect.any(Error)
         );
+      } finally {
+        consoleSpy.mockRestore();
+      }
+    });
+
+    it('shows retry button and refetches when clicked', async () => {
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      vi.mocked(getProfiles).mockRejectedValueOnce(new Error('Network error'));
+
+      try {
+        render(<ProfileSelect {...defaultProps} />);
+
+        // Wait for error state
+        await waitFor(() => {
+          expect(screen.getByText('Failed to load profiles')).toBeInTheDocument();
+        });
+
+        // Verify retry button is shown
+        const retryButton = screen.getByRole('button', { name: 'Retry' });
+        expect(retryButton).toBeInTheDocument();
+
+        // Mock successful response for retry
+        vi.mocked(getProfiles).mockResolvedValueOnce(mockProfiles);
+
+        // Click retry
+        fireEvent.click(retryButton);
+
+        // Verify profiles are fetched again
+        await waitFor(() => {
+          expect(getProfiles).toHaveBeenCalledTimes(2);
+        });
+
+        // Verify error message is cleared and profiles are loaded
+        await waitFor(() => {
+          expect(screen.queryByText('Failed to load profiles')).not.toBeInTheDocument();
+        });
+
+        // Verify profiles are now available
+        fireEvent.click(screen.getByRole('combobox'));
+        await waitFor(() => {
+          expect(screen.getByText('work')).toBeInTheDocument();
+        });
       } finally {
         consoleSpy.mockRestore();
       }

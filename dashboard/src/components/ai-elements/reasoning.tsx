@@ -7,26 +7,10 @@ import {
 import { cn } from "@/lib/utils";
 import { BrainIcon, ChevronDownIcon } from "lucide-react";
 import type { ComponentProps, ReactNode } from "react";
-import { createContext, memo, useContext, useEffect, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import { Streamdown } from "streamdown";
 import { Shimmer } from "./shimmer";
-
-type ReasoningContextValue = {
-  isStreaming: boolean;
-  isOpen: boolean;
-  setIsOpen: (open: boolean) => void;
-  duration: number | undefined;
-};
-
-const ReasoningContext = createContext<ReasoningContextValue | null>(null);
-
-export const useReasoning = () => {
-  const context = useContext(ReasoningContext);
-  if (!context) {
-    throw new Error("Reasoning components must be used within Reasoning");
-  }
-  return context;
-};
+import { ReasoningContext, useReasoning } from "./use-reasoning";
 
 export type ReasoningProps = ComponentProps<typeof Collapsible> & {
   isStreaming?: boolean;

@@ -12,6 +12,14 @@ import type { WorkflowEvent } from '../types';
 const MAX_EVENTS_PER_WORKFLOW = 500;
 
 /**
+ * Maximum number of workflows to retain in the store.
+ *
+ * When this limit is exceeded, the oldest workflows (by last event timestamp)
+ * are evicted to prevent unbounded memory growth from stale workflow entries.
+ */
+const MAX_WORKFLOWS = 100;
+
+/**
  * Batch configuration for event processing.
  *
  * Events are batched to reduce React re-renders and GC pressure when
@@ -59,6 +67,12 @@ interface WorkflowState {
    * Kept in sync with eventsByWorkflow - rebuilt when trimming occurs.
    */
   eventIdsByWorkflow: Record<string, Set<string>>;
+
+  /**
+   * Timestamp of the last event for each workflow (ISO 8601).
+   * Used for LRU eviction when MAX_WORKFLOWS is exceeded.
+   */
+  lastEventTimestampByWorkflow: Record<string, string>;
 
   /**
    * ID of the last received event, used for reconnection backfill.
@@ -149,6 +163,7 @@ function applyEventBatch(
 
   const newEventsByWorkflow = { ...state.eventsByWorkflow };
   const newEventIdsByWorkflow = { ...state.eventIdsByWorkflow };
+  const newLastEventTimestamp = { ...state.lastEventTimestampByWorkflow };
   let lastEventId = state.lastEventId;
 
   for (const event of events) {
@@ -177,12 +192,33 @@ function applyEventBatch(
 
     newEventsByWorkflow[workflowId] = trimmed;
     newEventIdsByWorkflow[workflowId] = newIds;
+    newLastEventTimestamp[workflowId] = event.timestamp;
     lastEventId = event.id;
+  }
+
+  // Evict oldest workflows if exceeding MAX_WORKFLOWS
+  const workflowIds = Object.keys(newEventsByWorkflow);
+  if (workflowIds.length > MAX_WORKFLOWS) {
+    // Sort by last event timestamp (oldest first)
+    const sortedByAge = workflowIds.sort((a, b) => {
+      const tsA = newLastEventTimestamp[a] ?? '';
+      const tsB = newLastEventTimestamp[b] ?? '';
+      return tsA.localeCompare(tsB);
+    });
+
+    // Evict oldest workflows until we're at the limit
+    const toEvict = sortedByAge.slice(0, workflowIds.length - MAX_WORKFLOWS);
+    for (const id of toEvict) {
+      delete newEventsByWorkflow[id];
+      delete newEventIdsByWorkflow[id];
+      delete newLastEventTimestamp[id];
+    }
   }
 
   return {
     eventsByWorkflow: newEventsByWorkflow,
     eventIdsByWorkflow: newEventIdsByWorkflow,
+    lastEventTimestampByWorkflow: newLastEventTimestamp,
     lastEventId,
   };
 }
@@ -274,6 +310,7 @@ export const useWorkflowStore = create<WorkflowState>()(
     (set) => ({
       eventsByWorkflow: {},
       eventIdsByWorkflow: {},
+      lastEventTimestampByWorkflow: {},
       lastEventId: null,
       isConnected: false,
       connectionError: null,

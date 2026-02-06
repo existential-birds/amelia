@@ -28,6 +28,7 @@ describe('workflowStore', () => {
     useWorkflowStore.setState({
       eventsByWorkflow: {},
       eventIdsByWorkflow: {},
+      lastEventTimestampByWorkflow: {},
       lastEventId: null,
       isConnected: false,
       connectionError: null,
@@ -326,6 +327,76 @@ describe('workflowStore', () => {
       // Should flush immediately without waiting for timer
       const state = useWorkflowStore.getState();
       expect(state.eventsByWorkflow['wf-1']).toHaveLength(50);
+    });
+  });
+
+  describe('workflow eviction', () => {
+    it('should evict oldest workflows when exceeding MAX_WORKFLOWS', () => {
+      const MAX_WORKFLOWS = 100;
+      const store = useWorkflowStore.getState();
+
+      // Add events for 101 workflows with increasing timestamps
+      // Using ISO format that sorts correctly: 2026-01-01T00:00:00Z, etc.
+      for (let i = 0; i <= MAX_WORKFLOWS; i++) {
+        // Generate unique, sortable timestamps
+        const day = String(Math.floor(i / 24) + 1).padStart(2, '0');
+        const hour = String(i % 24).padStart(2, '0');
+        store.addEvent({
+          id: `evt-wf-${i}`,
+          workflow_id: `wf-${i}`,
+          sequence: 1,
+          timestamp: `2026-01-${day}T${hour}:00:00Z`,
+          agent: 'system',
+          event_type: 'stage_started',
+          level: 'info',
+          message: `Workflow ${i} started`,
+        });
+      }
+      flushEvents();
+
+      const state = useWorkflowStore.getState();
+      const workflowIds = Object.keys(state.eventsByWorkflow);
+
+      // Should have evicted the oldest workflow (wf-0)
+      expect(workflowIds).toHaveLength(MAX_WORKFLOWS);
+      expect(workflowIds).not.toContain('wf-0');
+      expect(workflowIds).toContain('wf-1');
+      expect(workflowIds).toContain(`wf-${MAX_WORKFLOWS}`);
+
+      // Timestamp tracking should also be cleaned up
+      expect(state.lastEventTimestampByWorkflow['wf-0']).toBeUndefined();
+      expect(state.eventIdsByWorkflow['wf-0']).toBeUndefined();
+    });
+
+    it('should track last event timestamp per workflow', () => {
+      const store = useWorkflowStore.getState();
+
+      store.addEvent({
+        id: 'evt-1',
+        workflow_id: 'wf-1',
+        sequence: 1,
+        timestamp: '2026-01-01T10:00:00Z',
+        agent: 'system',
+        event_type: 'stage_started',
+        level: 'info',
+        message: 'First event',
+      });
+
+      store.addEvent({
+        id: 'evt-2',
+        workflow_id: 'wf-1',
+        sequence: 2,
+        timestamp: '2026-01-01T11:00:00Z',
+        agent: 'system',
+        event_type: 'stage_started',
+        level: 'info',
+        message: 'Second event',
+      });
+      flushEvents();
+
+      const state = useWorkflowStore.getState();
+      // Should have the latest timestamp
+      expect(state.lastEventTimestampByWorkflow['wf-1']).toBe('2026-01-01T11:00:00Z');
     });
   });
 });

@@ -22,9 +22,11 @@ import {
   PromptInputFooter,
   PromptInputSubmit,
   PromptInputProvider,
+} from "@/components/ai-elements/prompt-input";
+import {
   usePromptInputController,
   type PromptInputMessage,
-} from "@/components/ai-elements/prompt-input";
+} from "@/components/ai-elements/prompt-input-utils";
 import {
   Reasoning,
   ReasoningTrigger,

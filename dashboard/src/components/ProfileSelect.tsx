@@ -5,7 +5,7 @@
  * with active indicator and tracker type information.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { getProfiles, type Profile } from '@/api/settings';
 import {
   Select,
@@ -53,6 +53,7 @@ export function ProfileSelect({
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const fetchProfiles = useCallback(async (signal?: AbortSignal) => {
     setIsLoading(true);
@@ -72,14 +73,16 @@ export function ProfileSelect({
   }, []);
 
   useEffect(() => {
-    const controller = new AbortController();
-    fetchProfiles(controller.signal);
-    return () => controller.abort();
+    abortControllerRef.current = new AbortController();
+    fetchProfiles(abortControllerRef.current.signal);
+    return () => abortControllerRef.current?.abort();
   }, [fetchProfiles]);
 
   /** Retry fetching profiles after an error. */
   const handleRetry = () => {
-    fetchProfiles();
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = new AbortController();
+    fetchProfiles(abortControllerRef.current.signal);
   };
 
   /**
@@ -117,7 +120,7 @@ export function ProfileSelect({
           )}
         >
           <SelectValue
-            placeholder={isLoading ? 'Loading...' : fetchError || 'Select profile'}
+            placeholder={isLoading ? 'Loading...' : 'Select profile'}
           />
         </SelectTrigger>
         <SelectContent>
@@ -129,7 +132,11 @@ export function ProfileSelect({
 
           {/* Profile options */}
           {profiles.map((profile) => (
-            <SelectItem key={profile.id} value={profile.id}>
+            <SelectItem
+              key={profile.id}
+              value={profile.id}
+              aria-description={profile.is_active ? 'Currently active profile' : undefined}
+            >
               <div className="flex items-center gap-2">
                 <span>{profile.id}</span>
                 {profile.is_active && (

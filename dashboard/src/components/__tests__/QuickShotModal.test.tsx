@@ -48,8 +48,8 @@ vi.mock('sonner', () => ({
 // Mock settings API for ProfileSelect
 vi.mock('@/api/settings', () => ({
   getProfiles: vi.fn().mockResolvedValue([
-    { id: 'work', tracker: 'github', working_dir: '/work', plan_output_dir: '', plan_path_pattern: '', agents: {}, is_active: true },
-    { id: 'personal', tracker: 'jira', working_dir: '/personal', plan_output_dir: '', plan_path_pattern: '', agents: {}, is_active: false },
+    { id: 'work', tracker: 'github', working_dir: '/work', is_active: true },
+    { id: 'personal', tracker: 'jira', working_dir: '/personal', is_active: false },
   ]),
 }));
 
@@ -82,7 +82,9 @@ describe('QuickShotModal', () => {
   }
 
   /**
-   * Create a mock markdown file with File.text() support (not available in jsdom).
+   * Create a mock markdown file with File.text() support.
+   * jsdom doesn't implement File.text() (Blob reading methods), so we add it manually.
+   * See: https://github.com/jsdom/jsdom/issues/2555
    */
   function createMockMarkdownFile(
     content: string,
