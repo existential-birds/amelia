@@ -1,6 +1,7 @@
 """Tests for workflow state models."""
 
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -201,6 +202,51 @@ class TestPlanCache:
         assert cache.goal is None
         assert cache.plan_markdown is None
         assert cache.plan_path is None
+
+    async def test_plan_cache_get_markdown_returns_cached(self) -> None:
+        """get_plan_markdown returns cached plan_markdown if set."""
+        cache = PlanCache(
+            plan_markdown="# Cached Plan Content",
+            plan_path="/some/path.md",  # File path is ignored when markdown is cached
+        )
+
+        result = await cache.get_plan_markdown()
+
+        assert result == "# Cached Plan Content"
+
+    async def test_plan_cache_get_markdown_loads_from_file(self, tmp_path: Path) -> None:
+        """get_plan_markdown loads from plan_path when plan_markdown is None."""
+        # Create a plan file
+        plan_file = tmp_path / "plan.md"
+        plan_content = "# Plan loaded from file"
+        plan_file.write_text(plan_content)
+
+        cache = PlanCache(
+            plan_markdown=None,
+            plan_path=str(plan_file),
+        )
+
+        result = await cache.get_plan_markdown()
+
+        assert result == plan_content
+
+    async def test_plan_cache_get_markdown_raises_file_not_found(self) -> None:
+        """get_plan_markdown raises FileNotFoundError when plan file is missing."""
+        cache = PlanCache(
+            plan_markdown=None,
+            plan_path="/nonexistent/path/plan.md",
+        )
+
+        with pytest.raises(FileNotFoundError, match="Plan file not found"):
+            await cache.get_plan_markdown()
+
+    async def test_plan_cache_get_markdown_returns_none_when_no_plan(self) -> None:
+        """get_plan_markdown returns None when both plan_markdown and plan_path are None."""
+        cache = PlanCache()
+
+        result = await cache.get_plan_markdown()
+
+        assert result is None
 
 
 class TestServerExecutionStateWithNewFields:

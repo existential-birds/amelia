@@ -12,9 +12,3 @@ class ConfigurationError(AmeliaError):
     """Raised when required configuration is missing or invalid."""
 
     pass
-
-
-class AgenticExecutionError(AmeliaError):
-    """Raised when agentic execution fails."""
-
-    pass

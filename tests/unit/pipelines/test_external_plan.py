@@ -318,3 +318,87 @@ Content here.
                 profile=mock_profile,
                 workflow_id="wf-001",
             )
+
+    async def test_import_skips_write_when_file_at_target(
+        self, tmp_path: Path, mock_profile: Profile
+    ) -> None:
+        """Import skips write when plan_file is already at target location."""
+        import time
+
+        from amelia.pipelines.implementation.external_plan import import_external_plan
+
+        # Create worktree directory
+        worktree = Path(mock_profile.working_dir)
+        worktree.mkdir(parents=True, exist_ok=True)
+
+        # Create plan file at the target location
+        plan_content = "# Implementation Plan\n\n### Task 1: Do thing\n\nDo it."
+        target_path = worktree / "docs" / "plans" / "plan.md"
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        target_path.write_text(plan_content)
+
+        # Record modification time
+        original_mtime = target_path.stat().st_mtime
+
+        # Small delay to ensure mtime would change if file is rewritten
+        time.sleep(0.01)
+
+        with patch(
+            "amelia.pipelines.implementation.external_plan.extract_structured"
+        ) as mock_extract:
+            mock_extract.return_value = MarkdownPlanOutput(
+                goal="Do thing",
+                plan_markdown=plan_content,
+                key_files=[],
+            )
+
+            await import_external_plan(
+                plan_file=str(target_path),
+                plan_content=None,
+                target_path=target_path,
+                profile=mock_profile,
+                workflow_id="wf-001",
+            )
+
+        # Verify file was NOT rewritten
+        assert target_path.stat().st_mtime == original_mtime
+
+    async def test_import_returns_none_markdown_when_file_at_target(
+        self, tmp_path: Path, mock_profile: Profile
+    ) -> None:
+        """Import returns plan_markdown=None when file is already at target."""
+        from amelia.pipelines.implementation.external_plan import import_external_plan
+
+        # Create worktree directory
+        worktree = Path(mock_profile.working_dir)
+        worktree.mkdir(parents=True, exist_ok=True)
+
+        # Create plan file at the target location
+        plan_content = "# Implementation Plan\n\n### Task 1: Do thing\n\nDo it."
+        target_path = worktree / "docs" / "plans" / "plan.md"
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        target_path.write_text(plan_content)
+
+        with patch(
+            "amelia.pipelines.implementation.external_plan.extract_structured"
+        ) as mock_extract:
+            mock_extract.return_value = MarkdownPlanOutput(
+                goal="Do thing",
+                plan_markdown=plan_content,
+                key_files=[],
+            )
+
+            result = await import_external_plan(
+                plan_file=str(target_path),
+                plan_content=None,
+                target_path=target_path,
+                profile=mock_profile,
+                workflow_id="wf-001",
+            )
+
+        # plan_markdown should be None since file was already at target
+        assert result.plan_markdown is None
+        # plan_path should be set
+        assert result.plan_path == target_path
+        # goal should still be extracted
+        assert result.goal == "Do thing"

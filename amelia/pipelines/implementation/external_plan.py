@@ -24,7 +24,7 @@ class ExternalPlanImportResult(BaseModel):
     """Result of importing an external plan."""
 
     goal: str
-    plan_markdown: str
+    plan_markdown: str | None = None
     plan_path: Path
     key_files: list[str] = Field(default_factory=list)
     total_tasks: int
@@ -79,6 +79,7 @@ async def import_external_plan(
         content = await asyncio.to_thread(plan_path.read_text)
     else:
         content = plan_content or ""
+        plan_path = None
 
     # Validate content is not empty
     if not content.strip():
@@ -93,16 +94,25 @@ async def import_external_plan(
             f"Target path '{target_path}' resolves outside working directory"
         ) from None
 
-    # Write to target path
-    await asyncio.to_thread(target_path.parent.mkdir, parents=True, exist_ok=True)
-    await asyncio.to_thread(target_path.write_text, content)
+    # Check if source and target are the same file (both paths now resolved)
+    file_already_at_target = plan_path == target_path if plan_path is not None else False
 
-    logger.info(
-        "External plan written",
-        target_path=str(target_path),
-        content_length=len(content),
-        workflow_id=workflow_id,
-    )
+    # Write to target path (skip if file already there)
+    if not file_already_at_target:
+        await asyncio.to_thread(target_path.parent.mkdir, parents=True, exist_ok=True)
+        await asyncio.to_thread(target_path.write_text, content)
+        logger.info(
+            "External plan written",
+            target_path=str(target_path),
+            content_length=len(content),
+            workflow_id=workflow_id,
+        )
+    else:
+        logger.info(
+            "External plan file already at target location, skipping write",
+            plan_path=str(plan_path),
+            workflow_id=workflow_id,
+        )
 
     # Extract structured fields using LLM
     agent_config = profile.get_agent_config("plan_validator")
@@ -151,7 +161,7 @@ Return:
 
     return ExternalPlanImportResult(
         goal=goal,
-        plan_markdown=plan_markdown,
+        plan_markdown=None if file_already_at_target else plan_markdown,
         plan_path=target_path,
         key_files=key_files,
         total_tasks=total_tasks,

@@ -156,7 +156,7 @@ Tests use `pytest-asyncio` with `asyncio_mode = "auto"`.
 **Integration Tests Must Be Real Integration Tests:**
 
 - Integration tests (`tests/integration/`) must test actual component interactions, not mocked components.
-- Only mock at the **external boundary** (e.g., HTTP calls to LLM APIs). Never mock internal classes like `Architect`, `Developer`, `Reviewer`, or `DriverFactory`.
+- Only mock at the **external boundary** (e.g., HTTP calls to LLM APIs). Never mock internal classes like `Architect`, `Developer`, or `Reviewer`.
 - If you find yourself patching internal components, you're writing a unit test - move it to `tests/unit/`.
 - The purpose of integration tests is to verify that real components work together correctly. Mocking them defeats this purpose entirely.
 

@@ -1,14 +1,14 @@
-"""Tests for DriverFactory."""
+"""Tests for get_driver function and driver cleanup."""
 
 import pytest
 
 from amelia.drivers.api.deepagents import ApiDriver
 from amelia.drivers.cli.claude import ClaudeCliDriver
-from amelia.drivers.factory import DriverFactory, cleanup_driver_session
+from amelia.drivers.factory import cleanup_driver_session, get_driver
 
 
-class TestDriverFactory:
-    """Tests for DriverFactory."""
+class TestGetDriver:
+    """Tests for get_driver function."""
 
     @pytest.mark.parametrize(
         "driver_key,expected_type,model,expected_model",
@@ -20,8 +20,8 @@ class TestDriverFactory:
         ],
     )
     def test_get_driver(self, driver_key, expected_type, model, expected_model):
-        """Factory should return correct driver type for various driver keys."""
-        driver = DriverFactory.get_driver(driver_key, model=model)
+        """get_driver should return correct driver type for various driver keys."""
+        driver = get_driver(driver_key, model=model)
         assert isinstance(driver, expected_type)
         if expected_model is not None:
             assert driver.model == expected_model
@@ -34,9 +34,9 @@ class TestDriverFactory:
         ],
     )
     def test_invalid_driver_raises(self, driver_key, error_match):
-        """Factory should raise ValueError for unknown or unsupported drivers."""
+        """get_driver should raise ValueError for unknown or unsupported drivers."""
         with pytest.raises(ValueError, match=error_match):
-            DriverFactory.get_driver(driver_key)
+            get_driver(driver_key)
 
 
 class TestDriverInterfaceProtocol:
@@ -56,18 +56,18 @@ class TestDriverInterfaceProtocol:
         assert hasattr(driver, "generate")
 
 
-class TestDriverFactoryProviderPassing:
-    """Tests for factory passing provider to ApiDriver."""
+class TestGetDriverProviderPassing:
+    """Tests for get_driver passing provider to ApiDriver."""
 
     def test_api_openrouter_passes_provider(self) -> None:
-        """Factory should pass provider='openrouter' to ApiDriver for api."""
-        driver = DriverFactory.get_driver("api")
+        """get_driver should pass provider='openrouter' to ApiDriver for legacy 'api:openrouter' key."""
+        driver = get_driver("api:openrouter")
         assert isinstance(driver, ApiDriver)
         assert driver.provider == "openrouter"
 
     def test_api_shorthand_passes_provider(self) -> None:
-        """Factory should pass provider='openrouter' to ApiDriver for 'api' shorthand."""
-        driver = DriverFactory.get_driver("api")
+        """get_driver should pass provider='openrouter' to ApiDriver for 'api' shorthand."""
+        driver = get_driver("api")
         assert isinstance(driver, ApiDriver)
         assert driver.provider == "openrouter"
 
