@@ -115,7 +115,8 @@ function SpecBuilderPageContent() {
     return () => {
       mounted = false;
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only: loadSessions is stable but changes identity on each render
+  }, []);
 
   const handleSubmit = useCallback(
     async (message: PromptInputMessage, _event: FormEvent<HTMLFormElement>) => {
