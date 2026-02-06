@@ -65,9 +65,6 @@ async def import_external_plan(
             plan_path = working_dir / plan_file
         plan_path = plan_path.expanduser().resolve()
 
-        # Check if source and target are the same file
-        file_already_at_target = plan_path == target_path
-
         # Validate plan_path is within working directory (prevent path traversal)
         try:
             plan_path.relative_to(working_dir)
@@ -82,7 +79,7 @@ async def import_external_plan(
         content = await asyncio.to_thread(plan_path.read_text)
     else:
         content = plan_content or ""
-        file_already_at_target = False
+        plan_path = None
 
     # Validate content is not empty
     if not content.strip():
@@ -96,6 +93,9 @@ async def import_external_plan(
         raise ValueError(
             f"Target path '{target_path}' resolves outside working directory"
         ) from None
+
+    # Check if source and target are the same file (both paths now resolved)
+    file_already_at_target = plan_path == target_path if plan_path is not None else False
 
     # Write to target path (skip if file already there)
     if not file_already_at_target:
