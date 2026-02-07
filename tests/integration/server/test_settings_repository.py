@@ -10,18 +10,18 @@ pytestmark = pytest.mark.integration
 
 
 @pytest.fixture
-def repo(db_with_schema: Database) -> SettingsRepository:
+def repo(test_db: Database) -> SettingsRepository:
     """Create a SettingsRepository instance."""
-    return SettingsRepository(db_with_schema)
+    return SettingsRepository(test_db)
 
 
 class TestSettingsRepository:
     """Tests for SettingsRepository."""
 
-    async def test_ensure_defaults_creates_singleton(self, repo: SettingsRepository, db_with_schema: Database) -> None:
+    async def test_ensure_defaults_creates_singleton(self, repo: SettingsRepository, test_db: Database) -> None:
         """Verify ensure_defaults creates the singleton row."""
         await repo.ensure_defaults()
-        row = await db_with_schema.fetch_one("SELECT * FROM server_settings WHERE id = 1")
+        row = await test_db.fetch_one("SELECT * FROM server_settings WHERE id = 1")
         assert row is not None
         assert row["log_retention_days"] == 30
 

@@ -21,9 +21,9 @@ class TestBrainstormRepository:
     """Test BrainstormRepository CRUD operations."""
 
     @pytest.fixture
-    async def db(self, db_with_schema: Database) -> Database:
+    async def db(self, test_db: Database) -> Database:
         """Use the shared PostgreSQL database with schema."""
-        return db_with_schema
+        return test_db
 
     @pytest.fixture
     def repository(self, db: Database) -> BrainstormRepository:

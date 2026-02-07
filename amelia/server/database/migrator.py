@@ -23,10 +23,11 @@ class Migrator:
         for version, sql in migrations:
             if version > current:
                 logger.info("Applying migration", version=version)
-                await self._db.execute(sql)
-                await self._db.execute(
-                    "INSERT INTO schema_migrations (version) VALUES ($1)", version
-                )
+                async with self._db.transaction() as conn:
+                    await conn.execute(sql)
+                    await conn.execute(
+                        "INSERT INTO schema_migrations (version) VALUES ($1)", version
+                    )
                 logger.info("Migration applied", version=version)
 
     async def _ensure_migrations_table(self) -> None:
