@@ -16,10 +16,8 @@ from uuid import uuid4
 
 from deepagents.backends.protocol import BackendProtocol, WriteResult
 from deepagents.middleware.filesystem import (
-    TOOL_GENERATORS,
     FilesystemMiddleware,
     FilesystemState,
-    _get_backend,
     _validate_path,
 )
 from langchain.tools import ToolRuntime
@@ -60,7 +58,7 @@ Usage:
 
 
 def _write_design_doc_tool_generator(
-    backend: BackendProtocol | Callable[[ToolRuntime], BackendProtocol],
+    middleware: FilesystemMiddleware,
 ) -> BaseTool:
     """Generate the write_design_doc tool (markdown-only write).
 
@@ -69,7 +67,7 @@ def _write_design_doc_tool_generator(
     code generation.
 
     Args:
-        backend: Backend to use for file storage.
+        middleware: FilesystemMiddleware instance (used for backend resolution).
 
     Returns:
         Configured write_design_doc tool.
@@ -88,7 +86,7 @@ def _write_design_doc_tool_generator(
                 f"Got: {file_path}. The brainstormer cannot write code files."
             )
 
-        resolved_backend = _get_backend(backend, runtime)
+        resolved_backend = middleware._get_backend(runtime)
         validated_path = _validate_path(file_path)
         res: WriteResult = resolved_backend.write(validated_path, content)
 
@@ -121,7 +119,7 @@ def _write_design_doc_tool_generator(
                 f"Got: {file_path}. The brainstormer cannot write code files."
             )
 
-        resolved_backend = _get_backend(backend, runtime)
+        resolved_backend = middleware._get_backend(runtime)
         validated_path = _validate_path(file_path)
         res: WriteResult = await resolved_backend.awrite(validated_path, content)
 
@@ -147,40 +145,6 @@ def _write_design_doc_tool_generator(
         func=sync_write_design_doc,
         coroutine=async_write_design_doc,
     )
-
-
-def create_brainstormer_tools(
-    backend: BackendProtocol | Callable[[ToolRuntime], BackendProtocol],
-) -> list[BaseTool]:
-    """Create the restricted tool set for the brainstormer agent.
-
-    The brainstormer can:
-    - READ any files (for context): ls, read_file, glob, grep
-    - WRITE only markdown files: write_design_doc
-
-    The brainstormer CANNOT:
-    - Execute shell commands (no execute tool)
-    - Edit existing files (no edit_file tool)
-    - Write non-markdown files (write_design_doc validates .md extension)
-
-    Args:
-        backend: Backend to use for file operations.
-
-    Returns:
-        List of restricted tools for the brainstormer.
-    """
-    tools: list[BaseTool] = []
-
-    # Read-only tools from TOOL_GENERATORS
-    read_only_tools = ["ls", "read_file", "glob", "grep"]
-    for tool_name in read_only_tools:
-        generator = TOOL_GENERATORS[tool_name]
-        tools.append(generator(backend))
-
-    # Custom markdown-only write tool
-    tools.append(_write_design_doc_tool_generator(backend))
-
-    return tools
 
 
 # Custom restricted filesystem prompt for brainstormer
@@ -273,18 +237,22 @@ class BrainstormerFilesystemMiddleware(FilesystemMiddleware):
             backend: Backend for file storage.
             tool_token_limit_before_evict: Token limit before evicting tool results.
         """
-        # Don't call super().__init__() as it would create all tools
-        # Instead, initialize only what we need
-        self.tool_token_limit_before_evict = tool_token_limit_before_evict
-        self.backend = backend
-        self._custom_system_prompt = BRAINSTORMER_FILESYSTEM_PROMPT
+        # Initialize parent with restricted system prompt, but we'll override tools
+        super().__init__(
+            backend=backend,
+            system_prompt=BRAINSTORMER_FILESYSTEM_PROMPT,
+            tool_token_limit_before_evict=tool_token_limit_before_evict,
+        )
 
-        # Create restricted tools only if backend is provided
-        # If backend is None, tools will be created later when backend is set
-        if backend is not None:
-            self.tools = create_brainstormer_tools(backend)
-        else:
-            self.tools = []
+        # Override tools with restricted set:
+        # Read-only tools + markdown-only write
+        self.tools = [
+            self._create_ls_tool(),
+            self._create_read_file_tool(),
+            self._create_glob_tool(),
+            self._create_grep_tool(),
+            _write_design_doc_tool_generator(self),
+        ]
 
 
 BRAINSTORMER_PRIMING_PROMPT = """# Brainstorming Ideas Into Designs
