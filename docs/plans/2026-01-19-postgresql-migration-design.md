@@ -308,7 +308,7 @@ await pool.close()
 | **Startup** | `asyncpg.create_pool(database_url, min_size=2, max_size=10)` |
 | **Runtime** | Repositories acquire/release connections from pool automatically |
 | **Health check** | `pool.fetchval('SELECT 1')` replaces `PRAGMA integrity_check` |
-| **Shutdown** | `await pool.close()` then `await pool.wait_closed()` |
+| **Shutdown** | `await pool.close()` (waits for all connections to be released) |
 
 ## Testing
 
