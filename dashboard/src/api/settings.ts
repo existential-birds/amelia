@@ -156,6 +156,7 @@ export async function updateServerSettings(
 /**
  * Retrieves all profiles.
  *
+ * @param signal - Optional AbortSignal to cancel the request.
  * @returns Array of all profile configurations.
  * @throws {Error} When the API request fails.
  *
@@ -165,11 +166,16 @@ export async function updateServerSettings(
  * console.log(`Found ${profiles.length} profiles`);
  * ```
  */
-export async function getProfiles(): Promise<Profile[]> {
+export async function getProfiles(signal?: AbortSignal): Promise<Profile[]> {
+  const timeoutSignal = createTimeoutSignal();
+  const combinedSignal = signal
+    ? AbortSignal.any([timeoutSignal, signal])
+    : timeoutSignal;
+
   const response = await fetch(`${API_BASE_URL}/profiles`, {
     method: "GET",
     headers: { "Content-Type": "application/json" },
-    signal: createTimeoutSignal(),
+    signal: combinedSignal,
   });
   return handleResponse<Profile[]>(response);
 }

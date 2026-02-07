@@ -10,6 +10,7 @@ import {
   type TokenSummary,
   type TokenUsage,
 } from '../types';
+import { type Profile } from '../api/settings';
 
 // ============================================================================
 // Factory Functions
@@ -159,4 +160,29 @@ export function createMockEvent(
     ...overrides,
   };
 }
+
+/**
+ * Creates a mock Profile with sensible defaults.
+ * @param overrides - Optional partial object to override default values
+ */
+export function createMockProfile(overrides?: Partial<Profile>): Profile {
+  return {
+    id: 'work',
+    tracker: 'github',
+    working_dir: '/work',
+    plan_output_dir: '',
+    plan_path_pattern: '',
+    agents: {},
+    is_active: true,
+    ...overrides,
+  };
+}
+
+/**
+ * Standard mock profiles array for testing profile selection components.
+ */
+export const mockProfiles: Profile[] = [
+  createMockProfile({ id: 'work', tracker: 'github', working_dir: '/work', is_active: true }),
+  createMockProfile({ id: 'personal', tracker: 'jira', working_dir: '/personal', is_active: false }),
+];
 

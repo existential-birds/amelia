@@ -28,6 +28,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Card } from '@/components/ui/card';
 import { WorktreePathField } from '@/components/WorktreePathField';
+import { ProfileSelect } from '@/components/ProfileSelect';
 import { cn } from '@/lib/utils';
 
 /**
@@ -105,12 +106,6 @@ const fields: FieldConfig[] = [
     required: true,
   },
   {
-    name: 'profile',
-    label: 'Profile',
-    placeholder: 'noop-local',
-    required: false,
-  },
-  {
     name: 'task_title',
     label: 'Task Title',
     placeholder: 'Add logout button to navbar',
@@ -173,8 +168,9 @@ export function QuickShotModal({ open, onOpenChange, defaults }: QuickShotModalP
     },
   });
 
-  // Watch worktree_path for controlled input
+  // Watch worktree_path and profile for controlled inputs
   const worktreePath = watch('worktree_path');
+  const profileValue = watch('profile');
 
   // Ref for hidden file input (keyboard accessibility)
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -352,6 +348,7 @@ export function QuickShotModal({ open, onOpenChange, defaults }: QuickShotModalP
           </span>
         );
         reset();
+        setPlanData({});
         onOpenChange(false);
       } catch (error) {
         if (error instanceof ApiError) {
@@ -367,6 +364,7 @@ export function QuickShotModal({ open, onOpenChange, defaults }: QuickShotModalP
 
   const handleClose = () => {
     reset();
+    setPlanData({});
     onOpenChange(false);
   };
 
@@ -440,11 +438,25 @@ export function QuickShotModal({ open, onOpenChange, defaults }: QuickShotModalP
             />
           </div>
 
+          {/* Profile Selection */}
+          <div
+            className="animate-quick-shot-field"
+            style={{ animationDelay: '50ms' }}
+          >
+            <ProfileSelect
+              id="profile"
+              value={profileValue}
+              onChange={(value) => setValue('profile', value, { shouldValidate: true })}
+              error={errors.profile?.message}
+              disabled={isSubmitting}
+            />
+          </div>
+
           {fields.map((field, index) => (
             <div
               key={field.name}
               className="animate-quick-shot-field"
-              style={{ animationDelay: `${(index + 1) * 50}ms` }}
+              style={{ animationDelay: `${(index + 2) * 50}ms` }}
             >
               <div className="relative">
                 <Label
@@ -498,7 +510,7 @@ export function QuickShotModal({ open, onOpenChange, defaults }: QuickShotModalP
           {/* External Plan Import Section */}
           <div
             className="animate-quick-shot-field"
-            style={{ animationDelay: `${(fields.length + 1) * 50}ms` }}
+            style={{ animationDelay: `${(fields.length + 2) * 50}ms` }}
           >
             <PlanImportSection onPlanChange={handlePlanChange} worktreePath={worktreePath} />
           </div>

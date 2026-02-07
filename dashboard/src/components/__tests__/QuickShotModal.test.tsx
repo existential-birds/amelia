@@ -1,8 +1,8 @@
 /**
  * @fileoverview Tests for QuickShotModal functionality.
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QuickShotModal } from '../QuickShotModal';
 import { api, ApiError } from '@/api/client';
@@ -45,6 +45,14 @@ vi.mock('sonner', () => ({
   },
 }));
 
+// Mock settings API for ProfileSelect
+vi.mock('@/api/settings', () => ({
+  getProfiles: vi.fn().mockResolvedValue([
+    { id: 'work', tracker: 'github', working_dir: '/work', is_active: true },
+    { id: 'personal', tracker: 'jira', working_dir: '/personal', is_active: false },
+  ]),
+}));
+
 describe('QuickShotModal', () => {
   const defaultProps = {
     open: true,
@@ -58,11 +66,6 @@ describe('QuickShotModal', () => {
       status: 'pending',
       message: 'Workflow created',
     });
-  });
-
-  afterEach(() => {
-    // Ensure cleanup happens before moving to next test
-    cleanup();
   });
 
   /**
@@ -79,7 +82,9 @@ describe('QuickShotModal', () => {
   }
 
   /**
-   * Create a mock markdown file with File.text() support (not available in jsdom).
+   * Create a mock markdown file with File.text() support.
+   * jsdom doesn't implement File.text() (Blob reading methods), so we add it manually.
+   * See: https://github.com/jsdom/jsdom/issues/2555
    */
   function createMockMarkdownFile(
     content: string,
@@ -375,10 +380,8 @@ describe('QuickShotModal', () => {
         expect(screen.getByText(/launching/i)).toBeInTheDocument();
       });
 
-      // Resolve the promise and wait for the submission to complete
-      await waitFor(async () => {
-        resolvePromise!({ id: 'wf-123', status: 'pending', message: 'ok' });
-      });
+      // Resolve the promise to complete the test cleanly
+      resolvePromise!({ id: 'wf-123', status: 'pending', message: 'ok' });
     });
   });
 

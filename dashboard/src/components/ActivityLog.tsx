@@ -27,13 +27,18 @@ export function ActivityLog({
     useCallback((state) => state.eventsByWorkflow[workflowId], [workflowId])
   );
 
+  // Memoize initial event IDs separately - only recalculates when initialEvents changes
+  const initialIds = useMemo(
+    () => new Set(initialEvents.map((e) => e.id)),
+    [initialEvents]
+  );
+
   // Merge initial events with realtime events
   const allEvents = useMemo(() => {
     const realtime = realtimeEvents ?? [];
-    const initialIds = new Set(initialEvents.map((e) => e.id));
     const newEvents = realtime.filter((e) => !initialIds.has(e.id));
     return [...initialEvents, ...newEvents];
-  }, [initialEvents, realtimeEvents]);
+  }, [initialEvents, initialIds, realtimeEvents]);
 
   // Group events by stage and flatten for virtualization
   const { rows } = useActivityLogGroups(allEvents, collapsedStages);
