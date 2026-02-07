@@ -6,7 +6,7 @@ import { STAGE_ORDER, STAGE_LABELS } from './types';
 /**
  * Hook to group workflow events by stage for hierarchical display.
  *
- * @param events - All workflow events (will filter to info+debug only)
+ * @param events - All workflow events
  * @param collapsedStages - Set of stage names that are collapsed
  * @returns Groups and flattened rows for virtualization
  */
@@ -15,12 +15,9 @@ export function useActivityLogGroups(
   collapsedStages: Set<string>
 ): { groups: StageGroup[]; rows: VirtualRow[] } {
   return useMemo(() => {
-    // Filter to info+debug only (exclude trace)
-    const filteredEvents = events.filter((e) => e.level !== 'trace');
-
     // Group events by agent
     const byAgent = new Map<string, WorkflowEvent[]>();
-    for (const event of filteredEvents) {
+    for (const event of events) {
       const agent = event.agent.toLowerCase();
       // Map unknown agents to developer
       const targetStage = STAGE_ORDER.includes(agent as AgentStage)

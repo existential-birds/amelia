@@ -35,7 +35,6 @@ async function handleResponse<T>(response: Response): Promise<T> {
 export interface ServerSettings {
   log_retention_days: number;
   log_retention_max_events: number;
-  trace_retention_days: number;
   checkpoint_retention_days: number;
   checkpoint_path: string;
   websocket_idle_timeout_seconds: number;

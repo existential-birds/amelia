@@ -18,20 +18,20 @@ describe('WorkflowEvent types', () => {
       timestamp: '2025-01-01T00:00:00Z',
       agent: 'developer',
       event_type: 'claude_tool_call',
-      level: 'trace',
+      level: 'debug',
       message: 'Tool call',
       tool_name: 'Edit',
       tool_input: { file: 'test.py' },
       is_error: false,
     };
 
-    expect(event.level).toBe('trace');
+    expect(event.level).toBe('debug');
     expect(event.tool_name).toBe('Edit');
   });
 
-  it('level can be info, debug, or trace', () => {
-    const levels: EventLevel[] = ['info', 'debug', 'trace'];
-    expect(levels).toHaveLength(3);
+  it('level can be info, warning, error, or debug', () => {
+    const levels: EventLevel[] = ['info', 'warning', 'error', 'debug'];
+    expect(levels).toHaveLength(4);
   });
 
   it('supports distributed tracing fields', () => {
@@ -42,7 +42,7 @@ describe('WorkflowEvent types', () => {
       timestamp: '2025-01-01T00:00:00Z',
       agent: 'developer',
       event_type: 'claude_tool_result',
-      level: 'trace',
+      level: 'debug',
       message: 'Tool result',
       trace_id: 'trace-abc-123',
       parent_id: 'evt-parent',

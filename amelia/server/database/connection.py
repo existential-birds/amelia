@@ -1,5 +1,6 @@
 """Database connection management with SQLite."""
 import contextlib
+import sqlite3
 from collections.abc import AsyncGenerator, Sequence
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -70,7 +71,7 @@ class Database:
         if self._connection:
             try:
                 await self._connection.close()
-            except Exception as e:
+            except sqlite3.Error as e:
                 logger.warning(f"Error closing database connection: {e}")
             finally:
                 self._connection = None
@@ -277,22 +278,17 @@ class Database:
         """)
 
         await self.execute("""
-            CREATE TABLE IF NOT EXISTS events (
+            CREATE TABLE IF NOT EXISTS workflow_log (
                 id TEXT PRIMARY KEY,
                 workflow_id TEXT NOT NULL REFERENCES workflows(id) ON DELETE CASCADE,
                 sequence INTEGER NOT NULL,
                 timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                agent TEXT NOT NULL,
                 event_type TEXT NOT NULL,
-                level TEXT NOT NULL DEFAULT 'debug',
+                level TEXT NOT NULL CHECK (level IN ('info', 'warning', 'error', 'debug')),
+                agent TEXT,
                 message TEXT NOT NULL,
                 data_json TEXT,
-                correlation_id TEXT,
-                tool_name TEXT,
-                tool_input_json TEXT,
-                is_error INTEGER NOT NULL DEFAULT 0,
-                trace_id TEXT,
-                parent_id TEXT
+                is_error INTEGER NOT NULL DEFAULT 0
             )
         """)
 
@@ -402,21 +398,16 @@ class Database:
                 WHERE status IN ('in_progress', 'blocked')
         """)
         await self.execute("""
-            CREATE UNIQUE INDEX IF NOT EXISTS idx_events_workflow_sequence
-                ON events(workflow_id, sequence)
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_workflow_log_workflow_sequence
+                ON workflow_log(workflow_id, sequence)
         """)
         await self.execute(
-            "CREATE INDEX IF NOT EXISTS idx_events_workflow ON events(workflow_id, timestamp)"
+            "CREATE INDEX IF NOT EXISTS idx_workflow_log_workflow ON workflow_log(workflow_id, timestamp)"
         )
-        await self.execute(
-            "CREATE INDEX IF NOT EXISTS idx_events_type ON events(event_type)"
-        )
-        await self.execute(
-            "CREATE INDEX IF NOT EXISTS idx_events_level ON events(level)"
-        )
-        await self.execute(
-            "CREATE INDEX IF NOT EXISTS idx_events_trace_id ON events(trace_id)"
-        )
+        await self.execute("""
+            CREATE INDEX IF NOT EXISTS idx_workflow_log_errors
+                ON workflow_log(workflow_id) WHERE is_error = 1
+        """)
         await self.execute(
             "CREATE INDEX IF NOT EXISTS idx_tokens_workflow ON token_usage(workflow_id)"
         )
@@ -543,7 +534,6 @@ class Database:
                 id INTEGER PRIMARY KEY CHECK (id = 1),
                 log_retention_days INTEGER NOT NULL DEFAULT 30,
                 log_retention_max_events INTEGER NOT NULL DEFAULT 100000,
-                trace_retention_days INTEGER NOT NULL DEFAULT 7,
                 checkpoint_retention_days INTEGER NOT NULL DEFAULT 0,
                 checkpoint_path TEXT NOT NULL DEFAULT '~/.amelia/checkpoints.db',
                 websocket_idle_timeout_seconds REAL NOT NULL DEFAULT 300.0,

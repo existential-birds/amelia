@@ -27,18 +27,18 @@ class TestOracleEventTypes:
         """ORACLE_CONSULTATION_COMPLETED should be info level."""
         assert get_event_level(EventType.ORACLE_CONSULTATION_COMPLETED) == EventLevel.INFO
 
-    def test_oracle_failed_is_info_level(self):
-        """ORACLE_CONSULTATION_FAILED should be info level."""
-        assert get_event_level(EventType.ORACLE_CONSULTATION_FAILED) == EventLevel.INFO
+    def test_oracle_failed_is_error_level(self):
+        """ORACLE_CONSULTATION_FAILED should be error level."""
+        assert get_event_level(EventType.ORACLE_CONSULTATION_FAILED) == EventLevel.ERROR
 
-    def test_oracle_thinking_is_trace_level(self):
-        """ORACLE_CONSULTATION_THINKING should be trace level (streaming)."""
-        assert get_event_level(EventType.ORACLE_CONSULTATION_THINKING) == EventLevel.TRACE
+    def test_oracle_thinking_is_debug_level(self):
+        """ORACLE_CONSULTATION_THINKING should be debug level (streaming)."""
+        assert get_event_level(EventType.ORACLE_CONSULTATION_THINKING) == EventLevel.DEBUG
 
-    def test_oracle_tool_call_is_trace_level(self):
-        """ORACLE_TOOL_CALL should be trace level."""
-        assert get_event_level(EventType.ORACLE_TOOL_CALL) == EventLevel.TRACE
+    def test_oracle_tool_call_is_debug_level(self):
+        """ORACLE_TOOL_CALL should be debug level."""
+        assert get_event_level(EventType.ORACLE_TOOL_CALL) == EventLevel.DEBUG
 
-    def test_oracle_tool_result_is_trace_level(self):
-        """ORACLE_TOOL_RESULT should be trace level."""
-        assert get_event_level(EventType.ORACLE_TOOL_RESULT) == EventLevel.TRACE
+    def test_oracle_tool_result_is_debug_level(self):
+        """ORACLE_TOOL_RESULT should be debug level."""
+        assert get_event_level(EventType.ORACLE_TOOL_RESULT) == EventLevel.DEBUG

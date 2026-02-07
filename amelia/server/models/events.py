@@ -26,13 +26,15 @@ class EventLevel(StrEnum):
 
     Attributes:
         INFO: High-level workflow events (lifecycle, stages, approvals).
+        WARNING: System warnings and non-critical issues.
         DEBUG: Operational details (tasks, files, messages).
-        TRACE: Verbose execution trace (thinking, tool calls).
+        ERROR: Error events.
     """
 
     INFO = "info"
+    WARNING = "warning"
     DEBUG = "debug"
-    TRACE = "trace"
+    ERROR = "error"
 
 
 class EventType(StrEnum):
@@ -130,12 +132,61 @@ class EventType(StrEnum):
     ORACLE_CONSULTATION_FAILED = "oracle_consultation_failed"
 
 
-# Event type to level mapping
-_INFO_TYPES: frozenset[EventType] = frozenset({
+# Persisted event types (written to workflow log)
+PERSISTED_TYPES: frozenset[EventType] = frozenset({
+    # Lifecycle
     EventType.WORKFLOW_CREATED,
     EventType.WORKFLOW_STARTED,
     EventType.WORKFLOW_COMPLETED,
     EventType.WORKFLOW_FAILED,
+    EventType.WORKFLOW_CANCELLED,
+    # Stages
+    EventType.STAGE_STARTED,
+    EventType.STAGE_COMPLETED,
+    # Approval
+    EventType.APPROVAL_REQUIRED,
+    EventType.APPROVAL_GRANTED,
+    EventType.APPROVAL_REJECTED,
+    # Artifacts
+    EventType.FILE_CREATED,
+    EventType.FILE_MODIFIED,
+    EventType.FILE_DELETED,
+    # Review
+    EventType.REVIEW_REQUESTED,
+    EventType.REVIEW_COMPLETED,
+    EventType.REVISION_REQUESTED,
+    # Tasks
+    EventType.TASK_STARTED,
+    EventType.TASK_COMPLETED,
+    EventType.TASK_FAILED,
+    # System
+    EventType.SYSTEM_ERROR,
+    EventType.SYSTEM_WARNING,
+    # Oracle
+    EventType.ORACLE_CONSULTATION_STARTED,
+    EventType.ORACLE_CONSULTATION_COMPLETED,
+    EventType.ORACLE_CONSULTATION_FAILED,
+    # Brainstorm
+    EventType.BRAINSTORM_SESSION_CREATED,
+    EventType.BRAINSTORM_SESSION_COMPLETED,
+    EventType.BRAINSTORM_ARTIFACT_CREATED,
+})
+
+_ERROR_TYPES: frozenset[EventType] = frozenset({
+    EventType.WORKFLOW_FAILED,
+    EventType.TASK_FAILED,
+    EventType.SYSTEM_ERROR,
+    EventType.ORACLE_CONSULTATION_FAILED,
+})
+
+_WARNING_TYPES: frozenset[EventType] = frozenset({
+    EventType.SYSTEM_WARNING,
+})
+
+_INFO_TYPES: frozenset[EventType] = frozenset({
+    EventType.WORKFLOW_CREATED,
+    EventType.WORKFLOW_STARTED,
+    EventType.WORKFLOW_COMPLETED,
     EventType.WORKFLOW_CANCELLED,
     EventType.STAGE_STARTED,
     EventType.STAGE_COMPLETED,
@@ -145,17 +196,6 @@ _INFO_TYPES: frozenset[EventType] = frozenset({
     EventType.REVIEW_COMPLETED,
     EventType.ORACLE_CONSULTATION_STARTED,
     EventType.ORACLE_CONSULTATION_COMPLETED,
-    EventType.ORACLE_CONSULTATION_FAILED,
-})
-
-_TRACE_TYPES: frozenset[EventType] = frozenset({
-    EventType.CLAUDE_THINKING,
-    EventType.CLAUDE_TOOL_CALL,
-    EventType.CLAUDE_TOOL_RESULT,
-    EventType.AGENT_OUTPUT,
-    EventType.ORACLE_CONSULTATION_THINKING,
-    EventType.ORACLE_TOOL_CALL,
-    EventType.ORACLE_TOOL_RESULT,
 })
 
 
@@ -168,10 +208,12 @@ def get_event_level(event_type: EventType) -> EventLevel:
     Returns:
         EventLevel for the given event type.
     """
+    if event_type in _ERROR_TYPES:
+        return EventLevel.ERROR
+    if event_type in _WARNING_TYPES:
+        return EventLevel.WARNING
     if event_type in _INFO_TYPES:
         return EventLevel.INFO
-    if event_type in _TRACE_TYPES:
-        return EventLevel.TRACE
     return EventLevel.DEBUG
 
 

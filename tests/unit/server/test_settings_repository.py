@@ -99,7 +99,6 @@ class TestSettingsRepository:
         updates = {
             "log_retention_days": 60,
             "log_retention_max_events": 200000,
-            "trace_retention_days": 14,
             "checkpoint_retention_days": 3,
             "checkpoint_path": "/custom/path/checkpoints.db",
             "websocket_idle_timeout_seconds": 600.0,
@@ -111,7 +110,6 @@ class TestSettingsRepository:
 
         assert updated.log_retention_days == 60
         assert updated.log_retention_max_events == 200000
-        assert updated.trace_retention_days == 14
         assert updated.checkpoint_retention_days == 3
         assert updated.checkpoint_path == "/custom/path/checkpoints.db"
         assert updated.websocket_idle_timeout_seconds == 600.0

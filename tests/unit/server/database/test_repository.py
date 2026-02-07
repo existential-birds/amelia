@@ -589,105 +589,94 @@ class TestRepositoryEvents:
         await repository.save_event(event)
 
         row = await repository._db.fetch_one(
-            "SELECT level FROM events WHERE id = ?", (event.id,)
+            "SELECT level FROM workflow_log WHERE id = ?", (event.id,)
         )
         assert row["level"] == "info"
 
-    async def test_save_event_with_trace_fields(self, repository, sample_workflow) -> None:
-        """save_event persists trace-specific fields."""
-        event = WorkflowEvent(
-            id="evt-trace-test",
-            workflow_id=sample_workflow.id,
-            sequence=1,
-            timestamp=datetime.now(UTC),
-            agent="developer",
-            event_type=EventType.CLAUDE_TOOL_CALL,
-            level=EventLevel.TRACE,
-            message="Tool call: Edit",
-            tool_name="Edit",
-            tool_input={"file": "test.py", "content": "hello"},
-            is_error=False,
-        )
-        await repository.save_event(event)
-
-        row = await repository._db.fetch_one(
-            "SELECT tool_name, tool_input_json, is_error FROM events WHERE id = ?",
-            (event.id,),
-        )
-        assert row["tool_name"] == "Edit"
-        assert row["is_error"] == 0
-        import json
-        assert json.loads(row["tool_input_json"]) == {"file": "test.py", "content": "hello"}
-
     async def test_row_to_event_restores_level(self, repository, sample_workflow) -> None:
-        """_row_to_event restores level and trace fields."""
+        """_row_to_event restores level field from database."""
         event = WorkflowEvent(
             id="evt-restore-test",
             workflow_id=sample_workflow.id,
             sequence=1,
             timestamp=datetime.now(UTC),
-            agent="developer",
-            event_type=EventType.CLAUDE_TOOL_CALL,
-            level=EventLevel.TRACE,
-            message="Tool call",
-            tool_name="Read",
-            tool_input={"path": "/test"},
-            is_error=True,
+            agent="system",
+            event_type=EventType.WORKFLOW_STARTED,
+            level=EventLevel.INFO,
+            message="Workflow started",
         )
         await repository.save_event(event)
 
         events = await repository.get_recent_events(sample_workflow.id, limit=1)
         restored = events[0]
 
-        assert restored.level == EventLevel.TRACE
-        assert restored.tool_name == "Read"
-        assert restored.tool_input == {"path": "/test"}
-        assert restored.is_error is True
+        assert restored.level == EventLevel.INFO
+        assert restored.is_error is False
 
-    async def test_save_event_with_distributed_tracing(
-        self, repository, sample_workflow
-    ) -> None:
-        """save_event persists trace_id and parent_id fields."""
+
+class TestWorkflowLogFiltering:
+    """Tests for event persistence filtering in workflow_log."""
+
+    @pytest.fixture
+    async def repository(self, db_with_schema):
+        return WorkflowRepository(db_with_schema)
+
+    @pytest.fixture
+    async def sample_workflow(self, repository):
+        workflow_id = "wf-filter-test"
+        state = ServerExecutionState(
+            id=workflow_id,
+            issue_id="TEST-1",
+            worktree_path="/tmp/test",
+            workflow_status="in_progress",
+            started_at=datetime.now(UTC),
+        )
+        await repository.create(state)
+        return workflow_id
+
+    async def test_save_event_persists_lifecycle_event(self, repository, sample_workflow):
+        """Lifecycle events should be written to workflow_log."""
         event = WorkflowEvent(
-            id="evt-tracing-test",
-            workflow_id=sample_workflow.id,
+            id="evt-1",
+            workflow_id=sample_workflow,
+            sequence=1,
+            timestamp=datetime.now(UTC),
+            agent="system",
+            event_type=EventType.WORKFLOW_STARTED,
+            message="Workflow started",
+        )
+        await repository.save_event(event)
+        events = await repository.get_recent_events(sample_workflow)
+        assert len(events) == 1
+        assert events[0].event_type == EventType.WORKFLOW_STARTED
+
+    async def test_save_event_skips_trace_event(self, repository, sample_workflow):
+        """Trace events should NOT be written to workflow_log."""
+        event = WorkflowEvent(
+            id="evt-2",
+            workflow_id=sample_workflow,
             sequence=1,
             timestamp=datetime.now(UTC),
             agent="developer",
-            event_type=EventType.CLAUDE_TOOL_RESULT,
-            level=EventLevel.TRACE,
-            message="Tool result",
-            trace_id="trace-abc-123",
-            parent_id="evt-parent-call",
+            event_type=EventType.CLAUDE_THINKING,
+            message="Thinking...",
         )
         await repository.save_event(event)
+        events = await repository.get_recent_events(sample_workflow)
+        assert len(events) == 0
 
-        row = await repository._db.fetch_one(
-            "SELECT trace_id, parent_id FROM events WHERE id = ?",
-            (event.id,),
-        )
-        assert row["trace_id"] == "trace-abc-123"
-        assert row["parent_id"] == "evt-parent-call"
-
-    async def test_row_to_event_restores_tracing_fields(
-        self, repository, sample_workflow
-    ) -> None:
-        """_row_to_event restores trace_id and parent_id."""
+    async def test_save_event_skips_stream_event(self, repository, sample_workflow):
+        """Stream events should NOT be written to workflow_log."""
         event = WorkflowEvent(
-            id="evt-restore-tracing",
-            workflow_id=sample_workflow.id,
-            sequence=1,
+            id="evt-3",
+            workflow_id=sample_workflow,
+            sequence=0,
             timestamp=datetime.now(UTC),
             agent="developer",
-            event_type=EventType.CLAUDE_TOOL_CALL,
-            message="Tool call",
-            trace_id="trace-xyz-789",
-            parent_id="evt-stage-start",
+            event_type=EventType.STREAM,
+            message="chunk",
         )
         await repository.save_event(event)
+        events = await repository.get_recent_events(sample_workflow)
+        assert len(events) == 0
 
-        events = await repository.get_recent_events(sample_workflow.id, limit=1)
-        restored = events[0]
-
-        assert restored.trace_id == "trace-xyz-789"
-        assert restored.parent_id == "evt-stage-start"

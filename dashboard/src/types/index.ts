@@ -106,10 +106,11 @@ export interface WorkflowDetail extends WorkflowSummary {
  * Used to filter and categorize events in the UI.
  *
  * - `info`: High-level workflow progress (lifecycle, stages, approvals)
+ * - `warning`: System warnings and non-critical issues
+ * - `error`: Error events
  * - `debug`: Detailed operational information (file changes, agent messages)
- * - `trace`: Fine-grained execution details (tool calls, LLM thinking)
  */
-export type EventLevel = 'info' | 'debug' | 'trace';
+export type EventLevel = 'info' | 'warning' | 'error' | 'debug';
 
 /**
  * Types of events that can occur during workflow execution.

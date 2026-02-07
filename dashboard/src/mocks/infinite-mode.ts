@@ -33,15 +33,7 @@ function getEventLevel(eventType: WorkflowEvent['event_type']): EventLevel {
     'review_completed',
   ]);
 
-  const traceEvents = new Set([
-    'claude_thinking',
-    'claude_tool_call',
-    'claude_tool_result',
-    'agent_output',
-  ]);
-
   if (infoEvents.has(eventType)) return 'info';
-  if (traceEvents.has(eventType)) return 'trace';
   return 'debug';
 }
 

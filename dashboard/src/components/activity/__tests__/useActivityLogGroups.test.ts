@@ -34,11 +34,11 @@ describe('useActivityLogGroups', () => {
     expect(result.current.groups[1]?.events).toHaveLength(1);
   });
 
-  it('filters out trace level events', () => {
+  it('includes all event levels', () => {
     const events: WorkflowEvent[] = [
       makeEvent({ id: '1', level: 'info', event_type: 'stage_started' }),
       makeEvent({ id: '2', level: 'debug', event_type: 'task_started' }),
-      makeEvent({ id: '3', level: 'trace', event_type: 'claude_tool_call' }),
+      makeEvent({ id: '3', level: 'debug', event_type: 'claude_tool_call' }),
     ];
 
     const { result } = renderHook(() =>
@@ -46,8 +46,7 @@ describe('useActivityLogGroups', () => {
     );
 
     const allEvents = result.current.groups.flatMap((g) => g.events);
-    expect(allEvents).toHaveLength(2);
-    expect(allEvents.find((e) => e.level === 'trace')).toBeUndefined();
+    expect(allEvents).toHaveLength(3);
   });
 
   it('collapses stages in collapsedStages set', () => {

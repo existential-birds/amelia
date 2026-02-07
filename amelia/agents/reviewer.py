@@ -207,7 +207,7 @@ Rationale: [1-2 sentences]
             timestamp=datetime.now(UTC),
             agent=self._agent_name,
             event_type=EventType.AGENT_OUTPUT,
-            level=EventLevel.TRACE,
+            level=EventLevel.DEBUG,
             message="\n".join(content_parts),
         )
         self._event_bus.emit(event)

@@ -474,7 +474,6 @@ def server_show() -> None:
             table.add_row(
                 "Log Retention Max Events", str(settings.log_retention_max_events)
             )
-            table.add_row("Trace Retention Days", str(settings.trace_retention_days))
             table.add_row(
                 "Checkpoint Retention Days", str(settings.checkpoint_retention_days)
             )
@@ -509,7 +508,6 @@ def server_set(
     Valid settings:
     - log_retention_days (int)
     - log_retention_max_events (int)
-    - trace_retention_days (int)
     - checkpoint_retention_days (int)
     - checkpoint_path (str)
     - websocket_idle_timeout_seconds (float)
@@ -521,7 +519,6 @@ def server_set(
     int_fields = {
         "log_retention_days",
         "log_retention_max_events",
-        "trace_retention_days",
         "checkpoint_retention_days",
         "max_concurrent",
     }

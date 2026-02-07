@@ -35,7 +35,7 @@ const renderWithRouter = (ui: React.ReactElement) => {
   return render(<BrowserRouter>{ui}</BrowserRouter>);
 };
 
-// Helper to create mock trace events (WorkflowEvent with level: 'trace')
+// Helper to create mock debug-level trace events (WorkflowEvent with level: 'debug')
 const createTraceEvent = (
   eventType: EventType,
   overrides?: Partial<WorkflowEvent>
@@ -46,7 +46,7 @@ const createTraceEvent = (
   timestamp: new Date().toISOString(),
   agent: 'developer',
   event_type: eventType,
-  level: 'trace',
+  level: 'debug',
   message: eventType === 'claude_thinking' ? 'Test thinking content' : 'Test message',
   tool_name: eventType === 'claude_tool_call' ? 'test_tool' : undefined,
   tool_input: eventType === 'claude_tool_call' ? { arg: 'value' } : undefined,
@@ -251,9 +251,9 @@ describe('LogsPage', () => {
     expect(container.querySelector('[data-event-type="agent_output"]')).toBeInTheDocument();
   });
 
-  it('only displays trace-level events', () => {
+  it('only displays debug-level trace event types', () => {
     const events: WorkflowEvent[] = [
-      createTraceEvent('claude_thinking', { message: 'Trace event' }),
+      createTraceEvent('claude_thinking', { message: 'Thinking event' }),
       {
         id: 'evt-info-1',
         workflow_id: 'wf-123',
@@ -282,8 +282,8 @@ describe('LogsPage', () => {
     });
     renderWithRouter(<LogsPage />);
 
-    // Should only show trace event, not info or debug
-    expect(screen.getByText(/trace event/i)).toBeInTheDocument();
+    // Should only show debug trace event types, not info or non-trace debug
+    expect(screen.getByText(/thinking event/i)).toBeInTheDocument();
     expect(screen.queryByText(/info level event/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/debug level event/i)).not.toBeInTheDocument();
     expect(screen.getByText(/1 event/i)).toBeInTheDocument();
