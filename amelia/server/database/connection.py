@@ -1,12 +1,11 @@
 """Database connection management with SQLite."""
 import contextlib
+import sqlite3
 from collections.abc import AsyncGenerator, Sequence
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Any
-
-import sqlite3
 
 import aiosqlite
 from loguru import logger
