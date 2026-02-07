@@ -1,10 +1,8 @@
 """Log retention service for cleaning up old workflow data."""
-from collections.abc import Sequence
+
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 from typing import Any, Protocol
 
-import asyncpg
 from loguru import logger
 from pydantic import BaseModel
 
@@ -12,13 +10,13 @@ from pydantic import BaseModel
 class DatabaseProtocol(Protocol):
     """Protocol for database operations."""
 
-    async def execute(self, query: str, params: Sequence[Any] = ()) -> int:
+    async def execute(self, query: str, *args: Any) -> int:
         """Execute a query and return affected row count."""
         ...
 
     async def fetch_all(
-        self, query: str, params: Sequence[Any] = ()
-    ) -> list[asyncpg.Record]:
+        self, query: str, *args: Any
+    ) -> list[Any]:
         """Execute a query and return all rows."""
         ...
 
@@ -27,7 +25,6 @@ class ConfigProtocol(Protocol):
     """Protocol for config access."""
 
     log_retention_days: int
-    log_retention_max_events: int
     checkpoint_retention_days: int
 
 
@@ -52,30 +49,21 @@ class LogRetentionService:
         self,
         db: Any,
         config: Any,
-        checkpoint_path: Path | str | None = None,
     ) -> None:
         """Initialize retention service.
 
         Args:
             db: Database connection.
             config: Server configuration with retention settings.
-            checkpoint_path: Path to LangGraph checkpoint database.
-                If None, checkpoint cleanup is skipped.
         """
         self._db = db
         self._config = config
-        self._checkpoint_path = (
-            Path(checkpoint_path).expanduser().resolve()
-            if checkpoint_path
-            else None
-        )
 
     async def cleanup_on_shutdown(self) -> CleanupResult:
         """Execute retention policy cleanup during server shutdown."""
         logger.info(
             "Running log retention cleanup",
             retention_days=self._config.log_retention_days,
-            max_events=self._config.log_retention_max_events,
         )
 
         cutoff_date = datetime.now(UTC) - timedelta(
@@ -88,10 +76,10 @@ class LogRetentionService:
             WHERE workflow_id IN (
                 SELECT id FROM workflows
                 WHERE status IN ('completed', 'failed', 'cancelled')
-                AND completed_at < ?
+                AND completed_at < $1
             )
             """,
-            (cutoff_date.isoformat(),),
+            cutoff_date,
         )
 
         workflows_deleted = await self._db.execute(
@@ -99,9 +87,9 @@ class LogRetentionService:
             DELETE FROM workflows
             WHERE id NOT IN (SELECT DISTINCT workflow_id FROM workflow_log)
             AND status IN ('completed', 'failed', 'cancelled')
-            AND completed_at < ?
+            AND completed_at < $1
             """,
-            (cutoff_date.isoformat(),),
+            cutoff_date,
         )
 
         checkpoints_deleted = await self._cleanup_checkpoints()
@@ -133,33 +121,22 @@ class LogRetentionService:
             )
             return 0
 
-        if not self._checkpoint_path or not self._checkpoint_path.exists():
-            return 0
-
         # Build query based on retention days
         if retention_days == 0:
-            # Delete immediately for all finished workflows
-            query = """
-                SELECT id FROM workflows
-                WHERE status IN ('completed', 'failed', 'cancelled')
-            """
-            params: tuple[Any, ...] = ()
+            finished = await self._db.fetch_all(
+                "SELECT id FROM workflows WHERE status IN ('completed', 'failed', 'cancelled')"
+            )
         else:
-            # Delete only for workflows past retention period
-            cutoff_date = datetime.now(UTC) - timedelta(days=retention_days)
-            query = """
-                SELECT id FROM workflows
-                WHERE status IN ('completed', 'failed', 'cancelled')
-                AND completed_at < ?
-            """
-            params = (cutoff_date.isoformat(),)
+            cutoff = datetime.now(UTC) - timedelta(days=retention_days)
+            finished = await self._db.fetch_all(
+                "SELECT id FROM workflows WHERE status IN ('completed', 'failed', 'cancelled') AND completed_at < $1",
+                cutoff,
+            )
 
-        finished_workflows = await self._db.fetch_all(query, params)
-
-        if not finished_workflows:
+        if not finished:
             return 0
 
-        workflow_ids = [row["id"] for row in finished_workflows]
+        workflow_ids = [str(row["id"]) for row in finished]
         logger.debug(
             "Cleaning checkpoints for finished workflows",
             count=len(workflow_ids),
@@ -168,25 +145,15 @@ class LogRetentionService:
 
         total_deleted = 0
         try:
-            async with asyncpg.connect(str(self._checkpoint_path)) as conn:
-                # Delete from checkpoints table (thread_id = workflow_id)
-                placeholders = ",".join("?" * len(workflow_ids))
-                cursor = await conn.execute(
-                    f"DELETE FROM checkpoints WHERE thread_id IN ({placeholders})",
-                    workflow_ids,
+            for wf_id in workflow_ids:
+                r1 = await self._db.execute(
+                    "DELETE FROM checkpoints WHERE thread_id = $1", wf_id
                 )
-                total_deleted += cursor.rowcount
-
-                # Delete from writes table
-                cursor = await conn.execute(
-                    f"DELETE FROM writes WHERE thread_id IN ({placeholders})",
-                    workflow_ids,
+                r2 = await self._db.execute(
+                    "DELETE FROM writes WHERE thread_id = $1", wf_id
                 )
-                total_deleted += cursor.rowcount
-
-                await conn.commit()
+                total_deleted += r1 + r2
         except Exception as e:
-            # Log but don't fail shutdown on checkpoint cleanup errors
             logger.warning("Failed to cleanup checkpoints", error=str(e))
 
         return total_deleted
