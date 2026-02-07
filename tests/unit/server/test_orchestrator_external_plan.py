@@ -28,7 +28,6 @@ class TestQueueWorkflowWithExternalPlan:
             event_bus=mock_event_bus,
             repository=mock_repository,
             profile_repo=mock_profile_repo,
-            checkpoint_path="/tmp/checkpoints.db",
         )
 
     async def test_queue_workflow_with_plan_content_sets_external_flag(

@@ -1,6 +1,7 @@
 """Tests for WorkflowRepository usage trend methods."""
 
 from datetime import UTC, date, datetime
+from uuid import uuid4
 
 import pytest
 
@@ -8,6 +9,9 @@ from amelia.server.database.connection import Database
 from amelia.server.database.repository import WorkflowRepository
 from amelia.server.models.state import ServerExecutionState
 from amelia.server.models.tokens import TokenUsage
+
+
+pytestmark = pytest.mark.integration
 
 
 class TestUsageTrend:
@@ -30,22 +34,25 @@ class TestUsageTrend:
         repo = WorkflowRepository(db_with_schema)
 
         # Create workflows
+        wf1_id = str(uuid4())
+        wf2_id = str(uuid4())
+        wf3_id = str(uuid4())
         wf1 = ServerExecutionState(
-            id="wf-usage-1",
+            id=wf1_id,
             issue_id="ISSUE-1",
             worktree_path="/tmp/test-usage-1",
             workflow_status="completed",
             started_at=datetime(2026, 1, 15, 10, 0, 0, tzinfo=UTC),
         )
         wf2 = ServerExecutionState(
-            id="wf-usage-2",
+            id=wf2_id,
             issue_id="ISSUE-2",
             worktree_path="/tmp/test-usage-2",
             workflow_status="completed",
             started_at=datetime(2026, 1, 16, 10, 0, 0, tzinfo=UTC),
         )
         wf3 = ServerExecutionState(
-            id="wf-usage-3",
+            id=wf3_id,
             issue_id="ISSUE-3",
             worktree_path="/tmp/test-usage-3",
             workflow_status="completed",
@@ -58,7 +65,7 @@ class TestUsageTrend:
         # Day 1 (Jan 15): wf1 with sonnet and opus
         await repo.save_token_usage(
             TokenUsage(
-                workflow_id="wf-usage-1",
+                workflow_id=wf1_id,
                 agent="architect",
                 model="claude-sonnet-4-20250514",
                 input_tokens=1000,
@@ -71,7 +78,7 @@ class TestUsageTrend:
         )
         await repo.save_token_usage(
             TokenUsage(
-                workflow_id="wf-usage-1",
+                workflow_id=wf1_id,
                 agent="developer",
                 model="claude-opus-4-20250514",
                 input_tokens=2000,
@@ -86,7 +93,7 @@ class TestUsageTrend:
         # Day 2 (Jan 16): wf2 with sonnet only
         await repo.save_token_usage(
             TokenUsage(
-                workflow_id="wf-usage-2",
+                workflow_id=wf2_id,
                 agent="architect",
                 model="claude-sonnet-4-20250514",
                 input_tokens=1500,
@@ -99,7 +106,7 @@ class TestUsageTrend:
         )
         await repo.save_token_usage(
             TokenUsage(
-                workflow_id="wf-usage-2",
+                workflow_id=wf2_id,
                 agent="developer",
                 model="claude-sonnet-4-20250514",
                 input_tokens=2500,
@@ -114,7 +121,7 @@ class TestUsageTrend:
         # Day 3 (Jan 17): wf3 with opus only
         await repo.save_token_usage(
             TokenUsage(
-                workflow_id="wf-usage-3",
+                workflow_id=wf3_id,
                 agent="architect",
                 model="claude-opus-4-20250514",
                 input_tokens=3000,
@@ -240,8 +247,10 @@ class TestUsageSummaryWithSuccessMetrics:
         repo = WorkflowRepository(db_with_schema)
 
         # Previous period workflows (Jan 8-14)
+        wf_prev1_id = str(uuid4())
+        wf_prev2_id = str(uuid4())
         wf_prev1 = ServerExecutionState(
-            id="wf-prev-1",
+            id=wf_prev1_id,
             issue_id="ISSUE-P1",
             worktree_path="/tmp/test-prev-1",
             workflow_status="completed",
@@ -249,7 +258,7 @@ class TestUsageSummaryWithSuccessMetrics:
             completed_at=datetime(2026, 1, 10, 12, 0, 0, tzinfo=UTC),
         )
         wf_prev2 = ServerExecutionState(
-            id="wf-prev-2",
+            id=wf_prev2_id,
             issue_id="ISSUE-P2",
             worktree_path="/tmp/test-prev-2",
             workflow_status="completed",
@@ -262,7 +271,7 @@ class TestUsageSummaryWithSuccessMetrics:
         # Previous period token usage
         await repo.save_token_usage(
             TokenUsage(
-                workflow_id="wf-prev-1",
+                workflow_id=wf_prev1_id,
                 agent="architect",
                 model="claude-sonnet-4-20250514",
                 input_tokens=1000,
@@ -275,7 +284,7 @@ class TestUsageSummaryWithSuccessMetrics:
         )
         await repo.save_token_usage(
             TokenUsage(
-                workflow_id="wf-prev-2",
+                workflow_id=wf_prev2_id,
                 agent="architect",
                 model="claude-sonnet-4-20250514",
                 input_tokens=1200,
@@ -288,8 +297,12 @@ class TestUsageSummaryWithSuccessMetrics:
         )
 
         # Current period workflows (Jan 15-21): 3 completed, 1 failed
+        wf_curr1_id = str(uuid4())
+        wf_curr2_id = str(uuid4())
+        wf_curr3_id = str(uuid4())
+        wf_curr4_id = str(uuid4())
         wf_curr1 = ServerExecutionState(
-            id="wf-curr-1",
+            id=wf_curr1_id,
             issue_id="ISSUE-C1",
             worktree_path="/tmp/test-curr-1",
             workflow_status="completed",
@@ -297,7 +310,7 @@ class TestUsageSummaryWithSuccessMetrics:
             completed_at=datetime(2026, 1, 15, 12, 0, 0, tzinfo=UTC),
         )
         wf_curr2 = ServerExecutionState(
-            id="wf-curr-2",
+            id=wf_curr2_id,
             issue_id="ISSUE-C2",
             worktree_path="/tmp/test-curr-2",
             workflow_status="completed",
@@ -305,7 +318,7 @@ class TestUsageSummaryWithSuccessMetrics:
             completed_at=datetime(2026, 1, 16, 12, 0, 0, tzinfo=UTC),
         )
         wf_curr3 = ServerExecutionState(
-            id="wf-curr-3",
+            id=wf_curr3_id,
             issue_id="ISSUE-C3",
             worktree_path="/tmp/test-curr-3",
             workflow_status="completed",
@@ -313,7 +326,7 @@ class TestUsageSummaryWithSuccessMetrics:
             completed_at=datetime(2026, 1, 17, 12, 0, 0, tzinfo=UTC),
         )
         wf_curr4 = ServerExecutionState(
-            id="wf-curr-4",
+            id=wf_curr4_id,
             issue_id="ISSUE-C4",
             worktree_path="/tmp/test-curr-4",
             workflow_status="failed",
@@ -329,7 +342,7 @@ class TestUsageSummaryWithSuccessMetrics:
         # Current period token usage (one per workflow)
         await repo.save_token_usage(
             TokenUsage(
-                workflow_id="wf-curr-1",
+                workflow_id=wf_curr1_id,
                 agent="architect",
                 model="claude-sonnet-4-20250514",
                 input_tokens=1000,
@@ -342,7 +355,7 @@ class TestUsageSummaryWithSuccessMetrics:
         )
         await repo.save_token_usage(
             TokenUsage(
-                workflow_id="wf-curr-2",
+                workflow_id=wf_curr2_id,
                 agent="architect",
                 model="claude-sonnet-4-20250514",
                 input_tokens=1100,
@@ -355,7 +368,7 @@ class TestUsageSummaryWithSuccessMetrics:
         )
         await repo.save_token_usage(
             TokenUsage(
-                workflow_id="wf-curr-3",
+                workflow_id=wf_curr3_id,
                 agent="architect",
                 model="claude-sonnet-4-20250514",
                 input_tokens=1200,
@@ -368,7 +381,7 @@ class TestUsageSummaryWithSuccessMetrics:
         )
         await repo.save_token_usage(
             TokenUsage(
-                workflow_id="wf-curr-4",
+                workflow_id=wf_curr4_id,
                 agent="architect",
                 model="claude-sonnet-4-20250514",
                 input_tokens=500,
@@ -477,8 +490,12 @@ class TestUsageByModelWithTrendAndSuccess:
         repo = WorkflowRepository(db_with_schema)
 
         # Create workflows with mixed statuses
+        wf1_id = str(uuid4())
+        wf2_id = str(uuid4())
+        wf3_id = str(uuid4())
+        wf4_id = str(uuid4())
         wf1 = ServerExecutionState(
-            id="wf-model-1",
+            id=wf1_id,
             issue_id="ISSUE-M1",
             worktree_path="/tmp/test-model-1",
             workflow_status="completed",
@@ -486,7 +503,7 @@ class TestUsageByModelWithTrendAndSuccess:
             completed_at=datetime(2026, 1, 15, 12, 0, 0, tzinfo=UTC),
         )
         wf2 = ServerExecutionState(
-            id="wf-model-2",
+            id=wf2_id,
             issue_id="ISSUE-M2",
             worktree_path="/tmp/test-model-2",
             workflow_status="completed",
@@ -494,7 +511,7 @@ class TestUsageByModelWithTrendAndSuccess:
             completed_at=datetime(2026, 1, 16, 12, 0, 0, tzinfo=UTC),
         )
         wf3 = ServerExecutionState(
-            id="wf-model-3",
+            id=wf3_id,
             issue_id="ISSUE-M3",
             worktree_path="/tmp/test-model-3",
             workflow_status="completed",
@@ -502,7 +519,7 @@ class TestUsageByModelWithTrendAndSuccess:
             completed_at=datetime(2026, 1, 17, 12, 0, 0, tzinfo=UTC),
         )
         wf4 = ServerExecutionState(
-            id="wf-model-4",
+            id=wf4_id,
             issue_id="ISSUE-M4",
             worktree_path="/tmp/test-model-4",
             workflow_status="failed",
@@ -518,7 +535,7 @@ class TestUsageByModelWithTrendAndSuccess:
         # wf1 (Jan 15): uses sonnet only
         await repo.save_token_usage(
             TokenUsage(
-                workflow_id="wf-model-1",
+                workflow_id=wf1_id,
                 agent="architect",
                 model="claude-sonnet-4-20250514",
                 input_tokens=1000,
@@ -533,7 +550,7 @@ class TestUsageByModelWithTrendAndSuccess:
         # wf2 (Jan 16): uses sonnet and opus
         await repo.save_token_usage(
             TokenUsage(
-                workflow_id="wf-model-2",
+                workflow_id=wf2_id,
                 agent="architect",
                 model="claude-sonnet-4-20250514",
                 input_tokens=1100,
@@ -546,7 +563,7 @@ class TestUsageByModelWithTrendAndSuccess:
         )
         await repo.save_token_usage(
             TokenUsage(
-                workflow_id="wf-model-2",
+                workflow_id=wf2_id,
                 agent="developer",
                 model="claude-opus-4-20250514",
                 input_tokens=2000,
@@ -561,7 +578,7 @@ class TestUsageByModelWithTrendAndSuccess:
         # wf3 (Jan 17): uses opus only
         await repo.save_token_usage(
             TokenUsage(
-                workflow_id="wf-model-3",
+                workflow_id=wf3_id,
                 agent="architect",
                 model="claude-opus-4-20250514",
                 input_tokens=2500,
@@ -576,7 +593,7 @@ class TestUsageByModelWithTrendAndSuccess:
         # wf4 (Jan 18, failed): uses sonnet
         await repo.save_token_usage(
             TokenUsage(
-                workflow_id="wf-model-4",
+                workflow_id=wf4_id,
                 agent="architect",
                 model="claude-sonnet-4-20250514",
                 input_tokens=500,

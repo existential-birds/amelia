@@ -14,6 +14,9 @@ from amelia.server.models.state import (
 )
 
 
+pytestmark = pytest.mark.integration
+
+
 class TestWorkflowRepository:
     """Tests for WorkflowRepository CRUD operations."""
 
@@ -220,8 +223,9 @@ class TestWorkflowRepository:
     async def test_save_event(self, repository, make_event) -> None:
         """Should persist event to database."""
         # First create a workflow (required for foreign key)
+        wf_id = str(uuid4())
         state = ServerExecutionState(
-            id="wf-1",
+            id=wf_id,
             issue_id="ISSUE-123",
             worktree_path="/path/to/worktree",
             workflow_status="in_progress",
@@ -230,8 +234,8 @@ class TestWorkflowRepository:
         await repository.create(state)
 
         event = make_event(
-            id="evt-1",
-            workflow_id="wf-1",
+            id=str(uuid4()),
+            workflow_id=wf_id,
             timestamp=datetime.now(UTC),
             agent="architect",
             event_type=EventType.STAGE_STARTED,
@@ -241,14 +245,15 @@ class TestWorkflowRepository:
         await repository.save_event(event)
 
         # Verify in DB via get_max_event_sequence
-        max_seq = await repository.get_max_event_sequence("wf-1")
+        max_seq = await repository.get_max_event_sequence(wf_id)
         assert max_seq == 1
 
     async def test_get_max_event_sequence_with_events(self, repository, make_event) -> None:
         """Should return max sequence number."""
         # First create a workflow
+        wf_id = str(uuid4())
         state = ServerExecutionState(
-            id="wf-1",
+            id=wf_id,
             issue_id="ISSUE-123",
             worktree_path="/path/to/worktree",
             workflow_status="in_progress",
@@ -259,15 +264,15 @@ class TestWorkflowRepository:
         # Create events with sequences 1, 2, 3
         for seq in [1, 2, 3]:
             event = make_event(
-                id=f"evt-{seq}",
-                workflow_id="wf-1",
+                id=str(uuid4()),
+                workflow_id=wf_id,
                 sequence=seq,
                 timestamp=datetime.now(UTC),
                 message=f"Event {seq}",
             )
             await repository.save_event(event)
 
-        max_seq = await repository.get_max_event_sequence("wf-1")
+        max_seq = await repository.get_max_event_sequence(wf_id)
         assert max_seq == 3
 
     async def test_save_event_with_pydantic_model_in_data(self, repository, make_event) -> None:
@@ -278,8 +283,9 @@ class TestWorkflowRepository:
         from amelia.core.types import Profile
 
         # First create a workflow
+        wf_id = str(uuid4())
         state = ServerExecutionState(
-            id="wf-pydantic",
+            id=wf_id,
             issue_id="ISSUE-456",
             worktree_path="/path/to/worktree",
             workflow_status="in_progress",
@@ -300,8 +306,8 @@ class TestWorkflowRepository:
             },
         )
         event = make_event(
-            id="evt-pydantic",
-            workflow_id="wf-pydantic",
+            id=str(uuid4()),
+            workflow_id=wf_id,
             timestamp=datetime.now(UTC),
             agent="architect",
             event_type=EventType.STAGE_COMPLETED,
@@ -319,7 +325,7 @@ class TestWorkflowRepository:
         await repository.save_event(event)
 
         # Verify event was saved
-        max_seq = await repository.get_max_event_sequence("wf-pydantic")
+        max_seq = await repository.get_max_event_sequence(wf_id)
         assert max_seq == 1
 
     async def test_save_event_with_path_in_data(self, repository, make_event) -> None:
@@ -330,8 +336,9 @@ class TestWorkflowRepository:
         from pathlib import Path
 
         # First create a workflow
+        wf_id = str(uuid4())
         state = ServerExecutionState(
-            id="wf-path",
+            id=wf_id,
             issue_id="ISSUE-789",
             worktree_path="/path/to/worktree",
             workflow_status="in_progress",
@@ -341,8 +348,8 @@ class TestWorkflowRepository:
 
         # Create event with Path object in data
         event = make_event(
-            id="evt-path",
-            workflow_id="wf-path",
+            id=str(uuid4()),
+            workflow_id=wf_id,
             timestamp=datetime.now(UTC),
             agent="developer",
             event_type=EventType.STAGE_COMPLETED,
@@ -360,14 +367,15 @@ class TestWorkflowRepository:
         await repository.save_event(event)
 
         # Verify event was saved
-        max_seq = await repository.get_max_event_sequence("wf-path")
+        max_seq = await repository.get_max_event_sequence(wf_id)
         assert max_seq == 1
 
     async def test_get_recent_events(self, repository, make_event) -> None:
         """Should return recent events for a workflow in chronological order."""
         # Create a workflow
+        wf_id = str(uuid4())
         state = ServerExecutionState(
-            id="wf-recent",
+            id=wf_id,
             issue_id="ISSUE-789",
             worktree_path="/path/to/worktree",
             workflow_status="in_progress",
@@ -376,10 +384,13 @@ class TestWorkflowRepository:
         await repository.create(state)
 
         # Create events with sequences 1, 2, 3
+        event_ids = []
         for seq in [1, 2, 3]:
+            evt_id = str(uuid4())
+            event_ids.append(evt_id)
             event = make_event(
-                id=f"evt-recent-{seq}",
-                workflow_id="wf-recent",
+                id=evt_id,
+                workflow_id=wf_id,
                 sequence=seq,
                 timestamp=datetime.now(UTC),
                 message=f"Event {seq}",
@@ -387,19 +398,20 @@ class TestWorkflowRepository:
             await repository.save_event(event)
 
         # Get recent events
-        events = await repository.get_recent_events("wf-recent")
+        events = await repository.get_recent_events(wf_id)
 
         assert len(events) == 3
         # Should be in chronological order (oldest first)
-        assert events[0].id == "evt-recent-1"
-        assert events[1].id == "evt-recent-2"
-        assert events[2].id == "evt-recent-3"
+        assert events[0].id == event_ids[0]
+        assert events[1].id == event_ids[1]
+        assert events[2].id == event_ids[2]
 
     async def test_get_recent_events_with_limit(self, repository, make_event) -> None:
         """Should respect limit parameter."""
         # Create a workflow
+        wf_id = str(uuid4())
         state = ServerExecutionState(
-            id="wf-limited",
+            id=wf_id,
             issue_id="ISSUE-LIM",
             worktree_path="/path/to/worktree",
             workflow_status="in_progress",
@@ -408,10 +420,13 @@ class TestWorkflowRepository:
         await repository.create(state)
 
         # Create 5 events
+        event_ids = []
         for seq in range(1, 6):
+            evt_id = str(uuid4())
+            event_ids.append(evt_id)
             event = make_event(
-                id=f"evt-lim-{seq}",
-                workflow_id="wf-limited",
+                id=evt_id,
+                workflow_id=wf_id,
                 sequence=seq,
                 timestamp=datetime.now(UTC),
                 message=f"Event {seq}",
@@ -419,18 +434,19 @@ class TestWorkflowRepository:
             await repository.save_event(event)
 
         # Get only 2 most recent events
-        events = await repository.get_recent_events("wf-limited", limit=2)
+        events = await repository.get_recent_events(wf_id, limit=2)
 
         assert len(events) == 2
         # Should return most recent 2, in chronological order
-        assert events[0].id == "evt-lim-4"
-        assert events[1].id == "evt-lim-5"
+        assert events[0].id == event_ids[3]
+        assert events[1].id == event_ids[4]
 
     async def test_get_recent_events_empty(self, repository) -> None:
         """Should return empty list for workflow with no events."""
         # Create a workflow
+        wf_id = str(uuid4())
         state = ServerExecutionState(
-            id="wf-empty",
+            id=wf_id,
             issue_id="ISSUE-EMPTY",
             worktree_path="/path/to/worktree",
             workflow_status="in_progress",
@@ -439,7 +455,7 @@ class TestWorkflowRepository:
         await repository.create(state)
 
         # Get recent events for workflow with no events
-        events = await repository.get_recent_events("wf-empty")
+        events = await repository.get_recent_events(wf_id)
 
         assert len(events) == 0
 
@@ -447,7 +463,7 @@ class TestWorkflowRepository:
     async def test_get_recent_events_non_positive_limit(self, repository, limit) -> None:
         """Should return empty list for non-positive limit values."""
         # No need to create workflow - should return early before DB query
-        events = await repository.get_recent_events("any-workflow", limit=limit)
+        events = await repository.get_recent_events(str(uuid4()), limit=limit)
 
         assert events == []
 
@@ -474,10 +490,10 @@ class TestWorkflowRepository:
 
         # Verify by querying the column directly
         row = await repository._db.fetch_one(
-            "SELECT plan_cache FROM workflows WHERE id = ?", (state.id,)
+            "SELECT plan_cache FROM workflows WHERE id = $1", state.id
         )
         assert row is not None
-        restored = PlanCache.model_validate_json(row[0])
+        restored = PlanCache.model_validate(row["plan_cache"])
         assert restored.goal == "Test goal"
         assert restored.plan_markdown == "# Test Plan"
         assert restored.total_tasks == 5
@@ -491,7 +507,7 @@ class TestWorkflowRepository:
         plan_cache = PlanCache(goal="Test goal")
 
         with pytest.raises(WorkflowNotFoundError):
-            await repository.update_plan_cache("nonexistent-id", plan_cache)
+            await repository.update_plan_cache(str(uuid4()), plan_cache)
 
     async def test_create_workflow_writes_new_columns(self, repository) -> None:
         """create() dual-writes to new columns (workflow_type, profile_id, plan_cache)."""
@@ -510,17 +526,17 @@ class TestWorkflowRepository:
 
         # Verify columns directly
         row = await repository._db.fetch_one(
-            "SELECT workflow_type, profile_id, plan_cache, issue_cache FROM workflows WHERE id = ?",
-            (state.id,),
+            "SELECT workflow_type, profile_id, plan_cache, issue_cache FROM workflows WHERE id = $1",
+            state.id,
         )
         assert row is not None
-        assert row[0] == "full"  # workflow_type
-        assert row[1] == "test-profile"  # profile_id
-        assert row[2] is not None  # plan_cache is populated
-        assert row[3] == '{"key": "TEST-1"}'  # issue_cache
+        assert row["workflow_type"] == "full"
+        assert row["profile_id"] == "test-profile"
+        assert row["plan_cache"] is not None
+        assert row["issue_cache"] == {"key": "TEST-1"}  # JSONB returns dict
 
         # Verify plan_cache deserialization
-        restored = PlanCache.model_validate_json(row[2])
+        restored = PlanCache.model_validate(row["plan_cache"])
         assert restored.goal == "Test goal"
 
     async def test_update_workflow_writes_new_columns(self, repository) -> None:
@@ -543,14 +559,14 @@ class TestWorkflowRepository:
 
         # Verify columns
         row = await repository._db.fetch_one(
-            "SELECT profile_id, plan_cache, issue_cache FROM workflows WHERE id = ?",
-            (state.id,),
+            "SELECT profile_id, plan_cache, issue_cache FROM workflows WHERE id = $1",
+            state.id,
         )
         assert row is not None
-        assert row[0] == "updated-profile"
-        restored = PlanCache.model_validate_json(row[1])
+        assert row["profile_id"] == "updated-profile"
+        restored = PlanCache.model_validate(row["plan_cache"])
         assert restored.goal == "Updated goal"
-        assert row[2] == '{"key": "UPDATED-1"}'
+        assert row["issue_cache"] == {"key": "UPDATED-1"}  # JSONB returns dict
 
 
 class TestRepositoryEvents:
@@ -565,7 +581,7 @@ class TestRepositoryEvents:
     async def sample_workflow(self, repository):
         """Create a sample workflow for tests."""
         state = ServerExecutionState(
-            id="wf-event-test",
+            id=str(uuid4()),
             issue_id="ISSUE-EVENT",
             worktree_path="/path/to/event-test",
             workflow_status="in_progress",
@@ -577,7 +593,7 @@ class TestRepositoryEvents:
     async def test_save_event_with_level(self, repository, sample_workflow) -> None:
         """save_event persists level field."""
         event = WorkflowEvent(
-            id="evt-level-test",
+            id=str(uuid4()),
             workflow_id=sample_workflow.id,
             sequence=1,
             timestamp=datetime.now(UTC),
@@ -589,14 +605,14 @@ class TestRepositoryEvents:
         await repository.save_event(event)
 
         row = await repository._db.fetch_one(
-            "SELECT level FROM workflow_log WHERE id = ?", (event.id,)
+            "SELECT level FROM workflow_log WHERE id = $1", event.id
         )
         assert row["level"] == "info"
 
     async def test_row_to_event_restores_level(self, repository, sample_workflow) -> None:
         """_row_to_event restores level field from database."""
         event = WorkflowEvent(
-            id="evt-restore-test",
+            id=str(uuid4()),
             workflow_id=sample_workflow.id,
             sequence=1,
             timestamp=datetime.now(UTC),
@@ -623,7 +639,7 @@ class TestWorkflowLogFiltering:
 
     @pytest.fixture
     async def sample_workflow(self, repository):
-        workflow_id = "wf-filter-test"
+        workflow_id = str(uuid4())
         state = ServerExecutionState(
             id=workflow_id,
             issue_id="TEST-1",
@@ -637,7 +653,7 @@ class TestWorkflowLogFiltering:
     async def test_save_event_persists_lifecycle_event(self, repository, sample_workflow):
         """Lifecycle events should be written to workflow_log."""
         event = WorkflowEvent(
-            id="evt-1",
+            id=str(uuid4()),
             workflow_id=sample_workflow,
             sequence=1,
             timestamp=datetime.now(UTC),
@@ -653,7 +669,7 @@ class TestWorkflowLogFiltering:
     async def test_save_event_skips_trace_event(self, repository, sample_workflow):
         """Trace events should NOT be written to workflow_log."""
         event = WorkflowEvent(
-            id="evt-2",
+            id=str(uuid4()),
             workflow_id=sample_workflow,
             sequence=1,
             timestamp=datetime.now(UTC),
@@ -668,7 +684,7 @@ class TestWorkflowLogFiltering:
     async def test_save_event_skips_stream_event(self, repository, sample_workflow):
         """Stream events should NOT be written to workflow_log."""
         event = WorkflowEvent(
-            id="evt-3",
+            id=str(uuid4()),
             workflow_id=sample_workflow,
             sequence=0,
             timestamp=datetime.now(UTC),

@@ -168,24 +168,17 @@ def create_mock_graph(
 async def mock_checkpointer_and_graph(
     mock_graph: MagicMock,
 ) -> AsyncGenerator[MagicMock, None]:
-    """Context manager that patches AsyncSqliteSaver and graph creation."""
-    # Create a mock checkpointer context manager
+    """Context manager that patches graph creation.
+
+    The checkpointer is now passed directly to OrchestratorService.__init__,
+    so we only need to patch _create_server_graph to return our mock graph.
+    """
     mock_checkpointer = MagicMock()
 
-    @asynccontextmanager
-    async def mock_from_conn_string(path: str) -> AsyncGenerator[MagicMock, None]:
-        yield mock_checkpointer
-
-    with (
-        patch(
-            "amelia.server.orchestrator.service.AsyncSqliteSaver.from_conn_string",
-            mock_from_conn_string,
-        ),
-        patch.object(
-            OrchestratorService,
-            "_create_server_graph",
-            return_value=mock_graph,
-        ),
+    with patch.object(
+        OrchestratorService,
+        "_create_server_graph",
+        return_value=mock_graph,
     ):
         yield mock_checkpointer
 

@@ -5,6 +5,7 @@ import pytest
 from amelia.server.database.connection import Database
 from amelia.server.database.migrator import Migrator
 
+
 pytestmark = pytest.mark.integration
 
 DATABASE_URL = "postgresql://amelia:amelia@localhost:5432/amelia_test"

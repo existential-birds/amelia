@@ -2,12 +2,16 @@
 
 from datetime import UTC, datetime
 from typing import Any
+from uuid import uuid4
 
 import pytest
 
 from amelia.server.database.repository import WorkflowRepository
 from amelia.server.models.state import ServerExecutionState
 from amelia.server.models.tokens import TokenUsage
+
+
+pytestmark = pytest.mark.integration
 
 
 class TestTokenUsageRepository:
@@ -24,7 +28,7 @@ class TestTokenUsageRepository:
             Created workflow.
         """
         wf = ServerExecutionState(
-            id="wf-tokens",
+            id=str(uuid4()),
             issue_id="ISSUE-TOKEN",
             worktree_path="/tmp/test-tokens",
             workflow_status="in_progress",
@@ -122,8 +126,9 @@ class TestTokenUsageRepository:
     ) -> None:
         """Should preserve all token usage fields after save and retrieve."""
         timestamp = datetime.now(UTC)
+        usage_id = str(uuid4())
         usage = TokenUsage(
-            id="usage-123",
+            id=usage_id,
             workflow_id=workflow.id,
             agent="developer",
             model="claude-opus-4-20250514",
@@ -142,7 +147,7 @@ class TestTokenUsageRepository:
         usages = await repository.get_token_usage(workflow.id)
         assert len(usages) == 1
         retrieved = usages[0]
-        assert retrieved.id == "usage-123"
+        assert retrieved.id == usage_id
         assert retrieved.workflow_id == workflow.id
         assert retrieved.agent == "developer"
         assert retrieved.model == "claude-opus-4-20250514"
@@ -171,7 +176,7 @@ class TestTokenUsageRepository:
         self, repository: WorkflowRepository
     ) -> None:
         """Should return empty list for non-existent workflow."""
-        usages = await repository.get_token_usage("nonexistent-workflow-id")
+        usages = await repository.get_token_usage(str(uuid4()))
         assert usages == []
 
     async def test_get_token_usage_ordered_by_timestamp(
@@ -216,7 +221,7 @@ class TestTokenUsageRepository:
         """Should only return token usage for the specified workflow."""
         # Create another workflow
         other_wf = ServerExecutionState(
-            id="wf-other",
+            id=str(uuid4()),
             issue_id="ISSUE-OTHER",
             worktree_path="/tmp/test-other",
             workflow_status="in_progress",
@@ -377,7 +382,7 @@ class TestTokenUsageRepository:
         self, repository: WorkflowRepository
     ) -> None:
         """Should return None for non-existent workflow."""
-        summary = await repository.get_token_summary("nonexistent-workflow-id")
+        summary = await repository.get_token_summary(str(uuid4()))
         assert summary is None
 
     # =========================================================================
@@ -422,7 +427,7 @@ class TestTokenUsageRepository:
         workflows = []
         for i in range(3):
             wf = ServerExecutionState(
-                id=f"wf-batch-{i}",
+                id=str(uuid4()),
                 issue_id=f"ISSUE-{i}",
                 worktree_path=f"/tmp/test-batch-{i}",
                 workflow_status="in_progress",
@@ -447,15 +452,15 @@ class TestTokenUsageRepository:
 
         assert len(summaries) == 3
         # First workflow
-        assert summaries["wf-batch-0"] is not None
-        assert summaries["wf-batch-0"].total_input_tokens == 1000
-        assert summaries["wf-batch-0"].total_cost_usd == pytest.approx(0.01, rel=1e-6)
+        assert summaries[workflows[0].id] is not None
+        assert summaries[workflows[0].id].total_input_tokens == 1000
+        assert summaries[workflows[0].id].total_cost_usd == pytest.approx(0.01, rel=1e-6)
         # Second workflow
-        assert summaries["wf-batch-1"] is not None
-        assert summaries["wf-batch-1"].total_input_tokens == 2000
-        assert summaries["wf-batch-1"].total_cost_usd == pytest.approx(0.02, rel=1e-6)
+        assert summaries[workflows[1].id] is not None
+        assert summaries[workflows[1].id].total_input_tokens == 2000
+        assert summaries[workflows[1].id].total_cost_usd == pytest.approx(0.02, rel=1e-6)
         # Third workflow has no usage
-        assert summaries["wf-batch-2"] is None
+        assert summaries[workflows[2].id] is None
 
     async def test_get_token_summaries_batch_aggregates_multiple_usages(
         self, repository: WorkflowRepository, workflow: ServerExecutionState
@@ -499,13 +504,15 @@ class TestTokenUsageRepository:
         self, repository: WorkflowRepository
     ) -> None:
         """Should return None for non-existent workflow IDs."""
+        id1 = str(uuid4())
+        id2 = str(uuid4())
         summaries = await repository.get_token_summaries_batch(
-            ["nonexistent-1", "nonexistent-2"]
+            [id1, id2]
         )
 
         assert len(summaries) == 2
-        assert summaries["nonexistent-1"] is None
-        assert summaries["nonexistent-2"] is None
+        assert summaries[id1] is None
+        assert summaries[id2] is None
 
     async def test_get_token_summaries_batch_breakdown_ordered(
         self, repository: WorkflowRepository, workflow: ServerExecutionState

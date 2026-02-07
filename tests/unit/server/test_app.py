@@ -1,7 +1,5 @@
 """Tests for FastAPI application setup."""
-from collections.abc import Generator
 
-import pytest
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.testclient import TestClient
 
@@ -34,31 +32,24 @@ class TestAppSetup:
 class TestHealthEndpoints:
     """Tests for health check endpoints."""
 
-    @pytest.fixture
-    def client(self) -> Generator[TestClient, None, None]:
-        """FastAPI test client."""
-        # Use context manager to ensure lifespan events are triggered
-        with TestClient(app) as test_client:
-            yield test_client
-
-    def test_health_live_returns_200(self, client: TestClient) -> None:
+    def test_health_live_returns_200(self, mock_app_client: TestClient) -> None:
         """Liveness probe returns 200."""
-        response = client.get("/api/health/live")
+        response = mock_app_client.get("/api/health/live")
 
         assert response.status_code == 200
         assert response.json() == {"status": "alive"}
 
-    def test_health_ready_returns_200(self, client: TestClient) -> None:
+    def test_health_ready_returns_200(self, mock_app_client: TestClient) -> None:
         """Readiness probe returns 200 when ready."""
-        response = client.get("/api/health/ready")
+        response = mock_app_client.get("/api/health/ready")
 
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "ready"
 
-    def test_health_returns_detailed_info(self, client: TestClient) -> None:
+    def test_health_returns_detailed_info(self, mock_app_client: TestClient) -> None:
         """Main health endpoint returns detailed info."""
-        response = client.get("/api/health")
+        response = mock_app_client.get("/api/health")
 
         assert response.status_code == 200
         data = response.json()
@@ -75,9 +66,9 @@ class TestHealthEndpoints:
         # Status should be healthy or degraded
         assert data["status"] in ("healthy", "degraded")
 
-    def test_health_includes_database_status(self, client: TestClient) -> None:
+    def test_health_includes_database_status(self, mock_app_client: TestClient) -> None:
         """Health check includes database status."""
-        response = client.get("/api/health")
+        response = mock_app_client.get("/api/health")
         data = response.json()
 
         assert "database" in data

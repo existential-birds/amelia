@@ -3,6 +3,7 @@
 import os
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
+from uuid import uuid4
 
 import pytest
 
@@ -33,7 +34,7 @@ async def db_with_schema() -> AsyncGenerator[Database, None]:
     """Create a database with schema initialized.
 
     Connects to database and runs migrations to create all tables.
-    The database is automatically closed after the test.
+    Truncates all data tables before each test for isolation.
 
     Yields:
         Database: Connected database instance with schema initialized.
@@ -43,6 +44,15 @@ async def db_with_schema() -> AsyncGenerator[Database, None]:
 
         migrator = Migrator(db)
         await migrator.run()
+        # Truncate all data tables to ensure test isolation
+        await db.execute("""
+            TRUNCATE TABLE
+                workflow_prompt_versions, prompt_versions, prompts,
+                brainstorm_artifacts, brainstorm_messages, brainstorm_sessions,
+                token_usage, workflow_log, workflows,
+                profiles, server_settings
+            CASCADE
+        """)
         yield db
 
 
@@ -70,7 +80,7 @@ async def workflow(repository: WorkflowRepository) -> ServerExecutionState:
         ServerExecutionState: Created workflow.
     """
     wf = ServerExecutionState(
-        id="wf-test",
+        id=str(uuid4()),
         issue_id="ISSUE-1",
         worktree_path="/tmp/test",
         workflow_status="pending",

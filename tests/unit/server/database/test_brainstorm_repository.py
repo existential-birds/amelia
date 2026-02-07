@@ -1,8 +1,6 @@
 """Tests for BrainstormRepository."""
 
-from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
-from pathlib import Path
 
 import pytest
 
@@ -16,15 +14,16 @@ from amelia.server.models.brainstorm import (
 )
 
 
+pytestmark = pytest.mark.integration
+
+
 class TestBrainstormRepository:
     """Test BrainstormRepository CRUD operations."""
 
     @pytest.fixture
-    async def db(self, temp_db_path: Path) -> AsyncGenerator[Database, None]:
-        """Create database with schema."""
-        async with Database(temp_db_path) as db:
-            await db.ensure_schema()
-            yield db
+    async def db(self, db_with_schema: Database) -> Database:
+        """Use the shared PostgreSQL database with schema."""
+        return db_with_schema
 
     @pytest.fixture
     def repository(self, db: Database) -> BrainstormRepository:
