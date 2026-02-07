@@ -21,6 +21,14 @@ class DatabaseProtocol(Protocol):
         ...
 
 
+class CheckpointerProtocol(Protocol):
+    """Protocol for LangGraph checkpoint operations."""
+
+    async def adelete_thread(self, thread_id: str) -> None:
+        """Delete all checkpoints for a thread."""
+        ...
+
+
 class ConfigProtocol(Protocol):
     """Protocol for config access."""
 
@@ -49,15 +57,18 @@ class LogRetentionService:
         self,
         db: DatabaseProtocol,
         config: ConfigProtocol,
+        checkpointer: CheckpointerProtocol | None = None,
     ) -> None:
         """Initialize retention service.
 
         Args:
             db: Database connection.
             config: Server configuration with retention settings.
+            checkpointer: LangGraph checkpointer for checkpoint cleanup.
         """
         self._db = db
         self._config = config
+        self._checkpointer = checkpointer
 
     async def cleanup_on_shutdown(self) -> CleanupResult:
         """Execute retention policy cleanup during server shutdown."""
@@ -103,13 +114,16 @@ class LogRetentionService:
     async def _cleanup_checkpoints(self) -> int:
         """Delete LangGraph checkpoints for finished workflows based on retention.
 
+        Uses AsyncPostgresSaver.adelete_thread() for proper checkpoint cleanup,
+        avoiding direct SQL queries against LangGraph's internal tables.
+
         Respects checkpoint_retention_days setting:
         - -1: Never delete checkpoints (useful for debugging)
         - 0: Delete immediately for all finished workflows
         - >0: Delete only for workflows finished more than N days ago
 
         Returns:
-            Number of checkpoint entries deleted.
+            Number of workflows whose checkpoints were deleted.
         """
         retention_days = self._config.checkpoint_retention_days
 
@@ -119,6 +133,11 @@ class LogRetentionService:
                 "Checkpoint cleanup disabled",
                 checkpoint_retention_days=retention_days,
             )
+            return 0
+
+        # No checkpointer means no checkpoints to delete
+        if self._checkpointer is None:
+            logger.debug("No checkpointer configured, skipping checkpoint cleanup")
             return 0
 
         # Build query based on retention days
@@ -143,20 +162,16 @@ class LogRetentionService:
             retention_days=retention_days,
         )
 
-        total_deleted = 0
-        try:
-            # Build parameterized query with $1, $2, ... placeholders
-            placeholders = ", ".join(f"${i + 1}" for i in range(len(workflow_ids)))
-            r1 = await self._db.execute(
-                f"DELETE FROM checkpoints WHERE thread_id IN ({placeholders})",
-                *workflow_ids,
-            )
-            r2 = await self._db.execute(
-                f"DELETE FROM writes WHERE thread_id IN ({placeholders})",
-                *workflow_ids,
-            )
-            total_deleted = r1 + r2
-        except Exception as e:
-            logger.warning("Failed to cleanup checkpoints", error=str(e))
+        deleted_count = 0
+        for workflow_id in workflow_ids:
+            try:
+                await self._checkpointer.adelete_thread(workflow_id)
+                deleted_count += 1
+            except Exception as e:
+                logger.warning(
+                    "Failed to delete checkpoint for workflow",
+                    workflow_id=workflow_id,
+                    error=str(e),
+                )
 
-        return total_deleted
+        return deleted_count

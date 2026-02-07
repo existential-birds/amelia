@@ -10,6 +10,18 @@ import asyncpg
 from loguru import logger
 
 
+def in_clause_placeholders(count: int, start: int = 1) -> str:
+    """Generate SQL IN clause placeholders for parameterized queries.
+
+    Args:
+        count: Number of placeholders to generate.
+        start: Starting parameter index (1-based).
+
+    Returns:
+        Comma-separated placeholder string, e.g. "$1,$2,$3".
+    """
+    return ",".join(f"${i + start}" for i in range(count))
+
 class Database:
     """Async PostgreSQL database connection pool manager.
 

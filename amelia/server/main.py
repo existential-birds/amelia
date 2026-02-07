@@ -191,7 +191,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.event_bus = event_bus
 
     # Create lifecycle components
-    log_retention = LogRetentionService(db=database, config=server_settings)
+    log_retention = LogRetentionService(
+        db=database, config=server_settings, checkpointer=checkpointer
+    )
     lifecycle = ServerLifecycle(
         orchestrator=orchestrator,
         log_retention=log_retention,

@@ -314,12 +314,7 @@ class BrainstormRepository:
                 id, session_id, type, path, title, created_at
             ) VALUES ($1, $2, $3, $4, $5, $6)
             """,
-            artifact.id,
-            artifact.session_id,
-            artifact.type,
-            artifact.path,
-            artifact.title,
-            artifact.created_at,
+            artifact.id, artifact.session_id, artifact.type, artifact.path, artifact.title, artifact.created_at,
         )
 
     async def get_artifacts(self, session_id: str) -> list[Artifact]:

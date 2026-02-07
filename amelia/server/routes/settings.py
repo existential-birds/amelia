@@ -2,6 +2,7 @@
 """API routes for server settings and profiles."""
 from typing import Any
 
+from asyncpg import UniqueViolationError
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
@@ -175,10 +176,8 @@ async def create_profile(
 
     try:
         created = await repo.create_profile(profile)
-    except Exception as exc:
-        if "duplicate key" in str(exc).lower() or "unique" in str(exc).lower():
-            raise HTTPException(status_code=409, detail="Profile already exists") from exc
-        raise
+    except UniqueViolationError as exc:
+        raise HTTPException(status_code=409, detail="Profile already exists") from exc
     # Newly created profiles are not active
     return _profile_to_response(created, is_active=False)
 
