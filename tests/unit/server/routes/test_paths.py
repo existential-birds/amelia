@@ -217,3 +217,39 @@ class TestValidatePath:
             assert data["exists"] is True
             # Not a git repo, but the path is accepted
             assert "home directory" not in data["message"].lower()
+
+    def test_detects_git_worktree(self, client: TestClient) -> None:
+        """Should detect git worktrees where .git is a file with gitdir pointer."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            git_file = Path(tmpdir) / ".git"
+            git_file.write_text("gitdir: /some/path/.git/worktrees/branch")
+
+            with (
+                patch(
+                    "amelia.server.routes.paths._get_git_branch_sync",
+                    return_value="feature",
+                ),
+                patch(
+                    "amelia.server.routes.paths._has_uncommitted_changes_sync",
+                    return_value=False,
+                ),
+            ):
+                response = client.post("/api/paths/validate", json={"path": tmpdir})
+
+                assert response.status_code == 200
+                data = response.json()
+                assert data["exists"] is True
+                assert data["is_git_repo"] is True
+
+    def test_rejects_invalid_git_file(self, client: TestClient) -> None:
+        """Should not treat a .git file without gitdir pointer as a git repo."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            git_file = Path(tmpdir) / ".git"
+            git_file.write_text("not a valid gitdir pointer")
+
+            response = client.post("/api/paths/validate", json={"path": tmpdir})
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["exists"] is True
+            assert data["is_git_repo"] is False
