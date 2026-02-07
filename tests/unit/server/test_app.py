@@ -2,6 +2,7 @@
 from collections.abc import Generator
 
 import pytest
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.testclient import TestClient
 
 from amelia.server.main import app
@@ -13,6 +14,21 @@ class TestAppSetup:
     def test_openapi_url(self) -> None:
         """OpenAPI schema at /api/openapi.json."""
         assert app.openapi_url == "/api/openapi.json"
+
+    def test_cors_middleware_configured(self) -> None:
+        """CORS middleware is configured on the app."""
+        cors_middleware = None
+        for middleware in app.user_middleware:
+            if middleware.cls is CORSMiddleware:
+                cors_middleware = middleware
+                break
+
+        assert cors_middleware is not None, "CORSMiddleware not found in app middleware"
+        assert "http://127.0.0.1:8420" in cors_middleware.kwargs["allow_origins"]
+        assert "http://localhost:8420" in cors_middleware.kwargs["allow_origins"]
+        assert "http://127.0.0.1:8421" in cors_middleware.kwargs["allow_origins"]
+        assert "http://localhost:8421" in cors_middleware.kwargs["allow_origins"]
+        assert cors_middleware.kwargs["allow_credentials"] is True
 
 
 class TestHealthEndpoints:

@@ -135,6 +135,15 @@ async def validate_path(request: PathValidationRequest) -> PathValidationRespons
             message="Invalid path format",
         )
 
+    # Restrict to home directory to prevent filesystem probing
+    home_dir = Path.home().resolve()
+    if not resolved_path.is_relative_to(home_dir):
+        return PathValidationResponse(
+            exists=False,
+            is_git_repo=False,
+            message="Path must be within the home directory",
+        )
+
     # Check existence
     if not resolved_path.exists():
         return PathValidationResponse(
