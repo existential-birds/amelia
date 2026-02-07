@@ -169,7 +169,7 @@ class Database:
         try:
             return int(status.split()[-1])
         except (ValueError, IndexError, AttributeError):
-            logger.warning("Failed to parse row count from execute status", status=status)
+            # DDL statements (CREATE, DROP, ALTER) don't return row counts
             return 0
 
     async def fetch_one(
