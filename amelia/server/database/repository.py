@@ -56,14 +56,19 @@ class WorkflowRepository:
         if row["plan_cache"]:
             plan_cache = PlanCache.model_validate(row["plan_cache"])
 
+        # issue_cache is str|None in the model but JSONB in the DB
+        issue_cache = None
+        if row["issue_cache"] is not None:
+            issue_cache = json.dumps(row["issue_cache"])
+
         return ServerExecutionState(
-            id=row["id"],
+            id=str(row["id"]),
             issue_id=row["issue_id"],
             worktree_path=row["worktree_path"],
             workflow_type=WorkflowType(row["workflow_type"]) if row["workflow_type"] else WorkflowType.FULL,
             profile_id=row["profile_id"],
             plan_cache=plan_cache,
-            issue_cache=row["issue_cache"],
+            issue_cache=issue_cache,
             workflow_status=row["status"],
             created_at=row["created_at"],
             started_at=row["started_at"],
@@ -77,14 +82,17 @@ class WorkflowRepository:
         Args:
             state: Initial workflow state.
         """
-        # Serialize plan_cache if present
-        plan_cache_json: str | None = None
-        if state.plan_cache is not None:
-            plan_cache_json = json.dumps(state.plan_cache.model_dump())
+        # JSONB columns: pass dicts directly (asyncpg codec handles encoding)
+        plan_cache_data = state.plan_cache.model_dump() if state.plan_cache else None
 
-        issue_cache_json: str | None = None
+        # issue_cache is str|None in the model; parse to dict for JSONB
+        issue_cache_data = None
         if state.issue_cache is not None:
-            issue_cache_json = json.dumps(state.issue_cache)
+            issue_cache_data = (
+                json.loads(state.issue_cache)
+                if isinstance(state.issue_cache, str)
+                else state.issue_cache
+            )
 
         await self._db.execute(
             """
@@ -92,7 +100,7 @@ class WorkflowRepository:
                 id, issue_id, worktree_path,
                 status, created_at, started_at, completed_at, failure_reason,
                 workflow_type, profile_id, plan_cache, issue_cache
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12::jsonb)
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
             """,
             state.id,
             state.issue_id,
@@ -104,8 +112,8 @@ class WorkflowRepository:
             state.failure_reason,
             state.workflow_type,
             state.profile_id,
-            plan_cache_json,
-            issue_cache_json,
+            plan_cache_data,
+            issue_cache_data,
         )
 
     async def get(self, workflow_id: str) -> ServerExecutionState | None:
@@ -174,14 +182,16 @@ class WorkflowRepository:
         Args:
             state: Updated workflow state.
         """
-        # Serialize plan_cache if present
-        plan_cache_json: str | None = None
-        if state.plan_cache is not None:
-            plan_cache_json = json.dumps(state.plan_cache.model_dump())
+        # JSONB columns: pass dicts directly (asyncpg codec handles encoding)
+        plan_cache_data = state.plan_cache.model_dump() if state.plan_cache else None
 
-        issue_cache_json: str | None = None
+        issue_cache_data = None
         if state.issue_cache is not None:
-            issue_cache_json = json.dumps(state.issue_cache)
+            issue_cache_data = (
+                json.loads(state.issue_cache)
+                if isinstance(state.issue_cache, str)
+                else state.issue_cache
+            )
 
         await self._db.execute(
             """
@@ -192,8 +202,8 @@ class WorkflowRepository:
                 failure_reason = $4,
                 workflow_type = $5,
                 profile_id = $6,
-                plan_cache = $7::jsonb,
-                issue_cache = $8::jsonb
+                plan_cache = $7,
+                issue_cache = $8
             WHERE id = $9
             """,
             state.workflow_status,
@@ -202,8 +212,8 @@ class WorkflowRepository:
             state.failure_reason,
             state.workflow_type,
             state.profile_id,
-            plan_cache_json,
-            issue_cache_json,
+            plan_cache_data,
+            issue_cache_data,
             state.id,
         )
 
@@ -275,8 +285,8 @@ class WorkflowRepository:
             raise WorkflowNotFoundError(workflow_id)
 
         await self._db.execute(
-            "UPDATE workflows SET plan_cache = $1::jsonb WHERE id = $2",
-            json.dumps(plan_cache.model_dump()), workflow_id,
+            "UPDATE workflows SET plan_cache = $1 WHERE id = $2",
+            plan_cache.model_dump(), workflow_id,
         )
 
     async def list_active(
@@ -468,14 +478,14 @@ class WorkflowRepository:
             return
 
         serialized = event.model_dump(mode="json")
-        data_json = json.dumps(serialized["data"]) if serialized["data"] else None
+        data = serialized["data"] if serialized["data"] else None
 
         await self._db.execute(
             """
             INSERT INTO workflow_log (
                 id, workflow_id, sequence, timestamp, event_type,
                 level, agent, message, data, is_error
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10)
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             """,
             event.id,
             event.workflow_id,
@@ -485,7 +495,7 @@ class WorkflowRepository:
             event.level.value if event.level else "debug",
             event.agent,
             event.message,
-            data_json,
+            data,
             event.is_error,
         )
 
@@ -529,9 +539,10 @@ class WorkflowRepository:
             Validated WorkflowEvent model instance.
         """
         event_data = dict(row)
-        if event_data.get("data"):
-            event_data["data"] = event_data["data"]
-        else:
+        # asyncpg returns UUID objects for UUID columns; Pydantic expects str
+        event_data["id"] = str(event_data["id"])
+        event_data["workflow_id"] = str(event_data["workflow_id"])
+        if not event_data.get("data"):
             event_data.pop("data", None)
 
         return WorkflowEvent(**event_data)
@@ -755,8 +766,8 @@ class WorkflowRepository:
             Validated TokenUsage model instance.
         """
         return TokenUsage(
-            id=row["id"],
-            workflow_id=row["workflow_id"],
+            id=str(row["id"]),
+            workflow_id=str(row["workflow_id"]),
             agent=row["agent"],
             model=row["model"],
             input_tokens=row["input_tokens"],
@@ -842,13 +853,13 @@ class WorkflowRepository:
         )
 
         return {
-            "total_cost_usd": row[0] if row else 0.0,
+            "total_cost_usd": float(row[0]) if row else 0.0,
             "total_workflows": total_workflows_from_usage,
             "total_tokens": row[2] if row else 0,
             "total_duration_ms": row[3] if row else 0,
-            "previous_period_cost_usd": prev_row[0] if prev_row else 0.0,
+            "previous_period_cost_usd": float(prev_row[0]) if prev_row else 0.0,
             "successful_workflows": successful_workflows,
-            "success_rate": success_rate,
+            "success_rate": float(success_rate),
         }
 
     async def get_usage_trend(
@@ -895,22 +906,22 @@ class WorkflowRepository:
             start_date, end_date,
         )
 
-        # Build lookup: date -> {model: cost}
-        by_model_lookup: dict[date, dict[str, float]] = {}
+        # Build lookup: date_str -> {model: cost}
+        by_model_lookup: dict[str, dict[str, float]] = {}
         for model_row in model_rows:
-            row_date = model_row[0]
+            row_date = str(model_row[0])
             model = model_row[1]
-            cost = model_row[2]
+            cost = float(model_row[2])
             if row_date not in by_model_lookup:
                 by_model_lookup[row_date] = {}
             by_model_lookup[row_date][model] = cost
 
         return [
             {
-                "date": row[0],
-                "cost_usd": row[1],
+                "date": str(row[0]),
+                "cost_usd": float(row[1]),
                 "workflows": row[2],
-                "by_model": by_model_lookup.get(row[0], {}),
+                "by_model": by_model_lookup.get(str(row[0]), {}),
             }
             for row in rows
         ]
@@ -966,7 +977,7 @@ class WorkflowRepository:
         for trend_row in trend_rows:
             model = trend_row[0]
             row_date = trend_row[1]
-            cost = trend_row[2]
+            cost = float(trend_row[2])
             if model not in trend_lookup:
                 trend_lookup[model] = {}
             trend_lookup[model][row_date] = cost
@@ -1006,9 +1017,9 @@ class WorkflowRepository:
                 "model": row[0],
                 "workflows": row[1],
                 "tokens": row[2],
-                "cost_usd": row[3],
+                "cost_usd": float(row[3]),
                 "trend": [
-                    trend_lookup.get(row[0], {}).get(d, 0.0) for d in date_range
+                    float(trend_lookup.get(row[0], {}).get(d, 0.0)) for d in date_range
                 ],
                 "successful_workflows": success_lookup.get(row[0], {}).get(
                     "successful", 0

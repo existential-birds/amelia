@@ -1,5 +1,6 @@
 """Database connection management with PostgreSQL via asyncpg."""
 
+import json
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import Any
@@ -42,6 +43,17 @@ class Database:
             self._database_url,
             min_size=self._min_size,
             max_size=self._max_size,
+            init=self._init_connection,
+        )
+
+    @staticmethod
+    async def _init_connection(conn: asyncpg.Connection) -> None:
+        """Register JSON/JSONB codecs for automatic encoding/decoding."""
+        await conn.set_type_codec(
+            "jsonb",
+            encoder=json.dumps,
+            decoder=json.loads,
+            schema="pg_catalog",
         )
 
     async def close(self) -> None:
@@ -84,7 +96,7 @@ class Database:
             return False
         try:
             result = await self._pool.fetchval("SELECT 1")
-            return result == 1
+            return bool(result == 1)
         except Exception:
             return False
 
@@ -120,7 +132,7 @@ class Database:
 
     async def fetch_all(
         self, sql: str, *args: Any
-    ) -> list[asyncpg.Record]:
+    ) -> list[Any]:
         """Fetch all matching rows.
 
         Args:
@@ -130,7 +142,7 @@ class Database:
         Returns:
             List of matching Records.
         """
-        return await self.pool.fetch(sql, *args)
+        return list(await self.pool.fetch(sql, *args))
 
     async def fetch_scalar(
         self, sql: str, *args: Any

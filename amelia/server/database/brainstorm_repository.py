@@ -4,8 +4,6 @@ Handles persistence and retrieval of brainstorming sessions,
 messages, and artifacts.
 """
 
-import json
-
 import asyncpg
 
 from amelia.server.database.connection import Database
@@ -197,9 +195,9 @@ class BrainstormRepository:
         Args:
             message: Message to save.
         """
-        parts_json = None
+        parts_data = None
         if message.parts:
-            parts_json = json.dumps([p.model_dump() for p in message.parts])
+            parts_data = [p.model_dump() for p in message.parts]
 
         # Extract usage fields if present
         input_tokens = message.usage.input_tokens if message.usage else None
@@ -211,14 +209,14 @@ class BrainstormRepository:
             INSERT INTO brainstorm_messages (
                 id, session_id, sequence, role, content, parts, created_at,
                 input_tokens, output_tokens, cost_usd
-            ) VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10)
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             """,
             message.id,
             message.session_id,
             message.sequence,
             message.role,
             message.content,
-            parts_json,
+            parts_data,
             message.created_at,
             input_tokens,
             output_tokens,
@@ -277,8 +275,8 @@ class BrainstormRepository:
         """
         parts = None
         if row["parts"]:
-            parts_data = json.loads(row["parts"])
-            parts = [MessagePart(**p) for p in parts_data]
+            # JSONB codec returns list directly
+            parts = [MessagePart(**p) for p in row["parts"]]
 
         # Load usage if present
         usage = None
@@ -286,7 +284,7 @@ class BrainstormRepository:
             usage = MessageUsage(
                 input_tokens=row["input_tokens"],
                 output_tokens=row["output_tokens"] or 0,
-                cost_usd=row["cost_usd"] or 0.0,
+                cost_usd=float(row["cost_usd"]) if row["cost_usd"] else 0.0,
             )
 
         return Message(

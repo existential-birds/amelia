@@ -1,6 +1,5 @@
 """Repository for profile management."""
 
-import json
 from datetime import datetime
 
 import asyncpg
@@ -86,26 +85,26 @@ class ProfileRepository:
         Raises:
             asyncpg.UniqueViolationError: If profile name already exists.
         """
-        agents_json = json.dumps({
+        agents_data = {
             name: {
                 "driver": config.driver,
                 "model": config.model,
                 "options": config.options,
             }
             for name, config in profile.agents.items()
-        })
+        }
 
         await self._db.execute(
             """INSERT INTO profiles (
                 id, tracker, working_dir, plan_output_dir, plan_path_pattern,
                 agents, is_active
-            ) VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7)""",
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7)""",
             profile.name,
             profile.tracker,
             profile.working_dir,
             profile.plan_output_dir,
             profile.plan_path_pattern,
-            agents_json,
+            agents_data,
             False,
         )
         result = await self.get_profile(profile.name)
@@ -217,7 +216,8 @@ class ProfileRepository:
         Returns:
             Profile instance.
         """
-        agents_data = json.loads(row["agents"])
+        # JSONB codec returns dict directly
+        agents_data = row["agents"]
         agents = {
             name: AgentConfig(**config) for name, config in agents_data.items()
         }

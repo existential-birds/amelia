@@ -242,7 +242,7 @@ class PromptRepository:
         )
         return [
             WorkflowPromptVersion(
-                workflow_id=row["workflow_id"],
+                workflow_id=str(row["workflow_id"]),
                 prompt_id=row["prompt_id"],
                 version_id=row["version_id"],
             )

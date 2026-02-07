@@ -32,7 +32,7 @@ CREATE INDEX idx_workflows_status ON workflows(status);
 CREATE INDEX idx_workflows_worktree ON workflows(worktree_path);
 CREATE INDEX idx_workflows_started_at ON workflows(started_at DESC);
 CREATE UNIQUE INDEX idx_workflows_active_worktree
-    ON workflows(worktree_path) WHERE status IN ('pending', 'in_progress', 'blocked');
+    ON workflows(worktree_path) WHERE status IN ('in_progress', 'blocked');
 
 -- Workflow log
 CREATE TABLE workflow_log (

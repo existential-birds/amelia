@@ -47,7 +47,7 @@ class Migrator:
         """Load SQL migration files from the migrations directory."""
         migrations_dir = resources.files("amelia.server.database") / "migrations"
         result = []
-        for path in sorted(migrations_dir.iterdir()):
+        for path in sorted(migrations_dir.iterdir(), key=lambda p: str(p)):
             name = path.name if hasattr(path, "name") else str(path).split("/")[-1]
             if name.endswith(".sql") and name[:3].isdigit():
                 version = int(name[:3])
