@@ -14,6 +14,7 @@ from amelia.server.dependencies import get_config
 from amelia.server.main import app, lifespan
 
 
+@pytest.mark.integration
 class TestServerStartup:
     """Integration tests for full server startup."""
 
@@ -82,6 +83,7 @@ class TestServerStartup:
             assert schema["info"]["title"] == "Amelia API"
 
 
+@pytest.mark.integration
 class TestLifespanStartup:
     """Tests for lifespan startup behavior."""
 

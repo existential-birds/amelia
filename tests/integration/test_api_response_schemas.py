@@ -78,6 +78,7 @@ async def create_test_workflow(
     return workflow
 
 
+@pytest.mark.integration
 class TestAPIResponseSchemas:
     """Integration tests verifying client/server schema compatibility.
 
