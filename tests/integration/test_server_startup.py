@@ -1,9 +1,7 @@
 """Integration tests for server startup."""
 import asyncio
 import os
-import tempfile
 from collections.abc import AsyncIterator, Callable
-from pathlib import Path
 from unittest.mock import patch
 
 import httpx
@@ -87,22 +85,22 @@ class TestServerStartup:
 class TestLifespanStartup:
     """Tests for lifespan startup behavior."""
 
-    async def test_lifespan_creates_database_directory(self) -> None:
-        """Lifespan creates database parent directory if missing."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            # Set up a database path in a non-existent subdirectory
-            db_path = Path(tmpdir) / "nested" / "dir" / "test.db"
-            assert not db_path.parent.exists()
+    async def test_lifespan_uses_database_url_from_env(self) -> None:
+        """Lifespan picks up AMELIA_DATABASE_URL from environment."""
+        database_url = os.environ.get(
+            "DATABASE_URL",
+            "postgresql://amelia:amelia@localhost:5432/amelia_test",
+        )
 
-            with patch.dict(os.environ, {"AMELIA_DATABASE_PATH": str(db_path)}):
-                # Create a fresh app for this test
-                test_app = FastAPI(lifespan=lifespan)
+        with patch.dict(os.environ, {"AMELIA_DATABASE_URL": database_url}):
+            # Create a fresh app for this test
+            test_app = FastAPI(lifespan=lifespan)
 
-                # Run the lifespan
-                async with lifespan(test_app):
-                    # Directory should be created
-                    assert db_path.parent.exists()
-                    assert db_path.parent.is_dir()
+            # Run the lifespan — connects to PostgreSQL
+            async with lifespan(test_app):
+                config = get_config()
+                assert config is not None
+                assert config.database_url == database_url
 
     async def test_lifespan_initializes_config(self) -> None:
         """Lifespan initializes config so get_config works."""

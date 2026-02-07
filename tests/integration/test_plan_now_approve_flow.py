@@ -11,7 +11,7 @@ approve_workflow to fail because there was nothing to resume from.
 """
 
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -122,18 +122,13 @@ class TestPlanNowApproveFlow:
             ),
         )
 
-        with (
-            patch(
-                "amelia.server.orchestrator.service.AsyncSqliteSaver"
-            ) as mock_saver_class,
-            patch(
-                "amelia.server.orchestrator.service.create_implementation_graph"
-            ) as mock_create_graph,
-        ):
+        # Inject mock checkpointer so approve_workflow can resume
+        test_orchestrator._checkpointer = AsyncMock()
+
+        with patch(
+            "amelia.server.orchestrator.service.create_implementation_graph"
+        ) as mock_create_graph:
             mock_create_graph.return_value = mocks.graph
-            mock_saver_class.from_conn_string.return_value = (
-                mocks.saver_class.from_conn_string.return_value
-            )
 
             # This should NOT raise an error
             await test_orchestrator.approve_workflow(workflow_id)

@@ -16,13 +16,16 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 
 from amelia.server.database.brainstorm_repository import BrainstormRepository
 from amelia.server.database.connection import Database
+from amelia.server.database.migrator import Migrator
+from amelia.server.database.profile_repository import ProfileRepository
+from amelia.server.dependencies import get_profile_repository
 from amelia.server.events.bus import EventBus
 from amelia.server.main import create_app
 from amelia.server.routes.brainstorm import (
@@ -31,6 +34,9 @@ from amelia.server.routes.brainstorm import (
     get_driver,
 )
 from amelia.server.services.brainstorm import BrainstormService
+
+
+DATABASE_URL = "postgresql://amelia:amelia@localhost:5432/amelia_test"
 
 
 # =============================================================================
@@ -114,11 +120,12 @@ class TestBrainstormDependencyResolution:
     """
 
     @pytest.fixture
-    async def test_db(self, temp_db_path: Path) -> AsyncGenerator[Database, None]:
-        """Create and initialize in-memory SQLite database."""
-        db = Database(temp_db_path)
+    async def test_db(self) -> AsyncGenerator[Database, None]:
+        """Create and initialize PostgreSQL test database."""
+        db = Database(DATABASE_URL)
         await db.connect()
-        await db.ensure_schema()
+        migrator = Migrator(db)
+        await migrator.run()
         yield db
         await db.close()
 
@@ -133,7 +140,6 @@ class TestBrainstormDependencyResolution:
 
     def test_get_driver_resolves_with_settings_file(
         self,
-        test_brainstorm_service: BrainstormService,
         tmp_path: Path,
     ) -> None:
         """get_driver should resolve from active profile in settings file.
@@ -142,7 +148,14 @@ class TestBrainstormDependencyResolution:
         loads settings.amelia.yaml and reads driver from the active profile,
         then uses factory_get_driver() to create the driver instance.
         """
+        from datetime import UTC, datetime
+
         import yaml
+
+        from amelia.server.models.brainstorm import (
+            BrainstormingSession,
+            SessionStatus,
+        )
 
         # Create settings file with driver in profile
         settings_path = tmp_path / "settings.amelia.yaml"
@@ -172,9 +185,23 @@ class TestBrainstormDependencyResolution:
 
         app.router.lifespan_context = noop_lifespan
 
-        # Only override brainstorm_service (needs app.state from lifespan)
-        app.dependency_overrides[get_brainstorm_service] = (
-            lambda: test_brainstorm_service
+        # Mock brainstorm service (avoids real database in TestClient's event loop)
+        mock_service = AsyncMock(spec=BrainstormService)
+        now = datetime.now(UTC)
+        mock_service.create_session.return_value = BrainstormingSession(
+            id="test-session-id",
+            profile_id="test",
+            status=SessionStatus.ACTIVE,
+            topic="Test topic",
+            created_at=now,
+            updated_at=now,
+        )
+        app.dependency_overrides[get_brainstorm_service] = lambda: mock_service
+        # Override profile_repository (needs database from lifespan)
+        mock_profile_repo = AsyncMock(spec=ProfileRepository)
+        mock_profile_repo.get_profile.return_value = None
+        app.dependency_overrides[get_profile_repository] = (
+            lambda: mock_profile_repo
         )
 
         # Set AMELIA_SETTINGS to use our test settings file
@@ -192,37 +219,18 @@ class TestBrainstormDependencyResolution:
             # If it wasn't wired, we'd get RuntimeError("Driver not initialized")
             # when calling send_message (which uses Depends(get_driver))
 
-    def test_get_cwd_resolves_with_settings_file(
+    async def test_get_cwd_resolves_with_settings_file(
         self,
         test_brainstorm_service: BrainstormService,
         tmp_path: Path,
     ) -> None:
-        """get_cwd should resolve from active profile in settings file.
+        """get_cwd should resolve from active profile in database.
 
         This test verifies that the dependency wiring in main.py correctly
-        loads settings.amelia.yaml and reads working_dir from the active profile.
+        reads working_dir from the active profile via ProfileRepository.
         """
-        import yaml
-
-        # Create settings file with working_dir in profile
-        settings_path = tmp_path / "settings.amelia.yaml"
         working_dir = tmp_path / "my_working_dir"
         working_dir.mkdir()
-        settings_data = {
-            "active_profile": "test",
-            "profiles": {
-                "test": {
-                    "name": "test",
-                    "driver": "cli",
-                    "model": "sonnet",
-                    "tracker": "noop",
-                    "working_dir": str(working_dir),
-                    "validator_model": "sonnet",
-                }
-            },
-        }
-        with settings_path.open("w") as f:
-            yaml.dump(settings_data, f)
 
         app = create_app()
 
@@ -237,23 +245,33 @@ class TestBrainstormDependencyResolution:
             lambda: test_brainstorm_service
         )
 
-        # Set AMELIA_SETTINGS to use our test settings file
-        with patch.dict("os.environ", {"AMELIA_SETTINGS": str(settings_path)}):
-            # Get the actual override function and call it
+        # Mock get_profile_repository to return a profile with working_dir
+        mock_profile_repo = AsyncMock(spec=ProfileRepository)
+        mock_profile = AsyncMock()
+        mock_profile.working_dir = str(working_dir)
+        mock_profile_repo.get_active_profile.return_value = mock_profile
+
+        with patch(
+            "amelia.server.main.get_profile_repository",
+            return_value=mock_profile_repo,
+        ):
+            # Get the actual override function and await it (it's async)
             cwd_override = app.dependency_overrides[get_cwd]
-            result = cwd_override()
+            result = await cwd_override()
             assert result == str(working_dir)
 
-    def test_get_cwd_falls_back_to_getcwd(
+    async def test_get_cwd_falls_back_to_getcwd(
         self,
         test_brainstorm_service: BrainstormService,
         tmp_path: Path,
     ) -> None:
-        """get_cwd should fall back to os.getcwd() when settings file not found.
+        """get_cwd should fall back to os.getcwd() when no active profile found.
 
-        This test verifies the fallback behavior when settings.amelia.yaml
-        doesn't exist or doesn't have working_dir.
+        This test verifies the fallback behavior when no active profile exists
+        or working_dir is not set.
         """
+        import os
+
         app = create_app()
 
         @asynccontextmanager
@@ -267,19 +285,22 @@ class TestBrainstormDependencyResolution:
             lambda: test_brainstorm_service
         )
 
-        # Point to non-existent settings file
-        non_existent_path = tmp_path / "nonexistent.yaml"
-        with patch.dict("os.environ", {"AMELIA_SETTINGS": str(non_existent_path)}):
-            # Get the actual override function and call it
+        # Mock get_profile_repository to return no active profile
+        mock_profile_repo = AsyncMock(spec=ProfileRepository)
+        mock_profile_repo.get_active_profile.return_value = None
+
+        with patch(
+            "amelia.server.main.get_profile_repository",
+            return_value=mock_profile_repo,
+        ):
+            # Get the actual override function and await it (it's async)
             cwd_override = app.dependency_overrides[get_cwd]
-            result = cwd_override()
+            result = await cwd_override()
             # Should fall back to current working directory
-            import os
             assert result == os.getcwd()
 
     def test_send_message_endpoint_uses_real_dependencies(
         self,
-        test_brainstorm_service: BrainstormService,
         tmp_path: Path,
     ) -> None:
         """send_message endpoint should work with real dependency wiring.
@@ -292,10 +313,17 @@ class TestBrainstormDependencyResolution:
         We only mock:
         - AMELIA_SETTINGS env var (external: points to settings file)
         - DriverInterface.execute_agentic (external: calls LLM API)
+        - BrainstormService (avoids real database in TestClient's event loop)
         """
+        from datetime import UTC, datetime
+
         import yaml
 
         from amelia.drivers.base import AgenticMessage, AgenticMessageType
+        from amelia.server.models.brainstorm import (
+            BrainstormingSession,
+            SessionStatus,
+        )
         from tests.conftest import create_mock_execute_agentic
 
         # Create settings file with working_dir in profile
@@ -326,9 +354,27 @@ class TestBrainstormDependencyResolution:
 
         app.router.lifespan_context = noop_lifespan
 
-        # Only override brainstorm_service (needs app.state from lifespan)
-        app.dependency_overrides[get_brainstorm_service] = (
-            lambda: test_brainstorm_service
+        # Mock brainstorm service (avoids real database in TestClient's event loop)
+        mock_service = AsyncMock(spec=BrainstormService)
+        now = datetime.now(UTC)
+        mock_session = BrainstormingSession(
+            id="test-session-id",
+            profile_id="test",
+            status=SessionStatus.ACTIVE,
+            topic="Test topic",
+            created_at=now,
+            updated_at=now,
+        )
+        mock_service.create_session.return_value = mock_session
+        mock_service.get_session.return_value = mock_session
+        app.dependency_overrides[get_brainstorm_service] = lambda: mock_service
+        # Mock profile_repository (called directly in get_brainstorm_driver
+        # and get_brainstorm_cwd, not via FastAPI DI)
+        mock_profile_repo = AsyncMock(spec=ProfileRepository)
+        mock_profile_repo.get_profile.return_value = None
+        mock_profile_repo.get_active_profile.return_value = None
+        app.dependency_overrides[get_profile_repository] = (
+            lambda: mock_profile_repo
         )
 
         # Create mock driver response at LLM boundary
@@ -343,8 +389,12 @@ class TestBrainstormDependencyResolution:
         with (
             patch.dict("os.environ", {"AMELIA_SETTINGS": str(settings_path)}),
             patch(
-                "amelia.drivers.cli.ClaudeCliDriver.execute_agentic",
+                "amelia.drivers.cli.claude.ClaudeCliDriver.execute_agentic",
                 create_mock_execute_agentic(mock_messages),
+            ),
+            patch(
+                "amelia.server.main.get_profile_repository",
+                return_value=mock_profile_repo,
             ),
         ):
             client = TestClient(app)

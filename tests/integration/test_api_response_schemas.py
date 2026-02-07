@@ -3,14 +3,13 @@
 These tests verify that the server responses match the client model schemas,
 preventing regressions like the CreateWorkflowResponse/WorkflowResponse mismatch.
 
-Uses real WorkflowRepository with in-memory SQLite. Only mocks the orchestrator
-since it calls external LLM APIs.
+Uses real WorkflowRepository with PostgreSQL test database. Only mocks the
+orchestrator since it calls external LLM APIs.
 """
 
 import asyncio
 from collections.abc import AsyncGenerator, Callable
 from datetime import UTC, datetime
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import httpx
@@ -21,10 +20,14 @@ from amelia.client.api import AmeliaClient
 from amelia.client.models import CreateWorkflowResponse, WorkflowResponse
 from amelia.pipelines.implementation.state import ImplementationState
 from amelia.server.database.connection import Database
+from amelia.server.database.migrator import Migrator
 from amelia.server.database.repository import WorkflowRepository
 from amelia.server.dependencies import get_orchestrator, get_repository
 from amelia.server.main import app
 from amelia.server.models.state import ServerExecutionState
+
+
+DATABASE_URL = "postgresql://amelia:amelia@localhost:5432/amelia_test"
 
 
 # =============================================================================
@@ -33,17 +36,12 @@ from amelia.server.models.state import ServerExecutionState
 
 
 @pytest.fixture
-def temp_db_path(tmp_path: Path) -> Path:
-    """Create temporary database path."""
-    return tmp_path / "test_api_schemas.db"
-
-
-@pytest.fixture
-async def test_db(temp_db_path: Path) -> AsyncGenerator[Database, None]:
-    """Create and initialize in-memory SQLite database."""
-    db = Database(temp_db_path)
+async def test_db() -> AsyncGenerator[Database, None]:
+    """Create and initialize PostgreSQL test database."""
+    db = Database(DATABASE_URL)
     await db.connect()
-    await db.ensure_schema()
+    migrator = Migrator(db)
+    await migrator.run()
     yield db
     await db.close()
 
@@ -83,7 +81,7 @@ async def create_test_workflow(
 class TestAPIResponseSchemas:
     """Integration tests verifying client/server schema compatibility.
 
-    Uses real WorkflowRepository with in-memory SQLite.
+    Uses real WorkflowRepository with PostgreSQL test database.
     Only mocks the orchestrator (external LLM boundary).
     """
 

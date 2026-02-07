@@ -1,9 +1,10 @@
 """Integration tests for server startup with database settings."""
 
-import tempfile
-from pathlib import Path
-
 from amelia.server.database import Database, SettingsRepository
+from amelia.server.database.migrator import Migrator
+
+
+DATABASE_URL = "postgresql://amelia:amelia@localhost:5432/amelia_test"
 
 
 class TestServerStartupSettings:
@@ -11,15 +12,15 @@ class TestServerStartupSettings:
 
     async def test_ensure_defaults_called_on_startup(self) -> None:
         """Verify server_settings are initialized on startup."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            db = Database(Path(tmpdir) / "test.db")
-            await db.connect()
-            await db.ensure_schema()
+        db = Database(DATABASE_URL)
+        await db.connect()
+        migrator = Migrator(db)
+        await migrator.run()
 
-            repo = SettingsRepository(db)
-            await repo.ensure_defaults()
+        repo = SettingsRepository(db)
+        await repo.ensure_defaults()
 
-            settings = await repo.get_server_settings()
-            assert settings.log_retention_days == 30
+        settings = await repo.get_server_settings()
+        assert settings.log_retention_days == 30
 
-            await db.close()
+        await db.close()

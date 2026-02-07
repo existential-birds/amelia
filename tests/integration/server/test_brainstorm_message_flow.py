@@ -1,14 +1,14 @@
 """Integration tests for brainstorm message flow.
 
 Tests the full message flow with realistic driver behavior:
-- Create session → send message → verify persistence
-- Driver yields: THINKING → TOOL_CALL → TOOL_RESULT → RESULT
+- Create session -> send message -> verify persistence
+- Driver yields: THINKING -> TOOL_CALL -> TOOL_RESULT -> RESULT
 - Artifact detection from write_file tool calls
 
 Real components:
 - FastAPI route handlers
 - BrainstormService
-- BrainstormRepository with in-memory SQLite
+- BrainstormRepository with PostgreSQL test database
 - EventBus (without WebSocket connection manager)
 
 Only mocked:
@@ -27,6 +27,7 @@ from fastapi.testclient import TestClient
 from amelia.drivers.base import AgenticMessage, AgenticMessageType, DriverInterface
 from amelia.server.database.brainstorm_repository import BrainstormRepository
 from amelia.server.database.connection import Database
+from amelia.server.database.migrator import Migrator
 from amelia.server.events.bus import EventBus
 from amelia.server.main import create_app
 from amelia.server.routes.brainstorm import (
@@ -38,17 +39,21 @@ from amelia.server.services.brainstorm import BrainstormService
 from tests.conftest import create_mock_execute_agentic
 
 
+DATABASE_URL = "postgresql://amelia:amelia@localhost:5432/amelia_test"
+
+
 # =============================================================================
 # Fixtures
 # =============================================================================
 
 
 @pytest.fixture
-async def test_db(temp_db_path: Path) -> AsyncGenerator[Database, None]:
-    """Create and initialize in-memory SQLite database."""
-    db = Database(temp_db_path)
+async def test_db() -> AsyncGenerator[Database, None]:
+    """Create and initialize PostgreSQL test database."""
+    db = Database(DATABASE_URL)
     await db.connect()
-    await db.ensure_schema()
+    migrator = Migrator(db)
+    await migrator.run()
     yield db
     await db.close()
 

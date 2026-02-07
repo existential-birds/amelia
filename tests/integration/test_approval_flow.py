@@ -8,24 +8,14 @@ These tests verify the interrupt/resume cycle works end-to-end:
 5. Workflow completes successfully
 """
 
-import tempfile
 from datetime import UTC, datetime
-from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from amelia.server.models.events import EventType, WorkflowEvent
 from amelia.server.models.state import ServerExecutionState
 from amelia.server.orchestrator.service import OrchestratorService
-
-
-@pytest.fixture
-def temp_checkpoint_db():
-    """Create temporary checkpoint database."""
-    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
-        yield f.name
-    Path(f.name).unlink(missing_ok=True)
 
 
 @pytest.fixture
@@ -49,13 +39,13 @@ class TestMissingRequiredFields:
     """Test error handling for missing required workflow fields."""
 
     async def test_missing_profile_id_sets_status_to_failed(
-        self, event_tracker, mock_repository, temp_checkpoint_db
+        self, event_tracker, mock_repository
     ):
         """When profile_id is None (and no execution_state), status is set to failed."""
         service = OrchestratorService(
             event_tracker,
             mock_repository,
-            checkpoint_path=temp_checkpoint_db,
+            checkpointer=AsyncMock(),
         )
 
         # Create state without profile_id
@@ -81,15 +71,12 @@ class TestMissingRequiredFields:
 class TestLifecycleEvents:
     """Test workflow lifecycle event emission."""
 
-    @patch("amelia.server.orchestrator.service.AsyncSqliteSaver")
     @patch("amelia.server.orchestrator.service.create_implementation_graph")
     async def test_workflow_started_event_emitted(
         self,
         mock_create_graph,
-        mock_saver_class,
         event_tracker,
         mock_repository,
-        temp_checkpoint_db,
         mock_profile_repo,
         langgraph_mock_factory,
     ):
@@ -97,15 +84,12 @@ class TestLifecycleEvents:
         # Setup LangGraph mocks using factory
         mocks = langgraph_mock_factory()
         mock_create_graph.return_value = mocks.graph
-        mock_saver_class.from_conn_string.return_value = (
-            mocks.saver_class.from_conn_string.return_value
-        )
 
         service = OrchestratorService(
             event_tracker,
             mock_repository,
             profile_repo=mock_profile_repo,
-            checkpoint_path=temp_checkpoint_db,
+            checkpointer=AsyncMock(),
         )
 
         server_state = ServerExecutionState(
@@ -127,15 +111,12 @@ class TestLifecycleEvents:
 class TestGraphInterruptHandling:
     """Test GraphInterrupt is handled correctly."""
 
-    @patch("amelia.server.orchestrator.service.AsyncSqliteSaver")
     @patch("amelia.server.orchestrator.service.create_implementation_graph")
     async def test_interrupt_sets_status_blocked(
         self,
         mock_create_graph,
-        mock_saver_class,
         event_tracker,
         mock_repository,
-        temp_checkpoint_db,
         mock_profile_repo,
         langgraph_mock_factory,
     ):
@@ -148,15 +129,12 @@ class TestGraphInterruptHandling:
         ]
         mocks = langgraph_mock_factory(astream_items=interrupt_items)
         mock_create_graph.return_value = mocks.graph
-        mock_saver_class.from_conn_string.return_value = (
-            mocks.saver_class.from_conn_string.return_value
-        )
 
         service = OrchestratorService(
             event_tracker,
             mock_repository,
             profile_repo=mock_profile_repo,
-            checkpoint_path=temp_checkpoint_db,
+            checkpointer=AsyncMock(),
         )
 
         server_state = ServerExecutionState(

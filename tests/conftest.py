@@ -5,7 +5,6 @@ used throughout the test suite for the agentic execution model.
 """
 import os
 from collections.abc import AsyncGenerator, Callable, Generator
-from pathlib import Path
 from typing import Any, NamedTuple
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -39,12 +38,6 @@ rebuild_implementation_state()
 def event_bus() -> EventBus:
     """Create EventBus instance for testing."""
     return EventBus()
-
-
-@pytest.fixture
-def temp_db_path(tmp_path: Path) -> Path:
-    """Return a temporary database path (legacy, prefer database_url)."""
-    return tmp_path / "test.db"
 
 
 @pytest.fixture
