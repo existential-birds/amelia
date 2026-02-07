@@ -10,7 +10,6 @@ from uuid import uuid4
 from httpx import TimeoutException
 from langchain_core.runnables.config import RunnableConfig
 from langgraph.checkpoint.base import BaseCheckpointSaver
-from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langgraph.graph.state import CompiledStateGraph
 from loguru import logger
 
@@ -99,7 +98,7 @@ class OrchestratorService:
         repository: WorkflowRepository,
         profile_repo: ProfileRepository | None = None,
         max_concurrent: int = 5,
-        checkpoint_path: str = "~/.amelia/checkpoints.db",
+        checkpointer: BaseCheckpointSaver[Any] | None = None,
     ) -> None:
         """Initialize orchestrator service.
 
@@ -108,16 +107,13 @@ class OrchestratorService:
             repository: Repository for workflow persistence.
             profile_repo: Repository for profile lookup. Required for workflow execution.
             max_concurrent: Maximum number of concurrent workflows (default: 5).
-            checkpoint_path: Path to checkpoint database file.
+            checkpointer: LangGraph checkpoint saver for workflow state persistence.
         """
         self._event_bus = event_bus
         self._repository = repository
         self._profile_repo = profile_repo
         self._max_concurrent = max_concurrent
-        # Expand ~ and resolve path, ensure parent directory exists
-        expanded_path = Path(checkpoint_path).expanduser().resolve()
-        expanded_path.parent.mkdir(parents=True, exist_ok=True)
-        self._checkpoint_path = str(expanded_path)
+        self._checkpointer = checkpointer
         self._active_tasks: dict[str, tuple[str, asyncio.Task[None]]] = {}  # worktree_path -> (workflow_id, task)
         self._planning_tasks: dict[str, asyncio.Task[None]] = {}  # workflow_id -> planning task
         self._approval_lock = asyncio.Lock()  # Prevents race conditions on approvals
@@ -127,7 +123,7 @@ class OrchestratorService:
 
     def _create_server_graph(
         self,
-        checkpointer: BaseCheckpointSaver[Any],
+        checkpointer: BaseCheckpointSaver[Any] | None = None,
     ) -> CompiledStateGraph[Any]:
         """Create graph with server-mode interrupt configuration.
 
@@ -826,20 +822,17 @@ class OrchestratorService:
             )
 
         # Validate checkpoint exists (read-only, safe outside lock)
-        async with AsyncSqliteSaver.from_conn_string(
-            str(self._checkpoint_path)
-        ) as checkpointer:
-            graph = self._create_server_graph(checkpointer)
-            config: RunnableConfig = {
-                "configurable": {"thread_id": workflow_id},
-            }
-            checkpoint_state = await graph.aget_state(config)
-            if checkpoint_state is None or not checkpoint_state.values:
-                raise InvalidStateError(
-                    "Cannot resume: no checkpoint found for workflow",
-                    workflow_id=workflow_id,
-                    current_status=workflow.workflow_status,
-                )
+        graph = self._create_server_graph(self._checkpointer)
+        config: RunnableConfig = {
+            "configurable": {"thread_id": workflow_id},
+        }
+        checkpoint_state = await graph.aget_state(config)
+        if checkpoint_state is None or not checkpoint_state.values:
+            raise InvalidStateError(
+                "Cannot resume: no checkpoint found for workflow",
+                workflow_id=workflow_id,
+                current_status=workflow.workflow_status,
+            )
 
         async with self._start_lock:
             # Check worktree is not occupied (under lock to prevent TOCTOU race)
@@ -1041,121 +1034,118 @@ class OrchestratorService:
         # Resolve prompts before starting workflow
         prompts = await self._resolve_prompts(workflow_id)
 
-        async with AsyncSqliteSaver.from_conn_string(
-            str(self._checkpoint_path)
-        ) as checkpointer:
-            # CRITICAL: Pass interrupt_before to enable server-mode approval
-            graph = self._create_server_graph(checkpointer)
+        # CRITICAL: Pass interrupt_before to enable server-mode approval
+        graph = self._create_server_graph(self._checkpointer)
 
-            # Pass event_bus via config
-            # Recursion limit: 4 base steps + 3 per task + buffer
-            # Default 100 handles up to ~30 tasks
-            config: RunnableConfig = {
-                "recursion_limit": 100,
-                "configurable": {
-                    "thread_id": workflow_id,
-                    "execution_mode": "server",
-                    "event_bus": self._event_bus,
-                    "profile": profile,
-                    "repository": self._repository,
-                    "prompts": prompts,
-                },
-            }
+        # Pass event_bus via config
+        # Recursion limit: 4 base steps + 3 per task + buffer
+        # Default 100 handles up to ~30 tasks
+        config: RunnableConfig = {
+            "recursion_limit": 100,
+            "configurable": {
+                "thread_id": workflow_id,
+                "execution_mode": "server",
+                "event_bus": self._event_bus,
+                "profile": profile,
+                "repository": self._repository,
+                "prompts": prompts,
+            },
+        }
 
-            await self._emit(
-                workflow_id,
-                EventType.WORKFLOW_STARTED,
-                "Workflow execution started",
-                data={"issue_id": state.issue_id},
-            )
+        await self._emit(
+            workflow_id,
+            EventType.WORKFLOW_STARTED,
+            "Workflow execution started",
+            data={"issue_id": state.issue_id},
+        )
 
-            try:
-                # Only set status to IN_PROGRESS if not already in that state.
-                # This handles resumed workflows which are already IN_PROGRESS.
-                workflow = await self._repository.get(workflow_id)
-                if workflow and workflow.workflow_status != WorkflowStatus.IN_PROGRESS:
-                    await self._repository.set_status(workflow_id, WorkflowStatus.IN_PROGRESS)
+        try:
+            # Only set status to IN_PROGRESS if not already in that state.
+            # This handles resumed workflows which are already IN_PROGRESS.
+            workflow = await self._repository.get(workflow_id)
+            if workflow and workflow.workflow_status != WorkflowStatus.IN_PROGRESS:
+                await self._repository.set_status(workflow_id, WorkflowStatus.IN_PROGRESS)
 
-                was_interrupted = False
-                # Use astream with stream_mode="updates" to detect interrupts
-                # astream_events does NOT surface __interrupt__ events
+            was_interrupted = False
+            # Use astream with stream_mode="updates" to detect interrupts
+            # astream_events does NOT surface __interrupt__ events
 
-                # BUG FIX (#199): Check if checkpoint exists before starting.
-                # If we have an existing checkpoint, pass None to resume from it.
-                # If no checkpoint, pass initial_state to start fresh.
-                # This prevents the infinite loop bug where retries would restart
-                # the workflow from review_iteration=0 instead of resuming.
-                checkpoint_state = await graph.aget_state(config)
-                if checkpoint_state is not None and checkpoint_state.values:
-                    # Checkpoint exists - resume from it
-                    logger.debug(
-                        "Resuming workflow from existing checkpoint",
+            # BUG FIX (#199): Check if checkpoint exists before starting.
+            # If we have an existing checkpoint, pass None to resume from it.
+            # If no checkpoint, pass initial_state to start fresh.
+            # This prevents the infinite loop bug where retries would restart
+            # the workflow from review_iteration=0 instead of resuming.
+            checkpoint_state = await graph.aget_state(config)
+            if checkpoint_state is not None and checkpoint_state.values:
+                # Checkpoint exists - resume from it
+                logger.debug(
+                    "Resuming workflow from existing checkpoint",
+                    workflow_id=workflow_id,
+                    checkpoint_keys=list(checkpoint_state.values.keys())[:5],
+                )
+                input_state = None
+            else:
+                # No checkpoint - start fresh with initial state
+                # Reconstruct ImplementationState from columns
+                input_state = await self._reconstruct_initial_state(state, profile)
+
+                logger.debug(
+                    "Starting workflow fresh (no checkpoint)",
+                    workflow_id=workflow_id,
+                )
+
+            async for chunk in graph.astream(
+                input_state,
+                config=config,
+                stream_mode=["updates", "tasks"],
+            ):
+                # Combined mode returns (mode, data) tuples
+                # Cast for type checker - astream with list mode returns tuples
+                chunk_tuple = cast(tuple[str, Any], chunk)
+                if self._is_interrupt_chunk(chunk_tuple):
+                    was_interrupted = True
+                    mode, data = chunk_tuple
+                    interrupt_data = data.get("__interrupt__") if isinstance(data, dict) else None
+                    logger.info(
+                        "Workflow paused for human approval",
                         workflow_id=workflow_id,
-                        checkpoint_keys=list(checkpoint_state.values.keys())[:5],
+                        interrupt_data=interrupt_data,
                     )
-                    input_state = None
-                else:
-                    # No checkpoint - start fresh with initial state
-                    # Reconstruct ImplementationState from columns
-                    input_state = await self._reconstruct_initial_state(state, profile)
-
-                    logger.debug(
-                        "Starting workflow fresh (no checkpoint)",
-                        workflow_id=workflow_id,
-                    )
-
-                async for chunk in graph.astream(
-                    input_state,
-                    config=config,
-                    stream_mode=["updates", "tasks"],
-                ):
-                    # Combined mode returns (mode, data) tuples
-                    # Cast for type checker - astream with list mode returns tuples
-                    chunk_tuple = cast(tuple[str, Any], chunk)
-                    if self._is_interrupt_chunk(chunk_tuple):
-                        was_interrupted = True
-                        mode, data = chunk_tuple
-                        interrupt_data = data.get("__interrupt__") if isinstance(data, dict) else None
-                        logger.info(
-                            "Workflow paused for human approval",
-                            workflow_id=workflow_id,
-                            interrupt_data=interrupt_data,
-                        )
-                        # Sync plan from LangGraph checkpoint to ServerExecutionState
-                        # so it's available via REST API while blocked
-                        await self._sync_plan_from_checkpoint(workflow_id, graph, config)
-                        await self._emit(
-                            workflow_id,
-                            EventType.APPROVAL_REQUIRED,
-                            "Plan ready for review - awaiting human approval",
-                            agent="human_approval",
-                            data={"paused_at": "human_approval_node"},
-                        )
-                        await self._repository.set_status(workflow_id, WorkflowStatus.BLOCKED)
-                        break
-                    # Handle combined mode chunk
-                    await self._handle_combined_stream_chunk(workflow_id, chunk_tuple)
-
-                if not was_interrupted:
-                    # Workflow completed without interruption (no human approval needed).
-                    # Note: A separate COMPLETED emission exists in approve_workflow() for
-                    # workflows that resume after human approval. These are mutually exclusive
-                    # code paths - only one COMPLETED event is ever emitted per workflow.
-
-                    # Check for task failure before marking complete (multi-task mode)
-                    await self._emit_task_failed_if_applicable(workflow_id)
-
+                    # Sync plan from LangGraph checkpoint to ServerExecutionState
+                    # so it's available via REST API while blocked
+                    await self._sync_plan_from_checkpoint(workflow_id, graph, config)
                     await self._emit(
                         workflow_id,
-                        EventType.WORKFLOW_COMPLETED,
-                        "Workflow completed successfully",
+                        EventType.APPROVAL_REQUIRED,
+                        "Plan ready for review - awaiting human approval",
+                        agent="human_approval",
+                        data={"paused_at": "human_approval_node"},
                     )
-                    await self._repository.set_status(workflow_id, WorkflowStatus.COMPLETED)
+                    await self._repository.set_status(workflow_id, WorkflowStatus.BLOCKED)
+                    break
+                # Handle combined mode chunk
+                await self._handle_combined_stream_chunk(workflow_id, chunk_tuple)
 
-            except Exception:
-                # Let exceptions propagate to _run_workflow_with_retry for retry logic
-                # and proper failure event emission
-                raise
+            if not was_interrupted:
+                # Workflow completed without interruption (no human approval needed).
+                # Note: A separate COMPLETED emission exists in approve_workflow() for
+                # workflows that resume after human approval. These are mutually exclusive
+                # code paths - only one COMPLETED event is ever emitted per workflow.
+
+                # Check for task failure before marking complete (multi-task mode)
+                await self._emit_task_failed_if_applicable(workflow_id)
+
+                await self._emit(
+                    workflow_id,
+                    EventType.WORKFLOW_COMPLETED,
+                    "Workflow completed successfully",
+                )
+                await self._repository.set_status(workflow_id, WorkflowStatus.COMPLETED)
+
+        except Exception:
+            # Let exceptions propagate to _run_workflow_with_retry for retry logic
+            # and proper failure event emission
+            raise
 
     async def _run_workflow_with_retry(
         self,
@@ -1268,79 +1258,76 @@ class OrchestratorService:
         # Resolve prompts before starting workflow
         prompts = await self._resolve_prompts(workflow_id)
 
-        async with AsyncSqliteSaver.from_conn_string(
-            str(self._checkpoint_path)
-        ) as checkpointer:
-            # Use dedicated review graph for review workflows
-            graph = create_review_graph(
-                checkpointer=checkpointer,
-            )
+        # Use dedicated review graph for review workflows
+        graph = create_review_graph(
+            checkpointer=self._checkpointer,
+        )
 
-            # Pass event_bus via config
-            # Step limit: 4 base + 3 per task + buffer (default 100 handles ~30 tasks)
-            config: RunnableConfig = {
-                "recursion_limit": 100,
-                "configurable": {
-                    "thread_id": workflow_id,
-                    "execution_mode": "server",
-                    "event_bus": self._event_bus,
-                    "profile": profile,
-                    "repository": self._repository,
-                    "prompts": prompts,
-                },
-            }
+        # Pass event_bus via config
+        # Step limit: 4 base + 3 per task + buffer (default 100 handles ~30 tasks)
+        config: RunnableConfig = {
+            "recursion_limit": 100,
+            "configurable": {
+                "thread_id": workflow_id,
+                "execution_mode": "server",
+                "event_bus": self._event_bus,
+                "profile": profile,
+                "repository": self._repository,
+                "prompts": prompts,
+            },
+        }
+
+        await self._emit(
+            workflow_id,
+            EventType.WORKFLOW_STARTED,
+            "Review workflow started",
+            data={"issue_id": state.issue_id, "workflow_type": "review"},
+        )
+
+        try:
+            await self._repository.set_status(workflow_id, WorkflowStatus.IN_PROGRESS)
+
+            # Convert Pydantic model to JSON-serializable dict for checkpointing
+            initial_state = execution_state.model_dump(mode="json")
+
+            async for chunk in graph.astream(
+                initial_state,
+                config=config,
+                stream_mode=["updates", "tasks"],
+            ):
+                # Combined mode returns (mode, data) tuples
+                # Cast for type checker - astream with list mode returns tuples
+                chunk_tuple = cast(tuple[str, Any], chunk)
+                # No interrupt handling - review graph runs autonomously
+                # But we still need to check for unexpected interrupts
+                if self._is_interrupt_chunk(chunk_tuple):
+                    mode, data = chunk_tuple
+                    logger.warning(
+                        "Unexpected interrupt in review workflow",
+                        workflow_id=workflow_id,
+                    )
+                    continue
+                # Emit stage events for each node
+                await self._handle_combined_stream_chunk(workflow_id, chunk_tuple)
 
             await self._emit(
                 workflow_id,
-                EventType.WORKFLOW_STARTED,
-                "Review workflow started",
-                data={"issue_id": state.issue_id, "workflow_type": "review"},
+                EventType.WORKFLOW_COMPLETED,
+                "Review workflow completed",
             )
+            await self._repository.set_status(workflow_id, WorkflowStatus.COMPLETED)
 
-            try:
-                await self._repository.set_status(workflow_id, WorkflowStatus.IN_PROGRESS)
-
-                # Convert Pydantic model to JSON-serializable dict for checkpointing
-                initial_state = execution_state.model_dump(mode="json")
-
-                async for chunk in graph.astream(
-                    initial_state,
-                    config=config,
-                    stream_mode=["updates", "tasks"],
-                ):
-                    # Combined mode returns (mode, data) tuples
-                    # Cast for type checker - astream with list mode returns tuples
-                    chunk_tuple = cast(tuple[str, Any], chunk)
-                    # No interrupt handling - review graph runs autonomously
-                    # But we still need to check for unexpected interrupts
-                    if self._is_interrupt_chunk(chunk_tuple):
-                        mode, data = chunk_tuple
-                        logger.warning(
-                            "Unexpected interrupt in review workflow",
-                            workflow_id=workflow_id,
-                        )
-                        continue
-                    # Emit stage events for each node
-                    await self._handle_combined_stream_chunk(workflow_id, chunk_tuple)
-
-                await self._emit(
-                    workflow_id,
-                    EventType.WORKFLOW_COMPLETED,
-                    "Review workflow completed",
-                )
-                await self._repository.set_status(workflow_id, WorkflowStatus.COMPLETED)
-
-            except Exception as e:
-                logger.exception("Review workflow failed", workflow_id=workflow_id)
-                await self._emit(
-                    workflow_id,
-                    EventType.WORKFLOW_FAILED,
-                    f"Review workflow failed: {e}",
-                    data={"error": str(e)},
-                )
-                await self._repository.set_status(
-                    workflow_id, WorkflowStatus.FAILED, failure_reason=str(e)
-                )
+        except Exception as e:
+            logger.exception("Review workflow failed", workflow_id=workflow_id)
+            await self._emit(
+                workflow_id,
+                EventType.WORKFLOW_FAILED,
+                f"Review workflow failed: {e}",
+                data={"error": str(e)},
+            )
+            await self._repository.set_status(
+                workflow_id, WorkflowStatus.FAILED, failure_reason=str(e)
+            )
 
     async def _emit(
         self,
@@ -1414,12 +1401,10 @@ class OrchestratorService:
         Args:
             workflow_id: The workflow/thread ID whose checkpoint to delete.
         """
-        async with AsyncSqliteSaver.from_conn_string(
-            str(self._checkpoint_path)
-        ) as saver:
-            await saver.setup()
-            await saver.adelete_thread(workflow_id)
-            logger.info("Deleted checkpoint", workflow_id=workflow_id)
+        if self._checkpointer is None:
+            return
+        await self._checkpointer.adelete_thread(workflow_id)
+        logger.info("Deleted checkpoint", workflow_id=workflow_id)
 
     async def approve_workflow(self, workflow_id: str) -> None:
         """Approve a blocked workflow and resume LangGraph execution.
@@ -1469,80 +1454,77 @@ class OrchestratorService:
         prompts = await self._resolve_prompts(workflow_id)
 
         # Resume LangGraph execution with updated state
-        async with AsyncSqliteSaver.from_conn_string(
-            str(self._checkpoint_path)
-        ) as checkpointer:
-            graph = self._create_server_graph(checkpointer)
+        graph = self._create_server_graph(self._checkpointer)
 
-            # Pass event_bus via config
-            config: RunnableConfig = {
-                "recursion_limit": 100,
-                "configurable": {
-                    "thread_id": workflow_id,
-                    "execution_mode": "server",
-                    "event_bus": self._event_bus,
-                    "profile": profile,
-                    "repository": self._repository,
-                    "prompts": prompts,
-                },
-            }
+        # Pass event_bus via config
+        config: RunnableConfig = {
+            "recursion_limit": 100,
+            "configurable": {
+                "thread_id": workflow_id,
+                "execution_mode": "server",
+                "event_bus": self._event_bus,
+                "profile": profile,
+                "repository": self._repository,
+                "prompts": prompts,
+            },
+        }
 
-            # Update checkpoint state with approval decision
-            await graph.aupdate_state(config, {"human_approved": True})
+        # Update checkpoint state with approval decision
+        await graph.aupdate_state(config, {"human_approved": True})
 
-            # Update status to in_progress before resuming
-            await self._repository.set_status(workflow_id, WorkflowStatus.IN_PROGRESS)
+        # Update status to in_progress before resuming
+        await self._repository.set_status(workflow_id, WorkflowStatus.IN_PROGRESS)
 
-            # Resume execution from checkpoint
-            try:
-                async for chunk in graph.astream(
-                    None,  # Resume from checkpoint, no new input needed
-                    config=config,
-                    stream_mode=["updates", "tasks"],
-                ):
-                    # Combined mode returns (mode, data) tuples
-                    # Cast for type checker - astream with list mode returns tuples
-                    chunk_tuple = cast(tuple[str, Any], chunk)
-                    # In agentic mode, no interrupts expected after initial approval
-                    if self._is_interrupt_chunk(chunk_tuple):
-                        _, data = chunk_tuple
-                        state = await graph.aget_state(config)
-                        next_nodes = state.next if state else []
-                        logger.warning(
-                            "Unexpected interrupt after approval",
-                            workflow_id=workflow_id,
-                            next_nodes=next_nodes,
-                        )
-                        continue
-                    await self._handle_combined_stream_chunk(workflow_id, chunk_tuple)
+        # Resume execution from checkpoint
+        try:
+            async for chunk in graph.astream(
+                None,  # Resume from checkpoint, no new input needed
+                config=config,
+                stream_mode=["updates", "tasks"],
+            ):
+                # Combined mode returns (mode, data) tuples
+                # Cast for type checker - astream with list mode returns tuples
+                chunk_tuple = cast(tuple[str, Any], chunk)
+                # In agentic mode, no interrupts expected after initial approval
+                if self._is_interrupt_chunk(chunk_tuple):
+                    _, data = chunk_tuple
+                    state = await graph.aget_state(config)
+                    next_nodes = state.next if state else []
+                    logger.warning(
+                        "Unexpected interrupt after approval",
+                        workflow_id=workflow_id,
+                        next_nodes=next_nodes,
+                    )
+                    continue
+                await self._handle_combined_stream_chunk(workflow_id, chunk_tuple)
 
-                # Workflow completed after human approval.
-                # Note: A separate COMPLETED emission exists in _run_workflow() for
-                # workflows that complete without interruption. These are mutually exclusive
-                # code paths - only one COMPLETED event is ever emitted per workflow.
+            # Workflow completed after human approval.
+            # Note: A separate COMPLETED emission exists in _run_workflow() for
+            # workflows that complete without interruption. These are mutually exclusive
+            # code paths - only one COMPLETED event is ever emitted per workflow.
 
-                # Check for task failure before marking complete (multi-task mode)
-                await self._emit_task_failed_if_applicable(workflow_id)
+            # Check for task failure before marking complete (multi-task mode)
+            await self._emit_task_failed_if_applicable(workflow_id)
 
-                await self._emit(
-                    workflow_id,
-                    EventType.WORKFLOW_COMPLETED,
-                    "Workflow completed successfully",
-                )
-                await self._repository.set_status(workflow_id, WorkflowStatus.COMPLETED)
+            await self._emit(
+                workflow_id,
+                EventType.WORKFLOW_COMPLETED,
+                "Workflow completed successfully",
+            )
+            await self._repository.set_status(workflow_id, WorkflowStatus.COMPLETED)
 
-            except Exception as e:
-                logger.exception("Workflow failed after approval", workflow_id=workflow_id)
-                await self._emit(
-                    workflow_id,
-                    EventType.WORKFLOW_FAILED,
-                    f"Workflow failed: {e!s}",
-                    data={"error": str(e)},
-                )
-                await self._repository.set_status(
-                    workflow_id, WorkflowStatus.FAILED, failure_reason=str(e)
-                )
-                raise
+        except Exception as e:
+            logger.exception("Workflow failed after approval", workflow_id=workflow_id)
+            await self._emit(
+                workflow_id,
+                EventType.WORKFLOW_FAILED,
+                f"Workflow failed: {e!s}",
+                data={"error": str(e)},
+            )
+            await self._repository.set_status(
+                workflow_id, WorkflowStatus.FAILED, failure_reason=str(e)
+            )
+            raise
 
     async def reject_workflow(
         self,
@@ -1605,22 +1587,19 @@ class OrchestratorService:
             return
 
         # Update LangGraph state to record rejection
-        async with AsyncSqliteSaver.from_conn_string(
-            str(self._checkpoint_path)
-        ) as checkpointer:
-            graph = self._create_server_graph(checkpointer)
+        graph = self._create_server_graph(self._checkpointer)
 
-            config: RunnableConfig = {
-                "recursion_limit": 100,
-                "configurable": {
-                    "thread_id": workflow_id,
-                    "execution_mode": "server",
-                    "profile": profile,
-                    "repository": self._repository,
-                },
-            }
+        config: RunnableConfig = {
+            "recursion_limit": 100,
+            "configurable": {
+                "thread_id": workflow_id,
+                "execution_mode": "server",
+                "profile": profile,
+                "repository": self._repository,
+            },
+        }
 
-            await graph.aupdate_state(config, {"human_approved": False})
+        await graph.aupdate_state(config, {"human_approved": False})
 
     async def _handle_graph_event(
         self,
@@ -2180,125 +2159,122 @@ class OrchestratorService:
         # Resolve prompts for architect
         prompts = await self._resolve_prompts(workflow_id)
 
-        async with AsyncSqliteSaver.from_conn_string(
-            str(self._checkpoint_path)
-        ) as checkpointer:
-            graph = self._create_server_graph(checkpointer)
+        graph = self._create_server_graph(self._checkpointer)
 
-            config: RunnableConfig = {
-                "recursion_limit": 100,
-                "configurable": {
-                    "thread_id": workflow_id,
-                    "execution_mode": "server",
-                    "event_bus": self._event_bus,
-                    "profile": profile,
-                    "repository": self._repository,
-                    "prompts": prompts,
-                },
-            }
+        config: RunnableConfig = {
+            "recursion_limit": 100,
+            "configurable": {
+                "thread_id": workflow_id,
+                "execution_mode": "server",
+                "event_bus": self._event_bus,
+                "profile": profile,
+                "repository": self._repository,
+                "prompts": prompts,
+            },
+        }
 
-            try:
-                # Convert Pydantic model to JSON-serializable dict for checkpointing
-                input_state = execution_state.model_dump(mode="json")
+        try:
+            # Convert Pydantic model to JSON-serializable dict for checkpointing
+            input_state = execution_state.model_dump(mode="json")
 
-                was_interrupted = False
-                async for chunk in graph.astream(
-                    input_state,
-                    config=config,
-                    stream_mode=["updates", "tasks"],
-                ):
-                    chunk_tuple = cast(tuple[str, Any], chunk)
-                    if self._is_interrupt_chunk(chunk_tuple):
-                        was_interrupted = True
-                        mode, data = chunk_tuple
-                        interrupt_data = (
-                            data.get("__interrupt__") if isinstance(data, dict) else None
-                        )
-                        logger.info(
-                            "Planning paused for human approval",
-                            workflow_id=workflow_id,
-                            interrupt_data=interrupt_data,
-                        )
-                        # Sync plan from LangGraph checkpoint to ServerExecutionState
-                        await self._sync_plan_from_checkpoint(workflow_id, graph, config)
-
-                        # Re-fetch to avoid clobbering concurrent updates
-                        fresh = await self._repository.get(workflow_id)
-                        if fresh is None:
-                            logger.warning(
-                                "Workflow deleted during planning",
-                                workflow_id=workflow_id,
-                            )
-                            return
-
-                        # Only update if still pending (planning in background)
-                        if fresh.workflow_status != WorkflowStatus.PENDING:
-                            logger.info(
-                                "Planning finished but workflow status changed",
-                                workflow_id=workflow_id,
-                                workflow_status=fresh.workflow_status,
-                            )
-                            return
-
-                        fresh.workflow_status = WorkflowStatus.BLOCKED
-                        await self._repository.update(fresh)
-
-                        await self._emit(
-                            workflow_id,
-                            EventType.APPROVAL_REQUIRED,
-                            "Plan ready for review - awaiting human approval",
-                            agent="human_approval",
-                            data={"paused_at": "human_approval_node"},
-                        )
-
-                        logger.info(
-                            "Workflow queued with plan",
-                            workflow_id=workflow_id,
-                            issue_id=fresh.issue_id,
-                        )
-                        break
-
-                    # Handle combined mode chunk (updates, tasks)
-                    await self._handle_combined_stream_chunk(workflow_id, chunk_tuple)
-
-                if not was_interrupted:
-                    # Graph completed without interrupting - unexpected for planning
-                    logger.warning(
-                        "Planning completed without interrupt at human_approval_node",
-                        workflow_id=workflow_id,
+            was_interrupted = False
+            async for chunk in graph.astream(
+                input_state,
+                config=config,
+                stream_mode=["updates", "tasks"],
+            ):
+                chunk_tuple = cast(tuple[str, Any], chunk)
+                if self._is_interrupt_chunk(chunk_tuple):
+                    was_interrupted = True
+                    mode, data = chunk_tuple
+                    interrupt_data = (
+                        data.get("__interrupt__") if isinstance(data, dict) else None
                     )
+                    logger.info(
+                        "Planning paused for human approval",
+                        workflow_id=workflow_id,
+                        interrupt_data=interrupt_data,
+                    )
+                    # Sync plan from LangGraph checkpoint to ServerExecutionState
+                    await self._sync_plan_from_checkpoint(workflow_id, graph, config)
 
-            except asyncio.CancelledError:
-                # Don't treat cancellation (e.g., during shutdown) as a failure
-                logger.info("Planning task cancelled", workflow_id=workflow_id)
-                raise
-            except Exception as e:
-                # Mark workflow as failed using fresh state
-                try:
+                    # Re-fetch to avoid clobbering concurrent updates
                     fresh = await self._repository.get(workflow_id)
-                    if fresh is not None and fresh.workflow_status == WorkflowStatus.PENDING:
-                        fresh.workflow_status = WorkflowStatus.FAILED
-                        fresh.failure_reason = f"Planning failed: {e}"
-                        await self._repository.update(fresh)
-                except Exception as update_err:
-                    logger.error(
-                        "Failed to mark workflow as failed",
-                        workflow_id=workflow_id,
-                        error=str(update_err),
+                    if fresh is None:
+                        logger.warning(
+                            "Workflow deleted during planning",
+                            workflow_id=workflow_id,
+                        )
+                        return
+
+                    # Only update if still pending (planning in background)
+                    if fresh.workflow_status != WorkflowStatus.PENDING:
+                        logger.info(
+                            "Planning finished but workflow status changed",
+                            workflow_id=workflow_id,
+                            workflow_status=fresh.workflow_status,
+                        )
+                        return
+
+                    fresh.workflow_status = WorkflowStatus.BLOCKED
+                    await self._repository.update(fresh)
+
+                    await self._emit(
+                        workflow_id,
+                        EventType.APPROVAL_REQUIRED,
+                        "Plan ready for review - awaiting human approval",
+                        agent="human_approval",
+                        data={"paused_at": "human_approval_node"},
                     )
 
-                await self._emit(
-                    workflow_id,
-                    EventType.WORKFLOW_FAILED,
-                    f"Planning failed: {e}",
-                    data={"error": str(e)},
+                    logger.info(
+                        "Workflow queued with plan",
+                        workflow_id=workflow_id,
+                        issue_id=fresh.issue_id,
+                    )
+                    break
+
+                # Handle combined mode chunk (updates, tasks)
+                await self._handle_combined_stream_chunk(workflow_id, chunk_tuple)
+
+            if not was_interrupted:
+                # Graph completed without interrupting - unexpected for planning
+                logger.warning(
+                    "Planning completed without interrupt at human_approval_node",
+                    workflow_id=workflow_id,
                 )
 
+        except asyncio.CancelledError:
+            # Don't treat cancellation (e.g., during shutdown) as a failure
+            logger.info("Planning task cancelled", workflow_id=workflow_id)
+            raise
+        except Exception as e:
+            # Mark workflow as failed using fresh state
+            try:
+                fresh = await self._repository.get(workflow_id)
+                if fresh is not None and fresh.workflow_status == WorkflowStatus.PENDING:
+                    fresh.workflow_status = WorkflowStatus.FAILED
+                    fresh.failure_reason = f"Planning failed: {e}"
+                    await self._repository.update(fresh)
+            except Exception as update_err:
                 logger.error(
-                    "Planning task failed",
+                    "Failed to mark workflow as failed",
                     workflow_id=workflow_id,
-                    error=str(e),
+                    error=str(update_err),
                 )
+
+            await self._emit(
+                workflow_id,
+                EventType.WORKFLOW_FAILED,
+                f"Planning failed: {e}",
+                data={"error": str(e)},
+            )
+
+            logger.error(
+                "Planning task failed",
+                workflow_id=workflow_id,
+                error=str(e),
+            )
 
     async def queue_and_plan_workflow(
         self,
