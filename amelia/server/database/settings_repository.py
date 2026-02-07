@@ -11,9 +11,7 @@ class ServerSettings(BaseModel):
     """Server settings data class."""
 
     log_retention_days: int
-    log_retention_max_events: int
     checkpoint_retention_days: int
-    checkpoint_path: str
     websocket_idle_timeout_seconds: float
     workflow_start_timeout_seconds: float
     max_concurrent: int
@@ -39,7 +37,7 @@ class SettingsRepository:
         Idempotent - safe to call multiple times.
         """
         await self._db.execute(
-            """INSERT OR IGNORE INTO server_settings (id) VALUES (1)"""
+            """INSERT INTO server_settings (id) VALUES (1) ON CONFLICT DO NOTHING"""
         )
 
     async def get_server_settings(self) -> ServerSettings:
@@ -72,9 +70,7 @@ class SettingsRepository:
         """
         valid_fields = {
             "log_retention_days",
-            "log_retention_max_events",
             "checkpoint_retention_days",
-            "checkpoint_path",
             "websocket_idle_timeout_seconds",
             "workflow_start_timeout_seconds",
             "max_concurrent",
@@ -88,13 +84,16 @@ class SettingsRepository:
             return await self.get_server_settings()
 
         # Build UPDATE statement
-        set_clauses = [f"{k} = ?" for k in updates]
-        set_clauses.append("updated_at = CURRENT_TIMESTAMP")
-        values = list(updates.values())
+        set_clauses = []
+        values = []
+        for i, (k, v) in enumerate(updates.items(), start=1):
+            set_clauses.append(f"{k} = ${i}")
+            values.append(v)
+        set_clauses.append("updated_at = NOW()")
 
         await self._db.execute(
             f"UPDATE server_settings SET {', '.join(set_clauses)} WHERE id = 1",
-            values,
+            *values,
         )
         return await self.get_server_settings()
 
@@ -109,13 +108,11 @@ class SettingsRepository:
         """
         return ServerSettings(
             log_retention_days=row["log_retention_days"],
-            log_retention_max_events=row["log_retention_max_events"],
             checkpoint_retention_days=row["checkpoint_retention_days"],
-            checkpoint_path=row["checkpoint_path"],
             websocket_idle_timeout_seconds=row["websocket_idle_timeout_seconds"],
             workflow_start_timeout_seconds=row["workflow_start_timeout_seconds"],
             max_concurrent=row["max_concurrent"],
-            stream_tool_results=bool(row["stream_tool_results"]),
-            created_at=datetime.fromisoformat(row["created_at"]),
-            updated_at=datetime.fromisoformat(row["updated_at"]),
+            stream_tool_results=row["stream_tool_results"],
+            created_at=row["created_at"],
+            updated_at=row["updated_at"],
         )

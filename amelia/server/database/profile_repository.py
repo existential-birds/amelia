@@ -58,8 +58,8 @@ class ProfileRepository:
             Profile if found, None otherwise.
         """
         row = await self._db.fetch_one(
-            "SELECT * FROM profiles WHERE id = ?",
-            (profile_id,),
+            "SELECT * FROM profiles WHERE id = $1",
+            profile_id,
         )
         return self._row_to_profile(row) if row else None
 
@@ -69,7 +69,9 @@ class ProfileRepository:
         Returns:
             Active profile if one is set, None otherwise.
         """
-        row = await self._db.fetch_one("SELECT * FROM profiles WHERE is_active = 1")
+        row = await self._db.fetch_one(
+            "SELECT * FROM profiles WHERE is_active = TRUE"
+        )
         return self._row_to_profile(row) if row else None
 
     async def create_profile(self, profile: Profile) -> Profile:
@@ -82,7 +84,7 @@ class ProfileRepository:
             Created profile.
 
         Raises:
-            sqlite3.IntegrityError: If profile name already exists.
+            asyncpg.UniqueViolationError: If profile name already exists.
         """
         agents_json = json.dumps({
             name: {
@@ -97,16 +99,14 @@ class ProfileRepository:
             """INSERT INTO profiles (
                 id, tracker, working_dir, plan_output_dir, plan_path_pattern,
                 agents, is_active
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)""",
-            (
-                profile.name,
-                profile.tracker,
-                profile.working_dir,
-                profile.plan_output_dir,
-                profile.plan_path_pattern,
-                agents_json,
-                0,
-            ),
+            ) VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7)""",
+            profile.name,
+            profile.tracker,
+            profile.working_dir,
+            profile.plan_output_dir,
+            profile.plan_path_pattern,
+            agents_json,
+            False,
         )
         result = await self.get_profile(profile.name)
         # Result should never be None since we just inserted it
@@ -145,22 +145,18 @@ class ProfileRepository:
                 raise ValueError(f"Profile not found: {profile_id}")
             return profile
 
-        # Convert booleans to integers for SQLite
-        db_updates: dict[str, str | int] = {}
-        for k, v in updates.items():
-            if isinstance(v, bool):
-                db_updates[k] = 1 if v else 0
-            else:
-                db_updates[k] = v
+        set_clauses: list[str] = []
+        values: list[str | int | bool] = []
+        for i, (k, v) in enumerate(updates.items(), start=1):
+            set_clauses.append(f"{k} = ${i}")
+            values.append(v)
+        set_clauses.append("updated_at = NOW()")
 
-        set_clauses = [f"{k} = ?" for k in db_updates]
-        set_clauses.append("updated_at = CURRENT_TIMESTAMP")
-        values: list[str | int] = list(db_updates.values())
-        values.append(profile_id)
-
+        id_param = len(values) + 1
         rows_affected = await self._db.execute(
-            f"UPDATE profiles SET {', '.join(set_clauses)} WHERE id = ?",
-            values,
+            f"UPDATE profiles SET {', '.join(set_clauses)} WHERE id = ${id_param}",
+            *values,
+            profile_id,
         )
         if rows_affected == 0:
             raise ValueError(f"Profile not found: {profile_id}")
@@ -180,15 +176,16 @@ class ProfileRepository:
             True if deleted, False if not found.
         """
         rows_affected = await self._db.execute(
-            "DELETE FROM profiles WHERE id = ?",
-            (profile_id,),
+            "DELETE FROM profiles WHERE id = $1",
+            profile_id,
         )
         return rows_affected > 0
 
     async def set_active(self, profile_id: str) -> None:
-        """Set a profile as active.
+        """Set a profile as active, deactivating all others.
 
-        The database trigger ensures only one profile is active.
+        Uses a transaction to atomically deactivate all profiles
+        and activate the target profile.
 
         Args:
             profile_id: Profile to activate.
@@ -196,12 +193,20 @@ class ProfileRepository:
         Raises:
             ValueError: If profile not found.
         """
-        rows_affected = await self._db.execute(
-            "UPDATE profiles SET is_active = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-            (profile_id,),
-        )
-        if rows_affected == 0:
-            raise ValueError(f"Profile not found: {profile_id}")
+        async with self._db.transaction() as conn:
+            await conn.execute(
+                "UPDATE profiles SET is_active = FALSE WHERE is_active = TRUE"
+            )
+            result = await conn.execute(
+                "UPDATE profiles SET is_active = TRUE, updated_at = NOW() WHERE id = $1",
+                profile_id,
+            )
+            try:
+                rows_affected = int(result.split()[-1])
+            except (ValueError, IndexError, AttributeError):
+                rows_affected = 0
+            if rows_affected == 0:
+                raise ValueError(f"Profile not found: {profile_id}")
 
     def _row_to_profile(self, row: asyncpg.Record) -> Profile:
         """Convert a database row to a Profile object.

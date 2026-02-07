@@ -39,8 +39,8 @@ class PromptRepository:
         """
         await self._db.execute(
             """INSERT INTO prompts (id, agent, name, description, current_version_id)
-               VALUES (?, ?, ?, ?, ?)""",
-            (prompt.id, prompt.agent, prompt.name, prompt.description, prompt.current_version_id),
+               VALUES ($1, $2, $3, $4, $5)""",
+            prompt.id, prompt.agent, prompt.name, prompt.description, prompt.current_version_id,
         )
 
     async def list_prompts(self) -> list[Prompt]:
@@ -71,7 +71,7 @@ class PromptRepository:
             The prompt if found, None otherwise.
         """
         row = await self._db.fetch_one(
-            "SELECT * FROM prompts WHERE id = ?", (prompt_id,)
+            "SELECT * FROM prompts WHERE id = $1", prompt_id
         )
         if not row:
             return None
@@ -96,9 +96,9 @@ class PromptRepository:
         """
         rows = await self._db.fetch_all(
             """SELECT * FROM prompt_versions
-               WHERE prompt_id = ?
+               WHERE prompt_id = $1
                ORDER BY version_number DESC""",
-            (prompt_id,),
+            prompt_id,
         )
         return [
             PromptVersion(
@@ -106,7 +106,7 @@ class PromptRepository:
                 prompt_id=row["prompt_id"],
                 version_number=row["version_number"],
                 content=row["content"],
-                created_at=datetime.fromisoformat(row["created_at"]) if row["created_at"] else datetime.now(UTC),
+                created_at=row["created_at"] if row["created_at"] else datetime.now(UTC),
                 change_note=row["change_note"],
             )
             for row in rows
@@ -122,7 +122,7 @@ class PromptRepository:
             The version if found, None otherwise.
         """
         row = await self._db.fetch_one(
-            "SELECT * FROM prompt_versions WHERE id = ?", (version_id,)
+            "SELECT * FROM prompt_versions WHERE id = $1", version_id
         )
         if not row:
             return None
@@ -131,7 +131,7 @@ class PromptRepository:
             prompt_id=row["prompt_id"],
             version_number=row["version_number"],
             content=row["content"],
-            created_at=datetime.fromisoformat(row["created_at"]) if row["created_at"] else datetime.now(UTC),
+            created_at=row["created_at"] if row["created_at"] else datetime.now(UTC),
             change_note=row["change_note"],
         )
 
@@ -153,8 +153,8 @@ class PromptRepository:
         """
         # Get next version number
         row = await self._db.fetch_one(
-            "SELECT MAX(version_number) as max_version FROM prompt_versions WHERE prompt_id = ?",
-            (prompt_id,),
+            "SELECT MAX(version_number) as max_version FROM prompt_versions WHERE prompt_id = $1",
+            prompt_id,
         )
         next_version = (row["max_version"] or 0) + 1 if row else 1
 
@@ -163,14 +163,14 @@ class PromptRepository:
         now = datetime.now(UTC)
         await self._db.execute(
             """INSERT INTO prompt_versions (id, prompt_id, version_number, content, created_at, change_note)
-               VALUES (?, ?, ?, ?, ?, ?)""",
-            (version_id, prompt_id, next_version, content, now.isoformat(), change_note),
+               VALUES ($1, $2, $3, $4, $5, $6)""",
+            version_id, prompt_id, next_version, content, now, change_note,
         )
 
         # Set as active
         await self._db.execute(
-            "UPDATE prompts SET current_version_id = ? WHERE id = ?",
-            (version_id, prompt_id),
+            "UPDATE prompts SET current_version_id = $1 WHERE id = $2",
+            version_id, prompt_id,
         )
 
         return PromptVersion(
@@ -190,8 +190,8 @@ class PromptRepository:
             version_id: The version to make active.
         """
         await self._db.execute(
-            "UPDATE prompts SET current_version_id = ? WHERE id = ?",
-            (version_id, prompt_id),
+            "UPDATE prompts SET current_version_id = $1 WHERE id = $2",
+            version_id, prompt_id,
         )
 
     async def reset_to_default(self, prompt_id: str) -> None:
@@ -201,8 +201,8 @@ class PromptRepository:
             prompt_id: The prompt identifier.
         """
         await self._db.execute(
-            "UPDATE prompts SET current_version_id = NULL WHERE id = ?",
-            (prompt_id,),
+            "UPDATE prompts SET current_version_id = NULL WHERE id = $1",
+            prompt_id,
         )
 
     # Workflow linking
@@ -221,9 +221,10 @@ class PromptRepository:
             version_id: The version identifier.
         """
         await self._db.execute(
-            """INSERT OR REPLACE INTO workflow_prompt_versions (workflow_id, prompt_id, version_id)
-               VALUES (?, ?, ?)""",
-            (workflow_id, prompt_id, version_id),
+            """INSERT INTO workflow_prompt_versions (workflow_id, prompt_id, version_id)
+               VALUES ($1, $2, $3)
+               ON CONFLICT (workflow_id, prompt_id) DO UPDATE SET version_id = EXCLUDED.version_id""",
+            workflow_id, prompt_id, version_id,
         )
 
     async def get_workflow_prompts(self, workflow_id: str) -> list[WorkflowPromptVersion]:
@@ -236,8 +237,8 @@ class PromptRepository:
             List of workflow-prompt-version links.
         """
         rows = await self._db.fetch_all(
-            "SELECT * FROM workflow_prompt_versions WHERE workflow_id = ?",
-            (workflow_id,),
+            "SELECT * FROM workflow_prompt_versions WHERE workflow_id = $1",
+            workflow_id,
         )
         return [
             WorkflowPromptVersion(
