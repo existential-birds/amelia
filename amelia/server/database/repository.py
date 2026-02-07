@@ -8,7 +8,7 @@ import aiosqlite
 
 from amelia.server.database.connection import Database, SqliteValue
 from amelia.server.exceptions import WorkflowNotFoundError
-from amelia.server.models.events import WorkflowEvent
+from amelia.server.models.events import PERSISTED_TYPES, WorkflowEvent
 from amelia.server.models.state import (
     PlanCache,
     ServerExecutionState,
@@ -448,42 +448,37 @@ class WorkflowRepository:
     # =========================================================================
 
     async def save_event(self, event: WorkflowEvent) -> None:
-        """Persist workflow event to database.
+        """Persist workflow event to workflow_log if it's a persisted type.
+
+        Stream-only events (trace, streaming) are silently skipped.
 
         Args:
             event: The event to persist.
         """
-        # Use Pydantic's serialization which handles nested types (Path, models, etc.)
+        if event.event_type not in PERSISTED_TYPES:
+            return
+
         serialized = event.model_dump(mode="json")
         data_json = json.dumps(serialized["data"]) if serialized["data"] else None
-        tool_input_json = (
-            json.dumps(serialized["tool_input"]) if serialized["tool_input"] else None
-        )
 
         await self._db.execute(
             """
-            INSERT INTO events (
-                id, workflow_id, sequence, timestamp, agent,
-                event_type, level, message, data_json, correlation_id,
-                tool_name, tool_input_json, is_error, trace_id, parent_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO workflow_log (
+                id, workflow_id, sequence, timestamp, event_type,
+                level, agent, message, data_json, is_error
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 event.id,
                 event.workflow_id,
                 event.sequence,
                 event.timestamp.isoformat(),
-                event.agent,
                 event.event_type.value,
-                event.level.value if event.level else None,
+                event.level.value if event.level else "debug",
+                event.agent,
                 event.message,
                 data_json,
-                event.correlation_id,
-                event.tool_name,
-                tool_input_json,
                 1 if event.is_error else 0,
-                event.trace_id,
-                event.parent_id,
             ),
         )
 
@@ -497,7 +492,7 @@ class WorkflowRepository:
             Maximum sequence number, or 0 if no events exist.
         """
         result = await self._db.fetch_scalar(
-            "SELECT COALESCE(MAX(sequence), 0) FROM events WHERE workflow_id = ?",
+            "SELECT COALESCE(MAX(sequence), 0) FROM workflow_log WHERE workflow_id = ?",
             (workflow_id,),
         )
         return result if isinstance(result, int) else 0
@@ -512,7 +507,7 @@ class WorkflowRepository:
             True if event exists, False otherwise.
         """
         result = await self._db.fetch_scalar(
-            "SELECT 1 FROM events WHERE id = ? LIMIT 1",
+            "SELECT 1 FROM workflow_log WHERE id = ? LIMIT 1",
             (event_id,),
         )
         return result is not None
@@ -520,30 +515,18 @@ class WorkflowRepository:
     def _row_to_event(self, row: aiosqlite.Row) -> WorkflowEvent:
         """Convert database row to WorkflowEvent model.
 
-        Handles conversion of the data_json column to the data field,
-        parsing JSON when present. Also handles tool_input_json and is_error
-        conversion.
-
         Args:
-            row: Database row from events table.
+            row: Database row from workflow_log table.
 
         Returns:
             Validated WorkflowEvent model instance.
         """
         event_data = dict(row)
-        # Parse JSON data field if present (column is data_json, model field is data)
         if event_data.get("data_json"):
             event_data["data"] = json.loads(event_data.pop("data_json"))
         else:
-            event_data.pop("data_json", None)  # Remove None value
+            event_data.pop("data_json", None)
 
-        # Parse tool_input_json to tool_input
-        if event_data.get("tool_input_json"):
-            event_data["tool_input"] = json.loads(event_data.pop("tool_input_json"))
-        else:
-            event_data.pop("tool_input_json", None)
-
-        # Convert is_error from SQLite integer (0/1) to boolean
         if "is_error" in event_data:
             event_data["is_error"] = bool(event_data["is_error"])
 
@@ -564,9 +547,8 @@ class WorkflowRepository:
         Raises:
             ValueError: If the since_event_id doesn't exist.
         """
-        # First, get the workflow_id and sequence of the since event
         row = await self._db.fetch_one(
-            "SELECT workflow_id, sequence FROM events WHERE id = ?",
+            "SELECT workflow_id, sequence FROM workflow_log WHERE id = ?",
             (since_event_id,),
         )
 
@@ -575,13 +557,11 @@ class WorkflowRepository:
 
         workflow_id, since_sequence = row["workflow_id"], row["sequence"]
 
-        # Get events from same workflow with higher sequence, limited
         rows = await self._db.fetch_all(
             """
-            SELECT id, workflow_id, sequence, timestamp, agent, event_type,
-                   level, message, data_json, correlation_id,
-                   tool_name, tool_input_json, is_error, trace_id, parent_id
-            FROM events
+            SELECT id, workflow_id, sequence, timestamp, event_type,
+                   level, agent, message, data_json, is_error
+            FROM workflow_log
             WHERE workflow_id = ? AND sequence > ?
             ORDER BY sequence ASC
             LIMIT ?
@@ -603,16 +583,14 @@ class WorkflowRepository:
         Returns:
             List of events ordered by sequence ascending (oldest first).
         """
-        # Guard against non-positive limits (SQLite treats LIMIT -1 as no limit)
         if limit <= 0:
             return []
 
         rows = await self._db.fetch_all(
             """
-            SELECT id, workflow_id, sequence, timestamp, agent, event_type,
-                   level, message, data_json, correlation_id,
-                   tool_name, tool_input_json, is_error, trace_id, parent_id
-            FROM events
+            SELECT id, workflow_id, sequence, timestamp, event_type,
+                   level, agent, message, data_json, is_error
+            FROM workflow_log
             WHERE workflow_id = ?
             ORDER BY sequence DESC
             LIMIT ?
@@ -620,7 +598,6 @@ class WorkflowRepository:
             (workflow_id, limit),
         )
 
-        # Reverse to get oldest first (UI expects chronological order)
         events = [self._row_to_event(row) for row in rows]
         events.reverse()
         return events

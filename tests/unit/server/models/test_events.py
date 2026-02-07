@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 import pytest
 
 from amelia.server.models.events import (
+    PERSISTED_TYPES,
     EventLevel,
     EventType,
     WorkflowEvent,
@@ -16,18 +17,26 @@ class TestEventLevel:
     """Tests for EventLevel enum and classification."""
 
     def test_event_level_values(self) -> None:
-        """EventLevel has info, debug, trace values."""
+        """EventLevel has info, warning, debug, error values."""
         assert EventLevel.INFO == "info"
+        assert EventLevel.WARNING == "warning"
         assert EventLevel.DEBUG == "debug"
-        assert EventLevel.TRACE == "trace"
+        assert EventLevel.ERROR == "error"
 
     @pytest.mark.parametrize(
         "event_type,expected_level",
         [
+            # ERROR level - failures
+            (EventType.WORKFLOW_FAILED, EventLevel.ERROR),
+            (EventType.TASK_FAILED, EventLevel.ERROR),
+            (EventType.SYSTEM_ERROR, EventLevel.ERROR),
+            (EventType.ORACLE_CONSULTATION_FAILED, EventLevel.ERROR),
+            # WARNING level
+            (EventType.SYSTEM_WARNING, EventLevel.WARNING),
             # INFO level - workflow lifecycle
+            (EventType.WORKFLOW_CREATED, EventLevel.INFO),
             (EventType.WORKFLOW_STARTED, EventLevel.INFO),
             (EventType.WORKFLOW_COMPLETED, EventLevel.INFO),
-            (EventType.WORKFLOW_FAILED, EventLevel.INFO),
             (EventType.WORKFLOW_CANCELLED, EventLevel.INFO),
             # INFO level - stages
             (EventType.STAGE_STARTED, EventLevel.INFO),
@@ -36,12 +45,13 @@ class TestEventLevel:
             (EventType.APPROVAL_REQUIRED, EventLevel.INFO),
             (EventType.APPROVAL_GRANTED, EventLevel.INFO),
             (EventType.APPROVAL_REJECTED, EventLevel.INFO),
-            # INFO level - review completion
+            # INFO level - review/oracle
             (EventType.REVIEW_COMPLETED, EventLevel.INFO),
+            (EventType.ORACLE_CONSULTATION_STARTED, EventLevel.INFO),
+            (EventType.ORACLE_CONSULTATION_COMPLETED, EventLevel.INFO),
             # DEBUG level - tasks
             (EventType.TASK_STARTED, EventLevel.DEBUG),
             (EventType.TASK_COMPLETED, EventLevel.DEBUG),
-            (EventType.TASK_FAILED, EventLevel.DEBUG),
             # DEBUG level - files
             (EventType.FILE_CREATED, EventLevel.DEBUG),
             (EventType.FILE_MODIFIED, EventLevel.DEBUG),
@@ -50,13 +60,21 @@ class TestEventLevel:
             (EventType.AGENT_MESSAGE, EventLevel.DEBUG),
             (EventType.REVISION_REQUESTED, EventLevel.DEBUG),
             (EventType.REVIEW_REQUESTED, EventLevel.DEBUG),
-            (EventType.SYSTEM_ERROR, EventLevel.DEBUG),
-            (EventType.SYSTEM_WARNING, EventLevel.DEBUG),
-            # TRACE level - stream events
-            (EventType.CLAUDE_THINKING, EventLevel.TRACE),
-            (EventType.CLAUDE_TOOL_CALL, EventLevel.TRACE),
-            (EventType.CLAUDE_TOOL_RESULT, EventLevel.TRACE),
-            (EventType.AGENT_OUTPUT, EventLevel.TRACE),
+            # DEBUG level - stream/trace events
+            (EventType.CLAUDE_THINKING, EventLevel.DEBUG),
+            (EventType.CLAUDE_TOOL_CALL, EventLevel.DEBUG),
+            (EventType.CLAUDE_TOOL_RESULT, EventLevel.DEBUG),
+            (EventType.AGENT_OUTPUT, EventLevel.DEBUG),
+            # DEBUG level - brainstorm trace events
+            (EventType.BRAINSTORM_REASONING, EventLevel.DEBUG),
+            (EventType.BRAINSTORM_TOOL_CALL, EventLevel.DEBUG),
+            (EventType.BRAINSTORM_TOOL_RESULT, EventLevel.DEBUG),
+            (EventType.BRAINSTORM_TEXT, EventLevel.DEBUG),
+            (EventType.BRAINSTORM_MESSAGE_COMPLETE, EventLevel.DEBUG),
+            # DEBUG level - oracle trace events
+            (EventType.ORACLE_CONSULTATION_THINKING, EventLevel.DEBUG),
+            (EventType.ORACLE_TOOL_CALL, EventLevel.DEBUG),
+            (EventType.ORACLE_TOOL_RESULT, EventLevel.DEBUG),
         ],
     )
     def test_get_event_level(self, event_type: EventType, expected_level: EventLevel) -> None:
@@ -107,13 +125,13 @@ class TestWorkflowEvent:
             timestamp=datetime.now(UTC),
             agent="developer",
             event_type=EventType.CLAUDE_TOOL_CALL,
-            level=EventLevel.TRACE,
+            level=EventLevel.DEBUG,
             message="Tool call: Edit",
             tool_name="Edit",
             tool_input={"file": "test.py"},
             is_error=False,
         )
-        assert event.level == EventLevel.TRACE
+        assert event.level == EventLevel.DEBUG
         assert event.tool_name == "Edit"
         assert event.tool_input == {"file": "test.py"}
         assert event.is_error is False
@@ -188,14 +206,88 @@ class TestWorkflowEvent:
         )
         assert debug_event.level == EventLevel.DEBUG
 
-        # TRACE event
-        trace_event = WorkflowEvent(
+        # ERROR event
+        error_event = WorkflowEvent(
             id="evt-3",
             workflow_id="wf-1",
             sequence=3,
             timestamp=datetime.now(UTC),
-            agent="developer",
-            event_type=EventType.CLAUDE_THINKING,
-            message="Thinking...",
+            agent="system",
+            event_type=EventType.WORKFLOW_FAILED,
+            message="Failed",
         )
-        assert trace_event.level == EventLevel.TRACE
+        assert error_event.level == EventLevel.ERROR
+
+
+class TestPersistedTypes:
+    """Tests for PERSISTED_TYPES classification."""
+
+    def test_persisted_types_is_frozenset(self):
+        """PERSISTED_TYPES must be immutable."""
+        assert isinstance(PERSISTED_TYPES, frozenset)
+
+    def test_lifecycle_events_are_persisted(self):
+        """All lifecycle events must be persisted."""
+        lifecycle = {
+            EventType.WORKFLOW_CREATED,
+            EventType.WORKFLOW_STARTED,
+            EventType.WORKFLOW_COMPLETED,
+            EventType.WORKFLOW_FAILED,
+            EventType.WORKFLOW_CANCELLED,
+        }
+        assert lifecycle <= PERSISTED_TYPES
+
+    def test_trace_events_are_not_persisted(self):
+        """Trace events must NOT be persisted."""
+        trace_types = {
+            EventType.CLAUDE_THINKING,
+            EventType.CLAUDE_TOOL_CALL,
+            EventType.CLAUDE_TOOL_RESULT,
+            EventType.AGENT_OUTPUT,
+            EventType.ORACLE_CONSULTATION_THINKING,
+            EventType.ORACLE_TOOL_CALL,
+            EventType.ORACLE_TOOL_RESULT,
+        }
+        assert trace_types.isdisjoint(PERSISTED_TYPES)
+
+    def test_stream_events_are_not_persisted(self):
+        """Stream and agent_message events must NOT be persisted."""
+        stream_types = {EventType.STREAM, EventType.AGENT_MESSAGE}
+        assert stream_types.isdisjoint(PERSISTED_TYPES)
+
+    def test_brainstorm_trace_events_are_not_persisted(self):
+        """Brainstorm trace events must NOT be persisted."""
+        brainstorm_trace = {
+            EventType.BRAINSTORM_REASONING,
+            EventType.BRAINSTORM_TOOL_CALL,
+            EventType.BRAINSTORM_TOOL_RESULT,
+            EventType.BRAINSTORM_TEXT,
+            EventType.BRAINSTORM_MESSAGE_COMPLETE,
+        }
+        assert brainstorm_trace.isdisjoint(PERSISTED_TYPES)
+
+    def test_every_event_type_is_classified(self):
+        """Every EventType must be either persisted or explicitly stream-only.
+
+        Guards against new event types being added without classification.
+        """
+        all_types = set(EventType)
+        stream_only = {
+            EventType.CLAUDE_THINKING,
+            EventType.CLAUDE_TOOL_CALL,
+            EventType.CLAUDE_TOOL_RESULT,
+            EventType.AGENT_OUTPUT,
+            EventType.ORACLE_CONSULTATION_THINKING,
+            EventType.ORACLE_TOOL_CALL,
+            EventType.ORACLE_TOOL_RESULT,
+            EventType.BRAINSTORM_REASONING,
+            EventType.BRAINSTORM_TOOL_CALL,
+            EventType.BRAINSTORM_TOOL_RESULT,
+            EventType.BRAINSTORM_TEXT,
+            EventType.BRAINSTORM_MESSAGE_COMPLETE,
+            EventType.STREAM,
+            EventType.AGENT_MESSAGE,
+        }
+        classified = PERSISTED_TYPES | stream_only
+        unclassified = all_types - classified
+        assert not unclassified, f"Unclassified event types: {unclassified}"

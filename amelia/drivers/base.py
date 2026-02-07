@@ -120,7 +120,7 @@ class AgenticMessage(BaseModel):
             timestamp=datetime.now(UTC),
             agent=agent,
             event_type=type_mapping[self.type],
-            level=EventLevel.TRACE,
+            level=EventLevel.DEBUG,
             message=message,
             tool_name=self.tool_name,
             tool_input=self.tool_input,

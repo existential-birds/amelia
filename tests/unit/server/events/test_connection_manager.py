@@ -162,7 +162,7 @@ class TestConnectionManagerTraceEvents:
             timestamp=datetime.now(UTC),
             agent="developer",
             event_type=EventType.CLAUDE_TOOL_CALL,
-            level=EventLevel.TRACE,
+            level=EventLevel.DEBUG,
             message="Tool call",
         )
 

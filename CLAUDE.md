@@ -115,7 +115,6 @@ Server settings configurable via `amelia config server set` or dashboard. Enviro
 | `AMELIA_HOST` | `127.0.0.1` | Host to bind the server to |
 | `AMELIA_PORT` | `8420` | Port to bind the server to |
 | `AMELIA_LOG_RETENTION_DAYS` | `30` | Days to retain event logs |
-| `AMELIA_TRACE_RETENTION_DAYS` | `7` | Days to retain trace-level events. `0` = don't persist traces |
 | `AMELIA_CHECKPOINT_RETENTION_DAYS` | `0` | Days to retain LangGraph checkpoints. `0` = delete immediately on shutdown, `-1` = never delete (for debugging) |
 | `AMELIA_CHECKPOINT_PATH` | `~/.amelia/checkpoints.db` | Path to LangGraph checkpoint database |
 | `AMELIA_DATABASE_PATH` | `~/.amelia/amelia.db` | Path to main SQLite database |

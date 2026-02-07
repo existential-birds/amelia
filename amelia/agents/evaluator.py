@@ -264,7 +264,7 @@ Return your evaluation as an EvaluationOutput with all items and a summary.""")
                     timestamp=datetime.now(UTC),
                     agent="evaluator",
                     event_type=EventType.AGENT_OUTPUT,
-                    level=EventLevel.TRACE,
+                    level=EventLevel.DEBUG,
                     message="No review comments to evaluate",
                 )
                 self._event_bus.emit(event)
@@ -342,7 +342,7 @@ Return your evaluation as an EvaluationOutput with all items and a summary.""")
                 timestamp=datetime.now(UTC),
                 agent="evaluator",
                 event_type=EventType.AGENT_OUTPUT,
-                level=EventLevel.TRACE,
+                level=EventLevel.DEBUG,
                 message=message,
             )
             self._event_bus.emit(event)
