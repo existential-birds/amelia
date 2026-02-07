@@ -27,6 +27,12 @@ class TestValidatePath:
         """Create test client."""
         return TestClient(app)
 
+    @pytest.fixture(autouse=True)
+    def _mock_home_to_root(self) -> Iterator[None]:
+        """Mock Path.home() to return root so temp dirs are within home."""
+        with patch.object(Path, "home", return_value=Path("/")):
+            yield
+
     @pytest.fixture
     def temp_dir(self) -> Iterator[str]:
         """Create a temporary directory."""
@@ -183,3 +189,95 @@ class TestValidatePath:
             assert response.status_code == 200
             data = response.json()
             assert data["repo_name"] == Path(temp_git_repo).name
+
+    def test_rejects_path_outside_home_directory(self, client: TestClient) -> None:
+        """Should reject paths that are outside the user's home directory."""
+        with patch.object(Path, "home", return_value=Path("/home/testuser")):
+            response = client.post(
+                "/api/paths/validate", json={"path": "/etc/passwd"}
+            )
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["exists"] is False
+            assert data["is_git_repo"] is False
+            assert "home directory" in data["message"].lower()
+
+    def test_accepts_path_within_home_directory(
+        self, client: TestClient, temp_dir: str
+    ) -> None:
+        """Should accept paths that are within the user's home directory."""
+        # Mock home to be the parent of temp_dir so it's "within" home
+        parent = str(Path(temp_dir).resolve().parent)
+        with patch.object(Path, "home", return_value=Path(parent)):
+            response = client.post("/api/paths/validate", json={"path": temp_dir})
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["exists"] is True
+            # Not a git repo, but the path is accepted
+            assert "home directory" not in data["message"].lower()
+
+    def test_detects_git_worktree(self, client: TestClient) -> None:
+        """Should detect git worktrees where .git is a file with gitdir pointer."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            git_file = Path(tmpdir) / ".git"
+            git_file.write_text("gitdir: /some/path/.git/worktrees/branch")
+
+            with (
+                patch(
+                    "amelia.server.routes.paths._get_git_branch_sync",
+                    return_value="feature",
+                ),
+                patch(
+                    "amelia.server.routes.paths._has_uncommitted_changes_sync",
+                    return_value=False,
+                ),
+            ):
+                response = client.post("/api/paths/validate", json={"path": tmpdir})
+
+                assert response.status_code == 200
+                data = response.json()
+                assert data["exists"] is True
+                assert data["is_git_repo"] is True
+
+    def test_rejects_invalid_git_file(self, client: TestClient) -> None:
+        """Should not treat a .git file without gitdir pointer as a git repo."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            git_file = Path(tmpdir) / ".git"
+            git_file.write_text("not a valid gitdir pointer")
+
+            response = client.post("/api/paths/validate", json={"path": tmpdir})
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["exists"] is True
+            assert data["is_git_repo"] is False
+
+    def test_handles_undetermined_home_directory(
+        self, client: TestClient
+    ) -> None:
+        """Should return error when home directory cannot be determined."""
+        with patch.object(Path, "home", side_effect=RuntimeError("no home")):
+            response = client.post(
+                "/api/paths/validate", json={"path": "/some/path"}
+            )
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["exists"] is False
+            assert data["is_git_repo"] is False
+            assert "home directory" in data["message"].lower()
+
+    def test_handles_non_utf8_git_file(self, client: TestClient) -> None:
+        """Should not crash on a .git file with non-UTF-8 content."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            git_file = Path(tmpdir) / ".git"
+            git_file.write_bytes(b"\xff\xfe not valid utf-8")
+
+            response = client.post("/api/paths/validate", json={"path": tmpdir})
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["exists"] is True
+            assert data["is_git_repo"] is False

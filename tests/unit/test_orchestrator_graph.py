@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from langchain_core.runnables.config import RunnableConfig
+from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END
 
 from amelia.agents.evaluator import Disposition, EvaluatedItem, EvaluationResult
@@ -47,15 +48,15 @@ class TestGraphEdges:
 
     def test_graph_with_checkpoint_saver(self) -> None:
         """Graph should accept checkpoint saver."""
-        mock_saver = MagicMock()
-        graph = create_orchestrator_graph(checkpointer=mock_saver)
-        assert graph.checkpointer is mock_saver
+        saver = InMemorySaver()
+        graph = create_orchestrator_graph(checkpointer=saver)
+        assert graph.checkpointer is saver
 
     def test_review_graph_with_checkpoint_saver(self) -> None:
         """Review graph should accept checkpoint saver."""
-        mock_saver = MagicMock()
-        graph = create_review_graph(checkpointer=mock_saver)
-        assert graph.checkpointer is mock_saver
+        saver = InMemorySaver()
+        graph = create_review_graph(checkpointer=saver)
+        assert graph.checkpointer is saver
 
     def test_review_graph_without_checkpoint_saver(self) -> None:
         """Review graph can be created without checkpoint saver."""

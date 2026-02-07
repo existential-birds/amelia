@@ -44,6 +44,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Response
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -238,6 +239,20 @@ def create_app() -> FastAPI:
 
     # Configure exception handlers
     configure_exception_handlers(application)
+
+    # Add CORS middleware to restrict origins to the dashboard
+    application.add_middleware(
+        CORSMiddleware,
+        allow_origins=[
+            "http://127.0.0.1:8420",
+            "http://localhost:8420",
+            "http://127.0.0.1:8421",
+            "http://localhost:8421",
+        ],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     # Mount routes
     application.include_router(config_router, prefix="/api")

@@ -135,6 +135,22 @@ async def validate_path(request: PathValidationRequest) -> PathValidationRespons
             message="Invalid path format",
         )
 
+    # Restrict to home directory to prevent filesystem probing
+    try:
+        home_dir = Path.home().resolve()
+    except RuntimeError:
+        return PathValidationResponse(
+            exists=False,
+            is_git_repo=False,
+            message="Unable to determine home directory",
+        )
+    if not resolved_path.is_relative_to(home_dir):
+        return PathValidationResponse(
+            exists=False,
+            is_git_repo=False,
+            message="Path must be within the home directory",
+        )
+
     # Check existence
     if not resolved_path.exists():
         return PathValidationResponse(
@@ -152,8 +168,14 @@ async def validate_path(request: PathValidationRequest) -> PathValidationRespons
         )
 
     # Check if it's a git repository
+    # .git is a directory for regular repos, or a file with a gitdir pointer for worktrees
     git_dir = resolved_path / ".git"
-    is_git_repo = git_dir.exists() and git_dir.is_dir()
+    is_git_repo = git_dir.is_dir()
+    if not is_git_repo and git_dir.is_file():
+        try:
+            is_git_repo = git_dir.read_text(encoding="utf-8").startswith("gitdir:")
+        except (OSError, UnicodeDecodeError):
+            is_git_repo = False
 
     if not is_git_repo:
         return PathValidationResponse(
