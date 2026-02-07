@@ -4,6 +4,7 @@ import json
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import Any
+from urllib.parse import urlparse, urlunparse
 
 import asyncpg
 from loguru import logger
@@ -33,18 +34,59 @@ class Database:
         self._max_size = max_size
         self._pool: asyncpg.Pool | None = None
 
+    @property
+    def _redacted_url(self) -> str:
+        """Return the database URL with any password redacted."""
+        parsed = urlparse(self._database_url)
+        if parsed.password:
+            netloc = f"{parsed.username}:***@{parsed.hostname}"
+            if parsed.port:
+                netloc += f":{parsed.port}"
+            return urlunparse(parsed._replace(netloc=netloc))
+        return self._database_url
+
     async def connect(self) -> None:
         """Create the connection pool.
 
         Raises:
-            asyncpg.PostgresError: If connection fails.
+            ConnectionError: If connection fails with a user-friendly message.
         """
-        self._pool = await asyncpg.create_pool(
-            self._database_url,
-            min_size=self._min_size,
-            max_size=self._max_size,
-            init=self._init_connection,
-        )
+        try:
+            self._pool = await asyncpg.create_pool(
+                self._database_url,
+                min_size=self._min_size,
+                max_size=self._max_size,
+                init=self._init_connection,
+            )
+        except asyncpg.InvalidPasswordError:
+            raise ConnectionError(
+                f"PostgreSQL authentication failed for URL: {self._redacted_url}\n\n"
+                "This usually means the database URL is missing credentials or has "
+                "the wrong password.\n\n"
+                "To fix, set AMELIA_DATABASE_URL with valid credentials:\n"
+                "  export AMELIA_DATABASE_URL='postgresql://amelia:amelia@localhost:5432/amelia'\n\n"
+                "Or add it to a .env file in your project root:\n"
+                "  AMELIA_DATABASE_URL=postgresql://amelia:amelia@localhost:5432/amelia\n\n"
+                "To create the database and user with Docker:\n"
+                "  docker compose up -d postgres"
+            ) from None
+        except asyncpg.InvalidCatalogNameError as e:
+            raise ConnectionError(
+                f"PostgreSQL database not found: {e}\n\n"
+                "The database specified in the connection URL does not exist.\n\n"
+                "To create it:\n"
+                "  createdb amelia\n\n"
+                "Or with Docker:\n"
+                "  docker compose up -d postgres"
+            ) from None
+        except OSError as e:
+            raise ConnectionError(
+                f"Cannot connect to PostgreSQL at {self._redacted_url}: {e}\n\n"
+                "Make sure PostgreSQL is running and accepting connections.\n\n"
+                "With Docker:\n"
+                "  docker compose up -d postgres\n\n"
+                "Or check that the host and port in AMELIA_DATABASE_URL are correct."
+            ) from None
 
     @staticmethod
     async def _init_connection(conn: asyncpg.Connection) -> None:

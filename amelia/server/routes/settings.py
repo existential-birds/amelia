@@ -1,6 +1,5 @@
 # amelia/server/routes/settings.py
 """API routes for server settings and profiles."""
-import json
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -212,17 +211,16 @@ async def update_profile(
         if value is not None:
             update_dict[field] = value
 
-    # Handle agents field - convert to JSON for database storage
+    # Handle agents field - pass dict directly (JSONB codec handles encoding)
     if updates.agents is not None:
-        agents_json = json.dumps({
+        update_dict["agents"] = {
             name: {
                 "driver": config.driver,
                 "model": config.model,
                 "options": config.options,
             }
             for name, config in updates.agents.items()
-        })
-        update_dict["agents"] = agents_json
+        }
 
     try:
         updated = await repo.update_profile(profile_id, update_dict)

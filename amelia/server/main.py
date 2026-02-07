@@ -164,7 +164,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Create and register orchestrator
     from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 
-    checkpointer = AsyncPostgresSaver(database.pool)
+    checkpointer_cm = AsyncPostgresSaver.from_conn_string(config.database_url)
+    checkpointer = await checkpointer_cm.__aenter__()
     await checkpointer.setup()
 
     orchestrator = OrchestratorService(
@@ -219,6 +220,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await health_checker.stop()
     await lifecycle.shutdown()
     clear_orchestrator()
+    await checkpointer_cm.__aexit__(None, None, None)
     await database.close()
     clear_database()
     clear_config()
