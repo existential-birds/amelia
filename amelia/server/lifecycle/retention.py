@@ -1,5 +1,6 @@
 """Log retention service for cleaning up old workflow data."""
 
+import asyncio
 from datetime import UTC, datetime, timedelta
 from typing import Any, Protocol
 
@@ -162,16 +163,18 @@ class LogRetentionService:
             retention_days=retention_days,
         )
 
-        deleted_count = 0
-        for workflow_id in workflow_ids:
+        async def delete_checkpoint(workflow_id: str) -> bool:
+            """Delete a single checkpoint, returning True on success."""
             try:
-                await self._checkpointer.adelete_thread(workflow_id)
-                deleted_count += 1
+                await self._checkpointer.adelete_thread(workflow_id)  # type: ignore[union-attr]
+                return True
             except Exception as e:
                 logger.warning(
                     "Failed to delete checkpoint for workflow",
                     workflow_id=workflow_id,
                     error=str(e),
                 )
+                return False
 
-        return deleted_count
+        results = await asyncio.gather(*[delete_checkpoint(wid) for wid in workflow_ids])
+        return sum(results)

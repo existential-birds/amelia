@@ -118,6 +118,8 @@ def mock_app_client() -> Generator[TestClient, None, None]:
         # Mock workflow repository for health endpoint
         mock_repo = MagicMock(spec=WorkflowRepository)
         mock_repo.count_active = AsyncMock(return_value=0)
+        mock_repo.db = MagicMock()
+        mock_repo.db.is_healthy = AsyncMock(return_value=True)
         app.dependency_overrides[get_repository] = lambda: mock_repo
 
         with TestClient(app) as client:

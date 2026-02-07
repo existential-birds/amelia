@@ -48,7 +48,7 @@ class Migrator:
         migrations_dir = resources.files("amelia.server.database") / "migrations"
         result = []
         for path in sorted(migrations_dir.iterdir(), key=lambda p: str(p)):
-            name = path.name if hasattr(path, "name") else str(path).split("/")[-1]
+            name = path.name
             if name.endswith(".sql") and name[:3].isdigit():
                 version = int(name[:3])
                 sql = path.read_text(encoding="utf-8")

@@ -242,7 +242,7 @@ class WorkflowRepository:
 
         # Set completed_at for terminal states
         completed_at = None
-        if new_status in ("completed", "failed", "cancelled"):
+        if new_status in (WorkflowStatus.COMPLETED, WorkflowStatus.FAILED, WorkflowStatus.CANCELLED):
             completed_at = datetime.now(UTC)
 
         await self._db.execute(
@@ -1025,13 +1025,11 @@ class WorkflowRepository:
                     "successful", 0
                 ),
                 "success_rate": round(
-                    (
-                        success_lookup.get(row[0], {}).get("successful", 0)
-                        / success_lookup.get(row[0], {}).get("total", 1)
-                    ),
+                    success_lookup.get(row[0], {}).get("successful", 0)
+                    / success_lookup.get(row[0], {}).get("total", 1),
                     4,
                 )
-                if success_lookup.get(row[0], {}).get("total", 0) > 0
+                if success_lookup.get(row[0], {}).get("total")
                 else 0.0,
             }
             for row in rows

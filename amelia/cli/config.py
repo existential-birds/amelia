@@ -316,10 +316,8 @@ def profile_create(
                 raise typer.Exit(code=1)
 
             # At this point, all optional values have been filled via prompts
-            assert driver is not None
-            assert model is not None
-            assert tracker is not None
-            assert working_dir is not None
+            if driver is None or model is None or tracker is None or working_dir is None:
+                raise ValueError("All profile options must be provided")
 
             # Validate and cast to proper types
             validated_driver = _validate_driver(driver)

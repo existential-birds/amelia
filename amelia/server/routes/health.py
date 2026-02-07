@@ -48,16 +48,30 @@ class HealthResponse(BaseModel):
     database: DatabaseStatus
 
 
-def get_database_status() -> DatabaseStatus:
-    """Return database health status for local orchestrator.
+async def get_database_status(repository: WorkflowRepository) -> DatabaseStatus:
+    """Check database health by executing a test query.
 
-    For a local orchestrator, if the app started successfully,
-    the database is operational. No active probing needed.
+    Args:
+        repository: Workflow repository with database connection.
 
     Returns:
-        DatabaseStatus indicating healthy state with WAL mode.
+        DatabaseStatus with actual health check result.
     """
-    return DatabaseStatus(status="healthy", backend="postgresql")
+    try:
+        is_healthy = await repository.db.is_healthy()
+        if is_healthy:
+            return DatabaseStatus(status="healthy", backend="postgresql")
+        return DatabaseStatus(
+            status="unhealthy",
+            backend="postgresql",
+            error="Health check query failed",
+        )
+    except Exception as e:
+        return DatabaseStatus(
+            status="unhealthy",
+            backend="postgresql",
+            error=str(e),
+        )
 
 
 @router.get("/live", response_model=LivenessResponse)
@@ -105,7 +119,7 @@ async def health(
     active_workflows = await repository.count_active()
     websocket_connections = connection_manager.active_connections
 
-    db_status = get_database_status()
+    db_status = await get_database_status(repository)
 
     overall_status: Literal["healthy", "degraded"] = (
         "healthy" if db_status.status == "healthy" else "degraded"
