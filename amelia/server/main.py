@@ -1,7 +1,7 @@
 """FastAPI application setup and configuration.
 
 Note: Imports are intentionally placed after _check_dependencies() to provide
-a user-friendly error message when langgraph-checkpoint-sqlite is missing.
+a user-friendly error message when asyncpg/PostgreSQL dependencies are missing.
 This typically happens when running `amelia server` without `uv run`.
 """
 # ruff: noqa: E402, PLC0415
@@ -16,9 +16,9 @@ def _check_dependencies() -> None:
     """
     missing = []
     try:
-        import langgraph.checkpoint.sqlite.aio  # noqa: F401
+        import asyncpg  # noqa: F401
     except ModuleNotFoundError:
-        missing.append("langgraph-checkpoint-sqlite")
+        missing.append("asyncpg")
 
     if missing:
         print(
@@ -60,6 +60,7 @@ from amelia.server.config import ServerConfig
 from amelia.server.database import ProfileRepository, SettingsRepository, WorkflowRepository
 from amelia.server.database.brainstorm_repository import BrainstormRepository
 from amelia.server.database.connection import Database
+from amelia.server.database.migrator import Migrator
 from amelia.server.database.prompt_repository import PromptRepository
 from amelia.server.dependencies import (
     clear_config,
@@ -133,11 +134,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     config = ServerConfig()
     set_config(config)
 
-    # Connect to database and ensure schema exists
-    database = Database(config.database_path)
+    # Connect to database and run migrations
+    database = Database(config.database_url, min_size=config.db_pool_min_size, max_size=config.db_pool_max_size)
     await database.connect()
-    await database.ensure_schema()
-    await database.initialize_prompts()
+    migrator = Migrator(database)
+    await migrator.run()
+    await migrator.initialize_prompts()
 
     # Initialize settings with defaults
     settings_repo = SettingsRepository(database)
@@ -160,12 +162,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     connection_manager.set_repository(repository)
 
     # Create and register orchestrator
+    from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+
+    checkpointer = AsyncPostgresSaver(database.pool)
+    await checkpointer.setup()
+
     orchestrator = OrchestratorService(
         event_bus=event_bus,
         repository=repository,
         profile_repo=profile_repo,
         max_concurrent=server_settings.max_concurrent,
-        checkpoint_path=server_settings.checkpoint_path,
+        checkpointer=checkpointer,
     )
     set_orchestrator(orchestrator)
 
@@ -181,11 +188,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.event_bus = event_bus
 
     # Create lifecycle components
-    log_retention = LogRetentionService(
-        db=database,
-        config=server_settings,
-        checkpoint_path=Path(server_settings.checkpoint_path),
-    )
+    log_retention = LogRetentionService(db=database, config=server_settings)
     lifecycle = ServerLifecycle(
         orchestrator=orchestrator,
         log_retention=log_retention,
@@ -200,7 +203,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     log_server_startup(
         host=config.host,
         port=config.port,
-        database_path=str(config.database_path),
+        database_url=config.database_url,
         version=__version__,
     )
 

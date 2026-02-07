@@ -29,7 +29,7 @@ class DatabaseStatus(BaseModel):
     """Database health status."""
 
     status: Literal["healthy", "degraded", "unhealthy"]
-    mode: str = Field(description="Database mode (e.g., 'wal')")
+    backend: str = Field(description="Database backend type")
     error: str | None = Field(default=None, description="Error message if degraded")
 
 
@@ -55,7 +55,7 @@ def get_database_status() -> DatabaseStatus:
     Returns:
         DatabaseStatus indicating healthy state with WAL mode.
     """
-    return DatabaseStatus(status="healthy", mode="wal")
+    return DatabaseStatus(status="healthy", backend="postgresql")
 
 
 @router.get("/live", response_model=LivenessResponse)
