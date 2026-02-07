@@ -145,14 +145,17 @@ class LogRetentionService:
 
         total_deleted = 0
         try:
-            for wf_id in workflow_ids:
-                r1 = await self._db.execute(
-                    "DELETE FROM checkpoints WHERE thread_id = $1", wf_id
-                )
-                r2 = await self._db.execute(
-                    "DELETE FROM writes WHERE thread_id = $1", wf_id
-                )
-                total_deleted += r1 + r2
+            # Build parameterized query with $1, $2, ... placeholders
+            placeholders = ", ".join(f"${i + 1}" for i in range(len(workflow_ids)))
+            r1 = await self._db.execute(
+                f"DELETE FROM checkpoints WHERE thread_id IN ({placeholders})",
+                *workflow_ids,
+            )
+            r2 = await self._db.execute(
+                f"DELETE FROM writes WHERE thread_id IN ({placeholders})",
+                *workflow_ids,
+            )
+            total_deleted = r1 + r2
         except Exception as e:
             logger.warning("Failed to cleanup checkpoints", error=str(e))
 

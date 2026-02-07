@@ -70,10 +70,10 @@ async def test_cleanup_checkpoints_deletes_finished_workflows(
     mock_db: AsyncMock,
     config: MockConfig,
 ) -> None:
-    """Should delete checkpoints for finished workflows via shared database pool."""
+    """Should delete checkpoints for finished workflows via batch DELETE."""
     service = LogRetentionService(db=mock_db, config=config)
-    # events deleted, workflows deleted, then checkpoint deletes
-    mock_db.execute.side_effect = [0, 0, 2, 1, 1, 0]
+    # events deleted, workflows deleted, then batch checkpoint + writes deletes
+    mock_db.execute.side_effect = [0, 0, 3, 1]
     mock_db.fetch_all.return_value = [
         {"id": "completed-workflow-1"},
         {"id": "completed-workflow-2"},
@@ -81,7 +81,7 @@ async def test_cleanup_checkpoints_deletes_finished_workflows(
 
     result = await service.cleanup_on_shutdown()
 
-    # 2 + 1 + 1 + 0 = 4 total checkpoint/write rows deleted
+    # 3 checkpoints + 1 write = 4 total rows deleted (via 2 batch DELETEs)
     assert result.checkpoints_deleted == 4
 
 
@@ -106,12 +106,13 @@ async def test_cleanup_checkpoints_respects_retention_days(
     """Should only delete checkpoints for workflows older than retention_days."""
     config = MockConfig(checkpoint_retention_days=7)
     service = LogRetentionService(db=mock_db, config=config)
-    # events deleted, workflows deleted, then checkpoint deletes
+    # events deleted, workflows deleted, then batch checkpoint + writes deletes
     mock_db.execute.side_effect = [0, 0, 1, 0]
     mock_db.fetch_all.return_value = [{"id": "old-workflow"}]
 
     result = await service.cleanup_on_shutdown()
 
+    # 1 checkpoint + 0 writes = 1 total rows deleted
     assert result.checkpoints_deleted == 1
 
 

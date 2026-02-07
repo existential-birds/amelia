@@ -353,7 +353,7 @@ class WorkflowRepository:
             WHERE status IN ('pending', 'in_progress', 'blocked')
             """
         )
-        # COUNT(*) always returns int; use isinstance for type narrowing
+        # Type narrowing for asyncpg return type (COUNT returns int but fetch_scalar returns Any)
         return result if isinstance(result, int) else 0
 
     async def find_by_status(

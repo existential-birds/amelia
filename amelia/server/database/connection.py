@@ -139,7 +139,7 @@ class Database:
         try:
             result = await self._pool.fetchval("SELECT 1")
             return bool(result == 1)
-        except Exception as e:
+        except (asyncpg.PostgresError, OSError, TimeoutError) as e:
             logger.warning("Database health check failed", error=str(e))
             return False
 
