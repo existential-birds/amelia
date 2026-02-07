@@ -155,6 +155,5 @@ class Database:
 
         Commits on success, rolls back on exception.
         """
-        async with self.pool.acquire() as conn:
-            async with conn.transaction():
-                yield conn
+        async with self.pool.acquire() as conn, conn.transaction():
+            yield conn

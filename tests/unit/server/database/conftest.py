@@ -10,6 +10,7 @@ from amelia.server.database.connection import Database
 from amelia.server.database.repository import WorkflowRepository
 from amelia.server.models.state import ServerExecutionState
 
+
 DATABASE_URL = os.environ.get(
     "DATABASE_URL",
     "postgresql://amelia:amelia@localhost:5432/amelia_test",

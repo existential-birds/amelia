@@ -1,9 +1,9 @@
 """Tests for asyncpg database connection management."""
 
 import pytest
-import asyncpg
 
 from amelia.server.database.connection import Database
+
 
 pytestmark = pytest.mark.integration
 
