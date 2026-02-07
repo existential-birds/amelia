@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-02-07
+
+### Added
+
+- **oracle:** Add Oracle consultation system for querying LLMs about architecture and design decisions during workflows ([#372](https://github.com/existential-birds/amelia/pull/372))
+- **recovery:** Implement workflow recovery after server restart, automatically resuming in-progress workflows ([#376](https://github.com/existential-birds/amelia/pull/376))
+- **dashboard:** Add agent-aware model picker with models.dev integration for browsing and selecting models per agent ([#398](https://github.com/existential-birds/amelia/pull/398))
+- **dashboard:** Add ProfileSelect dropdown to QuickShotModal for choosing a profile before starting workflows ([#401](https://github.com/existential-birds/amelia/pull/401))
+- **server:** Auto-build dashboard on `amelia dev` startup so the bundled UI is always up to date ([#366](https://github.com/existential-birds/amelia/pull/366))
+
+### Changed
+
+- **Breaking:** Rename `events` table to `workflow_log` with filtered persistence to reduce database size ([#402](https://github.com/existential-birds/amelia/pull/402))
+
+  **Migration:** Delete your existing database file (`~/.amelia/amelia.db`) before starting Amelia, or run the server which will auto-migrate the schema. The `events` table has been renamed to `workflow_log` and only user-facing events are persisted.
+
+- **Breaking:** Remove `tool_calls` and `tool_results` fields from PlanCache ([#391](https://github.com/existential-birds/amelia/pull/391))
+
+  **Migration:** No action required. Cached plans will be re-fetched on next access.
+
+- **server:** Simplify ServerExecutionState by removing unused fields (`current_stage`, `planned_at`, `last_error_context`, `consecutive_errors`, `stage_timestamps`) and `state_json` blob in favor of discrete columns ([#383](https://github.com/existential-birds/amelia/pull/383), [#384](https://github.com/existential-birds/amelia/pull/384), [#385](https://github.com/existential-birds/amelia/pull/385), [#386](https://github.com/existential-birds/amelia/pull/386), [#389](https://github.com/existential-birds/amelia/pull/389))
+
+### Removed
+
+- Remove unused `amelia/ext/` extension system (hooks, registry, protocols) ([#388](https://github.com/existential-birds/amelia/pull/388))
+- Remove `planning` workflow status in favor of unified state transitions ([#375](https://github.com/existential-birds/amelia/pull/375))
+
+### Fixed
+
+- **server:** Update brainstorm service for deepagents v0.3.12 compatibility and fix git worktree validation ([#404](https://github.com/existential-birds/amelia/pull/404))
+- **server:** Skip plan file rewrite when file is already at target content, avoiding unnecessary disk writes ([#400](https://github.com/existential-birds/amelia/pull/400))
+- **dashboard:** Fix tracker value mismatch in settings and resolve test warnings ([#399](https://github.com/existential-birds/amelia/pull/399))
+- **dashboard:** Hide completed tool pips in execution strip for cleaner workflow visualization ([#377](https://github.com/existential-birds/amelia/pull/377))
+- **dashboard:** Deduplicate artifacts in brainstorm store to prevent duplicate entries ([#374](https://github.com/existential-birds/amelia/pull/374))
+
 ## [0.11.0] - 2026-01-26
 
 ### Added
