@@ -6,6 +6,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+import sqlite3
+
 import aiosqlite
 from loguru import logger
 
@@ -70,7 +72,7 @@ class Database:
         if self._connection:
             try:
                 await self._connection.close()
-            except Exception as e:
+            except sqlite3.Error as e:
                 logger.warning(f"Error closing database connection: {e}")
             finally:
                 self._connection = None
