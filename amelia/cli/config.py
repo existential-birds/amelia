@@ -108,7 +108,7 @@ def _validate_driver(value: str) -> DriverType:
         raise typer.BadParameter(
             f"Invalid driver '{value}'. Valid options: {sorted(VALID_DRIVERS)}"
         )
-    return value  # type: ignore[return-value]
+    return DriverType(value)
 
 
 def _validate_tracker(value: str) -> TrackerType:
@@ -127,7 +127,7 @@ def _validate_tracker(value: str) -> TrackerType:
         raise typer.BadParameter(
             f"Invalid tracker '{value}'. Valid options: {sorted(VALID_TRACKERS)}"
         )
-    return value  # type: ignore[return-value]
+    return TrackerType(value)
 
 
 def _build_default_agents(driver: DriverType, model: str) -> dict[str, AgentConfig]:

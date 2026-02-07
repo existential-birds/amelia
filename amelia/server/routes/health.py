@@ -3,10 +3,12 @@ from datetime import UTC, datetime
 from typing import Literal
 
 import psutil
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
 
 from amelia import __version__
+from amelia.server.database import WorkflowRepository
+from amelia.server.dependencies import get_repository
 from amelia.server.routes.websocket import connection_manager
 
 
@@ -80,7 +82,10 @@ async def readiness() -> ReadinessResponse:
 
 
 @router.get("", response_model=HealthResponse)
-async def health(request: Request) -> HealthResponse:
+async def health(
+    request: Request,
+    repository: WorkflowRepository = Depends(get_repository),
+) -> HealthResponse:
     """Detailed health check with server metrics.
 
     Returns:
@@ -97,8 +102,7 @@ async def health(request: Request) -> HealthResponse:
     start_time: datetime = request.app.state.start_time
     uptime = (datetime.now(UTC) - start_time).total_seconds()
 
-    # TODO: Get actual workflow count when service is implemented
-    active_workflows = 0
+    active_workflows = await repository.count_active()
     websocket_connections = connection_manager.active_connections
 
     db_status = get_database_status()

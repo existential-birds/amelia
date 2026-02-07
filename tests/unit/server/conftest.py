@@ -9,7 +9,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
+from amelia.server.database import WorkflowRepository
 from amelia.server.database.connection import Database
+from amelia.server.dependencies import get_repository
 from amelia.server.models.events import EventType, WorkflowEvent
 
 
@@ -113,5 +115,12 @@ def mock_app_client() -> Generator[TestClient, None, None]:
 
         from amelia.server.main import app
 
+        # Mock workflow repository for health endpoint
+        mock_repo = MagicMock(spec=WorkflowRepository)
+        mock_repo.count_active = AsyncMock(return_value=0)
+        app.dependency_overrides[get_repository] = lambda: mock_repo
+
         with TestClient(app) as client:
             yield client
+
+        app.dependency_overrides.clear()

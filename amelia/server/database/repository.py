@@ -43,6 +43,19 @@ class WorkflowRepository:
         """
         return self._db
 
+    @staticmethod
+    def _in_clause_placeholders(count: int, start: int = 1) -> str:
+        """Generate SQL IN clause placeholders for parameterized queries.
+
+        Args:
+            count: Number of placeholders to generate.
+            start: Starting parameter index (1-based).
+
+        Returns:
+            Comma-separated placeholder string, e.g. "$1,$2,$3".
+        """
+        return ",".join(f"${i + start}" for i in range(count))
+
     def _row_to_state(self, row: asyncpg.Record) -> ServerExecutionState:
         """Convert database row to ServerExecutionState.
 
@@ -158,7 +171,7 @@ class WorkflowRepository:
         Returns:
             Matching workflow or None if no workflow matches.
         """
-        placeholders = ",".join(f"${i+2}" for i in range(len(statuses)))
+        placeholders = self._in_clause_placeholders(len(statuses), start=2)
         row = await self._db.fetch_one(
             f"""
             SELECT
@@ -355,7 +368,7 @@ class WorkflowRepository:
         Returns:
             List of matching workflows.
         """
-        placeholders = ",".join(f"${i+1}" for i in range(len(statuses)))
+        placeholders = self._in_clause_placeholders(len(statuses))
         rows = await self._db.fetch_all(
             f"""
             SELECT
@@ -716,7 +729,7 @@ class WorkflowRepository:
             return {}
 
         # Build parameterized query with IN clause
-        placeholders = ",".join(f"${i+1}" for i in range(len(workflow_ids)))
+        placeholders = self._in_clause_placeholders(len(workflow_ids))
         rows = await self._db.fetch_all(
             f"""
             SELECT id, workflow_id, agent, model, input_tokens, output_tokens,

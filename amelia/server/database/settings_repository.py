@@ -2,6 +2,7 @@
 from datetime import datetime
 from typing import Any
 
+import asyncpg
 from pydantic import BaseModel
 
 from amelia.server.database.connection import Database
@@ -97,7 +98,7 @@ class SettingsRepository:
         )
         return await self.get_server_settings()
 
-    def _row_to_settings(self, row: Any) -> ServerSettings:
+    def _row_to_settings(self, row: asyncpg.Record) -> ServerSettings:
         """Convert database row to ServerSettings.
 
         Args:

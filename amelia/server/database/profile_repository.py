@@ -1,6 +1,7 @@
 """Repository for profile management."""
 
 from datetime import datetime
+from typing import Any
 
 import asyncpg
 from pydantic import BaseModel
@@ -113,7 +114,7 @@ class ProfileRepository:
         return result
 
     async def update_profile(
-        self, profile_id: str, updates: dict[str, str | int | bool]
+        self, profile_id: str, updates: dict[str, str | int | bool | dict[str, Any]]
     ) -> Profile:
         """Update a profile.
 
@@ -145,7 +146,7 @@ class ProfileRepository:
             return profile
 
         set_clauses: list[str] = []
-        values: list[str | int | bool] = []
+        values: list[str | int | bool | dict[str, Any]] = []
         for i, (k, v) in enumerate(updates.items(), start=1):
             set_clauses.append(f"{k} = ${i}")
             values.append(v)

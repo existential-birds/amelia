@@ -47,8 +47,8 @@ class LogRetentionService:
 
     def __init__(
         self,
-        db: Any,
-        config: Any,
+        db: DatabaseProtocol,
+        config: ConfigProtocol,
     ) -> None:
         """Initialize retention service.
 

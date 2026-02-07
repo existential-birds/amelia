@@ -39,7 +39,7 @@ _check_dependencies()
 
 import os
 from collections.abc import AsyncIterator, Callable
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -164,8 +164,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Create and register orchestrator
     from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 
-    checkpointer_cm = AsyncPostgresSaver.from_conn_string(config.database_url)
-    checkpointer = await checkpointer_cm.__aenter__()
+    exit_stack = AsyncExitStack()
+    checkpointer = await exit_stack.enter_async_context(
+        AsyncPostgresSaver.from_conn_string(config.database_url)
+    )
     await checkpointer.setup()
 
     orchestrator = OrchestratorService(
@@ -220,7 +222,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await health_checker.stop()
     await lifecycle.shutdown()
     clear_orchestrator()
-    await checkpointer_cm.__aexit__(None, None, None)
+    await exit_stack.aclose()
     await database.close()
     clear_database()
     clear_config()
