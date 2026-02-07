@@ -57,7 +57,7 @@ class TestSetPlanEndpoint:
             json={},
         )
 
-        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
     def test_set_plan_with_plan_file(
         self, test_client: TestClient, mock_orchestrator: MagicMock
@@ -102,4 +102,4 @@ class TestSetPlanEndpoint:
             json={"plan_file": "plan.md", "plan_content": "# Plan"},
         )
 
-        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT

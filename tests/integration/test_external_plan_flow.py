@@ -318,7 +318,7 @@ class TestExternalPlanAtCreation:
         )
 
         # Request validation should fail
-        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
 
 @pytest.mark.integration
@@ -435,7 +435,7 @@ class TestSetPlanEndpoint:
             json={},  # Missing both plan_file and plan_content
         )
 
-        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
     async def test_set_plan_requires_force_when_plan_exists(
         self,
