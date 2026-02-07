@@ -1,7 +1,7 @@
 /**
- * @fileoverview Logs monitoring page - real-time trace event viewer.
+ * @fileoverview Logs monitoring page - real-time debug event viewer.
  *
- * Displays trace-level events (thinking, tool calls, tool results, agent output)
+ * Displays debug-level events (thinking, tool calls, tool results, agent output)
  * across all workflows with filtering and auto-scroll.
  */
 
@@ -162,7 +162,7 @@ export default function LogsPage() {
     const allEvents: WorkflowEvent[] = [];
     for (const events of Object.values(eventsByWorkflow)) {
       for (const event of events) {
-        if (event.level === 'trace' && isTraceEventType(event.event_type)) {
+        if (event.level === 'debug' && isTraceEventType(event.event_type)) {
           allEvents.push(event);
         }
       }

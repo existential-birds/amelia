@@ -55,16 +55,16 @@ describe('ActivityLog', () => {
     expect(screen.getByText('Planning (Architect)')).toBeInTheDocument();
   });
 
-  it('does not render trace events', () => {
+  it('renders debug events alongside info events', () => {
     const events = [
       makeEvent({ id: '1', level: 'info', message: 'Info event' }),
-      makeEvent({ id: '2', level: 'trace', message: 'Trace event', event_type: 'claude_tool_call' }),
+      makeEvent({ id: '2', level: 'debug', message: 'Debug event', event_type: 'claude_tool_call' }),
     ];
 
     render(<ActivityLog workflowId="wf-test" initialEvents={events} />);
 
     expect(screen.getByText('Info event')).toBeInTheDocument();
-    expect(screen.queryByText('Trace event')).not.toBeInTheDocument();
+    expect(screen.getByText('Debug event')).toBeInTheDocument();
   });
 
   it('collapses stage when header clicked', () => {
