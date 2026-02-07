@@ -3,7 +3,7 @@
 import json
 from datetime import datetime
 
-import aiosqlite
+import asyncpg
 from pydantic import BaseModel
 
 from amelia.core.types import AgentConfig, Profile
@@ -203,7 +203,7 @@ class ProfileRepository:
         if rows_affected == 0:
             raise ValueError(f"Profile not found: {profile_id}")
 
-    def _row_to_profile(self, row: aiosqlite.Row) -> Profile:
+    def _row_to_profile(self, row: asyncpg.Record) -> Profile:
         """Convert a database row to a Profile object.
 
         Args:

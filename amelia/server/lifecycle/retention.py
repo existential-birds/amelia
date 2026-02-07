@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Protocol
 
-import aiosqlite
+import asyncpg
 from loguru import logger
 from pydantic import BaseModel
 
@@ -18,7 +18,7 @@ class DatabaseProtocol(Protocol):
 
     async def fetch_all(
         self, query: str, params: Sequence[Any] = ()
-    ) -> list[aiosqlite.Row]:
+    ) -> list[asyncpg.Record]:
         """Execute a query and return all rows."""
         ...
 
@@ -168,7 +168,7 @@ class LogRetentionService:
 
         total_deleted = 0
         try:
-            async with aiosqlite.connect(str(self._checkpoint_path)) as conn:
+            async with asyncpg.connect(str(self._checkpoint_path)) as conn:
                 # Delete from checkpoints table (thread_id = workflow_id)
                 placeholders = ",".join("?" * len(workflow_ids))
                 cursor = await conn.execute(

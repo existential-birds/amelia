@@ -4,9 +4,9 @@ import json
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
-import aiosqlite
+import asyncpg
 
-from amelia.server.database.connection import Database, SqliteValue
+from amelia.server.database.connection import Database
 from amelia.server.exceptions import WorkflowNotFoundError
 from amelia.server.models.events import PERSISTED_TYPES, WorkflowEvent
 from amelia.server.models.state import (
@@ -43,7 +43,7 @@ class WorkflowRepository:
         """
         return self._db
 
-    def _row_to_state(self, row: aiosqlite.Row) -> ServerExecutionState:
+    def _row_to_state(self, row: asyncpg.Record) -> ServerExecutionState:
         """Convert database row to ServerExecutionState.
 
         Args:
@@ -378,7 +378,7 @@ class WorkflowRepository:
             List of workflows matching filters.
         """
         conditions = []
-        params: list[SqliteValue] = []
+        params: list[Any] = []
 
         if status:
             conditions.append("status = ?")
@@ -427,7 +427,7 @@ class WorkflowRepository:
             Number of workflows matching filters.
         """
         conditions = []
-        params: list[SqliteValue] = []
+        params: list[Any] = []
 
         if status:
             conditions.append("status = ?")
@@ -512,7 +512,7 @@ class WorkflowRepository:
         )
         return result is not None
 
-    def _row_to_event(self, row: aiosqlite.Row) -> WorkflowEvent:
+    def _row_to_event(self, row: asyncpg.Record) -> WorkflowEvent:
         """Convert database row to WorkflowEvent model.
 
         Args:
@@ -743,7 +743,7 @@ class WorkflowRepository:
 
         return result
 
-    def _row_to_token_usage(self, row: aiosqlite.Row) -> TokenUsage:
+    def _row_to_token_usage(self, row: asyncpg.Record) -> TokenUsage:
         """Convert database row to TokenUsage model.
 
         Args:

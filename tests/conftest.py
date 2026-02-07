@@ -43,8 +43,17 @@ def event_bus() -> EventBus:
 
 @pytest.fixture
 def temp_db_path(tmp_path: Path) -> Path:
-    """Return a temporary database path."""
+    """Return a temporary database path (legacy, prefer database_url)."""
     return tmp_path / "test.db"
+
+
+@pytest.fixture
+def database_url() -> str:
+    """Return the PostgreSQL test database URL."""
+    return os.environ.get(
+        "DATABASE_URL",
+        "postgresql://amelia:amelia@localhost:5432/amelia_test",
+    )
 
 
 class AsyncIteratorMock:

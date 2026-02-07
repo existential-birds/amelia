@@ -7,7 +7,7 @@ messages, and artifacts.
 import json
 from datetime import datetime
 
-import aiosqlite
+import asyncpg
 
 from amelia.server.database.connection import Database
 from amelia.server.models.brainstorm import (
@@ -169,7 +169,7 @@ class BrainstormRepository:
         )
         return [self._row_to_session(row) for row in rows]
 
-    def _row_to_session(self, row: aiosqlite.Row) -> BrainstormingSession:
+    def _row_to_session(self, row: asyncpg.Record) -> BrainstormingSession:
         """Convert database row to BrainstormingSession.
 
         Args:
@@ -269,7 +269,7 @@ class BrainstormRepository:
         )
         return result if isinstance(result, int) else 0
 
-    def _row_to_message(self, row: aiosqlite.Row) -> Message:
+    def _row_to_message(self, row: asyncpg.Record) -> Message:
         """Convert database row to Message.
 
         Args:
@@ -349,7 +349,7 @@ class BrainstormRepository:
         )
         return [self._row_to_artifact(row) for row in rows]
 
-    def _row_to_artifact(self, row: aiosqlite.Row) -> Artifact:
+    def _row_to_artifact(self, row: asyncpg.Record) -> Artifact:
         """Convert database row to Artifact.
 
         Args:

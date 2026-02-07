@@ -1,8 +1,8 @@
 """Shared fixtures for database tests."""
 
+import os
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
-from pathlib import Path
 
 import pytest
 
@@ -10,38 +10,38 @@ from amelia.server.database.connection import Database
 from amelia.server.database.repository import WorkflowRepository
 from amelia.server.models.state import ServerExecutionState
 
+DATABASE_URL = os.environ.get(
+    "DATABASE_URL",
+    "postgresql://amelia:amelia@localhost:5432/amelia_test",
+)
+
 
 @pytest.fixture
-async def connected_db(temp_db_path: Path) -> AsyncGenerator[Database, None]:
+async def connected_db() -> AsyncGenerator[Database, None]:
     """Create a connected Database instance for testing.
-
-    The database is automatically connected before yielding and closed after.
-
-    Args:
-        temp_db_path: Path to temporary database file.
 
     Yields:
         Database: Connected database instance.
     """
-    async with Database(temp_db_path) as db:
+    async with Database(DATABASE_URL) as db:
         yield db
 
 
 @pytest.fixture
-async def db_with_schema(temp_db_path: Path) -> AsyncGenerator[Database, None]:
+async def db_with_schema() -> AsyncGenerator[Database, None]:
     """Create a database with schema initialized.
 
-    Connects to database and runs ensure_schema() to create all tables.
+    Connects to database and runs migrations to create all tables.
     The database is automatically closed after the test.
-
-    Args:
-        temp_db_path: Path to temporary database file.
 
     Yields:
         Database: Connected database instance with schema initialized.
     """
-    async with Database(temp_db_path) as db:
-        await db.ensure_schema()
+    async with Database(DATABASE_URL) as db:
+        from amelia.server.database.migrator import Migrator
+
+        migrator = Migrator(db)
+        await migrator.run()
         yield db
 
 
