@@ -99,8 +99,8 @@ async def test_fetch_scalar(db):
 
 async def test_transaction_commits(db):
     """Data persists after successful transaction."""
-    async with db.transaction():
-        await db.execute(
+    async with db.transaction() as conn:
+        await conn.execute(
             "INSERT INTO _test_table (name) VALUES ($1)", "committed"
         )
     row = await db.fetch_one(
@@ -112,8 +112,8 @@ async def test_transaction_commits(db):
 async def test_transaction_rolls_back(db):
     """Data does not persist when exception raised in transaction."""
     with pytest.raises(ValueError):
-        async with db.transaction():
-            await db.execute(
+        async with db.transaction() as conn:
+            await conn.execute(
                 "INSERT INTO _test_table (name) VALUES ($1)", "rolled_back"
             )
             raise ValueError("force rollback")

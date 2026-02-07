@@ -1,19 +1,11 @@
 """Database connection management with PostgreSQL via asyncpg."""
 
 from collections.abc import AsyncGenerator
-from contextvars import ContextVar
 from contextlib import asynccontextmanager
 from typing import Any
 
 import asyncpg
 from loguru import logger
-
-# Context variable to track the active transaction connection.
-# When inside a transaction() block, pool operations are routed
-# through this connection to maintain transactional consistency.
-_txn_conn: ContextVar[asyncpg.Connection | None] = ContextVar(
-    "_txn_conn", default=None
-)
 
 
 class Database:
@@ -82,13 +74,6 @@ class Database:
             raise RuntimeError("Database not connected. Call connect() first.")
         return self._pool
 
-    def _get_executor(self) -> asyncpg.Pool | asyncpg.Connection:
-        """Return the transaction connection if active, otherwise the pool."""
-        conn = _txn_conn.get()
-        if conn is not None:
-            return conn
-        return self.pool
-
     async def is_healthy(self) -> bool:
         """Check if pool is valid and database is accessible.
 
@@ -113,7 +98,7 @@ class Database:
         Returns:
             Number of rows affected (for INSERT/UPDATE/DELETE).
         """
-        status = await self._get_executor().execute(sql, *args)
+        status = await self.pool.execute(sql, *args)
         try:
             return int(status.split()[-1])
         except (ValueError, IndexError, AttributeError):
@@ -131,7 +116,7 @@ class Database:
         Returns:
             Single Record or None if not found.
         """
-        return await self._get_executor().fetchrow(sql, *args)
+        return await self.pool.fetchrow(sql, *args)
 
     async def fetch_all(
         self, sql: str, *args: Any
@@ -145,7 +130,7 @@ class Database:
         Returns:
             List of matching Records.
         """
-        return await self._get_executor().fetch(sql, *args)
+        return await self.pool.fetch(sql, *args)
 
     async def fetch_scalar(
         self, sql: str, *args: Any
@@ -159,21 +144,17 @@ class Database:
         Returns:
             The scalar value, or None if no rows found.
         """
-        return await self._get_executor().fetchval(sql, *args)
+        return await self.pool.fetchval(sql, *args)
 
     @asynccontextmanager
-    async def transaction(self) -> AsyncGenerator[None, None]:
+    async def transaction(self) -> AsyncGenerator[asyncpg.Connection, None]:
         """Context manager for database transactions.
 
-        While inside this block, all Database methods (execute, fetch_one, etc.)
-        are routed through the same connection to maintain transactional consistency.
+        Yields:
+            asyncpg.Connection: The connection with an active transaction.
 
         Commits on success, rolls back on exception.
         """
         async with self.pool.acquire() as conn:
-            token = _txn_conn.set(conn)
-            try:
-                async with conn.transaction():
-                    yield
-            finally:
-                _txn_conn.reset(token)
+            async with conn.transaction():
+                yield conn
