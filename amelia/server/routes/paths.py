@@ -152,8 +152,9 @@ async def validate_path(request: PathValidationRequest) -> PathValidationRespons
         )
 
     # Check if it's a git repository
+    # .git can be a directory (regular repo) or a file (worktree with gitdir pointer)
     git_dir = resolved_path / ".git"
-    is_git_repo = git_dir.exists() and git_dir.is_dir()
+    is_git_repo = git_dir.exists()
 
     if not is_git_repo:
         return PathValidationResponse(
