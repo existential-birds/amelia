@@ -253,3 +253,31 @@ class TestValidatePath:
             data = response.json()
             assert data["exists"] is True
             assert data["is_git_repo"] is False
+
+    def test_handles_undetermined_home_directory(
+        self, client: TestClient
+    ) -> None:
+        """Should return error when home directory cannot be determined."""
+        with patch.object(Path, "home", side_effect=RuntimeError("no home")):
+            response = client.post(
+                "/api/paths/validate", json={"path": "/some/path"}
+            )
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["exists"] is False
+            assert data["is_git_repo"] is False
+            assert "home directory" in data["message"].lower()
+
+    def test_handles_non_utf8_git_file(self, client: TestClient) -> None:
+        """Should not crash on a .git file with non-UTF-8 content."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            git_file = Path(tmpdir) / ".git"
+            git_file.write_bytes(b"\xff\xfe not valid utf-8")
+
+            response = client.post("/api/paths/validate", json={"path": tmpdir})
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["exists"] is True
+            assert data["is_git_repo"] is False

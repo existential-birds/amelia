@@ -136,7 +136,14 @@ async def validate_path(request: PathValidationRequest) -> PathValidationRespons
         )
 
     # Restrict to home directory to prevent filesystem probing
-    home_dir = Path.home().resolve()
+    try:
+        home_dir = Path.home().resolve()
+    except RuntimeError:
+        return PathValidationResponse(
+            exists=False,
+            is_git_repo=False,
+            message="Unable to determine home directory",
+        )
     if not resolved_path.is_relative_to(home_dir):
         return PathValidationResponse(
             exists=False,
@@ -167,7 +174,7 @@ async def validate_path(request: PathValidationRequest) -> PathValidationRespons
     if not is_git_repo and git_dir.is_file():
         try:
             is_git_repo = git_dir.read_text(encoding="utf-8").startswith("gitdir:")
-        except OSError:
+        except (OSError, UnicodeDecodeError):
             is_git_repo = False
 
     if not is_git_repo:
