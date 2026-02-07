@@ -20,8 +20,8 @@ dependencies = [
     "uvicorn[standard]>=0.40.0",
     "pydantic-settings>=2.6.0",
     "psutil>=6.1.0",
-    "aiosqlite>=0.20.0,<0.22.0",  # 0.22 breaks langgraph-checkpoint-sqlite (is_alive bug)
-    "langgraph-checkpoint-sqlite>=3.0.0",
+    "asyncpg>=0.30.0",
+    "langgraph-checkpoint-postgres>=2.0.0",
     "pyjwt[crypto]>=2.9.0",
     "websockets>=15.0",
     "tiktoken>=0.7.0",
@@ -82,8 +82,8 @@ mypy_path = "stubs"
 
 [[tool.mypy.overrides]]
 module = [
-    "langgraph.checkpoint.sqlite",
-    "langgraph.checkpoint.sqlite.aio",
+    "langgraph.checkpoint.postgres",
+    "langgraph.checkpoint.postgres.aio",
     "psutil",
     "claude_agent_sdk",
 ]
