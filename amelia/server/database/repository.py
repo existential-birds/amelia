@@ -1,6 +1,5 @@
 """Repository for workflow persistence operations."""
 
-import json
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
@@ -56,10 +55,8 @@ class WorkflowRepository:
         if row["plan_cache"]:
             plan_cache = PlanCache.model_validate(row["plan_cache"])
 
-        # issue_cache is str|None in the model but JSONB in the DB
-        issue_cache = None
-        if row["issue_cache"] is not None:
-            issue_cache = json.dumps(row["issue_cache"])
+        # issue_cache is dict|None - JSONB in DB, asyncpg returns dict directly
+        issue_cache = row["issue_cache"]
 
         return ServerExecutionState(
             id=str(row["id"]),
@@ -85,15 +82,6 @@ class WorkflowRepository:
         # JSONB columns: pass dicts directly (asyncpg codec handles encoding)
         plan_cache_data = state.plan_cache.model_dump() if state.plan_cache else None
 
-        # issue_cache is str|None in the model; parse to dict for JSONB
-        issue_cache_data = None
-        if state.issue_cache is not None:
-            issue_cache_data = (
-                json.loads(state.issue_cache)
-                if isinstance(state.issue_cache, str)
-                else state.issue_cache
-            )
-
         await self._db.execute(
             """
             INSERT INTO workflows (
@@ -113,7 +101,7 @@ class WorkflowRepository:
             state.workflow_type,
             state.profile_id,
             plan_cache_data,
-            issue_cache_data,
+            state.issue_cache,  # dict|None - asyncpg handles JSONB encoding
         )
 
     async def get(self, workflow_id: str) -> ServerExecutionState | None:
@@ -185,14 +173,6 @@ class WorkflowRepository:
         # JSONB columns: pass dicts directly (asyncpg codec handles encoding)
         plan_cache_data = state.plan_cache.model_dump() if state.plan_cache else None
 
-        issue_cache_data = None
-        if state.issue_cache is not None:
-            issue_cache_data = (
-                json.loads(state.issue_cache)
-                if isinstance(state.issue_cache, str)
-                else state.issue_cache
-            )
-
         await self._db.execute(
             """
             UPDATE workflows SET
@@ -213,7 +193,7 @@ class WorkflowRepository:
             state.workflow_type,
             state.profile_id,
             plan_cache_data,
-            issue_cache_data,
+            state.issue_cache,  # dict|None - asyncpg handles JSONB encoding
             state.id,
         )
 
@@ -1026,10 +1006,10 @@ class WorkflowRepository:
                 ),
                 "success_rate": round(
                     success_lookup.get(row[0], {}).get("successful", 0)
-                    / success_lookup.get(row[0], {}).get("total", 1),
+                    / total,
                     4,
                 )
-                if success_lookup.get(row[0], {}).get("total")
+                if (total := success_lookup.get(row[0], {}).get("total"))
                 else 0.0,
             }
             for row in rows

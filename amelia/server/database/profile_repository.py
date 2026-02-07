@@ -109,8 +109,8 @@ class ProfileRepository:
             False,
         )
         result = await self.get_profile(profile.name)
-        # Result should never be None since we just inserted it
-        assert result is not None
+        if result is None:
+            raise RuntimeError(f"Profile {profile.name} not found after insert")
         return result
 
     async def update_profile(
@@ -162,8 +162,8 @@ class ProfileRepository:
             raise ValueError(f"Profile not found: {profile_id}")
 
         result = await self.get_profile(profile_id)
-        # Result should never be None since we just updated it
-        assert result is not None
+        if result is None:
+            raise RuntimeError(f"Profile {profile_id} not found after update")
         return result
 
     async def delete_profile(self, profile_id: str) -> bool:

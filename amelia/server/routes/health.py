@@ -85,13 +85,15 @@ async def liveness() -> LivenessResponse:
 
 
 @router.get("/ready", response_model=ReadinessResponse)
-async def readiness() -> ReadinessResponse:
+async def readiness(request: Request) -> ReadinessResponse:
     """Readiness check - is the server ready to accept requests?
 
     Returns:
         Ready status or 503 if shutting down.
     """
-    # TODO: Check lifecycle.is_shutting_down when implemented
+    lifecycle = request.app.state.lifecycle
+    if lifecycle.is_shutting_down:
+        return ReadinessResponse(status="not_ready")
     return ReadinessResponse(status="ready")
 
 

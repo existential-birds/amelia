@@ -269,10 +269,10 @@ class TestServerExecutionStateWithNewFields:
 
     def test_state_with_issue_cache(self) -> None:
         """ServerExecutionState accepts issue_cache field."""
-        issue_json = '{"key": "TEST-1", "summary": "Test issue"}'
-        state = make_state(issue_cache=issue_json)
+        issue_data = {"key": "TEST-1", "summary": "Test issue"}
+        state = make_state(issue_cache=issue_data)
 
-        assert state.issue_cache == issue_json
+        assert state.issue_cache == issue_data
 
     def test_state_json_round_trip_with_new_fields(self) -> None:
         """State with new fields survives JSON serialization round-trip."""
@@ -280,7 +280,7 @@ class TestServerExecutionStateWithNewFields:
         original = make_state(
             profile_id="my-profile",
             plan_cache=plan_cache,
-            issue_cache='{"key": "TEST-1"}',
+            issue_cache={"key": "TEST-1"},
         )
 
         json_str = original.model_dump_json()
@@ -289,5 +289,5 @@ class TestServerExecutionStateWithNewFields:
         assert restored.profile_id == "my-profile"
         assert restored.plan_cache is not None
         assert restored.plan_cache.goal == "Test goal"
-        assert restored.issue_cache == '{"key": "TEST-1"}'
+        assert restored.issue_cache == {"key": "TEST-1"}
 

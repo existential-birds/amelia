@@ -4,6 +4,7 @@ import asyncio
 from datetime import UTC, datetime, timedelta
 from typing import Any, Protocol
 
+import asyncpg
 from loguru import logger
 from pydantic import BaseModel
 
@@ -168,7 +169,7 @@ class LogRetentionService:
             try:
                 await self._checkpointer.adelete_thread(workflow_id)  # type: ignore[union-attr]
                 return True
-            except Exception as e:
+            except asyncpg.PostgresError as e:
                 logger.warning(
                     "Failed to delete checkpoint for workflow",
                     workflow_id=workflow_id,

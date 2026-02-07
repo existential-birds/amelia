@@ -170,9 +170,9 @@ class ServerExecutionState(BaseModel):
         default=None,
         description="Cached plan data synced from LangGraph checkpoint",
     )
-    issue_cache: str | None = Field(
+    issue_cache: dict[str, Any] | None = Field(
         default=None,
-        description="Serialized Issue JSON for reconstructing initial state",
+        description="Issue data as dict for reconstructing initial state",
     )
     workflow_status: WorkflowStatus = Field(
         default=WorkflowStatus.PENDING,

@@ -47,12 +47,15 @@ class Migrator:
         """Load SQL migration files from the migrations directory."""
         migrations_dir = resources.files("amelia.server.database") / "migrations"
         result = []
-        for path in sorted(migrations_dir.iterdir(), key=lambda p: str(p)):
+        for path in migrations_dir.iterdir():
             name = path.name
-            if name.endswith(".sql") and name[:3].isdigit():
-                version = int(name[:3])
-                sql = path.read_text(encoding="utf-8")
-                result.append((version, sql))
+            if name.endswith(".sql"):
+                # Extract version number from prefix (e.g., "001_", "1000_")
+                prefix = name.split("_", 1)[0]
+                if prefix.isdigit():
+                    version = int(prefix)
+                    sql = path.read_text(encoding="utf-8")
+                    result.append((version, sql))
         return sorted(result, key=lambda x: x[0])
 
     async def initialize_prompts(self) -> None:

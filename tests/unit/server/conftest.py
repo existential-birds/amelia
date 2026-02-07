@@ -109,6 +109,7 @@ def mock_app_client() -> Generator[TestClient, None, None]:
         mock_lifecycle = mock_lifecycle_cls.return_value
         mock_lifecycle.startup = AsyncMock()
         mock_lifecycle.shutdown = AsyncMock()
+        mock_lifecycle.is_shutting_down = False
         mock_health = mock_health_cls.return_value
         mock_health.start = AsyncMock()
         mock_health.stop = AsyncMock()

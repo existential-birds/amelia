@@ -1248,7 +1248,7 @@ class TestStartWorkflowWithTaskFields:
             call_args = mock_repository.create.call_args
             state = call_args[0][0]
             assert state.issue_cache is not None
-            issue = Issue.model_validate_json(state.issue_cache)
+            issue = Issue.model_validate(state.issue_cache)
             assert issue.title == "Add logout button"
             assert issue.description == "Add to navbar with confirmation"
 
@@ -1316,5 +1316,5 @@ class TestStartWorkflowWithTaskFields:
             state = call_args[0][0]
             # Description should default to title
             assert state.issue_cache is not None
-            issue = Issue.model_validate_json(state.issue_cache)
+            issue = Issue.model_validate(state.issue_cache)
             assert issue.description == "Fix typo in README"

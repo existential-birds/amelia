@@ -199,6 +199,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         log_retention=log_retention,
     )
     health_checker = WorktreeHealthChecker(orchestrator=orchestrator)
+    app.state.lifecycle = lifecycle
 
     # Start lifecycle components
     await lifecycle.startup()

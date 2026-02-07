@@ -1,6 +1,7 @@
 """Unit tests for LogRetentionService."""
 from unittest.mock import AsyncMock
 
+import asyncpg
 import pytest
 from pydantic import BaseModel
 
@@ -203,10 +204,10 @@ async def test_cleanup_checkpoints_handles_individual_failures(
         {"id": "workflow-2"},
         {"id": "workflow-3"},
     ]
-    # First and third succeed, second fails
+    # First and third succeed, second fails with PostgresError
     mock_checkpointer.adelete_thread.side_effect = [
         None,
-        Exception("Database error"),
+        asyncpg.PostgresError("Database error"),
         None,
     ]
 

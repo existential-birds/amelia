@@ -47,6 +47,19 @@ class TestHealthEndpoints:
         data = response.json()
         assert data["status"] == "ready"
 
+    def test_health_ready_returns_not_ready_during_shutdown(
+        self, mock_app_client: TestClient
+    ) -> None:
+        """Readiness probe returns not_ready when shutting down."""
+        # Access the mocked lifecycle via app state and set shutdown flag
+        mock_app_client.app.state.lifecycle.is_shutting_down = True  # type: ignore[attr-defined]
+
+        response = mock_app_client.get("/api/health/ready")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "not_ready"
+
     def test_health_returns_detailed_info(self, mock_app_client: TestClient) -> None:
         """Main health endpoint returns detailed info."""
         response = mock_app_client.get("/api/health")

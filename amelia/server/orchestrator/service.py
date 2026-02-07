@@ -486,7 +486,7 @@ class OrchestratorService:
                 issue_id=issue_id,
                 worktree_path=resolved_path,
                 profile_id=loaded_profile.name,
-                issue_cache=execution_state.issue.model_dump_json(),
+                issue_cache=execution_state.issue.model_dump(mode="json"),
                 workflow_status=WorkflowStatus.PENDING,
                 started_at=datetime.now(UTC),
             )
@@ -600,7 +600,7 @@ class OrchestratorService:
             issue_id=request.issue_id,
             worktree_path=resolved_path,
             profile_id=profile.name,
-            issue_cache=execution_state.issue.model_dump_json(),
+            issue_cache=execution_state.issue.model_dump(mode="json"),
             workflow_status=WorkflowStatus.PENDING,
             # No started_at - workflow hasn't started
         )
@@ -715,7 +715,7 @@ class OrchestratorService:
                 worktree_path=resolved_path,
                 workflow_type=WorkflowType.REVIEW,
                 profile_id=loaded_profile.name,
-                issue_cache=execution_state.issue.model_dump_json(),
+                issue_cache=execution_state.issue.model_dump(mode="json"),
                 workflow_status=WorkflowStatus.PENDING,
                 started_at=datetime.now(UTC),
             )
@@ -952,7 +952,7 @@ class OrchestratorService:
         # Parse issue from issue_cache
         issue = None
         if state.issue_cache:
-            issue = Issue.model_validate_json(state.issue_cache)
+            issue = Issue.model_validate(state.issue_cache)
         else:
             # Fallback: fetch from tracker (shouldn't normally happen)
             tracker = create_tracker(profile)
@@ -2320,7 +2320,7 @@ class OrchestratorService:
             issue_id=request.issue_id,
             worktree_path=resolved_path,
             profile_id=profile.name,
-            issue_cache=execution_state.issue.model_dump_json(),
+            issue_cache=execution_state.issue.model_dump(mode="json"),
             workflow_status=WorkflowStatus.PENDING,
             # Note: started_at is None - workflow hasn't started yet
         )
@@ -2715,7 +2715,7 @@ class OrchestratorService:
             # Parse issue from issue_cache
             issue = None
             if workflow.issue_cache:
-                issue = Issue.model_validate_json(workflow.issue_cache)
+                issue = Issue.model_validate(workflow.issue_cache)
             else:
                 # Fallback: fetch from tracker
                 tracker = create_tracker(profile)

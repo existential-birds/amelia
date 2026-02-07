@@ -520,7 +520,7 @@ class TestWorkflowRepository:
             worktree_path="/path/to/repo",
             profile_id="test-profile",
             plan_cache=plan_cache,
-            issue_cache='{"key": "TEST-1"}',
+            issue_cache={"key": "TEST-1"},
         )
         await repository.create(state)
 
@@ -554,7 +554,7 @@ class TestWorkflowRepository:
         # Update with new fields
         state.profile_id = "updated-profile"
         state.plan_cache = PlanCache(goal="Updated goal")
-        state.issue_cache = '{"key": "UPDATED-1"}'
+        state.issue_cache = {"key": "UPDATED-1"}
         await repository.update(state)
 
         # Verify columns

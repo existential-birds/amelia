@@ -30,18 +30,18 @@ async def test_connect_creates_pool(db):
 
 
 async def test_close_closes_pool():
-    """After close(), pool is None."""
+    """After close(), database is no longer healthy."""
     database = Database(DATABASE_URL)
     await database.connect()
     await database.close()
-    assert database._pool is None
+    assert await database.is_healthy() is False
 
 
 async def test_context_manager():
     """async with Database(url) connects and closes."""
     async with Database(DATABASE_URL) as database:
         assert database.pool is not None
-    assert database._pool is None
+    assert await database.is_healthy() is False
 
 
 async def test_is_healthy(db):
