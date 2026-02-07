@@ -1,8 +1,12 @@
 """Integration tests for server startup with database settings."""
 
+import pytest
+
 from amelia.server.database import Database, SettingsRepository
 from amelia.server.database.migrator import Migrator
 
+
+pytestmark = pytest.mark.integration
 
 DATABASE_URL = "postgresql://amelia:amelia@localhost:5432/amelia_test"
 
