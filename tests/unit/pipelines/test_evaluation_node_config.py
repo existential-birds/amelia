@@ -1,18 +1,23 @@
-"""Tests for call_evaluation_node using profile.get_agent_config."""
+"""Unit tests for call_evaluation_node using profile.get_agent_config.
+
+This file contains isolated unit tests that mock the Evaluator class.
+For integration tests with real Evaluator (mocking only at driver.generate() boundary),
+see: tests/integration/test_evaluation_node.py
+"""
 
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from amelia.agents.evaluator import EvaluationResult
+from amelia.agents.schemas.evaluator import EvaluationResult
 from amelia.core.types import AgentConfig, Issue, Profile
 from amelia.pipelines.implementation.state import ImplementationState
 from amelia.pipelines.review.nodes import call_evaluation_node
 
 
 @pytest.fixture
-def profile_with_agents():
+def profile_with_agents() -> Profile:
     return Profile(
         name="test",
         tracker="noop",
@@ -24,7 +29,7 @@ def profile_with_agents():
 
 
 @pytest.fixture
-def mock_state():
+def mock_state() -> ImplementationState:
     return ImplementationState(
         workflow_id="wf-1",
         profile_id="test",
@@ -35,8 +40,7 @@ def mock_state():
     )
 
 
-@pytest.mark.asyncio
-async def test_call_evaluation_node_uses_agent_config(profile_with_agents, mock_state):
+async def test_call_evaluation_node_uses_agent_config(profile_with_agents, mock_state) -> None:
     """call_evaluation_node should use profile.get_agent_config('evaluator')."""
     config = {
         "configurable": {
@@ -61,11 +65,8 @@ async def test_call_evaluation_node_uses_agent_config(profile_with_agents, mock_
         with patch("amelia.pipelines.review.nodes._save_token_usage", new_callable=AsyncMock):
             await call_evaluation_node(mock_state, config)
 
-        # Verify Evaluator was instantiated with AgentConfig
-        call_args = MockEvaluator.call_args
-        assert call_args is not None
-        config_arg = call_args.kwargs.get("config") or call_args[1].get("config")
-        if config_arg is None:
-            config_arg = call_args[0][0]  # First positional
+        # Verify Evaluator was instantiated with AgentConfig via 'config' kwarg
+        MockEvaluator.assert_called_once()
+        config_arg = MockEvaluator.call_args.kwargs["config"]
         assert isinstance(config_arg, AgentConfig)
         assert config_arg.model == "sonnet"

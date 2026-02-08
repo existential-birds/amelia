@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from langchain_core.runnables.config import RunnableConfig
 
-from amelia.agents.architect import MarkdownPlanOutput
+from amelia.agents.schemas.architect import MarkdownPlanOutput
 from amelia.core.constants import ToolName
 from amelia.drivers.api import ApiDriver
 from amelia.drivers.base import AgenticMessage, AgenticMessageType

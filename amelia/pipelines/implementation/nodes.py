@@ -15,9 +15,11 @@ import typer
 from langchain_core.runnables.config import RunnableConfig
 from loguru import logger
 
-from amelia.agents.architect import Architect, MarkdownPlanOutput
+from amelia.agents.architect import Architect
+from amelia.agents.schemas.architect import MarkdownPlanOutput
 from amelia.core.constants import ToolName, resolve_plan_path
 from amelia.core.extraction import extract_structured
+from amelia.pipelines.implementation.external_plan import build_plan_extraction_prompt
 from amelia.pipelines.implementation.state import ImplementationState
 from amelia.pipelines.implementation.utils import (
     _extract_goal_from_plan,
@@ -77,16 +79,7 @@ async def plan_validator_node(
     # The plan already exists - we just need to parse it into structured format
     # Use plan_validator agent config for structured extraction
     agent_config = profile.get_agent_config("plan_validator")
-    prompt = f"""Extract the implementation plan structure from the following markdown plan.
-
-<plan>
-{plan_content}
-</plan>
-
-Return:
-- goal: 1-2 sentence summary of what this plan accomplishes
-- plan_markdown: The full plan content (preserve as-is)
-- key_files: List of files that will be created or modified"""
+    prompt = build_plan_extraction_prompt(plan_content)
 
     try:
         output = await extract_structured(
@@ -149,8 +142,10 @@ async def call_architect_node(
     Raises:
         ValueError: If no issue is provided in the state.
     """
-    issue_id_for_log = state.issue.id if state.issue else "No Issue Provided"
-    logger.info(f"Orchestrator: Calling Architect for issue {issue_id_for_log}")
+    logger.info(
+        "Orchestrator: Calling Architect",
+        issue_id=state.issue.id if state.issue else "No Issue Provided",
+    )
 
     if state.issue is None:
         raise ValueError("Cannot call Architect: no issue provided in state.")
@@ -158,8 +153,8 @@ async def call_architect_node(
     # Extract event_bus, workflow_id, and profile from config
     event_bus, workflow_id, profile = extract_config_params(config or {})
 
-    config = config or {}
-    configurable = config.get("configurable", {})
+    resolved_config = config or {}
+    configurable = resolved_config.get("configurable", {})
     repository = configurable.get("repository")
     prompts = configurable.get("prompts", {})
 
@@ -170,7 +165,7 @@ async def call_architect_node(
     plan_rel_path = resolve_plan_path(profile.plan_path_pattern, state.issue.id)
     working_dir = Path(profile.working_dir) if profile.working_dir else Path(".")
     plan_path = working_dir / plan_rel_path
-    plan_path.parent.mkdir(parents=True, exist_ok=True)
+    await asyncio.to_thread(plan_path.parent.mkdir, parents=True, exist_ok=True)
     logger.debug("Ensured plan directory exists", plan_dir=str(plan_path.parent))
 
     final_state = state
@@ -187,16 +182,17 @@ async def call_architect_node(
 
     # Fallback: If plan file doesn't exist, write it from Write tool call content
     # This handles cases where Claude Code's Write tool didn't persist the file
-    if not plan_path.exists():
+    plan_written = plan_path.exists()
+    if not plan_written:
         logger.warning(
             "Plan file not found after architect execution, attempting fallback",
             plan_path=str(plan_path),
             tool_calls_count=len(final_state.tool_calls),
         )
 
-        # DEBUG: Log all tool calls for diagnosis
+        # Log all tool calls for diagnosis
         logger.debug(
-            "DEBUG: All tool calls from architect",
+            "All tool calls from architect",
             tool_calls_detail=[
                 {
                     "tool_name": tc.tool_name,
@@ -240,6 +236,7 @@ async def call_architect_node(
                         plan_path=str(plan_path),
                         content_length=len(plan_content),
                     )
+                    plan_written = True
                     break
         else:
             # No Write tool call found - try to salvage plan from raw output
@@ -252,6 +249,7 @@ async def call_architect_node(
                     plan_path=str(plan_path),
                     content_length=len(raw_output),
                 )
+                plan_written = True
             else:
                 logger.error(
                     "No Write tool call found and raw output doesn't look like a plan",
@@ -260,16 +258,29 @@ async def call_architect_node(
                     tool_calls_count=len(final_state.tool_calls),
                     raw_output_length=len(raw_output) if raw_output else 0,
                 )
+                plan_written = False
 
-    logger.info(
-        "Agent action completed",
-        agent="architect",
-        action="generated_plan",
-        details={
-            "raw_output_length": len(final_state.raw_architect_output) if final_state.raw_architect_output else 0,
-            "tool_calls_count": len(final_state.tool_calls),
-        },
-    )
+    if plan_written:
+        logger.info(
+            "Agent action completed",
+            agent="architect",
+            action="generated_plan",
+            details={
+                "raw_output_length": len(final_state.raw_architect_output) if final_state.raw_architect_output else 0,
+                "tool_calls_count": len(final_state.tool_calls),
+            },
+        )
+    else:
+        logger.warning(
+            "Agent action completed with failure",
+            agent="architect",
+            action="generated_plan",
+            success=False,
+            details={
+                "raw_output_length": len(final_state.raw_architect_output) if final_state.raw_architect_output else 0,
+                "tool_calls_count": len(final_state.tool_calls),
+            },
+        )
 
     return {
         "raw_architect_output": final_state.raw_architect_output,
@@ -295,8 +306,8 @@ async def human_approval_node(
     Returns:
         Partial state dict with approval status, or empty dict for server mode.
     """
-    config = config or {}
-    execution_mode = config.get("configurable", {}).get("execution_mode", "cli")
+    resolved_config = config or {}
+    execution_mode = resolved_config.get("configurable", {}).get("execution_mode", "cli")
 
     if execution_mode == "server":
         # Server mode: approval comes from resumed state after interrupt

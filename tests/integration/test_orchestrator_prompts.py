@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from langchain_core.runnables.config import RunnableConfig
 
-from amelia.agents.evaluator import Disposition, EvaluatedItem, EvaluationOutput
+from amelia.agents.schemas.evaluator import Disposition, EvaluatedItem, EvaluationOutput
 from amelia.core.types import ReviewResult
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
 from amelia.pipelines.implementation.nodes import call_architect_node

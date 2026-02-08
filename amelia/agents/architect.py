@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from loguru import logger
-from pydantic import BaseModel
 
 from amelia.core.agentic_state import ToolCall, ToolResult
 from amelia.core.constants import ToolName, resolve_plan_path
@@ -22,22 +21,6 @@ if TYPE_CHECKING:
     from amelia.pipelines.implementation.state import ImplementationState
     from amelia.server.events.bus import EventBus
 
-
-class MarkdownPlanOutput(BaseModel):
-    """Structured output for markdown plan generation.
-
-    This is the schema the LLM uses to generate the plan content.
-
-    Attributes:
-        goal: High-level goal for the implementation.
-        plan_markdown: The full markdown plan with phases, tasks, and steps.
-        key_files: Files that will likely be modified.
-
-    """
-
-    goal: str
-    plan_markdown: str
-    key_files: list[str] = []
 
 
 class Architect:
@@ -170,7 +153,9 @@ Before planning, discover:
                 # Log tool call details with explicit tool name in message
                 input_keys = list(message.tool_input.keys()) if message.tool_input else []
                 logger.debug(
-                    f"TOOL_CALL: name={message.tool_name!r} keys={input_keys}"
+                    "Architect tool call",
+                    tool_name=message.tool_name,
+                    input_keys=input_keys,
                 )
                 event = message.to_workflow_event(workflow_id=workflow_id, agent="architect")
 
@@ -203,9 +188,9 @@ Before planning, discover:
                     tool_calls_count=len(tool_calls),
                 )
 
-                # DEBUG: Log all tool calls at completion
+                # Log all tool calls at completion
                 logger.debug(
-                    "DEBUG: Architect completed - all tool calls",
+                    "Architect completed",
                     tool_calls_summary=[
                         {"name": tc.tool_name, "input_keys": list(tc.tool_input.keys())}
                         for tc in tool_calls
@@ -228,14 +213,6 @@ Before planning, discover:
                     "raw_architect_output": raw_output,
                     "plan_markdown": raw_output,  # Backward compat until #199
                     "plan_path": extracted_plan_path,
-                })
-                yield current_state, event
-                continue  # Result is the final message - let loop drain naturally
-
-            if event:
-                current_state = state.model_copy(update={
-                    "tool_calls": tool_calls,
-                    "tool_results": tool_results,
                 })
                 yield current_state, event
 
@@ -269,7 +246,9 @@ Before planning, discover:
             parts.append("\n## Design Document")
             parts.append(
                 "The following design document was created during brainstorming. "
-                "Use it as the primary input for your implementation plan:"
+                "Use it as the primary input for your implementation plan. "
+                "If there are conflicts between the design document and the issue description, "
+                "the design document takes precedence as it represents refined requirements."
             )
             parts.append(f"\n{state.design.content}")
 

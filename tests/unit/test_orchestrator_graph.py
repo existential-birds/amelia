@@ -9,7 +9,7 @@ from langchain_core.runnables.config import RunnableConfig
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END
 
-from amelia.agents.evaluator import Disposition, EvaluatedItem, EvaluationResult
+from amelia.agents.schemas.evaluator import Disposition, EvaluatedItem, EvaluationResult
 from amelia.core.types import AgentConfig, DriverType, Profile, ReviewResult, Severity, TrackerType
 from amelia.pipelines.implementation import create_implementation_graph
 from amelia.pipelines.implementation.nodes import next_task_node

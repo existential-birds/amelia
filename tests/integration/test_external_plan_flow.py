@@ -15,6 +15,7 @@ Real components:
 - import_external_plan function (except LLM extraction)
 """
 
+import os
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -25,7 +26,7 @@ import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
 
-from amelia.agents.architect import MarkdownPlanOutput
+from amelia.agents.schemas.architect import MarkdownPlanOutput
 from amelia.core.types import AgentConfig, DriverType, Profile, TrackerType
 from amelia.server.database.connection import Database
 from amelia.server.database.migrator import Migrator
@@ -37,7 +38,10 @@ from amelia.server.main import create_app
 from amelia.server.orchestrator.service import OrchestratorService
 
 
-DATABASE_URL = "postgresql://amelia:amelia@localhost:5432/amelia_test"
+DATABASE_URL = os.environ.get(
+    "DATABASE_URL",
+    "postgresql://amelia:amelia@localhost:5432/amelia_test",
+)
 
 
 # =============================================================================
@@ -77,7 +81,7 @@ async def setup_test_profile(test_profile_repository: ProfileRepository) -> Prof
     """
     profile = Profile(
         name="test",
-        tracker=TrackerType.NONE,
+        tracker=TrackerType.NOOP,
         working_dir="/tmp/test",  # Will be overridden by worktree_path
         agents={
             "architect": AgentConfig(driver=DriverType.CLI, model="sonnet"),

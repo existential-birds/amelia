@@ -10,7 +10,7 @@ from pathlib import Path
 from loguru import logger
 from pydantic import BaseModel, Field
 
-from amelia.agents.architect import MarkdownPlanOutput
+from amelia.agents.schemas.architect import MarkdownPlanOutput
 from amelia.core.extraction import extract_structured
 from amelia.core.types import Profile
 from amelia.pipelines.implementation.utils import (
@@ -28,6 +28,27 @@ class ExternalPlanImportResult(BaseModel):
     plan_path: Path
     key_files: list[str] = Field(default_factory=list)
     total_tasks: int
+
+
+def build_plan_extraction_prompt(plan_content: str) -> str:
+    """Build prompt for extracting structured fields from a plan.
+
+    Args:
+        plan_content: The raw plan markdown content.
+
+    Returns:
+        Prompt string for LLM extraction.
+    """
+    return f"""Extract the implementation plan structure from the following markdown plan.
+
+<plan>
+{plan_content}
+</plan>
+
+Return:
+- goal: 1-2 sentence summary of what this plan accomplishes
+- plan_markdown: The full plan content (preserve as-is)
+- key_files: List of files that will be created or modified"""
 
 
 async def import_external_plan(
@@ -59,6 +80,7 @@ async def import_external_plan(
     working_dir = working_dir.expanduser().resolve()
 
     # Resolve content from file or use inline
+    plan_path: Path | None
     if plan_file is not None:
         plan_path = Path(plan_file)
         if not plan_path.is_absolute():
@@ -81,10 +103,6 @@ async def import_external_plan(
         content = plan_content or ""
         plan_path = None
 
-    # Validate content is not empty
-    if not content.strip():
-        raise ValueError("Plan content is empty")
-
     # Validate target_path is within working directory (prevent path traversal)
     target_path = target_path.expanduser().resolve()
     try:
@@ -93,6 +111,10 @@ async def import_external_plan(
         raise ValueError(
             f"Target path '{target_path}' resolves outside working directory"
         ) from None
+
+    # Validate content is not empty
+    if not content.strip():
+        raise ValueError("Plan content is empty")
 
     # Check if source and target are the same file (both paths now resolved)
     file_already_at_target = plan_path == target_path if plan_path is not None else False
@@ -116,16 +138,7 @@ async def import_external_plan(
 
     # Extract structured fields using LLM
     agent_config = profile.get_agent_config("plan_validator")
-    prompt = f"""Extract the implementation plan structure from the following markdown plan.
-
-<plan>
-{content}
-</plan>
-
-Return:
-- goal: 1-2 sentence summary of what this plan accomplishes
-- plan_markdown: The full plan content (preserve as-is)
-- key_files: List of files that will be created or modified"""
+    prompt = build_plan_extraction_prompt(content)
 
     try:
         output = await extract_structured(
@@ -137,7 +150,7 @@ Return:
         goal = output.goal
         plan_markdown = output.plan_markdown
         key_files = output.key_files
-    except (ValueError, RuntimeError) as e:
+    except RuntimeError as e:
         # Fallback extraction without LLM
         logger.warning(
             "Structured extraction failed, using fallback",
@@ -161,7 +174,7 @@ Return:
 
     return ExternalPlanImportResult(
         goal=goal,
-        plan_markdown=None if file_already_at_target else plan_markdown,
+        plan_markdown=plan_markdown,
         plan_path=target_path,
         key_files=key_files,
         total_tasks=total_tasks,

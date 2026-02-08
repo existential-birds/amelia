@@ -4,8 +4,9 @@ Tests the Amelia CLI commands: plan, start, approve, reject, status, cancel.
 
 For CLI tests, the proper mock boundaries are:
 - AmeliaClient: HTTP client to Amelia API server (for start/approve/reject/status/cancel)
+- _get_profile_from_server: Server API call for profile (for plan command)
 - create_tracker: External issue tracker API (Jira, GitHub)
-- pydantic_ai.Agent: LLM API boundary (for plan command which runs locally)
+- get_driver / execute_agentic: LLM HTTP boundary (for plan command)
 - get_worktree_context: Git context detection (needed for test isolation)
 
 Internal components like Architect should NOT be mocked.
@@ -18,13 +19,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from typer.testing import CliRunner
 
-from amelia.agents.architect import MarkdownPlanOutput
 from amelia.client.models import (
     CreateWorkflowResponse,
     WorkflowListResponse,
     WorkflowSummary,
 )
-from amelia.core.types import AgentConfig, Issue, Profile, Settings
+from amelia.core.types import AgentConfig, Issue, Profile
+from amelia.drivers.base import AgenticMessage, AgenticMessageType
 from amelia.main import app
 
 
@@ -46,9 +47,9 @@ def mock_worktree_context(tmp_path: Path) -> Generator[MagicMock, None, None]:
 
 
 @pytest.fixture
-def mock_settings(tmp_path: Path) -> Settings:
-    """Create mock settings for CLI tests."""
-    profile = Profile(
+def mock_profile(tmp_path: Path) -> Profile:
+    """Create mock profile for CLI tests."""
+    return Profile(
         name="test",
         tracker="noop",
         working_dir=str(tmp_path),
@@ -60,38 +61,27 @@ def mock_settings(tmp_path: Path) -> Settings:
             "plan_validator": AgentConfig(driver="api", model="openrouter:anthropic/claude-sonnet-4"),
         },
     )
-    return Settings(active_profile="test", profiles={"test": profile})
 
 
 @pytest.mark.integration
 class TestPlanCommand:
     """Test the `amelia plan` command with real components.
 
-    Real components: get_driver, ApiDriver, Architect
+    Real components: Architect (plan logic, state management)
     Mock boundaries:
     - get_worktree_context (git detection)
-    - load_settings (config file)
+    - _get_profile_from_server (server API call for profile)
     - create_tracker (external issue tracker API)
-    - pydantic_ai.Agent.run (LLM HTTP boundary)
+    - get_driver / execute_agentic (LLM HTTP boundary)
     """
 
     def test_plan_command_generates_markdown(
-        self, tmp_path: Path, mock_worktree_context: MagicMock, mock_settings: Settings
+        self, tmp_path: Path, mock_worktree_context: MagicMock, mock_profile: Profile
     ) -> None:
         """amelia plan should generate markdown plan file."""
         # Create plans directory
         plans_dir = tmp_path / "plans"
         plans_dir.mkdir(parents=True, exist_ok=True)
-
-        # Mock LLM response - this is the HTTP boundary
-        mock_llm_response = MarkdownPlanOutput(
-            goal="Implement feature X",
-            plan_markdown="# Implementation Plan\n\n1. Step one\n2. Step two",
-            key_files=["src/app.py", "tests/test_app.py"],
-        )
-
-        mock_result = MagicMock()
-        mock_result.output = mock_llm_response
 
         mock_issue = Issue(
             id="TEST-123",
@@ -100,19 +90,49 @@ class TestPlanCommand:
             status="open",
         )
 
-        with patch("amelia.client.cli.load_settings") as mock_load_settings, \
-             patch("amelia.client.cli.create_tracker") as mock_create_tracker, \
-             patch("pydantic_ai.Agent.run", new_callable=AsyncMock) as mock_agent_run:
+        # Resolve the plan path that Architect will use
+        from amelia.core.constants import resolve_plan_path  # noqa: PLC0415
 
-            mock_load_settings.return_value = mock_settings
+        plan_path = resolve_plan_path(mock_profile.plan_path_pattern, "TEST-123")
+        # Create the plan file on disk (simulates write_file tool execution)
+        full_plan_path = tmp_path / plan_path
+        full_plan_path.parent.mkdir(parents=True, exist_ok=True)
+        full_plan_path.write_text("# Implementation Plan\n\n1. Step one\n2. Step two")
+
+        # Mock driver's execute_agentic to yield messages simulating LLM execution
+        async def mock_execute_agentic(**kwargs):  # type: ignore[no-untyped-def]
+            yield AgenticMessage(
+                type=AgenticMessageType.TOOL_CALL,
+                tool_name="write_file",
+                tool_input={"file_path": plan_path, "content": "# Plan"},
+                tool_call_id="call-0",
+            )
+            yield AgenticMessage(
+                type=AgenticMessageType.TOOL_RESULT,
+                tool_name="write_file",
+                tool_output="File written",
+                tool_call_id="call-0",
+            )
+            yield AgenticMessage(
+                type=AgenticMessageType.RESULT,
+                content="Plan generated successfully.",
+            )
+
+        mock_driver = MagicMock()
+        mock_driver.execute_agentic = mock_execute_agentic
+
+        with patch("amelia.client.cli._get_profile_from_server", new_callable=AsyncMock) as mock_get_profile, \
+             patch("amelia.client.cli.create_tracker") as mock_create_tracker, \
+             patch("amelia.agents.architect.get_driver", return_value=mock_driver):
+
+            mock_get_profile.return_value = mock_profile
             mock_create_tracker.return_value.get_issue.return_value = mock_issue
-            mock_agent_run.return_value = mock_result
 
             # Run through typer
             result = runner.invoke(app, ["plan", "TEST-123"])
 
         assert result.exit_code == 0, f"CLI failed with: {result.stdout}"
-        assert "Plan generated successfully" in result.stdout or "✓" in result.stdout
+        assert "Plan generated successfully" in result.stdout or "\u2713" in result.stdout
 
     def test_plan_command_with_profile(
         self, tmp_path: Path, mock_worktree_context: MagicMock
@@ -121,17 +141,7 @@ class TestPlanCommand:
         plans_dir = tmp_path / "plans"
         plans_dir.mkdir(parents=True, exist_ok=True)
 
-        # Create settings with multiple profiles
-        test_profile = Profile(
-            name="test",
-            tracker="noop",
-            working_dir=str(tmp_path),
-            agents={
-                "architect": AgentConfig(driver="cli", model="sonnet"),
-                "developer": AgentConfig(driver="cli", model="sonnet"),
-                "reviewer": AgentConfig(driver="cli", model="sonnet"),
-            },
-        )
+        # _get_profile_from_server returns the profile for the requested name directly
         work_profile = Profile(
             name="work",
             tracker="jira",
@@ -144,19 +154,6 @@ class TestPlanCommand:
                 "plan_validator": AgentConfig(driver="api", model="openrouter:anthropic/claude-sonnet-4"),
             },
         )
-        settings = Settings(
-            active_profile="test",
-            profiles={"test": test_profile, "work": work_profile},
-        )
-
-        mock_llm_response = MarkdownPlanOutput(
-            goal="Complete work task",
-            plan_markdown="# Work Plan\n\n1. Do work",
-            key_files=["src/work.py"],
-        )
-
-        mock_result = MagicMock()
-        mock_result.output = mock_llm_response
 
         mock_issue = Issue(
             id="WORK-456",
@@ -165,13 +162,43 @@ class TestPlanCommand:
             status="open",
         )
 
-        with patch("amelia.client.cli.load_settings") as mock_load_settings, \
-             patch("amelia.client.cli.create_tracker") as mock_create_tracker, \
-             patch("pydantic_ai.Agent.run", new_callable=AsyncMock) as mock_agent_run:
+        # Resolve the plan path that Architect will use
+        from amelia.core.constants import resolve_plan_path  # noqa: PLC0415
 
-            mock_load_settings.return_value = settings
+        plan_path = resolve_plan_path(work_profile.plan_path_pattern, "WORK-456")
+        # Create the plan file on disk (simulates write_file tool execution)
+        full_plan_path = tmp_path / plan_path
+        full_plan_path.parent.mkdir(parents=True, exist_ok=True)
+        full_plan_path.write_text("# Work Plan\n\n1. Do work")
+
+        # Mock driver's execute_agentic to yield messages simulating LLM execution
+        async def mock_execute_agentic(**kwargs):  # type: ignore[no-untyped-def]
+            yield AgenticMessage(
+                type=AgenticMessageType.TOOL_CALL,
+                tool_name="write_file",
+                tool_input={"file_path": plan_path, "content": "# Work Plan"},
+                tool_call_id="call-0",
+            )
+            yield AgenticMessage(
+                type=AgenticMessageType.TOOL_RESULT,
+                tool_name="write_file",
+                tool_output="File written",
+                tool_call_id="call-0",
+            )
+            yield AgenticMessage(
+                type=AgenticMessageType.RESULT,
+                content="Plan generated successfully.",
+            )
+
+        mock_driver = MagicMock()
+        mock_driver.execute_agentic = mock_execute_agentic
+
+        with patch("amelia.client.cli._get_profile_from_server", new_callable=AsyncMock) as mock_get_profile, \
+             patch("amelia.client.cli.create_tracker") as mock_create_tracker, \
+             patch("amelia.agents.architect.get_driver", return_value=mock_driver):
+
+            mock_get_profile.return_value = work_profile
             mock_create_tracker.return_value.get_issue.return_value = mock_issue
-            mock_agent_run.return_value = mock_result
 
             result = runner.invoke(app, ["plan", "WORK-456", "--profile", "work"])
 

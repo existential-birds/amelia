@@ -21,9 +21,9 @@ class TestWorkflowRepository:
     """Tests for WorkflowRepository CRUD operations."""
 
     @pytest.fixture
-    async def repository(self, db_with_schema):
+    async def repository(self, test_db):
         """WorkflowRepository instance."""
-        return WorkflowRepository(db_with_schema)
+        return WorkflowRepository(test_db)
 
     async def test_create_workflow(self, repository) -> None:
         """Can create a workflow."""
@@ -573,9 +573,9 @@ class TestRepositoryEvents:
     """Tests for event persistence with level and trace fields."""
 
     @pytest.fixture
-    async def repository(self, db_with_schema):
+    async def repository(self, test_db):
         """WorkflowRepository instance."""
-        return WorkflowRepository(db_with_schema)
+        return WorkflowRepository(test_db)
 
     @pytest.fixture
     async def sample_workflow(self, repository):
@@ -634,8 +634,8 @@ class TestWorkflowLogFiltering:
     """Tests for event persistence filtering in workflow_log."""
 
     @pytest.fixture
-    async def repository(self, db_with_schema):
-        return WorkflowRepository(db_with_schema)
+    async def repository(self, test_db):
+        return WorkflowRepository(test_db)
 
     @pytest.fixture
     async def sample_workflow(self, repository):
