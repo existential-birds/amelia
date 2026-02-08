@@ -61,11 +61,8 @@ async def test_call_evaluation_node_uses_agent_config(profile_with_agents, mock_
         with patch("amelia.pipelines.review.nodes._save_token_usage", new_callable=AsyncMock):
             await call_evaluation_node(mock_state, config)
 
-        # Verify Evaluator was instantiated with AgentConfig
-        call_args = MockEvaluator.call_args
-        assert call_args is not None
-        config_arg = call_args.kwargs.get("config") or call_args[1].get("config")
-        if config_arg is None:
-            config_arg = call_args[0][0]  # First positional
+        # Verify Evaluator was instantiated with AgentConfig via 'config' kwarg
+        MockEvaluator.assert_called_once()
+        config_arg = MockEvaluator.call_args.kwargs["config"]
         assert isinstance(config_arg, AgentConfig)
         assert config_arg.model == "sonnet"

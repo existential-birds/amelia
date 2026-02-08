@@ -137,7 +137,7 @@ Return:
         goal = output.goal
         plan_markdown = output.plan_markdown
         key_files = output.key_files
-    except (ValueError, RuntimeError) as e:
+    except RuntimeError as e:
         # Fallback extraction without LLM
         logger.warning(
             "Structured extraction failed, using fallback",

@@ -15,6 +15,7 @@ Real components:
 - import_external_plan function (except LLM extraction)
 """
 
+import os
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -37,7 +38,10 @@ from amelia.server.main import create_app
 from amelia.server.orchestrator.service import OrchestratorService
 
 
-DATABASE_URL = "postgresql://amelia:amelia@localhost:5432/amelia_test"
+DATABASE_URL = os.environ.get(
+    "DATABASE_URL",
+    "postgresql://amelia:amelia@localhost:5432/amelia_test",
+)
 
 
 # =============================================================================

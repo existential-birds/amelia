@@ -50,6 +50,8 @@ def mock_profile(tmp_path: Path) -> Profile:
             "developer": AgentConfig(driver="api", model="gpt-4"),
             "reviewer": AgentConfig(driver="api", model="gpt-4"),
             "plan_validator": AgentConfig(driver="api", model="gpt-4o-mini"),
+            "evaluator": AgentConfig(driver="api", model="gpt-4"),
+            "task_reviewer": AgentConfig(driver="api", model="gpt-4o-mini"),
         },
     )
 
@@ -183,6 +185,8 @@ class TestPlanValidatorNode:
                 "developer": AgentConfig(driver="api", model="gpt-4"),
                 "reviewer": AgentConfig(driver="api", model="gpt-4"),
                 "plan_validator": AgentConfig(driver="api", model="gpt-4o-mini"),
+                "evaluator": AgentConfig(driver="api", model="gpt-4"),
+                "task_reviewer": AgentConfig(driver="api", model="gpt-4o-mini"),
             },
         )
 
@@ -331,6 +335,8 @@ class TestPlanValidatorNodeTotalTasks:
                 "developer": AgentConfig(driver="api", model="anthropic/claude-3.5-sonnet"),
                 "reviewer": AgentConfig(driver="api", model="anthropic/claude-3.5-sonnet"),
                 "plan_validator": AgentConfig(driver="api", model="anthropic/claude-3.5-sonnet"),
+                "evaluator": AgentConfig(driver="api", model="anthropic/claude-3.5-sonnet"),
+                "task_reviewer": AgentConfig(driver="api", model="anthropic/claude-3.5-sonnet"),
             },
         )
 
@@ -384,6 +390,8 @@ Do second thing.
                 "developer": AgentConfig(driver="api", model="anthropic/claude-3.5-sonnet"),
                 "reviewer": AgentConfig(driver="api", model="anthropic/claude-3.5-sonnet"),
                 "plan_validator": AgentConfig(driver="api", model="anthropic/claude-3.5-sonnet"),
+                "evaluator": AgentConfig(driver="api", model="anthropic/claude-3.5-sonnet"),
+                "task_reviewer": AgentConfig(driver="api", model="anthropic/claude-3.5-sonnet"),
             },
         )
         config: RunnableConfig = {
@@ -449,6 +457,8 @@ Do implementation.
                 "developer": AgentConfig(driver="api", model="anthropic/claude-3.5-sonnet"),
                 "reviewer": AgentConfig(driver="api", model="anthropic/claude-3.5-sonnet"),
                 "plan_validator": AgentConfig(driver="api", model="anthropic/claude-3.5-sonnet"),
+                "evaluator": AgentConfig(driver="api", model="anthropic/claude-3.5-sonnet"),
+                "task_reviewer": AgentConfig(driver="api", model="anthropic/claude-3.5-sonnet"),
             },
         )
         config: RunnableConfig = {
