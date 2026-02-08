@@ -153,8 +153,8 @@ async def call_architect_node(
     # Extract event_bus, workflow_id, and profile from config
     event_bus, workflow_id, profile = extract_config_params(config or {})
 
-    config = config or {}
-    configurable = config.get("configurable", {})
+    resolved_config = config or {}
+    configurable = resolved_config.get("configurable", {})
     repository = configurable.get("repository")
     prompts = configurable.get("prompts", {})
 
@@ -290,8 +290,8 @@ async def human_approval_node(
     Returns:
         Partial state dict with approval status, or empty dict for server mode.
     """
-    config = config or {}
-    execution_mode = config.get("configurable", {}).get("execution_mode", "cli")
+    resolved_config = config or {}
+    execution_mode = resolved_config.get("configurable", {}).get("execution_mode", "cli")
 
     if execution_mode == "server":
         # Server mode: approval comes from resumed state after interrupt
