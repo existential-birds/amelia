@@ -709,6 +709,54 @@ Rationale: The code is ready because:
         )
 
 
+    def test_no_ready_pattern_defaults_to_not_approved(self, create_reviewer: Callable[..., Reviewer]) -> None:
+        """When Ready: pattern is missing, default to approved=False (no keyword guessing)."""
+        reviewer = create_reviewer()
+        output = """## Review Summary
+Code looks good overall with minor issues.
+
+## Issues
+### Critical (Blocking)
+None
+
+## Good Patterns
+- Clean architecture
+
+## Verdict
+The code is approved and looks good to merge.
+Rationale: All checks pass."""
+
+        result = reviewer._parse_review_result(output, workflow_id="wf-test")
+        # Should NOT match "approved" keyword - should default to False
+        assert result.approved is False
+
+    def test_json_output_without_ready_pattern_defaults_to_not_approved(
+        self, create_reviewer: Callable[..., Reviewer]
+    ) -> None:
+        """JSON output (from mismatched prompt) should default to not approved."""
+        reviewer = create_reviewer()
+        output = '{"approved": true, "comments": [], "severity": "none"}'
+
+        result = reviewer._parse_review_result(output, workflow_id="wf-test")
+        assert result.approved is False
+
+    def test_truncated_output_without_ready_pattern_defaults_to_not_approved(
+        self, create_reviewer: Callable[..., Reviewer]
+    ) -> None:
+        """Truncated output missing verdict section should default to not approved."""
+        reviewer = create_reviewer()
+        output = """## Review Summary
+Code changes implement the feature correctly.
+
+## Issues
+### Minor (Nice to Have)
+1. [src/main.py:42] Consider adding type hint"""
+
+        result = reviewer._parse_review_result(output, workflow_id="wf-test")
+        assert result.approved is False
+        assert len(result.comments) >= 1
+
+
 class TestExtractTaskContext:
     """Tests for Reviewer._extract_task_context task extraction."""
 
