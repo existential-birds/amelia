@@ -4,7 +4,7 @@ Extracted from architect.py for lightweight cross-environment import.
 See amelia/agents/schemas/__init__.py for rationale.
 """
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class MarkdownPlanOutput(BaseModel):
@@ -21,4 +21,4 @@ class MarkdownPlanOutput(BaseModel):
 
     goal: str
     plan_markdown: str
-    key_files: list[str] = []
+    key_files: list[str] = Field(default_factory=list)
