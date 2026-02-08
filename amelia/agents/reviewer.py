@@ -463,7 +463,7 @@ The changes are in git - diff against commit: {base_commit}"""
         else:
             # No Ready: pattern and no structured issues → approve
             approved = True
-            logger.info(
+            logger.debug(
                 "No 'Ready:' verdict and no structured issues found, defaulting to approved",
                 agent=self._agent_name,
                 output_preview=output[:200] if output else None,
