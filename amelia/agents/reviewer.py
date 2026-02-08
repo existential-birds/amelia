@@ -402,24 +402,15 @@ The changes are in git - diff against commit: {base_commit}"""
                 workflow_id=workflow_id,
             )
         else:
-            # Fallback: check for approval keywords
-            output_lower = output.lower()
-            approval_keywords_found = [
-                word for word in ["ready: yes", "approved", "lgtm", "looks good"]
-                if word in output_lower
-            ]
-            rejection_keywords_found = [
-                word for word in ["ready: no", "not approved", "needs fixes", "blocked"]
-                if word in output_lower
-            ]
-            approved = bool(approval_keywords_found)
-            if rejection_keywords_found:
-                approved = False
-            logger.debug(
-                "Verdict parsed from fallback keywords",
-                approval_keywords_found=approval_keywords_found,
-                rejection_keywords_found=rejection_keywords_found,
-                approved=approved,
+            # No Ready: pattern found - default to not approved for safety.
+            # The prompt instructs the model to produce "Ready: Yes|No";
+            # if it doesn't, rejecting is the safe default, and the
+            # max-iterations routing fix prevents this from killing the workflow.
+            approved = False
+            logger.warning(
+                "No 'Ready:' verdict found in review output, defaulting to not approved",
+                agent=self._agent_name,
+                output_preview=output[:200] if output else None,
                 workflow_id=workflow_id,
             )
 
