@@ -12,7 +12,7 @@ from amelia.pipelines.review.nodes import call_evaluation_node
 
 
 @pytest.fixture
-def profile_with_agents():
+def profile_with_agents() -> Profile:
     return Profile(
         name="test",
         tracker="noop",
@@ -24,7 +24,7 @@ def profile_with_agents():
 
 
 @pytest.fixture
-def mock_state():
+def mock_state() -> ImplementationState:
     return ImplementationState(
         workflow_id="wf-1",
         profile_id="test",

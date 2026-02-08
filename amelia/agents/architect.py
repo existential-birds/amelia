@@ -153,7 +153,9 @@ Before planning, discover:
                 # Log tool call details with explicit tool name in message
                 input_keys = list(message.tool_input.keys()) if message.tool_input else []
                 logger.debug(
-                    f"TOOL_CALL: name={message.tool_name!r} keys={input_keys}"
+                    "Architect tool call",
+                    tool_name=message.tool_name,
+                    input_keys=input_keys,
                 )
                 event = message.to_workflow_event(workflow_id=workflow_id, agent="architect")
 
@@ -186,9 +188,9 @@ Before planning, discover:
                     tool_calls_count=len(tool_calls),
                 )
 
-                # DEBUG: Log all tool calls at completion
+                # Log all tool calls at completion
                 logger.debug(
-                    "DEBUG: Architect completed - all tool calls",
+                    "Architect completed",
                     tool_calls_summary=[
                         {"name": tc.tool_name, "input_keys": list(tc.tool_input.keys())}
                         for tc in tool_calls

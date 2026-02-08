@@ -195,9 +195,9 @@ async def call_architect_node(
             tool_calls_count=len(final_state.tool_calls),
         )
 
-        # DEBUG: Log all tool calls for diagnosis
+        # Log all tool calls for diagnosis
         logger.debug(
-            "DEBUG: All tool calls from architect",
+            "All tool calls from architect",
             tool_calls_detail=[
                 {
                     "tool_name": tc.tool_name,
