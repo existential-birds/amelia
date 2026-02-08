@@ -183,6 +183,9 @@ _WARNING_TYPES: frozenset[EventType] = frozenset({
     EventType.SYSTEM_WARNING,
 })
 
+# Sequence number for ephemeral/trace-only events (not persisted, no ordering needed)
+EPHEMERAL_SEQUENCE: int = 0
+
 _INFO_TYPES: frozenset[EventType] = frozenset({
     EventType.WORKFLOW_CREATED,
     EventType.WORKFLOW_STARTED,

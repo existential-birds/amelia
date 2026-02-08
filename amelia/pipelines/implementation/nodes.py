@@ -182,7 +182,8 @@ async def call_architect_node(
 
     # Fallback: If plan file doesn't exist, write it from Write tool call content
     # This handles cases where Claude Code's Write tool didn't persist the file
-    if not plan_path.exists():
+    plan_written = plan_path.exists()
+    if not plan_written:
         logger.warning(
             "Plan file not found after architect execution, attempting fallback",
             plan_path=str(plan_path),
@@ -235,6 +236,7 @@ async def call_architect_node(
                         plan_path=str(plan_path),
                         content_length=len(plan_content),
                     )
+                    plan_written = True
                     break
         else:
             # No Write tool call found - try to salvage plan from raw output
@@ -247,6 +249,7 @@ async def call_architect_node(
                     plan_path=str(plan_path),
                     content_length=len(raw_output),
                 )
+                plan_written = True
             else:
                 logger.error(
                     "No Write tool call found and raw output doesn't look like a plan",
@@ -255,16 +258,29 @@ async def call_architect_node(
                     tool_calls_count=len(final_state.tool_calls),
                     raw_output_length=len(raw_output) if raw_output else 0,
                 )
+                plan_written = False
 
-    logger.info(
-        "Agent action completed",
-        agent="architect",
-        action="generated_plan",
-        details={
-            "raw_output_length": len(final_state.raw_architect_output) if final_state.raw_architect_output else 0,
-            "tool_calls_count": len(final_state.tool_calls),
-        },
-    )
+    if plan_written:
+        logger.info(
+            "Agent action completed",
+            agent="architect",
+            action="generated_plan",
+            details={
+                "raw_output_length": len(final_state.raw_architect_output) if final_state.raw_architect_output else 0,
+                "tool_calls_count": len(final_state.tool_calls),
+            },
+        )
+    else:
+        logger.warning(
+            "Agent action completed with failure",
+            agent="architect",
+            action="generated_plan",
+            success=False,
+            details={
+                "raw_output_length": len(final_state.raw_architect_output) if final_state.raw_architect_output else 0,
+                "tool_calls_count": len(final_state.tool_calls),
+            },
+        )
 
     return {
         "raw_architect_output": final_state.raw_architect_output,

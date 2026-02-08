@@ -246,7 +246,9 @@ Before planning, discover:
             parts.append("\n## Design Document")
             parts.append(
                 "The following design document was created during brainstorming. "
-                "Use it as the primary input for your implementation plan:"
+                "Use it as the primary input for your implementation plan. "
+                "If there are conflicts between the design document and the issue description, "
+                "the design document takes precedence as it represents refined requirements."
             )
             parts.append(f"\n{state.design.content}")
 

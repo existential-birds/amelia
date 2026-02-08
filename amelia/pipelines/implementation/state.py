@@ -2,6 +2,20 @@
 
 This module defines ImplementationState, which extends BasePipelineState with
 fields specific to the implementation workflow (Architect -> Developer <-> Reviewer).
+
+Forward Reference Pattern
+-------------------------
+This module uses a forward reference pattern to avoid circular imports:
+
+1. EvaluationResult is imported under TYPE_CHECKING for type hints only
+2. At runtime, rebuild_implementation_state() must be called to:
+   - Import the actual types
+   - Inject them into this module's namespace (required by typing.get_type_hints())
+   - Call model_rebuild() to refresh Pydantic's type resolution
+
+This is necessary because LangGraph's StateGraph uses get_type_hints() to inspect
+state fields, which fails on forward references unless the types are in the module's
+global namespace. See rebuild_implementation_state() for the implementation.
 """
 
 from __future__ import annotations

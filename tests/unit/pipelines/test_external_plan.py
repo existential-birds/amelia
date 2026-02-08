@@ -363,10 +363,10 @@ Content here.
         # Verify file was NOT rewritten
         assert target_path.stat().st_mtime == original_mtime
 
-    async def test_import_returns_none_markdown_when_file_at_target(
+    async def test_import_returns_markdown_when_file_at_target(
         self, tmp_path: Path, mock_profile: Profile
     ) -> None:
-        """Import returns plan_markdown=None when file is already at target."""
+        """Import returns plan_markdown even when file is already at target."""
         from amelia.pipelines.implementation.external_plan import import_external_plan
 
         # Create worktree directory
@@ -396,8 +396,8 @@ Content here.
                 workflow_id="wf-001",
             )
 
-        # plan_markdown should be None since file was already at target
-        assert result.plan_markdown is None
+        # plan_markdown should always be returned (no special handling required by consumers)
+        assert result.plan_markdown == plan_content
         # plan_path should be set
         assert result.plan_path == target_path
         # goal should still be extracted

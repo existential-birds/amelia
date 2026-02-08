@@ -1,4 +1,9 @@
-"""Tests for call_evaluation_node using profile.get_agent_config."""
+"""Unit tests for call_evaluation_node using profile.get_agent_config.
+
+This file contains isolated unit tests that mock the Evaluator class.
+For integration tests with real Evaluator (mocking only at driver.generate() boundary),
+see: tests/integration/test_evaluation_node.py
+"""
 
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch

@@ -18,7 +18,12 @@ from amelia.agents.schemas.evaluator import (
 )
 from amelia.core.types import AgentConfig, Profile
 from amelia.drivers.factory import get_driver
-from amelia.server.models.events import EventLevel, EventType, WorkflowEvent
+from amelia.server.models.events import (
+    EPHEMERAL_SEQUENCE,
+    EventLevel,
+    EventType,
+    WorkflowEvent,
+)
 
 
 if TYPE_CHECKING:
@@ -185,7 +190,7 @@ Return your evaluation as an EvaluationOutput with all items and a summary.""")
                 event = WorkflowEvent(
                     id=str(uuid4()),
                     workflow_id=workflow_id,
-                    sequence=0,
+                    sequence=EPHEMERAL_SEQUENCE,
                     timestamp=datetime.now(UTC),
                     agent="evaluator",
                     event_type=EventType.AGENT_OUTPUT,
@@ -263,7 +268,7 @@ Return your evaluation as an EvaluationOutput with all items and a summary.""")
             event = WorkflowEvent(
                 id=str(uuid4()),
                 workflow_id=workflow_id,
-                sequence=0,
+                sequence=EPHEMERAL_SEQUENCE,
                 timestamp=datetime.now(UTC),
                 agent="evaluator",
                 event_type=EventType.AGENT_OUTPUT,

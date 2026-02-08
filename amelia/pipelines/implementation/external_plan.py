@@ -103,10 +103,6 @@ async def import_external_plan(
         content = plan_content or ""
         plan_path = None
 
-    # Validate content is not empty
-    if not content.strip():
-        raise ValueError("Plan content is empty")
-
     # Validate target_path is within working directory (prevent path traversal)
     target_path = target_path.expanduser().resolve()
     try:
@@ -115,6 +111,10 @@ async def import_external_plan(
         raise ValueError(
             f"Target path '{target_path}' resolves outside working directory"
         ) from None
+
+    # Validate content is not empty
+    if not content.strip():
+        raise ValueError("Plan content is empty")
 
     # Check if source and target are the same file (both paths now resolved)
     file_already_at_target = plan_path == target_path if plan_path is not None else False
@@ -174,7 +174,7 @@ async def import_external_plan(
 
     return ExternalPlanImportResult(
         goal=goal,
-        plan_markdown=None if file_already_at_target else plan_markdown,
+        plan_markdown=plan_markdown,
         plan_path=target_path,
         key_files=key_files,
         total_tasks=total_tasks,
