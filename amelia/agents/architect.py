@@ -215,9 +215,8 @@ Before planning, discover:
                     "plan_path": extracted_plan_path,
                 })
                 yield current_state, event
-                continue  # Result is the final message - let loop drain naturally
 
-            if event:
+            elif event:
                 current_state = state.model_copy(update={
                     "tool_calls": tool_calls,
                     "tool_results": tool_results,
