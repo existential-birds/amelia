@@ -4,10 +4,7 @@ Handles persistence and retrieval of brainstorming sessions,
 messages, and artifacts.
 """
 
-import json
-from datetime import datetime
-
-import aiosqlite
+import asyncpg
 
 from amelia.server.database.connection import Database
 from amelia.server.models.brainstorm import (
@@ -54,18 +51,16 @@ class BrainstormRepository:
             INSERT INTO brainstorm_sessions (
                 id, profile_id, driver_session_id, driver_type, status, topic,
                 created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             """,
-            (
-                session.id,
-                session.profile_id,
-                session.driver_session_id,
-                session.driver_type,
-                session.status,
-                session.topic,
-                session.created_at.isoformat(),
-                session.updated_at.isoformat(),
-            ),
+            session.id,
+            session.profile_id,
+            session.driver_session_id,
+            session.driver_type,
+            session.status,
+            session.topic,
+            session.created_at,
+            session.updated_at,
         )
 
     async def get_session(self, session_id: str) -> BrainstormingSession | None:
@@ -81,9 +76,9 @@ class BrainstormRepository:
             """
             SELECT id, profile_id, driver_session_id, driver_type, status, topic,
                    created_at, updated_at
-            FROM brainstorm_sessions WHERE id = ?
+            FROM brainstorm_sessions WHERE id = $1
             """,
-            (session_id,),
+            session_id,
         )
         if row is None:
             return None
@@ -98,21 +93,19 @@ class BrainstormRepository:
         await self._db.execute(
             """
             UPDATE brainstorm_sessions SET
-                driver_session_id = ?,
-                driver_type = ?,
-                status = ?,
-                topic = ?,
-                updated_at = ?
-            WHERE id = ?
+                driver_session_id = $1,
+                driver_type = $2,
+                status = $3,
+                topic = $4,
+                updated_at = $5
+            WHERE id = $6
             """,
-            (
-                session.driver_session_id,
-                session.driver_type,
-                session.status,
-                session.topic,
-                session.updated_at.isoformat(),
-                session.id,
-            ),
+            session.driver_session_id,
+            session.driver_type,
+            session.status,
+            session.topic,
+            session.updated_at,
+            session.id,
         )
 
     async def delete_session(self, session_id: str) -> None:
@@ -122,8 +115,8 @@ class BrainstormRepository:
             session_id: Session to delete.
         """
         await self._db.execute(
-            "DELETE FROM brainstorm_sessions WHERE id = ?",
-            (session_id,),
+            "DELETE FROM brainstorm_sessions WHERE id = $1",
+            session_id,
         )
 
     async def list_sessions(
@@ -144,14 +137,17 @@ class BrainstormRepository:
         """
         conditions = []
         params: list[str | int] = []
+        param_idx = 1
 
         if profile_id:
-            conditions.append("profile_id = ?")
+            conditions.append(f"profile_id = ${param_idx}")
             params.append(profile_id)
+            param_idx += 1
 
         if status:
-            conditions.append("status = ?")
+            conditions.append(f"status = ${param_idx}")
             params.append(status)
+            param_idx += 1
 
         where_clause = " AND ".join(conditions) if conditions else "1=1"
         params.append(limit)
@@ -163,13 +159,13 @@ class BrainstormRepository:
             FROM brainstorm_sessions
             WHERE {where_clause}
             ORDER BY updated_at DESC
-            LIMIT ?
+            LIMIT ${param_idx}
             """,
-            params,
+            *params,
         )
         return [self._row_to_session(row) for row in rows]
 
-    def _row_to_session(self, row: aiosqlite.Row) -> BrainstormingSession:
+    def _row_to_session(self, row: asyncpg.Record) -> BrainstormingSession:
         """Convert database row to BrainstormingSession.
 
         Args:
@@ -185,8 +181,8 @@ class BrainstormRepository:
             driver_type=row["driver_type"],
             status=row["status"],
             topic=row["topic"],
-            created_at=datetime.fromisoformat(row["created_at"]),
-            updated_at=datetime.fromisoformat(row["updated_at"]),
+            created_at=row["created_at"],
+            updated_at=row["updated_at"],
         )
 
     # =========================================================================
@@ -199,9 +195,9 @@ class BrainstormRepository:
         Args:
             message: Message to save.
         """
-        parts_json = None
+        parts_data = None
         if message.parts:
-            parts_json = json.dumps([p.model_dump() for p in message.parts])
+            parts_data = [p.model_dump() for p in message.parts]
 
         # Extract usage fields if present
         input_tokens = message.usage.input_tokens if message.usage else None
@@ -211,22 +207,20 @@ class BrainstormRepository:
         await self._db.execute(
             """
             INSERT INTO brainstorm_messages (
-                id, session_id, sequence, role, content, parts_json, created_at,
+                id, session_id, sequence, role, content, parts, created_at,
                 input_tokens, output_tokens, cost_usd
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             """,
-            (
-                message.id,
-                message.session_id,
-                message.sequence,
-                message.role,
-                message.content,
-                parts_json,
-                message.created_at.isoformat(),
-                input_tokens,
-                output_tokens,
-                cost_usd,
-            ),
+            message.id,
+            message.session_id,
+            message.sequence,
+            message.role,
+            message.content,
+            parts_data,
+            message.created_at,
+            input_tokens,
+            output_tokens,
+            cost_usd,
         )
 
     async def get_messages(
@@ -243,14 +237,15 @@ class BrainstormRepository:
         """
         rows = await self._db.fetch_all(
             """
-            SELECT id, session_id, sequence, role, content, parts_json, created_at,
+            SELECT id, session_id, sequence, role, content, parts, created_at,
                    input_tokens, output_tokens, cost_usd
             FROM brainstorm_messages
-            WHERE session_id = ?
+            WHERE session_id = $1
             ORDER BY sequence ASC
-            LIMIT ?
+            LIMIT $2
             """,
-            (session_id, limit),
+            session_id,
+            limit,
         )
         return [self._row_to_message(row) for row in rows]
 
@@ -264,12 +259,12 @@ class BrainstormRepository:
             Maximum sequence number, or 0 if no messages.
         """
         result = await self._db.fetch_scalar(
-            "SELECT COALESCE(MAX(sequence), 0) FROM brainstorm_messages WHERE session_id = ?",
-            (session_id,),
+            "SELECT COALESCE(MAX(sequence), 0) FROM brainstorm_messages WHERE session_id = $1",
+            session_id,
         )
         return result if isinstance(result, int) else 0
 
-    def _row_to_message(self, row: aiosqlite.Row) -> Message:
+    def _row_to_message(self, row: asyncpg.Record) -> Message:
         """Convert database row to Message.
 
         Args:
@@ -279,9 +274,9 @@ class BrainstormRepository:
             Message instance.
         """
         parts = None
-        if row["parts_json"]:
-            parts_data = json.loads(row["parts_json"])
-            parts = [MessagePart(**p) for p in parts_data]
+        if row["parts"]:
+            # JSONB codec returns list directly
+            parts = [MessagePart(**p) for p in row["parts"]]
 
         # Load usage if present
         usage = None
@@ -289,7 +284,7 @@ class BrainstormRepository:
             usage = MessageUsage(
                 input_tokens=row["input_tokens"],
                 output_tokens=row["output_tokens"] or 0,
-                cost_usd=row["cost_usd"] or 0.0,
+                cost_usd=float(row["cost_usd"]) if row["cost_usd"] else 0.0,
             )
 
         return Message(
@@ -300,7 +295,7 @@ class BrainstormRepository:
             content=row["content"],
             parts=parts,
             usage=usage,
-            created_at=datetime.fromisoformat(row["created_at"]),
+            created_at=row["created_at"],
         )
 
     # =========================================================================
@@ -317,16 +312,9 @@ class BrainstormRepository:
             """
             INSERT INTO brainstorm_artifacts (
                 id, session_id, type, path, title, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?)
+            ) VALUES ($1, $2, $3, $4, $5, $6)
             """,
-            (
-                artifact.id,
-                artifact.session_id,
-                artifact.type,
-                artifact.path,
-                artifact.title,
-                artifact.created_at.isoformat(),
-            ),
+            artifact.id, artifact.session_id, artifact.type, artifact.path, artifact.title, artifact.created_at,
         )
 
     async def get_artifacts(self, session_id: str) -> list[Artifact]:
@@ -342,14 +330,14 @@ class BrainstormRepository:
             """
             SELECT id, session_id, type, path, title, created_at
             FROM brainstorm_artifacts
-            WHERE session_id = ?
+            WHERE session_id = $1
             ORDER BY created_at ASC
             """,
-            (session_id,),
+            session_id,
         )
         return [self._row_to_artifact(row) for row in rows]
 
-    def _row_to_artifact(self, row: aiosqlite.Row) -> Artifact:
+    def _row_to_artifact(self, row: asyncpg.Record) -> Artifact:
         """Convert database row to Artifact.
 
         Args:
@@ -364,7 +352,7 @@ class BrainstormRepository:
             type=row["type"],
             path=row["path"],
             title=row["title"],
-            created_at=datetime.fromisoformat(row["created_at"]),
+            created_at=row["created_at"],
         )
 
     # =========================================================================
@@ -388,9 +376,9 @@ class BrainstormRepository:
                 COALESCE(SUM(cost_usd), 0.0) as total_cost_usd,
                 COUNT(*) as message_count
             FROM brainstorm_messages
-            WHERE session_id = ? AND input_tokens IS NOT NULL
+            WHERE session_id = $1 AND input_tokens IS NOT NULL
             """,
-            (session_id,),
+            session_id,
         )
 
         if row is None or row["message_count"] == 0:

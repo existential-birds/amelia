@@ -1,0 +1,720 @@
+version: 1
+metadata:
+  branch: feat/308-migrate-sqlite-to-postgresql
+  base: main
+  generated: "2026-02-07"
+  changes_summary: |
+    PostgreSQL migration - replaced SQLite with PostgreSQL for all persistence
+    (profiles, settings, workflows, events, usage, brainstorm sessions).
+    Includes connection pooling, JSONB codecs, migration system, and updated
+    CLI/API/dashboard integration.
+  test_scope: |
+    End-to-end browser tests covering the full user journey: profile creation
+    (both CLI and API drivers), brainstorming a design in Spec Builder,
+    and handing off the design to a planning workflow. Uses agent-browser CLI.
+
+setup:
+  stack:
+    - type: python
+      package_manager: uv
+    - type: node
+      package_manager: pnpm
+      path: dashboard/
+  prerequisites:
+    - description: "PostgreSQL running via Docker"
+      command: "docker compose up -d postgres"
+      verify: "docker compose ps --format json | python3 -c \"import sys,json; d=json.loads(sys.stdin.read()); print('healthy' if any('running' in str(s).lower() for s in (d if isinstance(d,list) else [d])) else 'NOT RUNNING')\""
+    - description: "Test repo exists at ../test_repo_c"
+      verify: "test -d ../test_repo_c && echo 'exists' || echo 'MISSING'"
+    - description: "Required environment variables are set"
+      env:
+        AMELIA_DATABASE_URL: "postgresql://amelia:amelia@localhost:5432/amelia"
+        OPENROUTER_API_KEY: "<your-openrouter-api-key>"
+  commands:
+    - "uv sync"
+    - "uv run amelia dev &"
+    - "sleep 5"
+  health_checks:
+    - url: http://localhost:8420/api/health/live
+      timeout: 30
+    - url: http://localhost:8420
+      timeout: 30
+  cleanup:
+    - description: "Delete test profiles created during tests"
+      command: |
+        curl -s -X DELETE http://localhost:8420/api/profiles/test-cli-profile 2>/dev/null || true
+        curl -s -X DELETE http://localhost:8420/api/profiles/test-api-profile 2>/dev/null || true
+
+tests:
+  # ============================================================
+  # SECTION 1: Health & Navigation Smoke Tests
+  # ============================================================
+
+  - id: TC-01
+    name: "Verify application loads and navigates to workflows"
+    context: |
+      Baseline test to confirm the server is running, dashboard loads,
+      and sidebar navigation works after PostgreSQL migration.
+    steps:
+      - action: agent-browser open
+        url: http://localhost:8420
+      - action: agent-browser snapshot -i
+        note: "Verify page loads with sidebar navigation visible"
+      - action: agent-browser screenshot
+        path: evidence/tc-01-home.png
+    expected: |
+      Dashboard loads successfully. Sidebar shows navigation links including
+      Active Jobs, Past Runs, Logs, Spec Builder, Agent Prompts, Costs,
+      and Settings. No errors in the UI.
+
+  - id: TC-02
+    name: "Verify health endpoint returns healthy status"
+    context: |
+      The /api/health endpoint now checks PostgreSQL connectivity
+      instead of SQLite. Verify it reports healthy.
+    steps:
+      - action: curl
+        method: GET
+        url: http://localhost:8420/api/health
+    expected: |
+      Returns 200 with JSON containing status "healthy", uptime info,
+      active_workflows count, and database connectivity confirmed.
+
+  # ============================================================
+  # SECTION 2: Profile Management - CLI Driver Profile
+  # ============================================================
+
+  - id: TC-03
+    name: "Navigate to Settings > Profiles page"
+    context: |
+      Profile CRUD is now backed by PostgreSQL. Verify the profiles
+      page loads and shows existing profiles (or empty state).
+    steps:
+      - action: agent-browser open
+        url: http://localhost:8420/settings/profiles
+      - action: agent-browser snapshot -i
+        note: "Capture the profiles page state"
+      - action: agent-browser screenshot
+        path: evidence/tc-03-profiles-page.png
+    expected: |
+      Settings page loads with Profiles tab active. Shows either existing
+      profile cards or an empty state with guidance to create a profile.
+      A button to create a new profile should be visible.
+
+  - id: TC-04
+    name: "Create a CLI driver profile"
+    context: |
+      Create a profile using the Claude CLI driver. This tests the
+      profile creation modal with all required fields and default
+      agent configurations. The profile stores in PostgreSQL.
+    steps:
+      - action: agent-browser open
+        url: http://localhost:8420/settings/profiles
+      - action: agent-browser snapshot -i
+        note: "Find and click the Create Profile button"
+      - action: agent-browser click
+        ref: "@create-profile-button"
+        note: "Click the button to open create profile modal (find the + or Create button)"
+      - action: agent-browser snapshot -i
+        note: "Profile creation modal should be open"
+      - action: agent-browser screenshot
+        path: evidence/tc-04a-create-modal.png
+      - action: agent-browser fill
+        ref: "@profile-name"
+        value: "test-cli-profile"
+        note: "Fill in profile name field"
+      - action: agent-browser fill
+        ref: "@working-dir"
+        value: "../test_repo_c"
+        note: "Fill in working directory"
+      - action: agent-browser select
+        ref: "@tracker"
+        value: "noop"
+        note: "Select 'None' for issue tracker"
+      - action: agent-browser snapshot -i
+        note: "Verify agent configs show CLI driver defaults"
+      - action: agent-browser screenshot
+        path: evidence/tc-04b-cli-agents.png
+        note: "Capture the agent configuration section showing CLI defaults"
+      - action: verify-agent-defaults
+        note: |
+          Verify default agent configurations:
+          - Architect: CLI / opus
+          - Developer: CLI / opus
+          - Reviewer: CLI / sonnet
+          All utility agents should default to CLI / haiku
+      - action: agent-browser click
+        ref: "@save-button"
+        note: "Click Save/Create button to create the profile"
+      - action: agent-browser snapshot -i
+        note: "Verify profile was created and appears in the list"
+      - action: agent-browser screenshot
+        path: evidence/tc-04c-profile-created.png
+    expected: |
+      Profile creation modal opens with all fields. After filling in
+      name="test-cli-profile", working_dir="../test_repo_c",
+      tracker="None", and keeping default CLI agent configs, clicking Save
+      creates the profile. A success toast appears and the profile card
+      shows in the profiles list with driver badge showing "CLI".
+
+  - id: TC-05
+    name: "Verify CLI profile was persisted via API"
+    context: |
+      Confirm the profile created in TC-04 was stored in PostgreSQL
+      by fetching it through the API.
+    steps:
+      - action: curl
+        method: GET
+        url: http://localhost:8420/api/profiles/test-cli-profile
+    expected: |
+      Returns 200 with profile JSON containing:
+      - id: "test-cli-profile"
+      - working_dir: "../test_repo_c"
+      - tracker: "noop"
+      - agents.architect.driver: "cli"
+      - agents.architect.model: "opus"
+      - agents.developer.driver: "cli"
+      - agents.reviewer.driver: "cli"
+      - agents.reviewer.model: "sonnet"
+
+  - id: TC-06
+    name: "Activate the CLI profile"
+    context: |
+      Activate the newly created profile so it becomes the default
+      for brainstorming and workflows.
+    steps:
+      - action: agent-browser open
+        url: http://localhost:8420/settings/profiles
+      - action: agent-browser snapshot -i
+        note: "Find the test-cli-profile card"
+      - action: agent-browser click
+        ref: "@activate-button"
+        note: "Click activate on test-cli-profile (may be a toggle or menu action)"
+      - action: agent-browser snapshot -i
+        note: "Verify the profile shows as active"
+      - action: agent-browser screenshot
+        path: evidence/tc-06-activated.png
+    expected: |
+      The test-cli-profile shows an active indicator (badge, checkmark, or
+      highlighted state). A success toast confirms activation.
+
+  # ============================================================
+  # SECTION 3: Profile Management - API Driver Profile
+  # ============================================================
+
+  - id: TC-07
+    name: "Create an API driver profile with custom agent models"
+    context: |
+      Create a second profile using the OpenRouter API driver to verify
+      both driver types work correctly with PostgreSQL storage. This tests
+      the bulk configuration feature and API model selection.
+    steps:
+      - action: agent-browser open
+        url: http://localhost:8420/settings/profiles
+      - action: agent-browser snapshot -i
+      - action: agent-browser click
+        ref: "@create-profile-button"
+        note: "Open create profile modal"
+      - action: agent-browser snapshot -i
+      - action: agent-browser fill
+        ref: "@profile-name"
+        value: "test-api-profile"
+      - action: agent-browser fill
+        ref: "@working-dir"
+        value: "../test_repo_c"
+      - action: agent-browser select
+        ref: "@tracker"
+        value: "noop"
+      - action: agent-browser snapshot -i
+        note: "Find the bulk configuration section"
+      - action: agent-browser screenshot
+        path: evidence/tc-07a-bulk-config.png
+      - action: agent-browser select
+        ref: "@bulk-driver"
+        value: "api"
+        note: "Change bulk driver to OpenRouter API"
+      - action: agent-browser click
+        ref: "@apply-to-all"
+        note: "Click 'Apply to All' to set all agents to API driver"
+      - action: agent-browser snapshot -i
+        note: "Verify all agent cards now show API driver"
+      - action: agent-browser screenshot
+        path: evidence/tc-07b-api-agents.png
+      - action: agent-browser click
+        ref: "@save-button"
+        note: "Save the API profile"
+      - action: agent-browser snapshot -i
+      - action: agent-browser screenshot
+        path: evidence/tc-07c-api-profile-created.png
+    expected: |
+      After changing the bulk driver to "OpenRouter API" and clicking
+      "Apply to All", all 7 agent cards should update to show the API
+      driver. The model dropdowns should change to show OpenRouter models
+      (fetched dynamically). Saving creates the profile with API driver
+      configuration. Profile card shows "API" driver badge.
+
+  - id: TC-08
+    name: "Verify API profile persisted with correct driver settings"
+    context: |
+      Confirm the API profile was stored correctly in PostgreSQL
+      with all agents set to the API driver.
+    steps:
+      - action: curl
+        method: GET
+        url: http://localhost:8420/api/profiles/test-api-profile
+    expected: |
+      Returns 200 with profile JSON where all agent entries have
+      driver: "api". The model values should reflect the selected
+      OpenRouter models.
+
+  - id: TC-09
+    name: "Verify both profiles appear in profiles list"
+    context: |
+      After creating both CLI and API profiles, verify the profiles
+      page shows both with correct driver badges.
+    steps:
+      - action: agent-browser open
+        url: http://localhost:8420/settings/profiles
+      - action: agent-browser snapshot -i
+        note: "Both profiles should be visible"
+      - action: agent-browser screenshot
+        path: evidence/tc-09-both-profiles.png
+    expected: |
+      The profiles page shows at least two profiles:
+      1. test-cli-profile with CLI driver badge
+      2. test-api-profile with API driver badge
+      One of them should show as active.
+
+  # ============================================================
+  # SECTION 4: Spec Builder - Brainstorming a Design
+  # ============================================================
+
+  - id: TC-10
+    name: "Navigate to Spec Builder and verify empty state"
+    context: |
+      The Spec Builder (brainstorm) page allows users to brainstorm
+      designs with Claude. Verify it loads correctly with active profile.
+    steps:
+      - action: agent-browser open
+        url: http://localhost:8420/specs
+      - action: agent-browser snapshot -i
+        note: "Check for empty state or existing sessions"
+      - action: agent-browser screenshot
+        path: evidence/tc-10-spec-builder-empty.png
+    expected: |
+      Spec Builder page loads. If no prior sessions exist, shows an
+      empty state with a message input at the bottom asking
+      "What would you like to design?". The active profile info
+      should be visible showing the current driver and model.
+
+  - id: TC-11
+    name: "Start a brainstorming session with a design prompt"
+    context: |
+      Create a new brainstorming session by typing a design prompt.
+      This tests the session creation flow and message streaming,
+      which now stores sessions in PostgreSQL.
+    steps:
+      - action: agent-browser open
+        url: http://localhost:8420/specs
+      - action: agent-browser snapshot -i
+        note: "Find the message input textarea"
+      - action: agent-browser fill
+        ref: "@message-input"
+        value: "Design a simple REST API for a todo list application with CRUD operations. Include the data model, endpoint definitions, and error handling strategy."
+        note: "Type the brainstorming prompt"
+      - action: agent-browser click
+        ref: "@submit-button"
+        note: "Submit the message (or press Enter)"
+      - action: agent-browser wait
+        type: text
+        value: "endpoint"
+        timeout: 60000
+        note: "Wait for the assistant to start responding about endpoints"
+      - action: agent-browser snapshot -i
+        note: "Capture the streaming response"
+      - action: agent-browser screenshot
+        path: evidence/tc-11a-brainstorm-streaming.png
+      - action: agent-browser wait
+        type: idle
+        timeout: 120000
+        note: "Wait for response to complete"
+      - action: agent-browser snapshot -i
+        note: "Capture the completed response"
+      - action: agent-browser screenshot
+        path: evidence/tc-11b-brainstorm-complete.png
+    expected: |
+      The user message appears on the right side of the conversation.
+      Claude's response streams in on the left side with the design
+      for a todo list API. The response should include data model
+      definitions, endpoint descriptions, and error handling patterns.
+      If reasoning is available, it may appear in a collapsible section.
+      An artifact card may be generated with the design document.
+
+  - id: TC-12
+    name: "Send a follow-up message to refine the design"
+    context: |
+      Continue the brainstorming conversation to test multi-turn
+      sessions and refine the design with additional requirements.
+    steps:
+      - action: agent-browser snapshot -i
+        note: "Verify we're still in the same session"
+      - action: agent-browser fill
+        ref: "@message-input"
+        value: "Add authentication with JWT tokens and rate limiting. Also include pagination for the list endpoint."
+      - action: agent-browser click
+        ref: "@submit-button"
+      - action: agent-browser wait
+        type: idle
+        timeout: 120000
+        note: "Wait for response to complete"
+      - action: agent-browser snapshot -i
+      - action: agent-browser screenshot
+        path: evidence/tc-12-brainstorm-refined.png
+    expected: |
+      The follow-up message and response appear in the same conversation
+      thread below the initial exchange. Claude refines the design to
+      include JWT authentication, rate limiting, and pagination details.
+      The conversation maintains context from the first message.
+
+  - id: TC-13
+    name: "Verify brainstorm session was persisted"
+    context: |
+      Confirm the brainstorming session and messages were stored in
+      PostgreSQL by checking the API.
+    steps:
+      - action: curl
+        method: GET
+        url: "http://localhost:8420/api/brainstorm/sessions?limit=1"
+    expected: |
+      Returns 200 with at least one session containing:
+      - A session ID
+      - Profile ID matching the active profile
+      - Status: "active"
+      - Created timestamp
+      The session should be the one just created.
+
+  # ============================================================
+  # SECTION 5: Artifact Generation & Review
+  # ============================================================
+
+  - id: TC-14
+    name: "Check for generated artifacts in the brainstorm session"
+    context: |
+      After a multi-turn brainstorming conversation, Claude may have
+      generated design artifacts (structured design documents).
+      Verify they appear in the UI.
+    steps:
+      - action: agent-browser open
+        url: http://localhost:8420/specs
+      - action: agent-browser snapshot -i
+        note: "Look for artifact cards in the conversation"
+      - action: agent-browser screenshot
+        path: evidence/tc-14-artifacts.png
+        note: "Capture any artifact cards that were generated"
+      - action: agent-browser scroll down 500
+        note: "Scroll down to see all artifacts"
+      - action: agent-browser snapshot -i
+      - action: agent-browser screenshot
+        path: evidence/tc-14b-artifacts-scrolled.png
+    expected: |
+      The conversation should contain one or more artifact cards
+      showing the design document(s) generated by Claude. Each artifact
+      card should have a title, description, and action buttons
+      including "Hand off" and "Copy". The artifacts represent the
+      structured output of the brainstorming session.
+
+  # ============================================================
+  # SECTION 6: Handoff - Design to Planning Workflow
+  # ============================================================
+
+  - id: TC-15
+    name: "Open the handoff dialog from an artifact"
+    context: |
+      The handoff feature creates a workflow from a brainstorm artifact.
+      This tests the handoff dialog which bridges brainstorming to
+      the planning/execution pipeline.
+    steps:
+      - action: agent-browser open
+        url: http://localhost:8420/specs
+      - action: agent-browser snapshot -i
+        note: "Find an artifact card with a Hand off button"
+      - action: agent-browser click
+        ref: "@handoff-button"
+        note: "Click the Hand off button on an artifact card"
+      - action: agent-browser snapshot -i
+        note: "Handoff dialog should open"
+      - action: agent-browser screenshot
+        path: evidence/tc-15-handoff-dialog.png
+    expected: |
+      A handoff dialog (AlertDialog) opens with:
+      - An issue title field pre-filled with "Implement {artifact title}"
+      - A "Cancel" button
+      - A "Create Workflow →" button
+      The dialog should clearly indicate that this will create a new
+      workflow from the brainstorm design.
+
+  - id: TC-16
+    name: "Complete the handoff to create a workflow"
+    context: |
+      Submit the handoff dialog to create a planning workflow from
+      the brainstorm design. This creates a workflow in PostgreSQL
+      and should navigate to the workflow detail page.
+    steps:
+      - action: agent-browser snapshot -i
+        note: "Verify handoff dialog is still open"
+      - action: verify-field
+        ref: "@issue-title"
+        note: "Verify the issue title is pre-filled"
+      - action: agent-browser fill
+        ref: "@issue-title"
+        value: "Implement Todo List REST API"
+        note: "Optionally adjust the issue title"
+      - action: agent-browser click
+        ref: "@create-workflow-button"
+        note: "Click 'Create Workflow →' to initiate handoff"
+      - action: agent-browser wait
+        type: url
+        value: "/workflows/"
+        timeout: 30000
+        note: "Wait for navigation to workflows page"
+      - action: agent-browser snapshot -i
+      - action: agent-browser screenshot
+        path: evidence/tc-16-workflow-created.png
+    expected: |
+      After clicking "Create Workflow", the system:
+      1. Creates a new workflow with the brainstorm design as the plan
+      2. Shows a loading state briefly
+      3. Navigates to the workflow detail page (/workflows/:id/detail)
+      4. The workflow should show as pending or in_progress
+      5. The workflow title should reflect "Implement Todo List REST API"
+
+  - id: TC-17
+    name: "Verify the workflow was created with correct data"
+    context: |
+      Confirm the handoff workflow was persisted in PostgreSQL
+      with the correct issue data and plan from the brainstorm.
+    steps:
+      - action: curl
+        method: GET
+        url: "http://localhost:8420/api/workflows/active"
+    expected: |
+      Returns 200 with workflow list containing the newly created
+      workflow with:
+      - Issue title matching "Implement Todo List REST API"
+      - Status: pending, in_progress, or blocked (depending on timing)
+      - Profile matching the active profile
+      - The workflow should have plan content from the brainstorm artifact
+
+  - id: TC-18
+    name: "Verify workflow appears on the Active Jobs page"
+    context: |
+      The workflow created via handoff should appear in the Active
+      Jobs list with its status and details.
+    steps:
+      - action: agent-browser open
+        url: http://localhost:8420/workflows
+      - action: agent-browser snapshot -i
+        note: "Find the handoff workflow in the active jobs list"
+      - action: agent-browser screenshot
+        path: evidence/tc-18-active-jobs.png
+    expected: |
+      The workflows page shows the newly created workflow from the
+      handoff. It should display:
+      - Issue ID or title: "Implement Todo List REST API"
+      - Current status (pending/in_progress/blocked)
+      - Profile name used
+      - Pipeline visualization showing the workflow stages
+
+  # ============================================================
+  # SECTION 7: Quick Shot - Alternative Workflow Creation
+  # ============================================================
+
+  - id: TC-19
+    name: "Open Quick Shot modal and create a workflow directly"
+    context: |
+      Test the Quick Shot modal as an alternative to the
+      brainstorm-to-handoff flow. This allows creating workflows
+      directly from the sidebar.
+    steps:
+      - action: agent-browser open
+        url: http://localhost:8420/workflows
+      - action: agent-browser snapshot -i
+        note: "Find the Quick Shot button in the sidebar"
+      - action: agent-browser click
+        ref: "@quick-shot-button"
+        note: "Click the Quick Shot button (lightning bolt icon in sidebar)"
+      - action: agent-browser snapshot -i
+        note: "Quick Shot modal should open"
+      - action: agent-browser screenshot
+        path: evidence/tc-19a-quickshot-modal.png
+      - action: agent-browser fill
+        ref: "@worktree-path"
+        value: "../test_repo_c"
+      - action: agent-browser fill
+        ref: "@task-id"
+        value: "QS-001"
+      - action: agent-browser fill
+        ref: "@task-title"
+        value: "Add unit tests for calculator module"
+      - action: agent-browser fill
+        ref: "@task-description"
+        value: "Write comprehensive unit tests for the calculator module in src/calculator.py covering add, subtract, multiply, and divide operations with edge cases."
+      - action: agent-browser snapshot -i
+      - action: agent-browser screenshot
+        path: evidence/tc-19b-quickshot-filled.png
+      - action: agent-browser click
+        ref: "@plan-and-queue"
+        note: "Click 'Plan & Queue' to create workflow with planning"
+      - action: agent-browser wait
+        type: idle
+        timeout: 10000
+      - action: agent-browser snapshot -i
+      - action: agent-browser screenshot
+        path: evidence/tc-19c-quickshot-submitted.png
+    expected: |
+      Quick Shot modal opens with all form fields. After filling in
+      worktree_path, task ID, title, and description, clicking
+      "Plan & Queue" creates the workflow and queues it for planning.
+      The modal closes and the workflow appears in the active jobs list.
+
+  # ============================================================
+  # SECTION 8: Settings - Server Configuration
+  # ============================================================
+
+  - id: TC-20
+    name: "Navigate to Server Settings and verify configuration"
+    context: |
+      Verify the server settings page loads correctly with current
+      PostgreSQL-backed configuration values.
+    steps:
+      - action: agent-browser open
+        url: http://localhost:8420/settings/server
+      - action: agent-browser snapshot -i
+        note: "Capture server settings form"
+      - action: agent-browser screenshot
+        path: evidence/tc-20-server-settings.png
+    expected: |
+      Server settings page loads with form fields showing:
+      - Log Retention dropdown (default: 30 days)
+      - Max Concurrent Workflows dropdown (default: 5)
+      - Stream Tool Results toggle (default: off)
+      All values should be loaded from PostgreSQL-backed settings.
+
+  - id: TC-21
+    name: "Modify and save a server setting"
+    context: |
+      Test that server settings can be updated and persisted to
+      PostgreSQL. Change a non-critical setting and verify it saves.
+    steps:
+      - action: agent-browser open
+        url: http://localhost:8420/settings/server
+      - action: agent-browser snapshot -i
+      - action: agent-browser select
+        ref: "@max-concurrent"
+        value: "10"
+        note: "Change max concurrent from 5 to 10"
+      - action: agent-browser snapshot -i
+        note: "Verify the save footer appears with unsaved changes"
+      - action: agent-browser screenshot
+        path: evidence/tc-21a-unsaved.png
+      - action: agent-browser click
+        ref: "@save-button"
+        note: "Click Save Changes"
+      - action: agent-browser wait
+        type: idle
+        timeout: 5000
+      - action: agent-browser snapshot -i
+      - action: agent-browser screenshot
+        path: evidence/tc-21b-saved.png
+      - action: agent-browser open
+        url: http://localhost:8420/settings/server
+        note: "Reload to verify persistence"
+      - action: agent-browser snapshot -i
+      - action: agent-browser screenshot
+        path: evidence/tc-21c-reloaded.png
+    expected: |
+      After changing max concurrent to 10:
+      1. A sticky footer appears saying "You have unsaved changes"
+      2. Clicking "Save Changes" shows a success toast
+      3. After reloading the page, the value remains at 10
+      This confirms settings are persisted to PostgreSQL.
+
+  # ============================================================
+  # SECTION 9: Navigation & Cross-Feature Verification
+  # ============================================================
+
+  - id: TC-22
+    name: "Verify Costs page loads with usage data"
+    context: |
+      If brainstorming sessions consumed tokens, verify usage
+      appears on the Costs page (backed by PostgreSQL).
+    steps:
+      - action: agent-browser open
+        url: http://localhost:8420/costs
+      - action: agent-browser snapshot -i
+      - action: agent-browser screenshot
+        path: evidence/tc-22-costs.png
+    expected: |
+      Costs page loads with usage metrics. If brainstorming consumed
+      tokens, the data table should show at least one row with
+      model name, input/output tokens, cost, and duration. Date range
+      presets (7d, 30d, 90d, all) should be visible.
+
+  - id: TC-23
+    name: "Verify Logs page shows brainstorm and workflow events"
+    context: |
+      The Logs page shows real-time events. After creating brainstorm
+      sessions and workflows, events should be logged.
+    steps:
+      - action: agent-browser open
+        url: http://localhost:8420/logs
+      - action: agent-browser snapshot -i
+      - action: agent-browser screenshot
+        path: evidence/tc-23-logs.png
+    expected: |
+      Logs page loads with event entries. Should show events related
+      to brainstorming (if any were logged) and workflow creation.
+      Event type filters should be visible and functional.
+
+  # ============================================================
+  # SECTION 10: Cleanup & Profile Deletion
+  # ============================================================
+
+  - id: TC-24
+    name: "Delete the test API profile"
+    context: |
+      Clean up by deleting the test-api-profile. Verify deletion
+      works correctly with PostgreSQL storage.
+    steps:
+      - action: agent-browser open
+        url: http://localhost:8420/settings/profiles
+      - action: agent-browser snapshot -i
+        note: "Find the test-api-profile card"
+      - action: agent-browser click
+        ref: "@delete-button-api"
+        note: "Click delete on test-api-profile"
+      - action: agent-browser snapshot -i
+        note: "Confirmation dialog should appear"
+      - action: agent-browser screenshot
+        path: evidence/tc-24a-delete-confirm.png
+      - action: agent-browser click
+        ref: "@confirm-delete"
+        note: "Confirm deletion"
+      - action: agent-browser snapshot -i
+      - action: agent-browser screenshot
+        path: evidence/tc-24b-deleted.png
+    expected: |
+      A confirmation dialog appears asking to confirm deletion.
+      After confirming, the test-api-profile is removed from the
+      profiles list. A success toast confirms deletion.
+
+  - id: TC-25
+    name: "Verify deleted profile is gone from API"
+    context: |
+      Confirm the profile was deleted from PostgreSQL.
+    steps:
+      - action: curl
+        method: GET
+        url: http://localhost:8420/api/profiles/test-api-profile
+    expected: |
+      Returns 404 indicating the profile no longer exists in the database.

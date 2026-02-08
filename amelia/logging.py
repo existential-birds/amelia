@@ -114,7 +114,7 @@ def configure_logging(level: str = "INFO") -> None:
     )
 
 
-def log_server_startup(host: str, port: int, database_path: str, version: str) -> None:
+def log_server_startup(host: str, port: int, database_url: str, version: str) -> None:
     """Log server startup information with Amelia-styled formatting.
 
     Outputs colored server configuration details including version, URL,
@@ -123,7 +123,7 @@ def log_server_startup(host: str, port: int, database_path: str, version: str) -
     Args:
         host: Server bind host address.
         port: Server bind port number.
-        database_path: Path to SQLite database file.
+        database_url: PostgreSQL connection URL.
         version: Application version string.
     """
     # Log configuration details with consistent styling
@@ -135,7 +135,7 @@ def log_server_startup(host: str, port: int, database_path: str, version: str) -
     config_lines = [
         f"  {muted}Version:{RESET}  {gold}v{version}{RESET}",
         f"  {muted}Server:{RESET}   {blue}http://{host}:{port}{RESET}",
-        f"  {muted}Database:{RESET} {sage}{database_path}{RESET}",
+        f"  {muted}Database:{RESET} {sage}{database_url}{RESET}",
         "",
     ]
     sys.stderr.write("\n".join(config_lines))

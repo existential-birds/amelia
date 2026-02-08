@@ -5,7 +5,6 @@ used throughout the test suite for the agentic execution model.
 """
 import os
 from collections.abc import AsyncGenerator, Callable, Generator
-from pathlib import Path
 from typing import Any, NamedTuple
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -42,9 +41,12 @@ def event_bus() -> EventBus:
 
 
 @pytest.fixture
-def temp_db_path(tmp_path: Path) -> Path:
-    """Return a temporary database path."""
-    return tmp_path / "test.db"
+def database_url() -> str:
+    """Return the PostgreSQL test database URL."""
+    return os.environ.get(
+        "DATABASE_URL",
+        "postgresql://amelia:amelia@localhost:5432/amelia_test",
+    )
 
 
 class AsyncIteratorMock:
@@ -383,7 +385,12 @@ class LangGraphMocks(NamedTuple):
 def langgraph_mock_factory(
     async_iterator_mock_factory: Callable[[list[Any]], AsyncIteratorMock],
 ) -> Callable[..., LangGraphMocks]:
-    """Factory fixture for creating LangGraph mock objects."""
+    """Factory fixture for creating LangGraph mock objects.
+
+    The checkpointer is now passed directly to OrchestratorService.__init__
+    (no more AsyncSqliteSaver.from_conn_string context managers).
+    The mock_saver is a simple AsyncMock that can be passed as checkpointer.
+    """
 
     def _create(
         astream_items: list[Any] | None = None,
@@ -401,7 +408,11 @@ def langgraph_mock_factory(
             astream_items
         )
 
+        # Mock checkpointer: passed directly to OrchestratorService(checkpointer=...)
         mock_saver = AsyncMock()
+        mock_saver.adelete_thread = AsyncMock()
+
+        # saver_class kept for backward compatibility with integration tests
         mock_saver_class = MagicMock()
         mock_saver_class.from_conn_string.return_value.__aenter__ = AsyncMock(
             return_value=mock_saver

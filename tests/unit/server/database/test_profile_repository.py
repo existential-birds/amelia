@@ -9,6 +9,9 @@ from amelia.server.database.connection import Database
 from amelia.server.database.profile_repository import ProfileRecord, ProfileRepository
 
 
+pytestmark = pytest.mark.integration
+
+
 def _make_agents_json(
     driver: str = "cli",
     model: str = "opus",
@@ -55,11 +58,12 @@ def test_profile_record_with_agents_json():
 
 
 def test_row_to_profile_parses_agents_json():
-    """_row_to_profile should parse agents JSON into AgentConfig dict."""
-    agents_json = json.dumps({
+    """_row_to_profile should parse agents JSONB into AgentConfig dict."""
+    # JSONB codec returns dicts directly from asyncpg
+    agents_data = {
         "architect": {"driver": "cli", "model": "opus", "options": {}},
         "developer": {"driver": "cli", "model": "sonnet", "options": {}},
-    })
+    }
 
     mock_row = {
         "id": "test",
@@ -67,8 +71,8 @@ def test_row_to_profile_parses_agents_json():
         "working_dir": "/tmp/test",
         "plan_output_dir": "docs/plans",
         "plan_path_pattern": "docs/plans/{date}-{issue_key}.md",
-        "agents": agents_json,
-        "is_active": 1,
+        "agents": agents_data,
+        "is_active": True,
         "created_at": "2025-01-01T00:00:00",
         "updated_at": "2025-01-01T00:00:00",
     }
@@ -83,40 +87,36 @@ def test_row_to_profile_parses_agents_json():
 
 
 @pytest.mark.asyncio
-async def test_create_profile_stores_agents_json(temp_db_path):
+async def test_create_profile_stores_agents_json(db_with_schema):
     """create_profile should serialize agents dict to JSON."""
-    async with Database(temp_db_path) as db:
-        await db.ensure_schema()
-        repo = ProfileRepository(db)
+    repo = ProfileRepository(db_with_schema)
 
-        profile = Profile(
-            name="test_agents",
-            tracker="noop",
-            working_dir="/tmp/test",
-            agents={
-                "architect": AgentConfig(driver="cli", model="opus"),
-                "developer": AgentConfig(driver="api", model="anthropic/claude-sonnet-4"),
-            },
-        )
+    profile = Profile(
+        name="test_agents",
+        tracker="noop",
+        working_dir="/tmp/test",
+        agents={
+            "architect": AgentConfig(driver="cli", model="opus"),
+            "developer": AgentConfig(driver="api", model="anthropic/claude-sonnet-4"),
+        },
+    )
 
-        await repo.create_profile(profile)
+    await repo.create_profile(profile)
 
-        # Retrieve and verify
-        retrieved = await repo.get_profile("test_agents")
-        assert retrieved is not None
-        assert retrieved.agents["architect"].model == "opus"
-        assert retrieved.agents["developer"].driver == "api"
+    # Retrieve and verify
+    retrieved = await repo.get_profile("test_agents")
+    assert retrieved is not None
+    assert retrieved.agents["architect"].model == "opus"
+    assert retrieved.agents["developer"].driver == "api"
 
 
 class TestProfileRepository:
     """Tests for ProfileRepository CRUD operations."""
 
     @pytest.fixture
-    async def db(self, temp_db_path) -> Database:
-        """Create database with schema."""
-        async with Database(temp_db_path) as db:
-            await db.ensure_schema()
-            yield db
+    async def db(self, db_with_schema: Database) -> Database:
+        """Use the shared PostgreSQL database with schema."""
+        return db_with_schema
 
     @pytest.fixture
     def repo(self, db: Database) -> ProfileRepository:
@@ -189,8 +189,12 @@ class TestProfileRepository:
                 agents=_make_agents(model="opus"),
             )
         )
-        # update_profile still accepts JSON string for agents
-        new_agents = _make_agents_json(model="sonnet")
+        # update_profile accepts dict for agents (JSONB codec handles encoding)
+        new_agents = {
+            "architect": {"driver": "cli", "model": "sonnet", "options": {}},
+            "developer": {"driver": "cli", "model": "sonnet", "options": {}},
+            "reviewer": {"driver": "cli", "model": "haiku", "options": {}},
+        }
         updated = await repo.update_profile("dev", {"agents": new_agents})
         assert updated.agents["architect"].model == "sonnet"
 

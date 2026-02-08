@@ -1,6 +1,6 @@
 """Tests for server configuration."""
+
 import os
-from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -23,7 +23,9 @@ class TestServerConfig:
 
         assert config.host == "127.0.0.1"
         assert config.port == 8420
-        assert config.database_path == Path.home() / ".amelia" / "amelia.db"
+        assert config.database_url == "postgresql://localhost:5432/amelia"
+        assert config.db_pool_min_size == 2
+        assert config.db_pool_max_size == 10
 
     def test_env_override_port(self) -> None:
         """Port can be overridden via environment variable."""
@@ -37,17 +39,24 @@ class TestServerConfig:
             config = ServerConfig()
             assert config.host == "0.0.0.0"
 
-    def test_database_path_default(self) -> None:
-        """Database path defaults to ~/.amelia/amelia.db."""
+    def test_database_url_default(self) -> None:
+        """Database URL defaults to local PostgreSQL."""
         config = ServerConfig()
-        expected = Path.home() / ".amelia" / "amelia.db"
-        assert config.database_path == expected
+        assert "postgresql://" in config.database_url
 
-    def test_database_path_override(self) -> None:
-        """Database path can be overridden."""
-        with patch.dict(os.environ, {"AMELIA_DATABASE_PATH": "/tmp/test.db"}):
+    def test_database_url_override(self) -> None:
+        """Database URL can be overridden."""
+        with patch.dict(
+            os.environ, {"AMELIA_DATABASE_URL": "postgresql://user:pass@db:5432/mydb"}
+        ):
             config = ServerConfig()
-            assert config.database_path == Path("/tmp/test.db")
+            assert config.database_url == "postgresql://user:pass@db:5432/mydb"
+
+    def test_pool_settings(self) -> None:
+        """Pool size settings have valid defaults."""
+        config = ServerConfig()
+        assert config.db_pool_min_size >= 1
+        assert config.db_pool_max_size >= config.db_pool_min_size
 
 
 class TestBootstrapServerConfig:
@@ -59,19 +68,22 @@ class TestBootstrapServerConfig:
         # These should exist
         assert hasattr(config, "host")
         assert hasattr(config, "port")
-        assert hasattr(config, "database_path")
+        assert hasattr(config, "database_url")
+        assert hasattr(config, "db_pool_min_size")
+        assert hasattr(config, "db_pool_max_size")
 
         # These should NOT exist (moved to database)
         assert not hasattr(config, "log_retention_days")
         assert not hasattr(config, "max_concurrent")
         assert not hasattr(config, "stream_tool_results")
+        assert not hasattr(config, "database_path")
 
     def test_defaults(self):
         """Verify default values."""
         config = ServerConfig()
         assert config.host == "127.0.0.1"
         assert config.port == 8420
-        assert config.database_path == Path.home() / ".amelia" / "amelia.db"
+        assert "postgresql://" in config.database_url
 
 
 class TestGetConfig:

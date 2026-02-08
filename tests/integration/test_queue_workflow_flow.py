@@ -5,17 +5,17 @@ Tests the complete queue workflow lifecycle:
 - Start individual queued workflows
 - Batch start multiple workflows
 
-Uses real OrchestratorService with real WorkflowRepository (in-memory SQLite).
+Uses real OrchestratorService with real WorkflowRepository (PostgreSQL test database).
 Only mocks at external boundaries (LangGraph checkpoint/resume).
 
 Mock boundaries:
-- AsyncSqliteSaver: Prevents actual graph execution
+- Mock checkpointer: Prevents actual graph execution
 - create_implementation_graph: Returns mock graph
 
 Real components:
 - FastAPI route handlers
 - OrchestratorService
-- WorkflowRepository with in-memory SQLite
+- WorkflowRepository with PostgreSQL test database
 - Request/Response model validation
 """
 
@@ -25,7 +25,7 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import status
@@ -33,6 +33,7 @@ from fastapi.testclient import TestClient
 
 from amelia.pipelines.implementation.state import ImplementationState
 from amelia.server.database.connection import Database
+from amelia.server.database.migrator import Migrator
 from amelia.server.database.repository import WorkflowRepository
 from amelia.server.dependencies import get_orchestrator, get_repository
 from amelia.server.events.bus import EventBus
@@ -41,17 +42,21 @@ from amelia.server.models.state import ServerExecutionState
 from amelia.server.orchestrator.service import OrchestratorService
 
 
+DATABASE_URL = "postgresql://amelia:amelia@localhost:5432/amelia_test"
+
+
 # =============================================================================
 # Fixtures
 # =============================================================================
 
 
 @pytest.fixture
-async def test_db(temp_db_path: Path) -> AsyncGenerator[Database, None]:
-    """Create and initialize in-memory SQLite database."""
-    db = Database(temp_db_path)
+async def test_db() -> AsyncGenerator[Database, None]:
+    """Create and initialize PostgreSQL test database."""
+    db = Database(DATABASE_URL)
     await db.connect()
-    await db.ensure_schema()
+    migrator = Migrator(db)
+    await migrator.run()
     yield db
     await db.close()
 
@@ -69,22 +74,15 @@ def test_event_bus() -> EventBus:
 
 
 @pytest.fixture
-def temp_checkpoint_db(tmp_path: Path) -> str:
-    """Create temporary checkpoint database path."""
-    return str(tmp_path / "checkpoints.db")
-
-
-@pytest.fixture
 def test_orchestrator(
     test_event_bus: EventBus,
     test_repository: WorkflowRepository,
-    temp_checkpoint_db: str,
 ) -> OrchestratorService:
     """Create real OrchestratorService with test dependencies."""
     return OrchestratorService(
         event_bus=test_event_bus,
         repository=test_repository,
-        checkpoint_path=temp_checkpoint_db,
+        checkpointer=AsyncMock(),
     )
 
 
@@ -221,9 +219,6 @@ profiles:
         mocks = langgraph_mock_factory(astream_items=[])
         with (
             patch(
-                "amelia.server.orchestrator.service.AsyncSqliteSaver"
-            ) as mock_saver_class,
-            patch(
                 "amelia.server.orchestrator.service.create_implementation_graph"
             ) as mock_create_graph,
             patch.object(
@@ -233,9 +228,6 @@ profiles:
             ),
         ):
             mock_create_graph.return_value = mocks.graph
-            mock_saver_class.from_conn_string.return_value = (
-                mocks.saver_class.from_conn_string.return_value
-            )
 
             response = test_client.post(
                 "/api/workflows",
@@ -276,9 +268,6 @@ class TestStartPendingWorkflow:
             mocks = langgraph_mock_factory(astream_items=[])
             with (
                 patch(
-                    "amelia.server.orchestrator.service.AsyncSqliteSaver"
-                ) as mock_saver_class,
-                patch(
                     "amelia.server.orchestrator.service.create_implementation_graph"
                 ) as mock_create_graph,
                 patch.object(
@@ -288,9 +277,6 @@ class TestStartPendingWorkflow:
                 ),
             ):
                 mock_create_graph.return_value = mocks.graph
-                mock_saver_class.from_conn_string.return_value = (
-                    mocks.saver_class.from_conn_string.return_value
-                )
 
                 response = test_client.post("/api/workflows/wf-pending-start/start")
 
@@ -371,9 +357,6 @@ class TestBatchStartWorkflows:
             mocks = langgraph_mock_factory(astream_items=[])
             with (
                 patch(
-                    "amelia.server.orchestrator.service.AsyncSqliteSaver"
-                ) as mock_saver_class,
-                patch(
                     "amelia.server.orchestrator.service.create_implementation_graph"
                 ) as mock_create_graph,
                 patch.object(
@@ -383,9 +366,6 @@ class TestBatchStartWorkflows:
                 ),
             ):
                 mock_create_graph.return_value = mocks.graph
-                mock_saver_class.from_conn_string.return_value = (
-                    mocks.saver_class.from_conn_string.return_value
-                )
 
                 response = test_client.post(
                     "/api/workflows/start-batch",
@@ -440,9 +420,6 @@ class TestBatchStartWorkflows:
             mocks = langgraph_mock_factory(astream_items=[])
             with (
                 patch(
-                    "amelia.server.orchestrator.service.AsyncSqliteSaver"
-                ) as mock_saver_class,
-                patch(
                     "amelia.server.orchestrator.service.create_implementation_graph"
                 ) as mock_create_graph,
                 patch.object(
@@ -452,9 +429,6 @@ class TestBatchStartWorkflows:
                 ),
             ):
                 mock_create_graph.return_value = mocks.graph
-                mock_saver_class.from_conn_string.return_value = (
-                    mocks.saver_class.from_conn_string.return_value
-                )
 
                 response = test_client.post(
                     "/api/workflows/start-batch",
@@ -539,18 +513,10 @@ profiles:
 
         # Step 3: Start the workflow
         mocks = langgraph_mock_factory(astream_items=[])
-        with (
-            patch(
-                "amelia.server.orchestrator.service.AsyncSqliteSaver"
-            ) as mock_saver_class,
-            patch(
-                "amelia.server.orchestrator.service.create_implementation_graph"
-            ) as mock_create_graph,
-        ):
+        with patch(
+            "amelia.server.orchestrator.service.create_implementation_graph"
+        ) as mock_create_graph:
             mock_create_graph.return_value = mocks.graph
-            mock_saver_class.from_conn_string.return_value = (
-                mocks.saver_class.from_conn_string.return_value
-            )
 
             start_response = test_client.post(f"/api/workflows/{workflow_id}/start")
 
@@ -767,18 +733,10 @@ profiles:
 
         # Start first workflow
         mocks = langgraph_mock_factory(astream_items=[])
-        with (
-            patch(
-                "amelia.server.orchestrator.service.AsyncSqliteSaver"
-            ) as mock_saver_class,
-            patch(
-                "amelia.server.orchestrator.service.create_implementation_graph"
-            ) as mock_create_graph,
-        ):
+        with patch(
+            "amelia.server.orchestrator.service.create_implementation_graph"
+        ) as mock_create_graph:
             mock_create_graph.return_value = mocks.graph
-            mock_saver_class.from_conn_string.return_value = (
-                mocks.saver_class.from_conn_string.return_value
-            )
 
             start1_response = test_client.post(f"/api/workflows/{workflow1_id}/start")
             assert start1_response.status_code == status.HTTP_202_ACCEPTED
@@ -895,18 +853,10 @@ profiles:
 
         # Start the workflow
         mocks = langgraph_mock_factory(astream_items=[])
-        with (
-            patch(
-                "amelia.server.orchestrator.service.AsyncSqliteSaver"
-            ) as mock_saver_class,
-            patch(
-                "amelia.server.orchestrator.service.create_implementation_graph"
-            ) as mock_create_graph,
-        ):
+        with patch(
+            "amelia.server.orchestrator.service.create_implementation_graph"
+        ) as mock_create_graph:
             mock_create_graph.return_value = mocks.graph
-            mock_saver_class.from_conn_string.return_value = (
-                mocks.saver_class.from_conn_string.return_value
-            )
 
             start_response = test_client.post(f"/api/workflows/{workflow_id}/start")
 
@@ -986,18 +936,10 @@ profiles:
 
         # Start the workflow (mocks apply to HTTP request context only)
         mocks = langgraph_mock_factory(astream_items=[])
-        with (
-            patch(
-                "amelia.server.orchestrator.service.AsyncSqliteSaver"
-            ) as mock_saver_class,
-            patch(
-                "amelia.server.orchestrator.service.create_implementation_graph"
-            ) as mock_create_graph,
-        ):
+        with patch(
+            "amelia.server.orchestrator.service.create_implementation_graph"
+        ) as mock_create_graph:
             mock_create_graph.return_value = mocks.graph
-            mock_saver_class.from_conn_string.return_value = (
-                mocks.saver_class.from_conn_string.return_value
-            )
 
             start_response = test_client.post(f"/api/workflows/{workflow_id}/start")
 

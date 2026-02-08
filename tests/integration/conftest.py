@@ -5,6 +5,7 @@ This module provides:
 - Fixtures for common test dependencies
 """
 
+import os
 import socket
 from collections.abc import AsyncGenerator, Callable
 from contextlib import asynccontextmanager
@@ -525,9 +526,8 @@ async def mock_langgraph_for_planning(
 ) -> AsyncGenerator[MagicMock, None]:
     """Context manager that mocks LangGraph for planning tests.
 
-    Patches AsyncSqliteSaver and _create_server_graph so that the
-    OrchestratorService runs against a mock graph instead of a real
-    LangGraph instance.
+    Patches _create_server_graph so that the OrchestratorService runs
+    against a mock graph instead of a real LangGraph instance.
 
     Args:
         goal: Forwarded to create_planning_graph_mock.
@@ -540,20 +540,8 @@ async def mock_langgraph_for_planning(
         extra_stream_items=extra_stream_items,
     )
 
-    mock_saver = AsyncMock()
-    mock_saver_class = MagicMock()
-    mock_saver_class.from_conn_string.return_value.__aenter__ = AsyncMock(
-        return_value=mock_saver
-    )
-    mock_saver_class.from_conn_string.return_value.__aexit__ = AsyncMock()
-
-    with (
-        patch(
-            "amelia.server.orchestrator.service.AsyncSqliteSaver", mock_saver_class
-        ),
-        patch.object(
-            OrchestratorService, "_create_server_graph", return_value=mock_graph
-        ),
+    with patch.object(
+        OrchestratorService, "_create_server_graph", return_value=mock_graph
     ):
         yield mock_graph
 
@@ -562,15 +550,30 @@ async def mock_langgraph_for_planning(
 # Shared database & service fixtures for orchestrator integration tests
 # ---------------------------------------------------------------------------
 
+DATABASE_URL = os.environ.get(
+    "DATABASE_URL",
+    "postgresql://amelia:amelia@localhost:5432/amelia_test",
+)
+
 
 @pytest.fixture
-async def test_db(temp_db_path: Path) -> AsyncGenerator[Database, None]:
-    """Create and initialize test database."""
-    db = Database(temp_db_path)
-    await db.connect()
-    await db.ensure_schema()
-    yield db
-    await db.close()
+async def test_db() -> AsyncGenerator[Database, None]:
+    """Create and initialize test database with PostgreSQL."""
+    from amelia.server.database.migrator import Migrator  # noqa: PLC0415
+
+    async with Database(DATABASE_URL) as db:
+        migrator = Migrator(db)
+        await migrator.run()
+        # Truncate all data tables to ensure test isolation
+        await db.execute("""
+            TRUNCATE TABLE
+                workflow_prompt_versions, prompt_versions, prompts,
+                brainstorm_artifacts, brainstorm_messages, brainstorm_sessions,
+                token_usage, workflow_log, workflows,
+                profiles, server_settings
+            CASCADE
+        """)
+        yield db
 
 
 @pytest.fixture
@@ -592,17 +595,10 @@ def test_event_bus() -> EventBus:
 
 
 @pytest.fixture
-def temp_checkpoint_db(tmp_path: Path) -> str:
-    """Temporary checkpoint database path."""
-    return str(tmp_path / "checkpoints.db")
-
-
-@pytest.fixture
 def test_orchestrator(
     test_event_bus: EventBus,
     test_repository: WorkflowRepository,
     test_profile_repository: ProfileRepository,
-    temp_checkpoint_db: str,
 ) -> OrchestratorService:
     """Create real OrchestratorService with test dependencies.
 
@@ -613,7 +609,7 @@ def test_orchestrator(
         event_bus=test_event_bus,
         repository=test_repository,
         profile_repo=test_profile_repository,
-        checkpoint_path=temp_checkpoint_db,
+        checkpointer=AsyncMock(),
     )
 
 

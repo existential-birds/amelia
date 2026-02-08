@@ -1,17 +1,17 @@
 """Integration tests for workflow API endpoints.
 
 Tests the HTTP layer with real route handlers, real OrchestratorService,
-and real WorkflowRepository (in-memory SQLite). Only mocks at the
+and real WorkflowRepository (PostgreSQL test database). Only mocks at the
 LangGraph checkpoint/resume boundary.
 
 Mock boundaries:
-- AsyncSqliteSaver: Prevents actual graph execution
+- Mock checkpointer: Prevents actual graph execution
 - create_implementation_graph: Returns mock graph for approve/reject/cancel
 
 Real components:
 - FastAPI route handlers
 - OrchestratorService
-- WorkflowRepository with in-memory SQLite
+- WorkflowRepository with PostgreSQL test database
 - Request/Response model validation
 - Exception handlers
 """
@@ -22,7 +22,7 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import status
@@ -30,6 +30,7 @@ from fastapi.testclient import TestClient
 
 from amelia.pipelines.implementation.state import ImplementationState
 from amelia.server.database.connection import Database
+from amelia.server.database.migrator import Migrator
 from amelia.server.database.repository import WorkflowRepository
 from amelia.server.dependencies import get_orchestrator, get_repository
 from amelia.server.events.bus import EventBus
@@ -38,17 +39,21 @@ from amelia.server.models.state import ServerExecutionState, WorkflowStatus
 from amelia.server.orchestrator.service import OrchestratorService
 
 
+DATABASE_URL = "postgresql://amelia:amelia@localhost:5432/amelia_test"
+
+
 # =============================================================================
 # Fixtures
 # =============================================================================
 
 
 @pytest.fixture
-async def test_db(temp_db_path: Path) -> AsyncGenerator[Database, None]:
-    """Create and initialize in-memory SQLite database."""
-    db = Database(temp_db_path)
+async def test_db() -> AsyncGenerator[Database, None]:
+    """Create and initialize PostgreSQL test database."""
+    db = Database(DATABASE_URL)
     await db.connect()
-    await db.ensure_schema()
+    migrator = Migrator(db)
+    await migrator.run()
     yield db
     await db.close()
 
@@ -66,22 +71,15 @@ def test_event_bus() -> EventBus:
 
 
 @pytest.fixture
-def temp_checkpoint_db(tmp_path: Path) -> str:
-    """Create temporary checkpoint database path."""
-    return str(tmp_path / "checkpoints.db")
-
-
-@pytest.fixture
 def test_orchestrator(
     test_event_bus: EventBus,
     test_repository: WorkflowRepository,
-    temp_checkpoint_db: str,
 ) -> OrchestratorService:
     """Create real OrchestratorService with test dependencies."""
     return OrchestratorService(
         event_bus=test_event_bus,
         repository=test_repository,
-        checkpoint_path=temp_checkpoint_db,
+        checkpointer=AsyncMock(),
     )
 
 
@@ -175,9 +173,6 @@ class TestApproveWorkflowEndpoint:
         mocks = langgraph_mock_factory(astream_items=[])
         with (
             patch(
-                "amelia.server.orchestrator.service.AsyncSqliteSaver"
-            ) as mock_saver_class,
-            patch(
                 "amelia.server.orchestrator.service.create_implementation_graph"
             ) as mock_create_graph,
             patch.object(
@@ -187,9 +182,6 @@ class TestApproveWorkflowEndpoint:
             ),
         ):
             mock_create_graph.return_value = mocks.graph
-            mock_saver_class.from_conn_string.return_value = (
-                mocks.saver_class.from_conn_string.return_value
-            )
 
             response = test_client.post("/api/workflows/wf-approve-ok/approve")
 
@@ -257,9 +249,6 @@ class TestRejectWorkflowEndpoint:
         mocks = langgraph_mock_factory()
         with (
             patch(
-                "amelia.server.orchestrator.service.AsyncSqliteSaver"
-            ) as mock_saver_class,
-            patch(
                 "amelia.server.orchestrator.service.create_implementation_graph"
             ) as mock_create_graph,
             patch.object(
@@ -269,9 +258,6 @@ class TestRejectWorkflowEndpoint:
             ),
         ):
             mock_create_graph.return_value = mocks.graph
-            mock_saver_class.from_conn_string.return_value = (
-                mocks.saver_class.from_conn_string.return_value
-            )
 
             response = test_client.post(
                 "/api/workflows/wf-reject-ok/reject",
@@ -416,7 +402,7 @@ class TestCancelWorkflowEndpoint:
 class TestListWorkflowsEndpoint:
     """Tests for GET /api/workflows endpoint.
 
-    Uses real WorkflowRepository with in-memory SQLite.
+    Uses real WorkflowRepository with PostgreSQL test database.
     No LLM mocking needed - only reads from database.
     """
 
@@ -549,7 +535,7 @@ class TestListWorkflowsEndpoint:
 class TestListActiveWorkflowsEndpoint:
     """Tests for GET /api/workflows/active endpoint.
 
-    Uses real WorkflowRepository with in-memory SQLite.
+    Uses real WorkflowRepository with PostgreSQL test database.
     """
 
     async def test_list_active_returns_200(

@@ -39,7 +39,6 @@ class TestSetWorkflowPlan:
             event_bus=mock_event_bus,
             repository=mock_repository,
             profile_repo=mock_profile_repo,
-            checkpoint_path="/tmp/checkpoints.db",
         )
 
     def _create_workflow_mock(

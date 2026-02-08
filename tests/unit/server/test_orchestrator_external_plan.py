@@ -16,7 +16,6 @@ class TestQueueWorkflowWithExternalPlan:
     def mock_orchestrator(self) -> OrchestratorService:
         """Create orchestrator with mocked dependencies."""
         mock_event_bus = MagicMock()
-        mock_event_bus.emit = AsyncMock()
         mock_repository = MagicMock()
         mock_repository.create = AsyncMock()
         mock_repository.add_event = AsyncMock()
@@ -28,7 +27,6 @@ class TestQueueWorkflowWithExternalPlan:
             event_bus=mock_event_bus,
             repository=mock_repository,
             profile_repo=mock_profile_repo,
-            checkpoint_path="/tmp/checkpoints.db",
         )
 
     async def test_queue_workflow_with_plan_content_sets_external_flag(

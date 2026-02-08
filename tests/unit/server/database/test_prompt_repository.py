@@ -1,8 +1,5 @@
 # tests/unit/server/database/test_prompt_repository.py
 """Tests for PromptRepository."""
-from collections.abc import AsyncGenerator
-from pathlib import Path
-
 import pytest
 
 from amelia.agents.prompts.models import Prompt
@@ -10,15 +7,13 @@ from amelia.server.database.connection import Database
 from amelia.server.database.prompt_repository import PromptRepository
 
 
+pytestmark = pytest.mark.integration
+
+
 @pytest.fixture
-async def db(tmp_path: Path) -> AsyncGenerator[Database, None]:
-    """Create a temporary database with schema."""
-    db_path = tmp_path / "test.db"
-    database = Database(db_path)
-    await database.connect()
-    await database.ensure_schema()
-    yield database
-    await database.close()
+async def db(db_with_schema: Database) -> Database:
+    """Use the shared PostgreSQL database with schema."""
+    return db_with_schema
 
 
 @pytest.fixture
@@ -133,20 +128,24 @@ class TestWorkflowLinking:
         """Should record which version a workflow used."""
         # Create workflow
         await db.execute(
-            "INSERT INTO workflows (id, issue_id, worktree_path) VALUES (?, ?, ?)",
-            ("wf-1", "ISSUE-1", "/path"),
+            "INSERT INTO workflows (id, issue_id, worktree_path) VALUES (gen_random_uuid(), $1, $2)",
+            "ISSUE-1", "/path",
         )
+        wf = await db.fetch_one("SELECT id FROM workflows WHERE issue_id = 'ISSUE-1'")
+        wf_id = str(wf["id"])
         # Create prompt and version
         await repo.create_prompt(Prompt(id="test.prompt", agent="test", name="Test"))
         version = await repo.create_version("test.prompt", "Content", None)
         # Record the link
-        await repo.record_workflow_prompt("wf-1", "test.prompt", version.id)
+        await repo.record_workflow_prompt(wf_id, "test.prompt", version.id)
         # Verify
-        results = await repo.get_workflow_prompts("wf-1")
+        results = await repo.get_workflow_prompts(wf_id)
         assert len(results) == 1
         assert results[0].version_id == version.id
 
     async def test_get_workflow_prompts_empty(self, repo: PromptRepository) -> None:
         """Should return empty list for workflow with no prompts."""
-        results = await repo.get_workflow_prompts("nonexistent")
+        from uuid import uuid4
+
+        results = await repo.get_workflow_prompts(str(uuid4()))
         assert results == []

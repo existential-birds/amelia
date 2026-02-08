@@ -438,11 +438,9 @@ def test_get_active_workflows(orchestrator: OrchestratorService) -> None:
 # =============================================================================
 
 
-@patch("amelia.server.orchestrator.service.AsyncSqliteSaver")
 @patch("amelia.server.orchestrator.service.create_implementation_graph")
 async def test_approve_workflow_success(
     mock_create_graph: MagicMock,
-    mock_saver_class: MagicMock,
     orchestrator: OrchestratorService,
     mock_repository: AsyncMock,
     mock_event_bus: EventBus,
@@ -468,7 +466,6 @@ async def test_approve_workflow_success(
         aget_state_return=MagicMock(values={"human_approved": True}, next=[])
     )
     mock_create_graph.return_value = mocks.graph
-    mock_saver_class.from_conn_string.return_value = mocks.saver_class.from_conn_string.return_value
 
     # Profile is already mocked via mock_profile_repo fixture
     # New API returns None, raises on error
@@ -486,11 +483,9 @@ async def test_approve_workflow_success(
     assert len(approval_granted) == 1
 
 
-@patch("amelia.server.orchestrator.service.AsyncSqliteSaver")
 @patch("amelia.server.orchestrator.service.create_implementation_graph")
 async def test_reject_workflow_success(
     mock_create_graph: MagicMock,
-    mock_saver_class: MagicMock,
     orchestrator: OrchestratorService,
     mock_repository: AsyncMock,
     mock_event_bus: EventBus,
@@ -514,7 +509,6 @@ async def test_reject_workflow_success(
     # Setup LangGraph mocks using factory
     mocks = langgraph_mock_factory()
     mock_create_graph.return_value = mocks.graph
-    mock_saver_class.from_conn_string.return_value = mocks.saver_class.from_conn_string.return_value
 
     # Profile is already mocked via mock_profile_repo fixture
     # Create fake task
@@ -543,12 +537,10 @@ async def test_reject_workflow_success(
 class TestRejectWorkflowGraphState:
     """Test reject_workflow updates LangGraph state."""
 
-    @patch("amelia.server.orchestrator.service.AsyncSqliteSaver")
     @patch("amelia.server.orchestrator.service.create_implementation_graph")
     async def test_reject_updates_graph_state(
         self,
         mock_create_graph: MagicMock,
-        mock_saver_class: MagicMock,
         orchestrator: OrchestratorService,
         mock_repository: AsyncMock,
         langgraph_mock_factory: Callable[..., MagicMock],
@@ -566,7 +558,6 @@ class TestRejectWorkflowGraphState:
         # Setup LangGraph mocks using factory
         mocks = langgraph_mock_factory()
         mock_create_graph.return_value = mocks.graph
-        mock_saver_class.from_conn_string.return_value = mocks.saver_class.from_conn_string.return_value
 
         # Profile is already mocked via mock_profile_repo fixture
         await orchestrator.reject_workflow("wf-123", "Not ready")
@@ -579,12 +570,10 @@ class TestRejectWorkflowGraphState:
 class TestApproveWorkflowResume:
     """Test approve_workflow resumes LangGraph execution."""
 
-    @patch("amelia.server.orchestrator.service.AsyncSqliteSaver")
     @patch("amelia.server.orchestrator.service.create_implementation_graph")
     async def test_approve_updates_state_and_resumes(
         self,
         mock_create_graph: MagicMock,
-        mock_saver_class: MagicMock,
         orchestrator: OrchestratorService,
         mock_repository: AsyncMock,
         langgraph_mock_factory: Callable[..., MagicMock],
@@ -606,7 +595,6 @@ class TestApproveWorkflowResume:
             aget_state_return=MagicMock(values={"human_approved": True}, next=[])
         )
         mock_create_graph.return_value = mocks.graph
-        mock_saver_class.from_conn_string.return_value = mocks.saver_class.from_conn_string.return_value
 
         # Profile is already mocked via mock_profile_repo fixture
         await orchestrator.approve_workflow("wf-123")
@@ -992,15 +980,7 @@ class TestRunWorkflowCheckpointResume:
             patch.object(orchestrator, "_create_server_graph", return_value=mock_graph),
             patch.object(orchestrator, "_get_profile_or_fail", return_value=mock_profile),
             patch.object(orchestrator, "_emit", new=AsyncMock()),
-            patch("amelia.server.orchestrator.service.AsyncSqliteSaver") as mock_saver,
         ):
-            # Setup AsyncSqliteSaver context manager
-            mock_checkpointer = MagicMock()
-            mock_saver.from_conn_string.return_value.__aenter__ = AsyncMock(
-                return_value=mock_checkpointer
-            )
-            mock_saver.from_conn_string.return_value.__aexit__ = AsyncMock()
-
             await orchestrator._run_workflow("wf-retry-test", mock_state)
 
         # Verify: astream was called with None (resume from checkpoint)
@@ -1052,14 +1032,7 @@ class TestRunWorkflowCheckpointResume:
             patch.object(orchestrator, "_create_server_graph", return_value=mock_graph),
             patch.object(orchestrator, "_get_profile_or_fail", return_value=mock_profile),
             patch.object(orchestrator, "_emit", new=AsyncMock()),
-            patch("amelia.server.orchestrator.service.AsyncSqliteSaver") as mock_saver,
         ):
-            mock_checkpointer = MagicMock()
-            mock_saver.from_conn_string.return_value.__aenter__ = AsyncMock(
-                return_value=mock_checkpointer
-            )
-            mock_saver.from_conn_string.return_value.__aexit__ = AsyncMock()
-
             await orchestrator._run_workflow("wf-retry-test", mock_state)
 
         # Verify: astream was called with initial_state (start fresh)
@@ -1275,7 +1248,7 @@ class TestStartWorkflowWithTaskFields:
             call_args = mock_repository.create.call_args
             state = call_args[0][0]
             assert state.issue_cache is not None
-            issue = Issue.model_validate_json(state.issue_cache)
+            issue = Issue.model_validate(state.issue_cache)
             assert issue.title == "Add logout button"
             assert issue.description == "Add to navbar with confirmation"
 
@@ -1343,5 +1316,5 @@ class TestStartWorkflowWithTaskFields:
             state = call_args[0][0]
             # Description should default to title
             assert state.issue_cache is not None
-            issue = Issue.model_validate_json(state.issue_cache)
+            issue = Issue.model_validate(state.issue_cache)
             assert issue.description == "Fix typo in README"

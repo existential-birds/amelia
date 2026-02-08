@@ -1,12 +1,11 @@
 """Repository for workflow persistence operations."""
 
-import json
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
-import aiosqlite
+import asyncpg
 
-from amelia.server.database.connection import Database, SqliteValue
+from amelia.server.database.connection import Database, in_clause_placeholders
 from amelia.server.exceptions import WorkflowNotFoundError
 from amelia.server.models.events import PERSISTED_TYPES, WorkflowEvent
 from amelia.server.models.state import (
@@ -43,7 +42,7 @@ class WorkflowRepository:
         """
         return self._db
 
-    def _row_to_state(self, row: aiosqlite.Row) -> ServerExecutionState:
+    def _row_to_state(self, row: asyncpg.Record) -> ServerExecutionState:
         """Convert database row to ServerExecutionState.
 
         Args:
@@ -54,16 +53,19 @@ class WorkflowRepository:
         """
         plan_cache = None
         if row["plan_cache"]:
-            plan_cache = PlanCache.model_validate_json(row["plan_cache"])
+            plan_cache = PlanCache.model_validate(row["plan_cache"])
+
+        # issue_cache is dict|None - JSONB in DB, asyncpg returns dict directly
+        issue_cache = row["issue_cache"]
 
         return ServerExecutionState(
-            id=row["id"],
+            id=str(row["id"]),
             issue_id=row["issue_id"],
             worktree_path=row["worktree_path"],
             workflow_type=WorkflowType(row["workflow_type"]) if row["workflow_type"] else WorkflowType.FULL,
             profile_id=row["profile_id"],
             plan_cache=plan_cache,
-            issue_cache=row["issue_cache"],
+            issue_cache=issue_cache,
             workflow_status=row["status"],
             created_at=row["created_at"],
             started_at=row["started_at"],
@@ -77,10 +79,8 @@ class WorkflowRepository:
         Args:
             state: Initial workflow state.
         """
-        # Serialize plan_cache if present
-        plan_cache_json: str | None = None
-        if state.plan_cache is not None:
-            plan_cache_json = state.plan_cache.model_dump_json()
+        # JSONB columns: pass dicts directly (asyncpg codec handles encoding)
+        plan_cache_data = state.plan_cache.model_dump() if state.plan_cache else None
 
         await self._db.execute(
             """
@@ -88,22 +88,20 @@ class WorkflowRepository:
                 id, issue_id, worktree_path,
                 status, created_at, started_at, completed_at, failure_reason,
                 workflow_type, profile_id, plan_cache, issue_cache
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
             """,
-            (
-                state.id,
-                state.issue_id,
-                state.worktree_path,
-                state.workflow_status,
-                state.created_at,
-                state.started_at,
-                state.completed_at,
-                state.failure_reason,
-                state.workflow_type,
-                state.profile_id,
-                plan_cache_json,
-                state.issue_cache,
-            ),
+            state.id,
+            state.issue_id,
+            state.worktree_path,
+            state.workflow_status,
+            state.created_at,
+            state.started_at,
+            state.completed_at,
+            state.failure_reason,
+            state.workflow_type,
+            state.profile_id,
+            plan_cache_data,
+            state.issue_cache,  # dict|None - asyncpg handles JSONB encoding
         )
 
     async def get(self, workflow_id: str) -> ServerExecutionState | None:
@@ -121,9 +119,9 @@ class WorkflowRepository:
                 id, issue_id, worktree_path, status,
                 created_at, started_at, completed_at, failure_reason,
                 workflow_type, profile_id, plan_cache, issue_cache
-            FROM workflows WHERE id = ?
+            FROM workflows WHERE id = $1
             """,
-            (workflow_id,),
+            workflow_id,
         )
         if row is None:
             return None
@@ -148,7 +146,7 @@ class WorkflowRepository:
         Returns:
             Matching workflow or None if no workflow matches.
         """
-        placeholders = ",".join("?" for _ in statuses)
+        placeholders = in_clause_placeholders(len(statuses), start=2)
         row = await self._db.fetch_one(
             f"""
             SELECT
@@ -156,10 +154,10 @@ class WorkflowRepository:
                 created_at, started_at, completed_at, failure_reason,
                 workflow_type, profile_id, plan_cache, issue_cache
             FROM workflows
-            WHERE worktree_path = ?
+            WHERE worktree_path = $1
             AND status IN ({placeholders})
             """,
-            (worktree_path, *statuses),
+            worktree_path, *statuses,
         )
         if row is None:
             return None
@@ -172,35 +170,31 @@ class WorkflowRepository:
         Args:
             state: Updated workflow state.
         """
-        # Serialize plan_cache if present
-        plan_cache_json: str | None = None
-        if state.plan_cache is not None:
-            plan_cache_json = state.plan_cache.model_dump_json()
+        # JSONB columns: pass dicts directly (asyncpg codec handles encoding)
+        plan_cache_data = state.plan_cache.model_dump() if state.plan_cache else None
 
         await self._db.execute(
             """
             UPDATE workflows SET
-                status = ?,
-                started_at = ?,
-                completed_at = ?,
-                failure_reason = ?,
-                workflow_type = ?,
-                profile_id = ?,
-                plan_cache = ?,
-                issue_cache = ?
-            WHERE id = ?
+                status = $1,
+                started_at = $2,
+                completed_at = $3,
+                failure_reason = $4,
+                workflow_type = $5,
+                profile_id = $6,
+                plan_cache = $7,
+                issue_cache = $8
+            WHERE id = $9
             """,
-            (
-                state.workflow_status,
-                state.started_at,
-                state.completed_at,
-                state.failure_reason,
-                state.workflow_type,
-                state.profile_id,
-                plan_cache_json,
-                state.issue_cache,
-                state.id,
-            ),
+            state.workflow_status,
+            state.started_at,
+            state.completed_at,
+            state.failure_reason,
+            state.workflow_type,
+            state.profile_id,
+            plan_cache_data,
+            state.issue_cache,  # dict|None - asyncpg handles JSONB encoding
+            state.id,
         )
 
     async def set_status(
@@ -228,23 +222,21 @@ class WorkflowRepository:
 
         # Set completed_at for terminal states
         completed_at = None
-        if new_status in ("completed", "failed", "cancelled"):
+        if new_status in (WorkflowStatus.COMPLETED, WorkflowStatus.FAILED, WorkflowStatus.CANCELLED):
             completed_at = datetime.now(UTC)
 
         await self._db.execute(
             """
             UPDATE workflows SET
-                status = ?,
-                completed_at = ?,
-                failure_reason = ?
-            WHERE id = ?
+                status = $1,
+                completed_at = $2,
+                failure_reason = $3
+            WHERE id = $4
             """,
-            (
-                new_status,
-                completed_at.isoformat() if completed_at else None,
-                failure_reason,
-                workflow_id,
-            ),
+            new_status,
+            completed_at,
+            failure_reason,
+            workflow_id,
         )
 
     async def update_plan_cache(
@@ -266,15 +258,15 @@ class WorkflowRepository:
             WorkflowNotFoundError: If workflow doesn't exist.
         """
         result = await self._db.fetch_one(
-            "SELECT id FROM workflows WHERE id = ?",
-            (workflow_id,),
+            "SELECT id FROM workflows WHERE id = $1",
+            workflow_id,
         )
         if result is None:
             raise WorkflowNotFoundError(workflow_id)
 
         await self._db.execute(
-            "UPDATE workflows SET plan_cache = ? WHERE id = ?",
-            (plan_cache.model_dump_json(), workflow_id),
+            "UPDATE workflows SET plan_cache = $1 WHERE id = $2",
+            plan_cache.model_dump(), workflow_id,
         )
 
     async def list_active(
@@ -297,10 +289,10 @@ class WorkflowRepository:
                     workflow_type, profile_id, plan_cache, issue_cache
                 FROM workflows
                 WHERE status IN ('pending', 'in_progress', 'blocked')
-                AND worktree_path = ?
+                AND worktree_path = $1
                 ORDER BY started_at DESC
                 """,
-                (worktree_path,),
+                worktree_path,
             )
         else:
             rows = await self._db.fetch_all(
@@ -328,7 +320,7 @@ class WorkflowRepository:
             WHERE status IN ('pending', 'in_progress', 'blocked')
             """
         )
-        # COUNT(*) always returns int; use isinstance for type narrowing
+        # Type narrowing for asyncpg return type (COUNT returns int but fetch_scalar returns Any)
         return result if isinstance(result, int) else 0
 
     async def find_by_status(
@@ -343,7 +335,7 @@ class WorkflowRepository:
         Returns:
             List of matching workflows.
         """
-        placeholders = ",".join("?" for _ in statuses)
+        placeholders = in_clause_placeholders(len(statuses))
         rows = await self._db.fetch_all(
             f"""
             SELECT
@@ -353,7 +345,7 @@ class WorkflowRepository:
             FROM workflows
             WHERE status IN ({placeholders})
             """,
-            statuses,
+            *statuses,
         )
         return [self._row_to_state(row) for row in rows]
 
@@ -378,22 +370,26 @@ class WorkflowRepository:
             List of workflows matching filters.
         """
         conditions = []
-        params: list[SqliteValue] = []
+        params: list[Any] = []
+        param_idx = 1
 
         if status:
-            conditions.append("status = ?")
+            conditions.append(f"status = ${param_idx}")
             params.append(status)
+            param_idx += 1
 
         if worktree_path:
-            conditions.append("worktree_path = ?")
+            conditions.append(f"worktree_path = ${param_idx}")
             params.append(worktree_path)
+            param_idx += 1
 
         # Cursor-based pagination
         if after_started_at and after_id:
             conditions.append(
-                "(started_at < ? OR (started_at = ? AND id < ?))"
+                f"(started_at < ${param_idx} OR (started_at = ${param_idx + 1} AND id < ${param_idx + 2}))"
             )
-            params.extend([after_started_at.isoformat(), after_started_at.isoformat(), after_id])
+            params.extend([after_started_at, after_started_at, after_id])
+            param_idx += 3
 
         where_clause = " AND ".join(conditions) if conditions else "1=1"
 
@@ -405,11 +401,11 @@ class WorkflowRepository:
             FROM workflows
             WHERE {where_clause}
             ORDER BY started_at DESC NULLS LAST, id DESC
-            LIMIT ?
+            LIMIT ${param_idx}
         """
         params.append(limit)
 
-        rows = await self._db.fetch_all(query, params)
+        rows = await self._db.fetch_all(query, *params)
         return [self._row_to_state(row) for row in rows]
 
     async def count_workflows(
@@ -427,20 +423,23 @@ class WorkflowRepository:
             Number of workflows matching filters.
         """
         conditions = []
-        params: list[SqliteValue] = []
+        params: list[Any] = []
+        param_idx = 1
 
         if status:
-            conditions.append("status = ?")
+            conditions.append(f"status = ${param_idx}")
             params.append(status)
+            param_idx += 1
 
         if worktree_path:
-            conditions.append("worktree_path = ?")
+            conditions.append(f"worktree_path = ${param_idx}")
             params.append(worktree_path)
+            param_idx += 1
 
         where_clause = " AND ".join(conditions) if conditions else "1=1"
 
         query = f"SELECT COUNT(*) FROM workflows WHERE {where_clause}"
-        count = await self._db.fetch_scalar(query, params)
+        count = await self._db.fetch_scalar(query, *params)
         return count if isinstance(count, int) else 0
 
     # =========================================================================
@@ -459,27 +458,25 @@ class WorkflowRepository:
             return
 
         serialized = event.model_dump(mode="json")
-        data_json = json.dumps(serialized["data"]) if serialized["data"] else None
+        data = serialized["data"] if serialized["data"] else None
 
         await self._db.execute(
             """
             INSERT INTO workflow_log (
                 id, workflow_id, sequence, timestamp, event_type,
-                level, agent, message, data_json, is_error
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                level, agent, message, data, is_error
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             """,
-            (
-                event.id,
-                event.workflow_id,
-                event.sequence,
-                event.timestamp.isoformat(),
-                event.event_type.value,
-                event.level.value if event.level else "debug",
-                event.agent,
-                event.message,
-                data_json,
-                1 if event.is_error else 0,
-            ),
+            event.id,
+            event.workflow_id,
+            event.sequence,
+            event.timestamp,
+            event.event_type.value,
+            event.level.value if event.level else "debug",
+            event.agent,
+            event.message,
+            data,
+            event.is_error,
         )
 
     async def get_max_event_sequence(self, workflow_id: str) -> int:
@@ -492,8 +489,8 @@ class WorkflowRepository:
             Maximum sequence number, or 0 if no events exist.
         """
         result = await self._db.fetch_scalar(
-            "SELECT COALESCE(MAX(sequence), 0) FROM workflow_log WHERE workflow_id = ?",
-            (workflow_id,),
+            "SELECT COALESCE(MAX(sequence), 0) FROM workflow_log WHERE workflow_id = $1",
+            workflow_id,
         )
         return result if isinstance(result, int) else 0
 
@@ -507,12 +504,12 @@ class WorkflowRepository:
             True if event exists, False otherwise.
         """
         result = await self._db.fetch_scalar(
-            "SELECT 1 FROM workflow_log WHERE id = ? LIMIT 1",
-            (event_id,),
+            "SELECT 1 FROM workflow_log WHERE id = $1 LIMIT 1",
+            event_id,
         )
         return result is not None
 
-    def _row_to_event(self, row: aiosqlite.Row) -> WorkflowEvent:
+    def _row_to_event(self, row: asyncpg.Record) -> WorkflowEvent:
         """Convert database row to WorkflowEvent model.
 
         Args:
@@ -522,13 +519,11 @@ class WorkflowRepository:
             Validated WorkflowEvent model instance.
         """
         event_data = dict(row)
-        if event_data.get("data_json"):
-            event_data["data"] = json.loads(event_data.pop("data_json"))
-        else:
-            event_data.pop("data_json", None)
-
-        if "is_error" in event_data:
-            event_data["is_error"] = bool(event_data["is_error"])
+        # asyncpg returns UUID objects for UUID columns; Pydantic expects str
+        event_data["id"] = str(event_data["id"])
+        event_data["workflow_id"] = str(event_data["workflow_id"])
+        if not event_data.get("data"):
+            event_data.pop("data", None)
 
         return WorkflowEvent(**event_data)
 
@@ -548,8 +543,8 @@ class WorkflowRepository:
             ValueError: If the since_event_id doesn't exist.
         """
         row = await self._db.fetch_one(
-            "SELECT workflow_id, sequence FROM workflow_log WHERE id = ?",
-            (since_event_id,),
+            "SELECT workflow_id, sequence FROM workflow_log WHERE id = $1",
+            since_event_id,
         )
 
         if row is None:
@@ -560,13 +555,13 @@ class WorkflowRepository:
         rows = await self._db.fetch_all(
             """
             SELECT id, workflow_id, sequence, timestamp, event_type,
-                   level, agent, message, data_json, is_error
+                   level, agent, message, data, is_error
             FROM workflow_log
-            WHERE workflow_id = ? AND sequence > ?
+            WHERE workflow_id = $1 AND sequence > $2
             ORDER BY sequence ASC
-            LIMIT ?
+            LIMIT $3
             """,
-            (workflow_id, since_sequence, limit),
+            workflow_id, since_sequence, limit,
         )
 
         return [self._row_to_event(row) for row in rows]
@@ -589,13 +584,13 @@ class WorkflowRepository:
         rows = await self._db.fetch_all(
             """
             SELECT id, workflow_id, sequence, timestamp, event_type,
-                   level, agent, message, data_json, is_error
+                   level, agent, message, data, is_error
             FROM workflow_log
-            WHERE workflow_id = ?
+            WHERE workflow_id = $1
             ORDER BY sequence DESC
-            LIMIT ?
+            LIMIT $2
             """,
-            (workflow_id, limit),
+            workflow_id, limit,
         )
 
         events = [self._row_to_event(row) for row in rows]
@@ -618,22 +613,20 @@ class WorkflowRepository:
                 id, workflow_id, agent, model, input_tokens, output_tokens,
                 cache_read_tokens, cache_creation_tokens, cost_usd,
                 duration_ms, num_turns, timestamp
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
             """,
-            (
-                usage.id,
-                usage.workflow_id,
-                usage.agent,
-                usage.model,
-                usage.input_tokens,
-                usage.output_tokens,
-                usage.cache_read_tokens,
-                usage.cache_creation_tokens,
-                usage.cost_usd,
-                usage.duration_ms,
-                usage.num_turns,
-                usage.timestamp.isoformat(),
-            ),
+            usage.id,
+            usage.workflow_id,
+            usage.agent,
+            usage.model,
+            usage.input_tokens,
+            usage.output_tokens,
+            usage.cache_read_tokens,
+            usage.cache_creation_tokens,
+            float(usage.cost_usd),
+            usage.duration_ms,
+            usage.num_turns,
+            usage.timestamp,
         )
 
     async def get_token_usage(self, workflow_id: str) -> list[TokenUsage]:
@@ -651,10 +644,10 @@ class WorkflowRepository:
                    cache_read_tokens, cache_creation_tokens, cost_usd,
                    duration_ms, num_turns, timestamp
             FROM token_usage
-            WHERE workflow_id = ?
+            WHERE workflow_id = $1
             ORDER BY timestamp ASC
             """,
-            (workflow_id,),
+            workflow_id,
         )
 
         return [self._row_to_token_usage(row) for row in rows]
@@ -703,7 +696,7 @@ class WorkflowRepository:
             return {}
 
         # Build parameterized query with IN clause
-        placeholders = ",".join("?" for _ in workflow_ids)
+        placeholders = in_clause_placeholders(len(workflow_ids))
         rows = await self._db.fetch_all(
             f"""
             SELECT id, workflow_id, agent, model, input_tokens, output_tokens,
@@ -713,7 +706,7 @@ class WorkflowRepository:
             WHERE workflow_id IN ({placeholders})
             ORDER BY timestamp ASC
             """,
-            list(workflow_ids),
+            *workflow_ids,
         )
 
         # Group usages by workflow_id
@@ -743,7 +736,7 @@ class WorkflowRepository:
 
         return result
 
-    def _row_to_token_usage(self, row: aiosqlite.Row) -> TokenUsage:
+    def _row_to_token_usage(self, row: asyncpg.Record) -> TokenUsage:
         """Convert database row to TokenUsage model.
 
         Args:
@@ -753,8 +746,8 @@ class WorkflowRepository:
             Validated TokenUsage model instance.
         """
         return TokenUsage(
-            id=row["id"],
-            workflow_id=row["workflow_id"],
+            id=str(row["id"]),
+            workflow_id=str(row["workflow_id"]),
             agent=row["agent"],
             model=row["model"],
             input_tokens=row["input_tokens"],
@@ -764,7 +757,7 @@ class WorkflowRepository:
             cost_usd=row["cost_usd"],
             duration_ms=row["duration_ms"],
             num_turns=row["num_turns"],
-            timestamp=datetime.fromisoformat(row["timestamp"]),
+            timestamp=row["timestamp"],
         )
 
     # =========================================================================
@@ -786,16 +779,10 @@ class WorkflowRepository:
             Dict with total_cost_usd, total_workflows, total_tokens, total_duration_ms,
             previous_period_cost_usd, successful_workflows, success_rate.
         """
-        # Format dates for SQL comparison
-        start_str = start_date.isoformat()
-        end_str = end_date.isoformat()
-
         # Calculate previous period (same duration, immediately before)
         period_days = (end_date - start_date).days + 1
         prev_end_date = start_date - timedelta(days=1)
         prev_start_date = prev_end_date - timedelta(days=period_days - 1)
-        prev_start_str = prev_start_date.isoformat()
-        prev_end_str = prev_end_date.isoformat()
 
         # Current period token usage metrics
         row = await self._db.fetch_one(
@@ -806,9 +793,9 @@ class WorkflowRepository:
                 COALESCE(SUM(t.input_tokens + t.output_tokens), 0) as total_tokens,
                 COALESCE(SUM(t.duration_ms), 0) as total_duration_ms
             FROM token_usage t
-            WHERE DATE(t.timestamp) >= ? AND DATE(t.timestamp) <= ?
+            WHERE t.timestamp::date >= $1 AND t.timestamp::date <= $2
             """,
-            (start_str, end_str),
+            start_date, end_date,
         )
 
         # Previous period cost
@@ -816,9 +803,9 @@ class WorkflowRepository:
             """
             SELECT COALESCE(SUM(t.cost_usd), 0) as prev_cost_usd
             FROM token_usage t
-            WHERE DATE(t.timestamp) >= ? AND DATE(t.timestamp) <= ?
+            WHERE t.timestamp::date >= $1 AND t.timestamp::date <= $2
             """,
-            (prev_start_str, prev_end_str),
+            prev_start_date, prev_end_date,
         )
 
         # Store token_usage-derived total_workflows for consistent response
@@ -831,10 +818,10 @@ class WorkflowRepository:
             SELECT
                 SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as successful_workflows
             FROM workflows
-            WHERE DATE(completed_at) >= ? AND DATE(completed_at) <= ?
+            WHERE completed_at::date >= $1 AND completed_at::date <= $2
               AND status IN ('completed', 'failed', 'cancelled')
             """,
-            (start_str, end_str),
+            start_date, end_date,
         )
 
         successful_workflows = success_row[0] if success_row and success_row[0] else 0
@@ -846,13 +833,13 @@ class WorkflowRepository:
         )
 
         return {
-            "total_cost_usd": row[0] if row else 0.0,
+            "total_cost_usd": float(row[0]) if row else 0.0,
             "total_workflows": total_workflows_from_usage,
             "total_tokens": row[2] if row else 0,
             "total_duration_ms": row[3] if row else 0,
-            "previous_period_cost_usd": prev_row[0] if prev_row else 0.0,
+            "previous_period_cost_usd": float(prev_row[0]) if prev_row else 0.0,
             "successful_workflows": successful_workflows,
-            "success_rate": success_rate,
+            "success_rate": float(success_rate),
         }
 
     async def get_usage_trend(
@@ -869,55 +856,52 @@ class WorkflowRepository:
         Returns:
             List of dicts with date, cost_usd, workflows, by_model.
         """
-        start_str = start_date.isoformat()
-        end_str = end_date.isoformat()
-
         # Get daily totals
         rows = await self._db.fetch_all(
             """
             SELECT
-                DATE(t.timestamp) as date,
+                t.timestamp::date as date,
                 SUM(t.cost_usd) as cost_usd,
                 COUNT(DISTINCT t.workflow_id) as workflows
             FROM token_usage t
-            WHERE DATE(t.timestamp) >= ? AND DATE(t.timestamp) <= ?
-            GROUP BY DATE(t.timestamp)
+            WHERE t.timestamp::date >= $1 AND t.timestamp::date <= $2
+            GROUP BY t.timestamp::date
             ORDER BY date
             """,
-            (start_str, end_str),
+            start_date, end_date,
         )
 
         # Get per-model breakdown by day
         model_rows = await self._db.fetch_all(
             """
             SELECT
-                DATE(t.timestamp) as date,
+                t.timestamp::date as date,
                 t.model,
                 SUM(t.cost_usd) as cost_usd
             FROM token_usage t
-            WHERE DATE(t.timestamp) >= ? AND DATE(t.timestamp) <= ?
-            GROUP BY DATE(t.timestamp), t.model
+            WHERE t.timestamp::date >= $1 AND t.timestamp::date <= $2
+            GROUP BY t.timestamp::date, t.model
             ORDER BY date, cost_usd DESC
             """,
-            (start_str, end_str),
+            start_date, end_date,
         )
 
-        # Build lookup: date -> {model: cost}
+        # Build lookup: date_str -> {model: cost}
         by_model_lookup: dict[str, dict[str, float]] = {}
         for model_row in model_rows:
-            row_date = model_row[0]
+            row_date = str(model_row[0])
             model = model_row[1]
-            cost = model_row[2]
+            cost = float(model_row[2])
             if row_date not in by_model_lookup:
                 by_model_lookup[row_date] = {}
             by_model_lookup[row_date][model] = cost
 
         return [
             {
-                "date": row[0],
-                "cost_usd": row[1],
+                "date": str(row[0]),
+                "cost_usd": float(row[1]),
                 "workflows": row[2],
-                "by_model": by_model_lookup.get(row[0], {}),
+                "by_model": by_model_lookup.get(str(row[0]), {}),
             }
             for row in rows
         ]
@@ -937,9 +921,6 @@ class WorkflowRepository:
             List of dicts with model, workflows, tokens, cost_usd, trend,
             successful_workflows, success_rate.
         """
-        start_str = start_date.isoformat()
-        end_str = end_date.isoformat()
-
         # Get aggregated stats per model
         rows = await self._db.fetch_all(
             """
@@ -949,11 +930,11 @@ class WorkflowRepository:
                 SUM(t.input_tokens + t.output_tokens) as tokens,
                 SUM(t.cost_usd) as cost_usd
             FROM token_usage t
-            WHERE DATE(t.timestamp) >= ? AND DATE(t.timestamp) <= ?
+            WHERE t.timestamp::date >= $1 AND t.timestamp::date <= $2
             GROUP BY t.model
             ORDER BY cost_usd DESC
             """,
-            (start_str, end_str),
+            start_date, end_date,
         )
 
         # Get daily trend per model for sparklines
@@ -961,22 +942,22 @@ class WorkflowRepository:
             """
             SELECT
                 t.model,
-                DATE(t.timestamp) as date,
+                t.timestamp::date as date,
                 SUM(t.cost_usd) as cost_usd
             FROM token_usage t
-            WHERE DATE(t.timestamp) >= ? AND DATE(t.timestamp) <= ?
-            GROUP BY t.model, DATE(t.timestamp)
+            WHERE t.timestamp::date >= $1 AND t.timestamp::date <= $2
+            GROUP BY t.model, t.timestamp::date
             ORDER BY t.model, date
             """,
-            (start_str, end_str),
+            start_date, end_date,
         )
 
         # Build trend lookup: model -> {date: cost}
-        trend_lookup: dict[str, dict[str, float]] = {}
+        trend_lookup: dict[str, dict[date, float]] = {}
         for trend_row in trend_rows:
             model = trend_row[0]
             row_date = trend_row[1]
-            cost = trend_row[2]
+            cost = float(trend_row[2])
             if model not in trend_lookup:
                 trend_lookup[model] = {}
             trend_lookup[model][row_date] = cost
@@ -984,7 +965,7 @@ class WorkflowRepository:
         # Generate full date range for consistent trend arrays
         num_days = (end_date - start_date).days + 1
         date_range = [
-            (start_date + timedelta(days=i)).isoformat() for i in range(num_days)
+            start_date + timedelta(days=i) for i in range(num_days)
         ]
 
         # Get success metrics per model (join with workflows)
@@ -997,10 +978,10 @@ class WorkflowRepository:
                     as successful_workflows
             FROM token_usage t
             JOIN workflows w ON t.workflow_id = w.id
-            WHERE DATE(t.timestamp) >= ? AND DATE(t.timestamp) <= ?
+            WHERE t.timestamp::date >= $1 AND t.timestamp::date <= $2
             GROUP BY t.model
             """,
-            (start_str, end_str),
+            start_date, end_date,
         )
 
         # Build success lookup: model -> {total, successful}
@@ -1016,21 +997,19 @@ class WorkflowRepository:
                 "model": row[0],
                 "workflows": row[1],
                 "tokens": row[2],
-                "cost_usd": row[3],
+                "cost_usd": float(row[3]),
                 "trend": [
-                    trend_lookup.get(row[0], {}).get(d, 0.0) for d in date_range
+                    float(trend_lookup.get(row[0], {}).get(d, 0.0)) for d in date_range
                 ],
                 "successful_workflows": success_lookup.get(row[0], {}).get(
                     "successful", 0
                 ),
                 "success_rate": round(
-                    (
-                        success_lookup.get(row[0], {}).get("successful", 0)
-                        / success_lookup.get(row[0], {}).get("total", 1)
-                    ),
+                    success_lookup.get(row[0], {}).get("successful", 0)
+                    / total,
                     4,
                 )
-                if success_lookup.get(row[0], {}).get("total", 0) > 0
+                if (total := success_lookup.get(row[0], {}).get("total"))
                 else 0.0,
             }
             for row in rows
