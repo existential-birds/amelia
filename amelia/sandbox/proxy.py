@@ -7,8 +7,8 @@ X-Amelia-Profile header to resolve which upstream provider to use.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Coroutine
-from typing import Any
+from collections.abc import Awaitable, Callable, Coroutine
+from typing import Any, NamedTuple
 
 import httpx
 from fastapi import APIRouter, HTTPException, Request, Response
@@ -29,6 +29,18 @@ class ProviderConfig(BaseModel):
 
 # Type alias for the provider resolver function
 ProviderResolver = Callable[[str], Coroutine[Any, Any, ProviderConfig | None]]
+
+
+class ProxyRouter(NamedTuple):
+    """Proxy router with cleanup function.
+
+    Attributes:
+        router: The FastAPI router with proxy routes.
+        cleanup: Async cleanup function to close the HTTP client.
+    """
+
+    router: APIRouter
+    cleanup: Callable[[], Awaitable[None]]
 
 
 def _get_profile_header(request: Request) -> str:
@@ -79,7 +91,7 @@ async def _resolve_provider_or_raise(
 
 def create_proxy_router(
     resolve_provider: ProviderResolver,
-) -> APIRouter:
+) -> ProxyRouter:
     """Create the proxy router with injected provider resolver.
 
     Args:
@@ -88,12 +100,16 @@ def create_proxy_router(
             profile is unknown.
 
     Returns:
-        Configured APIRouter with proxy routes.
+        ProxyRouter containing the router and cleanup function.
     """
     router = APIRouter()
 
     # Router-scoped client for connection pooling across requests
     http_client = httpx.AsyncClient(timeout=300.0)
+
+    async def cleanup() -> None:
+        """Close the HTTP client."""
+        await http_client.aclose()
 
     async def forward_request(
         request: Request,
@@ -167,4 +183,4 @@ def create_proxy_router(
             content="Git credential proxy not yet implemented",
         )
 
-    return router
+    return ProxyRouter(router=router, cleanup=cleanup)

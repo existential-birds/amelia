@@ -30,8 +30,8 @@ def proxy_app(monkeypatch):
         }
         return providers.get(profile_name)
 
-    router = create_proxy_router(resolve_provider=_resolve_provider)
-    app.include_router(router, prefix="/proxy/v1")
+    proxy = create_proxy_router(resolve_provider=_resolve_provider)
+    app.include_router(proxy.router, prefix="/proxy/v1")
     return app
 
 
@@ -159,3 +159,33 @@ class TestProxyForwarding:
         )
 
         assert response.status_code == 429
+
+
+class TestProxyCleanup:
+    async def test_cleanup_closes_http_client(self, monkeypatch):
+        """Verify cleanup() closes the httpx.AsyncClient."""
+        close_called = []
+
+        original_init = httpx.AsyncClient.__init__
+
+        def patched_init(self, *args, **kwargs):
+            original_init(self, *args, **kwargs)
+            # Track aclose calls
+            original_aclose = self.aclose
+
+            async def tracked_aclose():
+                close_called.append(True)
+                await original_aclose()
+
+            self.aclose = tracked_aclose
+
+        monkeypatch.setattr(httpx.AsyncClient, "__init__", patched_init)
+
+        async def _resolve_provider(profile_name: str) -> ProviderConfig | None:
+            return None
+
+        proxy = create_proxy_router(resolve_provider=_resolve_provider)
+        assert len(close_called) == 0
+
+        await proxy.cleanup()
+        assert len(close_called) == 1

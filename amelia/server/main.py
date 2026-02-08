@@ -227,6 +227,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await lifecycle.shutdown()
     clear_orchestrator()
     await exit_stack.aclose()
+
+    # Clean up proxy HTTP client (set in create_app)
+    if hasattr(app.state, "proxy_cleanup"):
+        await app.state.proxy_cleanup()
+
     await database.close()
     clear_database()
     clear_config()
@@ -379,8 +384,9 @@ def create_app() -> FastAPI:
 
         return ProviderConfig(base_url=entry[0], api_key=entry[1])
 
-    proxy_router = create_proxy_router(resolve_provider=_resolve_provider)
-    application.include_router(proxy_router, prefix="/proxy/v1")
+    proxy = create_proxy_router(resolve_provider=_resolve_provider)
+    application.include_router(proxy.router, prefix="/proxy/v1")
+    application.state.proxy_cleanup = proxy.cleanup
 
     # Serve dashboard static files
     # Priority: bundled static files (installed package) > dev build (dashboard/dist)
