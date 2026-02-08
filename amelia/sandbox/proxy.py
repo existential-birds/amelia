@@ -92,6 +92,48 @@ def create_proxy_router(
     """
     router = APIRouter()
 
+    # Router-scoped client for connection pooling across requests
+    http_client = httpx.AsyncClient(timeout=300.0)
+
+    async def forward_request(
+        request: Request,
+        provider: ProviderConfig,
+        path: str,
+    ) -> Response:
+        """Forward an HTTP request to the upstream provider with auth.
+
+        Args:
+            request: Original incoming request.
+            provider: Resolved provider config with base_url and api_key.
+            path: API path to append to base_url.
+
+        Returns:
+            Proxied response from the upstream provider.
+        """
+        body = await request.body()
+        upstream_url = f"{provider.base_url.rstrip('/')}{path}"
+
+        # Forward original headers, replacing auth and removing internal headers
+        headers = dict(request.headers)
+        headers["authorization"] = f"Bearer {provider.api_key}"
+        # Remove hop-by-hop and internal headers
+        for h in ("host", "x-amelia-profile", "content-length"):
+            headers.pop(h, None)
+
+        upstream_response = await http_client.request(
+            method=request.method,
+            url=upstream_url,
+            content=body,
+            headers=headers,
+        )
+
+        # Pass through the upstream response
+        return Response(
+            content=upstream_response.content,
+            status_code=upstream_response.status_code,
+            headers=dict(upstream_response.headers),
+        )
+
     @router.api_route(
         "/chat/completions",
         methods=["POST"],
@@ -100,7 +142,7 @@ def create_proxy_router(
         """Forward chat completion requests to the upstream LLM provider."""
         profile = _get_profile_header(request)
         provider = await _resolve_provider_or_raise(profile, resolve_provider)
-        return await _forward_request(request, provider, "/chat/completions")
+        return await forward_request(request, provider, "/chat/completions")
 
     @router.api_route(
         "/embeddings",
@@ -110,7 +152,7 @@ def create_proxy_router(
         """Forward embedding requests to the upstream LLM provider."""
         profile = _get_profile_header(request)
         provider = await _resolve_provider_or_raise(profile, resolve_provider)
-        return await _forward_request(request, provider, "/embeddings")
+        return await forward_request(request, provider, "/embeddings")
 
     @router.post("/git/credentials")
     async def proxy_git_credentials(request: Request) -> Response:
@@ -126,44 +168,3 @@ def create_proxy_router(
         )
 
     return router
-
-
-async def _forward_request(
-    request: Request,
-    provider: ProviderConfig,
-    path: str,
-) -> Response:
-    """Forward an HTTP request to the upstream provider with auth.
-
-    Args:
-        request: Original incoming request.
-        provider: Resolved provider config with base_url and api_key.
-        path: API path to append to base_url.
-
-    Returns:
-        Proxied response from the upstream provider.
-    """
-    body = await request.body()
-    upstream_url = f"{provider.base_url.rstrip('/')}{path}"
-
-    # Forward original headers, replacing auth and removing internal headers
-    headers = dict(request.headers)
-    headers["authorization"] = f"Bearer {provider.api_key}"
-    # Remove hop-by-hop and internal headers
-    for h in ("host", "x-amelia-profile", "content-length"):
-        headers.pop(h, None)
-
-    async with httpx.AsyncClient(timeout=300.0) as client:
-        upstream_response = await client.request(
-            method=request.method,
-            url=upstream_url,
-            content=body,
-            headers=headers,
-        )
-
-    # Pass through the upstream response
-    return Response(
-        content=upstream_response.content,
-        status_code=upstream_response.status_code,
-        headers=dict(upstream_response.headers),
-    )

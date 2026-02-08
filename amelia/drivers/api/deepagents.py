@@ -94,7 +94,7 @@ class LocalSandbox(FilesystemBackend, SandboxBackendProtocol):
                 exit_code=124,
                 truncated=False,
             )
-        except Exception as e:
+        except OSError as e:
             return ExecuteResponse(
                 output=f"Command execution failed: {e}",
                 exit_code=1,
