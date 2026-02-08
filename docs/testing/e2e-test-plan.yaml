@@ -27,8 +27,8 @@ setup:
     - description: "Test repo exists at ../test_repo_c"
       verify: "test -d ../test_repo_c && echo 'exists' || echo 'MISSING'"
   commands:
-    - "cd /Users/ka/github/existential-birds/amelia-feature && uv sync"
-    - "cd /Users/ka/github/existential-birds/amelia-feature && uv run amelia dev &"
+    - "uv sync"
+    - "uv run amelia dev &"
     - "sleep 5"
   health_checks:
     - url: http://localhost:8420/api/health/live
@@ -121,7 +121,7 @@ tests:
         note: "Fill in profile name field"
       - action: agent-browser fill
         ref: "@working-dir"
-        value: "/Users/ka/github/existential-birds/test_repo_c"
+        value: "../test_repo_c"
         note: "Fill in working directory"
       - action: agent-browser select
         ref: "@tracker"
@@ -148,7 +148,7 @@ tests:
         path: evidence/tc-04c-profile-created.png
     expected: |
       Profile creation modal opens with all fields. After filling in
-      name="test-cli-profile", working_dir="/Users/ka/github/existential-birds/test_repo_c",
+      name="test-cli-profile", working_dir="../test_repo_c",
       tracker="None", and keeping default CLI agent configs, clicking Save
       creates the profile. A success toast appears and the profile card
       shows in the profiles list with driver badge showing "CLI".
@@ -165,7 +165,7 @@ tests:
     expected: |
       Returns 200 with profile JSON containing:
       - id: "test-cli-profile"
-      - working_dir: "/Users/ka/github/existential-birds/test_repo_c"
+      - working_dir: "../test_repo_c"
       - tracker: "noop"
       - agents.architect.driver: "cli"
       - agents.architect.model: "opus"
@@ -217,7 +217,7 @@ tests:
         value: "test-api-profile"
       - action: agent-browser fill
         ref: "@working-dir"
-        value: "/Users/ka/github/existential-birds/test_repo_c"
+        value: "../test_repo_c"
       - action: agent-browser select
         ref: "@tracker"
         value: "noop"
@@ -545,7 +545,7 @@ tests:
         path: evidence/tc-19a-quickshot-modal.png
       - action: agent-browser fill
         ref: "@worktree-path"
-        value: "/Users/ka/github/existential-birds/test_repo_c"
+        value: "../test_repo_c"
       - action: agent-browser fill
         ref: "@task-id"
         value: "QS-001"
