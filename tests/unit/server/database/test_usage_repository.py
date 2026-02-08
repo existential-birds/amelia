@@ -1,35 +1,85 @@
 """Tests for usage repository methods."""
 
-from datetime import date
+from datetime import UTC, date, datetime
+from uuid import uuid4
 
 import pytest
 
 from amelia.server.database import WorkflowRepository
 from amelia.server.database.connection import Database
+from amelia.server.models.state import ServerExecutionState
+from amelia.server.models.tokens import TokenUsage
+
+
+pytestmark = pytest.mark.integration
 
 
 @pytest.fixture
-async def seed_data(db_with_schema: Database) -> None:
+async def seed_data(db_with_schema: Database, repository: WorkflowRepository) -> None:
     """Seed test data for usage queries."""
+    wf1_id = str(uuid4())
+    wf2_id = str(uuid4())
+
     # Create two workflows
-    await db_with_schema.execute("""
-        INSERT INTO workflows (id, issue_id, worktree_path, status, created_at, started_at)
-        VALUES
-            ('wf-1', 'ISSUE-1', '/tmp/repo1', 'completed', '2026-01-10T10:00:00Z', '2026-01-10T10:00:00Z'),
-            ('wf-2', 'ISSUE-2', '/tmp/repo2', 'completed', '2026-01-15T10:00:00Z', '2026-01-15T10:00:00Z')
-    """)
+    wf1 = ServerExecutionState(
+        id=wf1_id,
+        issue_id="ISSUE-1",
+        worktree_path="/tmp/repo1",
+        workflow_status="completed",
+        started_at=datetime(2026, 1, 10, 10, 0, 0, tzinfo=UTC),
+    )
+    wf2 = ServerExecutionState(
+        id=wf2_id,
+        issue_id="ISSUE-2",
+        worktree_path="/tmp/repo2",
+        workflow_status="completed",
+        started_at=datetime(2026, 1, 15, 10, 0, 0, tzinfo=UTC),
+    )
+    await repository.create(wf1)
+    await repository.create(wf2)
 
     # Create token usage records
-    await db_with_schema.execute("""
-        INSERT INTO token_usage (id, workflow_id, agent, model, input_tokens, output_tokens, cache_read_tokens, cost_usd, duration_ms, timestamp)
-        VALUES
-            ('tu-1', 'wf-1', 'architect', 'claude-sonnet-4', 10000, 2000, 5000, 0.50, 30000, '2026-01-10T10:05:00Z'),
-            ('tu-2', 'wf-1', 'developer', 'claude-sonnet-4', 20000, 5000, 8000, 1.20, 60000, '2026-01-10T10:10:00Z'),
-            ('tu-3', 'wf-2', 'architect', 'claude-opus-4', 15000, 3000, 0, 2.50, 45000, '2026-01-15T10:05:00Z')
-    """)
+    await repository.save_token_usage(
+        TokenUsage(
+            workflow_id=wf1_id,
+            agent="architect",
+            model="claude-sonnet-4",
+            input_tokens=10000,
+            output_tokens=2000,
+            cache_read_tokens=5000,
+            cost_usd=0.50,
+            duration_ms=30000,
+            timestamp=datetime(2026, 1, 10, 10, 5, 0, tzinfo=UTC),
+        )
+    )
+    await repository.save_token_usage(
+        TokenUsage(
+            workflow_id=wf1_id,
+            agent="developer",
+            model="claude-sonnet-4",
+            input_tokens=20000,
+            output_tokens=5000,
+            cache_read_tokens=8000,
+            cost_usd=1.20,
+            duration_ms=60000,
+            timestamp=datetime(2026, 1, 10, 10, 10, 0, tzinfo=UTC),
+        )
+    )
+    await repository.save_token_usage(
+        TokenUsage(
+            workflow_id=wf2_id,
+            agent="architect",
+            model="claude-opus-4",
+            input_tokens=15000,
+            output_tokens=3000,
+            cache_read_tokens=0,
+            cost_usd=2.50,
+            duration_ms=45000,
+            timestamp=datetime(2026, 1, 15, 10, 5, 0, tzinfo=UTC),
+        )
+    )
 
 
-@pytest.mark.asyncio
 async def test_get_usage_summary(repository: WorkflowRepository, seed_data: None) -> None:
     """get_usage_summary returns aggregated totals."""
     summary = await repository.get_usage_summary(
@@ -43,7 +93,6 @@ async def test_get_usage_summary(repository: WorkflowRepository, seed_data: None
     assert summary["total_duration_ms"] == 135000  # 30k+60k+45k
 
 
-@pytest.mark.asyncio
 async def test_get_usage_trend(repository: WorkflowRepository, seed_data: None) -> None:
     """get_usage_trend returns daily aggregates."""
     trend = await repository.get_usage_trend(
@@ -65,7 +114,6 @@ async def test_get_usage_trend(repository: WorkflowRepository, seed_data: None) 
     assert jan15["workflows"] == 1
 
 
-@pytest.mark.asyncio
 async def test_get_usage_by_model(repository: WorkflowRepository, seed_data: None) -> None:
     """get_usage_by_model returns model breakdown."""
     by_model = await repository.get_usage_by_model(
@@ -85,7 +133,6 @@ async def test_get_usage_by_model(repository: WorkflowRepository, seed_data: Non
     assert opus["tokens"] == 18000  # 15k+3k
 
 
-@pytest.mark.asyncio
 async def test_get_usage_summary_date_filtering(repository: WorkflowRepository, seed_data: None) -> None:
     """Date filtering excludes out-of-range data."""
     summary = await repository.get_usage_summary(

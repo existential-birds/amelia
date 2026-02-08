@@ -1,5 +1,7 @@
 # Amelia: Agentic Orchestrator
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/existential-birds/amelia)
+
 ![Amelia Terminal](docs/design/terminal_screen.jpg)
 
 ![Active Workflow](docs/design/amelia_active_workflow.png)

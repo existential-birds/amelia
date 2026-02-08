@@ -1,21 +1,12 @@
 """Test static file serving for dashboard."""
-from collections.abc import Generator
 
 import pytest
 from fastapi.testclient import TestClient
 from httpx import Response
 
-from amelia.server.main import app
-
 
 class TestDashboardServing:
     """Tests for dashboard static file serving."""
-
-    @pytest.fixture
-    def client(self) -> Generator[TestClient, None, None]:
-        """FastAPI test client."""
-        with TestClient(app) as test_client:
-            yield test_client
 
     def _assert_spa_response(self, response: Response) -> None:
         """Assert response is either dashboard HTML or 'not built' JSON."""
@@ -29,9 +20,9 @@ class TestDashboardServing:
             assert "instructions" in data
 
     @pytest.mark.parametrize("path", ["/", "/workflows", "/settings"])
-    def test_spa_routes_return_index_or_message(self, client: TestClient, path: str) -> None:
+    def test_spa_routes_return_index_or_message(self, mock_app_client: TestClient, path: str) -> None:
         """SPA routes return dashboard index.html or helpful message."""
-        response = client.get(path)
+        response = mock_app_client.get(path)
         self._assert_spa_response(response)
 
     @pytest.mark.parametrize("path,expected_status", [
@@ -39,14 +30,14 @@ class TestDashboardServing:
         ("/ws/events", 404),  # Non-WebSocket GET returns 404
     ])
     def test_reserved_prefixes_not_spa_fallback(
-        self, client: TestClient, path: str, expected_status: int
+        self, mock_app_client: TestClient, path: str, expected_status: int
     ) -> None:
         """API and WebSocket routes don't fall through to SPA."""
-        response = client.get(path)
+        response = mock_app_client.get(path)
         assert response.status_code == expected_status
 
-    def test_api_health_endpoint(self, client: TestClient) -> None:
+    def test_api_health_endpoint(self, mock_app_client: TestClient) -> None:
         """Health endpoint works normally."""
-        response = client.get("/api/health/live")
+        response = mock_app_client.get("/api/health/live")
         assert response.status_code == 200
         assert response.json() == {"status": "alive"}

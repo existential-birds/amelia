@@ -1,6 +1,7 @@
 """Shared fixtures for CLI tests."""
 
-from unittest.mock import AsyncMock, MagicMock
+from collections.abc import Generator
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -11,5 +12,14 @@ def mock_db() -> MagicMock:
     mock = MagicMock()
     mock.connect = AsyncMock()
     mock.close = AsyncMock()
-    mock.ensure_schema = AsyncMock()
     return mock
+
+
+@pytest.fixture(autouse=True)
+def _mock_migrator() -> Generator[None, None, None]:
+    """Auto-mock Migrator so CLI tests don't need real PostgreSQL."""
+    mock_cls = MagicMock()
+    mock_cls.return_value.run = AsyncMock()
+    mock_cls.return_value.initialize_prompts = AsyncMock()
+    with patch("amelia.cli.config.Migrator", mock_cls):
+        yield

@@ -3,10 +3,12 @@ from datetime import UTC, datetime
 from typing import Literal
 
 import psutil
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
 
 from amelia import __version__
+from amelia.server.database import WorkflowRepository
+from amelia.server.dependencies import get_repository
 from amelia.server.routes.websocket import connection_manager
 
 
@@ -29,7 +31,7 @@ class DatabaseStatus(BaseModel):
     """Database health status."""
 
     status: Literal["healthy", "degraded", "unhealthy"]
-    mode: str = Field(description="Database mode (e.g., 'wal')")
+    backend: str = Field(description="Database backend type")
     error: str | None = Field(default=None, description="Error message if degraded")
 
 
@@ -46,16 +48,30 @@ class HealthResponse(BaseModel):
     database: DatabaseStatus
 
 
-def get_database_status() -> DatabaseStatus:
-    """Return database health status for local orchestrator.
+async def get_database_status(repository: WorkflowRepository) -> DatabaseStatus:
+    """Check database health by executing a test query.
 
-    For a local orchestrator, if the app started successfully,
-    the database is operational. No active probing needed.
+    Args:
+        repository: Workflow repository with database connection.
 
     Returns:
-        DatabaseStatus indicating healthy state with WAL mode.
+        DatabaseStatus with actual health check result.
     """
-    return DatabaseStatus(status="healthy", mode="wal")
+    try:
+        is_healthy = await repository.db.is_healthy()
+        if is_healthy:
+            return DatabaseStatus(status="healthy", backend="postgresql")
+        return DatabaseStatus(
+            status="unhealthy",
+            backend="postgresql",
+            error="Health check query failed",
+        )
+    except Exception as e:
+        return DatabaseStatus(
+            status="unhealthy",
+            backend="postgresql",
+            error=str(e),
+        )
 
 
 @router.get("/live", response_model=LivenessResponse)
@@ -69,18 +85,23 @@ async def liveness() -> LivenessResponse:
 
 
 @router.get("/ready", response_model=ReadinessResponse)
-async def readiness() -> ReadinessResponse:
+async def readiness(request: Request) -> ReadinessResponse:
     """Readiness check - is the server ready to accept requests?
 
     Returns:
         Ready status or 503 if shutting down.
     """
-    # TODO: Check lifecycle.is_shutting_down when implemented
+    lifecycle = request.app.state.lifecycle
+    if lifecycle.is_shutting_down:
+        return ReadinessResponse(status="not_ready")
     return ReadinessResponse(status="ready")
 
 
 @router.get("", response_model=HealthResponse)
-async def health(request: Request) -> HealthResponse:
+async def health(
+    request: Request,
+    repository: WorkflowRepository = Depends(get_repository),
+) -> HealthResponse:
     """Detailed health check with server metrics.
 
     Returns:
@@ -97,11 +118,10 @@ async def health(request: Request) -> HealthResponse:
     start_time: datetime = request.app.state.start_time
     uptime = (datetime.now(UTC) - start_time).total_seconds()
 
-    # TODO: Get actual workflow count when service is implemented
-    active_workflows = 0
+    active_workflows = await repository.count_active()
     websocket_connections = connection_manager.active_connections
 
-    db_status = get_database_status()
+    db_status = await get_database_status(repository)
 
     overall_status: Literal["healthy", "degraded"] = (
         "healthy" if db_status.status == "healthy" else "degraded"

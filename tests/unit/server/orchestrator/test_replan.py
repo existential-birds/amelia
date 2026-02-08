@@ -103,24 +103,24 @@ class TestDeleteCheckpoint:
         self,
         orchestrator: OrchestratorService,
     ) -> None:
-        """_delete_checkpoint should open sqlite and delete checkpoint data."""
-        mock_saver_instance = AsyncMock()
+        """_delete_checkpoint should call adelete_thread on the checkpointer."""
+        mock_checkpointer = AsyncMock()
+        orchestrator._checkpointer = mock_checkpointer
 
-        mock_saver_ctx = AsyncMock()
-        mock_saver_ctx.__aenter__ = AsyncMock(return_value=mock_saver_instance)
-        mock_saver_ctx.__aexit__ = AsyncMock(return_value=False)
+        await orchestrator._delete_checkpoint("wf-123")
 
-        with patch(
-            "amelia.server.orchestrator.service.AsyncSqliteSaver"
-        ) as mock_saver_class:
-            mock_saver_class.from_conn_string.return_value = mock_saver_ctx
+        # Should have called adelete_thread with the workflow ID
+        mock_checkpointer.adelete_thread.assert_awaited_once_with("wf-123")
 
-            await orchestrator._delete_checkpoint("wf-123")
+    async def test_delete_checkpoint_no_checkpointer(
+        self,
+        orchestrator: OrchestratorService,
+    ) -> None:
+        """_delete_checkpoint should return early if no checkpointer is set."""
+        orchestrator._checkpointer = None
 
-            # Should have opened connection with checkpoint path
-            mock_saver_class.from_conn_string.assert_called_once()
-            # Should have called adelete_thread with the workflow ID
-            mock_saver_instance.adelete_thread.assert_awaited_once_with("wf-123")
+        # Should not raise
+        await orchestrator._delete_checkpoint("wf-123")
 
 
 class TestReplanWorkflow:

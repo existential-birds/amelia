@@ -1,18 +1,17 @@
 """Integration tests for brainstorming endpoints.
 
 Tests the HTTP layer with real route handlers, real BrainstormService,
-and real BrainstormRepository (in-memory SQLite).
+and real BrainstormRepository (PostgreSQL test database).
 
 Real components:
 - FastAPI route handlers
 - BrainstormService
-- BrainstormRepository with in-memory SQLite
+- BrainstormRepository with PostgreSQL test database
 - Request/Response model validation
 """
 
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from pathlib import Path
 from typing import Any
 
 import pytest
@@ -20,10 +19,14 @@ from fastapi.testclient import TestClient
 
 from amelia.server.database.brainstorm_repository import BrainstormRepository
 from amelia.server.database.connection import Database
+from amelia.server.database.migrator import Migrator
 from amelia.server.events.bus import EventBus
 from amelia.server.main import create_app
 from amelia.server.routes.brainstorm import get_brainstorm_service
 from amelia.server.services.brainstorm import BrainstormService
+
+
+DATABASE_URL = "postgresql://amelia:amelia@localhost:5432/amelia_test"
 
 
 # =============================================================================
@@ -32,11 +35,12 @@ from amelia.server.services.brainstorm import BrainstormService
 
 
 @pytest.fixture
-async def test_db(temp_db_path: Path) -> AsyncGenerator[Database, None]:
-    """Create and initialize in-memory SQLite database."""
-    db = Database(temp_db_path)
+async def test_db() -> AsyncGenerator[Database, None]:
+    """Create and initialize PostgreSQL test database."""
+    db = Database(DATABASE_URL)
     await db.connect()
-    await db.ensure_schema()
+    migrator = Migrator(db)
+    await migrator.run()
     yield db
     await db.close()
 

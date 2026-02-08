@@ -87,7 +87,7 @@ async def get_usage(
         end_date = datetime.now(UTC).date()
         start_date = end_date - timedelta(days=29)
 
-    # Fetch data in parallel conceptually (SQLite is single-threaded but this is the pattern)
+    # Fetch all usage data
     summary_data = await repository.get_usage_summary(
         start_date=start_date,
         end_date=end_date,

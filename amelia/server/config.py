@@ -3,7 +3,6 @@
 Only settings needed before database is available.
 All other settings are stored in the database.
 """
-from pathlib import Path
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -33,7 +32,9 @@ class ServerConfig(BaseSettings):
         le=65535,
         description="Port to bind the server to",
     )
-    database_path: Path = Field(
-        default_factory=lambda: Path.home() / ".amelia" / "amelia.db",
-        description="Path to SQLite database file",
+    database_url: str = Field(
+        default="postgresql://localhost:5432/amelia",
+        description="PostgreSQL connection URL",
     )
+    db_pool_min_size: int = Field(default=2, ge=1, description="Minimum pool connections")
+    db_pool_max_size: int = Field(default=10, ge=1, description="Maximum pool connections")

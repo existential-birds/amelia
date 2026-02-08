@@ -5,7 +5,7 @@ which are then broadcast to WebSocket clients.
 
 Real components:
 - BrainstormService
-- BrainstormRepository with in-memory SQLite
+- BrainstormRepository with PostgreSQL test database
 - EventBus (with subscriber to capture events)
 - ConnectionManager (for full WebSocket tests)
 
@@ -45,16 +45,6 @@ from tests.conftest import create_mock_execute_agentic
 # =============================================================================
 # Fixtures
 # =============================================================================
-
-
-@pytest.fixture
-async def test_db(temp_db_path: Path) -> AsyncGenerator[Database, None]:
-    """Create and initialize in-memory SQLite database."""
-    db = Database(temp_db_path)
-    await db.connect()
-    await db.ensure_schema()
-    yield db
-    await db.close()
 
 
 @pytest.fixture

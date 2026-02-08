@@ -100,7 +100,7 @@ The driver abstraction allows switching between direct API calls (`api`) and CLI
 
 ### Configuration
 
-Configuration is stored in SQLite database (`~/.amelia/amelia.db`) and managed via:
+Configuration is stored in PostgreSQL database and managed via:
 - **CLI**: `amelia config profile {list|show|create|delete|activate}` and `amelia config server {show|set}`
 - **Dashboard**: Settings page at `/settings` with Profiles and Server tabs
 
@@ -116,8 +116,9 @@ Server settings configurable via `amelia config server set` or dashboard. Enviro
 | `AMELIA_PORT` | `8420` | Port to bind the server to |
 | `AMELIA_LOG_RETENTION_DAYS` | `30` | Days to retain event logs |
 | `AMELIA_CHECKPOINT_RETENTION_DAYS` | `0` | Days to retain LangGraph checkpoints. `0` = delete immediately on shutdown, `-1` = never delete (for debugging) |
-| `AMELIA_CHECKPOINT_PATH` | `~/.amelia/checkpoints.db` | Path to LangGraph checkpoint database |
-| `AMELIA_DATABASE_PATH` | `~/.amelia/amelia.db` | Path to main SQLite database |
+| `AMELIA_DATABASE_URL` | `postgresql://localhost:5432/amelia` | PostgreSQL connection URL |
+| `AMELIA_DB_POOL_MIN_SIZE` | `2` | Minimum pool connections |
+| `AMELIA_DB_POOL_MAX_SIZE` | `10` | Maximum pool connections |
 | `AMELIA_MAX_CONCURRENT` | `5` | Maximum concurrent workflows |
 | `AMELIA_STREAM_TOOL_RESULTS` | `false` | Stream tool result events to dashboard. Enable for debugging. |
 

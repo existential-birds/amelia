@@ -1,9 +1,8 @@
 # amelia/server/routes/settings.py
 """API routes for server settings and profiles."""
-import json
-import sqlite3
 from typing import Any
 
+from asyncpg import UniqueViolationError
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
@@ -26,9 +25,7 @@ class ServerSettingsResponse(BaseModel):
     """Server settings API response."""
 
     log_retention_days: int
-    log_retention_max_events: int
     checkpoint_retention_days: int
-    checkpoint_path: str
     websocket_idle_timeout_seconds: float
     workflow_start_timeout_seconds: float
     max_concurrent: int
@@ -39,9 +36,7 @@ class ServerSettingsUpdate(BaseModel):
     """Server settings update request."""
 
     log_retention_days: int | None = None
-    log_retention_max_events: int | None = None
     checkpoint_retention_days: int | None = None
-    checkpoint_path: str | None = None
     websocket_idle_timeout_seconds: float | None = None
     workflow_start_timeout_seconds: float | None = None
     max_concurrent: int | None = None
@@ -116,9 +111,7 @@ async def get_server_settings(
     settings = await repo.get_server_settings()
     return ServerSettingsResponse(
         log_retention_days=settings.log_retention_days,
-        log_retention_max_events=settings.log_retention_max_events,
         checkpoint_retention_days=settings.checkpoint_retention_days,
-        checkpoint_path=settings.checkpoint_path,
         websocket_idle_timeout_seconds=settings.websocket_idle_timeout_seconds,
         workflow_start_timeout_seconds=settings.workflow_start_timeout_seconds,
         max_concurrent=settings.max_concurrent,
@@ -136,9 +129,7 @@ async def update_server_settings(
     settings = await repo.update_server_settings(update_dict)
     return ServerSettingsResponse(
         log_retention_days=settings.log_retention_days,
-        log_retention_max_events=settings.log_retention_max_events,
         checkpoint_retention_days=settings.checkpoint_retention_days,
-        checkpoint_path=settings.checkpoint_path,
         websocket_idle_timeout_seconds=settings.websocket_idle_timeout_seconds,
         workflow_start_timeout_seconds=settings.workflow_start_timeout_seconds,
         max_concurrent=settings.max_concurrent,
@@ -185,7 +176,7 @@ async def create_profile(
 
     try:
         created = await repo.create_profile(profile)
-    except sqlite3.IntegrityError as exc:
+    except UniqueViolationError as exc:
         raise HTTPException(status_code=409, detail="Profile already exists") from exc
     # Newly created profiles are not active
     return _profile_to_response(created, is_active=False)
@@ -219,17 +210,16 @@ async def update_profile(
         if value is not None:
             update_dict[field] = value
 
-    # Handle agents field - convert to JSON for database storage
+    # Handle agents field - pass dict directly (JSONB codec handles encoding)
     if updates.agents is not None:
-        agents_json = json.dumps({
+        update_dict["agents"] = {
             name: {
                 "driver": config.driver,
                 "model": config.model,
                 "options": config.options,
             }
             for name, config in updates.agents.items()
-        })
-        update_dict["agents"] = agents_json
+        }
 
     try:
         updated = await repo.update_profile(profile_id, update_dict)

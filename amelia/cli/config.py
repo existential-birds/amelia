@@ -16,6 +16,7 @@ from amelia.core.types import AgentConfig, DriverType, Profile, TrackerType
 from amelia.server.config import ServerConfig
 from amelia.server.database import (
     Database,
+    Migrator,
     ProfileRepository,
     SettingsRepository,
 )
@@ -46,10 +47,10 @@ def get_database() -> Database:
     """Create a Database instance from ServerConfig.
 
     Returns:
-        Database instance configured with the path from ServerConfig.
+        Database instance configured with the URL from ServerConfig.
     """
     config = ServerConfig()
-    return Database(config.database_path)
+    return Database(config.database_url)
 
 
 async def _get_profile_repository() -> tuple[Database, ProfileRepository]:
@@ -60,7 +61,8 @@ async def _get_profile_repository() -> tuple[Database, ProfileRepository]:
     """
     db = get_database()
     await db.connect()
-    await db.ensure_schema()
+    migrator = Migrator(db)
+    await migrator.run()
     return db, ProfileRepository(db)
 
 
@@ -72,7 +74,8 @@ async def _get_settings_repository() -> tuple[Database, SettingsRepository]:
     """
     db = get_database()
     await db.connect()
-    await db.ensure_schema()
+    migrator = Migrator(db)
+    await migrator.run()
     repo = SettingsRepository(db)
     await repo.ensure_defaults()
     return db, repo
@@ -105,7 +108,7 @@ def _validate_driver(value: str) -> DriverType:
         raise typer.BadParameter(
             f"Invalid driver '{value}'. Valid options: {sorted(VALID_DRIVERS)}"
         )
-    return value  # type: ignore[return-value]
+    return DriverType(value)
 
 
 def _validate_tracker(value: str) -> TrackerType:
@@ -124,7 +127,7 @@ def _validate_tracker(value: str) -> TrackerType:
         raise typer.BadParameter(
             f"Invalid tracker '{value}'. Valid options: {sorted(VALID_TRACKERS)}"
         )
-    return value  # type: ignore[return-value]
+    return TrackerType(value)
 
 
 def _build_default_agents(driver: DriverType, model: str) -> dict[str, AgentConfig]:
@@ -313,10 +316,8 @@ def profile_create(
                 raise typer.Exit(code=1)
 
             # At this point, all optional values have been filled via prompts
-            assert driver is not None
-            assert model is not None
-            assert tracker is not None
-            assert working_dir is not None
+            if driver is None or model is None or tracker is None or working_dir is None:
+                raise ValueError("All profile options must be provided")
 
             # Validate and cast to proper types
             validated_driver = _validate_driver(driver)
@@ -472,12 +473,8 @@ def server_show() -> None:
 
             table.add_row("Log Retention Days", str(settings.log_retention_days))
             table.add_row(
-                "Log Retention Max Events", str(settings.log_retention_max_events)
-            )
-            table.add_row(
                 "Checkpoint Retention Days", str(settings.checkpoint_retention_days)
             )
-            table.add_row("Checkpoint Path", settings.checkpoint_path)
             table.add_row(
                 "WebSocket Idle Timeout (s)",
                 str(settings.websocket_idle_timeout_seconds),
@@ -507,9 +504,7 @@ def server_set(
 
     Valid settings:
     - log_retention_days (int)
-    - log_retention_max_events (int)
     - checkpoint_retention_days (int)
-    - checkpoint_path (str)
     - websocket_idle_timeout_seconds (float)
     - workflow_start_timeout_seconds (float)
     - max_concurrent (int)
@@ -518,13 +513,11 @@ def server_set(
     # Convert value to appropriate type
     int_fields = {
         "log_retention_days",
-        "log_retention_max_events",
         "checkpoint_retention_days",
         "max_concurrent",
     }
     float_fields = {"websocket_idle_timeout_seconds", "workflow_start_timeout_seconds"}
     bool_fields = {"stream_tool_results"}
-    str_fields = {"checkpoint_path"}
 
     parsed_value: int | float | bool | str
     try:
@@ -544,12 +537,10 @@ def server_set(
                     "Use true/false, yes/no, or 1/0.[/red]"
                 )
                 raise typer.Exit(code=1)
-        elif setting in str_fields:
-            parsed_value = value
         else:
             console.print(f"[red]Unknown setting: {setting}[/red]")
             console.print("\nValid settings:")
-            all_fields = int_fields | float_fields | bool_fields | str_fields
+            all_fields = int_fields | float_fields | bool_fields
             for field in sorted(all_fields):
                 console.print(f"  - {field}")
             raise typer.Exit(code=1)

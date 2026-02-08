@@ -191,20 +191,12 @@ class TestResumeWorkflow:
         mock_state = MagicMock()
         mock_state.values = {"some": "state"}
 
-        with pytest.MonkeyPatch.context() as mp:
-            mock_saver = AsyncMock()
-            mock_saver.__aenter__ = AsyncMock(return_value=mock_saver)
-            mock_saver.__aexit__ = AsyncMock(return_value=False)
-            mp.setattr(
-                "amelia.server.orchestrator.service.AsyncSqliteSaver.from_conn_string",
-                MagicMock(return_value=mock_saver),
-            )
-            mock_graph = MagicMock()
-            mock_graph.aget_state = AsyncMock(return_value=mock_state)
-            mp.setattr(service, "_create_server_graph", MagicMock(return_value=mock_graph))
+        mock_graph = MagicMock()
+        mock_graph.aget_state = AsyncMock(return_value=mock_state)
+        service._create_server_graph = MagicMock(return_value=mock_graph)
 
-            with pytest.raises(InvalidStateError, match="worktree.*occupied"):
-                await service.resume_workflow("wf-1")
+        with pytest.raises(InvalidStateError, match="worktree.*occupied"):
+            await service.resume_workflow("wf-1")
 
         # Cleanup
         service._active_tasks.clear()
@@ -227,25 +219,13 @@ class TestResumeWorkflow:
         mock_state = MagicMock()
         mock_state.values = {"some": "state"}
 
-        with (
-            pytest.MonkeyPatch.context() as mp,
-        ):
-            mock_saver = AsyncMock()
-            mock_saver.__aenter__ = AsyncMock(return_value=mock_saver)
-            mock_saver.__aexit__ = AsyncMock(return_value=False)
+        mock_graph = MagicMock()
+        mock_graph.aget_state = AsyncMock(return_value=mock_state)
+        service._create_server_graph = MagicMock(return_value=mock_graph)
 
-            mp.setattr(
-                "amelia.server.orchestrator.service.AsyncSqliteSaver.from_conn_string",
-                MagicMock(return_value=mock_saver),
-            )
+        service._run_workflow_with_retry = AsyncMock()
 
-            mock_graph = MagicMock()
-            mock_graph.aget_state = AsyncMock(return_value=mock_state)
-            mp.setattr(service, "_create_server_graph", MagicMock(return_value=mock_graph))
-
-            service._run_workflow_with_retry = AsyncMock()
-
-            await service.resume_workflow("wf-1")
+        await service.resume_workflow("wf-1")
 
         # Verify error fields cleared
         assert wf.failure_reason is None
@@ -272,20 +252,12 @@ class TestResumeWorkflow:
         mock_state = MagicMock()
         mock_state.values = {"some": "state"}
 
-        with pytest.MonkeyPatch.context() as mp:
-            mock_saver = AsyncMock()
-            mock_saver.__aenter__ = AsyncMock(return_value=mock_saver)
-            mock_saver.__aexit__ = AsyncMock(return_value=False)
-            mp.setattr(
-                "amelia.server.orchestrator.service.AsyncSqliteSaver.from_conn_string",
-                MagicMock(return_value=mock_saver),
-            )
-            mock_graph = MagicMock()
-            mock_graph.aget_state = AsyncMock(return_value=mock_state)
-            mp.setattr(service, "_create_server_graph", MagicMock(return_value=mock_graph))
-            service._run_workflow_with_retry = AsyncMock()
+        mock_graph = MagicMock()
+        mock_graph.aget_state = AsyncMock(return_value=mock_state)
+        service._create_server_graph = MagicMock(return_value=mock_graph)
+        service._run_workflow_with_retry = AsyncMock()
 
-            await service.resume_workflow("wf-1")
+        await service.resume_workflow("wf-1")
 
         # Check WORKFLOW_STARTED event with resumed=True
         saved_events = [c[0][0] for c in repository.save_event.call_args_list]

@@ -13,6 +13,24 @@ jobs:
   check:
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: amelia
+          POSTGRES_PASSWORD: amelia
+          POSTGRES_DB: amelia_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://amelia:amelia@localhost:5432/amelia_test
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
