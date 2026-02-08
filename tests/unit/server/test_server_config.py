@@ -10,6 +10,14 @@ from amelia.server.config import ServerConfig
 from amelia.server.dependencies import get_config
 
 
+@pytest.fixture(autouse=True)
+def _clean_amelia_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Remove all AMELIA_-prefixed env vars to isolate tests from the shell."""
+    for key in list(os.environ):
+        if key.startswith("AMELIA_"):
+            monkeypatch.delenv(key)
+
+
 class TestServerConfig:
     """Tests for ServerConfig (bootstrap-only fields).
 
