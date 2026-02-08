@@ -17,44 +17,7 @@ if TYPE_CHECKING:
     from amelia.server.events.bus import EventBus
 
 
-class Reviewer:
-    """Agent responsible for reviewing code changes against requirements.
-
-    Review Method:
-        agentic_review(): Agentic review that auto-detects technologies, loads review
-            skills, and fetches diff via git. Returns ReviewResult with properly
-            separated issues (not including observations or praise).
-
-    Attributes:
-        driver: LLM driver interface for generating reviews.
-
-    """
-
-    AGENTIC_REVIEW_PROMPT = """You are an expert code reviewer. Your task is to review code changes using the appropriate review skills.
-
-## Process
-
-1. **Identify Changed Files**: Run `git diff --name-only {base_commit}` to see what files changed
-
-2. **Detect Technologies**: Based on file extensions and imports, identify the stack:
-   - Python files (.py): Look for FastAPI, Pydantic-AI, SQLAlchemy, pytest
-   - Go files (.go): Look for BubbleTea, Wish, Prometheus
-   - TypeScript/React (.tsx, .ts): Look for React Router, shadcn/ui, Zustand, React Flow
-
-3. **Load Review Skills**: Use the `Skill` tool to load appropriate review skills:
-   - Python: `beagle:review-python` (FastAPI, pytest, Pydantic)
-   - Go: `beagle:review-go` (error handling, concurrency, interfaces)
-   - Frontend: `beagle:review-frontend` (React, TypeScript, CSS)
-   - TUI: `beagle:review-tui` (BubbleTea terminal apps)
-
-4. **Get the Diff**: Run `git diff {base_commit}` to get the full diff
-
-5. **Review**: Follow the loaded skill's instructions to review the code
-
-6. **Output**: Provide your review in the following markdown format:
-
-```markdown
-## Review Summary
+REVIEW_OUTPUT_FORMAT = """## Review Summary
 
 [1-2 sentence overview of findings]
 
@@ -88,7 +51,47 @@ N. [FILE:LINE] ISSUE_TITLE
 ## Verdict
 
 Ready: Yes | No | With fixes 1-N
-Rationale: [1-2 sentences]
+Rationale: [1-2 sentences]"""
+
+
+class Reviewer:
+    """Agent responsible for reviewing code changes against requirements.
+
+    Review Method:
+        agentic_review(): Agentic review that auto-detects technologies, loads review
+            skills, and fetches diff via git. Returns ReviewResult with properly
+            separated issues (not including observations or praise).
+
+    Attributes:
+        driver: LLM driver interface for generating reviews.
+
+    """
+
+    AGENTIC_REVIEW_PROMPT = f"""You are an expert code reviewer. Your task is to review code changes using the appropriate review skills.
+
+## Process
+
+1. **Identify Changed Files**: Run `git diff --name-only {{base_commit}}` to see what files changed
+
+2. **Detect Technologies**: Based on file extensions and imports, identify the stack:
+   - Python files (.py): Look for FastAPI, Pydantic-AI, SQLAlchemy, pytest
+   - Go files (.go): Look for BubbleTea, Wish, Prometheus
+   - TypeScript/React (.tsx, .ts): Look for React Router, shadcn/ui, Zustand, React Flow
+
+3. **Load Review Skills**: Use the `Skill` tool to load appropriate review skills:
+   - Python: `beagle:review-python` (FastAPI, pytest, Pydantic)
+   - Go: `beagle:review-go` (error handling, concurrency, interfaces)
+   - Frontend: `beagle:review-frontend` (React, TypeScript, CSS)
+   - TUI: `beagle:review-tui` (BubbleTea terminal apps)
+
+4. **Get the Diff**: Run `git diff {{base_commit}}` to get the full diff
+
+5. **Review**: Follow the loaded skill's instructions to review the code
+
+6. **Output**: Provide your review in the following markdown format:
+
+```markdown
+{REVIEW_OUTPUT_FORMAT}
 ```
 
 ## Rules
