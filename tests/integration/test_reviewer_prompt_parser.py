@@ -132,13 +132,13 @@ class TestReviewerPromptParserChain:
         assert result.severity == Severity.NONE
         assert session_id == "sess-1"
 
-    async def test_malformed_review_defaults_to_not_approved_and_routing_advances(
+    async def test_malformed_review_without_issues_defaults_to_approved(
         self,
         create_reviewer_with_defaults: Callable[..., Reviewer],
         mock_driver: MagicMock,
         profile: Profile,
     ) -> None:
-        """Malformed output (no Ready: pattern) -> approved=False -> routing advances."""
+        """Malformed output (no Ready: pattern, no issues) -> approved=True -> routes to next task."""
         reviewer = create_reviewer_with_defaults()
 
         mock_driver.execute_agentic = MagicMock(
@@ -160,16 +160,15 @@ class TestReviewerPromptParserChain:
             status="running",
             current_task_index=0,
             total_tasks=3,
-            task_review_iteration=2,  # At max iterations
         )
 
         result, _ = await reviewer.agentic_review(
             state, base_commit="abc123", profile=profile, workflow_id="wf-int-002"
         )
 
-        assert result.approved is False
+        assert result.approved is True
 
-        # Simulate routing with the result
+        # Simulate routing with the approved result
         state_after = ImplementationState(
             workflow_id="wf-int-002",
             profile_id="test",
@@ -177,11 +176,10 @@ class TestReviewerPromptParserChain:
             status="running",
             current_task_index=0,
             total_tasks=3,
-            task_review_iteration=2,
             last_review=result,
         )
         route = route_after_task_review(state_after, profile)
-        # Non-final task at max iterations -> advance, not abort
+        # Approved non-final task -> advance to next task
         assert route == "next_task_node"
 
     async def test_prompt_defaults_contain_ready_format(self) -> None:

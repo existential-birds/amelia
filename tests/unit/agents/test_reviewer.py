@@ -709,8 +709,8 @@ Rationale: The code is ready because:
         )
 
 
-    def test_no_ready_pattern_defaults_to_not_approved(self, create_reviewer: Callable[..., Reviewer]) -> None:
-        """When Ready: pattern is missing, default to approved=False (no keyword guessing)."""
+    def test_no_ready_pattern_without_issues_defaults_to_approved(self, create_reviewer: Callable[..., Reviewer]) -> None:
+        """When Ready: pattern is missing and no structured issues found, default to approved=True."""
         reviewer = create_reviewer()
         output = """## Review Summary
 Code looks good overall with minor issues.
@@ -727,18 +727,19 @@ The code is approved and looks good to merge.
 Rationale: All checks pass."""
 
         result = reviewer._parse_review_result(output, workflow_id="wf-test")
-        # Should NOT match "approved" keyword - should default to False
-        assert result.approved is False
+        # No Ready: verdict AND no structured issues → approve
+        assert result.approved is True
 
-    def test_json_output_without_ready_pattern_defaults_to_not_approved(
+    def test_json_output_without_ready_pattern_defaults_to_approved(
         self, create_reviewer: Callable[..., Reviewer]
     ) -> None:
-        """JSON output (from mismatched prompt) should default to not approved."""
+        """JSON output (from mismatched prompt) with no structured issues defaults to approved."""
         reviewer = create_reviewer()
         output = '{"approved": true, "comments": [], "severity": "none"}'
 
         result = reviewer._parse_review_result(output, workflow_id="wf-test")
-        assert result.approved is False
+        # No Ready: verdict AND no structured issues → approve
+        assert result.approved is True
 
     def test_truncated_output_without_ready_pattern_defaults_to_not_approved(
         self, create_reviewer: Callable[..., Reviewer]
@@ -751,6 +752,40 @@ Code changes implement the feature correctly.
 ## Issues
 ### Minor (Nice to Have)
 1. [src/main.py:42] Consider adding type hint"""
+
+        result = reviewer._parse_review_result(output, workflow_id="wf-test")
+        assert result.approved is False
+        assert len(result.comments) >= 1
+
+    def test_freeform_positive_review_without_issues_approves(
+        self, create_reviewer: Callable[..., Reviewer]
+    ) -> None:
+        """Freeform prose with no structured issues should default to approved=True."""
+        reviewer = create_reviewer()
+        output = "Build passed. The implementation is ready for the next task."
+
+        result = reviewer._parse_review_result(output, workflow_id="wf-test")
+        assert result.approved is True
+        assert result.comments == []
+
+    def test_no_verdict_with_issues_defaults_to_not_approved(
+        self, create_reviewer: Callable[..., Reviewer]
+    ) -> None:
+        """No Ready: verdict but structured issues present should default to approved=False."""
+        reviewer = create_reviewer()
+        output = """## Review Summary
+There are problems to address.
+
+## Issues
+### Critical (Blocking)
+1. [src/api.py:15] SQL injection vulnerability in query builder
+
+### Major (Should Fix)
+
+### Minor (Nice to Have)
+
+## Good Patterns
+- Good test coverage"""
 
         result = reviewer._parse_review_result(output, workflow_id="wf-test")
         assert result.approved is False

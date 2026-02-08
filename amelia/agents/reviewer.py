@@ -395,29 +395,9 @@ The changes are in git - diff against commit: {base_commit}"""
             output_preview=output[:500] if output else None,
             workflow_id=workflow_id,
         )
-        if verdict_match:
-            verdict_text = verdict_match.group(1).lower()
-            approved = verdict_text == "yes"
-            logger.debug(
-                "Verdict parsed from regex match",
-                verdict_text=verdict_text,
-                approved=approved,
-                workflow_id=workflow_id,
-            )
-        else:
-            # No Ready: pattern found - default to not approved for safety.
-            # The prompt instructs the model to produce "Ready: Yes|No";
-            # if it doesn't, rejecting is the safe default, and the
-            # max-iterations routing fix prevents this from killing the workflow.
-            approved = False
-            logger.warning(
-                "No 'Ready:' verdict found in review output, defaulting to not approved",
-                agent=self._agent_name,
-                output_preview=output[:200] if output else None,
-                workflow_id=workflow_id,
-            )
 
-        # Parse issues from each severity section
+        # Parse issues from each severity section BEFORE deciding approval,
+        # so the fallback heuristic can use issue presence.
         issues: list[tuple[str, str]] = []  # (severity, issue_text)
 
         # Match numbered issues: "1. [FILE:LINE] TITLE" or just "1. TITLE"
@@ -454,6 +434,36 @@ The changes are in git - diff against commit: {base_commit}"""
                     else:
                         issue_text = f"[{current_severity}] {title}"
                     issues.append((current_severity, issue_text))
+
+        # Decide approval based on verdict match or fallback heuristic
+        if verdict_match:
+            verdict_text = verdict_match.group(1).lower()
+            approved = verdict_text == "yes"
+            logger.debug(
+                "Verdict parsed from regex match",
+                verdict_text=verdict_text,
+                approved=approved,
+                workflow_id=workflow_id,
+            )
+        elif issues:
+            # No Ready: pattern but structured issues found → reject
+            approved = False
+            logger.warning(
+                "No 'Ready:' verdict found but structured issues present, defaulting to not approved",
+                agent=self._agent_name,
+                issue_count=len(issues),
+                output_preview=output[:200] if output else None,
+                workflow_id=workflow_id,
+            )
+        else:
+            # No Ready: pattern and no structured issues → approve
+            approved = True
+            logger.info(
+                "No 'Ready:' verdict and no structured issues found, defaulting to approved",
+                agent=self._agent_name,
+                output_preview=output[:200] if output else None,
+                workflow_id=workflow_id,
+            )
 
         # Determine overall severity from highest issue severity
         severity_priority = {"critical": 3, "major": 2, "minor": 1}
