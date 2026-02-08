@@ -17,44 +17,12 @@ if TYPE_CHECKING:
     from amelia.server.events.bus import EventBus
 
 
-class Reviewer:
-    """Agent responsible for reviewing code changes against requirements.
+# Maximum number of review comments to return to the developer.
+# Limits cognitive load and ensures the developer focuses on the most important issues first.
+# Additional issues beyond this limit will be caught in subsequent review cycles.
+MAX_REVIEW_COMMENTS = 20
 
-    Review Method:
-        agentic_review(): Agentic review that auto-detects technologies, loads review
-            skills, and fetches diff via git. Returns ReviewResult with properly
-            separated issues (not including observations or praise).
-
-    Attributes:
-        driver: LLM driver interface for generating reviews.
-
-    """
-
-    AGENTIC_REVIEW_PROMPT = """You are an expert code reviewer. Your task is to review code changes using the appropriate review skills.
-
-## Process
-
-1. **Identify Changed Files**: Run `git diff --name-only {base_commit}` to see what files changed
-
-2. **Detect Technologies**: Based on file extensions and imports, identify the stack:
-   - Python files (.py): Look for FastAPI, Pydantic-AI, SQLAlchemy, pytest
-   - Go files (.go): Look for BubbleTea, Wish, Prometheus
-   - TypeScript/React (.tsx, .ts): Look for React Router, shadcn/ui, Zustand, React Flow
-
-3. **Load Review Skills**: Use the `Skill` tool to load appropriate review skills:
-   - Python: `beagle:review-python` (FastAPI, pytest, Pydantic)
-   - Go: `beagle:review-go` (error handling, concurrency, interfaces)
-   - Frontend: `beagle:review-frontend` (React, TypeScript, CSS)
-   - TUI: `beagle:review-tui` (BubbleTea terminal apps)
-
-4. **Get the Diff**: Run `git diff {base_commit}` to get the full diff
-
-5. **Review**: Follow the loaded skill's instructions to review the code
-
-6. **Output**: Provide your review in the following markdown format:
-
-```markdown
-## Review Summary
+REVIEW_OUTPUT_FORMAT = """## Review Summary
 
 [1-2 sentence overview of findings]
 
@@ -88,7 +56,47 @@ N. [FILE:LINE] ISSUE_TITLE
 ## Verdict
 
 Ready: Yes | No | With fixes 1-N
-Rationale: [1-2 sentences]
+Rationale: [1-2 sentences]"""
+
+
+class Reviewer:
+    """Agent responsible for reviewing code changes against requirements.
+
+    Review Method:
+        agentic_review(): Agentic review that auto-detects technologies, loads review
+            skills, and fetches diff via git. Returns ReviewResult with properly
+            separated issues (not including observations or praise).
+
+    Attributes:
+        driver: LLM driver interface for generating reviews.
+
+    """
+
+    AGENTIC_REVIEW_PROMPT = f"""You are an expert code reviewer. Your task is to review code changes using the appropriate review skills.
+
+## Process
+
+1. **Identify Changed Files**: Run `git diff --name-only {{base_commit}}` to see what files changed
+
+2. **Detect Technologies**: Based on file extensions and imports, identify the stack:
+   - Python files (.py): Look for FastAPI, Pydantic-AI, SQLAlchemy, pytest
+   - Go files (.go): Look for BubbleTea, Wish, Prometheus
+   - TypeScript/React (.tsx, .ts): Look for React Router, shadcn/ui, Zustand, React Flow
+
+3. **Load Review Skills**: Use the `Skill` tool to load appropriate review skills:
+   - Python: `beagle:review-python` (FastAPI, pytest, Pydantic)
+   - Go: `beagle:review-go` (error handling, concurrency, interfaces)
+   - Frontend: `beagle:review-frontend` (React, TypeScript, CSS)
+   - TUI: `beagle:review-tui` (BubbleTea terminal apps)
+
+4. **Get the Diff**: Run `git diff {{base_commit}}` to get the full diff
+
+5. **Review**: Follow the loaded skill's instructions to review the code
+
+6. **Output**: Provide your review in the following markdown format:
+
+```markdown
+{REVIEW_OUTPUT_FORMAT}
 ```
 
 ## Rules
@@ -378,10 +386,10 @@ The changes are in git - diff against commit: {base_commit}"""
             )
 
         # Parse verdict to determine approval
-        # Handle markdown formatting like **Ready:** Yes, **Ready**: Yes, or __Ready:__ Yes
-        # Pattern allows bold/italic markers before "Ready", between "Ready" and ":", and after ":"
+        # Handle markdown formatting like **Ready:** Yes, ***Ready***: Yes, or __Ready:__ Yes
+        # Pattern allows any combination of bold/italic markers (*, **, ***, _, __, etc.)
         verdict_match = re.search(
-            r"[*_]{0,2}Ready[*_]{0,2}:[*_]{0,2}\s*(Yes|No|With fixes[^\n]*)",
+            r"[*_]*Ready[*_]*:[*_]*\s*(Yes|No|With fixes[^\n]*)",
             output,
             re.IGNORECASE,
         )
@@ -392,38 +400,9 @@ The changes are in git - diff against commit: {base_commit}"""
             output_preview=output[:500] if output else None,
             workflow_id=workflow_id,
         )
-        if verdict_match:
-            verdict_text = verdict_match.group(1).lower()
-            approved = verdict_text == "yes"
-            logger.debug(
-                "Verdict parsed from regex match",
-                verdict_text=verdict_text,
-                approved=approved,
-                workflow_id=workflow_id,
-            )
-        else:
-            # Fallback: check for approval keywords
-            output_lower = output.lower()
-            approval_keywords_found = [
-                word for word in ["ready: yes", "approved", "lgtm", "looks good"]
-                if word in output_lower
-            ]
-            rejection_keywords_found = [
-                word for word in ["ready: no", "not approved", "needs fixes", "blocked"]
-                if word in output_lower
-            ]
-            approved = bool(approval_keywords_found)
-            if rejection_keywords_found:
-                approved = False
-            logger.debug(
-                "Verdict parsed from fallback keywords",
-                approval_keywords_found=approval_keywords_found,
-                rejection_keywords_found=rejection_keywords_found,
-                approved=approved,
-                workflow_id=workflow_id,
-            )
 
-        # Parse issues from each severity section
+        # Parse issues from each severity section BEFORE deciding approval,
+        # so the fallback heuristic can use issue presence.
         issues: list[tuple[str, str]] = []  # (severity, issue_text)
 
         # Match numbered issues: "1. [FILE:LINE] TITLE" or just "1. TITLE"
@@ -461,6 +440,36 @@ The changes are in git - diff against commit: {base_commit}"""
                         issue_text = f"[{current_severity}] {title}"
                     issues.append((current_severity, issue_text))
 
+        # Decide approval based on verdict match or fallback heuristic
+        if verdict_match:
+            verdict_text = verdict_match.group(1).lower()
+            approved = verdict_text == "yes"
+            logger.debug(
+                "Verdict parsed from regex match",
+                verdict_text=verdict_text,
+                approved=approved,
+                workflow_id=workflow_id,
+            )
+        elif issues:
+            # No Ready: pattern but structured issues found → reject
+            approved = False
+            logger.warning(
+                "No 'Ready:' verdict found but structured issues present, defaulting to not approved",
+                agent=self._agent_name,
+                issue_count=len(issues),
+                output_preview=output[:200] if output else None,
+                workflow_id=workflow_id,
+            )
+        else:
+            # No Ready: pattern and no structured issues → approve
+            approved = True
+            logger.debug(
+                "No 'Ready:' verdict and no structured issues found, defaulting to approved",
+                agent=self._agent_name,
+                output_preview=output[:200] if output else None,
+                workflow_id=workflow_id,
+            )
+
         # Determine overall severity from highest issue severity
         severity_priority = {"critical": 3, "major": 2, "minor": 1}
         if issues:
@@ -493,6 +502,6 @@ The changes are in git - diff against commit: {base_commit}"""
         return ReviewResult(
             reviewer_persona="Agentic",
             approved=approved,
-            comments=comments[:20],  # Limit to 20 issues
+            comments=comments[:MAX_REVIEW_COMMENTS],
             severity=overall_severity,
         )

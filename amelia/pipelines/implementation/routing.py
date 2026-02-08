@@ -53,14 +53,15 @@ def route_after_task_review(
     Returns:
         "next_task_node" if approved and more tasks remain.
         "developer" if not approved and iterations remain.
-        "__end__" if all tasks complete or max iterations reached.
+        "next_task_node" if max iterations on a non-final task (advance with warning).
+        "__end__" if all tasks complete or max iterations on final task.
     """
     task_number = state.current_task_index + 1
+    is_final_task = state.current_task_index + 1 >= state.total_tasks
     approved = state.last_review.approved if state.last_review else False
 
     if approved:
-        # Task approved - check if more tasks remain
-        if state.current_task_index + 1 >= state.total_tasks:
+        if is_final_task:
             logger.debug(
                 "Task routing decision",
                 task=task_number,
@@ -68,30 +69,39 @@ def route_after_task_review(
                 route="__end__",
                 reason="all_tasks_complete",
             )
-            return "__end__"  # All tasks complete
+            return "__end__"
         logger.debug(
             "Task routing decision",
             task=task_number,
             approved=True,
             route="next_task_node",
         )
-        return "next_task_node"  # Move to next task
+        return "next_task_node"
 
     # Not approved - check iteration limit from task_reviewer options, default to 5
     max_iterations = 5
     if "task_reviewer" in profile.agents:
         max_iterations = profile.agents["task_reviewer"].options.get("max_iterations", 5)
     if state.task_review_iteration >= max_iterations:
-        logger.debug(
-            "Task routing decision",
+        if is_final_task:
+            logger.debug(
+                "Task routing decision",
+                task=task_number,
+                approved=False,
+                iteration=state.task_review_iteration,
+                max_iterations=max_iterations,
+                route="__end__",
+                reason="max_iterations_on_final_task",
+            )
+            return "__end__"
+        logger.warning(
+            "Max review iterations reached on non-final task, advancing to next task",
             task=task_number,
-            approved=False,
             iteration=state.task_review_iteration,
             max_iterations=max_iterations,
-            route="__end__",
-            reason="max_iterations_reached",
+            route="next_task_node",
         )
-        return "__end__"  # Halt on repeated failure
+        return "next_task_node"
 
     logger.debug(
         "Task routing decision",
@@ -101,4 +111,4 @@ def route_after_task_review(
         max_iterations=max_iterations,
         route="developer",
     )
-    return "developer"  # Retry with feedback
+    return "developer"

@@ -8,6 +8,8 @@ These serve as:
 """
 from pydantic import BaseModel, ConfigDict
 
+from amelia.agents.reviewer import REVIEW_OUTPUT_FORMAT
+
 
 class PromptDefault(BaseModel):
     """Immutable prompt default definition.
@@ -87,11 +89,11 @@ Guidelines:
         agent="reviewer",
         name="Reviewer Agentic Prompt",
         description="Instructions for agentic code review with tool calling and skill loading",
-        content="""You are an expert code reviewer. Your task is to review code changes using the appropriate review skills.
+        content=f"""You are an expert code reviewer. Your task is to review code changes using the appropriate review skills.
 
 ## Process
 
-1. **Identify Changed Files**: Run `git diff --name-only {base_commit}` to see what files changed
+1. **Identify Changed Files**: Run `git diff --name-only {{base_commit}}` to see what files changed
 
 2. **Detect Technologies**: Based on file extensions and imports, identify the stack:
    - Python files (.py): Look for FastAPI, Pydantic-AI, SQLAlchemy, pytest
@@ -104,27 +106,25 @@ Guidelines:
    - Frontend: `beagle:review-frontend` (React, TypeScript, CSS)
    - TUI: `beagle:review-tui` (BubbleTea terminal apps)
 
-4. **Get the Diff**: Run `git diff {base_commit}` to get the full diff
+4. **Get the Diff**: Run `git diff {{base_commit}}` to get the full diff
 
 5. **Review**: Follow the loaded skill's instructions to review the code
 
-6. **Output**: Provide your review in the following JSON format:
+6. **Output**: Provide your review in the following markdown format:
 
-```json
-{{
-  "approved": true|false,
-  "comments": ["comment 1", "comment 2"],
-  "severity": "none"|"minor"|"major"|"critical"
-}}
+```markdown
+{REVIEW_OUTPUT_FORMAT}
 ```
 
 ## Rules
 
 - Load skills BEFORE reviewing (not after)
-- Include FILE:LINE in your comments
-- Be specific about what needs to change
+- Number every issue sequentially (1, 2, 3...)
+- Include FILE:LINE for each issue
+- Separate Issue/Why/Fix clearly
+- Categorize by actual severity (Critical/Major/Minor)
 - Only flag real issues - check linters first before flagging style issues
-- Approved means the code is ready to merge as-is""",
+- "Ready: Yes" means approved to merge as-is""",
     ),
     "evaluator.system": PromptDefault(
         agent="evaluator",

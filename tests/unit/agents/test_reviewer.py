@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from amelia.agents.reviewer import Reviewer
-from amelia.core.types import AgentConfig, Profile
+from amelia.core.types import AgentConfig, DriverType, Profile, Severity
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
 from amelia.pipelines.implementation.state import ImplementationState
 from amelia.server.models.events import EventType
@@ -17,7 +17,7 @@ from tests.conftest import AsyncIteratorMock
 @pytest.fixture
 def mock_agent_config() -> AgentConfig:
     """Default AgentConfig for tests."""
-    return AgentConfig(driver="cli", model="sonnet", options={})
+    return AgentConfig(driver=DriverType.CLI, model="sonnet", options={})
 
 
 @pytest.fixture
@@ -33,7 +33,7 @@ def create_reviewer(mock_driver: MagicMock) -> Callable[..., Reviewer]:
         agent_name: str = "reviewer",
     ) -> Reviewer:
         with patch("amelia.agents.reviewer.get_driver", return_value=mock_driver):
-            config = AgentConfig(driver="cli", model="sonnet", options={})
+            config = AgentConfig(driver=DriverType.CLI, model="sonnet", options={})
             return Reviewer(config, event_bus=event_bus, prompts=prompts, agent_name=agent_name)
     return _create
 
@@ -44,7 +44,7 @@ class TestReviewerInit:
     def test_reviewer_init_with_agent_config(self) -> None:
         """Reviewer should accept AgentConfig and create its own driver."""
         config = AgentConfig(
-            driver="cli",
+            driver=DriverType.CLI,
             model="sonnet",
             options={"max_iterations": 5},
         )
@@ -152,7 +152,7 @@ Rationale: No issues found, code is ready to merge.
 
         assert result.approved is True
         assert len(result.comments) == 0  # No issues found
-        assert result.severity == "none"
+        assert result.severity == Severity.NONE
         assert session_id == "session-789"
 
         # Verify execute_agentic was called
@@ -353,7 +353,7 @@ Rationale: Two major issues need to be fixed first.
         assert len(result.comments) == 2
         assert "[major]" in result.comments[0].lower()
         assert "file.py:42" in result.comments[0]
-        assert result.severity == "major"
+        assert result.severity == Severity.MAJOR
 
     async def test_agentic_review_determines_severity_from_highest_issue(
         self,
@@ -417,7 +417,7 @@ Rationale: Critical security issue must be fixed.
         )
 
         # Overall severity should be critical (highest)
-        assert result.severity == "critical"
+        assert result.severity == Severity.CRITICAL
         assert result.approved is False
         assert len(result.comments) == 2
         assert session_id == "session-critical"
@@ -707,6 +707,89 @@ Rationale: The code is ready because:
             "Approved review should have empty comments. "
             "Bullet points in Verdict rationale are not issues."
         )
+
+
+    def test_no_ready_pattern_without_issues_defaults_to_approved(self, create_reviewer: Callable[..., Reviewer]) -> None:
+        """When Ready: pattern is missing and no structured issues found, default to approved=True."""
+        reviewer = create_reviewer()
+        output = """## Review Summary
+Code looks good overall with minor issues.
+
+## Issues
+### Critical (Blocking)
+None
+
+## Good Patterns
+- Clean architecture
+
+## Verdict
+The code is approved and looks good to merge.
+Rationale: All checks pass."""
+
+        result = reviewer._parse_review_result(output, workflow_id="wf-test")
+        # No Ready: verdict AND no structured issues → approve
+        assert result.approved is True
+
+    def test_json_output_without_ready_pattern_defaults_to_approved(
+        self, create_reviewer: Callable[..., Reviewer]
+    ) -> None:
+        """JSON output (from mismatched prompt) with no structured issues defaults to approved."""
+        reviewer = create_reviewer()
+        output = '{"approved": true, "comments": [], "severity": "none"}'
+
+        result = reviewer._parse_review_result(output, workflow_id="wf-test")
+        # No Ready: verdict AND no structured issues → approve
+        assert result.approved is True
+
+    def test_truncated_output_without_ready_pattern_defaults_to_not_approved(
+        self, create_reviewer: Callable[..., Reviewer]
+    ) -> None:
+        """Truncated output missing verdict section should default to not approved."""
+        reviewer = create_reviewer()
+        output = """## Review Summary
+Code changes implement the feature correctly.
+
+## Issues
+### Minor (Nice to Have)
+1. [src/main.py:42] Consider adding type hint"""
+
+        result = reviewer._parse_review_result(output, workflow_id="wf-test")
+        assert result.approved is False
+        assert len(result.comments) >= 1
+
+    def test_freeform_positive_review_without_issues_approves(
+        self, create_reviewer: Callable[..., Reviewer]
+    ) -> None:
+        """Freeform prose with no structured issues should default to approved=True."""
+        reviewer = create_reviewer()
+        output = "Build passed. The implementation is ready for the next task."
+
+        result = reviewer._parse_review_result(output, workflow_id="wf-test")
+        assert result.approved is True
+        assert result.comments == []
+
+    def test_no_verdict_with_issues_defaults_to_not_approved(
+        self, create_reviewer: Callable[..., Reviewer]
+    ) -> None:
+        """No Ready: verdict but structured issues present should default to approved=False."""
+        reviewer = create_reviewer()
+        output = """## Review Summary
+There are problems to address.
+
+## Issues
+### Critical (Blocking)
+1. [src/api.py:15] SQL injection vulnerability in query builder
+
+### Major (Should Fix)
+
+### Minor (Nice to Have)
+
+## Good Patterns
+- Good test coverage"""
+
+        result = reviewer._parse_review_result(output, workflow_id="wf-test")
+        assert result.approved is False
+        assert len(result.comments) >= 1
 
 
 class TestExtractTaskContext:
