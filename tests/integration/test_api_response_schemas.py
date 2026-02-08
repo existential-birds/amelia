@@ -90,7 +90,7 @@ class TestAPIResponseSchemas:
     def mock_orchestrator(self) -> MagicMock:
         """Create a mock orchestrator that returns predictable workflow IDs."""
         orchestrator = MagicMock()
-        orchestrator.start_workflow = AsyncMock(return_value="test-workflow-id-123")
+        orchestrator.start_workflow = AsyncMock(return_value="00000000-0000-4000-8000-000000000123")
         return orchestrator
 
     @pytest.fixture
@@ -104,7 +104,7 @@ class TestAPIResponseSchemas:
         # Create the test workflow in the real database
         await create_test_workflow(
             test_repository,
-            workflow_id="test-workflow-id-123",
+            workflow_id="00000000-0000-4000-8000-000000000123",
             issue_id="TEST-456",
             worktree_path="/test/path",
         )
@@ -165,7 +165,7 @@ class TestAPIResponseSchemas:
         assert isinstance(response, CreateWorkflowResponse)
 
         # Verify only the minimal fields are present
-        assert response.id == "test-workflow-id-123"
+        assert response.id == "00000000-0000-4000-8000-000000000123"
         assert response.status == "pending"
         assert "TEST-123" in response.message
 
@@ -204,11 +204,11 @@ class TestAPIResponseSchemas:
         client = AmeliaClient(base_url=server_with_real_db)
 
         # Get workflow details (workflow was created in fixture)
-        response = await client.get_workflow("test-workflow-id-123")
+        response = await client.get_workflow("00000000-0000-4000-8000-000000000123")
 
         # Verify correct response type with full details
         assert isinstance(response, WorkflowResponse)
-        assert response.id == "test-workflow-id-123"
+        assert response.id == "00000000-0000-4000-8000-000000000123"
         assert response.issue_id == "TEST-456"
         assert response.worktree_path == "/test/path"
         assert response.status == "pending"
@@ -219,7 +219,7 @@ class TestAPIResponseSchemas:
         """Verify raw HTTP response from GET includes full workflow details."""
         async with httpx.AsyncClient() as http_client:
             response = await http_client.get(
-                f"{server_with_real_db}/api/workflows/test-workflow-id-123"
+                f"{server_with_real_db}/api/workflows/00000000-0000-4000-8000-000000000123"
             )
 
         assert response.status_code == 200
@@ -233,6 +233,6 @@ class TestAPIResponseSchemas:
         assert "status" in data
 
         # Verify values match our test workflow
-        assert data["id"] == "test-workflow-id-123"
+        assert data["id"] == "00000000-0000-4000-8000-000000000123"
         assert data["issue_id"] == "TEST-456"
         assert data["worktree_path"] == "/test/path"
