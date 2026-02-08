@@ -26,6 +26,10 @@ setup:
       verify: "docker compose ps --format json | python3 -c \"import sys,json; d=json.loads(sys.stdin.read()); print('healthy' if any('running' in str(s).lower() for s in (d if isinstance(d,list) else [d])) else 'NOT RUNNING')\""
     - description: "Test repo exists at ../test_repo_c"
       verify: "test -d ../test_repo_c && echo 'exists' || echo 'MISSING'"
+    - description: "Required environment variables are set"
+      env:
+        AMELIA_DATABASE_URL: "postgresql://amelia:amelia@localhost:5432/amelia"
+        OPENROUTER_API_KEY: "<your-openrouter-api-key>"
   commands:
     - "uv sync"
     - "uv run amelia dev &"
