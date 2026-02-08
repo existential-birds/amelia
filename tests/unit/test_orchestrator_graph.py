@@ -233,10 +233,10 @@ class TestRouteAfterTaskReview:
         result = route_after_task_review(state, mock_profile_task_review)
         assert result == "developer"
 
-    def test_route_after_task_review_ends_on_max_iterations(
+    def test_route_after_task_review_advances_on_max_iterations_non_final(
         self, mock_profile_task_review: Profile, rejected_review: ReviewResult
     ) -> None:
-        """Should END when max iterations reached without approval."""
+        """Should advance to next task when max iterations reached on non-final task."""
         state = ImplementationState(
             workflow_id="test-workflow",
             created_at=datetime.now(UTC),
@@ -244,6 +244,24 @@ class TestRouteAfterTaskReview:
             profile_id="test",
             total_tasks=2,
             current_task_index=0,
+            task_review_iteration=3,  # At limit
+            last_review=rejected_review,
+        )
+
+        result = route_after_task_review(state, mock_profile_task_review)
+        assert result == "next_task_node"
+
+    def test_route_after_task_review_ends_on_max_iterations_final_task(
+        self, mock_profile_task_review: Profile, rejected_review: ReviewResult
+    ) -> None:
+        """Should END when max iterations reached on final task."""
+        state = ImplementationState(
+            workflow_id="test-workflow",
+            created_at=datetime.now(UTC),
+            status="running",
+            profile_id="test",
+            total_tasks=2,
+            current_task_index=1,  # Final task (0-indexed)
             task_review_iteration=3,  # At limit
             last_review=rejected_review,
         )
