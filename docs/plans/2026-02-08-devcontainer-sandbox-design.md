@@ -36,6 +36,8 @@ The Trail of Bits `claude-code-devcontainer` project demonstrates a Docker-based
 | Agent execution | Inside container (not just tool execution) | All LLM calls and file I/O run inside the container. No bind-mounts. Full isolation. |
 | API key management | Host proxy — keys never enter the container | LLM and git credentials served by proxy on host. Works for local and future cloud. |
 | Git authentication | Host proxy credential helper from day one | No shortcuts. Container's git credential helper talks to host proxy. |
+| Usage tracking | Worker emits final `USAGE` message via JSON-line protocol | Worker has access to DeepAgents' accumulated `usage_metadata`. Emitting it as a final `AgenticMessage` keeps cost tracking working across all drivers with no special-casing. |
+| Session cleanup | No-op (`return False`), same as `ClaudeCliDriver` | Session state lives in git worktrees, managed at workflow level by `worktree.py`. No in-memory checkpointer to clean up. |
 
 ---
 
@@ -364,8 +366,28 @@ python -m amelia.sandbox.worker generate \
 
 - **stdin:** Not used. Prompt delivered via `--prompt-file` (written by host as `vscode` user).
 - **stdout:** One `AgenticMessage` JSON object per line. Nothing else.
+- **Final stdout line:** `AgenticMessage` with `type=USAGE` containing accumulated `DriverUsage` in the `usage` field. Emitted by the worker after execution completes, before exit. The `ContainerDriver` captures this and stores it for `get_usage()`.
 - **stderr:** Worker's own loguru logs. Not parsed by host. Available for debugging.
 - **Exit code:** 0 = success, non-zero = failure.
+
+### Changes to AgenticMessage
+
+The worker protocol requires two additions to existing types in `amelia/drivers/base.py`:
+
+```python
+class AgenticMessageType(StrEnum):
+    THINKING = "thinking"
+    TOOL_CALL = "tool_call"
+    TOOL_RESULT = "tool_result"
+    RESULT = "result"
+    USAGE = "usage"          # NEW — final line with accumulated usage data
+
+class AgenticMessage(BaseModel):
+    # ... existing fields ...
+    usage: DriverUsage | None = None  # Populated only for type=USAGE
+```
+
+The `USAGE` message is not yielded to callers — it is consumed internally by `ContainerDriver` to populate `get_usage()`. The `to_workflow_event()` mapping does not need a `USAGE` entry since it never reaches the event bus.
 
 ### Prompt Delivery
 
@@ -439,8 +461,10 @@ class ContainerDriver:
     def __init__(self, model: str, provider: SandboxProvider):
         self.model = model
         self.provider = provider
+        self._usage: DriverUsage | None = None
 
     async def execute_agentic(self, prompt, cwd, ...):
+        self._usage = None
         await self.provider.ensure_running()
         await self._write_prompt_file(prompt)
 
@@ -449,9 +473,14 @@ class ContainerDriver:
                "--cwd", cwd, "--model", self.model]
 
         async for line in self.provider.exec_stream(cmd, cwd=cwd):
-            yield AgenticMessage.model_validate_json(line)
+            message = AgenticMessage.model_validate_json(line)
+            if message.type == AgenticMessageType.USAGE:
+                self._usage = message.usage
+            else:
+                yield message
 
     async def generate(self, prompt, schema=None, ...):
+        self._usage = None
         await self.provider.ensure_running()
         await self._write_prompt_file(prompt)
 
@@ -463,11 +492,22 @@ class ContainerDriver:
 
         async for line in self.provider.exec_stream(cmd):
             message = AgenticMessage.model_validate_json(line)
-            if message.type == AgenticMessageType.RESULT:
+            if message.type == AgenticMessageType.USAGE:
+                self._usage = message.usage
+            elif message.type == AgenticMessageType.RESULT:
                 return message.content, message.session_id
+
+    def get_usage(self) -> DriverUsage | None:
+        """Return accumulated usage from last execution."""
+        return self._usage
+
+    def cleanup_session(self, session_id: str) -> bool:
+        """No-op. Session state lives in git worktrees, managed by worktree.py."""
+        return False
 ```
 
-Session continuity maps to git worktrees (persistent across calls), not in-memory checkpointers.
+- **Usage tracking:** The worker emits a final `USAGE` message with accumulated `DriverUsage`. `ContainerDriver` captures it during streaming and stores it for `get_usage()`. This keeps cost tracking working across all drivers.
+- **Session cleanup:** Returns `False`, same as `ClaudeCliDriver`. Worktree lifecycle (create/remove) is managed by `worktree.py` at the workflow level, not through the driver interface.
 
 ## Network Allowlist
 
@@ -557,7 +597,7 @@ amelia/sandbox/
 | `amelia/server/app.py` | Mount proxy routes at `/proxy/v1/` | PR 1 |
 | `pyproject.toml` | Add `[dependency-groups] sandbox = [...]` | PR 2 |
 | `amelia/drivers/factory.py` | Add `ContainerDriver` branch when `sandbox.mode == "container"` | PR 3 |
-| `amelia/drivers/base.py` | No change | — |
+| `amelia/drivers/base.py` | Add `USAGE` to `AgenticMessageType`, add `usage: DriverUsage \| None` field to `AgenticMessage` | PR 2 |
 | `amelia/agents/` | No change | — |
 | `amelia/server/events/` | No change | — |
 | `dashboard/` | No change (MVP) | — |
