@@ -30,6 +30,27 @@ class ExternalPlanImportResult(BaseModel):
     total_tasks: int
 
 
+def build_plan_extraction_prompt(plan_content: str) -> str:
+    """Build prompt for extracting structured fields from a plan.
+
+    Args:
+        plan_content: The raw plan markdown content.
+
+    Returns:
+        Prompt string for LLM extraction.
+    """
+    return f"""Extract the implementation plan structure from the following markdown plan.
+
+<plan>
+{plan_content}
+</plan>
+
+Return:
+- goal: 1-2 sentence summary of what this plan accomplishes
+- plan_markdown: The full plan content (preserve as-is)
+- key_files: List of files that will be created or modified"""
+
+
 async def import_external_plan(
     plan_file: str | None,
     plan_content: str | None,
@@ -117,16 +138,7 @@ async def import_external_plan(
 
     # Extract structured fields using LLM
     agent_config = profile.get_agent_config("plan_validator")
-    prompt = f"""Extract the implementation plan structure from the following markdown plan.
-
-<plan>
-{content}
-</plan>
-
-Return:
-- goal: 1-2 sentence summary of what this plan accomplishes
-- plan_markdown: The full plan content (preserve as-is)
-- key_files: List of files that will be created or modified"""
+    prompt = build_plan_extraction_prompt(content)
 
     try:
         output = await extract_structured(

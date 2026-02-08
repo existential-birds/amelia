@@ -19,6 +19,7 @@ from amelia.agents.architect import Architect
 from amelia.agents.schemas.architect import MarkdownPlanOutput
 from amelia.core.constants import ToolName, resolve_plan_path
 from amelia.core.extraction import extract_structured
+from amelia.pipelines.implementation.external_plan import build_plan_extraction_prompt
 from amelia.pipelines.implementation.state import ImplementationState
 from amelia.pipelines.implementation.utils import (
     _extract_goal_from_plan,
@@ -78,16 +79,7 @@ async def plan_validator_node(
     # The plan already exists - we just need to parse it into structured format
     # Use plan_validator agent config for structured extraction
     agent_config = profile.get_agent_config("plan_validator")
-    prompt = f"""Extract the implementation plan structure from the following markdown plan.
-
-<plan>
-{plan_content}
-</plan>
-
-Return:
-- goal: 1-2 sentence summary of what this plan accomplishes
-- plan_markdown: The full plan content (preserve as-is)
-- key_files: List of files that will be created or modified"""
+    prompt = build_plan_extraction_prompt(plan_content)
 
     try:
         output = await extract_structured(
@@ -150,8 +142,10 @@ async def call_architect_node(
     Raises:
         ValueError: If no issue is provided in the state.
     """
-    issue_id_for_log = state.issue.id if state.issue else "No Issue Provided"
-    logger.info("Orchestrator: Calling Architect", issue_id=issue_id_for_log)
+    logger.info(
+        "Orchestrator: Calling Architect",
+        issue_id=state.issue.id if state.issue else "No Issue Provided",
+    )
 
     if state.issue is None:
         raise ValueError("Cannot call Architect: no issue provided in state.")
