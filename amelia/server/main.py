@@ -56,6 +56,7 @@ from amelia.drivers.factory import (
 )
 from amelia.logging import configure_logging, log_server_startup
 from amelia.pipelines.implementation.state import rebuild_implementation_state
+from amelia.sandbox.proxy import ProviderConfig, create_proxy_router
 from amelia.server.config import ServerConfig
 from amelia.server.database import ProfileRepository, SettingsRepository, WorkflowRepository
 from amelia.server.database.brainstorm_repository import BrainstormRepository
@@ -335,6 +336,51 @@ def create_app() -> FastAPI:
         return bus
 
     application.dependency_overrides[oracle_get_event_bus] = get_oracle_event_bus
+
+    # Mount sandbox proxy routes
+    async def _resolve_provider(profile_name: str) -> ProviderConfig | None:
+        """Resolve LLM provider config from profile name.
+
+        Looks up the profile in the database, finds the developer agent's
+        provider setting, and returns the corresponding upstream URL and API key.
+        """
+        profile_repo = get_profile_repository()
+        profile = await profile_repo.get_profile(profile_name)
+        if profile is None:
+            return None
+
+        # Use developer agent config to determine provider
+        try:
+            agent_config = profile.get_agent_config("developer")
+        except ValueError:
+            return None
+
+        provider = agent_config.options.get("provider", "openrouter")
+
+        # Map provider to upstream config
+        provider_registry: dict[str, tuple[str, str]] = {
+            "openrouter": (
+                "https://openrouter.ai/api/v1",
+                os.environ.get("OPENROUTER_API_KEY", ""),
+            ),
+            "anthropic": (
+                "https://api.anthropic.com/v1",
+                os.environ.get("ANTHROPIC_API_KEY", ""),
+            ),
+            "openai": (
+                "https://api.openai.com/v1",
+                os.environ.get("OPENAI_API_KEY", ""),
+            ),
+        }
+
+        entry = provider_registry.get(provider)
+        if entry is None or not entry[1]:
+            return None
+
+        return ProviderConfig(base_url=entry[0], api_key=entry[1])
+
+    proxy_router = create_proxy_router(resolve_provider=_resolve_provider)
+    application.include_router(proxy_router, prefix="/proxy/v1")
 
     # Serve dashboard static files
     # Priority: bundled static files (installed package) > dev build (dashboard/dist)
