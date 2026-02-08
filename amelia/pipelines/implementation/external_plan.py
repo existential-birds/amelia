@@ -150,7 +150,7 @@ async def import_external_plan(
         goal = output.goal
         plan_markdown = output.plan_markdown
         key_files = output.key_files
-    except RuntimeError as e:
+    except (ValueError, RuntimeError) as e:
         # Fallback extraction without LLM
         logger.warning(
             "Structured extraction failed, using fallback",

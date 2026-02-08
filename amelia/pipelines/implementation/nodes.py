@@ -178,10 +178,7 @@ async def call_architect_node(
         if event_bus:
             event_bus.emit(event)
 
-    if repository is None:
-        logger.debug("Skipping token usage save: no repository configured")
-    else:
-        await _save_token_usage(architect.driver, workflow_id, "architect", repository)
+    await _save_token_usage(architect.driver, workflow_id, "architect", repository)
 
     # Fallback: If plan file doesn't exist, write it from Write tool call content
     # This handles cases where Claude Code's Write tool didn't persist the file
