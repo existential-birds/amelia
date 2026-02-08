@@ -17,6 +17,11 @@ if TYPE_CHECKING:
     from amelia.server.events.bus import EventBus
 
 
+# Maximum number of review comments to return to the developer.
+# Limits cognitive load and ensures the developer focuses on the most important issues first.
+# Additional issues beyond this limit will be caught in subsequent review cycles.
+MAX_REVIEW_COMMENTS = 20
+
 REVIEW_OUTPUT_FORMAT = """## Review Summary
 
 [1-2 sentence overview of findings]
@@ -381,10 +386,10 @@ The changes are in git - diff against commit: {base_commit}"""
             )
 
         # Parse verdict to determine approval
-        # Handle markdown formatting like **Ready:** Yes, **Ready**: Yes, or __Ready:__ Yes
-        # Pattern allows bold/italic markers before "Ready", between "Ready" and ":", and after ":"
+        # Handle markdown formatting like **Ready:** Yes, ***Ready***: Yes, or __Ready:__ Yes
+        # Pattern allows any combination of bold/italic markers (*, **, ***, _, __, etc.)
         verdict_match = re.search(
-            r"[*_]{0,2}Ready[*_]{0,2}:[*_]{0,2}\s*(Yes|No|With fixes[^\n]*)",
+            r"[*_]*Ready[*_]*:[*_]*\s*(Yes|No|With fixes[^\n]*)",
             output,
             re.IGNORECASE,
         )
@@ -497,6 +502,6 @@ The changes are in git - diff against commit: {base_commit}"""
         return ReviewResult(
             reviewer_persona="Agentic",
             approved=approved,
-            comments=comments[:20],  # Limit to 20 issues
+            comments=comments[:MAX_REVIEW_COMMENTS],
             severity=overall_severity,
         )
