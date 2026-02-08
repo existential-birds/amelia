@@ -79,3 +79,83 @@ class TestProxyGitCredentials:
         # Should not 404 — route exists. Actual credential fetching is tested
         # in integration tests since it depends on host git config.
         assert response.status_code in (200, 501)
+
+
+class TestProxyForwarding:
+    def test_chat_completions_forwards_with_auth(self, client, monkeypatch):
+        """Verify proxy attaches auth header and forwards to upstream."""
+        captured_request = {}
+
+        async def mock_request(self, method, url, content, headers, **kwargs):
+            captured_request["method"] = method
+            captured_request["url"] = str(url)
+            captured_request["headers"] = dict(headers)
+            captured_request["content"] = content
+
+            class MockResponse:
+                status_code = 200
+                content = b'{"choices": []}'
+                headers = {"content-type": "application/json"}
+
+            return MockResponse()
+
+        monkeypatch.setattr(httpx.AsyncClient, "request", mock_request)
+
+        response = client.post(
+            "/proxy/v1/chat/completions",
+            json={"model": "test", "messages": [{"role": "user", "content": "hi"}]},
+            headers={"X-Amelia-Profile": "work"},
+        )
+
+        assert response.status_code == 200
+        assert captured_request["url"] == "https://openrouter.ai/api/v1/chat/completions"
+        assert captured_request["headers"]["authorization"] == "Bearer sk-or-test-key"
+        assert "x-amelia-profile" not in captured_request["headers"]
+
+    def test_embeddings_forwards_with_auth(self, client, monkeypatch):
+        """Verify embeddings endpoint forwards correctly."""
+        captured_request = {}
+
+        async def mock_request(self, method, url, content, headers, **kwargs):
+            captured_request["url"] = str(url)
+            captured_request["headers"] = dict(headers)
+
+            class MockResponse:
+                status_code = 200
+                content = b'{"data": []}'
+                headers = {"content-type": "application/json"}
+
+            return MockResponse()
+
+        monkeypatch.setattr(httpx.AsyncClient, "request", mock_request)
+
+        response = client.post(
+            "/proxy/v1/embeddings",
+            json={"model": "test", "input": "hello"},
+            headers={"X-Amelia-Profile": "personal"},
+        )
+
+        assert response.status_code == 200
+        assert captured_request["url"] == "https://api.anthropic.com/v1/embeddings"
+        assert captured_request["headers"]["authorization"] == "Bearer sk-ant-test-key"
+
+    def test_upstream_error_passed_through(self, client, monkeypatch):
+        """Verify upstream errors are forwarded to the caller."""
+
+        async def mock_request(self, method, url, content, headers, **kwargs):
+            class MockResponse:
+                status_code = 429
+                content = b'{"error": "rate limited"}'
+                headers = {"content-type": "application/json"}
+
+            return MockResponse()
+
+        monkeypatch.setattr(httpx.AsyncClient, "request", mock_request)
+
+        response = client.post(
+            "/proxy/v1/chat/completions",
+            json={"model": "test", "messages": []},
+            headers={"X-Amelia-Profile": "work"},
+        )
+
+        assert response.status_code == 429
