@@ -454,5 +454,3 @@ class TestEvaluator:
         call_args = mock_driver.generate.call_args
         prompt = call_args.kwargs.get("prompt") or call_args.args[0]
         assert "Issue Context" in prompt or "Test Issue" in prompt
-
-

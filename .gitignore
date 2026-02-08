@@ -116,6 +116,7 @@ amelia.db
 checkpoints/
 *.ckpt
 review_report.md
+.review-output.md
 
 # Bundled dashboard (built during release)
 amelia/server/static/*

@@ -165,7 +165,7 @@ async def call_architect_node(
     plan_rel_path = resolve_plan_path(profile.plan_path_pattern, state.issue.id)
     working_dir = Path(profile.working_dir) if profile.working_dir else Path(".")
     plan_path = working_dir / plan_rel_path
-    plan_path.parent.mkdir(parents=True, exist_ok=True)
+    await asyncio.to_thread(plan_path.parent.mkdir, parents=True, exist_ok=True)
     logger.debug("Ensured plan directory exists", plan_dir=str(plan_path.parent))
 
     final_state = state
