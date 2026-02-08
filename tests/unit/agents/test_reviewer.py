@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from amelia.agents.reviewer import Reviewer
-from amelia.core.types import AgentConfig, Profile
+from amelia.core.types import AgentConfig, DriverType, Profile, Severity
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
 from amelia.pipelines.implementation.state import ImplementationState
 from amelia.server.models.events import EventType
@@ -17,7 +17,7 @@ from tests.conftest import AsyncIteratorMock
 @pytest.fixture
 def mock_agent_config() -> AgentConfig:
     """Default AgentConfig for tests."""
-    return AgentConfig(driver="cli", model="sonnet", options={})
+    return AgentConfig(driver=DriverType.CLI, model="sonnet", options={})
 
 
 @pytest.fixture
@@ -33,7 +33,7 @@ def create_reviewer(mock_driver: MagicMock) -> Callable[..., Reviewer]:
         agent_name: str = "reviewer",
     ) -> Reviewer:
         with patch("amelia.agents.reviewer.get_driver", return_value=mock_driver):
-            config = AgentConfig(driver="cli", model="sonnet", options={})
+            config = AgentConfig(driver=DriverType.CLI, model="sonnet", options={})
             return Reviewer(config, event_bus=event_bus, prompts=prompts, agent_name=agent_name)
     return _create
 
@@ -44,7 +44,7 @@ class TestReviewerInit:
     def test_reviewer_init_with_agent_config(self) -> None:
         """Reviewer should accept AgentConfig and create its own driver."""
         config = AgentConfig(
-            driver="cli",
+            driver=DriverType.CLI,
             model="sonnet",
             options={"max_iterations": 5},
         )
@@ -152,7 +152,7 @@ Rationale: No issues found, code is ready to merge.
 
         assert result.approved is True
         assert len(result.comments) == 0  # No issues found
-        assert result.severity == "none"
+        assert result.severity == Severity.NONE
         assert session_id == "session-789"
 
         # Verify execute_agentic was called
@@ -353,7 +353,7 @@ Rationale: Two major issues need to be fixed first.
         assert len(result.comments) == 2
         assert "[major]" in result.comments[0].lower()
         assert "file.py:42" in result.comments[0]
-        assert result.severity == "major"
+        assert result.severity == Severity.MAJOR
 
     async def test_agentic_review_determines_severity_from_highest_issue(
         self,
@@ -417,7 +417,7 @@ Rationale: Critical security issue must be fixed.
         )
 
         # Overall severity should be critical (highest)
-        assert result.severity == "critical"
+        assert result.severity == Severity.CRITICAL
         assert result.approved is False
         assert len(result.comments) == 2
         assert session_id == "session-critical"

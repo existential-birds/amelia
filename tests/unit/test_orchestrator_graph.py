@@ -10,7 +10,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END
 
 from amelia.agents.evaluator import Disposition, EvaluatedItem, EvaluationResult
-from amelia.core.types import AgentConfig, Profile, ReviewResult
+from amelia.core.types import AgentConfig, DriverType, Profile, ReviewResult, Severity, TrackerType
 from amelia.pipelines.implementation import create_implementation_graph
 from amelia.pipelines.implementation.nodes import next_task_node
 from amelia.pipelines.implementation.routing import route_after_task_review
@@ -151,14 +151,14 @@ class TestRouteAfterTaskReview:
     def mock_profile_task_review(self) -> Profile:
         return Profile(
             name="test",
-            tracker="noop",
+            tracker=TrackerType.NOOP,
             working_dir="/tmp/test",
             agents={
-                "architect": AgentConfig(driver="cli", model="sonnet"),
-                "developer": AgentConfig(driver="cli", model="sonnet"),
-                "reviewer": AgentConfig(driver="cli", model="sonnet"),
+                "architect": AgentConfig(driver=DriverType.CLI, model="sonnet"),
+                "developer": AgentConfig(driver=DriverType.CLI, model="sonnet"),
+                "reviewer": AgentConfig(driver=DriverType.CLI, model="sonnet"),
                 "task_reviewer": AgentConfig(
-                    driver="cli", model="sonnet", options={"max_iterations": 3}
+                    driver=DriverType.CLI, model="sonnet", options={"max_iterations": 3}
                 ),
             },
         )
@@ -169,7 +169,7 @@ class TestRouteAfterTaskReview:
             reviewer_persona="test",
             approved=True,
             comments=[],
-            severity="none",
+            severity=Severity.NONE,
         )
 
     @pytest.fixture
@@ -178,7 +178,7 @@ class TestRouteAfterTaskReview:
             reviewer_persona="test",
             approved=False,
             comments=["Needs fixes"],
-            severity="minor",
+            severity=Severity.MINOR,
         )
 
     def test_route_after_task_review_ends_when_all_tasks_complete(
@@ -273,14 +273,14 @@ class TestRouteAfterTaskReview:
         """Should respect task_reviewer agent's options.max_iterations setting."""
         profile = Profile(
             name="test",
-            tracker="noop",
+            tracker=TrackerType.NOOP,
             working_dir="/tmp/test",
             agents={
-                "architect": AgentConfig(driver="cli", model="sonnet"),
-                "developer": AgentConfig(driver="cli", model="sonnet"),
-                "reviewer": AgentConfig(driver="cli", model="sonnet"),
+                "architect": AgentConfig(driver=DriverType.CLI, model="sonnet"),
+                "developer": AgentConfig(driver=DriverType.CLI, model="sonnet"),
+                "reviewer": AgentConfig(driver=DriverType.CLI, model="sonnet"),
                 "task_reviewer": AgentConfig(
-                    driver="cli", model="sonnet", options={"max_iterations": 10}
+                    driver=DriverType.CLI, model="sonnet", options={"max_iterations": 10}
                 ),
             },
         )
@@ -288,7 +288,7 @@ class TestRouteAfterTaskReview:
             reviewer_persona="test",
             approved=False,
             comments=["Needs fixes"],
-            severity="minor",
+            severity=Severity.MINOR,
         )
         state = ImplementationState(
             workflow_id="test-workflow",
@@ -417,13 +417,13 @@ class TestReviewerNodeTaskIteration:
         )
         profile = Profile(
             name="test",
-            tracker="noop",
+            tracker=TrackerType.NOOP,
             working_dir="/tmp/test",
             agents={
-                "architect": AgentConfig(driver="cli", model="sonnet"),
-                "developer": AgentConfig(driver="cli", model="sonnet"),
-                "reviewer": AgentConfig(driver="cli", model="sonnet"),
-                "task_reviewer": AgentConfig(driver="cli", model="sonnet"),
+                "architect": AgentConfig(driver=DriverType.CLI, model="sonnet"),
+                "developer": AgentConfig(driver=DriverType.CLI, model="sonnet"),
+                "reviewer": AgentConfig(driver=DriverType.CLI, model="sonnet"),
+                "task_reviewer": AgentConfig(driver=DriverType.CLI, model="sonnet"),
             },
         )
         config: RunnableConfig = {"configurable": {"profile": profile, "thread_id": "test-wf"}}
@@ -433,7 +433,7 @@ class TestReviewerNodeTaskIteration:
             reviewer_persona="test",
             approved=False,
             comments=["Needs work"],
-            severity="minor",
+            severity=Severity.MINOR,
         )
 
         with patch("amelia.pipelines.nodes.Reviewer") as mock_reviewer_class:

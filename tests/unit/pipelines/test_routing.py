@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from amelia.core.types import AgentConfig, Profile, ReviewResult, Severity
+from amelia.core.types import AgentConfig, DriverType, Profile, ReviewResult, Severity
 from amelia.pipelines.implementation.routing import route_after_start, route_after_task_review
 from amelia.pipelines.implementation.state import ImplementationState
 
@@ -46,7 +46,7 @@ class TestRouteAfterTaskReview:
             working_dir="/tmp/test",
             agents={
                 "task_reviewer": AgentConfig(
-                    driver="cli", model="sonnet", options={"max_iterations": 2}
+                    driver=DriverType.CLI, model="sonnet", options={"max_iterations": 2}
                 ),
             },
         )
