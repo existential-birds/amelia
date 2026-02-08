@@ -25,7 +25,7 @@ import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
 
-from amelia.agents.architect import MarkdownPlanOutput
+from amelia.agents.schemas.architect import MarkdownPlanOutput
 from amelia.core.types import AgentConfig, DriverType, Profile, TrackerType
 from amelia.server.database.connection import Database
 from amelia.server.database.migrator import Migrator

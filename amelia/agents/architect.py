@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from loguru import logger
-from pydantic import BaseModel
 
 from amelia.core.agentic_state import ToolCall, ToolResult
 from amelia.core.constants import ToolName, resolve_plan_path
@@ -22,22 +21,6 @@ if TYPE_CHECKING:
     from amelia.pipelines.implementation.state import ImplementationState
     from amelia.server.events.bus import EventBus
 
-
-class MarkdownPlanOutput(BaseModel):
-    """Structured output for markdown plan generation.
-
-    This is the schema the LLM uses to generate the plan content.
-
-    Attributes:
-        goal: High-level goal for the implementation.
-        plan_markdown: The full markdown plan with phases, tasks, and steps.
-        key_files: Files that will likely be modified.
-
-    """
-
-    goal: str
-    plan_markdown: str
-    key_files: list[str] = []
 
 
 class Architect:

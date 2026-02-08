@@ -15,7 +15,8 @@ import typer
 from langchain_core.runnables.config import RunnableConfig
 from loguru import logger
 
-from amelia.agents.architect import Architect, MarkdownPlanOutput
+from amelia.agents.architect import Architect
+from amelia.agents.schemas.architect import MarkdownPlanOutput
 from amelia.core.constants import ToolName, resolve_plan_path
 from amelia.core.extraction import extract_structured
 from amelia.pipelines.implementation.state import ImplementationState

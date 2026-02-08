@@ -4,12 +4,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from amelia.agents.evaluator import (
+from amelia.agents.evaluator import Evaluator
+from amelia.agents.schemas.evaluator import (
     Disposition,
     EvaluatedItem,
     EvaluationOutput,
     EvaluationResult,
-    Evaluator,
 )
 from amelia.core.types import AgentConfig, Profile, ReviewResult
 from amelia.pipelines.implementation.state import ImplementationState

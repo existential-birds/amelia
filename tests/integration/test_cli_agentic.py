@@ -18,7 +18,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from typer.testing import CliRunner
 
-from amelia.agents.architect import MarkdownPlanOutput
+from amelia.agents.schemas.architect import MarkdownPlanOutput
 from amelia.client.models import (
     CreateWorkflowResponse,
     WorkflowListResponse,

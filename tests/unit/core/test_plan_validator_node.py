@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from langchain_core.runnables.config import RunnableConfig
 
-from amelia.agents.architect import MarkdownPlanOutput
+from amelia.agents.schemas.architect import MarkdownPlanOutput
 from amelia.core.types import AgentConfig, Issue, Profile
 from amelia.pipelines.implementation.state import ImplementationState
 

@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import pytest
 
-from amelia.agents.architect import MarkdownPlanOutput
+from amelia.agents.schemas.architect import MarkdownPlanOutput
 from amelia.core.types import AgentConfig, Profile
 
 

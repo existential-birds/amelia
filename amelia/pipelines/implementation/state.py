@@ -18,7 +18,7 @@ from amelia.pipelines.base import BasePipelineState
 
 
 if TYPE_CHECKING:
-    from amelia.agents.evaluator import EvaluationResult
+    from amelia.agents.schemas.evaluator import EvaluationResult
 
 
 class ImplementationState(BasePipelineState):
@@ -93,7 +93,7 @@ def rebuild_implementation_state() -> None:
     """
     import sys  # noqa: PLC0415
 
-    from amelia.agents.evaluator import EvaluationResult  # noqa: PLC0415
+    from amelia.agents.schemas.evaluator import EvaluationResult  # noqa: PLC0415
 
     # Inject types into this module's namespace for get_type_hints() compatibility.
     # These dynamic assignments are required for Python's typing.get_type_hints()

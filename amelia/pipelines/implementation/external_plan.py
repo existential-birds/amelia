@@ -10,7 +10,7 @@ from pathlib import Path
 from loguru import logger
 from pydantic import BaseModel, Field
 
-from amelia.agents.architect import MarkdownPlanOutput
+from amelia.agents.schemas.architect import MarkdownPlanOutput
 from amelia.core.extraction import extract_structured
 from amelia.core.types import Profile
 from amelia.pipelines.implementation.utils import (
