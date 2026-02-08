@@ -216,13 +216,6 @@ Before planning, discover:
                 })
                 yield current_state, event
 
-            elif event:
-                current_state = state.model_copy(update={
-                    "tool_calls": tool_calls,
-                    "tool_results": tool_results,
-                })
-                yield current_state, event
-
     def _build_agentic_prompt(self, state: "ImplementationState", profile: Profile) -> str:
         """Build user prompt for agentic plan generation.
 
