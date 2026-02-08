@@ -1,6 +1,5 @@
 """Tests for SandboxConfig persistence in ProfileRepository."""
 
-import pytest
 
 from amelia.core.types import SandboxConfig
 

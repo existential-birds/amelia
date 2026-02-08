@@ -14,8 +14,9 @@ class TestSandboxConfig:
 
     def test_invalid_mode_rejected(self):
         import pytest
+        from pydantic import ValidationError
 
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             SandboxConfig(mode="invalid")
 
     def test_default_image(self):
@@ -48,7 +49,8 @@ class TestProfileSandboxConfig:
 
     def test_profile_sandbox_is_frozen(self):
         import pytest
+        from pydantic import ValidationError
 
         profile = Profile(name="test", working_dir="/tmp")
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             profile.sandbox = SandboxConfig(mode="container")

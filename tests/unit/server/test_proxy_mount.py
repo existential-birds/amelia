@@ -1,6 +1,6 @@
 """Tests that the proxy router is mounted on the FastAPI application."""
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
