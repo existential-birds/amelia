@@ -36,7 +36,7 @@ def mock_state() -> ImplementationState:
 
 
 @pytest.mark.asyncio
-async def test_call_evaluation_node_uses_agent_config(profile_with_agents, mock_state):
+async def test_call_evaluation_node_uses_agent_config(profile_with_agents, mock_state) -> None:
     """call_evaluation_node should use profile.get_agent_config('evaluator')."""
     config = {
         "configurable": {

@@ -227,15 +227,15 @@ Return your evaluation as an EvaluationOutput with all items and a summary.""")
         items_deferred: list[EvaluatedItem] = []
         items_needing_clarification: list[EvaluatedItem] = []
 
+        disposition_map: dict[Disposition, list[EvaluatedItem]] = {
+            Disposition.IMPLEMENT: items_to_implement,
+            Disposition.REJECT: items_rejected,
+            Disposition.DEFER: items_deferred,
+            Disposition.CLARIFY: items_needing_clarification,
+        }
+
         for item in response.evaluated_items:
-            if item.disposition == Disposition.IMPLEMENT:
-                items_to_implement.append(item)
-            elif item.disposition == Disposition.REJECT:
-                items_rejected.append(item)
-            elif item.disposition == Disposition.DEFER:
-                items_deferred.append(item)
-            elif item.disposition == Disposition.CLARIFY:
-                items_needing_clarification.append(item)
+            disposition_map[item.disposition].append(item)
 
         logger.info(
             "Evaluation complete",

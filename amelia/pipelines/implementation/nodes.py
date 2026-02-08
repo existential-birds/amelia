@@ -151,7 +151,7 @@ async def call_architect_node(
         ValueError: If no issue is provided in the state.
     """
     issue_id_for_log = state.issue.id if state.issue else "No Issue Provided"
-    logger.info(f"Orchestrator: Calling Architect for issue {issue_id_for_log}")
+    logger.info("Orchestrator: Calling Architect", issue_id=issue_id_for_log)
 
     if state.issue is None:
         raise ValueError("Cannot call Architect: no issue provided in state.")

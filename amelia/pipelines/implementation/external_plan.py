@@ -59,6 +59,7 @@ async def import_external_plan(
     working_dir = working_dir.expanduser().resolve()
 
     # Resolve content from file or use inline
+    plan_path: Path | None
     if plan_file is not None:
         plan_path = Path(plan_file)
         if not plan_path.is_absolute():
