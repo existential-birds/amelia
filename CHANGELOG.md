@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-02-08
+
+### Changed
+
+- **Breaking:** Migrate from SQLite to PostgreSQL for all server data storage ([#406](https://github.com/existential-birds/amelia/pull/406))
+
+  **Migration:** Amelia now requires a running PostgreSQL instance. Install PostgreSQL and create a database, or use the provided Docker Compose setup (`docker compose up -d postgres`). Set `AMELIA_DATABASE_URL` to your connection string (default: `postgresql://localhost:5432/amelia`). Schema migrations run automatically on server startup. SQLite databases are not migrated — reconfigure profiles via CLI or dashboard after upgrading.
+
+### Fixed
+
+- **reviewer:** Align prompt format with parser expectations and improve fallback handling for unparseable reviews ([#416](https://github.com/existential-birds/amelia/pull/416))
+
 ## [0.12.0] - 2026-02-07
 
 ### Added
@@ -345,7 +357,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - FastAPI server with WebSocket support
 - React dashboard for workflow visualization
 
-[Unreleased]: https://github.com/existential-birds/amelia/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/existential-birds/amelia/compare/v0.13.0...HEAD
+[0.13.0]: https://github.com/existential-birds/amelia/compare/v0.12.0...v0.13.0
+[0.12.0]: https://github.com/existential-birds/amelia/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/existential-birds/amelia/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/existential-birds/amelia/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/existential-birds/amelia/compare/v0.8.0...v0.9.0
