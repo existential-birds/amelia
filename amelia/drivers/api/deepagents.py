@@ -106,12 +106,18 @@ class LocalSandbox(FilesystemBackend, SandboxBackendProtocol):
         return await asyncio.to_thread(self.execute, command)
 
 
-def _create_chat_model(model: str, provider: str | None = None) -> BaseChatModel:
+def _create_chat_model(
+    model: str,
+    provider: str | None = None,
+    base_url: str | None = None,
+) -> BaseChatModel:
     """Create a LangChain chat model, handling provider configuration.
 
     Args:
         model: Model identifier (e.g., 'minimax/minimax-m2').
         provider: Optional provider name. If 'openrouter', configures OpenRouter API.
+        base_url: Optional base URL override. Used for proxy routing when running
+            in sandboxed environments. Only applies to OpenRouter provider.
 
     Returns:
         Configured BaseChatModel instance.
@@ -139,10 +145,12 @@ def _create_chat_model(model: str, provider: str | None = None) -> BaseChatModel
         )
         site_name = os.environ.get("OPENROUTER_SITE_NAME", "Amelia")
 
+        resolved_url = base_url or "https://openrouter.ai/api/v1"
+
         return init_chat_model(
             model=model,
             model_provider="openai",
-            base_url="https://openrouter.ai/api/v1",
+            base_url=resolved_url,
             api_key=api_key,
             default_headers={
                 "HTTP-Referer": site_url,
