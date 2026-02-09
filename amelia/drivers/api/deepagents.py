@@ -6,6 +6,7 @@ import time
 from collections.abc import AsyncIterator
 from typing import Any, ClassVar
 from uuid import uuid4
+from weakref import WeakKeyDictionary
 
 from deepagents import create_deep_agent
 from deepagents.backends import FilesystemBackend
@@ -182,7 +183,9 @@ class ApiDriver(DriverInterface):
     # Maps session_id -> MemorySaver checkpointer
     # Oldest sessions are evicted when _MAX_SESSIONS is exceeded
     _sessions: ClassVar[dict[str, MemorySaver]] = {}
-    _sessions_lock: ClassVar[asyncio.Lock] = asyncio.Lock()
+    _sessions_lock_by_loop: ClassVar[
+        WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Lock]
+    ] = WeakKeyDictionary()
 
     def __init__(
         self,
@@ -201,6 +204,15 @@ class ApiDriver(DriverInterface):
         self.provider = provider
         self.cwd = cwd
         self._usage: DriverUsage | None = None
+
+    @classmethod
+    def _sessions_lock_for_loop(cls) -> asyncio.Lock:
+        loop = asyncio.get_running_loop()
+        lock = cls._sessions_lock_by_loop.get(loop)
+        if lock is None:
+            lock = asyncio.Lock()
+            cls._sessions_lock_by_loop[loop] = lock
+        return lock
 
     async def generate(
         self,
@@ -385,7 +397,7 @@ class ApiDriver(DriverInterface):
             is_new_session = session_id is None
             current_session_id = session_id or str(uuid4())
 
-            async with ApiDriver._sessions_lock:
+            async with ApiDriver._sessions_lock_for_loop():
                 if current_session_id in ApiDriver._sessions:
                     checkpointer = ApiDriver._sessions[current_session_id]
                     logger.debug(
@@ -726,7 +738,7 @@ class ApiDriver(DriverInterface):
         Returns:
             True if session was found and removed, False otherwise.
         """
-        async with ApiDriver._sessions_lock:
+        async with ApiDriver._sessions_lock_for_loop():
             return ApiDriver._sessions.pop(session_id, None) is not None
 
     @classmethod
@@ -738,7 +750,7 @@ class ApiDriver(DriverInterface):
         Returns:
             Number of sessions that were cleared.
         """
-        async with cls._sessions_lock:
+        async with cls._sessions_lock_for_loop():
             count = len(cls._sessions)
             cls._sessions.clear()
             if count > 0:

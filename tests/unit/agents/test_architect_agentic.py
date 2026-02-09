@@ -10,7 +10,7 @@ from amelia.agents.architect import Architect
 from amelia.core.types import AgentConfig, Profile
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
 from amelia.pipelines.implementation.state import ImplementationState
-from amelia.server.models.events import WorkflowEvent
+from amelia.server.models.events import EventType, WorkflowEvent
 
 
 class TestArchitectInitWithAgentConfig:
@@ -99,6 +99,12 @@ class TestArchitectPlanAsyncGenerator:
                 tool_call_id="call-1",
             )
             yield AgenticMessage(
+                type=AgenticMessageType.TOOL_RESULT,
+                tool_name="read_file",
+                tool_output="file contents",
+                tool_call_id="call-1",
+            )
+            yield AgenticMessage(
                 type=AgenticMessageType.RESULT,
                 content="# Plan\n\n**Goal:** Test goal",
             )
@@ -112,7 +118,11 @@ class TestArchitectPlanAsyncGenerator:
             async for new_state, event in architect.plan(state, profile, workflow_id="wf-1"):
                 results.append((new_state, event))
 
-            assert len(results) >= 1
+            assert [event.event_type for _, event in results] == [
+                EventType.CLAUDE_TOOL_CALL,
+                EventType.CLAUDE_TOOL_RESULT,
+                EventType.AGENT_OUTPUT,
+            ]
             for new_state, event in results:
                 assert isinstance(new_state, ImplementationState)
                 assert isinstance(event, WorkflowEvent)
