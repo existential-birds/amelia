@@ -105,7 +105,10 @@ def create_proxy_router(
     router = APIRouter()
 
     # Router-scoped client for connection pooling across requests
-    http_client = httpx.AsyncClient(timeout=300.0)
+    # Split timeouts: fast connect/write, longer read for LLM responses
+    http_client = httpx.AsyncClient(
+        timeout=httpx.Timeout(timeout=30.0, read=300.0)
+    )
 
     async def cleanup() -> None:
         """Close the HTTP client."""

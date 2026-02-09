@@ -247,6 +247,7 @@ async def call_architect_node(
                     "FALLBACK: Wrote plan from raw output - may be incomplete or malformed (model didn't use write tool)",
                     plan_path=str(plan_path),
                     content_length=len(raw_output),
+                    tool_sequence=tool_names[-5:],
                 )
                 plan_written = True
             else:

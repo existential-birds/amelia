@@ -398,7 +398,7 @@ class TestEvaluator:
             reviewer_persona="General",
             approved=False,
             comments=["Check this"],
-            severity="none",
+            severity=Severity.NONE,
         )
         state, profile = mock_execution_state_factory(
             goal="Implement feature X",
@@ -432,7 +432,7 @@ class TestEvaluator:
             reviewer_persona="General",
             approved=False,
             comments=["Check this"],
-            severity="none",
+            severity=Severity.NONE,
         )
         state, profile = mock_execution_state_factory(
             goal=None,  # No goal
