@@ -20,6 +20,13 @@ from starlette.background import BackgroundTask
 from starlette.responses import StreamingResponse
 
 
+# Proxy timeout constants (seconds)
+# LLM streaming responses can take minutes for complex generations,
+# but connection issues should fail fast.
+PROXY_CONNECT_TIMEOUT = 30.0  # Connect/write/pool timeout
+PROXY_READ_TIMEOUT = 300.0  # Read timeout for streaming responses
+
+
 class ProviderConfig(BaseModel):
     """Resolved provider configuration for proxy forwarding.
 
@@ -113,11 +120,8 @@ def create_proxy_router(
     router = APIRouter()
 
     # Router-scoped client for connection pooling across requests.
-    # Split timeouts: 30s for connect/write/pool (default), 300s for read.
-    # LLM streaming responses can take minutes for complex generations,
-    # but connection issues should fail fast.
     http_client = httpx.AsyncClient(
-        timeout=httpx.Timeout(timeout=30.0, read=300.0)
+        timeout=httpx.Timeout(timeout=PROXY_CONNECT_TIMEOUT, read=PROXY_READ_TIMEOUT)
     )
     _cleanup_called = False
 

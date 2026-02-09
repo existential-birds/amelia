@@ -226,6 +226,7 @@ Before planning, discover:
         except (RuntimeError, ValueError) as exc:
             # RuntimeError: Driver execution failures (CLI/API errors)
             # ValueError: Invalid input (e.g., empty prompt)
+            logger.exception("Architect agent failed")
             error_event = AgenticMessage(
                 type=AgenticMessageType.RESULT,
                 content=str(exc),
