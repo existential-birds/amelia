@@ -14,6 +14,7 @@ from typing import Any, NamedTuple
 
 import httpx
 from fastapi import APIRouter, HTTPException, Request, Response
+from loguru import logger
 from pydantic import BaseModel
 from starlette.background import BackgroundTask
 from starlette.responses import StreamingResponse
@@ -131,12 +132,16 @@ def create_proxy_router(
                     ResourceWarning,
                     stacklevel=1,
                 )
-        except (TypeError, AttributeError):
+        except (TypeError, AttributeError) as e:
             # During interpreter shutdown, accessing http_client state may fail
             # if the event loop or other resources are already torn down.
             # TypeError: method became None; AttributeError: object partially collected.
-            # Suppress to avoid false positive warnings during normal shutdown.
-            pass
+            # Log at debug level for diagnostics, but don't warn during normal shutdown.
+            logger.debug(
+                "Suppressed exception in _sync_cleanup during interpreter shutdown",
+                error=str(e),
+                error_type=type(e).__name__,
+            )
 
     atexit.register(_sync_cleanup)
 

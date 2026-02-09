@@ -1,5 +1,8 @@
 """Tests for the LLM + git credential proxy router."""
 
+from collections.abc import AsyncIterator
+from typing import Any
+
 import httpx
 import pytest
 from fastapi import FastAPI
@@ -9,7 +12,7 @@ from amelia.sandbox.proxy import ProviderConfig, create_proxy_router
 
 
 @pytest.fixture()
-def proxy_app(monkeypatch):
+def proxy_app(monkeypatch: pytest.MonkeyPatch) -> FastAPI:
     """Create a test app with the proxy router mounted."""
     monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test-key")
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test-key")
@@ -36,12 +39,12 @@ def proxy_app(monkeypatch):
 
 
 @pytest.fixture()
-def client(proxy_app):
+def client(proxy_app: FastAPI) -> TestClient:
     return TestClient(proxy_app)
 
 
 class TestProviderConfig:
-    def test_provider_config_fields(self):
+    def test_provider_config_fields(self) -> None:
         config = ProviderConfig(
             base_url="https://openrouter.ai/api/v1",
             api_key="sk-test",
@@ -51,7 +54,7 @@ class TestProviderConfig:
 
 
 class TestProxyProfileResolution:
-    def test_missing_profile_header_returns_400(self, client):
+    def test_missing_profile_header_returns_400(self, client: TestClient) -> None:
         response = client.post(
             "/proxy/v1/chat/completions",
             json={"model": "test", "messages": []},
@@ -59,7 +62,7 @@ class TestProxyProfileResolution:
         assert response.status_code == 400
         assert "X-Amelia-Profile" in response.json()["detail"]
 
-    def test_unknown_profile_returns_404(self, client):
+    def test_unknown_profile_returns_404(self, client: TestClient) -> None:
         response = client.post(
             "/proxy/v1/chat/completions",
             json={"model": "test", "messages": []},
@@ -70,7 +73,7 @@ class TestProxyProfileResolution:
 
 
 class TestProxyGitCredentials:
-    def test_git_credentials_endpoint_exists(self, client):
+    def test_git_credentials_endpoint_exists(self, client: TestClient) -> None:
         response = client.post(
             "/proxy/v1/git/credentials",
             content="host=github.com\nprotocol=https\n",
@@ -92,7 +95,7 @@ class _MockStream(httpx.AsyncByteStream):
     def __init__(self, data: bytes) -> None:
         self._data = data
 
-    async def __aiter__(self):
+    async def __aiter__(self) -> AsyncIterator[bytes]:
         yield self._data
 
     async def aclose(self) -> None:
@@ -116,11 +119,11 @@ def _streaming_response(
 
 
 class TestProxyForwarding:
-    def test_chat_completions_forwards_with_auth(self, client, monkeypatch):
+    def test_chat_completions_forwards_with_auth(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
         """Verify proxy attaches auth header and forwards to upstream."""
-        captured_request = {}
+        captured_request: dict[str, Any] = {}
 
-        async def mock_send(self, request, *, stream=False, **kwargs):
+        async def mock_send(self: Any, request: httpx.Request, *, stream: bool = False, **kwargs: Any) -> httpx.Response:
             captured_request["method"] = request.method
             captured_request["url"] = str(request.url)
             captured_request["headers"] = dict(request.headers)
@@ -139,11 +142,11 @@ class TestProxyForwarding:
         assert captured_request["headers"]["authorization"] == "Bearer sk-or-test-key"
         assert "x-amelia-profile" not in captured_request["headers"]
 
-    def test_embeddings_forwards_with_auth(self, client, monkeypatch):
+    def test_embeddings_forwards_with_auth(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
         """Verify embeddings endpoint forwards correctly."""
-        captured_request = {}
+        captured_request: dict[str, Any] = {}
 
-        async def mock_send(self, request, *, stream=False, **kwargs):
+        async def mock_send(self: Any, request: httpx.Request, *, stream: bool = False, **kwargs: Any) -> httpx.Response:
             captured_request["url"] = str(request.url)
             captured_request["headers"] = dict(request.headers)
             return _streaming_response(200, b'{"data": []}', request)
@@ -160,10 +163,10 @@ class TestProxyForwarding:
         assert captured_request["url"] == "https://api.anthropic.com/v1/embeddings"
         assert captured_request["headers"]["authorization"] == "Bearer sk-ant-test-key"
 
-    def test_upstream_error_passed_through(self, client, monkeypatch):
+    def test_upstream_error_passed_through(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
         """Verify upstream errors are forwarded to the caller."""
 
-        async def mock_send(self, request, *, stream=False, **kwargs):
+        async def mock_send(self: Any, request: httpx.Request, *, stream: bool = False, **kwargs: Any) -> httpx.Response:
             return _streaming_response(429, b'{"error": "rate limited"}', request)
 
         monkeypatch.setattr(httpx.AsyncClient, "send", mock_send)
@@ -178,12 +181,12 @@ class TestProxyForwarding:
 
 
 class TestProxyCleanup:
-    async def test_cleanup_closes_http_client(self, monkeypatch):
+    async def test_cleanup_closes_http_client(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Verify cleanup() closes the httpx.AsyncClient."""
         close_called = []
         original_aclose = httpx.AsyncClient.aclose
 
-        async def tracked_aclose(self):
+        async def tracked_aclose(self: httpx.AsyncClient) -> None:
             close_called.append(True)
             await original_aclose(self)
 

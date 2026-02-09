@@ -13,7 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 # Default allowed hosts for sandbox network allowlist
-DEFAULT_NETWORK_ALLOWED_HOSTS: list[str] = [
+DEFAULT_NETWORK_ALLOWED_HOSTS: tuple[str, ...] = (
     "api.anthropic.com",
     "openrouter.ai",
     "api.openai.com",
@@ -21,7 +21,7 @@ DEFAULT_NETWORK_ALLOWED_HOSTS: list[str] = [
     "registry.npmjs.org",
     "pypi.org",
     "files.pythonhosted.org",
-]
+)
 
 
 class DriverType(StrEnum):
@@ -90,7 +90,7 @@ class SandboxConfig(BaseModel):
     mode: Literal["none", "container"] = "none"
     image: str = "amelia-sandbox:latest"
     network_allowlist_enabled: bool = False
-    network_allowed_hosts: list[str] = Field(default_factory=lambda: DEFAULT_NETWORK_ALLOWED_HOSTS.copy())
+    network_allowed_hosts: list[str] = Field(default_factory=lambda: list(DEFAULT_NETWORK_ALLOWED_HOSTS))
 
 
 class Profile(BaseModel):
