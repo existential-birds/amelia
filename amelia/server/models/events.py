@@ -6,6 +6,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+
 # Sequence number for ephemeral/trace-only events (not persisted, no ordering needed)
 EPHEMERAL_SEQUENCE: int = 0
 
