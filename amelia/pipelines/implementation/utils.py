@@ -112,6 +112,13 @@ def _looks_like_plan(text: str) -> bool:
     # This ensures downstream processing (extract_task_count, developer node) works correctly
     task_pattern = r"^### Task \d+(\.\d+)?:"
     has_valid_task = bool(re.search(task_pattern, text, re.MULTILINE))
+    if not has_valid_task:
+        logger.debug(
+            "Plan validation failed: missing task header pattern",
+            pattern=task_pattern,
+            text_length=len(text),
+            indicators_found=indicators,
+        )
     return has_valid_task
 
 

@@ -216,6 +216,17 @@ class ApiDriver(DriverInterface):
 
     @classmethod
     def _sessions_lock_for_loop(cls) -> asyncio.Lock:
+        """Get or create an asyncio.Lock for the current event loop.
+
+        Uses WeakKeyDictionary with the event loop as key to provide per-loop locks.
+        This is necessary because asyncio.Lock is bound to a specific event loop and
+        cannot be shared across loops (e.g., in pytest-asyncio where each test may
+        run in a different loop). When a loop is garbage collected, its lock entry
+        is automatically removed.
+
+        Returns:
+            The asyncio.Lock associated with the current running event loop.
+        """
         loop = asyncio.get_running_loop()
         with cls._sessions_lock_by_loop_guard:
             lock = cls._sessions_lock_by_loop.get(loop)

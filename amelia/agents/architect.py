@@ -223,7 +223,7 @@ Before planning, discover:
                         "tool_results": tool_results,
                     })
                     yield current_state, event
-        except (RuntimeError, ValueError, KeyboardInterrupt) as exc:
+        except (RuntimeError, ValueError) as exc:
             error_event = AgenticMessage(
                 type=AgenticMessageType.RESULT,
                 content=str(exc),
