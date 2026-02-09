@@ -81,26 +81,47 @@ class TestProxyGitCredentials:
         assert response.status_code in (200, 501)
 
 
+class _MockStream(httpx.AsyncByteStream):
+    """Async byte stream that yields data once, compatible with httpx streaming."""
+
+    def __init__(self, data: bytes) -> None:
+        self._data = data
+
+    async def __aiter__(self):
+        yield self._data
+
+    async def aclose(self) -> None:
+        pass
+
+
+def _streaming_response(
+    status_code: int, body: bytes, request: httpx.Request
+) -> httpx.Response:
+    """Build an httpx.Response with an unconsumed async stream.
+
+    The proxy uses ``stream=True`` and ``aiter_raw()``, so the response
+    must have an unconsumed stream (``content=`` marks it consumed).
+    """
+    return httpx.Response(
+        status_code=status_code,
+        stream=_MockStream(body),
+        headers={"content-type": "application/json"},
+        request=request,
+    )
+
+
 class TestProxyForwarding:
     def test_chat_completions_forwards_with_auth(self, client, monkeypatch):
         """Verify proxy attaches auth header and forwards to upstream."""
         captured_request = {}
 
-        async def mock_request(self, method, url, content, headers, **kwargs):
-            captured_request["method"] = method
-            captured_request["url"] = str(url)
-            captured_request["headers"] = dict(headers)
-            captured_request["content"] = content
+        async def mock_send(self, request, *, stream=False, **kwargs):
+            captured_request["method"] = request.method
+            captured_request["url"] = str(request.url)
+            captured_request["headers"] = dict(request.headers)
+            return _streaming_response(200, b'{"choices": []}', request)
 
-            class MockResponse:
-                def __init__(self):
-                    self.status_code = 200
-                    self.content = b'{"choices": []}'
-                    self.headers = {"content-type": "application/json"}
-
-            return MockResponse()
-
-        monkeypatch.setattr(httpx.AsyncClient, "request", mock_request)
+        monkeypatch.setattr(httpx.AsyncClient, "send", mock_send)
 
         response = client.post(
             "/proxy/v1/chat/completions",
@@ -117,19 +138,12 @@ class TestProxyForwarding:
         """Verify embeddings endpoint forwards correctly."""
         captured_request = {}
 
-        async def mock_request(self, method, url, content, headers, **kwargs):
-            captured_request["url"] = str(url)
-            captured_request["headers"] = dict(headers)
+        async def mock_send(self, request, *, stream=False, **kwargs):
+            captured_request["url"] = str(request.url)
+            captured_request["headers"] = dict(request.headers)
+            return _streaming_response(200, b'{"data": []}', request)
 
-            class MockResponse:
-                def __init__(self):
-                    self.status_code = 200
-                    self.content = b'{"data": []}'
-                    self.headers = {"content-type": "application/json"}
-
-            return MockResponse()
-
-        monkeypatch.setattr(httpx.AsyncClient, "request", mock_request)
+        monkeypatch.setattr(httpx.AsyncClient, "send", mock_send)
 
         response = client.post(
             "/proxy/v1/embeddings",
@@ -144,16 +158,10 @@ class TestProxyForwarding:
     def test_upstream_error_passed_through(self, client, monkeypatch):
         """Verify upstream errors are forwarded to the caller."""
 
-        async def mock_request(self, method, url, content, headers, **kwargs):
-            class MockResponse:
-                def __init__(self):
-                    self.status_code = 429
-                    self.content = b'{"error": "rate limited"}'
-                    self.headers = {"content-type": "application/json"}
+        async def mock_send(self, request, *, stream=False, **kwargs):
+            return _streaming_response(429, b'{"error": "rate limited"}', request)
 
-            return MockResponse()
-
-        monkeypatch.setattr(httpx.AsyncClient, "request", mock_request)
+        monkeypatch.setattr(httpx.AsyncClient, "send", mock_send)
 
         response = client.post(
             "/proxy/v1/chat/completions",

@@ -13,6 +13,8 @@ from typing import Any, NamedTuple
 import httpx
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel
+from starlette.background import BackgroundTask
+from starlette.responses import StreamingResponse
 
 
 class ProviderConfig(BaseModel):
@@ -142,12 +144,14 @@ def create_proxy_router(
             headers.pop(h, None)
 
         try:
-            upstream_response = await http_client.request(
+            upstream_request = http_client.build_request(
                 method=request.method,
                 url=upstream_url,
+                params=request.query_params,
                 content=body,
                 headers=headers,
             )
+            upstream_response = await http_client.send(upstream_request, stream=True)
         except httpx.ConnectError as e:
             raise HTTPException(
                 status_code=502,
@@ -165,10 +169,11 @@ def create_proxy_router(
             ) from e
 
         # Pass through the upstream response
-        return Response(
-            content=upstream_response.content,
+        return StreamingResponse(
+            content=upstream_response.aiter_raw(),
             status_code=upstream_response.status_code,
             headers=dict(upstream_response.headers),
+            background=BackgroundTask(upstream_response.aclose),
         )
 
     @router.api_route(
