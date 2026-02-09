@@ -126,22 +126,18 @@ def create_proxy_router(
         nonlocal _cleanup_called
         try:
             if not _cleanup_called and not http_client.is_closed:
-                warnings.warn(
+                msg = (
                     "ProxyRouter cleanup() was never called - HTTP client may not be "
-                    "properly closed. Register cleanup in app shutdown events.",
-                    ResourceWarning,
-                    stacklevel=1,
+                    "properly closed. Register cleanup in app shutdown events."
                 )
-        except (TypeError, AttributeError) as e:
+                logger.warning(msg)
+                warnings.warn(msg, ResourceWarning, stacklevel=1)
+        except (TypeError, AttributeError):
             # During interpreter shutdown, accessing http_client state may fail
             # if the event loop or other resources are already torn down.
             # TypeError: method became None; AttributeError: object partially collected.
-            # Log at debug level for diagnostics, but don't warn during normal shutdown.
-            logger.debug(
-                "Suppressed exception in _sync_cleanup during interpreter shutdown",
-                error=str(e),
-                error_type=type(e).__name__,
-            )
+            # This is expected behavior during normal shutdown - silently ignore.
+            pass
 
     atexit.register(_sync_cleanup)
 
@@ -174,7 +170,14 @@ def create_proxy_router(
         headers = dict(request.headers)
         headers["authorization"] = f"Bearer {provider.api_key}"
         # Remove hop-by-hop and internal headers
-        for h in ("host", "x-amelia-profile", "content-length"):
+        for h in (
+            "host",
+            "x-amelia-profile",
+            "content-length",
+            "connection",
+            "keep-alive",
+            "transfer-encoding",
+        ):
             headers.pop(h, None)
 
         try:

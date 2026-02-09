@@ -43,6 +43,45 @@ class TestExecutionStateRawArchitectOutput:
         assert state.raw_architect_output is None  # Original unchanged
 
 
+class TestArchitectErrorField:
+    """Tests for architect_error field."""
+
+    def test_architect_error_defaults_to_none(self) -> None:
+        """architect_error should default to None."""
+        state = ImplementationState(
+            workflow_id="test-workflow",
+            created_at=datetime.now(UTC),
+            status="running",
+            profile_id="test",
+        )
+        assert state.architect_error is None
+
+    def test_architect_error_stores_error_message(self) -> None:
+        """architect_error should store error message string."""
+        error_msg = "RuntimeError: LLM call failed"
+        state = ImplementationState(
+            workflow_id="test-workflow",
+            created_at=datetime.now(UTC),
+            status="running",
+            profile_id="test",
+            architect_error=error_msg,
+        )
+        assert state.architect_error == error_msg
+
+    def test_architect_error_separate_from_raw_output(self) -> None:
+        """architect_error and raw_architect_output should be independent."""
+        state = ImplementationState(
+            workflow_id="test-workflow",
+            created_at=datetime.now(UTC),
+            status="running",
+            profile_id="test",
+            raw_architect_output="# Plan content",
+            architect_error="Some error occurred",
+        )
+        assert state.raw_architect_output == "# Plan content"
+        assert state.architect_error == "Some error occurred"
+
+
 class TestTaskExecutionFields:
     """Tests for task execution tracking fields."""
 

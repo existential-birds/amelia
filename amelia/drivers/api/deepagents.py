@@ -178,7 +178,8 @@ class ApiDriver(DriverInterface):
     DEFAULT_MODEL = "minimax/minimax-m2"
 
     # Maximum number of sessions to retain before evicting oldest
-    _MAX_SESSIONS: ClassVar[int] = 100
+    # Configurable via AMELIA_DRIVER_MAX_SESSIONS environment variable
+    _MAX_SESSIONS: ClassVar[int] = int(os.environ.get("AMELIA_DRIVER_MAX_SESSIONS", "100"))
 
     # Class-level session storage for conversation continuity
     # Maps session_id -> MemorySaver checkpointer
@@ -233,6 +234,11 @@ class ApiDriver(DriverInterface):
             if lock is None:
                 lock = asyncio.Lock()
                 cls._sessions_lock_by_loop[loop] = lock
+                logger.debug(
+                    "Created new per-loop lock",
+                    loop_id=id(loop),
+                    total_locks=len(cls._sessions_lock_by_loop),
+                )
             return lock
 
     async def generate(

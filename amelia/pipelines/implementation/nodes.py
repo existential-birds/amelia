@@ -284,6 +284,7 @@ async def call_architect_node(
 
     return {
         "raw_architect_output": final_state.raw_architect_output,
+        "architect_error": final_state.architect_error,
         "tool_calls": list(final_state.tool_calls),
         "tool_results": list(final_state.tool_results),
     }

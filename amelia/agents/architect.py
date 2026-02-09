@@ -234,7 +234,7 @@ Before planning, discover:
             current_state = state.model_copy(update={
                 "tool_calls": tool_calls,
                 "tool_results": tool_results,
-                "raw_architect_output": str(exc),
+                "architect_error": str(exc),
             })
             yield current_state, error_event
 
@@ -327,8 +327,12 @@ Each step is ONE action (2-5 minutes):
 
 ## Task Structure
 
+CRITICAL: Task headers MUST follow the exact format `### Task N:` (e.g., `### Task 1:`, `### Task 2:`)
+or hierarchical `### Task N.M:` (e.g., `### Task 1.1:`, `### Task 1.2:`).
+The number and colon are required for downstream task processing.
+
 ```markdown
-### Task N: [Component Name]
+### Task 1: [Component Name]
 
 **Files:**
 - Create: `exact/path/to/file.py`

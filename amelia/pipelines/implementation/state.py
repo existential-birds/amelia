@@ -60,6 +60,7 @@ class ImplementationState(BasePipelineState):
     base_commit: str | None = None
     plan_markdown: str | None = None
     raw_architect_output: str | None = None
+    architect_error: str | None = None
     plan_path: Path | None = None
     key_files: list[str] = Field(default_factory=list)
 
