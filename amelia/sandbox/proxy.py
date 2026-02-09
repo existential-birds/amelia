@@ -131,9 +131,10 @@ def create_proxy_router(
                     ResourceWarning,
                     stacklevel=1,
                 )
-        except Exception:
+        except (TypeError, AttributeError):
             # During interpreter shutdown, accessing http_client state may fail
             # if the event loop or other resources are already torn down.
+            # TypeError: method became None; AttributeError: object partially collected.
             # Suppress to avoid false positive warnings during normal shutdown.
             pass
 

@@ -598,11 +598,11 @@ def test_event_bus() -> EventBus:
 
 
 @pytest.fixture
-def make_event() -> Callable[..., WorkflowEvent]:
+def event_factory() -> Callable[..., WorkflowEvent]:
     """Factory fixture for creating WorkflowEvent instances with sensible defaults."""
     from datetime import datetime  # noqa: PLC0415
 
-    def _make_event(**overrides: Any) -> WorkflowEvent:
+    def _create(**overrides: Any) -> WorkflowEvent:
         defaults: dict[str, Any] = {
             "id": "event-123",
             "workflow_id": "wf-456",
@@ -614,7 +614,7 @@ def make_event() -> Callable[..., WorkflowEvent]:
         }
         return WorkflowEvent(**{**defaults, **overrides})
 
-    return _make_event
+    return _create
 
 
 @pytest.fixture

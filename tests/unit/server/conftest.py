@@ -40,7 +40,7 @@ async def db_with_schema() -> AsyncGenerator[Database, None]:
 
 
 @pytest.fixture
-def make_event() -> Callable[..., WorkflowEvent]:
+def event_factory() -> Callable[..., WorkflowEvent]:
     """Factory fixture for creating WorkflowEvent instances with sensible defaults.
 
     Returns:
@@ -48,12 +48,12 @@ def make_event() -> Callable[..., WorkflowEvent]:
         that can be overridden via keyword arguments.
 
     Example:
-        def test_something(make_event):
-            event = make_event(agent="developer", event_type=EventType.FILE_CREATED)
+        def test_something(event_factory):
+            event = event_factory(agent="developer", event_type=EventType.FILE_CREATED)
             assert event.agent == "developer"
     """
 
-    def _make_event(**overrides: Any) -> WorkflowEvent:
+    def _create(**overrides: Any) -> WorkflowEvent:
         """Create a WorkflowEvent with sensible defaults."""
         defaults: dict[str, Any] = {
             "id": "event-123",
@@ -66,7 +66,7 @@ def make_event() -> Callable[..., WorkflowEvent]:
         }
         return WorkflowEvent(**{**defaults, **overrides})
 
-    return _make_event
+    return _create
 
 
 @pytest.fixture

@@ -2,6 +2,7 @@
 import asyncio
 import os
 import subprocess
+import threading
 import time
 from collections.abc import AsyncIterator
 from typing import Any, ClassVar
@@ -192,6 +193,8 @@ class ApiDriver(DriverInterface):
     _sessions_lock_by_loop: ClassVar[
         WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Lock]
     ] = WeakKeyDictionary()
+    # Threading lock to protect _sessions_lock_by_loop mutations (check-then-act pattern)
+    _sessions_lock_by_loop_guard: ClassVar[threading.Lock] = threading.Lock()
 
     def __init__(
         self,
@@ -214,11 +217,12 @@ class ApiDriver(DriverInterface):
     @classmethod
     def _sessions_lock_for_loop(cls) -> asyncio.Lock:
         loop = asyncio.get_running_loop()
-        lock = cls._sessions_lock_by_loop.get(loop)
-        if lock is None:
-            lock = asyncio.Lock()
-            cls._sessions_lock_by_loop[loop] = lock
-        return lock
+        with cls._sessions_lock_by_loop_guard:
+            lock = cls._sessions_lock_by_loop.get(loop)
+            if lock is None:
+                lock = asyncio.Lock()
+                cls._sessions_lock_by_loop[loop] = lock
+            return lock
 
     async def generate(
         self,

@@ -76,8 +76,9 @@ async def import_external_plan(
         ValueError: If validation fails, content is empty, or path traversal detected.
     """
     # Establish working directory as security boundary
-    working_dir = Path(profile.working_dir) if profile.working_dir else Path(".")
-    working_dir = working_dir.expanduser().resolve()
+    working_dir = (
+        Path(profile.working_dir) if profile.working_dir else Path(".")
+    ).expanduser().resolve()
 
     # Resolve content from file or use inline
     plan_path: Path | None
@@ -122,7 +123,7 @@ async def import_external_plan(
     # Write to target path (skip if file already there)
     if not file_already_at_target:
         await asyncio.to_thread(target_path.parent.mkdir, parents=True, exist_ok=True)
-        await asyncio.to_thread(target_path.write_text, content)
+        await asyncio.to_thread(target_path.write_text, content, encoding="utf-8")
         logger.info(
             "External plan written",
             target_path=str(target_path),
@@ -150,7 +151,7 @@ async def import_external_plan(
         goal = output.goal
         plan_markdown = output.plan_markdown
         key_files = output.key_files
-    except (RuntimeError, ValueError) as e:
+    except RuntimeError as e:
         # Fallback extraction without LLM
         logger.warning(
             "Structured extraction failed, using regex fallback",

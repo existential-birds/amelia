@@ -10,7 +10,6 @@ from uuid import uuid4
 
 from loguru import logger
 
-from amelia.agents.prompts.defaults import PROMPT_DEFAULTS
 from amelia.agents.schemas.evaluator import (
     Disposition,
     EvaluatedItem,
@@ -48,9 +47,6 @@ class Evaluator:
     """
 
     PROMPT_KEY_SYSTEM = "evaluator.system"
-
-    # Validate at class definition that the key exists
-    assert PROMPT_KEY_SYSTEM in PROMPT_DEFAULTS, f"Unknown prompt key: {PROMPT_KEY_SYSTEM}"
 
     SYSTEM_PROMPT = """You are an expert code evaluation agent. Your task is to evaluate
 code review feedback items against the actual codebase.

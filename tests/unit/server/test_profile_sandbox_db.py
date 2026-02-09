@@ -5,13 +5,15 @@ from amelia.core.types import SandboxConfig
 
 
 class TestProfileSandboxSerialization:
-    def test_sandbox_config_serializes_to_dict(self):
+    def test_sandbox_config_serializes_to_dict(self) -> None:
+        """Verify SandboxConfig model_dump produces expected dict."""
         config = SandboxConfig(mode="container", image="custom:latest")
         data = config.model_dump()
         assert data["mode"] == "container"
         assert data["image"] == "custom:latest"
 
-    def test_sandbox_config_roundtrips_through_json(self):
+    def test_sandbox_config_roundtrips_through_json(self) -> None:
+        """Verify SandboxConfig survives JSON serialization roundtrip."""
         config = SandboxConfig(
             mode="container",
             network_allowlist_enabled=True,
@@ -21,13 +23,15 @@ class TestProfileSandboxSerialization:
         restored = SandboxConfig.model_validate_json(json_str)
         assert restored == config
 
-    def test_default_sandbox_config_roundtrips(self):
+    def test_default_sandbox_config_roundtrips(self) -> None:
+        """Verify default SandboxConfig roundtrips through model_dump."""
         config = SandboxConfig()
         data = config.model_dump()
         restored = SandboxConfig(**data)
         assert restored.mode == "none"
 
-    def test_profile_with_sandbox_serializes(self):
+    def test_profile_with_sandbox_serializes(self) -> None:
+        """Verify Profile with sandbox config serializes correctly."""
         from amelia.core.types import AgentConfig, DriverType, Profile
 
         profile = Profile(

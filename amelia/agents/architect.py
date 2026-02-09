@@ -195,7 +195,7 @@ Before planning, discover:
                             {"name": tc.tool_name, "input_keys": list(tc.tool_input.keys())}
                             for tc in tool_calls
                         ],
-                        raw_output_preview=raw_output[:300] if raw_output else "EMPTY",
+                        raw_output_preview=raw_output[:300] if raw_output else None,
                     )
 
                     # Extract plan_path from Write tool calls
@@ -235,7 +235,6 @@ Before planning, discover:
                 "raw_architect_output": str(exc),
             })
             yield current_state, error_event
-            raise
 
     def _build_agentic_prompt(self, state: "ImplementationState", profile: Profile) -> str:
         """Build user prompt for agentic plan generation.
@@ -268,8 +267,9 @@ Before planning, discover:
             parts.append(
                 "The following design document was created during brainstorming. "
                 "Use it as the primary input for your implementation plan. "
-                "If there are conflicts between the design document and the issue description, "
-                "the design document takes precedence as it represents refined requirements."
+                "If there are conflicts between the design document and the issue "
+                "description, the design document takes precedence as it represents "
+                "refined requirements."
             )
             parts.append(f"\n{state.design.content}")
 

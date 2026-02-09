@@ -168,8 +168,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     exit_stack = AsyncExitStack()
 
     # Register proxy cleanup early so it runs even if startup fails
-    if hasattr(app.state, "proxy_cleanup"):
-        exit_stack.push_async_callback(app.state.proxy_cleanup)
+    # proxy_cleanup is always set by create_app() before lifespan runs
+    exit_stack.push_async_callback(app.state.proxy_cleanup)
 
     checkpointer = await exit_stack.enter_async_context(
         AsyncPostgresSaver.from_conn_string(config.database_url)
@@ -367,22 +367,25 @@ def create_app() -> FastAPI:
         # NOTE: Only OpenAI-compatible providers (using /chat/completions endpoint)
         # are supported. Anthropic uses /messages and requires different auth headers.
         # TODO: Move provider registry to database-stored configuration
-        provider_registry: dict[str, tuple[str, str]] = {
-            "openrouter": (
-                "https://openrouter.ai/api/v1",
-                os.environ.get("OPENROUTER_API_KEY", ""),
-            ),
-            "openai": (
-                "https://api.openai.com/v1",
-                os.environ.get("OPENAI_API_KEY", ""),
-            ),
+        provider_registry: dict[str, str] = {
+            "openrouter": "https://openrouter.ai/api/v1",
+            "openai": "https://api.openai.com/v1",
+        }
+        api_key_env_vars: dict[str, str] = {
+            "openrouter": "OPENROUTER_API_KEY",
+            "openai": "OPENAI_API_KEY",
         }
 
-        entry = provider_registry.get(provider)
-        if entry is None or not entry[1]:
+        base_url = provider_registry.get(provider)
+        env_var = api_key_env_vars.get(provider)
+        if base_url is None or env_var is None:
             return None
 
-        return ProviderConfig(base_url=entry[0], api_key=entry[1])
+        api_key = os.environ.get(env_var, "")
+        if not api_key:
+            return None
+
+        return ProviderConfig(base_url=base_url, api_key=api_key)
 
     proxy = create_proxy_router(resolve_provider=_resolve_provider)
     application.include_router(proxy.router, prefix="/proxy/v1")
