@@ -244,7 +244,7 @@ async def call_architect_node(
             if raw_output and _looks_like_plan(raw_output):
                 await asyncio.to_thread(plan_path.write_text, raw_output)
                 logger.warning(
-                    "Wrote plan file from raw output (model didn't use write tool)",
+                    "FALLBACK: Wrote plan from raw output - may be incomplete or malformed (model didn't use write tool)",
                     plan_path=str(plan_path),
                     content_length=len(raw_output),
                 )

@@ -228,7 +228,7 @@ class TestEvaluator:
             reviewer_persona="General",
             approved=True,
             comments=[],
-            severity="none",
+            severity=Severity.NONE,
         )
         state, profile = mock_execution_state_factory(
             goal="Fix bugs",
@@ -353,7 +353,7 @@ class TestEvaluator:
             reviewer_persona="General",
             approved=False,
             comments=["Issue 1"],
-            severity="none",
+            severity=Severity.NONE,
         )
         state, profile = mock_execution_state_factory(
             goal="Fix bugs",

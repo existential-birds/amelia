@@ -182,6 +182,7 @@ class ApiDriver(DriverInterface):
     # Maps session_id -> MemorySaver checkpointer
     # Oldest sessions are evicted when _MAX_SESSIONS is exceeded
     _sessions: ClassVar[dict[str, MemorySaver]] = {}
+    _sessions_lock: ClassVar[asyncio.Lock] = asyncio.Lock()
 
     def __init__(
         self,
@@ -384,24 +385,25 @@ class ApiDriver(DriverInterface):
             is_new_session = session_id is None
             current_session_id = session_id or str(uuid4())
 
-            if current_session_id in ApiDriver._sessions:
-                checkpointer = ApiDriver._sessions[current_session_id]
-                logger.debug(
-                    "Resuming existing session",
-                    session_id=current_session_id,
-                )
-            else:
-                checkpointer = MemorySaver()
-                # Evict oldest sessions if at capacity (dict preserves insertion order)
-                while len(ApiDriver._sessions) >= ApiDriver._MAX_SESSIONS:
-                    oldest_id = next(iter(ApiDriver._sessions))
-                    del ApiDriver._sessions[oldest_id]
-                    logger.debug("Evicted oldest session", session_id=oldest_id)
-                ApiDriver._sessions[current_session_id] = checkpointer
-                logger.debug(
-                    "Created new session",
-                    session_id=current_session_id,
-                )
+            async with ApiDriver._sessions_lock:
+                if current_session_id in ApiDriver._sessions:
+                    checkpointer = ApiDriver._sessions[current_session_id]
+                    logger.debug(
+                        "Resuming existing session",
+                        session_id=current_session_id,
+                    )
+                else:
+                    checkpointer = MemorySaver()
+                    # Evict oldest sessions if at capacity (dict preserves insertion order)
+                    while len(ApiDriver._sessions) >= ApiDriver._MAX_SESSIONS:
+                        oldest_id = next(iter(ApiDriver._sessions))
+                        del ApiDriver._sessions[oldest_id]
+                        logger.debug("Evicted oldest session", session_id=oldest_id)
+                    ApiDriver._sessions[current_session_id] = checkpointer
+                    logger.debug(
+                        "Created new session",
+                        session_id=current_session_id,
+                    )
 
             # Use session_id as thread_id for checkpointing
             thread_id = current_session_id
