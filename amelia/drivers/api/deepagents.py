@@ -183,7 +183,9 @@ class ApiDriver(DriverInterface):
 
     # Class-level session storage for conversation continuity
     # Maps session_id -> MemorySaver checkpointer
-    # Least recently used sessions are evicted when _MAX_SESSIONS is exceeded (LRU)
+    # Least recently used sessions are evicted when _MAX_SESSIONS is exceeded (LRU).
+    # On eviction, adelete_thread() is called to clear the checkpointer's internal
+    # storage, then the checkpointer is garbage-collected (no callback mechanism).
     _sessions: ClassVar[dict[str, MemorySaver]] = {}
 
     # Per-loop lock storage using WeakKeyDictionary pattern:
@@ -439,7 +441,9 @@ class ApiDriver(DriverInterface):
                     # Evict least recently used sessions if at capacity (LRU via dict order)
                     while len(ApiDriver._sessions) >= ApiDriver._MAX_SESSIONS:
                         oldest_id = next(iter(ApiDriver._sessions))
-                        del ApiDriver._sessions[oldest_id]
+                        evicted_checkpointer = ApiDriver._sessions.pop(oldest_id)
+                        # Clean up checkpointer's internal storage to prevent memory leak
+                        await evicted_checkpointer.adelete_thread(oldest_id)
                         logger.debug("Evicted oldest session", session_id=oldest_id)
                     ApiDriver._sessions[current_session_id] = checkpointer
                     logger.debug(
@@ -769,7 +773,12 @@ class ApiDriver(DriverInterface):
             True if session was found and removed, False otherwise.
         """
         async with ApiDriver._sessions_lock_for_loop():
-            return ApiDriver._sessions.pop(session_id, None) is not None
+            checkpointer = ApiDriver._sessions.pop(session_id, None)
+            if checkpointer is not None:
+                # Clean up checkpointer's internal storage to prevent memory leak
+                await checkpointer.adelete_thread(session_id)
+                return True
+            return False
 
     @classmethod
     async def clear_all_sessions(cls) -> int:
