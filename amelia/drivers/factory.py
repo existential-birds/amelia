@@ -47,7 +47,7 @@ async def cleanup_driver_session(driver_key: str, session_id: str) -> bool:
     if driver_key in ("cli:claude", "cli"):
         return False  # ClaudeCliDriver has no session state to clean
     elif driver_key in ("api:openrouter", "api"):
-        async with ApiDriver._sessions_lock:
+        async with ApiDriver._sessions_lock_for_loop():
             return ApiDriver._sessions.pop(session_id, None) is not None
     else:
         raise ValueError(f"Unknown driver key: {driver_key}")
