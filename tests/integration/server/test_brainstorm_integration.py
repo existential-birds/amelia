@@ -15,8 +15,6 @@ with its own event loop, causing asyncpg event loop mismatches).
 """
 
 from collections.abc import AsyncGenerator
-from contextlib import asynccontextmanager
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import httpx
@@ -30,6 +28,8 @@ from amelia.server.events.bus import EventBus
 from amelia.server.main import create_app
 from amelia.server.routes.brainstorm import get_brainstorm_service
 from amelia.server.services.brainstorm import BrainstormService
+
+from .conftest import AsyncClientFactory, noop_lifespan
 
 
 DATABASE_URL = "postgresql://amelia:amelia@localhost:5432/amelia_test"
@@ -75,6 +75,7 @@ def test_brainstorm_service(
 @pytest.fixture
 async def test_client(
     test_brainstorm_service: BrainstormService,
+    async_client_factory: AsyncClientFactory,
 ) -> AsyncGenerator[httpx.AsyncClient, None]:
     """Create async test client with real dependencies.
 
@@ -82,11 +83,6 @@ async def test_client(
     same event loop as the asyncpg pool created by test_db.
     """
     app = create_app()
-
-    # Create a no-op lifespan that doesn't initialize database/orchestrator
-    @asynccontextmanager
-    async def noop_lifespan(_app: Any) -> AsyncGenerator[None, None]:
-        yield
 
     app.router.lifespan_context = noop_lifespan
     app.dependency_overrides[get_brainstorm_service] = lambda: test_brainstorm_service
@@ -100,10 +96,7 @@ async def test_client(
     mock_orch.queue_workflow = AsyncMock(return_value="00000000-0000-4000-8000-000000000001")
     app.dependency_overrides[get_orchestrator] = lambda: mock_orch
 
-    async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app),
-        base_url="http://testserver",
-    ) as client:
+    async with async_client_factory(app) as client:
         yield client
 
 

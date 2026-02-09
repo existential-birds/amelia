@@ -7,6 +7,8 @@ X-Amelia-Profile header to resolve which upstream provider to use.
 
 from __future__ import annotations
 
+import atexit
+import warnings
 from collections.abc import Awaitable, Callable, Coroutine
 from typing import Any, NamedTuple
 
@@ -35,6 +37,9 @@ type ProviderResolver = Callable[[str], Coroutine[Any, Any, ProviderConfig | Non
 
 class ProxyRouter(NamedTuple):
     """Proxy router with cleanup function.
+
+    Use this when mounting the LLM proxy router on a FastAPI app. The cleanup
+    function must be called during app shutdown to close the HTTP client pool.
 
     Attributes:
         router: The FastAPI router with proxy routes.
@@ -113,9 +118,26 @@ def create_proxy_router(
     http_client = httpx.AsyncClient(
         timeout=httpx.Timeout(timeout=30.0, read=300.0)
     )
+    _cleanup_called = False
+
+    def _sync_cleanup() -> None:
+        """Warn if cleanup was never called (potential resource leak)."""
+        nonlocal _cleanup_called
+        if not _cleanup_called and not http_client.is_closed:
+            warnings.warn(
+                "ProxyRouter cleanup() was never called - HTTP client may not be "
+                "properly closed. Register cleanup in app shutdown events.",
+                ResourceWarning,
+                stacklevel=1,
+            )
+
+    atexit.register(_sync_cleanup)
 
     async def cleanup() -> None:
         """Close the HTTP client."""
+        nonlocal _cleanup_called
+        _cleanup_called = True
+        atexit.unregister(_sync_cleanup)
         await http_client.aclose()
 
     async def forward_request(

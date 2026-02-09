@@ -181,7 +181,7 @@ class ApiDriver(DriverInterface):
 
     # Class-level session storage for conversation continuity
     # Maps session_id -> MemorySaver checkpointer
-    # Oldest sessions are evicted when _MAX_SESSIONS is exceeded
+    # Least recently used sessions are evicted when _MAX_SESSIONS is exceeded (LRU)
     _sessions: ClassVar[dict[str, MemorySaver]] = {}
     _sessions_lock_by_loop: ClassVar[
         WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Lock]
@@ -400,13 +400,16 @@ class ApiDriver(DriverInterface):
             async with ApiDriver._sessions_lock_for_loop():
                 if current_session_id in ApiDriver._sessions:
                     checkpointer = ApiDriver._sessions[current_session_id]
+                    # Move to end for LRU eviction (re-insert to update order)
+                    del ApiDriver._sessions[current_session_id]
+                    ApiDriver._sessions[current_session_id] = checkpointer
                     logger.debug(
                         "Resuming existing session",
                         session_id=current_session_id,
                     )
                 else:
                     checkpointer = MemorySaver()
-                    # Evict oldest sessions if at capacity (dict preserves insertion order)
+                    # Evict least recently used sessions if at capacity (LRU via dict order)
                     while len(ApiDriver._sessions) >= ApiDriver._MAX_SESSIONS:
                         oldest_id = next(iter(ApiDriver._sessions))
                         del ApiDriver._sessions[oldest_id]

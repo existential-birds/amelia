@@ -22,7 +22,6 @@ if TYPE_CHECKING:
     from amelia.server.events.bus import EventBus
 
 
-
 class Architect:
     """Agent responsible for creating implementation plans from issues.
 
@@ -224,7 +223,7 @@ Before planning, discover:
                         "tool_results": tool_results,
                     })
                     yield current_state, event
-        except (Exception, KeyboardInterrupt) as exc:
+        except (RuntimeError, ValueError, KeyboardInterrupt) as exc:
             error_event = AgenticMessage(
                 type=AgenticMessageType.RESULT,
                 content=str(exc),

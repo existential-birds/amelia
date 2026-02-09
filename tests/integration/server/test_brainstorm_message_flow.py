@@ -20,7 +20,6 @@ with its own event loop, causing asyncpg event loop mismatches).
 """
 
 from collections.abc import AsyncGenerator
-from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
@@ -42,6 +41,8 @@ from amelia.server.routes.brainstorm import (
 )
 from amelia.server.services.brainstorm import BrainstormService
 from tests.conftest import create_mock_execute_agentic
+
+from .conftest import AsyncClientFactory, noop_lifespan
 
 
 DATABASE_URL = "postgresql://amelia:amelia@localhost:5432/amelia_test"
@@ -144,10 +145,6 @@ def _create_app_with_overrides(
     """Create FastAPI app with noop lifespan and dependency overrides."""
     app = create_app()
 
-    @asynccontextmanager
-    async def noop_lifespan(_app: Any) -> AsyncGenerator[None, None]:
-        yield
-
     app.router.lifespan_context = noop_lifespan
     app.dependency_overrides[get_brainstorm_service] = lambda: brainstorm_service
     app.dependency_overrides[get_driver] = lambda: driver
@@ -170,13 +167,11 @@ async def test_client(
     test_brainstorm_service: BrainstormService,
     mock_driver: MagicMock,
     tmp_path: Path,
+    async_client_factory: AsyncClientFactory,
 ) -> AsyncGenerator[httpx.AsyncClient, None]:
     """Create async test client with real dependencies and mock driver."""
     app = _create_app_with_overrides(test_brainstorm_service, mock_driver, str(tmp_path))
-    async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app),
-        base_url="http://testserver",
-    ) as client:
+    async with async_client_factory(app) as client:
         yield client
 
 
@@ -330,15 +325,13 @@ class TestBrainstormArtifactDetection:
         test_brainstorm_service: BrainstormService,
         mock_driver_with_write_file: MagicMock,
         tmp_path: Path,
+        async_client_factory: AsyncClientFactory,
     ) -> AsyncGenerator[httpx.AsyncClient, None]:
         """Create test client with driver that emits write_file."""
         app = _create_app_with_overrides(
             test_brainstorm_service, mock_driver_with_write_file, str(tmp_path)
         )
-        async with httpx.AsyncClient(
-            transport=httpx.ASGITransport(app=app),
-            base_url="http://testserver",
-        ) as client:
+        async with async_client_factory(app) as client:
             yield client
 
     async def test_write_file_creates_artifact(
@@ -378,6 +371,7 @@ class TestBrainstormArtifactDetection:
         self,
         test_brainstorm_service: BrainstormService,
         tmp_path: Path,
+        async_client_factory: AsyncClientFactory,
     ) -> None:
         """Failed write_file should not create an artifact."""
         # Create driver that fails write_file
@@ -404,10 +398,7 @@ class TestBrainstormArtifactDetection:
         driver.execute_agentic = create_mock_execute_agentic(messages)
 
         app = _create_app_with_overrides(test_brainstorm_service, driver, str(tmp_path))
-        async with httpx.AsyncClient(
-            transport=httpx.ASGITransport(app=app),
-            base_url="http://testserver",
-        ) as client:
+        async with async_client_factory(app) as client:
             # Create session and send message
             create_resp = await client.post(
                 "/api/brainstorm/sessions",
@@ -466,15 +457,13 @@ class TestBrainstormHandoffFlow:
         test_brainstorm_service: BrainstormService,
         mock_driver_with_write_file: MagicMock,
         tmp_path: Path,
+        async_client_factory: AsyncClientFactory,
     ) -> AsyncGenerator[httpx.AsyncClient, None]:
         """Create test client for handoff testing."""
         app = _create_app_with_overrides(
             test_brainstorm_service, mock_driver_with_write_file, str(tmp_path)
         )
-        async with httpx.AsyncClient(
-            transport=httpx.ASGITransport(app=app),
-            base_url="http://testserver",
-        ) as client:
+        async with async_client_factory(app) as client:
             yield client
 
     async def test_full_handoff_flow(

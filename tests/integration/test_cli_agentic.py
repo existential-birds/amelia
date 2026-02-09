@@ -132,7 +132,7 @@ class TestPlanCommand:
             result = runner.invoke(app, ["plan", "TEST-123"])
 
         assert result.exit_code == 0, f"CLI failed with: {result.stdout}"
-        assert "Plan generated successfully" in result.stdout or "\u2713" in result.stdout
+        assert "Plan generated successfully" in result.stdout or "✓" in result.stdout
 
     def test_plan_command_with_profile(
         self, tmp_path: Path, mock_worktree_context: MagicMock
