@@ -90,7 +90,7 @@ class SandboxConfig(BaseModel):
     mode: Literal["none", "container"] = "none"
     image: str = "amelia-sandbox:latest"
     network_allowlist_enabled: bool = False
-    network_allowed_hosts: list[str] = Field(default_factory=DEFAULT_NETWORK_ALLOWED_HOSTS.copy)
+    network_allowed_hosts: list[str] = Field(default_factory=lambda: DEFAULT_NETWORK_ALLOWED_HOSTS.copy())
 
 
 class Profile(BaseModel):

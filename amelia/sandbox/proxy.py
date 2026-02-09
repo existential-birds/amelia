@@ -28,7 +28,7 @@ class ProviderConfig(BaseModel):
 
 
 # Type alias for the provider resolver function
-ProviderResolver = Callable[[str], Coroutine[Any, Any, ProviderConfig | None]]
+type ProviderResolver = Callable[[str], Coroutine[Any, Any, ProviderConfig | None]]
 
 
 class ProxyRouter(NamedTuple):

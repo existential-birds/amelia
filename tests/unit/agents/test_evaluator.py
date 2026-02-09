@@ -11,7 +11,7 @@ from amelia.agents.schemas.evaluator import (
     EvaluationOutput,
     EvaluationResult,
 )
-from amelia.core.types import AgentConfig, Profile, ReviewResult
+from amelia.core.types import AgentConfig, Profile, ReviewResult, Severity
 from amelia.pipelines.implementation.state import ImplementationState
 
 
@@ -185,7 +185,7 @@ class TestEvaluator:
             reviewer_persona="General",
             approved=False,
             comments=["Issue 1", "Issue 2", "Issue 3", "Issue 4"],
-            severity="minor",
+            severity=Severity.MINOR,
         )
         state, profile = mock_execution_state_factory(
             goal="Fix bugs",
@@ -299,7 +299,7 @@ class TestEvaluator:
             reviewer_persona="General",
             approved=False,
             comments=["Comment 1", "Comment 2", "Comment 3"],
-            severity="minor",
+            severity=Severity.MINOR,
         )
         state, profile = mock_execution_state_factory(
             goal="Fix bugs",
