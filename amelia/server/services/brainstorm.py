@@ -513,7 +513,7 @@ class BrainstormService:
         await self._repository.update_session(session)
 
         # Clean up when session reaches terminal status
-        if status in ("completed", "failed"):
+        if status in (SessionStatus.COMPLETED, SessionStatus.FAILED):
             self._session_locks.pop(session_id, None)
 
             # Clean up driver session

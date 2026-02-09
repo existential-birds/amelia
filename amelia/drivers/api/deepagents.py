@@ -730,7 +730,7 @@ class ApiDriver(DriverInterface):
             return ApiDriver._sessions.pop(session_id, None) is not None
 
     @classmethod
-    def clear_all_sessions(cls) -> int:
+    async def clear_all_sessions(cls) -> int:
         """Clear all session state from the class-level cache.
 
         Useful for cleanup on server shutdown or testing.
@@ -738,8 +738,9 @@ class ApiDriver(DriverInterface):
         Returns:
             Number of sessions that were cleared.
         """
-        count = len(cls._sessions)
-        cls._sessions.clear()
-        if count > 0:
-            logger.debug("Cleared all sessions", count=count)
-        return count
+        async with cls._sessions_lock:
+            count = len(cls._sessions)
+            cls._sessions.clear()
+            if count > 0:
+                logger.debug("Cleared all sessions", count=count)
+            return count

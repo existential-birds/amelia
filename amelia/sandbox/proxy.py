@@ -104,8 +104,10 @@ def create_proxy_router(
     """
     router = APIRouter()
 
-    # Router-scoped client for connection pooling across requests
-    # Split timeouts: fast connect/write, longer read for LLM responses
+    # Router-scoped client for connection pooling across requests.
+    # Split timeouts: 30s for connect/write/pool (default), 300s for read.
+    # LLM streaming responses can take minutes for complex generations,
+    # but connection issues should fail fast.
     http_client = httpx.AsyncClient(
         timeout=httpx.Timeout(timeout=30.0, read=300.0)
     )

@@ -364,14 +364,12 @@ def create_app() -> FastAPI:
         provider = agent_config.options.get("provider", "openrouter")
 
         # Map provider to upstream config
+        # NOTE: Only OpenAI-compatible providers (using /chat/completions endpoint)
+        # are supported. Anthropic uses /messages and requires different auth headers.
         provider_registry: dict[str, tuple[str, str]] = {
             "openrouter": (
                 "https://openrouter.ai/api/v1",
                 os.environ.get("OPENROUTER_API_KEY", ""),
-            ),
-            "anthropic": (
-                "https://api.anthropic.com/v1",
-                os.environ.get("ANTHROPIC_API_KEY", ""),
             ),
             "openai": (
                 "https://api.openai.com/v1",
