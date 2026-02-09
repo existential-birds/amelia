@@ -93,9 +93,10 @@ class TestProxyForwarding:
             captured_request["content"] = content
 
             class MockResponse:
-                status_code = 200
-                content = b'{"choices": []}'
-                headers = {"content-type": "application/json"}
+                def __init__(self):
+                    self.status_code = 200
+                    self.content = b'{"choices": []}'
+                    self.headers = {"content-type": "application/json"}
 
             return MockResponse()
 
@@ -121,9 +122,10 @@ class TestProxyForwarding:
             captured_request["headers"] = dict(headers)
 
             class MockResponse:
-                status_code = 200
-                content = b'{"data": []}'
-                headers = {"content-type": "application/json"}
+                def __init__(self):
+                    self.status_code = 200
+                    self.content = b'{"data": []}'
+                    self.headers = {"content-type": "application/json"}
 
             return MockResponse()
 
@@ -144,9 +146,10 @@ class TestProxyForwarding:
 
         async def mock_request(self, method, url, content, headers, **kwargs):
             class MockResponse:
-                status_code = 429
-                content = b'{"error": "rate limited"}'
-                headers = {"content-type": "application/json"}
+                def __init__(self):
+                    self.status_code = 429
+                    self.content = b'{"error": "rate limited"}'
+                    self.headers = {"content-type": "application/json"}
 
             return MockResponse()
 

@@ -136,12 +136,28 @@ def create_proxy_router(
         for h in ("host", "x-amelia-profile", "content-length"):
             headers.pop(h, None)
 
-        upstream_response = await http_client.request(
-            method=request.method,
-            url=upstream_url,
-            content=body,
-            headers=headers,
-        )
+        try:
+            upstream_response = await http_client.request(
+                method=request.method,
+                url=upstream_url,
+                content=body,
+                headers=headers,
+            )
+        except httpx.ConnectError as e:
+            raise HTTPException(
+                status_code=502,
+                detail=f"Failed to connect to upstream provider: {e}",
+            ) from e
+        except httpx.TimeoutException as e:
+            raise HTTPException(
+                status_code=504,
+                detail=f"Upstream provider request timed out: {e}",
+            ) from e
+        except httpx.HTTPError as e:
+            raise HTTPException(
+                status_code=502,
+                detail=f"Upstream provider request failed: {e}",
+            ) from e
 
         # Pass through the upstream response
         return Response(

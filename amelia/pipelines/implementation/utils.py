@@ -68,16 +68,17 @@ def extract_task_title(plan_markdown: str, task_index: int) -> str | None:
 
 
 def _looks_like_plan(text: str) -> bool:
-    """Check if text looks like a plan document.
+    """Check if text looks like a plan document with valid structure.
 
     Used as a fallback when the LLM doesn't use the write tool but outputs
-    the plan as text instead.
+    the plan as text instead. Validates both plan-like indicators AND
+    that the content has at least one task header for downstream processing.
 
     Args:
         text: The text to check.
 
     Returns:
-        True if the text contains plan-like indicators.
+        True if the text contains plan-like indicators and valid task structure.
     """
     if not text or len(text) < 100:
         return False
@@ -104,7 +105,14 @@ def _looks_like_plan(text: str) -> bool:
             indicators += 1
 
     # Need at least 3 indicators to consider it a plan
-    return indicators >= 3
+    if indicators < 3:
+        return False
+
+    # Validate task structure: must have at least one "### Task N:" header
+    # This ensures downstream processing (extract_task_count, developer node) works correctly
+    task_pattern = r"^### Task \d+(\.\d+)?:"
+    has_valid_task = bool(re.search(task_pattern, text, re.MULTILINE))
+    return has_valid_task
 
 
 def _extract_goal_from_plan(plan_content: str) -> str:

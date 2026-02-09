@@ -98,7 +98,7 @@ async def import_external_plan(
         if not plan_path.exists():
             raise FileNotFoundError(f"Plan file not found: {plan_path}")
 
-        content = await asyncio.to_thread(plan_path.read_text)
+        content = await asyncio.to_thread(plan_path.read_text, encoding="utf-8")
     else:
         content = plan_content or ""
         plan_path = None
