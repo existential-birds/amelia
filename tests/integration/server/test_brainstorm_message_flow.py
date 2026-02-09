@@ -24,6 +24,8 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
+from fastapi import FastAPI
+
 import httpx
 import pytest
 
@@ -141,7 +143,7 @@ def _create_app_with_overrides(
     brainstorm_service: BrainstormService,
     driver: MagicMock,
     cwd: str,
-) -> Any:
+) -> FastAPI:
     """Create FastAPI app with noop lifespan and dependency overrides."""
     app = create_app()
 

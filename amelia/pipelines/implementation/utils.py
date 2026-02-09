@@ -74,6 +74,11 @@ def _looks_like_plan(text: str) -> bool:
     the plan as text instead. Validates both plan-like indicators AND
     that the content has at least one task header for downstream processing.
 
+    Task headers must follow the format: "### Task N:" or "### Task N.M:"
+    where N and M are numbers. This format is required because downstream
+    processing (extract_task_count, extract_task_section, developer node)
+    relies on this pattern to parse and execute tasks sequentially.
+
     Args:
         text: The text to check.
 
@@ -113,8 +118,10 @@ def _looks_like_plan(text: str) -> bool:
     task_pattern = r"^### Task \d+(\.\d+)?:"
     has_valid_task = bool(re.search(task_pattern, text, re.MULTILINE))
     if not has_valid_task:
-        logger.debug(
-            "Plan validation failed: missing task header pattern",
+        logger.warning(
+            "Plan rejected: missing required task header format '### Task N:' or '### Task N.M:'. "
+            "This format is required for downstream task processing. "
+            "Ensure the architect prompt generates plans with proper task headers.",
             pattern=task_pattern,
             text_length=len(text),
             indicators_found=indicators,

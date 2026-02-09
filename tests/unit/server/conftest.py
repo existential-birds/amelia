@@ -1,9 +1,7 @@
 """Shared fixtures for server tests."""
 
 import os
-from collections.abc import AsyncGenerator, Callable, Generator
-from datetime import datetime
-from typing import Any
+from collections.abc import AsyncGenerator, Generator
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -12,7 +10,6 @@ from fastapi.testclient import TestClient
 from amelia.server.database import WorkflowRepository
 from amelia.server.database.connection import Database
 from amelia.server.dependencies import get_repository
-from amelia.server.models.events import EventType, WorkflowEvent
 
 
 DATABASE_URL = os.environ.get(
@@ -37,36 +34,6 @@ async def db_with_schema() -> AsyncGenerator[Database, None]:
         migrator = Migrator(db)
         await migrator.run()
         yield db
-
-
-@pytest.fixture
-def event_factory() -> Callable[..., WorkflowEvent]:
-    """Factory fixture for creating WorkflowEvent instances with sensible defaults.
-
-    Returns:
-        A function that creates WorkflowEvent instances with default values
-        that can be overridden via keyword arguments.
-
-    Example:
-        def test_something(event_factory):
-            event = event_factory(agent="developer", event_type=EventType.FILE_CREATED)
-            assert event.agent == "developer"
-    """
-
-    def _create(**overrides: Any) -> WorkflowEvent:
-        """Create a WorkflowEvent with sensible defaults."""
-        defaults: dict[str, Any] = {
-            "id": "event-123",
-            "workflow_id": "wf-456",
-            "sequence": 1,
-            "timestamp": datetime(2025, 1, 1, 12, 0, 0),
-            "agent": "system",
-            "event_type": EventType.WORKFLOW_STARTED,
-            "message": "Test event",
-        }
-        return WorkflowEvent(**{**defaults, **overrides})
-
-    return _create
 
 
 @pytest.fixture

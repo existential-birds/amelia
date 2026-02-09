@@ -224,6 +224,8 @@ Before planning, discover:
                     })
                     yield current_state, event
         except (RuntimeError, ValueError) as exc:
+            # RuntimeError: Driver execution failures (CLI/API errors)
+            # ValueError: Invalid input (e.g., empty prompt)
             error_event = AgenticMessage(
                 type=AgenticMessageType.RESULT,
                 content=str(exc),
