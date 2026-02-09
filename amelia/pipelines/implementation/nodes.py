@@ -238,8 +238,7 @@ async def call_architect_node(
                     )
                     plan_written = True
                     break
-        else:
-            # No Write tool call found - try to salvage plan from raw output
+        else:  # no matching write_file tool call found - try salvaging from raw output
             # Some models output the plan as text instead of using the write tool
             raw_output = final_state.raw_architect_output or ""
             if raw_output and _looks_like_plan(raw_output):

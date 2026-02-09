@@ -93,6 +93,13 @@ Provide clear evidence for each disposition decision."""
         self._event_bus = event_bus
         self._prompts = prompts or {}
 
+        if self.PROMPT_KEY_SYSTEM not in self._prompts:
+            logger.debug(
+                "Custom prompt key not found, using default",
+                agent="evaluator",
+                prompt_key=self.PROMPT_KEY_SYSTEM,
+            )
+
     @property
     def system_prompt(self) -> str:
         """Get the system prompt for evaluation.
@@ -104,12 +111,6 @@ Provide clear evidence for each disposition decision."""
             The system prompt string.
 
         """
-        if self.PROMPT_KEY_SYSTEM not in self._prompts:
-            logger.debug(
-                "Custom prompt key not found, using default",
-                agent="evaluator",
-                prompt_key=self.PROMPT_KEY_SYSTEM,
-            )
         return self._prompts.get(self.PROMPT_KEY_SYSTEM, self.SYSTEM_PROMPT)
 
     def _build_prompt(self, state: "ImplementationState") -> str:
