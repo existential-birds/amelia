@@ -714,7 +714,7 @@ class ApiDriver(DriverInterface):
         """
         return self._usage
 
-    def cleanup_session(self, session_id: str) -> bool:
+    async def cleanup_session(self, session_id: str) -> bool:
         """Clean up session state from the class-level cache.
 
         Delegates to the classmethod to remove the MemorySaver
@@ -726,7 +726,8 @@ class ApiDriver(DriverInterface):
         Returns:
             True if session was found and removed, False otherwise.
         """
-        return ApiDriver._sessions.pop(session_id, None) is not None
+        async with ApiDriver._sessions_lock:
+            return ApiDriver._sessions.pop(session_id, None) is not None
 
     @classmethod
     def clear_all_sessions(cls) -> int:

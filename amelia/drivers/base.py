@@ -197,7 +197,7 @@ class DriverInterface(Protocol):
         """Return accumulated usage from last execution, or None if unavailable."""
         ...
 
-    def cleanup_session(self, session_id: str) -> bool:
+    async def cleanup_session(self, session_id: str) -> bool:
         """Clean up driver-specific session state.
 
         Called when a session is deleted or reaches terminal status.

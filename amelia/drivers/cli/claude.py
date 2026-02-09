@@ -545,7 +545,7 @@ class ClaudeCliDriver:
             model=usage_data.get("model") or self.model,
         )
 
-    def cleanup_session(self, session_id: str) -> bool:
+    async def cleanup_session(self, session_id: str) -> bool:
         """Clean up session state.
 
         ClaudeCliDriver delegates session management to the SDK,

@@ -357,6 +357,5 @@ async def commit_task_changes(state: ImplementationState, config: RunnableConfig
     if proc.returncode == 0:
         logger.info("Committed task changes", task=task_number, message=commit_msg)
         return True
-    else:
-        logger.warning("Failed to commit task changes", error=stderr.decode())
-        return False
+    logger.warning("Failed to commit task changes", error=stderr.decode())
+    return False

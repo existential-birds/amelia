@@ -38,7 +38,7 @@ def _check_dependencies() -> None:
 _check_dependencies()
 
 import os
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import AsyncExitStack, asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -103,15 +103,15 @@ from amelia.server.routes.workflows import configure_exception_handlers
 from amelia.server.services.brainstorm import BrainstormService
 
 
-def create_driver_cleanup_callback() -> Callable[[str, str], bool]:
-    """Create callback for cleaning up driver sessions.
+def create_driver_cleanup_callback() -> Callable[[str, str], Awaitable[bool]]:
+    """Create async callback for cleaning up driver sessions.
 
     Returns:
-        Callback that takes (driver_type, driver_session_id) and returns bool.
+        Async callback that takes (driver_type, driver_session_id) and returns bool.
     """
 
-    def cleanup(driver_type: str, driver_session_id: str) -> bool:
-        return cleanup_driver_session(driver_type, driver_session_id)
+    async def cleanup(driver_type: str, driver_session_id: str) -> bool:
+        return await cleanup_driver_session(driver_type, driver_session_id)
 
     return cleanup
 
