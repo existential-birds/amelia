@@ -33,7 +33,7 @@ class ProviderConfig(BaseModel):
 
 
 # Type alias for the provider resolver function
-ProviderResolver = Callable[[str], Coroutine[Any, Any, ProviderConfig | None]]
+type ProviderResolver = Callable[[str], Coroutine[Any, Any, ProviderConfig | None]]
 
 
 class ProxyRouter(NamedTuple):
@@ -200,9 +200,10 @@ def create_proxy_router(
                 detail=f"Upstream provider request timed out: {e}",
             ) from e
         except httpx.HTTPError as e:
+            logger.debug("Upstream request failed", exc_class=type(e).__name__, error=str(e))
             raise HTTPException(
                 status_code=502,
-                detail=f"Upstream provider request failed: {e}",
+                detail=f"Upstream provider request failed ({type(e).__name__}): {e}",
             ) from e
 
         # Pass through the upstream response
