@@ -24,10 +24,9 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
-from fastapi import FastAPI
-
 import httpx
 import pytest
+from fastapi import FastAPI
 
 from amelia.drivers.base import AgenticMessage, AgenticMessageType, DriverInterface
 from amelia.server.database.brainstorm_repository import BrainstormRepository
