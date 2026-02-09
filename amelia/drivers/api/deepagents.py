@@ -183,6 +183,12 @@ class ApiDriver(DriverInterface):
     # Maps session_id -> MemorySaver checkpointer
     # Least recently used sessions are evicted when _MAX_SESSIONS is exceeded (LRU)
     _sessions: ClassVar[dict[str, MemorySaver]] = {}
+
+    # Per-loop lock storage using WeakKeyDictionary pattern:
+    # - asyncio.Lock is bound to a specific event loop and cannot be shared across loops
+    # - WeakKeyDictionary uses the event loop as key, so each loop gets its own lock
+    # - When an event loop is garbage collected, its lock entry is automatically removed
+    # - This enables safe concurrent access in multi-loop scenarios (e.g., pytest-asyncio)
     _sessions_lock_by_loop: ClassVar[
         WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Lock]
     ] = WeakKeyDictionary()

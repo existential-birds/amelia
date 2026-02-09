@@ -123,13 +123,19 @@ def create_proxy_router(
     def _sync_cleanup() -> None:
         """Warn if cleanup was never called (potential resource leak)."""
         nonlocal _cleanup_called
-        if not _cleanup_called and not http_client.is_closed:
-            warnings.warn(
-                "ProxyRouter cleanup() was never called - HTTP client may not be "
-                "properly closed. Register cleanup in app shutdown events.",
-                ResourceWarning,
-                stacklevel=1,
-            )
+        try:
+            if not _cleanup_called and not http_client.is_closed:
+                warnings.warn(
+                    "ProxyRouter cleanup() was never called - HTTP client may not be "
+                    "properly closed. Register cleanup in app shutdown events.",
+                    ResourceWarning,
+                    stacklevel=1,
+                )
+        except Exception:
+            # During interpreter shutdown, accessing http_client state may fail
+            # if the event loop or other resources are already torn down.
+            # Suppress to avoid false positive warnings during normal shutdown.
+            pass
 
     atexit.register(_sync_cleanup)
 

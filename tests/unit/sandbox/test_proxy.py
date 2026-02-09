@@ -82,7 +82,12 @@ class TestProxyGitCredentials:
 
 
 class _MockStream(httpx.AsyncByteStream):
-    """Async byte stream that yields data once, compatible with httpx streaming."""
+    """Async byte stream that yields data once, compatible with httpx streaming.
+
+    The proxy uses ``stream=True`` and ``aiter_raw()``, so tests must provide
+    responses with an unconsumed stream. Using ``content=`` would mark the
+    response as already consumed, causing the proxy to hang or fail.
+    """
 
     def __init__(self, data: bytes) -> None:
         self._data = data
