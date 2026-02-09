@@ -175,8 +175,12 @@ class ApiDriver(DriverInterface):
 
     DEFAULT_MODEL = "minimax/minimax-m2"
 
+    # Maximum number of sessions to retain before evicting oldest
+    _MAX_SESSIONS: ClassVar[int] = 100
+
     # Class-level session storage for conversation continuity
     # Maps session_id -> MemorySaver checkpointer
+    # Oldest sessions are evicted when _MAX_SESSIONS is exceeded
     _sessions: ClassVar[dict[str, MemorySaver]] = {}
 
     def __init__(
@@ -388,6 +392,11 @@ class ApiDriver(DriverInterface):
                 )
             else:
                 checkpointer = MemorySaver()
+                # Evict oldest sessions if at capacity (dict preserves insertion order)
+                while len(ApiDriver._sessions) >= ApiDriver._MAX_SESSIONS:
+                    oldest_id = next(iter(ApiDriver._sessions))
+                    del ApiDriver._sessions[oldest_id]
+                    logger.debug("Evicted oldest session", session_id=oldest_id)
                 ApiDriver._sessions[current_session_id] = checkpointer
                 logger.debug(
                     "Created new session",
@@ -716,3 +725,18 @@ class ApiDriver(DriverInterface):
             True if session was found and removed, False otherwise.
         """
         return ApiDriver._sessions.pop(session_id, None) is not None
+
+    @classmethod
+    def clear_all_sessions(cls) -> int:
+        """Clear all session state from the class-level cache.
+
+        Useful for cleanup on server shutdown or testing.
+
+        Returns:
+            Number of sessions that were cleared.
+        """
+        count = len(cls._sessions)
+        cls._sessions.clear()
+        if count > 0:
+            logger.debug("Cleared all sessions", count=count)
+        return count

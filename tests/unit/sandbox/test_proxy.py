@@ -165,21 +165,13 @@ class TestProxyCleanup:
     async def test_cleanup_closes_http_client(self, monkeypatch):
         """Verify cleanup() closes the httpx.AsyncClient."""
         close_called = []
+        original_aclose = httpx.AsyncClient.aclose
 
-        original_init = httpx.AsyncClient.__init__
+        async def tracked_aclose(self):
+            close_called.append(True)
+            await original_aclose(self)
 
-        def patched_init(self, *args, **kwargs):
-            original_init(self, *args, **kwargs)
-            # Track aclose calls
-            original_aclose = self.aclose
-
-            async def tracked_aclose():
-                close_called.append(True)
-                await original_aclose()
-
-            self.aclose = tracked_aclose
-
-        monkeypatch.setattr(httpx.AsyncClient, "__init__", patched_init)
+        monkeypatch.setattr(httpx.AsyncClient, "aclose", tracked_aclose)
 
         async def _resolve_provider(profile_name: str) -> ProviderConfig | None:
             return None

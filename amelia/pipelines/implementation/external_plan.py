@@ -153,13 +153,31 @@ async def import_external_plan(
     except RuntimeError as e:
         # Fallback extraction without LLM
         logger.warning(
-            "Structured extraction failed, using fallback",
+            "Structured extraction failed, using regex fallback",
             error=str(e),
             workflow_id=workflow_id,
         )
         goal = _extract_goal_from_plan(content)
         plan_markdown = content
         key_files = _extract_key_files_from_plan(content)
+
+        # Log fallback extraction results for visibility
+        goal_is_default = goal == "Implementation plan"
+        logger.info(
+            "Regex fallback extraction complete",
+            goal_extracted=not goal_is_default,
+            goal=goal if not goal_is_default else "(default)",
+            key_files_count=len(key_files),
+            key_files=key_files if key_files else "(none found)",
+            workflow_id=workflow_id,
+        )
+        if goal_is_default or not key_files:
+            logger.warning(
+                "Fallback extraction produced partial data",
+                goal_is_default=goal_is_default,
+                key_files_empty=not key_files,
+                workflow_id=workflow_id,
+            )
 
     # Extract task count
     total_tasks = extract_task_count(content)

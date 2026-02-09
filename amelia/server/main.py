@@ -166,6 +166,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 
     exit_stack = AsyncExitStack()
+
+    # Register proxy cleanup early so it runs even if startup fails
+    if hasattr(app.state, "proxy_cleanup"):
+        exit_stack.push_async_callback(app.state.proxy_cleanup)
+
     checkpointer = await exit_stack.enter_async_context(
         AsyncPostgresSaver.from_conn_string(config.database_url)
     )
@@ -226,11 +231,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await health_checker.stop()
     await lifecycle.shutdown()
     clear_orchestrator()
-    await exit_stack.aclose()
-
-    # Clean up proxy HTTP client (set in create_app)
-    if hasattr(app.state, "proxy_cleanup"):
-        await app.state.proxy_cleanup()
+    await exit_stack.aclose()  # Also cleans up proxy HTTP client
 
     await database.close()
     clear_database()
