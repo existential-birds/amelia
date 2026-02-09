@@ -104,6 +104,12 @@ Provide clear evidence for each disposition decision."""
             The system prompt string.
 
         """
+        if self.PROMPT_KEY_SYSTEM not in self._prompts:
+            logger.debug(
+                "Custom prompt key not found, using default",
+                agent="evaluator",
+                prompt_key=self.PROMPT_KEY_SYSTEM,
+            )
         return self._prompts.get(self.PROMPT_KEY_SYSTEM, self.SYSTEM_PROMPT)
 
     def _build_prompt(self, state: "ImplementationState") -> str:
