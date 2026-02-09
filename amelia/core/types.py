@@ -11,6 +11,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+
 # Default allowed hosts for sandbox network allowlist
 DEFAULT_NETWORK_ALLOWED_HOSTS: list[str] = [
     "api.anthropic.com",
