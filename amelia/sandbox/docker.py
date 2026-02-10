@@ -139,10 +139,12 @@ class DockerSandboxProvider:
 
     async def _build_image(self) -> None:
         """Build the sandbox Docker image from the in-repo Dockerfile."""
-        dockerfile_dir = Path(__file__).parent
+        dockerfile_path = Path(__file__).parent / "Dockerfile"
+        # Context must be repo root since Dockerfile uses COPY . and COPY amelia/
+        repo_root = Path(__file__).parent.parent.parent
         logger.info("Building sandbox image", image=self.image)
         proc = await asyncio.create_subprocess_exec(
-            "docker", "build", "-t", self.image, str(dockerfile_dir),
+            "docker", "build", "-f", str(dockerfile_path), "-t", self.image, str(repo_root),
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -158,6 +160,8 @@ class DockerSandboxProvider:
             "docker", "run", "-d",
             "--name", self.container_name,
             "--add-host=host.docker.internal:host-gateway",
+            # NET_ADMIN + NET_RAW required for iptables-based network allowlist
+            # that restricts outbound connections to approved hosts only.
             "--cap-add", "NET_ADMIN",
             "--cap-add", "NET_RAW",
             "-e", f"LLM_PROXY_URL=http://host.docker.internal:{self.proxy_port}/proxy/v1",

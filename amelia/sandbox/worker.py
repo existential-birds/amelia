@@ -154,8 +154,7 @@ async def _run_agentic(args: argparse.Namespace) -> None:
     from amelia.core.constants import normalize_tool_name  # noqa: PLC0415
 
     prompt = _read_prompt(args.prompt_file)
-    proxy_url = os.environ.get("LLM_PROXY_URL")
-    base_url = proxy_url if proxy_url else None
+    base_url = os.environ.get("LLM_PROXY_URL")
 
     chat_model = _create_worker_chat_model(args.model, base_url=base_url)
     backend = FilesystemBackend(root_dir=args.cwd)
@@ -270,8 +269,7 @@ async def _run_generate(args: argparse.Namespace) -> None:
     from langchain_core.messages import HumanMessage  # noqa: PLC0415
 
     prompt = _read_prompt(args.prompt_file)
-    proxy_url = os.environ.get("LLM_PROXY_URL")
-    base_url = proxy_url if proxy_url else None
+    base_url = os.environ.get("LLM_PROXY_URL")
 
     chat_model = _create_worker_chat_model(args.model, base_url=base_url)
 
