@@ -179,7 +179,9 @@ class ApiDriver(DriverInterface):
 
     # Maximum number of sessions to retain before evicting oldest
     # Configurable via AMELIA_DRIVER_MAX_SESSIONS environment variable
-    _MAX_SESSIONS: ClassVar[int] = int(os.environ.get("AMELIA_DRIVER_MAX_SESSIONS", "100"))
+    _MAX_SESSIONS: ClassVar[int] = max(
+        1, int(os.environ.get("AMELIA_DRIVER_MAX_SESSIONS", "100"))
+    )
 
     # Class-level session storage for conversation continuity
     # Maps session_id -> MemorySaver checkpointer
@@ -790,8 +792,13 @@ class ApiDriver(DriverInterface):
             Number of sessions that were cleared.
         """
         async with cls._sessions_lock_for_loop():
-            count = len(cls._sessions)
+            sessions = list(cls._sessions.items())
             cls._sessions.clear()
-            if count > 0:
-                logger.debug("Cleared all sessions", count=count)
-            return count
+
+        for session_id, checkpointer in sessions:
+            await checkpointer.adelete_thread(session_id)
+
+        count = len(sessions)
+        if count > 0:
+            logger.debug("Cleared all sessions", count=count)
+        return count
