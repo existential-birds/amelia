@@ -11,6 +11,8 @@ PROXY_URL="${LLM_PROXY_URL:-http://host.docker.internal:8430/proxy/v1}"
 PROFILE="${AMELIA_PROFILE:-default}"
 
 curl -sf \
+    --connect-timeout 5 \
+    --max-time 10 \
     -H "X-Amelia-Profile: ${PROFILE}" \
     "${PROXY_URL}/git/credentials" \
     --data-binary @/dev/stdin

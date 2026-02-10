@@ -90,15 +90,26 @@ class DockerSandboxProvider:
 
         if proc.stdout is None:
             raise RuntimeError("Failed to capture stdout from docker exec")
+
+        stderr_chunks: list[bytes] = []
+
+        async def _drain_stderr() -> None:
+            if proc.stderr:
+                async for chunk in proc.stderr:
+                    stderr_chunks.append(chunk)
+
+        drain_task = asyncio.create_task(_drain_stderr())
+
         async for raw_line in proc.stdout:
             yield raw_line.decode().rstrip("\n")
 
+        await drain_task
         await proc.wait()
         if proc.returncode != 0:
-            stderr_bytes = await proc.stderr.read() if proc.stderr else b""
+            stderr_text = b"".join(stderr_chunks).decode().strip()
             raise RuntimeError(
                 f"Command exited with code {proc.returncode}: "
-                f"{stderr_bytes.decode().strip()}"
+                f"{stderr_text}"
             )
 
     async def teardown(self) -> None:
@@ -155,7 +166,25 @@ class DockerSandboxProvider:
             )
 
     async def _start_container(self) -> None:
-        """Start the container with sleep infinity."""
+        """Start the container with sleep infinity.
+
+        Attempts to restart an existing stopped container first. If no
+        container exists, creates a new one with ``docker run``.
+        """
+        # Try restarting an existing stopped container first.
+        restart = await asyncio.create_subprocess_exec(
+            "docker", "start", self.container_name,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        await restart.wait()
+        if restart.returncode == 0:
+            logger.info(
+                "Restarted existing container",
+                container=self.container_name,
+            )
+            return
+
         cmd = [
             "docker", "run", "-d",
             "--name", self.container_name,
