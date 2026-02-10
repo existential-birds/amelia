@@ -85,9 +85,9 @@ class TestEventLevel:
 class TestWorkflowEvent:
     """Tests for WorkflowEvent model."""
 
-    def test_create_event_with_all_fields(self, make_event) -> None:
+    def test_create_event_with_all_fields(self, event_factory) -> None:
         """Event can be created with all fields including optional ones."""
-        event = make_event(
+        event = event_factory(
             agent="developer",
             event_type=EventType.FILE_CREATED,
             message="Created file",

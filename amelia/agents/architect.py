@@ -12,7 +12,7 @@ from loguru import logger
 from amelia.core.agentic_state import ToolCall, ToolResult
 from amelia.core.constants import ToolName, resolve_plan_path
 from amelia.core.types import AgentConfig, Profile
-from amelia.drivers.base import AgenticMessageType
+from amelia.drivers.base import AgenticMessage, AgenticMessageType
 from amelia.drivers.factory import get_driver
 from amelia.server.models.events import WorkflowEvent
 
@@ -20,7 +20,6 @@ from amelia.server.models.events import WorkflowEvent
 if TYPE_CHECKING:
     from amelia.pipelines.implementation.state import ImplementationState
     from amelia.server.events.bus import EventBus
-
 
 
 class Architect:
@@ -131,90 +130,114 @@ Before planning, discover:
             plan_path=plan_path,
         )
 
-        async for message in self.driver.execute_agentic(
-            prompt=user_prompt,
-            cwd=cwd,
-            instructions=self.plan_prompt,
-            required_tool="write_file",
-            required_file_path=plan_path,
-        ):
-            event: WorkflowEvent | None = None
+        try:
+            async for message in self.driver.execute_agentic(
+                prompt=user_prompt,
+                cwd=cwd,
+                instructions=self.plan_prompt,
+                required_tool="write_file",
+                required_file_path=plan_path,
+            ):
+                event: WorkflowEvent | None = None
 
-            if message.type == AgenticMessageType.THINKING:
-                event = message.to_workflow_event(workflow_id=workflow_id, agent="architect")
+                if message.type == AgenticMessageType.THINKING:
+                    event = message.to_workflow_event(workflow_id=workflow_id, agent="architect")
 
-            elif message.type == AgenticMessageType.TOOL_CALL:
-                call = ToolCall(
-                    id=message.tool_call_id or f"call-{len(tool_calls)}",
-                    tool_name=message.tool_name or "unknown",
-                    tool_input=message.tool_input or {},
-                )
-                tool_calls.append(call)
-                # Log tool call details with explicit tool name in message
-                input_keys = list(message.tool_input.keys()) if message.tool_input else []
-                logger.debug(
-                    "Architect tool call",
-                    tool_name=message.tool_name,
-                    input_keys=input_keys,
-                )
-                event = message.to_workflow_event(workflow_id=workflow_id, agent="architect")
+                elif message.type == AgenticMessageType.TOOL_CALL:
+                    call = ToolCall(
+                        id=message.tool_call_id or f"call-{len(tool_calls)}",
+                        tool_name=message.tool_name or "unknown",
+                        tool_input=message.tool_input or {},
+                    )
+                    tool_calls.append(call)
+                    # Log tool call details with explicit tool name in message
+                    input_keys = list(message.tool_input.keys()) if message.tool_input else []
+                    logger.debug(
+                        "Architect tool call",
+                        tool_name=message.tool_name,
+                        input_keys=input_keys,
+                    )
+                    event = message.to_workflow_event(workflow_id=workflow_id, agent="architect")
 
-            elif message.type == AgenticMessageType.TOOL_RESULT:
-                result = ToolResult(
-                    call_id=message.tool_call_id or f"call-{len(tool_results)}",
-                    tool_name=message.tool_name or "unknown",
-                    output=message.tool_output or "",
-                    success=not message.is_error,
-                )
-                tool_results.append(result)
-                logger.debug(
-                    "Architect tool result recorded",
-                    call_id=result.call_id,
-                )
-                event = message.to_workflow_event(workflow_id=workflow_id, agent="architect")
+                elif message.type == AgenticMessageType.TOOL_RESULT:
+                    result = ToolResult(
+                        call_id=message.tool_call_id or f"call-{len(tool_results)}",
+                        tool_name=message.tool_name or "unknown",
+                        output=message.tool_output or "",
+                        success=not message.is_error,
+                    )
+                    tool_results.append(result)
+                    logger.debug(
+                        "Architect tool result recorded",
+                        call_id=result.call_id,
+                    )
+                    event = message.to_workflow_event(workflow_id=workflow_id, agent="architect")
 
-            elif message.type == AgenticMessageType.RESULT:
-                raw_output = message.content or ""
-                event = message.to_workflow_event(workflow_id=workflow_id, agent="architect")
+                elif message.type == AgenticMessageType.RESULT:
+                    raw_output = message.content or ""
+                    event = message.to_workflow_event(workflow_id=workflow_id, agent="architect")
 
-                # In agentic mode, Claude writes the plan via Write tool.
-                # The orchestrator extracts the plan from tool_calls.
-                # No need to save the summary response to a file.
+                    # In agentic mode, Claude writes the plan via Write tool.
+                    # The orchestrator extracts the plan from tool_calls.
+                    # No need to save the summary response to a file.
 
-                logger.info(
-                    "Architect plan generated",
-                    agent="architect",
-                    raw_output_length=len(raw_output),
-                    tool_calls_count=len(tool_calls),
-                )
+                    logger.info(
+                        "Architect plan generated",
+                        agent="architect",
+                        raw_output_length=len(raw_output),
+                        tool_calls_count=len(tool_calls),
+                    )
 
-                # Log all tool calls at completion
-                logger.debug(
-                    "Architect completed",
-                    tool_calls_summary=[
-                        {"name": tc.tool_name, "input_keys": list(tc.tool_input.keys())}
-                        for tc in tool_calls
-                    ],
-                    raw_output_preview=raw_output[:300] if raw_output else "EMPTY",
-                )
+                    # Log all tool calls at completion
+                    logger.debug(
+                        "Architect completed",
+                        tool_calls_summary=[
+                            {"name": tc.tool_name, "input_keys": list(tc.tool_input.keys())}
+                            for tc in tool_calls
+                        ],
+                        raw_output_preview=raw_output[:300] if raw_output else None,
+                    )
 
-                # Extract plan_path from Write tool calls
-                # Note: CLI driver normalizes "Write" to "write_file" (ToolName.WRITE_FILE)
-                extracted_plan_path: Path | None = None
-                for tc in tool_calls:
-                    if tc.tool_name == ToolName.WRITE_FILE and "file_path" in tc.tool_input:
-                        extracted_plan_path = Path(tc.tool_input["file_path"])
-                        break  # Use first Write call (should be the plan)
+                    # Extract plan_path from Write tool calls
+                    # Note: CLI driver normalizes "Write" to "write_file" (ToolName.WRITE_FILE)
+                    extracted_plan_path: Path | None = None
+                    for tc in tool_calls:
+                        if tc.tool_name == ToolName.WRITE_FILE and "file_path" in tc.tool_input:
+                            extracted_plan_path = Path(tc.tool_input["file_path"])
+                            break  # Use first Write call (should be the plan)
 
-                # Yield final state with all updates
-                current_state = state.model_copy(update={
-                    "tool_calls": tool_calls,
-                    "tool_results": tool_results,
-                    "raw_architect_output": raw_output,
-                    "plan_markdown": raw_output,  # Backward compat until #199
-                    "plan_path": extracted_plan_path,
-                })
-                yield current_state, event
+                    # Yield final state with all updates
+                    current_state = state.model_copy(update={
+                        "tool_calls": tool_calls,
+                        "tool_results": tool_results,
+                        "raw_architect_output": raw_output,
+                        "plan_markdown": raw_output,  # Backward compat until #199
+                        "plan_path": extracted_plan_path,
+                    })
+                    yield current_state, event
+                    continue  # Result is the final message
+
+                if event is not None:
+                    current_state = state.model_copy(update={
+                        "tool_calls": tool_calls,
+                        "tool_results": tool_results,
+                    })
+                    yield current_state, event
+        except (RuntimeError, ValueError) as exc:
+            # RuntimeError: Driver execution failures (CLI/API errors)
+            # ValueError: Invalid input (e.g., empty prompt)
+            logger.exception("Architect agent failed")
+            error_event = AgenticMessage(
+                type=AgenticMessageType.RESULT,
+                content=str(exc),
+                is_error=True,
+            ).to_workflow_event(workflow_id=workflow_id, agent="architect")
+            current_state = state.model_copy(update={
+                "tool_calls": tool_calls,
+                "tool_results": tool_results,
+                "architect_error": str(exc),
+            })
+            yield current_state, error_event
 
     def _build_agentic_prompt(self, state: "ImplementationState", profile: Profile) -> str:
         """Build user prompt for agentic plan generation.
@@ -247,8 +270,9 @@ Before planning, discover:
             parts.append(
                 "The following design document was created during brainstorming. "
                 "Use it as the primary input for your implementation plan. "
-                "If there are conflicts between the design document and the issue description, "
-                "the design document takes precedence as it represents refined requirements."
+                "If there are conflicts between the design document and the issue "
+                "description, the design document takes precedence as it represents "
+                "refined requirements."
             )
             parts.append(f"\n{state.design.content}")
 
@@ -304,8 +328,12 @@ Each step is ONE action (2-5 minutes):
 
 ## Task Structure
 
+CRITICAL: Task headers MUST follow the exact format `### Task N:` (e.g., `### Task 1:`, `### Task 2:`)
+or hierarchical `### Task N.M:` (e.g., `### Task 1.1:`, `### Task 1.2:`).
+The number and colon are required for downstream task processing.
+
 ```markdown
-### Task N: [Component Name]
+### Task 1: [Component Name]
 
 **Files:**
 - Create: `exact/path/to/file.py`

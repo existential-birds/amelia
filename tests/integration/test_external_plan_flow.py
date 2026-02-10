@@ -15,12 +15,11 @@ Real components:
 - import_external_plan function (except LLM extraction)
 """
 
-import os
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import pytest
 from fastapi import status
@@ -28,48 +27,19 @@ from fastapi.testclient import TestClient
 
 from amelia.agents.schemas.architect import MarkdownPlanOutput
 from amelia.core.types import AgentConfig, DriverType, Profile, TrackerType
-from amelia.server.database.connection import Database
-from amelia.server.database.migrator import Migrator
 from amelia.server.database.profile_repository import ProfileRepository
 from amelia.server.database.repository import WorkflowRepository
 from amelia.server.dependencies import get_orchestrator, get_repository
-from amelia.server.events.bus import EventBus
 from amelia.server.main import create_app
 from amelia.server.orchestrator.service import OrchestratorService
-
-
-DATABASE_URL = os.environ.get(
-    "DATABASE_URL",
-    "postgresql://amelia:amelia@localhost:5432/amelia_test",
-)
 
 
 # =============================================================================
 # Fixtures
 # =============================================================================
 
-
-@pytest.fixture
-async def test_db() -> AsyncGenerator[Database, None]:
-    """Create and initialize PostgreSQL test database."""
-    db = Database(DATABASE_URL)
-    await db.connect()
-    migrator = Migrator(db)
-    await migrator.run()
-    yield db
-    await db.close()
-
-
-@pytest.fixture
-def test_repository(test_db: Database) -> WorkflowRepository:
-    """Create repository backed by test database."""
-    return WorkflowRepository(test_db)
-
-
-@pytest.fixture
-def test_profile_repository(test_db: Database) -> ProfileRepository:
-    """Create profile repository backed by test database."""
-    return ProfileRepository(test_db)
+# test_db, test_repository, test_profile_repository, and test_event_bus
+# fixtures are inherited from tests/integration/conftest.py
 
 
 @pytest.fixture
@@ -93,27 +63,6 @@ async def setup_test_profile(test_profile_repository: ProfileRepository) -> Prof
     created_profile = await test_profile_repository.create_profile(profile)
     await test_profile_repository.set_active(profile.name)
     return created_profile
-
-
-@pytest.fixture
-def test_event_bus() -> EventBus:
-    """Create event bus for testing."""
-    return EventBus()
-
-
-@pytest.fixture
-def test_orchestrator(
-    test_event_bus: EventBus,
-    test_repository: WorkflowRepository,
-    test_profile_repository: ProfileRepository,
-) -> OrchestratorService:
-    """Create real OrchestratorService with test dependencies."""
-    return OrchestratorService(
-        event_bus=test_event_bus,
-        repository=test_repository,
-        profile_repo=test_profile_repository,
-        checkpointer=AsyncMock(),
-    )
 
 
 @pytest.fixture

@@ -68,16 +68,22 @@ def extract_task_title(plan_markdown: str, task_index: int) -> str | None:
 
 
 def _looks_like_plan(text: str) -> bool:
-    """Check if text looks like a plan document.
+    """Check if text looks like a plan document with valid structure.
 
     Used as a fallback when the LLM doesn't use the write tool but outputs
-    the plan as text instead.
+    the plan as text instead. Validates both plan-like indicators AND
+    that the content has at least one task header for downstream processing.
+
+    Task headers must follow the format: "### Task N:" or "### Task N.M:"
+    where N and M are numbers. This format is required because downstream
+    processing (extract_task_count, extract_task_section, developer node)
+    relies on this pattern to parse and execute tasks sequentially.
 
     Args:
         text: The text to check.
 
     Returns:
-        True if the text contains plan-like indicators.
+        True if the text contains plan-like indicators and valid task structure.
     """
     if not text or len(text) < 100:
         return False
@@ -104,7 +110,23 @@ def _looks_like_plan(text: str) -> bool:
             indicators += 1
 
     # Need at least 3 indicators to consider it a plan
-    return indicators >= 3
+    if indicators < 3:
+        return False
+
+    # Validate task structure: must have at least one "### Task N:" header
+    # This ensures downstream processing (extract_task_count, developer node) works correctly
+    task_pattern = r"^### Task \d+(\.\d+)?:"
+    has_valid_task = bool(re.search(task_pattern, text, re.MULTILINE))
+    if not has_valid_task:
+        logger.warning(
+            "Plan rejected: missing required task header format '### Task N:' or '### Task N.M:'. "
+            "This format is required for downstream task processing. "
+            "Ensure the architect prompt generates plans with proper task headers.",
+            pattern=task_pattern,
+            text_length=len(text),
+            indicators_found=indicators,
+        )
+    return has_valid_task
 
 
 def _extract_goal_from_plan(plan_content: str) -> str:
@@ -349,6 +371,5 @@ async def commit_task_changes(state: ImplementationState, config: RunnableConfig
     if proc.returncode == 0:
         logger.info("Committed task changes", task=task_number, message=commit_msg)
         return True
-    else:
-        logger.warning("Failed to commit task changes", error=stderr.decode())
-        return False
+    logger.warning("Failed to commit task changes", error=stderr.decode())
+    return False

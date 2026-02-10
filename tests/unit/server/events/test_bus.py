@@ -12,9 +12,9 @@ from amelia.server.models import WorkflowEvent
 
 
 @pytest.fixture
-def sample_event(make_event: Callable[..., WorkflowEvent]) -> WorkflowEvent:
+def sample_event(event_factory: Callable[..., WorkflowEvent]) -> WorkflowEvent:
     """Create sample event."""
-    return make_event(
+    return event_factory(
         id="evt-1",
         workflow_id="wf-1",
         timestamp=datetime.now(UTC),

@@ -220,7 +220,7 @@ class TestWorkflowRepository:
     # Event Persistence Tests
     # =========================================================================
 
-    async def test_save_event(self, repository, make_event) -> None:
+    async def test_save_event(self, repository, event_factory) -> None:
         """Should persist event to database."""
         # First create a workflow (required for foreign key)
         wf_id = str(uuid4())
@@ -233,7 +233,7 @@ class TestWorkflowRepository:
         )
         await repository.create(state)
 
-        event = make_event(
+        event = event_factory(
             id=str(uuid4()),
             workflow_id=wf_id,
             timestamp=datetime.now(UTC),
@@ -248,7 +248,7 @@ class TestWorkflowRepository:
         max_seq = await repository.get_max_event_sequence(wf_id)
         assert max_seq == 1
 
-    async def test_get_max_event_sequence_with_events(self, repository, make_event) -> None:
+    async def test_get_max_event_sequence_with_events(self, repository, event_factory) -> None:
         """Should return max sequence number."""
         # First create a workflow
         wf_id = str(uuid4())
@@ -263,7 +263,7 @@ class TestWorkflowRepository:
 
         # Create events with sequences 1, 2, 3
         for seq in [1, 2, 3]:
-            event = make_event(
+            event = event_factory(
                 id=str(uuid4()),
                 workflow_id=wf_id,
                 sequence=seq,
@@ -275,7 +275,7 @@ class TestWorkflowRepository:
         max_seq = await repository.get_max_event_sequence(wf_id)
         assert max_seq == 3
 
-    async def test_save_event_with_pydantic_model_in_data(self, repository, make_event) -> None:
+    async def test_save_event_with_pydantic_model_in_data(self, repository, event_factory) -> None:
         """Should serialize Pydantic models in event data.
 
         Regression test for: TypeError: Object of type Profile is not JSON serializable
@@ -305,7 +305,7 @@ class TestWorkflowRepository:
                 "reviewer": AgentConfig(driver="cli", model="sonnet"),
             },
         )
-        event = make_event(
+        event = event_factory(
             id=str(uuid4()),
             workflow_id=wf_id,
             timestamp=datetime.now(UTC),
@@ -328,7 +328,7 @@ class TestWorkflowRepository:
         max_seq = await repository.get_max_event_sequence(wf_id)
         assert max_seq == 1
 
-    async def test_save_event_with_path_in_data(self, repository, make_event) -> None:
+    async def test_save_event_with_path_in_data(self, repository, event_factory) -> None:
         """Should serialize Path objects in event data.
 
         Regression test for: TypeError: Object of type PosixPath is not JSON serializable
@@ -347,7 +347,7 @@ class TestWorkflowRepository:
         await repository.create(state)
 
         # Create event with Path object in data
-        event = make_event(
+        event = event_factory(
             id=str(uuid4()),
             workflow_id=wf_id,
             timestamp=datetime.now(UTC),
@@ -370,7 +370,7 @@ class TestWorkflowRepository:
         max_seq = await repository.get_max_event_sequence(wf_id)
         assert max_seq == 1
 
-    async def test_get_recent_events(self, repository, make_event) -> None:
+    async def test_get_recent_events(self, repository, event_factory) -> None:
         """Should return recent events for a workflow in chronological order."""
         # Create a workflow
         wf_id = str(uuid4())
@@ -388,7 +388,7 @@ class TestWorkflowRepository:
         for seq in [1, 2, 3]:
             evt_id = str(uuid4())
             event_ids.append(evt_id)
-            event = make_event(
+            event = event_factory(
                 id=evt_id,
                 workflow_id=wf_id,
                 sequence=seq,
@@ -406,7 +406,7 @@ class TestWorkflowRepository:
         assert events[1].id == event_ids[1]
         assert events[2].id == event_ids[2]
 
-    async def test_get_recent_events_with_limit(self, repository, make_event) -> None:
+    async def test_get_recent_events_with_limit(self, repository, event_factory) -> None:
         """Should respect limit parameter."""
         # Create a workflow
         wf_id = str(uuid4())
@@ -424,7 +424,7 @@ class TestWorkflowRepository:
         for seq in range(1, 6):
             evt_id = str(uuid4())
             event_ids.append(evt_id)
-            event = make_event(
+            event = event_factory(
                 id=evt_id,
                 workflow_id=wf_id,
                 sequence=seq,

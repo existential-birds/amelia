@@ -1,7 +1,7 @@
 """Configuration and shared type definitions for the Amelia orchestrator.
 
 Contains StrEnum types (DriverType, TrackerType, Severity) and
-Pydantic models (RetryConfig, Profile, Settings, Issue) used throughout
+Pydantic models (RetryConfig, SandboxConfig, Profile, Settings, Issue) used throughout
 the Amelia agentic coding orchestrator.
 """
 from datetime import datetime
@@ -10,6 +10,18 @@ from pathlib import Path
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
+
+
+# Default allowed hosts for sandbox network allowlist
+DEFAULT_NETWORK_ALLOWED_HOSTS: tuple[str, ...] = (
+    "api.anthropic.com",
+    "openrouter.ai",
+    "api.openai.com",
+    "github.com",
+    "registry.npmjs.org",
+    "pypi.org",
+    "files.pythonhosted.org",
+)
 
 
 class DriverType(StrEnum):
@@ -63,6 +75,24 @@ class RetryConfig(BaseModel):
     )
 
 
+class SandboxConfig(BaseModel):
+    """Sandbox execution configuration for a profile.
+
+    Attributes:
+        mode: Sandbox mode ('none' = direct execution, 'container' = Docker sandbox).
+        image: Docker image for sandbox container.
+        network_allowlist_enabled: Whether to restrict outbound network.
+        network_allowed_hosts: Hosts allowed when network allowlist is enabled.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    mode: Literal["none", "container"] = "none"
+    image: str = "amelia-sandbox:latest"
+    network_allowlist_enabled: bool = False
+    network_allowed_hosts: list[str] = Field(default_factory=lambda: list(DEFAULT_NETWORK_ALLOWED_HOSTS))
+
+
 class Profile(BaseModel):
     """Configuration profile for Amelia execution.
 
@@ -77,6 +107,7 @@ class Profile(BaseModel):
         plan_path_pattern: Path pattern for plan files with {date} and {issue_key} placeholders.
         retry: Retry configuration for transient failures.
         agents: Per-agent driver and model configuration.
+        sandbox: Sandbox execution configuration.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -88,6 +119,7 @@ class Profile(BaseModel):
     plan_path_pattern: str = "docs/plans/{date}-{issue_key}.md"
     retry: RetryConfig = Field(default_factory=RetryConfig)
     agents: dict[str, AgentConfig] = Field(default_factory=dict)
+    sandbox: SandboxConfig = Field(default_factory=SandboxConfig)
 
     def get_agent_config(self, agent_name: str) -> AgentConfig:
         """Get config for an agent.

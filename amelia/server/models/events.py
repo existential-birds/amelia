@@ -7,6 +7,10 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 
+# Sequence number for ephemeral/trace-only events (not persisted, no ordering needed)
+EPHEMERAL_SEQUENCE: int = 0
+
+
 class EventDomain(StrEnum):
     """Domain of event origin.
 
@@ -182,9 +186,6 @@ _ERROR_TYPES: frozenset[EventType] = frozenset({
 _WARNING_TYPES: frozenset[EventType] = frozenset({
     EventType.SYSTEM_WARNING,
 })
-
-# Sequence number for ephemeral/trace-only events (not persisted, no ordering needed)
-EPHEMERAL_SEQUENCE: int = 0
 
 _INFO_TYPES: frozenset[EventType] = frozenset({
     EventType.WORKFLOW_CREATED,

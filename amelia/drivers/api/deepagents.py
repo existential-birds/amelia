@@ -2,10 +2,12 @@
 import asyncio
 import os
 import subprocess
+import threading
 import time
 from collections.abc import AsyncIterator
 from typing import Any, ClassVar
 from uuid import uuid4
+from weakref import WeakKeyDictionary
 
 from deepagents import create_deep_agent
 from deepagents.backends import FilesystemBackend
@@ -94,7 +96,7 @@ class LocalSandbox(FilesystemBackend, SandboxBackendProtocol):
                 exit_code=124,
                 truncated=False,
             )
-        except Exception as e:
+        except OSError as e:
             return ExecuteResponse(
                 output=f"Command execution failed: {e}",
                 exit_code=1,
@@ -106,12 +108,18 @@ class LocalSandbox(FilesystemBackend, SandboxBackendProtocol):
         return await asyncio.to_thread(self.execute, command)
 
 
-def _create_chat_model(model: str, provider: str | None = None) -> BaseChatModel:
+def _create_chat_model(
+    model: str,
+    provider: str | None = None,
+    base_url: str | None = None,
+) -> BaseChatModel:
     """Create a LangChain chat model, handling provider configuration.
 
     Args:
         model: Model identifier (e.g., 'minimax/minimax-m2').
         provider: Optional provider name. If 'openrouter', configures OpenRouter API.
+        base_url: Optional base URL override. Used for proxy routing when running
+            in sandboxed environments. Only applies to OpenRouter provider.
 
     Returns:
         Configured BaseChatModel instance.
@@ -139,10 +147,12 @@ def _create_chat_model(model: str, provider: str | None = None) -> BaseChatModel
         )
         site_name = os.environ.get("OPENROUTER_SITE_NAME", "Amelia")
 
+        resolved_url = base_url or "https://openrouter.ai/api/v1"
+
         return init_chat_model(
             model=model,
             model_provider="openai",
-            base_url="https://openrouter.ai/api/v1",
+            base_url=resolved_url,
             api_key=api_key,
             default_headers={
                 "HTTP-Referer": site_url,
@@ -167,9 +177,29 @@ class ApiDriver(DriverInterface):
 
     DEFAULT_MODEL = "minimax/minimax-m2"
 
+    # Maximum number of sessions to retain before evicting oldest
+    # Configurable via AMELIA_DRIVER_MAX_SESSIONS environment variable
+    _MAX_SESSIONS: ClassVar[int] = max(
+        1, int(os.environ.get("AMELIA_DRIVER_MAX_SESSIONS", "100"))
+    )
+
     # Class-level session storage for conversation continuity
     # Maps session_id -> MemorySaver checkpointer
+    # Least recently used sessions are evicted when _MAX_SESSIONS is exceeded (LRU).
+    # On eviction, adelete_thread() is called to clear the checkpointer's internal
+    # storage, then the checkpointer is garbage-collected (no callback mechanism).
     _sessions: ClassVar[dict[str, MemorySaver]] = {}
+
+    # Per-loop lock storage using WeakKeyDictionary pattern:
+    # - asyncio.Lock is bound to a specific event loop and cannot be shared across loops
+    # - WeakKeyDictionary uses the event loop as key, so each loop gets its own lock
+    # - When an event loop is garbage collected, its lock entry is automatically removed
+    # - This enables safe concurrent access in multi-loop scenarios (e.g., pytest-asyncio)
+    _sessions_lock_by_loop: ClassVar[
+        WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Lock]
+    ] = WeakKeyDictionary()
+    # Threading lock to protect _sessions_lock_by_loop mutations (check-then-act pattern)
+    _sessions_lock_by_loop_guard: ClassVar[threading.Lock] = threading.Lock()
 
     def __init__(
         self,
@@ -188,6 +218,32 @@ class ApiDriver(DriverInterface):
         self.provider = provider
         self.cwd = cwd
         self._usage: DriverUsage | None = None
+
+    @classmethod
+    def _sessions_lock_for_loop(cls) -> asyncio.Lock:
+        """Get or create an asyncio.Lock for the current event loop.
+
+        Uses WeakKeyDictionary with the event loop as key to provide per-loop locks.
+        This is necessary because asyncio.Lock is bound to a specific event loop and
+        cannot be shared across loops (e.g., in pytest-asyncio where each test may
+        run in a different loop). When a loop is garbage collected, its lock entry
+        is automatically removed.
+
+        Returns:
+            The asyncio.Lock associated with the current running event loop.
+        """
+        loop = asyncio.get_running_loop()
+        with cls._sessions_lock_by_loop_guard:
+            lock = cls._sessions_lock_by_loop.get(loop)
+            if lock is None:
+                lock = asyncio.Lock()
+                cls._sessions_lock_by_loop[loop] = lock
+                logger.debug(
+                    "Created new per-loop lock",
+                    loop_id=id(loop),
+                    total_locks=len(cls._sessions_lock_by_loop),
+                )
+            return lock
 
     async def generate(
         self,
@@ -372,19 +428,30 @@ class ApiDriver(DriverInterface):
             is_new_session = session_id is None
             current_session_id = session_id or str(uuid4())
 
-            if current_session_id in ApiDriver._sessions:
-                checkpointer = ApiDriver._sessions[current_session_id]
-                logger.debug(
-                    "Resuming existing session",
-                    session_id=current_session_id,
-                )
-            else:
-                checkpointer = MemorySaver()
-                ApiDriver._sessions[current_session_id] = checkpointer
-                logger.debug(
-                    "Created new session",
-                    session_id=current_session_id,
-                )
+            async with ApiDriver._sessions_lock_for_loop():
+                if current_session_id in ApiDriver._sessions:
+                    checkpointer = ApiDriver._sessions[current_session_id]
+                    # Move to end for LRU eviction (re-insert to update order)
+                    del ApiDriver._sessions[current_session_id]
+                    ApiDriver._sessions[current_session_id] = checkpointer
+                    logger.debug(
+                        "Resuming existing session",
+                        session_id=current_session_id,
+                    )
+                else:
+                    checkpointer = MemorySaver()
+                    # Evict least recently used sessions if at capacity (LRU via dict order)
+                    while len(ApiDriver._sessions) >= ApiDriver._MAX_SESSIONS:
+                        oldest_id = next(iter(ApiDriver._sessions))
+                        evicted_checkpointer = ApiDriver._sessions.pop(oldest_id)
+                        # Clean up checkpointer's internal storage to prevent memory leak
+                        await evicted_checkpointer.adelete_thread(oldest_id)
+                        logger.debug("Evicted oldest session", session_id=oldest_id)
+                    ApiDriver._sessions[current_session_id] = checkpointer
+                    logger.debug(
+                        "Created new session",
+                        session_id=current_session_id,
+                    )
 
             # Use session_id as thread_id for checkpointing
             thread_id = current_session_id
@@ -695,7 +762,7 @@ class ApiDriver(DriverInterface):
         """
         return self._usage
 
-    def cleanup_session(self, session_id: str) -> bool:
+    async def cleanup_session(self, session_id: str) -> bool:
         """Clean up session state from the class-level cache.
 
         Delegates to the classmethod to remove the MemorySaver
@@ -707,4 +774,31 @@ class ApiDriver(DriverInterface):
         Returns:
             True if session was found and removed, False otherwise.
         """
-        return ApiDriver._sessions.pop(session_id, None) is not None
+        async with ApiDriver._sessions_lock_for_loop():
+            checkpointer = ApiDriver._sessions.pop(session_id, None)
+            if checkpointer is not None:
+                # Clean up checkpointer's internal storage to prevent memory leak
+                await checkpointer.adelete_thread(session_id)
+                return True
+            return False
+
+    @classmethod
+    async def clear_all_sessions(cls) -> int:
+        """Clear all session state from the class-level cache.
+
+        Useful for cleanup on server shutdown or testing.
+
+        Returns:
+            Number of sessions that were cleared.
+        """
+        async with cls._sessions_lock_for_loop():
+            sessions = list(cls._sessions.items())
+            cls._sessions.clear()
+
+        for session_id, checkpointer in sessions:
+            await checkpointer.adelete_thread(session_id)
+
+        count = len(sessions)
+        if count > 0:
+            logger.debug("Cleared all sessions", count=count)
+        return count

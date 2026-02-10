@@ -46,6 +46,8 @@ class Evaluator:
 
     """
 
+    PROMPT_KEY_SYSTEM = "evaluator.system"
+
     SYSTEM_PROMPT = """You are an expert code evaluation agent. Your task is to evaluate
 code review feedback items against the actual codebase.
 
@@ -87,6 +89,13 @@ Provide clear evidence for each disposition decision."""
         self._event_bus = event_bus
         self._prompts = prompts or {}
 
+        if self.PROMPT_KEY_SYSTEM not in self._prompts:
+            logger.debug(
+                "Custom prompt key not found, using default",
+                agent="evaluator",
+                prompt_key=self.PROMPT_KEY_SYSTEM,
+            )
+
     @property
     def system_prompt(self) -> str:
         """Get the system prompt for evaluation.
@@ -98,7 +107,7 @@ Provide clear evidence for each disposition decision."""
             The system prompt string.
 
         """
-        return self._prompts.get("evaluator.system", self.SYSTEM_PROMPT)
+        return self._prompts.get(self.PROMPT_KEY_SYSTEM, self.SYSTEM_PROMPT)
 
     def _build_prompt(self, state: "ImplementationState") -> str:
         """Build the user prompt for evaluation from state.

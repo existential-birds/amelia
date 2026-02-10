@@ -5,7 +5,7 @@ between the repository, event bus, and Claude driver.
 """
 
 import asyncio
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
@@ -317,7 +317,7 @@ class BrainstormService:
         self,
         repository: BrainstormRepository,
         event_bus: EventBus,
-        driver_cleanup: Callable[[str, str], bool] | None = None,
+        driver_cleanup: Callable[[str, str], Awaitable[bool]] | None = None,
         profile_repo: ProfileRepository | None = None,
     ) -> None:
         """Initialize service.
@@ -325,7 +325,7 @@ class BrainstormService:
         Args:
             repository: Database repository.
             event_bus: Event bus for broadcasting.
-            driver_cleanup: Optional callback to clean up driver sessions.
+            driver_cleanup: Optional async callback to clean up driver sessions.
                 Called with (driver_type, driver_session_id) when sessions
                 are deleted or reach terminal status.
             profile_repo: Repository for profile lookup. Used to populate
@@ -476,7 +476,7 @@ class BrainstormService:
             and session.driver_session_id
         ):
             try:
-                self._driver_cleanup(session.driver_type, session.driver_session_id)
+                await self._driver_cleanup(session.driver_type, session.driver_session_id)
             except Exception as e:
                 logger.warning(
                     "Failed to clean up driver session",
@@ -513,13 +513,13 @@ class BrainstormService:
         await self._repository.update_session(session)
 
         # Clean up when session reaches terminal status
-        if status in ("completed", "failed"):
+        if status in (SessionStatus.COMPLETED, SessionStatus.FAILED):
             self._session_locks.pop(session_id, None)
 
             # Clean up driver session
             if self._driver_cleanup and session.driver_type and session.driver_session_id:
                 try:
-                    self._driver_cleanup(session.driver_type, session.driver_session_id)
+                    await self._driver_cleanup(session.driver_type, session.driver_session_id)
                 except Exception as e:
                     logger.warning(
                         "Failed to clean up driver session",

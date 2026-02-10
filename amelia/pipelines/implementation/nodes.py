@@ -238,16 +238,16 @@ async def call_architect_node(
                     )
                     plan_written = True
                     break
-        else:
-            # No Write tool call found - try to salvage plan from raw output
+        else:  # no matching write_file tool call found - try salvaging from raw output
             # Some models output the plan as text instead of using the write tool
             raw_output = final_state.raw_architect_output or ""
             if raw_output and _looks_like_plan(raw_output):
                 await asyncio.to_thread(plan_path.write_text, raw_output)
                 logger.warning(
-                    "Wrote plan file from raw output (model didn't use write tool)",
+                    "FALLBACK: Wrote plan from raw output - may be incomplete or malformed (model didn't use write tool)",
                     plan_path=str(plan_path),
                     content_length=len(raw_output),
+                    tool_sequence=tool_names[-5:],
                 )
                 plan_written = True
             else:
@@ -284,6 +284,7 @@ async def call_architect_node(
 
     return {
         "raw_architect_output": final_state.raw_architect_output,
+        "architect_error": final_state.architect_error,
         "tool_calls": list(final_state.tool_calls),
         "tool_results": list(final_state.tool_results),
     }

@@ -38,7 +38,7 @@ def _check_dependencies() -> None:
 _check_dependencies()
 
 import os
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import AsyncExitStack, asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -56,6 +56,7 @@ from amelia.drivers.factory import (
 )
 from amelia.logging import configure_logging, log_server_startup
 from amelia.pipelines.implementation.state import rebuild_implementation_state
+from amelia.sandbox.proxy import ProviderConfig, create_proxy_router
 from amelia.server.config import ServerConfig
 from amelia.server.database import ProfileRepository, SettingsRepository, WorkflowRepository
 from amelia.server.database.brainstorm_repository import BrainstormRepository
@@ -102,15 +103,15 @@ from amelia.server.routes.workflows import configure_exception_handlers
 from amelia.server.services.brainstorm import BrainstormService
 
 
-def create_driver_cleanup_callback() -> Callable[[str, str], bool]:
-    """Create callback for cleaning up driver sessions.
+def create_driver_cleanup_callback() -> Callable[[str, str], Awaitable[bool]]:
+    """Create async callback for cleaning up driver sessions.
 
     Returns:
-        Callback that takes (driver_type, driver_session_id) and returns bool.
+        Async callback that takes (driver_type, driver_session_id) and returns bool.
     """
 
-    def cleanup(driver_type: str, driver_session_id: str) -> bool:
-        return cleanup_driver_session(driver_type, driver_session_id)
+    async def cleanup(driver_type: str, driver_session_id: str) -> bool:
+        return await cleanup_driver_session(driver_type, driver_session_id)
 
     return cleanup
 
@@ -165,6 +166,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 
     exit_stack = AsyncExitStack()
+
+    # Register proxy cleanup early so it runs even if startup fails
+    # proxy_cleanup is always set by create_app() before lifespan runs
+    exit_stack.push_async_callback(app.state.proxy_cleanup)
+
     checkpointer = await exit_stack.enter_async_context(
         AsyncPostgresSaver.from_conn_string(config.database_url)
     )
@@ -225,7 +231,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await health_checker.stop()
     await lifecycle.shutdown()
     clear_orchestrator()
-    await exit_stack.aclose()
+    await exit_stack.aclose()  # Also cleans up proxy HTTP client
+
     await database.close()
     clear_database()
     clear_config()
@@ -335,6 +342,54 @@ def create_app() -> FastAPI:
         return bus
 
     application.dependency_overrides[oracle_get_event_bus] = get_oracle_event_bus
+
+    # Mount sandbox proxy routes
+    async def _resolve_provider(profile_name: str) -> ProviderConfig | None:
+        """Resolve LLM provider config from profile name.
+
+        Looks up the profile in the database, finds the developer agent's
+        provider setting, and returns the corresponding upstream URL and API key.
+        """
+        profile_repo = get_profile_repository()
+        profile = await profile_repo.get_profile(profile_name)
+        if profile is None:
+            return None
+
+        # Use developer agent config to determine provider
+        try:
+            agent_config = profile.get_agent_config("developer")
+        except ValueError:
+            return None
+
+        provider = agent_config.options.get("provider", "openrouter")
+
+        # Map provider to upstream config
+        # NOTE: Only OpenAI-compatible providers (using /chat/completions endpoint)
+        # are supported. Anthropic uses /messages and requires different auth headers.
+        # TODO(#420): Move provider registry to database-stored configuration
+        provider_registry: dict[str, str] = {
+            "openrouter": "https://openrouter.ai/api/v1",
+            "openai": "https://api.openai.com/v1",
+        }
+        api_key_env_vars: dict[str, str] = {
+            "openrouter": "OPENROUTER_API_KEY",
+            "openai": "OPENAI_API_KEY",
+        }
+
+        base_url = provider_registry.get(provider)
+        env_var = api_key_env_vars.get(provider)
+        if base_url is None or env_var is None:
+            return None
+
+        api_key = os.environ.get(env_var, "")
+        if not api_key:
+            return None
+
+        return ProviderConfig(base_url=base_url, api_key=api_key)
+
+    proxy = create_proxy_router(resolve_provider=_resolve_provider)
+    application.include_router(proxy.router, prefix="/proxy/v1")
+    application.state.proxy_cleanup = proxy.cleanup
 
     # Serve dashboard static files
     # Priority: bundled static files (installed package) > dev build (dashboard/dist)

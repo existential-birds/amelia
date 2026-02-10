@@ -6,7 +6,7 @@ from typing import Any
 import asyncpg
 from pydantic import BaseModel
 
-from amelia.core.types import AgentConfig, Profile
+from amelia.core.types import AgentConfig, Profile, SandboxConfig
 from amelia.server.database.connection import Database
 
 
@@ -23,6 +23,7 @@ class ProfileRecord(BaseModel):
     plan_output_dir: str = "docs/plans"
     plan_path_pattern: str = "docs/plans/{date}-{issue_key}.md"
     agents: str  # JSON blob of dict[str, AgentConfig]
+    sandbox: str = "{}"  # JSON blob of SandboxConfig
     is_active: bool = False
     created_at: datetime | None = None
     updated_at: datetime | None = None
@@ -95,17 +96,20 @@ class ProfileRepository:
             for name, config in profile.agents.items()
         }
 
+        sandbox_data = profile.sandbox.model_dump()
+
         await self._db.execute(
             """INSERT INTO profiles (
                 id, tracker, working_dir, plan_output_dir, plan_path_pattern,
-                agents, is_active
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7)""",
+                agents, sandbox, is_active
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)""",
             profile.name,
             profile.tracker,
             profile.working_dir,
             profile.plan_output_dir,
             profile.plan_path_pattern,
             agents_data,
+            sandbox_data,
             False,
         )
         result = await self.get_profile(profile.name)
@@ -134,6 +138,7 @@ class ProfileRepository:
             "plan_output_dir",
             "plan_path_pattern",
             "agents",
+            "sandbox",
         }
         invalid = set(updates.keys()) - valid_fields
         if invalid:
@@ -223,6 +228,9 @@ class ProfileRepository:
             name: AgentConfig(**config) for name, config in agents_data.items()
         }
 
+        sandbox_data = row.get("sandbox", {})
+        sandbox = SandboxConfig(**sandbox_data) if sandbox_data else SandboxConfig()
+
         return Profile(
             name=row["id"],
             tracker=row["tracker"],
@@ -230,4 +238,5 @@ class ProfileRepository:
             plan_output_dir=row["plan_output_dir"],
             plan_path_pattern=row["plan_path_pattern"],
             agents=agents,
+            sandbox=sandbox,
         )

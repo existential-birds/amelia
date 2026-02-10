@@ -79,7 +79,7 @@ Generate implementation plans in markdown format that follow this structure:
 
 Guidelines:
 - Each Phase groups related work with ## headers
-- Each Task is a discrete unit of work with ### headers
+- CRITICAL: Task headers MUST use format `### Task N:` (e.g., `### Task 1:`) or `### Task N.M:` (e.g., `### Task 1.1:`) - the number and colon are required for downstream processing
 - Each Step has code blocks, commands to run, and success criteria
 - Include TDD approach: write test first, run to verify it fails, implement, run to verify it passes
 - Be specific about file paths, commands, and expected outputs

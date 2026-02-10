@@ -76,8 +76,9 @@ async def import_external_plan(
         ValueError: If validation fails, content is empty, or path traversal detected.
     """
     # Establish working directory as security boundary
-    working_dir = Path(profile.working_dir) if profile.working_dir else Path(".")
-    working_dir = working_dir.expanduser().resolve()
+    working_dir = (
+        Path(profile.working_dir) if profile.working_dir else Path(".")
+    ).expanduser().resolve()
 
     # Resolve content from file or use inline
     plan_path: Path | None
@@ -98,7 +99,7 @@ async def import_external_plan(
         if not plan_path.exists():
             raise FileNotFoundError(f"Plan file not found: {plan_path}")
 
-        content = await asyncio.to_thread(plan_path.read_text)
+        content = await asyncio.to_thread(plan_path.read_text, encoding="utf-8")
     else:
         content = plan_content or ""
         plan_path = None
@@ -122,7 +123,7 @@ async def import_external_plan(
     # Write to target path (skip if file already there)
     if not file_already_at_target:
         await asyncio.to_thread(target_path.parent.mkdir, parents=True, exist_ok=True)
-        await asyncio.to_thread(target_path.write_text, content)
+        await asyncio.to_thread(target_path.write_text, content, encoding="utf-8")
         logger.info(
             "External plan written",
             target_path=str(target_path),
@@ -153,13 +154,31 @@ async def import_external_plan(
     except RuntimeError as e:
         # Fallback extraction without LLM
         logger.warning(
-            "Structured extraction failed, using fallback",
+            "Structured extraction failed, using regex fallback",
             error=str(e),
             workflow_id=workflow_id,
         )
         goal = _extract_goal_from_plan(content)
         plan_markdown = content
         key_files = _extract_key_files_from_plan(content)
+
+        # Log fallback extraction results for visibility
+        goal_is_default = goal == "Implementation plan"
+        logger.info(
+            "Regex fallback extraction complete",
+            goal_extracted=not goal_is_default,
+            goal=goal if not goal_is_default else "(default)",
+            key_files_count=len(key_files),
+            key_files=key_files if key_files else "(none found)",
+            workflow_id=workflow_id,
+        )
+        if goal_is_default or not key_files:
+            logger.warning(
+                "Fallback extraction produced partial data",
+                goal_is_default=goal_is_default,
+                key_files_empty=not key_files,
+                workflow_id=workflow_id,
+            )
 
     # Extract task count
     total_tasks = extract_task_count(content)

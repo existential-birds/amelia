@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking:** `DriverInterface.cleanup_session()` is now async
+
+  **Migration:** Change `driver.cleanup_session(session_id)` to `await driver.cleanup_session(session_id)`. Custom driver implementations must update the method signature from `def cleanup_session(...)` to `async def cleanup_session(...)`.
+
 ## [0.13.0] - 2026-02-08
 
 ### Changed

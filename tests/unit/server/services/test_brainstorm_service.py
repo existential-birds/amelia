@@ -52,9 +52,9 @@ class TestBrainstormService:
         return BrainstormService(mock_repository, mock_event_bus)
 
     @pytest.fixture
-    def mock_cleanup(self) -> MagicMock:
-        """Create mock cleanup callback."""
-        return MagicMock(return_value=True)
+    def mock_cleanup(self) -> AsyncMock:
+        """Create mock async cleanup callback."""
+        return AsyncMock(return_value=True)
 
     @pytest.fixture
     def service_with_cleanup(

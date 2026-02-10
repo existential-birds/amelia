@@ -68,14 +68,14 @@ class TestConnectionManager:
         ids=["subscribe_all", "specific_match", "no_match"],
     )
     async def test_broadcast_filtering(
-        self, manager, mock_websocket, subscription_workflow, event_workflow, should_send, make_event
+        self, manager, mock_websocket, subscription_workflow, event_workflow, should_send, event_factory
     ) -> None:
         """broadcast() respects subscription filters."""
         await manager.connect(mock_websocket)
         if subscription_workflow:
             await manager.subscribe(mock_websocket, subscription_workflow)
 
-        event = make_event(
+        event = event_factory(
             id="evt-123",
             workflow_id=event_workflow,
             timestamp=datetime.now(UTC),
@@ -89,12 +89,12 @@ class TestConnectionManager:
         else:
             mock_websocket.send_json.assert_not_awaited()
 
-    async def test_broadcast_handles_disconnected_socket(self, manager, mock_websocket, make_event) -> None:
+    async def test_broadcast_handles_disconnected_socket(self, manager, mock_websocket, event_factory) -> None:
         """broadcast() removes disconnected sockets gracefully."""
         await manager.connect(mock_websocket)
         mock_websocket.send_json.side_effect = WebSocketDisconnect()
 
-        event = make_event(
+        event = event_factory(
             id="evt-123",
             workflow_id="wf-456",
             timestamp=datetime.now(UTC),

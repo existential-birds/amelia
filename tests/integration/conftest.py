@@ -26,7 +26,6 @@ from amelia.server.database.profile_repository import ProfileRepository
 from amelia.server.database.repository import WorkflowRepository
 from amelia.server.events.bus import EventBus
 from amelia.server.events.connection_manager import ConnectionManager
-from amelia.server.models import EventType
 from amelia.server.models.events import WorkflowEvent
 from amelia.server.models.state import ServerExecutionState
 from amelia.server.orchestrator.service import OrchestratorService
@@ -595,26 +594,6 @@ def test_profile_repository(test_db: Database) -> ProfileRepository:
 def test_event_bus() -> EventBus:
     """Create event bus for testing."""
     return EventBus()
-
-
-@pytest.fixture
-def make_event() -> Callable[..., WorkflowEvent]:
-    """Factory fixture for creating WorkflowEvent instances with sensible defaults."""
-    from datetime import datetime  # noqa: PLC0415
-
-    def _make_event(**overrides: Any) -> WorkflowEvent:
-        defaults: dict[str, Any] = {
-            "id": "event-123",
-            "workflow_id": "wf-456",
-            "sequence": 1,
-            "timestamp": datetime(2025, 1, 1, 12, 0, 0),
-            "agent": "system",
-            "event_type": EventType.WORKFLOW_STARTED,
-            "message": "Test event",
-        }
-        return WorkflowEvent(**{**defaults, **overrides})
-
-    return _make_event
 
 
 @pytest.fixture

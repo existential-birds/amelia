@@ -27,6 +27,7 @@ from amelia.pipelines.implementation.state import (
 )
 from amelia.server.database import ProfileRecord
 from amelia.server.events.bus import EventBus
+from amelia.server.models.events import EventType, WorkflowEvent
 
 
 # Rebuild state models to resolve forward references for EvaluationResult.
@@ -38,6 +39,37 @@ rebuild_implementation_state()
 def event_bus() -> EventBus:
     """Create EventBus instance for testing."""
     return EventBus()
+
+
+@pytest.fixture
+def event_factory() -> Callable[..., WorkflowEvent]:
+    """Factory fixture for creating WorkflowEvent instances with sensible defaults.
+
+    Returns:
+        A function that creates WorkflowEvent instances with default values
+        that can be overridden via keyword arguments.
+
+    Example:
+        def test_something(event_factory):
+            event = event_factory(agent="developer", event_type=EventType.FILE_CREATED)
+            assert event.agent == "developer"
+    """
+    from datetime import datetime  # noqa: PLC0415
+
+    def _create(**overrides: Any) -> WorkflowEvent:
+        """Create a WorkflowEvent with sensible defaults."""
+        defaults: dict[str, Any] = {
+            "id": "event-123",
+            "workflow_id": "wf-456",
+            "sequence": 1,
+            "timestamp": datetime(2025, 1, 1, 12, 0, 0),
+            "agent": "system",
+            "event_type": EventType.WORKFLOW_STARTED,
+            "message": "Test event",
+        }
+        return WorkflowEvent(**{**defaults, **overrides})
+
+    return _create
 
 
 @pytest.fixture

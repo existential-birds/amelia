@@ -27,7 +27,7 @@ def get_driver(driver_key: str, **kwargs: Any) -> DriverInterface:
         raise ValueError(f"Unknown driver key: {driver_key}")
 
 
-def cleanup_driver_session(driver_key: str, session_id: str) -> bool:
+async def cleanup_driver_session(driver_key: str, session_id: str) -> bool:
     """Clean up a driver session without instantiating a full driver.
 
     Routes to the appropriate driver's class-level cleanup based on driver_key.
@@ -47,6 +47,7 @@ def cleanup_driver_session(driver_key: str, session_id: str) -> bool:
     if driver_key in ("cli:claude", "cli"):
         return False  # ClaudeCliDriver has no session state to clean
     elif driver_key in ("api:openrouter", "api"):
-        return ApiDriver._sessions.pop(session_id, None) is not None
+        async with ApiDriver._sessions_lock_for_loop():
+            return ApiDriver._sessions.pop(session_id, None) is not None
     else:
         raise ValueError(f"Unknown driver key: {driver_key}")
