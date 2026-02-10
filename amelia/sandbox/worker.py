@@ -221,9 +221,13 @@ async def _run_agentic(args: argparse.Namespace) -> None:
                 tool_name=normalize_tool_name(message.name or "unknown"),
                 tool_output=str(message.content)[:10000],
                 tool_call_id=message.tool_call_id,
-                is_error=message.status == "error" if hasattr(message, "status") else False,
+                is_error=getattr(message, "status", None) == "error",
                 model=args.model,
             ))
+
+    # Verify agent produced output
+    if num_turns == 0:
+        raise RuntimeError("Agent stream yielded no messages")
 
     # Final result — last AI message content
     final_content = ""
@@ -260,6 +264,7 @@ async def _run_generate(args: argparse.Namespace) -> None:
     Args:
         args: Parsed CLI arguments.
     """
+    # TODO: langchain.agents.structured_output.ToolStrategy - migrate to langchain_core when available
     from deepagents import create_deep_agent  # noqa: PLC0415
     from deepagents.backends import FilesystemBackend  # noqa: PLC0415
     from langchain.agents.structured_output import ToolStrategy  # noqa: PLC0415
