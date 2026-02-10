@@ -34,6 +34,7 @@ class AgenticMessageType(StrEnum):
     TOOL_CALL = "tool_call"
     TOOL_RESULT = "tool_result"
     RESULT = "result"
+    USAGE = "usage"
 
 
 class AgenticMessage(BaseModel):
@@ -63,6 +64,7 @@ class AgenticMessage(BaseModel):
     session_id: str | None = None
     is_error: bool = False
     model: str | None = None
+    usage: DriverUsage | None = None
 
     def _build_message(self) -> str:
         """Build a human-readable message from the agentic message content.
