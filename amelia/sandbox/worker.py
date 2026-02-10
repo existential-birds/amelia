@@ -170,6 +170,7 @@ async def _run_agentic(args: argparse.Namespace) -> None:
     total_input = 0
     total_output = 0
     num_turns = 0
+    chunk: dict[str, Any] = {}  # Initialize to avoid NameError if astream yields nothing
 
     async for chunk in agent.astream(
         {"messages": [HumanMessage(content=prompt)]},
