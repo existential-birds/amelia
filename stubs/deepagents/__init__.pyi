@@ -12,5 +12,6 @@ def create_deep_agent(
     system_prompt: str = ...,
     backend: BackendProtocol | None = ...,
     checkpointer: BaseCheckpointSaver | None = ...,
+    response_format: Any = ...,
     **kwargs: Any,
 ) -> Any: ...

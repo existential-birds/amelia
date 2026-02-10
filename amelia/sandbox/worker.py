@@ -16,7 +16,7 @@ import importlib
 import os
 import sys
 import time
-from typing import Any, TextIO
+from typing import Any, TextIO, cast
 
 from loguru import logger
 from pydantic import BaseModel
@@ -70,7 +70,7 @@ def _import_schema(schema_path: str) -> type[BaseModel]:
         )
     module_path, class_name = schema_path.rsplit(":", 1)
     module = importlib.import_module(module_path)
-    return getattr(module, class_name)
+    return cast(type[BaseModel], getattr(module, class_name))
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -157,12 +157,12 @@ async def _run_agentic(args: argparse.Namespace) -> None:
     base_url = proxy_url if proxy_url else None
 
     chat_model = _create_worker_chat_model(args.model, base_url=base_url)
-    backend = FilesystemBackend(cwd=args.cwd)
+    backend = FilesystemBackend(root_dir=args.cwd)
 
     agent = create_deep_agent(
-        chat_model=chat_model,
+        model=chat_model,
+        system_prompt=args.instructions or "",
         backend=backend,
-        instructions=args.instructions,
     )
 
     start_time = time.monotonic()
@@ -275,26 +275,28 @@ async def _run_generate(args: argparse.Namespace) -> None:
 
     if schema:
         agent = create_deep_agent(
-            chat_model=chat_model,
-            backend=FilesystemBackend(cwd="/tmp"),
-            tool_strategy=ToolStrategy(schema=schema),
+            model=chat_model,
+            backend=FilesystemBackend(root_dir="/tmp"),
+            response_format=ToolStrategy(schema=schema),
         )
         result = await agent.ainvoke({"messages": [HumanMessage(content=prompt)]})
-        messages = result.get("messages", [])
 
-        # Extract structured output from the last AI message
-        output = None
-        for msg in reversed(messages):
-            if hasattr(msg, "content") and msg.content:
-                try:
-                    output = schema.model_validate_json(
-                        msg.content if isinstance(msg.content, str) else str(msg.content)
-                    )
-                except Exception:
-                    output = msg.content
-                break
-
-        content = output.model_dump_json() if isinstance(output, BaseModel) else str(output)
+        # Extract structured output — prefer structured_response key
+        structured = result.get("structured_response")
+        if structured is not None:
+            content = structured.model_dump_json() if isinstance(structured, BaseModel) else str(structured)
+        else:
+            # Fallback: extract from last AI message
+            content = ""
+            for msg in reversed(result.get("messages", [])):
+                if hasattr(msg, "content") and msg.content:
+                    raw = msg.content if isinstance(msg.content, str) else str(msg.content)
+                    try:
+                        parsed = schema.model_validate_json(raw)
+                        content = parsed.model_dump_json()
+                    except Exception:
+                        content = raw
+                    break
     else:
         result = await chat_model.ainvoke(prompt)
         content = result.content if hasattr(result, "content") else str(result)
