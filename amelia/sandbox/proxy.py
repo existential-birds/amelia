@@ -7,9 +7,6 @@ X-Amelia-Profile header to resolve which upstream provider to use.
 
 from __future__ import annotations
 
-import atexit
-import sys
-import warnings
 from collections.abc import Awaitable, Callable, Coroutine
 from typing import Any, NamedTuple
 
@@ -124,37 +121,9 @@ def create_proxy_router(
     http_client = httpx.AsyncClient(
         timeout=httpx.Timeout(timeout=PROXY_CONNECT_TIMEOUT, read=PROXY_READ_TIMEOUT)
     )
-    _cleanup_called = False
-
-    def _sync_cleanup() -> None:
-        """Warn if cleanup was never called (potential resource leak).
-
-        Uses print() instead of loguru to avoid noisy "Logging error" tracebacks
-        when stderr is already closed during interpreter shutdown.
-        """
-        nonlocal _cleanup_called
-        try:
-            if not _cleanup_called and not http_client.is_closed:
-                msg = (
-                    "ProxyRouter cleanup() was never called - HTTP client may not be "
-                    "properly closed. Register cleanup in app shutdown events."
-                )
-                # Bypass loguru — its internal error handler prints noisy tracebacks
-                # when stderr is closed during interpreter shutdown.
-                print(f"WARNING: {msg}", file=sys.stderr)
-                warnings.warn(msg, ResourceWarning, stacklevel=1)
-        except Exception:
-            # During interpreter shutdown, I/O and other resources may be
-            # unavailable. Best-effort warning — silently ignore any failure.
-            pass
-
-    atexit.register(_sync_cleanup)
 
     async def cleanup() -> None:
         """Close the HTTP client."""
-        nonlocal _cleanup_called
-        _cleanup_called = True
-        atexit.unregister(_sync_cleanup)
         await http_client.aclose()
 
     async def forward_request(
