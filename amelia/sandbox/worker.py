@@ -170,7 +170,6 @@ async def _run_agentic(args: argparse.Namespace) -> None:
     total_input = 0
     total_output = 0
     num_turns = 0
-    chunk: dict[str, Any] = {}  # Initialize to avoid NameError if astream yields nothing
 
     async for chunk in agent.astream(
         {"messages": [HumanMessage(content=prompt)]},
@@ -264,7 +263,6 @@ async def _run_generate(args: argparse.Namespace) -> None:
     Args:
         args: Parsed CLI arguments.
     """
-    # TODO: langchain.agents.structured_output.ToolStrategy - migrate to langchain_core when available
     from deepagents import create_deep_agent  # noqa: PLC0415
     from deepagents.backends import FilesystemBackend  # noqa: PLC0415
     from langchain.agents.structured_output import ToolStrategy  # noqa: PLC0415
