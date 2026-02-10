@@ -8,6 +8,7 @@ X-Amelia-Profile header to resolve which upstream provider to use.
 from __future__ import annotations
 
 import atexit
+import sys
 import warnings
 from collections.abc import Awaitable, Callable, Coroutine
 from typing import Any, NamedTuple
@@ -126,7 +127,11 @@ def create_proxy_router(
     _cleanup_called = False
 
     def _sync_cleanup() -> None:
-        """Warn if cleanup was never called (potential resource leak)."""
+        """Warn if cleanup was never called (potential resource leak).
+
+        Uses print() instead of loguru to avoid noisy "Logging error" tracebacks
+        when stderr is already closed during interpreter shutdown.
+        """
         nonlocal _cleanup_called
         try:
             if not _cleanup_called and not http_client.is_closed:
@@ -134,13 +139,13 @@ def create_proxy_router(
                     "ProxyRouter cleanup() was never called - HTTP client may not be "
                     "properly closed. Register cleanup in app shutdown events."
                 )
-                logger.warning(msg)
+                # Bypass loguru — its internal error handler prints noisy tracebacks
+                # when stderr is closed during interpreter shutdown.
+                print(f"WARNING: {msg}", file=sys.stderr)
                 warnings.warn(msg, ResourceWarning, stacklevel=1)
-        except (TypeError, AttributeError):
-            # During interpreter shutdown, accessing http_client state may fail
-            # if the event loop or other resources are already torn down.
-            # TypeError: method became None; AttributeError: object partially collected.
-            # This is expected behavior during normal shutdown - silently ignore.
+        except Exception:
+            # During interpreter shutdown, I/O and other resources may be
+            # unavailable. Best-effort warning — silently ignore any failure.
             pass
 
     atexit.register(_sync_cleanup)

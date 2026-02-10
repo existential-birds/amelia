@@ -26,8 +26,8 @@ class _AsyncIteratorMock:
         return self._empty_iter()
 
     async def _empty_iter(self) -> AsyncIterator[str]:
-        return
-        yield  # noqa: RET504 — makes this an async generator
+        if False:
+            yield  # pragma: no cover — makes this an async generator
 
 
 class TestWorktreeManager:

@@ -52,8 +52,9 @@ class WorktreeManager:
             List of stdout lines.
         """
         lines: list[str] = []
-        # exec_stream is an async generator; mypy misreads Protocol async generators
         stream = self._provider.exec_stream(command, cwd=cwd, env=env)
+        # TODO(mypy): Remove type: ignore when python/mypy#17844 is fixed.
+        # Mypy doesn't recognize AsyncIterator from Protocol methods as iterable.
         async for line in stream:  # type: ignore[attr-defined]
             lines.append(line)
         return lines

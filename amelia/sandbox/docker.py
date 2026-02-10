@@ -88,7 +88,8 @@ class DockerSandboxProvider:
             await proc.stdin.drain()
             proc.stdin.close()
 
-        assert proc.stdout is not None  # noqa: S101
+        if proc.stdout is None:
+            raise RuntimeError("Failed to capture stdout from docker exec")
         async for raw_line in proc.stdout:
             yield raw_line.decode().rstrip("\n")
 

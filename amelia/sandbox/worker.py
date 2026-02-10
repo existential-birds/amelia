@@ -170,6 +170,7 @@ async def _run_agentic(args: argparse.Namespace) -> None:
     total_input = 0
     total_output = 0
     num_turns = 0
+    chunk: dict[str, Any] = {}  # Initialize to avoid UnboundLocalError if agent yields nothing
 
     async for chunk in agent.astream(
         {"messages": [HumanMessage(content=prompt)]},
@@ -303,7 +304,7 @@ async def _run_generate(args: argparse.Namespace) -> None:
                         content = raw
                     break
     else:
-        result = await chat_model.ainvoke(prompt)
+        result = await chat_model.ainvoke([HumanMessage(content=prompt)])
         content = result.content if hasattr(result, "content") else str(result)
 
     # Track usage
