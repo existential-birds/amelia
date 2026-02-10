@@ -20,19 +20,19 @@ async def _async_iter[T](items: list[T]) -> AsyncIterator[T]:
 class TestDockerProviderProtocol:
     """DockerSandboxProvider satisfies SandboxProvider protocol."""
 
-    def test_satisfies_protocol(self):
+    def test_satisfies_protocol(self) -> None:
         provider = DockerSandboxProvider(profile_name="test")
         assert isinstance(provider, SandboxProvider)
 
-    def test_container_name(self):
+    def test_container_name(self) -> None:
         provider = DockerSandboxProvider(profile_name="work")
         assert provider.container_name == "amelia-sandbox-work"
 
-    def test_default_image(self):
+    def test_default_image(self) -> None:
         provider = DockerSandboxProvider(profile_name="test")
         assert provider.image == "amelia-sandbox:latest"
 
-    def test_custom_image(self):
+    def test_custom_image(self) -> None:
         provider = DockerSandboxProvider(profile_name="test", image="custom:v1")
         assert provider.image == "custom:v1"
 
@@ -41,10 +41,10 @@ class TestHealthCheck:
     """Tests for health_check() — inspects container state."""
 
     @pytest.fixture
-    def provider(self):
+    def provider(self) -> DockerSandboxProvider:
         return DockerSandboxProvider(profile_name="test")
 
-    async def test_healthy_container(self, provider):
+    async def test_healthy_container(self, provider: DockerSandboxProvider) -> None:
         mock_proc = AsyncMock()
         mock_proc.communicate.return_value = (b"true\n", b"")
         mock_proc.returncode = 0
@@ -57,7 +57,7 @@ class TestHealthCheck:
         assert "docker" in args
         assert "inspect" in args
 
-    async def test_unhealthy_container(self, provider):
+    async def test_unhealthy_container(self, provider: DockerSandboxProvider) -> None:
         mock_proc = AsyncMock()
         mock_proc.communicate.return_value = (b"false\n", b"")
         mock_proc.returncode = 0
@@ -67,7 +67,7 @@ class TestHealthCheck:
 
         assert result is False
 
-    async def test_missing_container(self, provider):
+    async def test_missing_container(self, provider: DockerSandboxProvider) -> None:
         mock_proc = AsyncMock()
         mock_proc.communicate.return_value = (b"", b"No such object")
         mock_proc.returncode = 1
@@ -82,10 +82,10 @@ class TestExecStream:
     """Tests for exec_stream() — runs commands via docker exec."""
 
     @pytest.fixture
-    def provider(self):
+    def provider(self) -> DockerSandboxProvider:
         return DockerSandboxProvider(profile_name="test")
 
-    async def test_streams_stdout_lines(self, provider):
+    async def test_streams_stdout_lines(self, provider: DockerSandboxProvider) -> None:
         lines = [b"line1\n", b"line2\n", b"line3\n"]
 
         mock_proc = AsyncMock()
@@ -98,7 +98,7 @@ class TestExecStream:
 
         assert result == ["line1", "line2", "line3"]
 
-    async def test_passes_cwd(self, provider):
+    async def test_passes_cwd(self, provider: DockerSandboxProvider) -> None:
         mock_proc = AsyncMock()
         mock_proc.stdout.__aiter__ = lambda self: _async_iter([])
         mock_proc.wait = AsyncMock(return_value=0)
@@ -113,7 +113,7 @@ class TestExecStream:
         assert "--workdir" in args
         assert "/workspace/worktrees/issue-1" in args
 
-    async def test_nonzero_exit_raises(self, provider):
+    async def test_nonzero_exit_raises(self, provider: DockerSandboxProvider) -> None:
         mock_proc = AsyncMock()
         mock_proc.stdout.__aiter__ = lambda self: _async_iter([b"output\n"])
         mock_proc.wait = AsyncMock(return_value=1)
@@ -128,7 +128,7 @@ class TestExecStream:
 class TestTeardown:
     """Tests for teardown() — removes the container."""
 
-    async def test_removes_container(self):
+    async def test_removes_container(self) -> None:
         provider = DockerSandboxProvider(profile_name="test")
         mock_proc = AsyncMock()
         mock_proc.communicate.return_value = (b"", b"")
@@ -147,40 +147,53 @@ class TestTeardown:
 class TestEnsureRunning:
     """Tests for ensure_running() — starts container if not healthy."""
 
-    async def test_noop_when_healthy(self):
+    async def test_noop_when_healthy(self, monkeypatch: pytest.MonkeyPatch) -> None:
         provider = DockerSandboxProvider(profile_name="test")
-        provider.health_check = AsyncMock(return_value=True)
-        provider._build_image = AsyncMock()
-        provider._start_container = AsyncMock()
+        mock_health_check = AsyncMock(return_value=True)
+        mock_build_image = AsyncMock()
+        mock_start_container = AsyncMock()
+        monkeypatch.setattr(provider, "health_check", mock_health_check)
+        monkeypatch.setattr(provider, "_build_image", mock_build_image)
+        monkeypatch.setattr(provider, "_start_container", mock_start_container)
 
         await provider.ensure_running()
 
-        provider.health_check.assert_awaited_once()
-        provider._build_image.assert_not_awaited()
-        provider._start_container.assert_not_awaited()
+        mock_health_check.assert_awaited_once()
+        mock_build_image.assert_not_awaited()
+        mock_start_container.assert_not_awaited()
 
-    async def test_builds_and_starts_when_not_healthy(self):
+    async def test_builds_and_starts_when_not_healthy(self, monkeypatch: pytest.MonkeyPatch) -> None:
         provider = DockerSandboxProvider(profile_name="test")
-        provider.health_check = AsyncMock(return_value=False)
-        provider._image_exists = AsyncMock(return_value=False)
-        provider._build_image = AsyncMock()
-        provider._start_container = AsyncMock()
-        provider._wait_for_ready = AsyncMock()
+        mock_health_check = AsyncMock(return_value=False)
+        mock_image_exists = AsyncMock(return_value=False)
+        mock_build_image = AsyncMock()
+        mock_start_container = AsyncMock()
+        mock_wait_for_ready = AsyncMock()
+        monkeypatch.setattr(provider, "health_check", mock_health_check)
+        monkeypatch.setattr(provider, "_image_exists", mock_image_exists)
+        monkeypatch.setattr(provider, "_build_image", mock_build_image)
+        monkeypatch.setattr(provider, "_start_container", mock_start_container)
+        monkeypatch.setattr(provider, "_wait_for_ready", mock_wait_for_ready)
 
         await provider.ensure_running()
 
-        provider._build_image.assert_awaited_once()
-        provider._start_container.assert_awaited_once()
+        mock_build_image.assert_awaited_once()
+        mock_start_container.assert_awaited_once()
 
-    async def test_skips_build_when_image_exists(self):
+    async def test_skips_build_when_image_exists(self, monkeypatch: pytest.MonkeyPatch) -> None:
         provider = DockerSandboxProvider(profile_name="test")
-        provider.health_check = AsyncMock(return_value=False)
-        provider._image_exists = AsyncMock(return_value=True)
-        provider._build_image = AsyncMock()
-        provider._start_container = AsyncMock()
-        provider._wait_for_ready = AsyncMock()
+        mock_health_check = AsyncMock(return_value=False)
+        mock_image_exists = AsyncMock(return_value=True)
+        mock_build_image = AsyncMock()
+        mock_start_container = AsyncMock()
+        mock_wait_for_ready = AsyncMock()
+        monkeypatch.setattr(provider, "health_check", mock_health_check)
+        monkeypatch.setattr(provider, "_image_exists", mock_image_exists)
+        monkeypatch.setattr(provider, "_build_image", mock_build_image)
+        monkeypatch.setattr(provider, "_start_container", mock_start_container)
+        monkeypatch.setattr(provider, "_wait_for_ready", mock_wait_for_ready)
 
         await provider.ensure_running()
 
-        provider._build_image.assert_not_awaited()
-        provider._start_container.assert_awaited_once()
+        mock_build_image.assert_not_awaited()
+        mock_start_container.assert_awaited_once()

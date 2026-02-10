@@ -13,7 +13,7 @@ from amelia.drivers.base import AgenticMessage, AgenticMessageType, DriverUsage
 class TestWorkerEmitLine:
     """Tests for the JSON-line emission helper."""
 
-    def test_emit_line_writes_json_to_stdout(self):
+    def test_emit_line_writes_json_to_stdout(self) -> None:
         from amelia.sandbox.worker import _emit_line
 
         buf = StringIO()
@@ -25,7 +25,7 @@ class TestWorkerEmitLine:
         assert parsed["type"] == "result"
         assert parsed["content"] == "done"
 
-    def test_emit_line_one_line_per_message(self):
+    def test_emit_line_one_line_per_message(self) -> None:
         from amelia.sandbox.worker import _emit_line
 
         buf = StringIO()
@@ -39,7 +39,7 @@ class TestWorkerEmitLine:
 class TestWorkerParseArgs:
     """Tests for CLI argument parsing."""
 
-    def test_agentic_mode(self):
+    def test_agentic_mode(self) -> None:
         from amelia.sandbox.worker import _parse_args
 
         args = _parse_args([
@@ -53,7 +53,7 @@ class TestWorkerParseArgs:
         assert args.cwd == "/workspace/worktrees/issue-1"
         assert args.model == "anthropic/claude-sonnet-4-5"
 
-    def test_generate_mode_with_schema(self):
+    def test_generate_mode_with_schema(self) -> None:
         from amelia.sandbox.worker import _parse_args
 
         args = _parse_args([
@@ -65,7 +65,7 @@ class TestWorkerParseArgs:
         assert args.mode == "generate"
         assert args.schema == "amelia.agents.schemas.evaluator:EvaluationOutput"
 
-    def test_agentic_mode_with_instructions(self):
+    def test_agentic_mode_with_instructions(self) -> None:
         from amelia.sandbox.worker import _parse_args
 
         args = _parse_args([
@@ -81,7 +81,7 @@ class TestWorkerParseArgs:
 class TestWorkerSchemaImport:
     """Tests for dynamic schema class import."""
 
-    def test_import_known_schema(self):
+    def test_import_known_schema(self) -> None:
         from amelia.sandbox.worker import _import_schema
 
         cls = _import_schema("amelia.agents.schemas.evaluator:EvaluationOutput")
@@ -89,13 +89,13 @@ class TestWorkerSchemaImport:
 
         assert cls is EvaluationOutput
 
-    def test_import_invalid_format_raises(self):
+    def test_import_invalid_format_raises(self) -> None:
         from amelia.sandbox.worker import _import_schema
 
         with pytest.raises(ValueError, match="must be 'module:ClassName'"):
             _import_schema("no_colon_here")
 
-    def test_import_nonexistent_module_raises(self):
+    def test_import_nonexistent_module_raises(self) -> None:
         from amelia.sandbox.worker import _import_schema
 
         with pytest.raises(ImportError):
@@ -105,7 +105,7 @@ class TestWorkerSchemaImport:
 class TestWorkerUsageEmission:
     """Tests for final USAGE message emission."""
 
-    def test_emit_usage(self):
+    def test_emit_usage(self) -> None:
         from amelia.sandbox.worker import _emit_usage
 
         buf = StringIO()

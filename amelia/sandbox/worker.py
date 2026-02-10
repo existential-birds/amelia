@@ -15,11 +15,12 @@ import asyncio
 import importlib
 import os
 import sys
+import tempfile
 import time
 from typing import Any, TextIO, cast
 
 from loguru import logger
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from amelia.drivers.base import (
     AgenticMessage,
@@ -113,7 +114,7 @@ def _read_prompt(path: str) -> str:
     Returns:
         Prompt text content.
     """
-    with open(path) as f:
+    with open(path, encoding="utf-8") as f:
         return f.read()
 
 
@@ -276,7 +277,7 @@ async def _run_generate(args: argparse.Namespace) -> None:
     if schema:
         agent = create_deep_agent(
             model=chat_model,
-            backend=FilesystemBackend(root_dir="/tmp"),
+            backend=FilesystemBackend(root_dir=tempfile.gettempdir()),
             response_format=ToolStrategy(schema=schema),
         )
         result = await agent.ainvoke({"messages": [HumanMessage(content=prompt)]})
@@ -294,7 +295,7 @@ async def _run_generate(args: argparse.Namespace) -> None:
                     try:
                         parsed = schema.model_validate_json(raw)
                         content = parsed.model_dump_json()
-                    except Exception:
+                    except ValidationError:
                         content = raw
                     break
     else:

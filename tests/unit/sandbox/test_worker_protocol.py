@@ -12,17 +12,17 @@ from amelia.drivers.base import (
 class TestUsageMessageType:
     """Tests for USAGE enum value and AgenticMessage.usage field."""
 
-    def test_usage_enum_value_exists(self):
-        assert AgenticMessageType.USAGE == "usage"
+    def test_usage_enum_value_exists(self) -> None:
+        assert AgenticMessageType.USAGE.value == "usage"
 
-    def test_usage_enum_is_valid_string(self):
+    def test_usage_enum_is_valid_string(self) -> None:
         assert AgenticMessageType("usage") == AgenticMessageType.USAGE
 
-    def test_agentic_message_usage_field_default_none(self):
+    def test_agentic_message_usage_field_default_none(self) -> None:
         msg = AgenticMessage(type=AgenticMessageType.RESULT, content="done")
         assert msg.usage is None
 
-    def test_agentic_message_with_usage(self):
+    def test_agentic_message_with_usage(self) -> None:
         usage = DriverUsage(input_tokens=100, output_tokens=50, model="test-model")
         msg = AgenticMessage(
             type=AgenticMessageType.USAGE,
@@ -33,7 +33,7 @@ class TestUsageMessageType:
         assert msg.usage.input_tokens == 100
         assert msg.usage.output_tokens == 50
 
-    def test_usage_message_json_roundtrip(self):
+    def test_usage_message_json_roundtrip(self) -> None:
         usage = DriverUsage(
             input_tokens=100,
             output_tokens=50,
@@ -46,7 +46,7 @@ class TestUsageMessageType:
         assert restored.type == AgenticMessageType.USAGE
         assert restored.usage == usage
 
-    def test_usage_message_not_in_workflow_event_mapping(self):
+    def test_usage_message_not_in_workflow_event_mapping(self) -> None:
         """USAGE messages should raise KeyError in to_workflow_event — they are
         consumed by the driver, never reaching the event bus."""
         msg = AgenticMessage(type=AgenticMessageType.USAGE)

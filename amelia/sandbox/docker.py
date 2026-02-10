@@ -7,6 +7,7 @@ interactions use asyncio.create_subprocess_exec — no Docker SDK dependency.
 from __future__ import annotations
 
 import asyncio
+import time
 from collections.abc import AsyncIterator
 from pathlib import Path
 
@@ -188,8 +189,8 @@ class DockerSandboxProvider:
         Raises:
             TimeoutError: If container doesn't become healthy in time.
         """
-        deadline = asyncio.get_event_loop().time() + timeout
-        while asyncio.get_event_loop().time() < deadline:
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
             if await self.health_check():
                 return
             await asyncio.sleep(0.5)

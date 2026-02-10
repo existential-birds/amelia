@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 from amelia.sandbox.proxy import ProviderConfig, create_proxy_router
 
 
-@pytest.fixture()
+@pytest.fixture
 def proxy_app(monkeypatch: pytest.MonkeyPatch) -> FastAPI:
     """Create a test app with the proxy router mounted."""
     monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test-key")
@@ -38,7 +38,7 @@ def proxy_app(monkeypatch: pytest.MonkeyPatch) -> FastAPI:
     return app
 
 
-@pytest.fixture()
+@pytest.fixture
 def client(proxy_app: FastAPI) -> TestClient:
     return TestClient(proxy_app)
 
