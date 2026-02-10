@@ -16,7 +16,7 @@ import importlib
 import os
 import sys
 import time
-from typing import IO, Any, TextIO
+from typing import Any, TextIO
 
 from loguru import logger
 from pydantic import BaseModel
@@ -127,7 +127,7 @@ def _create_worker_chat_model(model: str, base_url: str | None = None) -> Any:
     Returns:
         Configured LangChain chat model.
     """
-    from langchain.chat_models import init_chat_model
+    from langchain.chat_models import init_chat_model  # noqa: PLC0415
 
     if base_url:
         # Route through proxy — use openai-compatible interface
@@ -146,11 +146,11 @@ async def _run_agentic(args: argparse.Namespace) -> None:
     Args:
         args: Parsed CLI arguments.
     """
-    from deepagents import create_deep_agent
-    from deepagents.backends import FilesystemBackend
-    from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+    from deepagents import create_deep_agent  # noqa: PLC0415
+    from deepagents.backends import FilesystemBackend  # noqa: PLC0415
+    from langchain_core.messages import AIMessage, HumanMessage, ToolMessage  # noqa: PLC0415
 
-    from amelia.core.constants import normalize_tool_name
+    from amelia.core.constants import normalize_tool_name  # noqa: PLC0415
 
     prompt = _read_prompt(args.prompt_file)
     proxy_url = os.environ.get("LLM_PROXY_URL")
@@ -258,6 +258,11 @@ async def _run_generate(args: argparse.Namespace) -> None:
     Args:
         args: Parsed CLI arguments.
     """
+    from deepagents import create_deep_agent  # noqa: PLC0415
+    from deepagents.backends import FilesystemBackend  # noqa: PLC0415
+    from langchain.agents.structured_output import ToolStrategy  # noqa: PLC0415
+    from langchain_core.messages import HumanMessage  # noqa: PLC0415
+
     prompt = _read_prompt(args.prompt_file)
     proxy_url = os.environ.get("LLM_PROXY_URL")
     base_url = proxy_url if proxy_url else None
@@ -269,9 +274,27 @@ async def _run_generate(args: argparse.Namespace) -> None:
     start_time = time.monotonic()
 
     if schema:
-        structured_model = chat_model.with_structured_output(schema)
-        result = await structured_model.ainvoke(prompt)
-        content = result.model_dump_json() if isinstance(result, BaseModel) else str(result)
+        agent = create_deep_agent(
+            chat_model=chat_model,
+            backend=FilesystemBackend(cwd="/tmp"),
+            tool_strategy=ToolStrategy(schema=schema),
+        )
+        result = await agent.ainvoke({"messages": [HumanMessage(content=prompt)]})
+        messages = result.get("messages", [])
+
+        # Extract structured output from the last AI message
+        output = None
+        for msg in reversed(messages):
+            if hasattr(msg, "content") and msg.content:
+                try:
+                    output = schema.model_validate_json(
+                        msg.content if isinstance(msg.content, str) else str(msg.content)
+                    )
+                except Exception:
+                    output = msg.content
+                break
+
+        content = output.model_dump_json() if isinstance(output, BaseModel) else str(output)
     else:
         result = await chat_model.ainvoke(prompt)
         content = result.content if hasattr(result, "content") else str(result)
@@ -279,7 +302,7 @@ async def _run_generate(args: argparse.Namespace) -> None:
     # Track usage
     total_input = 0
     total_output = 0
-    for msg in [result] if not isinstance(result, dict) else result.get("messages", []):
+    for msg in result.get("messages", []) if isinstance(result, dict) else [result]:
         if hasattr(msg, "usage_metadata") and msg.usage_metadata:
             total_input += msg.usage_metadata.get("input_tokens", 0)
             total_output += msg.usage_metadata.get("output_tokens", 0)

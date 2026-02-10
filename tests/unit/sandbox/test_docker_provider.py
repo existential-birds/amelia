@@ -2,20 +2,16 @@
 
 from __future__ import annotations
 
-import asyncio
 from collections.abc import AsyncIterator
-from typing import TypeVar
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from amelia.sandbox.docker import DockerSandboxProvider
 from amelia.sandbox.provider import SandboxProvider
 
-T = TypeVar("T")
 
-
-async def _async_iter(items: list[T]) -> AsyncIterator[T]:
+async def _async_iter[T](items: list[T]) -> AsyncIterator[T]:
     """Convert a list to an async iterator."""
     for item in items:
         yield item
@@ -125,9 +121,8 @@ class TestExecStream:
         mock_proc.stderr = AsyncMock()
         mock_proc.stderr.read = AsyncMock(return_value=b"error details")
 
-        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
-            with pytest.raises(RuntimeError, match="exited with code 1"):
-                _ = [line async for line in provider.exec_stream(["false"])]
+        with patch("asyncio.create_subprocess_exec", return_value=mock_proc), pytest.raises(RuntimeError, match="exited with code 1"):
+            _ = [line async for line in provider.exec_stream(["false"])]
 
 
 class TestTeardown:

@@ -1,7 +1,6 @@
 """Tests for the USAGE message type added to the worker protocol."""
 
 import pytest
-from pydantic import ValidationError
 
 from amelia.drivers.base import (
     AgenticMessage,
