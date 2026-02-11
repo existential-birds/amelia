@@ -7,6 +7,7 @@ interactions use asyncio.create_subprocess_exec — no Docker SDK dependency.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import time
 from collections.abc import AsyncIterator
 from pathlib import Path
@@ -100,11 +101,18 @@ class DockerSandboxProvider:
 
         drain_task = asyncio.create_task(_drain_stderr())
 
-        async for raw_line in proc.stdout:
-            yield raw_line.decode().rstrip("\n")
+        try:
+            async for raw_line in proc.stdout:
+                yield raw_line.decode().rstrip("\n")
+        finally:
+            if proc.returncode is None:
+                proc.terminate()
+            if not drain_task.done():
+                drain_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await drain_task
+            await proc.wait()
 
-        await drain_task
-        await proc.wait()
         if proc.returncode != 0:
             stderr_text = b"".join(stderr_chunks).decode().strip()
             raise RuntimeError(
