@@ -163,22 +163,57 @@ class DockerSandboxProvider:
         await proc.communicate()
         return proc.returncode == 0
 
-    async def _build_image(self) -> None:
-        """Build the sandbox Docker image from the in-repo Dockerfile."""
-        dockerfile_path = Path(__file__).parent / "Dockerfile"
-        # Context must be repo root since Dockerfile uses COPY . and COPY amelia/
-        repo_root = Path(__file__).parent.parent.parent
-        logger.info("Building sandbox image", image=self.image)
+    async def _ensure_base_image(self) -> None:
+        """Build the ToB devcontainer base image if not present."""
+        base_image = "tob-claude-devcontainer:latest"
         proc = await asyncio.create_subprocess_exec(
-            "docker", "build", "-f", str(dockerfile_path), "-t", self.image, str(repo_root),
+            "docker", "image", "inspect", base_image,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        _, stderr = await proc.communicate()
-        if proc.returncode != 0:
-            raise RuntimeError(
-                f"Failed to build sandbox image: {stderr.decode().strip()}"
-            )
+        await proc.communicate()
+        if proc.returncode == 0:
+            return
+
+        logger.info(
+            "Building base image (first run, may take 5-15 minutes)",
+            image=base_image,
+        )
+        script = Path(__file__).parent.parent.parent / "scripts" / "build-sandbox-base.sh"
+        proc = await asyncio.create_subprocess_exec(
+            "bash", str(script), "--force",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+        assert proc.stdout is not None
+        async for line in proc.stdout:
+            text = line.decode().rstrip()
+            if text:
+                logger.debug(text, source="sandbox-base-build")
+        returncode = await proc.wait()
+        if returncode != 0:
+            raise RuntimeError("Failed to build base image (see logs above)")
+
+    async def _build_image(self) -> None:
+        """Build the sandbox Docker image from the in-repo Dockerfile."""
+        await self._ensure_base_image()
+        dockerfile_path = Path(__file__).parent / "Dockerfile"
+        # Context must be repo root since Dockerfile uses COPY . and COPY amelia/
+        repo_root = Path(__file__).parent.parent.parent
+        logger.info("Building sandbox overlay image", image=self.image)
+        proc = await asyncio.create_subprocess_exec(
+            "docker", "build", "-f", str(dockerfile_path), "-t", self.image, str(repo_root),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+        assert proc.stdout is not None
+        async for line in proc.stdout:
+            text = line.decode().rstrip()
+            if text:
+                logger.debug(text, source="sandbox-overlay-build")
+        returncode = await proc.wait()
+        if returncode != 0:
+            raise RuntimeError("Failed to build sandbox image (see logs above)")
 
     async def _start_container(self) -> None:
         """Start the container with sleep infinity.

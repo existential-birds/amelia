@@ -1,6 +1,7 @@
 # Amelia sandbox container for isolated agent execution.
-# Based on Trail of Bits claude-code-devcontainer with Amelia worker overlay.
-FROM ghcr.io/trailofbits/claude-code-devcontainer:latest
+# Base image built from: https://github.com/trailofbits/claude-code-devcontainer
+# Build base first: ./scripts/build-sandbox-base.sh
+FROM tob-claude-devcontainer:latest
 
 # Install amelia package (code only, no transitive deps) and worker dependencies.
 # This gives the worker access to:
