@@ -119,8 +119,15 @@ class DockerSandboxProvider:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        await proc.communicate()
-        logger.info("Container removed", container=self.container_name)
+        _, stderr = await proc.communicate()
+        if proc.returncode != 0:
+            logger.warning(
+                "Failed to remove container",
+                container=self.container_name,
+                error=stderr.decode().strip(),
+            )
+        else:
+            logger.info("Container removed", container=self.container_name)
 
     async def health_check(self) -> bool:
         """Check if the container is running.
