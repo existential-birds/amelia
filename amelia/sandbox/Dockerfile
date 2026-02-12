@@ -11,8 +11,8 @@ FROM tob-claude-devcontainer:latest
 # Heavy deps (langgraph, fastapi, asyncpg, langchain) are NOT installed.
 COPY . /tmp/amelia/
 RUN cd /tmp/amelia \
-    && uv pip install --system --no-deps . \
-    && uv pip install --system deepagents pydantic loguru httpx \
+    && uv pip install --system --break-system-packages --no-deps . \
+    && uv pip install --system --break-system-packages deepagents pydantic loguru httpx \
     && rm -rf /tmp/amelia
 
 # Install credential helper
