@@ -56,7 +56,7 @@ def test_developer_init_passes_sandbox_config() -> None:
 
     with patch("amelia.agents.developer.get_driver") as mock_get_driver:
         mock_get_driver.return_value = MagicMock()
-        developer = Developer(config)
+        Developer(config)
 
         mock_get_driver.assert_called_once_with(
             "api",
