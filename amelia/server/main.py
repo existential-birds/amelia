@@ -57,6 +57,7 @@ from amelia.drivers.factory import (
 from amelia.logging import configure_logging, log_server_startup
 from amelia.pipelines.implementation.state import rebuild_implementation_state
 from amelia.sandbox.proxy import ProviderConfig, create_proxy_router
+from amelia.sandbox.teardown import teardown_all_sandbox_containers
 from amelia.server.config import ServerConfig
 from amelia.server.database import ProfileRepository, SettingsRepository, WorkflowRepository
 from amelia.server.database.brainstorm_repository import BrainstormRepository
@@ -230,6 +231,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     await health_checker.stop()
     await lifecycle.shutdown()
+    await teardown_all_sandbox_containers()
     clear_orchestrator()
     await exit_stack.aclose()  # Also cleans up proxy HTTP client
 
