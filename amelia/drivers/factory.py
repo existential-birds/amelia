@@ -38,15 +38,13 @@ def get_driver(
                 "CLI driver containerization is not yet supported."
             )
         from amelia.sandbox.docker import DockerSandboxProvider  # noqa: PLC0415
-        from amelia.sandbox.driver import (  # type: ignore[import-untyped]  # noqa: PLC0415
-            ContainerDriver,
-        )
+        from amelia.sandbox.driver import ContainerDriver  # noqa: PLC0415
 
         provider = DockerSandboxProvider(
             profile_name=profile_name,
             image=sandbox_config.image,
         )
-        return ContainerDriver(model=model, provider=provider)  # type: ignore[no-any-return]
+        return ContainerDriver(model=model, provider=provider)
 
     # Accept legacy values for backward compatibility
     if driver_key in ("cli:claude", "cli"):

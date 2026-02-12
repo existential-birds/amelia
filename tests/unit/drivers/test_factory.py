@@ -32,8 +32,8 @@ class TestGetDriverContainerBranch:
 
     def test_container_mode_returns_container_driver(self) -> None:
         sandbox = SandboxConfig(mode="container", image="test:latest")
-        with patch("amelia.drivers.factory.DockerSandboxProvider") as mock_provider_cls, \
-             patch("amelia.drivers.factory.ContainerDriver") as mock_driver_cls:
+        with patch("amelia.sandbox.docker.DockerSandboxProvider") as mock_provider_cls, \
+             patch("amelia.sandbox.driver.ContainerDriver") as mock_driver_cls:
             mock_driver_cls.return_value = MagicMock()
             _driver = get_driver(
                 "api", model="test-model",
