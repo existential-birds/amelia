@@ -7,8 +7,6 @@ X-Amelia-Profile header to resolve which upstream provider to use.
 
 from __future__ import annotations
 
-import atexit
-import warnings
 from collections.abc import Awaitable, Callable, Coroutine
 from typing import Any, NamedTuple
 
@@ -123,33 +121,9 @@ def create_proxy_router(
     http_client = httpx.AsyncClient(
         timeout=httpx.Timeout(timeout=PROXY_CONNECT_TIMEOUT, read=PROXY_READ_TIMEOUT)
     )
-    _cleanup_called = False
-
-    def _sync_cleanup() -> None:
-        """Warn if cleanup was never called (potential resource leak)."""
-        nonlocal _cleanup_called
-        try:
-            if not _cleanup_called and not http_client.is_closed:
-                msg = (
-                    "ProxyRouter cleanup() was never called - HTTP client may not be "
-                    "properly closed. Register cleanup in app shutdown events."
-                )
-                logger.warning(msg)
-                warnings.warn(msg, ResourceWarning, stacklevel=1)
-        except (TypeError, AttributeError):
-            # During interpreter shutdown, accessing http_client state may fail
-            # if the event loop or other resources are already torn down.
-            # TypeError: method became None; AttributeError: object partially collected.
-            # This is expected behavior during normal shutdown - silently ignore.
-            pass
-
-    atexit.register(_sync_cleanup)
 
     async def cleanup() -> None:
         """Close the HTTP client."""
-        nonlocal _cleanup_called
-        _cleanup_called = True
-        atexit.unregister(_sync_cleanup)
         await http_client.aclose()
 
     async def forward_request(

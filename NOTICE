@@ -4,3 +4,9 @@ Copyright 2024-2025 Existential Birds LLC
 This product includes software developed by Existential Birds LLC.
 
 Licensed under the Apache License, Version 2.0.
+
+This product includes software from:
+  Trail of Bits claude-code-devcontainer
+  https://github.com/trailofbits/claude-code-devcontainer
+  Copyright 2025 Trail of Bits, Inc.
+  Licensed under the Apache License, Version 2.0.
