@@ -44,7 +44,7 @@ def get_driver(
             profile_name=profile_name,
             image=sandbox_config.image,
         )
-        return ContainerDriver(model=model, provider=provider)
+        return ContainerDriver(model=model, provider=provider)  # type: ignore[arg-type]
 
     # Accept legacy values for backward compatibility
     if driver_key in ("cli:claude", "cli"):

@@ -39,7 +39,7 @@ class ContainerDriver:
             Path to the temp file inside the container.
         """
         prompt_path = f"/tmp/prompt-{uuid4().hex[:12]}.txt"
-        async for _ in self._provider.exec_stream(  # type: ignore[union-attr]
+        async for _ in self._provider.exec_stream(  # type: ignore[attr-defined]
             ["tee", prompt_path],
             stdin=prompt.encode(),
         ):
@@ -52,7 +52,7 @@ class ContainerDriver:
         Args:
             prompt_path: Path to the temp file to remove.
         """
-        async for _ in self._provider.exec_stream(["rm", "-f", prompt_path]):
+        async for _ in self._provider.exec_stream(["rm", "-f", prompt_path]):  # type: ignore[attr-defined]
             pass
 
     def _parse_line(self, line: str) -> AgenticMessage:
@@ -122,7 +122,7 @@ class ContainerDriver:
             if instructions:
                 cmd.extend(["--instructions", instructions])
 
-            async for line in self._provider.exec_stream(cmd, cwd=cwd):
+            async for line in self._provider.exec_stream(cmd, cwd=cwd):  # type: ignore[attr-defined]
                 msg = self._parse_line(line)
                 if msg.type == AgenticMessageType.USAGE:
                     self._last_usage = msg.usage
@@ -175,7 +175,7 @@ class ContainerDriver:
                 cmd.extend(["--schema", f"{schema.__module__}:{schema.__name__}"])
 
             result_content: str | None = None
-            async for line in self._provider.exec_stream(cmd):
+            async for line in self._provider.exec_stream(cmd):  # type: ignore[attr-defined]
                 msg = self._parse_line(line)
                 if msg.type == AgenticMessageType.USAGE:
                     self._last_usage = msg.usage
