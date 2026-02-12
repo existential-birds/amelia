@@ -1,28 +1,58 @@
 from typing import Any
 
+from amelia.core.types import SandboxConfig
 from amelia.drivers.api import ApiDriver
 from amelia.drivers.base import DriverInterface
 from amelia.drivers.cli.claude import ClaudeCliDriver
 
 
-def get_driver(driver_key: str, **kwargs: Any) -> DriverInterface:
+def get_driver(
+    driver_key: str,
+    *,
+    model: str = "",
+    cwd: str | None = None,
+    sandbox_config: SandboxConfig | None = None,
+    profile_name: str = "default",
+    options: dict[str, Any] | None = None,
+) -> DriverInterface:
     """Get a concrete driver implementation.
 
     Args:
         driver_key: Driver identifier ("cli" or "api").
-        **kwargs: Driver-specific configuration passed to constructor.
+        model: LLM model identifier.
+        cwd: Working directory (used by CLI driver).
+        sandbox_config: Sandbox configuration for containerized execution.
+        profile_name: Profile name for container naming.
+        options: Driver-specific configuration options.
 
     Returns:
         Configured driver instance.
 
     Raises:
-        ValueError: If driver_key is not recognized.
+        ValueError: If driver_key is not recognized or incompatible with sandbox.
     """
+    if sandbox_config and sandbox_config.mode == "container":
+        if driver_key.startswith("cli"):
+            raise ValueError(
+                "Container sandbox requires API driver. "
+                "CLI driver containerization is not yet supported."
+            )
+        from amelia.sandbox.docker import DockerSandboxProvider  # noqa: PLC0415
+        from amelia.sandbox.driver import (  # type: ignore[import-untyped]  # noqa: PLC0415
+            ContainerDriver,
+        )
+
+        provider = DockerSandboxProvider(
+            profile_name=profile_name,
+            image=sandbox_config.image,
+        )
+        return ContainerDriver(model=model, provider=provider)  # type: ignore[no-any-return]
+
     # Accept legacy values for backward compatibility
     if driver_key in ("cli:claude", "cli"):
-        return ClaudeCliDriver(**kwargs)
+        return ClaudeCliDriver(model=model)
     elif driver_key in ("api:openrouter", "api"):
-        return ApiDriver(provider="openrouter", **kwargs)
+        return ApiDriver(provider="openrouter", model=model)
     else:
         raise ValueError(f"Unknown driver key: {driver_key}")
 
