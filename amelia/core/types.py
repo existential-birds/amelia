@@ -39,6 +39,24 @@ class TrackerType(StrEnum):
     NOOP = "noop"
 
 
+class SandboxConfig(BaseModel):
+    """Sandbox execution configuration for a profile.
+
+    Attributes:
+        mode: Sandbox mode ('none' = direct execution, 'container' = Docker sandbox).
+        image: Docker image for sandbox container.
+        network_allowlist_enabled: Whether to restrict outbound network.
+        network_allowed_hosts: Hosts allowed when network allowlist is enabled.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    mode: Literal["none", "container"] = "none"
+    image: str = "amelia-sandbox:latest"
+    network_allowlist_enabled: bool = False
+    network_allowed_hosts: list[str] = Field(default_factory=lambda: list(DEFAULT_NETWORK_ALLOWED_HOSTS))
+
+
 class AgentConfig(BaseModel):
     """Per-agent driver and model configuration.
 
@@ -46,6 +64,8 @@ class AgentConfig(BaseModel):
         driver: LLM driver type ('api' or 'cli').
         model: LLM model identifier.
         options: Agent-specific options (e.g., max_iterations).
+        sandbox: Sandbox execution config (injected by Profile.get_agent_config).
+        profile_name: Profile name (injected by Profile.get_agent_config).
     """
 
     model_config = ConfigDict(frozen=True)
@@ -53,6 +73,8 @@ class AgentConfig(BaseModel):
     driver: DriverType
     model: str
     options: dict[str, Any] = Field(default_factory=dict)
+    sandbox: SandboxConfig = Field(default_factory=SandboxConfig)
+    profile_name: str = "default"
 
 
 class RetryConfig(BaseModel):
@@ -73,24 +95,6 @@ class RetryConfig(BaseModel):
     max_delay: float = Field(
         default=60.0, ge=1.0, le=300.0, description="Maximum delay cap in seconds"
     )
-
-
-class SandboxConfig(BaseModel):
-    """Sandbox execution configuration for a profile.
-
-    Attributes:
-        mode: Sandbox mode ('none' = direct execution, 'container' = Docker sandbox).
-        image: Docker image for sandbox container.
-        network_allowlist_enabled: Whether to restrict outbound network.
-        network_allowed_hosts: Hosts allowed when network allowlist is enabled.
-    """
-
-    model_config = ConfigDict(frozen=True)
-
-    mode: Literal["none", "container"] = "none"
-    image: str = "amelia-sandbox:latest"
-    network_allowlist_enabled: bool = False
-    network_allowed_hosts: list[str] = Field(default_factory=lambda: list(DEFAULT_NETWORK_ALLOWED_HOSTS))
 
 
 class Profile(BaseModel):

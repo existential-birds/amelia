@@ -96,3 +96,34 @@ class TestDesign:
 
         design = Design.from_file(str(design_file))
         assert design.content == "content"
+
+
+def test_agent_config_sandbox_default():
+    """AgentConfig should default sandbox to SandboxConfig() with mode='none'."""
+    from amelia.core.types import AgentConfig, SandboxConfig
+
+    config = AgentConfig(driver="cli", model="sonnet")
+    assert config.sandbox == SandboxConfig()
+    assert config.sandbox.mode == "none"
+
+
+def test_agent_config_profile_name_default():
+    """AgentConfig should default profile_name to 'default'."""
+    from amelia.core.types import AgentConfig
+
+    config = AgentConfig(driver="cli", model="sonnet")
+    assert config.profile_name == "default"
+
+
+def test_agent_config_with_sandbox_config():
+    """AgentConfig should accept explicit SandboxConfig."""
+    from amelia.core.types import AgentConfig, SandboxConfig
+
+    sandbox = SandboxConfig(mode="container", image="custom:latest")
+    config = AgentConfig(
+        driver="api", model="test-model",
+        sandbox=sandbox, profile_name="work",
+    )
+    assert config.sandbox.mode == "container"
+    assert config.sandbox.image == "custom:latest"
+    assert config.profile_name == "work"
