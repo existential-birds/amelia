@@ -126,20 +126,22 @@ class Profile(BaseModel):
     sandbox: SandboxConfig = Field(default_factory=SandboxConfig)
 
     def get_agent_config(self, agent_name: str) -> AgentConfig:
-        """Get config for an agent.
+        """Get config for an agent with profile-level sandbox and name injected.
 
         Args:
             agent_name: Name of the agent (e.g., 'architect', 'developer').
 
         Returns:
-            AgentConfig for the specified agent.
+            AgentConfig with sandbox and profile_name from this profile.
 
         Raises:
             ValueError: If agent not configured in this profile.
         """
         if agent_name not in self.agents:
             raise ValueError(f"Agent '{agent_name}' not configured in profile '{self.name}'")
-        return self.agents[agent_name]
+        return self.agents[agent_name].model_copy(
+            update={"sandbox": self.sandbox, "profile_name": self.name}
+        )
 
 
 class Settings(BaseModel):
