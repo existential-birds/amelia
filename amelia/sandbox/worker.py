@@ -131,12 +131,15 @@ def _create_worker_chat_model(model: str, base_url: str | None = None) -> Any:
     from langchain.chat_models import init_chat_model  # noqa: PLC0415
 
     if base_url:
-        # Route through proxy — use openai-compatible interface
+        # Route through proxy — use openai-compatible interface.
+        # The proxy requires X-Amelia-Profile to resolve provider config.
+        profile = os.environ.get("AMELIA_PROFILE", "")
         return init_chat_model(
             model=model,
             model_provider="openai",
             base_url=base_url,
             api_key="proxy-managed",
+            default_headers={"X-Amelia-Profile": profile},
         )
     return init_chat_model(model)
 

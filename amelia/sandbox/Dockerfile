@@ -9,10 +9,11 @@ FROM tob-claude-devcontainer:latest
 #   amelia.agents.schemas (EvaluationOutput, MarkdownPlanOutput, etc.)
 #   amelia.sandbox.worker (entrypoint)
 # Heavy deps (langgraph, fastapi, asyncpg, langchain) are NOT installed.
+USER root
 COPY . /tmp/amelia/
 RUN cd /tmp/amelia \
     && uv pip install --system --break-system-packages --no-deps . \
-    && uv pip install --system --break-system-packages deepagents pydantic loguru httpx \
+    && uv pip install --system --break-system-packages deepagents pydantic loguru httpx langchain-openai \
     && rm -rf /tmp/amelia
 
 # Install credential helper
