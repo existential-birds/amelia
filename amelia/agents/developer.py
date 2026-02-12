@@ -37,7 +37,13 @@ class Developer:
         Args:
             config: Agent configuration with driver, model, and options.
         """
-        self.driver = get_driver(config.driver, model=config.model)
+        self.driver = get_driver(
+            config.driver,
+            model=config.model,
+            sandbox_config=config.sandbox,
+            profile_name=config.profile_name,
+            options=config.options,
+        )
         self.options = config.options
 
     async def run(
