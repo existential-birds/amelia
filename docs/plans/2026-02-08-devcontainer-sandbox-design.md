@@ -10,7 +10,7 @@
 - #408 — Parent issue
 - #415 — ~~Prerequisite: Extract agent schemas into standalone modules~~ (Done: PR #418, merged)
 - #409 — ~~PR 1: Foundation (SandboxProvider protocol, SandboxConfig, LLM/git proxy)~~ (Done: PR #419, merged)
-- #410 — PR 2: Container + Worker (Dockerfile, DockerSandboxProvider, worker, worktrees) — In progress: PR #424
+- #410 — ~~PR 2: Container + Worker (Dockerfile, DockerSandboxProvider, worker, worktrees)~~ (Done: PR #424, merged)
 - #411 — PR 3: Integration (ContainerDriver, factory wiring, network allowlist) — Not started
 
 ---
