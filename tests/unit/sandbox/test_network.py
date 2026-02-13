@@ -24,8 +24,8 @@ class TestGenerateAllowlistRules:
             allowed_hosts=["api.example.com", "cdn.example.com"],
         )
 
-        assert "api.example.com" in rules
-        assert "cdn.example.com" in rules
+        assert "getent hosts api.example.com" in rules
+        assert "getent hosts cdn.example.com" in rules
 
     def test_proxy_always_allowed(self) -> None:
         """Proxy host should always be in rules regardless of allowed_hosts."""
