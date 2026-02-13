@@ -14,7 +14,11 @@ class TestGetDriverExistingBehavior:
         with patch("amelia.drivers.factory.ClaudeCliDriver") as mock_cls:
             mock_cls.return_value = MagicMock()
             _driver = get_driver("cli", model="sonnet")
-            mock_cls.assert_called_once_with(model="sonnet")
+            mock_cls.assert_called_once()
+            kwargs = mock_cls.call_args.kwargs
+            assert kwargs["model"] == "sonnet"
+            assert kwargs.get("cwd") is None
+            assert set(kwargs).issubset({"model", "cwd"})
 
     def test_api_driver(self) -> None:
         with patch("amelia.drivers.factory.ApiDriver") as mock_cls:
