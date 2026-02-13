@@ -27,7 +27,7 @@ class TestGetDriverExistingBehavior:
             mock_cls.assert_called_once_with(provider="openrouter", model="test-model")
 
     def test_unknown_driver_raises(self) -> None:
-        with pytest.raises(ValueError, match="Unknown driver key: unknown"):
+        with pytest.raises(ValueError, match=r"Unknown driver key: 'unknown'\."):
             get_driver("unknown")
 
 
