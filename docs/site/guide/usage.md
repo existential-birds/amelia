@@ -11,14 +11,14 @@ Create a profile using the CLI:
 ```bash
 # Create and activate a profile
 amelia config profile create dev \
-  --driver api:openrouter \
+  --driver api \
   --model "minimax/minimax-m2" \
   --tracker github \
   --activate
 
 # Or create a CLI-based profile for enterprise compliance
 amelia config profile create work \
-  --driver cli:claude \
+  --driver cli \
   --tracker jira \
   --activate
 ```
