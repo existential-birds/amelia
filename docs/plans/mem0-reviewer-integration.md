@@ -1202,7 +1202,7 @@ class Profile(BaseModel):
 
 ```bash
 # Create profile with memory settings
-amelia config profile create work --driver cli:claude --model sonnet --tracker github --activate
+amelia config profile create work --driver cli --model sonnet --tracker github --activate
 
 # Memory configuration would be set via dashboard or future CLI commands
 ```
