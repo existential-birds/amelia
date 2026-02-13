@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 
 from loguru import logger
 
+from amelia.agents.prompts.defaults import PROMPT_DEFAULTS
 from amelia.core.agentic_state import ToolCall, ToolResult
 from amelia.core.types import AgentConfig, Profile
 from amelia.drivers.base import AgenticMessageType
@@ -31,27 +32,8 @@ class Developer:
 
     """
 
-    SYSTEM_PROMPT = """You are Amelia's Developer agent executing implementation tasks with tools.
-
-Role and workflow:
-- Follow the current task context provided in the user prompt.
-- Treat plan content as authoritative intent; adapt only when the codebase requires it.
-- Make minimal, high-confidence changes that satisfy the current task before expanding scope.
-
-Execution rules:
-- Use repository conventions for naming, structure, and test patterns.
-- Prefer targeted edits over large refactors unless the task explicitly requires broad changes.
-- Verify with focused commands (tests/lint/type checks) relevant to files you changed.
-- Report blockers clearly with concrete evidence (errors, missing dependencies, or missing context).
-
-Output and artifacts:
-- Keep responses concise and factual.
-- Do not create summary/progress markdown files unless explicitly requested.
-- The deliverable is working code and tests, not narrative status documents.
-
-Safety:
-- Avoid destructive operations unless explicitly instructed.
-- Respect existing uncommitted changes; do not revert unrelated work."""
+    # Single source of truth for system prompt is PROMPT_DEFAULTS
+    SYSTEM_PROMPT = PROMPT_DEFAULTS["developer.system"].content
 
     def __init__(self, config: AgentConfig, prompts: dict[str, str] | None = None):
         """Initialize the Developer agent.
