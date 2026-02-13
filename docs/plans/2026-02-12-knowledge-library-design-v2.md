@@ -1,4 +1,4 @@
-# Knowledge Library Design
+# Knowledge Library Design (v2)
 
 **Goal:** Provide a RAG backend that stores, chunks, embeds, and retrieves documentation for Amelia's agents via tool calls.
 
@@ -6,6 +6,8 @@
 - #203 - Knowledge Library
 - #280 - Oracle Consulting System
 - #290 - RLM Integration
+
+**Supersedes:** `2026-01-27-knowledge-library-design.md`
 
 ---
 
@@ -19,18 +21,30 @@ This is **not** a chat interface. It is infrastructure that agents access throug
 
 ---
 
+## Changes from v1
+
+| Decision | v1 | v2 | Rationale |
+|----------|----|----|-----------|
+| PostgreSQL | 16 | **17** | Current stable release |
+| Vector index | IVFFlat (lists=100) | **HNSW** | Better recall, no tuning parameters, community default |
+| Docling | >=2.70.0 | **>=2.73.0** | Latest stable |
+
+All other decisions from v1 are unchanged.
+
+---
+
 ## Decisions
 
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
-| Document formats (MVP) | PDF, Markdown | Covers framework docs and internal standards |
-| Parser | Docling v2.70+ | MIT license, Pydantic data model, structural parsing, built-in chunking |
+| Document formats | PDF, Markdown | Covers framework docs and internal standards |
+| Parser | Docling v2.73+ | MIT license, Pydantic data model, structural parsing, built-in chunking |
 | Chunking | Docling HierarchicalChunker | Preserves heading hierarchy and semantic boundaries |
-| Embeddings | OpenRouter API (`openai/text-embedding-3-small`, 1536 dims) | OpenAI-compatible API, centralized key management, low cost |
-| Vector storage | PostgreSQL + pg_vector | Aligns with PostgreSQL migration plan; no separate vector DB |
+| Embeddings | OpenRouter API (`openai/text-embedding-3-small`, 1536 dims) | OpenAI-compatible API, centralized key management, low cost; direct OpenAI driver will inherit this when it lands |
+| Vector storage | PostgreSQL 17 + pg_vector (HNSW) | Aligns with PostgreSQL stack; no separate vector DB; HNSW needs no tuning |
 | Document organization | Flat with tags | Simple, no hierarchy to manage; agents filter by tag |
-| Agent access | Two-tier: direct tool + Oracle deep processing | Simple search for all agents; Oracle adds RLM synthesis for complex queries |
-| Dashboard MVP | Upload + list + status | Minimal CRUD; no preview or chat |
+| Agent access | Two-tier: direct tool + Oracle deep processing | Simple search for all agents; Oracle adds full-document synthesis for complex queries |
+| Dashboard MVP | Upload + list + status + error surfacing | Full CRUD with real-time status; errors accessible via tooltip on failed status badge |
 | Web scraping | Post-MVP | Deferred; manual upload sufficient for MVP |
 
 ---
@@ -55,15 +69,15 @@ This is **not** a chat interface. It is infrastructure that agents access throug
 │                 │       │  Tier 2: calls       │
 │  • Embed query  │       │  knowledge_search +  │
 │  • pg_vector    │       │  fetches raw_text +  │
-│    similarity   │       │  applies RLM tools   │
-│  • Tag filter   │       │  for deep synthesis  │
+│    HNSW search  │       │  full-document       │
+│  • Tag filter   │       │  processing          │
 │  • Return top_k │       │                      │
 └────────┬────────┘       └──────────┬───────────┘
          │                           │
          └─────────────┬─────────────┘
                        ▼
 ┌───────────────────────────────────────────────────┐
-│              PostgreSQL + pg_vector                │
+│              PostgreSQL 17 + pg_vector             │
 │                                                    │
 │  documents        │  document_chunks              │
 │  ─────────        │  ───────────────              │
@@ -78,7 +92,7 @@ This is **not** a chat interface. It is infrastructure that agents access throug
 
 ## Data Model
 
-New PostgreSQL migration (depends on PostgreSQL migration plan):
+New PostgreSQL migration (003):
 
 ```sql
 CREATE EXTENSION IF NOT EXISTS vector;
@@ -112,7 +126,7 @@ CREATE TABLE document_chunks (
 );
 
 CREATE INDEX idx_chunks_embedding ON document_chunks
-    USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+    USING hnsw (embedding vector_cosine_ops);
 CREATE INDEX idx_chunks_document ON document_chunks(document_id);
 CREATE INDEX idx_documents_tags ON documents USING GIN(tags);
 CREATE INDEX idx_documents_status ON documents(status);
@@ -148,7 +162,7 @@ status='processing'
     ▼
 Docling DocumentConverter.convert()
     → DoclingDocument with structural parsing
-    → Extract raw_text for Oracle/RLM use
+    → Extract raw_text for Oracle/Tier 2 use
     │
     ▼
 HierarchicalChunker.chunk()
@@ -180,7 +194,7 @@ async def knowledge_search(
 ```
 
 1. Embed the query via OpenRouter
-2. Execute pg_vector cosine similarity search on `document_chunks`
+2. Execute pg_vector HNSW cosine similarity search on `document_chunks`
 3. If `tags` provided, filter to chunks from documents matching any tag
 4. Return top_k results above threshold
 
@@ -210,7 +224,7 @@ Batches chunks per request to minimize round trips.
 
 ### Tier 1: Direct Search (All Agents)
 
-Registered as a tool in the driver tool set:
+Registered as a tool in the driver tool set, added to `ToolName` enum in `amelia/core/constants.py`:
 
 ```python
 knowledge_search(query: str, top_k: int = 5, tags: list[str] | None = None) -> list[SearchResult]
@@ -220,12 +234,9 @@ Agents call this like any other tool. The Architect calls it when planning aroun
 
 ### Tier 2: Oracle Deep Processing
 
-Oracle calls `knowledge_search` for retrieval, then additionally:
-- Fetches `raw_text` from `documents` for full-document RLM processing
-- Applies RLM structured tools (per the RLM integration design) on large documents
-- Uses `depth_hint` to decide between direct injection vs RLM loop
+Oracle calls `knowledge_search` for retrieval, then additionally fetches `raw_text` from `documents` for full-document processing. Oracle decides based on query complexity whether to use chunk results directly or pull the full document.
 
-The Knowledge Library does not know about Oracle or RLM. Oracle composes on top.
+The Knowledge Library does not know about Oracle. Oracle composes on top — it calls the same `knowledge_search` function and makes a separate repository call for `raw_text`. No changes to the existing Oracle API contract.
 
 ---
 
@@ -241,6 +252,8 @@ Added to the existing FastAPI server:
 | `DELETE` | `/api/knowledge/documents/{id}` | Delete document + cascaded chunks |
 | `POST` | `/api/knowledge/search` | Semantic search (query, top_k, tags) |
 
+Upload accepts `.pdf` and `.md` files. The ingestion pipeline runs as a background task — the endpoint returns immediately with the document record in `pending` status.
+
 ---
 
 ## WebSocket Events
@@ -252,20 +265,21 @@ class EventType(StrEnum):
     DOCUMENT_INGESTION_FAILED = "document_ingestion_failed"
 ```
 
-Events carry the document ID and status, enabling real-time dashboard updates.
+Events carry the document ID, status, and (for failures) the error message. Enables real-time dashboard updates.
 
 ---
 
 ## Dashboard
 
-New route at `/knowledge` — a Knowledge Library tab.
+New route at `/knowledge` — a Knowledge Library tab replacing the current "Coming Soon" sidebar placeholder.
 
 **Document list view:**
-- Table: Name, Tags (pills), Status (badge), Chunks, Uploaded
+- Table: Name, Tags (pill badges), Status (color-coded badge), Chunks, Uploaded
 - Upload button opens drag-and-drop zone for `.pdf` and `.md` files
 - Name and tags entered during upload (tags as comma-separated input)
 - Delete action with confirmation per row
 - Status auto-updates via WebSocket (pending → processing → ready/failed)
+- Failed status badge shows the error message in a tooltip
 
 **Frontend files:**
 
@@ -284,13 +298,13 @@ dashboard/src/
 
 | Package | Purpose | Layer |
 |---------|---------|-------|
-| `docling>=2.70.0` | PDF/Markdown parsing and structural chunking | Backend |
+| `docling>=2.73.0` | PDF/Markdown parsing and structural chunking | Backend |
 | `pgvector` | pg_vector Python bindings for asyncpg | Backend |
 | `httpx` (existing) | OpenRouter API calls | Backend |
 
 No new frontend dependencies.
 
-PostgreSQL must have the `vector` extension installed. The Docker Compose setup enables it via the migration.
+**Infrastructure change:** Docker-compose switches from `postgres:16` to `pgvector/pgvector:pg17`.
 
 ---
 
@@ -298,13 +312,14 @@ PostgreSQL must have the `vector` extension installed. The Docker Compose setup 
 
 | Phase | What | Depends On |
 |-------|------|------------|
-| 1 | PostgreSQL migration (existing plan) | — |
-| 2 | pg_vector migration + data model | Phase 1 |
-| 3 | Embedding client (OpenRouter wrapper) | Phase 1 |
+| 1 | PostgreSQL 17 upgrade + pg_vector migration | — |
+| 2 | Pydantic models + repository layer | Phase 1 |
+| 3 | Embedding client (OpenRouter wrapper) | — |
 | 4 | Ingestion pipeline (Docling + chunking + embedding + storage) | Phase 2, 3 |
 | 5 | Search module + `knowledge_search` agent tool registration | Phase 2, 3 |
-| 6 | API endpoints + WebSocket events | Phase 4, 5 |
-| 7 | Dashboard Knowledge Library tab | Phase 6 |
+| 6 | Oracle integration (Tier 2 deep processing) | Phase 5 |
+| 7 | API endpoints + WebSocket events | Phase 4, 5 |
+| 8 | Dashboard Knowledge Library tab | Phase 7 |
 
 Phases 2+3 run in parallel. Phases 4+5 run in parallel.
 
@@ -317,3 +332,4 @@ Phases 2+3 run in parallel. Phases 4+5 run in parallel.
 - Document preview panel in dashboard
 - Multi-page crawling
 - Embedding model selection in dashboard settings
+- Direct OpenAI embedding support (via OpenAI driver)
