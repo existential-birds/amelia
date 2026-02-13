@@ -37,7 +37,7 @@ amelia config profile create my-profile
 
 # With flags (non-interactive)
 amelia config profile create my-profile \
-  --driver api:openrouter \
+  --driver api \
   --model "minimax/minimax-m2" \
   --tracker github \
   --working-dir /path/to/project \
@@ -46,7 +46,7 @@ amelia config profile create my-profile \
 
 | Flag | Short | Description |
 |------|-------|-------------|
-| `--driver` | `-d` | LLM driver (e.g., `cli:claude`, `api:openrouter`) |
+| `--driver` | `-d` | LLM driver (`cli` or `api`) |
 | `--model` | `-m` | Model name (required for API drivers) |
 | `--tracker` | `-t` | Issue tracker (`none`, `github`, `jira`) |
 | `--working-dir` | `-w` | Working directory for agent execution |
@@ -76,14 +76,12 @@ How Amelia communicates with LLMs.
 
 | Value | Description | Requirements |
 |-------|-------------|--------------|
-| `api:openrouter` | Direct OpenRouter API calls | `OPENROUTER_API_KEY` env var, `model` field |
-| `api` | Alias for `api:openrouter` | Same as above |
-| `cli:claude` | Wraps Claude CLI tool | `claude` CLI installed & authenticated |
-| `cli` | Alias for `cli:claude` | Same as above |
+| `api` | Direct OpenRouter API calls | `OPENROUTER_API_KEY` env var, `model` field |
+| `cli` | Claude CLI wrapper | `claude` CLI installed, authenticated |
 
 ### Model (required for API drivers)
 
-The LLM model identifier. Required when using `api:openrouter` or `api` drivers.
+The LLM model identifier. Required when using `api` driver.
 
 Common models:
 - `anthropic/claude-sonnet-4.5` - Claude Sonnet 4.5 (recommended)
@@ -137,9 +135,9 @@ Agent Configurations
 ┏━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━┓
 ┃ Agent          ┃ Driver         ┃ Model                  ┃
 ┡━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━┩
-│ architect      │ cli:claude     │ opus                   │
-│ developer      │ api:openrouter │ qwen/qwen3-coder-flash │
-│ reviewer       │ cli:claude     │ opus                   │
+│ architect      │ cli            │ opus                   │
+│ developer      │ api            │ qwen/qwen3-coder-flash │
+│ reviewer       │ cli            │ opus                   │
 └────────────────┴────────────────┴────────────────────────┘
 ```
 
@@ -247,7 +245,7 @@ The dashboard provides a visual interface for managing configuration at `/settin
 ```bash
 # Create a profile for your project
 amelia config profile create myproject \
-  --driver api:openrouter \
+  --driver api \
   --model "minimax/minimax-m2" \
   --tracker github \
   --working-dir /path/to/myproject \
