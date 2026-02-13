@@ -1,5 +1,7 @@
 # Remove Legacy Driver Values Implementation Plan
 
+**Status:** ✅ Implemented (2026-02-13)
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Remove backward compatibility for legacy driver values (`cli:claude`, `api:openrouter`) from the driver factory, accepting only canonical forms (`cli`, `api`).
