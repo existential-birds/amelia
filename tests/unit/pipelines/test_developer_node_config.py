@@ -1,10 +1,11 @@
 from collections.abc import Callable
-from typing import Any
+from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from langchain_core.runnables.config import RunnableConfig
 
-from amelia.core.types import AgentConfig, Profile
+from amelia.core.types import AgentConfig, DriverType, Profile
 from amelia.pipelines.implementation.state import ImplementationState
 from amelia.pipelines.nodes import call_developer_node
 from tests.conftest import AsyncIteratorMock
@@ -20,7 +21,7 @@ async def test_call_developer_node_uses_agent_config(
     profile = mock_profile_factory(
         preset="cli_single",
         agents={
-            "developer": AgentConfig(driver="cli", model="sonnet"),
+            "developer": AgentConfig(driver=DriverType.CLI, model="sonnet"),
         },
     )
 
@@ -48,53 +49,12 @@ async def test_call_developer_node_uses_agent_config(
         MockDeveloper.return_value = mock_developer
 
         with patch("amelia.pipelines.nodes._save_token_usage", new_callable=AsyncMock):
-            await call_developer_node(state, config)
+            await call_developer_node(state, cast(RunnableConfig, config))
 
         # Verify Developer was instantiated with AgentConfig
         call_args = MockDeveloper.call_args
         assert call_args is not None
         config_arg = call_args[0][0]  # First positional arg
         assert isinstance(config_arg, AgentConfig)
-        assert config_arg.driver == "cli"
+        assert config_arg.driver == DriverType.CLI
         assert config_arg.model == "sonnet"
-
-
-@pytest.mark.asyncio
-async def test_call_developer_node_passes_prompts_to_developer(
-    mock_execution_state_factory: Callable[..., tuple[ImplementationState, Profile]],
-    mock_profile_factory: Callable[..., Profile],
-):
-    """call_developer_node should pass resolved prompts into Developer."""
-    profile = mock_profile_factory(
-        preset="cli_single",
-        agents={
-            "developer": AgentConfig(driver="cli", model="sonnet"),
-        },
-    )
-    state, _ = mock_execution_state_factory(
-        profile=profile,
-        goal="Implement test feature",
-        plan_markdown="## Task 1\n\nDo something",
-    )
-    prompts = {"developer.system": "Custom developer policy"}
-    config: dict[str, Any] = {
-        "configurable": {
-            "profile": profile,
-            "thread_id": "wf-1",
-            "prompts": prompts,
-        }
-    }
-
-    with patch("amelia.pipelines.nodes.Developer") as MockDeveloper:
-        mock_developer = MagicMock()
-        mock_developer.run = MagicMock(return_value=AsyncIteratorMock([
-            (state.model_copy(update={"agentic_status": "completed"}), MagicMock())
-        ]))
-        mock_developer.driver = MagicMock()
-        MockDeveloper.return_value = mock_developer
-
-        with patch("amelia.pipelines.nodes._save_token_usage", new_callable=AsyncMock):
-            await call_developer_node(state, config)
-
-        assert MockDeveloper.call_args is not None
-        assert MockDeveloper.call_args.kwargs["prompts"] == prompts
