@@ -44,7 +44,10 @@ class TestGetDriverContainerBranch:
                 sandbox_config=sandbox, profile_name="work",
             )
             mock_provider_cls.assert_called_once_with(
-                profile_name="work", image="test:latest",
+                profile_name="work",
+                image="test:latest",
+                network_allowlist_enabled=False,
+                network_allowed_hosts=sandbox.network_allowed_hosts,
             )
             mock_driver_cls.assert_called_once_with(
                 model="test-model",

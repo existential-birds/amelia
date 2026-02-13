@@ -37,18 +37,22 @@ def get_driver(
                 "Container sandbox requires API driver. "
                 "CLI driver containerization is not yet supported."
             )
+        if driver_key not in ("api:openrouter", "api"):
+            raise ValueError(f"Unknown driver key: {driver_key}")
         from amelia.sandbox.docker import DockerSandboxProvider  # noqa: PLC0415
         from amelia.sandbox.driver import ContainerDriver  # noqa: PLC0415
 
         provider = DockerSandboxProvider(
             profile_name=profile_name,
             image=sandbox_config.image,
+            network_allowlist_enabled=sandbox_config.network_allowlist_enabled,
+            network_allowed_hosts=sandbox_config.network_allowed_hosts,
         )
         return ContainerDriver(model=model, provider=provider)  # type: ignore[arg-type]
 
     # Accept legacy values for backward compatibility
     if driver_key in ("cli:claude", "cli"):
-        return ClaudeCliDriver(model=model)
+        return ClaudeCliDriver(model=model, cwd=cwd)
     elif driver_key in ("api:openrouter", "api"):
         return ApiDriver(provider="openrouter", model=model)
     else:
