@@ -7,7 +7,7 @@ Papers, blog posts, and projects that influenced Amelia's architecture.
 ### [vtrivedy - Claude Code SDK / HaaS (Harness as a Service)](https://www.vtrivedy.com/posts/claude-code-sdk-haas-harness-as-a-service)
 - **Key thesis:** Agent infrastructure is commoditizing. HaaS provides complete runtime environments (context management, tool invocation, permissions, loop control) so developers focus on domain specialization.
 - **Four customization pillars:** System prompts, Tools/MCPs, Context, Subagents
-- **Influence on Amelia:** Validates driver abstraction (`api:openrouter` vs `cli:claude`), profile-based configuration, and the multi-agent architecture (Architect, Developer, Reviewer as specialized subagents)
+- **Influence on Amelia:** Validates driver abstraction (`api` vs `cli`), profile-based configuration, and the multi-agent architecture (Architect, Developer, Reviewer as specialized subagents)
 
 ### [ghuntley - Ralph](https://ghuntley.com/ralph/)
 - **Key thesis:** LLMs are "deterministically bad in an undeterministic world" - success comes from iteration, not expecting perfection
