@@ -1,6 +1,6 @@
 """Unit tests for implementation pipeline utilities."""
 
-import asyncio
+from datetime import UTC
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -142,7 +142,7 @@ class TestCommitTaskChanges:
     @pytest.fixture
     def test_state_and_config(self, tmp_path: Path) -> tuple[ImplementationState, dict]:
         """Create test state and config."""
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         # Create profile
         agents = {
@@ -162,7 +162,7 @@ class TestCommitTaskChanges:
             workflow_id="test-workflow",
             pipeline_type="implementation",
             profile_id="test",
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
             status="running",
             current_task_index=0,
             total_tasks=5,
