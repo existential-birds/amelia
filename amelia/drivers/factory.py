@@ -78,11 +78,14 @@ async def cleanup_driver_session(driver_key: str, session_id: str) -> bool:
     Raises:
         ValueError: If driver_key is not recognized.
     """
-    # Accept legacy values for backward compatibility
-    if driver_key in ("cli:claude", "cli"):
+    if driver_key == "cli":
         return False  # ClaudeCliDriver has no session state to clean
-    elif driver_key in ("api:openrouter", "api"):
+    elif driver_key == "api":
         async with ApiDriver._sessions_lock_for_loop():
             return ApiDriver._sessions.pop(session_id, None) is not None
     else:
-        raise ValueError(f"Unknown driver key: {driver_key}")
+        raise ValueError(
+            f"Unknown driver key: {driver_key!r}. "
+            f"Valid options: 'cli' or 'api'. "
+            f"(Legacy forms 'cli:claude' and 'api:openrouter' are no longer supported.)"
+        )
