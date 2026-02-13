@@ -76,9 +76,9 @@ class Database:
                 "This usually means the database URL is missing credentials or has "
                 "the wrong password.\n\n"
                 "To fix, set AMELIA_DATABASE_URL with valid credentials:\n"
-                "  export AMELIA_DATABASE_URL='postgresql://amelia:amelia@localhost:5432/amelia'\n\n"
+                "  export AMELIA_DATABASE_URL='postgresql://amelia:amelia@localhost:5434/amelia'\n\n"
                 "Or add it to a .env file in your project root:\n"
-                "  AMELIA_DATABASE_URL=postgresql://amelia:amelia@localhost:5432/amelia\n\n"
+                "  AMELIA_DATABASE_URL=postgresql://amelia:amelia@localhost:5434/amelia\n\n"
                 "To create the database and user with Docker:\n"
                 "  docker compose up -d postgres"
             ) from None
