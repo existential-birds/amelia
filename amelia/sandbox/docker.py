@@ -9,15 +9,16 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from pathlib import Path
 
 from loguru import logger
 
 from amelia.sandbox.network import generate_allowlist_rules
+from amelia.sandbox.provider import SandboxProvider
 
 
-class DockerSandboxProvider:
+class DockerSandboxProvider(SandboxProvider):
     """Manages a Docker container for sandboxed agent execution.
 
     One container per profile, started on first use, kept alive with
@@ -35,13 +36,14 @@ class DockerSandboxProvider:
         image: str = "amelia-sandbox:latest",
         proxy_port: int = 8430,
         network_allowlist_enabled: bool = False,
-        network_allowed_hosts: list[str] | None = None,
+        network_allowed_hosts: Sequence[str] | None = None,
     ) -> None:
         self.profile_name = profile_name
         self.image = image
         self.proxy_port = proxy_port
         self.network_allowlist_enabled = network_allowlist_enabled
-        self.network_allowed_hosts = network_allowed_hosts or []
+        self.network_allowed_hosts: list[str] = list(network_allowed_hosts or [])
+
         self.container_name = f"amelia-sandbox-{profile_name}"
 
     async def ensure_running(self) -> None:

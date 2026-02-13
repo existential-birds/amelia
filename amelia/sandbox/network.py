@@ -5,6 +5,8 @@ hosts only. The generated script is applied inside the container by
 setup-network.sh.
 """
 
+import shlex
+
 
 def generate_allowlist_rules(
     allowed_hosts: list[str],
@@ -47,7 +49,7 @@ def generate_allowlist_rules(
         "iptables -A OUTPUT -p tcp --dport 53 -j ACCEPT",
         "",
         f"# Allow proxy host ({proxy_host})",
-        f"PROXY_IP=$(getent hosts {proxy_host} | awk '{{print $1}}')",
+        f"PROXY_IP=$(getent hosts {shlex.quote(proxy_host)} | awk '{{print $1}}')",
         'if [ -n "$PROXY_IP" ]; then',
         '    iptables -A OUTPUT -d "$PROXY_IP" -j ACCEPT',
         "fi",
@@ -57,7 +59,7 @@ def generate_allowlist_rules(
         lines.append("")
         lines.append("# Allow configured hosts")
         for host in allowed_hosts:
-            lines.append(f"HOST_IP=$(getent hosts {host} | awk '{{print $1}}')")
+            lines.append(f"HOST_IP=$(getent hosts {shlex.quote(host)} | awk '{{print $1}}')")
             lines.append('if [ -n "$HOST_IP" ]; then')
             lines.append('    iptables -A OUTPUT -d "$HOST_IP" -j ACCEPT')
             lines.append("fi")

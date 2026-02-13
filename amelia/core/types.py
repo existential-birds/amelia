@@ -54,7 +54,9 @@ class SandboxConfig(BaseModel):
     mode: Literal["none", "container"] = "none"
     image: str = "amelia-sandbox:latest"
     network_allowlist_enabled: bool = False
-    network_allowed_hosts: list[str] = Field(default_factory=lambda: list(DEFAULT_NETWORK_ALLOWED_HOSTS))
+    network_allowed_hosts: tuple[str, ...] = Field(
+        default_factory=lambda: DEFAULT_NETWORK_ALLOWED_HOSTS,
+    )
 
 
 class AgentConfig(BaseModel):

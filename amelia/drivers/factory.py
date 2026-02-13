@@ -48,7 +48,7 @@ def get_driver(
             network_allowlist_enabled=sandbox_config.network_allowlist_enabled,
             network_allowed_hosts=sandbox_config.network_allowed_hosts,
         )
-        return ContainerDriver(model=model, provider=provider)  # type: ignore[arg-type]
+        return ContainerDriver(model=model, provider=provider)
 
     # Accept legacy values for backward compatibility
     if driver_key in ("cli:claude", "cli"):

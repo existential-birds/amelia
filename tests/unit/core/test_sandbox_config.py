@@ -34,7 +34,7 @@ class TestSandboxConfig:
 
     def test_custom_allowed_hosts(self):
         config = SandboxConfig(network_allowed_hosts=["example.com"])
-        assert config.network_allowed_hosts == ["example.com"]
+        assert config.network_allowed_hosts == ("example.com",)
 
 
 class TestProfileSandboxConfig:

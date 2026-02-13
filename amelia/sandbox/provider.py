@@ -18,7 +18,7 @@ class SandboxProvider(Protocol):
         """Ensure the sandbox is ready. Start if not running, no-op if already up."""
         ...
 
-    async def exec_stream(
+    def exec_stream(
         self,
         command: list[str],
         cwd: str | None = None,
