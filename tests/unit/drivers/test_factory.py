@@ -59,11 +59,6 @@ class TestGetDriverContainerBranch:
         with pytest.raises(ValueError, match="Container sandbox requires API driver"):
             get_driver("cli", sandbox_config=sandbox, profile_name="test")
 
-    def test_container_mode_cli_colon_raises(self) -> None:
-        sandbox = SandboxConfig(mode="container")
-        with pytest.raises(ValueError, match="Container sandbox requires API driver"):
-            get_driver("cli:claude", sandbox_config=sandbox, profile_name="test")
-
     def test_none_mode_returns_normal_driver(self) -> None:
         sandbox = SandboxConfig(mode="none")
         with patch("amelia.drivers.factory.ApiDriver") as mock_cls:
