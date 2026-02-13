@@ -1,6 +1,14 @@
 """Unit tests for implementation pipeline utilities."""
 
-from amelia.pipelines.implementation.utils import _looks_like_plan
+import asyncio
+from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
+from amelia.core.types import AgentConfig, Issue, Profile
+from amelia.pipelines.implementation.state import ImplementationState
+from amelia.pipelines.implementation.utils import _looks_like_plan, commit_task_changes
 
 
 class TestLooksLikePlan:
@@ -126,3 +134,174 @@ code = True
         padded = invalid_task + "\n" + ("x" * 50)
         assert len(padded) >= 100
         assert _looks_like_plan(padded) is False
+
+
+class TestCommitTaskChanges:
+    """Tests for commit_task_changes function."""
+
+    @pytest.fixture
+    def test_state_and_config(self, tmp_path: Path) -> tuple[ImplementationState, dict]:
+        """Create test state and config."""
+        from datetime import datetime, timezone
+
+        # Create profile
+        agents = {
+            "architect": AgentConfig(driver="cli", model="sonnet"),
+            "developer": AgentConfig(driver="cli", model="sonnet"),
+            "reviewer": AgentConfig(driver="cli", model="sonnet"),
+        }
+        profile = Profile(
+            name="test",
+            tracker="noop",
+            working_dir=str(tmp_path),
+            agents=agents,
+        )
+
+        # Create state
+        state = ImplementationState(
+            workflow_id="test-workflow",
+            pipeline_type="implementation",
+            profile_id="test",
+            created_at=datetime.now(timezone.utc),
+            status="running",
+            current_task_index=0,
+            total_tasks=5,
+            issue=Issue(
+                id="TEST-123",
+                title="Test issue",
+                description="Test issue description",
+            ),
+        )
+
+        config = {"configurable": {"profile": profile}}
+        return state, config
+
+    @pytest.mark.asyncio
+    async def test_retries_commit_when_hooks_modify_files(
+        self,
+        test_state_and_config: tuple[ImplementationState, dict],
+    ) -> None:
+        """Should re-stage and retry commit when hooks modify files."""
+        mock_state, mock_config = test_state_and_config
+        # Mock process results
+        mock_add_proc = MagicMock()
+        mock_add_proc.returncode = 0
+        mock_add_proc.communicate = AsyncMock(return_value=(b"", b""))
+
+        mock_diff_cached_proc = MagicMock()
+        mock_diff_cached_proc.returncode = 1  # Changes exist
+        mock_diff_cached_proc.communicate = AsyncMock(return_value=(b"", b""))
+
+        mock_commit_proc_fail = MagicMock()
+        mock_commit_proc_fail.returncode = 1  # Commit failed
+        mock_commit_proc_fail.communicate = AsyncMock(return_value=(b"", b"hook modified files"))
+
+        mock_diff_unstaged_proc = MagicMock()
+        mock_diff_unstaged_proc.returncode = 1  # Unstaged changes exist (hook modified)
+        mock_diff_unstaged_proc.communicate = AsyncMock(return_value=(b"", b""))
+
+        mock_restage_proc = MagicMock()
+        mock_restage_proc.returncode = 0
+        mock_restage_proc.communicate = AsyncMock(return_value=(b"", b""))
+
+        mock_commit_proc_success = MagicMock()
+        mock_commit_proc_success.returncode = 0  # Retry succeeds
+        mock_commit_proc_success.communicate = AsyncMock(return_value=(b"", b""))
+
+        # Sequence of subprocess calls:
+        # 1. git add -A (initial staging)
+        # 2. git diff --cached --quiet (check staged)
+        # 3. git commit -m ... (fails)
+        # 4. git diff --quiet (check for hook modifications)
+        # 5. git add -A (re-stage)
+        # 6. git commit -m ... (retry succeeds)
+        with patch("asyncio.create_subprocess_exec") as mock_exec:
+            mock_exec.side_effect = [
+                mock_add_proc,
+                mock_diff_cached_proc,
+                mock_commit_proc_fail,
+                mock_diff_unstaged_proc,
+                mock_restage_proc,
+                mock_commit_proc_success,
+            ]
+
+            result = await commit_task_changes(mock_state, mock_config)
+
+        assert result is True
+        assert mock_exec.call_count == 6
+
+    @pytest.mark.asyncio
+    async def test_fails_when_hooks_modify_and_retry_fails(
+        self,
+        test_state_and_config: tuple[ImplementationState, dict],
+    ) -> None:
+        """Should return False when retry commit also fails."""
+        mock_state, mock_config = test_state_and_config
+        mock_add_proc = MagicMock()
+        mock_add_proc.returncode = 0
+        mock_add_proc.communicate = AsyncMock(return_value=(b"", b""))
+
+        mock_diff_cached_proc = MagicMock()
+        mock_diff_cached_proc.returncode = 1
+        mock_diff_cached_proc.communicate = AsyncMock(return_value=(b"", b""))
+
+        mock_commit_proc_fail = MagicMock()
+        mock_commit_proc_fail.returncode = 1
+        mock_commit_proc_fail.communicate = AsyncMock(return_value=(b"", b"hook error"))
+
+        mock_diff_unstaged_proc = MagicMock()
+        mock_diff_unstaged_proc.returncode = 1  # Hook modified
+        mock_diff_unstaged_proc.communicate = AsyncMock(return_value=(b"", b""))
+
+        mock_restage_proc = MagicMock()
+        mock_restage_proc.returncode = 0
+        mock_restage_proc.communicate = AsyncMock(return_value=(b"", b""))
+
+        mock_commit_proc_retry_fail = MagicMock()
+        mock_commit_proc_retry_fail.returncode = 1  # Retry also fails
+        mock_commit_proc_retry_fail.communicate = AsyncMock(return_value=(b"", b"still failed"))
+
+        with patch("asyncio.create_subprocess_exec") as mock_exec:
+            mock_exec.side_effect = [
+                mock_add_proc,
+                mock_diff_cached_proc,
+                mock_commit_proc_fail,
+                mock_diff_unstaged_proc,
+                mock_restage_proc,
+                mock_commit_proc_retry_fail,
+            ]
+
+            result = await commit_task_changes(mock_state, mock_config)
+
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_succeeds_on_first_commit_attempt(
+        self,
+        test_state_and_config: tuple[ImplementationState, dict],
+    ) -> None:
+        """Should succeed on first attempt when no hook modifications."""
+        mock_state, mock_config = test_state_and_config
+        mock_add_proc = MagicMock()
+        mock_add_proc.returncode = 0
+        mock_add_proc.communicate = AsyncMock(return_value=(b"", b""))
+
+        mock_diff_cached_proc = MagicMock()
+        mock_diff_cached_proc.returncode = 1
+        mock_diff_cached_proc.communicate = AsyncMock(return_value=(b"", b""))
+
+        mock_commit_proc = MagicMock()
+        mock_commit_proc.returncode = 0  # Success on first try
+        mock_commit_proc.communicate = AsyncMock(return_value=(b"", b""))
+
+        with patch("asyncio.create_subprocess_exec") as mock_exec:
+            mock_exec.side_effect = [
+                mock_add_proc,
+                mock_diff_cached_proc,
+                mock_commit_proc,
+            ]
+
+            result = await commit_task_changes(mock_state, mock_config)
+
+        assert result is True
+        assert mock_exec.call_count == 3  # No retry needed
