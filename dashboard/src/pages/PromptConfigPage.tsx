@@ -37,7 +37,7 @@ const AGENT_LABELS: Record<string, string> = {
   evaluator: 'Evaluator',
 };
 
-/** Agent display order (developer last since not editable). */
+/** Agent display order (developer last to match existing UI ordering). */
 const AGENT_ORDER = ['architect', 'reviewer', 'evaluator', 'developer'];
 
 /** Agents that should always show, even if they have no configurable prompts. */
@@ -185,13 +185,11 @@ export default function SettingsPage() {
                 <Card className="border-dashed bg-muted/30">
                   <CardHeader>
                     <CardTitle className="text-base text-muted-foreground">
-                      Dynamic Prompts
+                      No Configurable Prompt
                     </CardTitle>
                     <CardDescription>
-                      Developer prompts are built dynamically from your
-                      implementation plan and review feedback. Unlike other
-                      agents, they adapt to each execution context rather than
-                      using fixed templates.
+                      This agent currently has no prompt template available for
+                      customization.
                     </CardDescription>
                   </CardHeader>
                 </Card>

@@ -127,10 +127,12 @@ async def call_developer_node(
     })
 
     config = config or {}
-    repository = config.get("configurable", {}).get("repository")
+    configurable = config.get("configurable", {})
+    repository = configurable.get("repository")
+    prompts = configurable.get("prompts", {})
 
     agent_config = profile.get_agent_config("developer")
-    developer = Developer(agent_config)
+    developer = Developer(agent_config, prompts=prompts)
 
     final_state = state
     async for new_state, event in developer.run(state, profile):
