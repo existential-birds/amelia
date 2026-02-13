@@ -126,11 +126,36 @@ CREATE TABLE document_chunks (
 );
 
 CREATE INDEX idx_chunks_embedding ON document_chunks
-    USING hnsw (embedding vector_cosine_ops);
+    USING hnsw (embedding vector_cosine_ops)
+    WITH (m = 16, ef_construction = 64);  -- HNSW build parameters (explicit defaults)
 CREATE INDEX idx_chunks_document ON document_chunks(document_id);
 CREATE INDEX idx_documents_tags ON documents USING GIN(tags);
 CREATE INDEX idx_documents_status ON documents(status);
 ```
+
+**HNSW Parameters:**
+- `m = 16`: Max connections per layer (default, good balance of recall/speed)
+- `ef_construction = 64`: Build-time search depth (default, adequate for most use cases)
+- Query-time parameter `hnsw.ef_search = 40` (default) can be adjusted per search if needed
+
+---
+
+## Database Configuration
+
+**Connection Pool Sizing:**
+
+The Knowledge Library increases database connection requirements due to background ingestion tasks and concurrent agent searches. Update the default pool size:
+
+```python
+# In server settings (update from default 10 → 20)
+AMELIA_DB_POOL_MAX_SIZE = 20
+```
+
+**Rationale:**
+- Background ingestion tasks hold connections during processing (max `AMELIA_INGESTION_CONCURRENCY`)
+- Concurrent agent searches from multiple workflows
+- Default pool size (10) insufficient for concurrent ingestion + searches
+- Pool size of 20 provides headroom for typical usage patterns
 
 ---
 
@@ -148,7 +173,16 @@ amelia/knowledge/
 
 ### Ingestion Pipeline
 
-Triggered on upload, runs async in background:
+Triggered on upload, runs async in background with concurrency limit:
+
+```python
+# Server setting
+AMELIA_INGESTION_CONCURRENCY = 2  # Max parallel ingestions
+
+# Implementation uses asyncio.Semaphore to limit concurrent processing
+```
+
+**Pipeline stages:**
 
 ```
 Upload (PDF/MD)
@@ -157,30 +191,59 @@ Upload (PDF/MD)
 Store metadata → documents row (status='pending')
     │
     ▼
-status='processing'
+Acquire ingestion semaphore (queue if at limit)
     │
     ▼
+status='processing', emit DOCUMENT_INGESTION_STARTED event
+    │
+    ▼
+Stage: Parsing
 Docling DocumentConverter.convert()
     → DoclingDocument with structural parsing
     → Extract raw_text for Oracle/Tier 2 use
+    → Emit progress event (stage='parsing', progress=0.25)
     │
     ▼
+Stage: Chunking
 HierarchicalChunker.chunk()
     → Chunks with heading_path metadata
     → Token counts per chunk
+    → Emit progress event (stage='chunking', progress=0.50)
     │
     ▼
-Embed chunks (batched via OpenRouter, openai/text-embedding-3-small)
+Stage: Embedding
+Embed chunks (parallel batched via OpenRouter, openai/text-embedding-3-small)
     → vector(1536) per chunk
+    → Batch size: 100 chunks per request
+    → Parallel batches: up to 3 concurrent API requests
+    → Emit progress events after each batch (stage='embedding', progress=0.50-0.90)
     │
     ▼
-INSERT chunks → document_chunks rows
+Stage: Storing
+INSERT chunks → document_chunks rows (batched transaction)
+    → Emit progress event (stage='storing', progress=0.95)
     │
     ▼
 status='ready', chunk_count=N, token_count=T
+Release semaphore, emit DOCUMENT_INGESTION_COMPLETED event
 ```
 
-If any step fails, status becomes `'failed'` with the error stored. The user can delete and re-upload.
+**Error Handling:**
+
+If any step fails, status becomes `'failed'` with a classified error message:
+
+```python
+# Error classification examples:
+- "PDF is password-protected. Please upload an unlocked version."
+- "File appears corrupted. Please verify the file and try again."
+- "PDF contains only scanned images. OCR support coming soon."
+- "Embedding API request failed: rate limit exceeded. Please try again later."
+- "Document too large: exceeds maximum token limit (500k tokens)."
+```
+
+The user can delete and re-upload after addressing the error.
+
+**Concurrency:** Queue position shown in dashboard for pending uploads ("Queued — position 3 of 5").
 
 ### Search
 
@@ -193,10 +256,39 @@ async def knowledge_search(
 ) -> list[SearchResult]:
 ```
 
-1. Embed the query via OpenRouter
-2. Execute pg_vector HNSW cosine similarity search on `document_chunks`
-3. If `tags` provided, filter to chunks from documents matching any tag
+**Search strategy (filter-then-search):**
+
+1. Embed the query via OpenRouter (cached for repeated queries)
+2. If `tags` provided, build filtered document set using GIN index
+3. Execute pg_vector HNSW cosine similarity search on `document_chunks`, constrained to filtered documents
 4. Return top_k results above threshold
+
+**SQL implementation:**
+
+```sql
+-- With tag filtering (filter-then-search)
+WITH tagged_docs AS (
+    SELECT id FROM documents
+    WHERE tags && $1  -- GIN index on tags, matches any tag in list
+)
+SELECT
+    dc.id,
+    dc.document_id,
+    d.name AS document_name,
+    d.tags,
+    dc.content,
+    dc.heading_path,
+    dc.token_count,
+    1 - (dc.embedding <=> $2) AS similarity  -- Cosine similarity
+FROM document_chunks dc
+JOIN documents d ON dc.document_id = d.id
+JOIN tagged_docs td ON dc.document_id = td.id
+WHERE 1 - (dc.embedding <=> $2) >= $3  -- similarity_threshold
+ORDER BY dc.embedding <=> $2  -- HNSW index on embedding
+LIMIT $4;  -- top_k
+```
+
+**Rationale for filter-then-search:** Only search relevant documents, more efficient than over-fetching and filtering in application code.
 
 ### SearchResult Model
 
@@ -216,7 +308,26 @@ class SearchResult(BaseModel):
 
 Thin async wrapper calling `POST https://openrouter.ai/api/v1/embeddings` with bearer auth. Uses the user's OpenRouter API key. Default model: `openai/text-embedding-3-small` (1536 dimensions). Embedding model is configurable in server settings.
 
-Batches chunks per request to minimize round trips.
+**Batching strategy:**
+
+```python
+EMBEDDING_BATCH_SIZE = 100        # Chunks per API request
+EMBEDDING_MAX_PARALLEL = 3        # Concurrent API requests
+EMBEDDING_MAX_RETRIES = 3         # Retries per batch on failure
+EMBEDDING_TIMEOUT_SECONDS = 30    # Per-request timeout
+```
+
+**Parallel batching implementation:**
+
+1. Split chunks into batches of 100
+2. Process up to 3 batches concurrently using `asyncio.gather()`
+3. Retry failed batches with exponential backoff
+4. Emit progress events after each batch completes
+5. Return embeddings in original order
+
+**Example:** 500 chunks = 5 batches. Process batches 1-3 in parallel, then batches 4-5. Total time ≈ 2 rounds instead of 5 sequential requests.
+
+**Error handling:** If a batch fails after max retries, the entire ingestion fails with a clear error message indicating which batch failed and why (e.g., rate limit, timeout, API error).
 
 ---
 
@@ -261,11 +372,51 @@ Upload accepts `.pdf` and `.md` files. The ingestion pipeline runs as a backgrou
 ```python
 class EventType(StrEnum):
     DOCUMENT_INGESTION_STARTED = "document_ingestion_started"
+    DOCUMENT_INGESTION_PROGRESS = "document_ingestion_progress"
     DOCUMENT_INGESTION_COMPLETED = "document_ingestion_completed"
     DOCUMENT_INGESTION_FAILED = "document_ingestion_failed"
 ```
 
-Events carry the document ID, status, and (for failures) the error message. Enables real-time dashboard updates.
+**Event payloads:**
+
+```python
+# STARTED
+{
+    "document_id": "uuid",
+    "status": "processing",
+    "timestamp": "2026-02-13T10:30:00Z"
+}
+
+# PROGRESS
+{
+    "document_id": "uuid",
+    "status": "processing",
+    "stage": "parsing" | "chunking" | "embedding" | "storing",
+    "progress": 0.65,  # 0.0 to 1.0
+    "chunks_processed": 230,  # Optional, during embedding stage
+    "total_chunks": 512,      # Optional, during embedding stage
+    "timestamp": "2026-02-13T10:30:15Z"
+}
+
+# COMPLETED
+{
+    "document_id": "uuid",
+    "status": "ready",
+    "chunk_count": 512,
+    "token_count": 45000,
+    "timestamp": "2026-02-13T10:32:00Z"
+}
+
+# FAILED
+{
+    "document_id": "uuid",
+    "status": "failed",
+    "error": "PDF is password-protected. Please upload an unlocked version.",
+    "timestamp": "2026-02-13T10:31:00Z"
+}
+```
+
+Enables real-time dashboard updates with progress bars and queue status.
 
 ---
 
@@ -278,8 +429,13 @@ New route at `/knowledge` — a Knowledge Library tab replacing the current "Com
 - Upload button opens drag-and-drop zone for `.pdf` and `.md` files
 - Name and tags entered during upload (tags as comma-separated input)
 - Delete action with confirmation per row
-- Status auto-updates via WebSocket (pending → processing → ready/failed)
-- Failed status badge shows the error message in a tooltip
+- Status auto-updates via WebSocket:
+  - `pending`: "Pending" badge
+  - `queued`: "Queued — position X of Y" badge (when ingestion concurrency limit reached)
+  - `processing`: Progress bar with stage label (e.g., "Embedding — 65%")
+  - `ready`: "Ready" badge with chunk count
+  - `failed`: "Failed" badge with error message in tooltip
+- Failed status badge shows the classified error message in a tooltip
 
 **Frontend files:**
 
