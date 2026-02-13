@@ -1,10 +1,11 @@
 from collections.abc import Callable
-from typing import Any
+from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from langchain_core.runnables.config import RunnableConfig
 
-from amelia.core.types import AgentConfig, Profile
+from amelia.core.types import AgentConfig, DriverType, Profile
 from amelia.pipelines.implementation.state import ImplementationState
 from amelia.pipelines.nodes import call_developer_node
 from tests.conftest import AsyncIteratorMock
@@ -20,7 +21,7 @@ async def test_call_developer_node_uses_agent_config(
     profile = mock_profile_factory(
         preset="cli_single",
         agents={
-            "developer": AgentConfig(driver="cli", model="sonnet"),
+            "developer": AgentConfig(driver=DriverType.CLI, model="sonnet"),
         },
     )
 
@@ -48,12 +49,12 @@ async def test_call_developer_node_uses_agent_config(
         MockDeveloper.return_value = mock_developer
 
         with patch("amelia.pipelines.nodes._save_token_usage", new_callable=AsyncMock):
-            await call_developer_node(state, config)
+            await call_developer_node(state, cast(RunnableConfig, config))
 
         # Verify Developer was instantiated with AgentConfig
         call_args = MockDeveloper.call_args
         assert call_args is not None
         config_arg = call_args[0][0]  # First positional arg
         assert isinstance(config_arg, AgentConfig)
-        assert config_arg.driver == "cli"
+        assert config_arg.driver == DriverType.CLI
         assert config_arg.model == "sonnet"

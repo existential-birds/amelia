@@ -1,19 +1,22 @@
 """Unit tests for Developer prompt building with task extraction."""
 
+from collections.abc import Callable
 from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from amelia.agents.developer import Developer
-from amelia.core.types import AgentConfig
+from amelia.core.types import AgentConfig, DriverType, Issue, Profile
+from amelia.drivers.base import AgenticMessage, AgenticMessageType
 from amelia.pipelines.implementation.state import ImplementationState
+from tests.conftest import create_mock_execute_agentic
 
 
 @pytest.fixture
 def mock_developer() -> Developer:
     """Create a Developer with a mocked driver for prompt tests."""
-    config = AgentConfig(driver="api", model="test-model")
+    config = AgentConfig(driver=DriverType.API, model="test-model")
     with patch("amelia.agents.developer.get_driver") as mock_get_driver:
         mock_get_driver.return_value = MagicMock()
         return Developer(config)
@@ -150,3 +153,90 @@ class TestDeveloperBuildPrompt:
 
         with pytest.raises(ValueError, match="requires plan_markdown"):
             mock_developer._build_prompt(state)
+
+
+class TestDeveloperSystemPrompt:
+    """Tests for Developer system prompt injection to drivers."""
+
+    @pytest.mark.asyncio
+    async def test_run_passes_custom_system_prompt_to_driver(
+        self,
+        mock_profile_factory: Callable[..., Profile],
+    ) -> None:
+        """Developer.run should pass configured prompt as driver instructions."""
+        config = AgentConfig(driver=DriverType.API, model="test-model")
+        profile: Profile = mock_profile_factory()
+        captured_kwargs: list[dict[str, object]] = []
+        custom_prompt = "Custom Amelia developer system prompt"
+
+        with patch("amelia.agents.developer.get_driver") as mock_get_driver:
+            mock_driver = MagicMock()
+            mock_driver.execute_agentic = create_mock_execute_agentic(
+                [
+                    AgenticMessage(
+                        type=AgenticMessageType.RESULT,
+                        content="Done",
+                        session_id="session-1",
+                    )
+                ],
+                capture_kwargs=captured_kwargs,
+            )
+            mock_get_driver.return_value = mock_driver
+            developer = Developer(config, prompts={"developer.system": custom_prompt})
+
+        state = ImplementationState(
+            workflow_id="test-workflow",
+            created_at=datetime.now(UTC),
+            status="running",
+            profile_id=profile.name,
+            issue=Issue(id="TEST-1", title="Test", description="Test"),
+            goal="Implement feature",
+            plan_markdown="# Plan\n\nDo work",
+        )
+
+        async for _state_update, _event in developer.run(state, profile, "wf-test"):
+            pass
+
+        assert len(captured_kwargs) == 1
+        assert captured_kwargs[0]["instructions"] == custom_prompt
+
+    @pytest.mark.asyncio
+    async def test_run_uses_default_system_prompt_when_not_configured(
+        self,
+        mock_profile_factory: Callable[..., Profile],
+    ) -> None:
+        """Developer.run should pass built-in default when no custom prompt exists."""
+        config = AgentConfig(driver=DriverType.API, model="test-model")
+        profile: Profile = mock_profile_factory()
+        captured_kwargs: list[dict[str, object]] = []
+
+        with patch("amelia.agents.developer.get_driver") as mock_get_driver:
+            mock_driver = MagicMock()
+            mock_driver.execute_agentic = create_mock_execute_agentic(
+                [
+                    AgenticMessage(
+                        type=AgenticMessageType.RESULT,
+                        content="Done",
+                        session_id="session-1",
+                    )
+                ],
+                capture_kwargs=captured_kwargs,
+            )
+            mock_get_driver.return_value = mock_driver
+            developer = Developer(config)
+
+        state = ImplementationState(
+            workflow_id="test-workflow",
+            created_at=datetime.now(UTC),
+            status="running",
+            profile_id=profile.name,
+            issue=Issue(id="TEST-2", title="Test", description="Test"),
+            goal="Implement feature",
+            plan_markdown="# Plan\n\nDo work",
+        )
+
+        async for _state_update, _event in developer.run(state, profile, "wf-test"):
+            pass
+
+        assert len(captured_kwargs) == 1
+        assert captured_kwargs[0]["instructions"] == developer.system_prompt

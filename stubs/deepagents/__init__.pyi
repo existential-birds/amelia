@@ -11,7 +11,7 @@ def create_deep_agent(
     model: BaseChatModel,
     system_prompt: str = ...,
     backend: BackendProtocol | None = ...,
-    checkpointer: BaseCheckpointSaver | None = ...,
+    checkpointer: BaseCheckpointSaver[Any] | None = ...,
     response_format: Any = ...,
     **kwargs: Any,
 ) -> Any: ...
