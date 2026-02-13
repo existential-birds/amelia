@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   **Migration:** Change `driver.cleanup_session(session_id)` to `await driver.cleanup_session(session_id)`. Custom driver implementations must update the method signature from `def cleanup_session(...)` to `async def cleanup_session(...)`.
 
+- **drivers:** Remove support for legacy driver values (`cli:claude`, `api:openrouter`). Use canonical forms `cli` and `api` instead.
+
 ## [0.13.0] - 2026-02-08
 
 ### Changed
