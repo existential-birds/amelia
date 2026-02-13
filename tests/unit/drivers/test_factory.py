@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from amelia.core.types import SandboxConfig
-from amelia.drivers.factory import get_driver
+from amelia.drivers.factory import cleanup_driver_session, get_driver
 
 
 class TestGetDriverExistingBehavior:
@@ -76,3 +76,38 @@ class TestGetDriverContainerBranch:
             mock_cls.return_value = MagicMock()
             _driver = get_driver("api", model="test-model")
             mock_cls.assert_called_once_with(provider="openrouter", model="test-model")
+
+
+class TestLegacyDriverRejection:
+    """Legacy driver forms should be rejected with clear errors."""
+
+    def test_legacy_cli_driver_rejected(self) -> None:
+        """Legacy cli:claude driver form should raise clear error."""
+        with pytest.raises(
+            ValueError,
+            match=r"Unknown driver key: 'cli:claude'.*Legacy forms.*no longer supported",
+        ):
+            get_driver("cli:claude", model="test-model")
+
+    def test_legacy_api_driver_rejected(self) -> None:
+        """Legacy api:openrouter driver form should raise clear error."""
+        with pytest.raises(
+            ValueError,
+            match=r"Unknown driver key: 'api:openrouter'.*Legacy forms.*no longer supported",
+        ):
+            get_driver("api:openrouter", model="test-model")
+
+    @pytest.mark.asyncio
+    async def test_legacy_cleanup_driver_rejected(self) -> None:
+        """Legacy driver values should be rejected in cleanup."""
+        with pytest.raises(
+            ValueError,
+            match=r"Unknown driver key: 'cli:claude'",
+        ):
+            await cleanup_driver_session("cli:claude", "test-session-id")
+
+        with pytest.raises(
+            ValueError,
+            match=r"Unknown driver key: 'api:openrouter'",
+        ):
+            await cleanup_driver_session("api:openrouter", "test-session-id")
