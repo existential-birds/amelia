@@ -272,7 +272,7 @@ class TestNetworkAllowlist:
 
         args = mock_exec.call_args[0]
         assert args == (
-            "docker", "exec", "-i", "amelia-sandbox-test",
+            "docker", "exec", "-i", "--user", "root", "amelia-sandbox-test",
             "sh", "/opt/amelia/scripts/setup-network.sh",
         )
         # Verify rules were piped via stdin

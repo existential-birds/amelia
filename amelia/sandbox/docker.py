@@ -310,7 +310,7 @@ class DockerSandboxProvider(SandboxProvider):
         )
 
         proc = await asyncio.create_subprocess_exec(
-            "docker", "exec", "-i", self.container_name,
+            "docker", "exec", "-i", "--user", "root", self.container_name,
             "sh", "/opt/amelia/scripts/setup-network.sh",
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
