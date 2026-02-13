@@ -29,16 +29,18 @@ class ContainerDriver:
         self._provider = provider
         self._last_usage: DriverUsage | None = None
 
-    async def _write_prompt(self, prompt: str) -> str:
+    async def _write_prompt(self, prompt: str, workflow_id: str | None = None) -> str:
         """Write the prompt to a temp file inside the container.
 
         Args:
             prompt: The prompt text to write.
+            workflow_id: Optional workflow identifier for the filename.
 
         Returns:
             Path to the temp file inside the container.
         """
-        prompt_path = f"/tmp/prompt-{uuid4().hex[:12]}.txt"
+        suffix = workflow_id or uuid4().hex[:12]
+        prompt_path = f"/tmp/prompt-{suffix}.txt"
         async for _ in self._provider.exec_stream(  # type: ignore[attr-defined]
             ["tee", prompt_path],
             stdin=prompt.encode(),
@@ -110,7 +112,8 @@ class ContainerDriver:
             raise ValueError("Prompt cannot be empty")
 
         await self._provider.ensure_running()
-        prompt_path = await self._write_prompt(prompt)
+        workflow_id = kwargs.get("workflow_id")
+        prompt_path = await self._write_prompt(prompt, workflow_id=workflow_id)
 
         try:
             cmd = [
@@ -163,7 +166,8 @@ class ContainerDriver:
             raise ValueError("Prompt cannot be empty")
 
         await self._provider.ensure_running()
-        prompt_path = await self._write_prompt(prompt)
+        workflow_id = kwargs.get("workflow_id")
+        prompt_path = await self._write_prompt(prompt, workflow_id=workflow_id)
 
         try:
             cmd = [
