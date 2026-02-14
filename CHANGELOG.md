@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-02-14
+
+### Added
+
+- **sandbox:** Add DevContainer-based sandbox for isolated code execution with Docker containers, LLM proxy, git worktree management, and worker entrypoint ([#419](https://github.com/existential-birds/amelia/pull/419), [#424](https://github.com/existential-birds/amelia/pull/424), [#428](https://github.com/existential-birds/amelia/pull/428))
+- **prompts:** Add configurable developer system prompt via prompt configuration system ([#431](https://github.com/existential-birds/amelia/pull/431))
+
 ### Changed
 
 - **Breaking:** `DriverInterface.cleanup_session()` is now async
@@ -14,6 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   **Migration:** Change `driver.cleanup_session(session_id)` to `await driver.cleanup_session(session_id)`. Custom driver implementations must update the method signature from `def cleanup_session(...)` to `async def cleanup_session(...)`.
 
 - **drivers:** Remove support for legacy driver values (`cli:claude`, `api:openrouter`). Use canonical forms `cli` and `api` instead.
+
+### Security
+
+- **deps:** Update cryptography from 46.0.3 to 46.0.5 ([#425](https://github.com/existential-birds/amelia/pull/425))
 
 ## [0.13.0] - 2026-02-08
 
@@ -365,7 +376,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - FastAPI server with WebSocket support
 - React dashboard for workflow visualization
 
-[Unreleased]: https://github.com/existential-birds/amelia/compare/v0.13.0...HEAD
+[Unreleased]: https://github.com/existential-birds/amelia/compare/v0.14.0...HEAD
+[0.14.0]: https://github.com/existential-birds/amelia/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/existential-birds/amelia/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/existential-birds/amelia/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/existential-birds/amelia/compare/v0.10.0...v0.11.0
