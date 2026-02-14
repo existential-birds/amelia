@@ -1,7 +1,8 @@
 """OpenRouter embedding client for Knowledge Library."""
 
 import asyncio
-from collections.abc import Callable
+from collections.abc import Callable, Coroutine
+from typing import Any
 
 import httpx
 from loguru import logger
@@ -100,8 +101,18 @@ class EmbeddingClient:
 
         # Process batches in parallel with concurrency limit
         semaphore = asyncio.Semaphore(EMBEDDING_MAX_PARALLEL)
+        processed_count = 0
+        lock = asyncio.Lock()
+
+        async def track_progress(batch_size: int) -> None:
+            nonlocal processed_count
+            async with lock:
+                processed_count += batch_size
+                if progress_callback:
+                    progress_callback(processed_count, len(texts))
+
         tasks = [
-            self._embed_batch_with_retry(batch, semaphore, progress_callback, len(texts))
+            self._embed_batch_with_retry(batch, semaphore, track_progress)
             for batch in batches
         ]
 
@@ -116,16 +127,14 @@ class EmbeddingClient:
         self,
         texts: list[str],
         semaphore: asyncio.Semaphore,
-        progress_callback: Callable[[int, int], None] | None,
-        total: int,
+        on_complete: Callable[[int], Coroutine[Any, Any, None]] | None,
     ) -> list[list[float]]:
         """Embed batch with retry logic and progress reporting.
 
         Args:
             texts: Batch of texts to embed.
             semaphore: Concurrency limiter.
-            progress_callback: Optional callback(processed, total).
-            total: Total number of texts being embedded.
+            on_complete: Optional async callback(batch_size) called on success.
 
         Returns:
             Embeddings for this batch.
@@ -139,8 +148,8 @@ class EmbeddingClient:
                     embeddings = await self._call_api(texts)
 
                     # Report progress
-                    if progress_callback:
-                        progress_callback(len(texts), total)
+                    if on_complete:
+                        await on_complete(len(texts))
 
                     return embeddings
 
@@ -163,6 +172,8 @@ class EmbeddingClient:
                     )
                     await asyncio.sleep(wait)
 
+        # Unreachable: loop always returns (line 154) or raises (line 163).
+        # Required for mypy since it can't prove exhaustiveness.
         raise EmbeddingError("Unreachable")
 
     async def _call_api(self, texts: list[str]) -> list[list[float]]:

@@ -65,6 +65,16 @@ async def test_embed_batch(embedding_client: EmbeddingClient) -> None:
 
 
 @pytest.mark.asyncio
+async def test_embed_batch_empty_input(embedding_client: EmbeddingClient) -> None:
+    """Should return empty list for empty input without API call."""
+    with patch("httpx.AsyncClient.post") as mock_post:
+        embeddings = await embedding_client.embed_batch([])
+
+        assert embeddings == []
+        mock_post.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_embed_error_handling(embedding_client: EmbeddingClient) -> None:
     """Should raise EmbeddingError on API failure."""
     with patch("httpx.AsyncClient.post") as mock_post:
@@ -117,6 +127,30 @@ async def test_embed_retry_on_failure(embedding_client: EmbeddingClient) -> None
         assert mock_post.call_count == 2  # Retry after first failure
         # Verify exponential backoff: 2^0 = 1 second for first retry
         mock_sleep.assert_called_once_with(1)
+
+
+@pytest.mark.asyncio
+async def test_embed_retry_exhaustion(embedding_client: EmbeddingClient) -> None:
+    """Should raise EmbeddingError after all 3 retries fail."""
+    with (
+        patch("httpx.AsyncClient.post") as mock_post,
+        patch("asyncio.sleep") as mock_sleep,
+    ):
+        # All 3 attempts fail
+        mock_post.side_effect = [
+            httpx.Response(500, json={"error": "Server error 1"}),
+            httpx.Response(500, json={"error": "Server error 2"}),
+            httpx.Response(500, json={"error": "Server error 3"}),
+        ]
+
+        with pytest.raises(EmbeddingError, match="Server error 3"):
+            await embedding_client.embed("Test text")
+
+        assert mock_post.call_count == 3  # All retries exhausted
+        # Verify exponential backoff: 2^0=1, 2^1=2 seconds
+        assert mock_sleep.call_count == 2
+        mock_sleep.assert_any_call(1)
+        mock_sleep.assert_any_call(2)
 
 
 @pytest.mark.asyncio
