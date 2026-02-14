@@ -1,0 +1,95 @@
+"""Test OpenRouter embedding client."""
+
+from unittest.mock import patch
+
+import httpx
+import pytest
+
+from amelia.knowledge.embeddings import EmbeddingClient, EmbeddingError
+
+
+@pytest.fixture
+def embedding_client():
+    """Provide embedding client with test API key."""
+    return EmbeddingClient(api_key="test-key", model="openai/text-embedding-3-small")
+
+
+@pytest.mark.asyncio
+async def test_embed_single_text(embedding_client):
+    """Should embed single text and return 1536-dim vector."""
+    with patch("httpx.AsyncClient.post") as mock_post:
+        mock_post.return_value = httpx.Response(
+            200,
+            json={
+                "data": [{"embedding": [0.1] * 1536}],
+                "model": "openai/text-embedding-3-small",
+            },
+        )
+
+        embedding = await embedding_client.embed("Test text")
+
+        assert len(embedding) == 1536
+        assert isinstance(embedding[0], float)
+        mock_post.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_embed_batch(embedding_client):
+    """Should embed multiple texts in parallel batches."""
+    texts = [f"Text {i}" for i in range(250)]  # Requires 3 batches (100, 100, 50)
+
+    def make_response(*args, **kwargs):
+        """Return embeddings matching the input count."""
+        input_texts = kwargs.get("json", {}).get("input", [])
+        return httpx.Response(
+            200,
+            json={
+                "data": [{"embedding": [0.1] * 1536} for _ in range(len(input_texts))],
+                "model": "openai/text-embedding-3-small",
+            },
+        )
+
+    with patch("httpx.AsyncClient.post") as mock_post:
+        mock_post.side_effect = make_response
+
+        embeddings = await embedding_client.embed_batch(texts)
+
+        assert len(embeddings) == 250
+        assert len(embeddings[0]) == 1536
+        # Should make 3 API calls (100 + 100 + 50 texts)
+        assert mock_post.call_count == 3
+
+
+@pytest.mark.asyncio
+async def test_embed_error_handling(embedding_client):
+    """Should raise EmbeddingError on API failure."""
+    with patch("httpx.AsyncClient.post") as mock_post:
+        mock_post.return_value = httpx.Response(
+            429,
+            json={"error": "Rate limit exceeded"},
+        )
+
+        with pytest.raises(EmbeddingError, match="Rate limit"):
+            await embedding_client.embed("Test text")
+
+
+@pytest.mark.asyncio
+async def test_embed_retry_on_failure(embedding_client):
+    """Should retry failed batches with exponential backoff."""
+    with patch("httpx.AsyncClient.post") as mock_post:
+        # First call fails, second succeeds
+        mock_post.side_effect = [
+            httpx.Response(500, json={"error": "Server error"}),
+            httpx.Response(
+                200,
+                json={
+                    "data": [{"embedding": [0.1] * 1536}],
+                    "model": "openai/text-embedding-3-small",
+                },
+            ),
+        ]
+
+        embedding = await embedding_client.embed("Test text")
+
+        assert len(embedding) == 1536
+        assert mock_post.call_count == 2  # Retry after first failure
