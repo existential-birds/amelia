@@ -16,8 +16,8 @@ from tests.conftest import AsyncIteratorMock
 async def test_call_developer_node_uses_agent_config(
     mock_execution_state_factory: Callable[..., tuple[ImplementationState, Profile]],
     mock_profile_factory: Callable[..., Profile],
-):
-    """call_developer_node should use profile.get_agent_config('developer')."""
+) -> None:
+    """Call developer node should use profile.get_agent_config('developer')."""
     # Create profile with agents config
     profile = mock_profile_factory(
         preset="cli_single",
@@ -69,12 +69,17 @@ async def test_call_developer_node_uses_agent_config(
 async def test_call_developer_node_passes_prompts_to_developer(
     mock_execution_state_factory: Callable[..., tuple[ImplementationState, Profile]],
     mock_profile_factory: Callable[..., Profile],
-):
-    """call_developer_node should pass resolved prompts into Developer."""
+) -> None:
+    """Call developer node should pass resolved prompts into Developer.
+
+    Args:
+        mock_execution_state_factory: Factory for execution state and profile.
+        mock_profile_factory: Factory for profile instances.
+    """
     profile = mock_profile_factory(
         preset="cli_single",
         agents={
-            "developer": AgentConfig(driver="cli", model="sonnet"),
+            "developer": AgentConfig(driver=DriverType.CLI, model="sonnet"),
         },
     )
     state, _ = mock_execution_state_factory(
@@ -104,7 +109,7 @@ async def test_call_developer_node_passes_prompts_to_developer(
         MockDeveloper.return_value = mock_developer
 
         with patch("amelia.pipelines.nodes._save_token_usage", new_callable=AsyncMock):
-            await call_developer_node(state, config)
+            await call_developer_node(state, cast(RunnableConfig, config))
 
         assert MockDeveloper.call_args is not None
         assert MockDeveloper.call_args.kwargs["prompts"] == prompts
