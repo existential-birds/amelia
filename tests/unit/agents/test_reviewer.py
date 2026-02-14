@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from amelia.agents.reviewer import Reviewer
-from amelia.core.types import AgentConfig, DriverType, Profile, Severity
+from amelia.core.types import AgentConfig, DriverType, Profile, SandboxConfig, Severity
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
 from amelia.pipelines.implementation.state import ImplementationState
 from amelia.server.models.events import EventType
@@ -55,7 +55,13 @@ class TestReviewerInit:
 
             reviewer = Reviewer(config)
 
-            mock_get_driver.assert_called_once_with("cli", model="sonnet")
+            mock_get_driver.assert_called_once_with(
+                "cli",
+                model="sonnet",
+                sandbox_config=SandboxConfig(),
+                profile_name="default",
+                options={"max_iterations": 5},
+            )
             assert reviewer.driver is mock_driver
             assert reviewer.options == {"max_iterations": 5}
 

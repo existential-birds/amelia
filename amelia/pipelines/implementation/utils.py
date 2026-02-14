@@ -371,5 +371,84 @@ async def commit_task_changes(state: ImplementationState, config: RunnableConfig
     if proc.returncode == 0:
         logger.info("Committed task changes", task=task_number, message=commit_msg)
         return True
+
+    # Commit failed - check if hooks modified files (common with auto-formatters)
+    logger.debug("Initial commit failed, checking for hook modifications", task=task_number)
+
+    # Check if there are unstaged changes (modified by hooks)
+    proc = await asyncio.create_subprocess_exec(
+        "git", "diff", "--quiet",
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        cwd=working_dir,
+        env=git_env,
+    )
+    try:
+        await asyncio.wait_for(proc.communicate(), timeout=timeout_seconds)
+    except TimeoutError:
+        logger.warning("Timeout checking for hook modifications", task=task_number)
+        proc.kill()
+        await proc.wait()
+        return False
+
+    # returncode 0 = no unstaged changes, 1 = unstaged changes exist
+    if proc.returncode == 1:
+        # Hooks modified files - re-stage and retry commit
+        logger.info(
+            "Git hooks modified files during commit, re-staging and retrying",
+            task=task_number,
+        )
+
+        # Re-stage all changes
+        proc = await asyncio.create_subprocess_exec(
+            "git", "add", "-A",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            cwd=working_dir,
+            env=git_env,
+        )
+        try:
+            _, restage_stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout_seconds)
+        except TimeoutError:
+            logger.warning("Timeout re-staging hook modifications", task=task_number)
+            proc.kill()
+            await proc.wait()
+            return False
+        if proc.returncode != 0:
+            logger.warning(
+                "Failed to re-stage hook modifications",
+                error=restage_stderr.decode(),
+            )
+            return False
+
+        # Retry commit
+        proc = await asyncio.create_subprocess_exec(
+            "git", "commit", "-m", commit_msg,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            cwd=working_dir,
+            env=git_env,
+        )
+        try:
+            _, retry_stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout_seconds)
+        except TimeoutError:
+            logger.warning("Timeout on commit retry after hook modifications", task=task_number)
+            proc.kill()
+            await proc.wait()
+            return False
+        if proc.returncode == 0:
+            logger.info(
+                "Committed task changes after hook modifications",
+                task=task_number,
+                message=commit_msg,
+            )
+            return True
+        logger.warning(
+            "Failed to commit task changes on retry",
+            error=retry_stderr.decode(),
+        )
+        return False
+
+    # No unstaged changes, commit failed for another reason
     logger.warning("Failed to commit task changes", error=stderr.decode())
     return False

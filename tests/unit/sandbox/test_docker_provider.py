@@ -197,3 +197,107 @@ class TestEnsureRunning:
 
         mock_build_image.assert_not_awaited()
         mock_start_container.assert_awaited_once()
+
+
+class TestNetworkAllowlist:
+    """Tests for _apply_network_allowlist() — applies iptables rules in container."""
+
+    async def test_allowlist_applied_when_enabled(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """ensure_running() calls _apply_network_allowlist() after _wait_for_ready()."""
+        provider = DockerSandboxProvider(
+            profile_name="test",
+            network_allowlist_enabled=True,
+            network_allowed_hosts=["github.com"],
+        )
+        call_order: list[str] = []
+
+        mock_health_check = AsyncMock(return_value=False)
+        mock_image_exists = AsyncMock(return_value=True)
+        mock_start_container = AsyncMock()
+
+        async def mock_wait() -> None:
+            call_order.append("wait_for_ready")
+
+        async def mock_allowlist() -> None:
+            call_order.append("apply_network_allowlist")
+
+        monkeypatch.setattr(provider, "health_check", mock_health_check)
+        monkeypatch.setattr(provider, "_image_exists", mock_image_exists)
+        monkeypatch.setattr(provider, "_build_image", AsyncMock())
+        monkeypatch.setattr(provider, "_start_container", mock_start_container)
+        monkeypatch.setattr(provider, "_wait_for_ready", mock_wait)
+        monkeypatch.setattr(provider, "_apply_network_allowlist", mock_allowlist)
+
+        await provider.ensure_running()
+
+        assert call_order == ["wait_for_ready", "apply_network_allowlist"]
+
+    async def test_allowlist_skipped_when_disabled(
+        self, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """When network_allowlist_enabled=False, no docker exec is invoked."""
+        provider = DockerSandboxProvider(profile_name="test")
+        assert provider.network_allowlist_enabled is False
+
+        with patch("asyncio.create_subprocess_exec") as mock_exec:
+            await provider._apply_network_allowlist()
+
+        mock_exec.assert_not_called()
+
+    async def test_allowlist_generates_and_pipes_rules(self) -> None:
+        """Verify rules are generated and piped to docker exec as stdin."""
+        hosts = ["github.com", "pypi.org"]
+        provider = DockerSandboxProvider(
+            profile_name="test",
+            network_allowlist_enabled=True,
+            network_allowed_hosts=hosts,
+        )
+
+        mock_proc = AsyncMock()
+        mock_proc.communicate.return_value = (b"", b"")
+        mock_proc.returncode = 0
+
+        with (
+            patch("asyncio.create_subprocess_exec", return_value=mock_proc) as mock_exec,
+            patch(
+                "amelia.sandbox.docker.generate_allowlist_rules",
+                return_value="#!/bin/sh\nfake-rules\n",
+            ) as mock_gen,
+        ):
+            await provider._apply_network_allowlist()
+
+        mock_gen.assert_called_once_with(allowed_hosts=hosts)
+
+        args = mock_exec.call_args[0]
+        assert args == (
+            "docker", "exec", "-i", "--user", "root", "amelia-sandbox-test",
+            "sh", "/opt/amelia/scripts/setup-network.sh",
+        )
+        # Verify rules were piped via stdin
+        mock_proc.communicate.assert_awaited_once()
+        call_kwargs = mock_proc.communicate.call_args
+        assert call_kwargs[1]["input"] == b"#!/bin/sh\nfake-rules\n"
+
+    async def test_allowlist_failure_raises(self) -> None:
+        """Non-zero exit from docker exec raises RuntimeError."""
+        provider = DockerSandboxProvider(
+            profile_name="test",
+            network_allowlist_enabled=True,
+            network_allowed_hosts=["github.com"],
+        )
+
+        mock_proc = AsyncMock()
+        mock_proc.communicate.return_value = (b"", b"iptables: Permission denied")
+        mock_proc.returncode = 1
+
+        with (
+            patch("asyncio.create_subprocess_exec", return_value=mock_proc),
+            patch(
+                "amelia.sandbox.docker.generate_allowlist_rules",
+                return_value="#!/bin/sh\nfake-rules\n",
+            ),
+            pytest.raises(RuntimeError, match="Failed to apply network allowlist"),
+        ):
+            await provider._apply_network_allowlist()

@@ -382,7 +382,7 @@ Error: Profile 'production' not found in settings.
 
 2. Create the missing profile:
    ```bash
-   amelia config profile create production --driver cli:claude --tracker github
+   amelia config profile create production --driver cli --tracker github
    ```
 
 3. Or use an existing profile:
@@ -404,10 +404,10 @@ Error: No profiles configured. Run 'amelia config profile create' to add one.
 1. Create a profile with CLI commands:
    ```bash
    # Create a profile with CLI driver (recommended for getting started)
-   amelia config profile create dev --driver cli:claude --tracker none
+   amelia config profile create dev --driver cli --tracker none
 
    # Or with API driver
-   amelia config profile create dev --driver api:openrouter --model "anthropic/claude-sonnet-4" --tracker github
+   amelia config profile create dev --driver api --model "anthropic/claude-sonnet-4" --tracker github
    ```
 
 2. Set the active profile:
@@ -567,9 +567,9 @@ PathTraversalError: Path '../../../etc/passwd' resolves to '/etc/passwd' which i
 
 **Checklist:**
 1. Dependencies installed: `uv sync`
-2. Profile created: `amelia config profile create dev --driver cli:claude --activate`
+2. Profile created: `amelia config profile create dev --driver cli --activate`
 3. Tracker configured (or use `--tracker none`)
-4. Driver credentials set (or use `cli:claude`)
+4. Driver credentials set (or use `cli`)
 5. Server started: `amelia dev`
 
 ### Can't start workflow

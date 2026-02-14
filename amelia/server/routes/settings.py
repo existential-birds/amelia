@@ -4,9 +4,9 @@ from typing import Any
 
 from asyncpg import UniqueViolationError
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from amelia.core.types import AgentConfig, DriverType, Profile, TrackerType
+from amelia.core.types import AgentConfig, DriverType, Profile, SandboxConfig, TrackerType
 from amelia.server.database import (
     ProfileRepository,
     SettingsRepository,
@@ -64,6 +64,7 @@ class ProfileResponse(BaseModel):
     plan_output_dir: str
     plan_path_pattern: str
     agents: dict[str, AgentConfigResponse]
+    sandbox: SandboxConfig = Field(default_factory=SandboxConfig)
     is_active: bool = False
 
 
@@ -87,6 +88,7 @@ class ProfileCreate(BaseModel):
     plan_output_dir: str = "docs/plans"
     plan_path_pattern: str = "docs/plans/{date}-{issue_key}.md"
     agents: dict[str, AgentConfigCreate]
+    sandbox: SandboxConfig = Field(default_factory=SandboxConfig)
 
 
 class ProfileUpdate(BaseModel):
@@ -100,6 +102,7 @@ class ProfileUpdate(BaseModel):
     plan_output_dir: str | None = None
     plan_path_pattern: str | None = None
     agents: dict[str, AgentConfigCreate] | None = None
+    sandbox: SandboxConfig | None = None
 
 
 # Server settings endpoints
@@ -172,6 +175,7 @@ async def create_profile(
         plan_output_dir=profile_req.plan_output_dir,
         plan_path_pattern=profile_req.plan_path_pattern,
         agents=agents,
+        sandbox=profile_req.sandbox,
     )
 
     try:
@@ -220,6 +224,10 @@ async def update_profile(
             }
             for name, config in updates.agents.items()
         }
+
+    # Handle sandbox field - pass as dict for JSONB storage
+    if updates.sandbox is not None:
+        update_dict["sandbox"] = updates.sandbox.model_dump()
 
     try:
         updated = await repo.update_profile(profile_id, update_dict)
@@ -281,5 +289,6 @@ def _profile_to_response(profile: Profile, is_active: bool = False) -> ProfileRe
             )
             for name, config in profile.agents.items()
         },
+        sandbox=profile.sandbox,
         is_active=is_active,
     )

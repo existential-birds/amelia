@@ -96,3 +96,89 @@ class TestDesign:
 
         design = Design.from_file(str(design_file))
         assert design.content == "content"
+
+
+def test_agent_config_sandbox_default():
+    """AgentConfig should default sandbox to SandboxConfig() with mode='none'."""
+    from amelia.core.types import AgentConfig, SandboxConfig
+
+    config = AgentConfig(driver="cli", model="sonnet")
+    assert config.sandbox == SandboxConfig()
+    assert config.sandbox.mode == "none"
+
+
+def test_agent_config_profile_name_default():
+    """AgentConfig should default profile_name to 'default'."""
+    from amelia.core.types import AgentConfig
+
+    config = AgentConfig(driver="cli", model="sonnet")
+    assert config.profile_name == "default"
+
+
+def test_agent_config_with_sandbox_config():
+    """AgentConfig should accept explicit SandboxConfig."""
+    from amelia.core.types import AgentConfig, SandboxConfig
+
+    sandbox = SandboxConfig(mode="container", image="custom:latest")
+    config = AgentConfig(
+        driver="api", model="test-model",
+        sandbox=sandbox, profile_name="work",
+    )
+    assert config.sandbox.mode == "container"
+    assert config.sandbox.image == "custom:latest"
+    assert config.profile_name == "work"
+
+
+def test_get_agent_config_injects_sandbox():
+    """get_agent_config should inject profile's sandbox config into AgentConfig."""
+    from amelia.core.types import AgentConfig, Profile, SandboxConfig
+
+    sandbox = SandboxConfig(mode="container", image="custom:latest")
+    profile = Profile(
+        name="work",
+        tracker="noop",
+        working_dir="/tmp/test",
+        sandbox=sandbox,
+        agents={"architect": AgentConfig(driver="api", model="opus")},
+    )
+
+    config = profile.get_agent_config("architect")
+    assert config.sandbox.mode == "container"
+    assert config.sandbox.image == "custom:latest"
+    assert config.profile_name == "work"
+
+
+def test_get_agent_config_injects_profile_name():
+    """get_agent_config should set profile_name to profile.name."""
+    from amelia.core.types import AgentConfig, Profile
+
+    profile = Profile(
+        name="personal",
+        tracker="noop",
+        working_dir="/tmp/test",
+        agents={"developer": AgentConfig(driver="cli", model="sonnet")},
+    )
+
+    config = profile.get_agent_config("developer")
+    assert config.profile_name == "personal"
+
+
+def test_get_agent_config_preserves_original():
+    """get_agent_config should not mutate the stored AgentConfig."""
+    from amelia.core.types import AgentConfig, Profile, SandboxConfig
+
+    sandbox = SandboxConfig(mode="container")
+    original = AgentConfig(driver="api", model="opus")
+    profile = Profile(
+        name="work",
+        tracker="noop",
+        working_dir="/tmp/test",
+        sandbox=sandbox,
+        agents={"architect": original},
+    )
+
+    injected = profile.get_agent_config("architect")
+    assert injected is not original
+    assert original.sandbox.mode == "none"  # Original unchanged
+    assert original.profile_name == "default"  # Original unchanged
+    assert injected.sandbox.mode == "container"  # Injected has profile's sandbox

@@ -9,13 +9,16 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from pathlib import Path
 
 from loguru import logger
 
+from amelia.sandbox.network import generate_allowlist_rules
+from amelia.sandbox.provider import SandboxProvider
 
-class DockerSandboxProvider:
+
+class DockerSandboxProvider(SandboxProvider):
     """Manages a Docker container for sandboxed agent execution.
 
     One container per profile, started on first use, kept alive with
@@ -32,10 +35,15 @@ class DockerSandboxProvider:
         profile_name: str,
         image: str = "amelia-sandbox:latest",
         proxy_port: int = 8430,
+        network_allowlist_enabled: bool = False,
+        network_allowed_hosts: Sequence[str] | None = None,
     ) -> None:
         self.profile_name = profile_name
         self.image = image
         self.proxy_port = proxy_port
+        self.network_allowlist_enabled = network_allowlist_enabled
+        self.network_allowed_hosts: list[str] = list(network_allowed_hosts or [])
+
         self.container_name = f"amelia-sandbox-{profile_name}"
 
     async def ensure_running(self) -> None:
@@ -46,6 +54,7 @@ class DockerSandboxProvider:
             await self._build_image()
         await self._start_container()
         await self._wait_for_ready()
+        await self._apply_network_allowlist()
 
     async def exec_stream(
         self,
@@ -281,3 +290,35 @@ class DockerSandboxProvider:
         raise TimeoutError(
             f"Container {self.container_name} not ready after {timeout}s"
         )
+
+    async def _apply_network_allowlist(self) -> None:
+        """Apply iptables network allowlist if enabled.
+
+        Generates iptables rules and executes them inside the container
+        as root via the setup-network.sh script.
+        """
+        if not self.network_allowlist_enabled:
+            return
+
+        rules = generate_allowlist_rules(
+            allowed_hosts=self.network_allowed_hosts,
+        )
+        logger.info(
+            "Applying network allowlist",
+            container=self.container_name,
+            hosts=len(self.network_allowed_hosts),
+        )
+
+        proc = await asyncio.create_subprocess_exec(
+            "docker", "exec", "-i", "--user", "root", self.container_name,
+            "sh", "/opt/amelia/scripts/setup-network.sh",
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        _, stderr = await proc.communicate(input=rules.encode())
+        if proc.returncode != 0:
+            raise RuntimeError(
+                f"Failed to apply network allowlist: {stderr.decode().strip()}"
+            )
+        logger.info("Network allowlist applied", container=self.container_name)

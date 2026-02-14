@@ -473,3 +473,42 @@ class TestServerSet:
 
         assert result.exit_code == 1
         assert "Unknown setting" in result.stdout
+
+
+class TestDbConnectionError:
+    """Tests for database connection error handling in CLI."""
+
+    @pytest.fixture
+    def runner(self) -> CliRunner:
+        """Typer CLI test runner."""
+        return CliRunner()
+
+    def test_profile_list_shows_panel_on_connection_error(
+        self, runner: CliRunner
+    ) -> None:
+        """'amelia config profile list' shows clean error on DB failure."""
+        mock_db = MagicMock()
+        mock_db.connect = AsyncMock(
+            side_effect=ConnectionError("Cannot connect to PostgreSQL")
+        )
+
+        with patch("amelia.cli.config.get_database", return_value=mock_db):
+            result = runner.invoke(app, ["config", "profile", "list"])
+
+        assert result.exit_code == 1
+        assert "Database Connection Error" in result.stdout
+
+    def test_server_show_shows_panel_on_connection_error(
+        self, runner: CliRunner
+    ) -> None:
+        """'amelia config server show' shows clean error on DB failure."""
+        mock_db = MagicMock()
+        mock_db.connect = AsyncMock(
+            side_effect=ConnectionError("Cannot connect to PostgreSQL")
+        )
+
+        with patch("amelia.cli.config.get_database", return_value=mock_db):
+            result = runner.invoke(app, ["config", "server", "show"])
+
+        assert result.exit_code == 1
+        assert "Database Connection Error" in result.stdout

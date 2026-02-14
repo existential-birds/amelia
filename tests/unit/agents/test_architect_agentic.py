@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from amelia.agents.architect import Architect
-from amelia.core.types import AgentConfig, Profile
+from amelia.core.types import AgentConfig, Profile, SandboxConfig
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
 from amelia.pipelines.implementation.state import ImplementationState
 from amelia.server.models.events import EventType, WorkflowEvent
@@ -26,7 +26,13 @@ class TestArchitectInitWithAgentConfig:
 
             architect = Architect(config)
 
-            mock_get_driver.assert_called_once_with("cli", model="sonnet")
+            mock_get_driver.assert_called_once_with(
+                "cli",
+                model="sonnet",
+                sandbox_config=SandboxConfig(),
+                profile_name="default",
+                options={},
+            )
             assert architect.driver is mock_driver
             assert architect.options == {}
 

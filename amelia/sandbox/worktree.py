@@ -53,9 +53,7 @@ class WorktreeManager:
         """
         lines: list[str] = []
         stream = self._provider.exec_stream(command, cwd=cwd, env=env)
-        # TODO(mypy): Remove type: ignore when python/mypy#17844 is fixed.
-        # Mypy doesn't recognize AsyncIterator from Protocol methods as iterable.
-        async for line in stream:  # type: ignore[attr-defined]
+        async for line in stream:
             lines.append(line)
         return lines
 

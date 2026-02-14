@@ -72,7 +72,13 @@ Before planning, discover:
                 Supports keys: "architect.system", "architect.plan".
 
         """
-        self.driver = get_driver(config.driver, model=config.model)
+        self.driver = get_driver(
+            config.driver,
+            model=config.model,
+            sandbox_config=config.sandbox,
+            profile_name=config.profile_name,
+            options=config.options,
+        )
         self.options = config.options
         self._event_bus = event_bus
         self._prompts = prompts or {}

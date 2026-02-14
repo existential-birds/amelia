@@ -33,7 +33,7 @@ class ServerConfig(BaseSettings):
         description="Port to bind the server to",
     )
     database_url: str = Field(
-        default="postgresql://localhost:5432/amelia",
+        default="postgresql://amelia:amelia@localhost:5434/amelia",
         description="PostgreSQL connection URL",
     )
     db_pool_min_size: int = Field(default=2, ge=1, description="Minimum pool connections")

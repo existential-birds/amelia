@@ -43,7 +43,13 @@ class Developer:
             prompts: Optional dict mapping prompt IDs to custom content.
                 Supports key: "developer.system".
         """
-        self.driver = get_driver(config.driver, model=config.model)
+        self.driver = get_driver(
+            config.driver,
+            model=config.model,
+            sandbox_config=config.sandbox,
+            profile_name=config.profile_name,
+            options=config.options,
+        )
         self.options = config.options
         self._prompts = prompts or {}
 

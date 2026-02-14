@@ -11,7 +11,7 @@ White papers, blog posts, videos, and open-source projects that influenced Ameli
 
 This blog post introduced **Harness as a Service (HaaS)**, arguing that agent infrastructure is commoditizing. A harness provides complete runtime environments (context management, tool invocation, permissions, loop control) so developers can focus on domain specialization rather than building infrastructure from scratch.
 
-**Key influence:** Amelia's driver abstraction (`api:openrouter` vs `cli:claude`), profile-based configuration, and multi-agent architecture (Architect, Developer, Reviewer as specialized subagents).
+**Key influence:** Amelia's driver abstraction (`api` vs `cli`), profile-based configuration, and multi-agent architecture (Architect, Developer, Reviewer as specialized subagents).
 
 #### [Ralph Wiggum as a Software Engineer](https://ghuntley.com/ralph/)
 *by Geoffrey Huntley*

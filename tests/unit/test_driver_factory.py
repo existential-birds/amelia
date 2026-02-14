@@ -59,12 +59,6 @@ class TestDriverInterfaceProtocol:
 class TestGetDriverProviderPassing:
     """Tests for get_driver passing provider to ApiDriver."""
 
-    def test_api_openrouter_passes_provider(self) -> None:
-        """get_driver should pass provider='openrouter' to ApiDriver for legacy 'api:openrouter' key."""
-        driver = get_driver("api:openrouter")
-        assert isinstance(driver, ApiDriver)
-        assert driver.provider == "openrouter"
-
     def test_api_shorthand_passes_provider(self) -> None:
         """get_driver should pass provider='openrouter' to ApiDriver for 'api' shorthand."""
         driver = get_driver("api")

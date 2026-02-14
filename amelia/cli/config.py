@@ -20,6 +20,7 @@ from amelia.server.database import (
     ProfileRepository,
     SettingsRepository,
 )
+from amelia.server.errors import print_db_error
 
 
 console = Console()
@@ -60,7 +61,11 @@ async def _get_profile_repository() -> tuple[Database, ProfileRepository]:
         Tuple of (Database, ProfileRepository) with connected database.
     """
     db = get_database()
-    await db.connect()
+    try:
+        await db.connect()
+    except ConnectionError as e:
+        print_db_error(console, e)
+        raise typer.Exit(1) from None
     migrator = Migrator(db)
     await migrator.run()
     return db, ProfileRepository(db)
@@ -73,7 +78,11 @@ async def _get_settings_repository() -> tuple[Database, SettingsRepository]:
         Tuple of (Database, SettingsRepository) with connected database.
     """
     db = get_database()
-    await db.connect()
+    try:
+        await db.connect()
+    except ConnectionError as e:
+        print_db_error(console, e)
+        raise typer.Exit(1) from None
     migrator = Migrator(db)
     await migrator.run()
     repo = SettingsRepository(db)

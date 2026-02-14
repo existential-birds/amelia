@@ -116,7 +116,7 @@ Server settings configurable via `amelia config server set` or dashboard. Enviro
 | `AMELIA_PORT` | `8420` | Port to bind the server to |
 | `AMELIA_LOG_RETENTION_DAYS` | `30` | Days to retain event logs |
 | `AMELIA_CHECKPOINT_RETENTION_DAYS` | `0` | Days to retain LangGraph checkpoints. `0` = delete immediately on shutdown, `-1` = never delete (for debugging) |
-| `AMELIA_DATABASE_URL` | `postgresql://localhost:5432/amelia` | PostgreSQL connection URL |
+| `AMELIA_DATABASE_URL` | `postgresql://amelia:amelia@localhost:5434/amelia` | PostgreSQL connection URL |
 | `AMELIA_DB_POOL_MIN_SIZE` | `2` | Minimum pool connections |
 | `AMELIA_DB_POOL_MAX_SIZE` | `10` | Maximum pool connections |
 | `AMELIA_MAX_CONCURRENT` | `5` | Maximum concurrent workflows |

@@ -47,6 +47,7 @@ from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from loguru import logger
 
 from amelia import __version__
 from amelia.drivers.base import DriverInterface
@@ -57,6 +58,7 @@ from amelia.drivers.factory import (
 from amelia.logging import configure_logging, log_server_startup
 from amelia.pipelines.implementation.state import rebuild_implementation_state
 from amelia.sandbox.proxy import ProviderConfig, create_proxy_router
+from amelia.sandbox.teardown import teardown_all_sandbox_containers
 from amelia.server.config import ServerConfig
 from amelia.server.database import ProfileRepository, SettingsRepository, WorkflowRepository
 from amelia.server.database.brainstorm_repository import BrainstormRepository
@@ -137,7 +139,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # Connect to database and run migrations
     database = Database(config.database_url, min_size=config.db_pool_min_size, max_size=config.db_pool_max_size)
-    await database.connect()
+    try:
+        await database.connect()
+    except ConnectionError:
+        logger.error("Failed to connect to database. Is PostgreSQL running? Try: docker compose up -d postgres")
+        raise
     migrator = Migrator(database)
     await migrator.run()
     await migrator.initialize_prompts()
@@ -230,6 +236,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     await health_checker.stop()
     await lifecycle.shutdown()
+    await teardown_all_sandbox_containers()
     clear_orchestrator()
     await exit_stack.aclose()  # Also cleans up proxy HTTP client
 

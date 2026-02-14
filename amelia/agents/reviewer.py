@@ -127,7 +127,13 @@ class Reviewer:
                 execution to distinguish from final review.
 
         """
-        self.driver = get_driver(config.driver, model=config.model)
+        self.driver = get_driver(
+            config.driver,
+            model=config.model,
+            sandbox_config=config.sandbox,
+            profile_name=config.profile_name,
+            options=config.options,
+        )
         self.options = config.options
         self._event_bus = event_bus
         self._prompts = prompts or {}

@@ -11,11 +11,13 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from amelia.sandbox.docker import DockerSandboxProvider
+    from amelia.sandbox.driver import ContainerDriver
     from amelia.sandbox.provider import SandboxProvider
     from amelia.sandbox.proxy import ProviderConfig
     from amelia.sandbox.worktree import WorktreeManager
 
 __all__ = [
+    "ContainerDriver",
     "DockerSandboxProvider",
     "ProviderConfig",
     "SandboxProvider",
@@ -36,6 +38,10 @@ def __getattr__(name: str) -> object:
         from amelia.sandbox.provider import SandboxProvider  # noqa: PLC0415
 
         return SandboxProvider
+    if name == "ContainerDriver":
+        from amelia.sandbox.driver import ContainerDriver  # noqa: PLC0415
+
+        return ContainerDriver
     if name == "WorktreeManager":
         from amelia.sandbox.worktree import WorktreeManager  # noqa: PLC0415
 
