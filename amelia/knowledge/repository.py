@@ -1,6 +1,6 @@
 """PostgreSQL repository for Knowledge Library."""
 
-from typing import TypedDict
+from typing import NotRequired, TypedDict
 from uuid import uuid4
 
 import asyncpg
@@ -10,7 +10,7 @@ from amelia.knowledge.models import Document, DocumentStatus, SearchResult
 from amelia.server.database.connection import Database
 
 
-class ChunkData(TypedDict, total=False):
+class ChunkData(TypedDict):
     """Type for chunk data passed to insert_chunks."""
 
     chunk_index: int
@@ -18,7 +18,7 @@ class ChunkData(TypedDict, total=False):
     heading_path: list[str]
     token_count: int
     embedding: list[float]
-    metadata: dict[str, str]
+    metadata: NotRequired[dict[str, str]]
 
 
 class KnowledgeRepository:
