@@ -9,6 +9,19 @@ import pytest
 from amelia.knowledge.embeddings import EmbeddingClient, EmbeddingError
 
 
+def make_batch_response(*args: object, **kwargs: object) -> httpx.Response:
+    """Return embeddings matching the input count for batch tests."""
+    json_data = kwargs.get("json", {})
+    input_texts = json_data.get("input", []) if isinstance(json_data, dict) else []
+    return httpx.Response(
+        200,
+        json={
+            "data": [{"embedding": [0.1] * 1536} for _ in range(len(input_texts))],
+            "model": "openai/text-embedding-3-small",
+        },
+    )
+
+
 @pytest.fixture
 async def embedding_client() -> AsyncGenerator[EmbeddingClient, None]:
     """Provide embedding client with test API key."""
@@ -41,20 +54,8 @@ async def test_embed_batch(embedding_client: EmbeddingClient) -> None:
     """Should embed multiple texts in parallel batches."""
     texts = [f"Text {i}" for i in range(250)]  # Requires 3 batches (100, 100, 50)
 
-    def make_response(*args: object, **kwargs: object) -> httpx.Response:
-        """Return embeddings matching the input count."""
-        json_data = kwargs.get("json", {})
-        input_texts = json_data.get("input", []) if isinstance(json_data, dict) else []
-        return httpx.Response(
-            200,
-            json={
-                "data": [{"embedding": [0.1] * 1536} for _ in range(len(input_texts))],
-                "model": "openai/text-embedding-3-small",
-            },
-        )
-
     with patch("httpx.AsyncClient.post") as mock_post:
-        mock_post.side_effect = make_response
+        mock_post.side_effect = make_batch_response
 
         embeddings = await embedding_client.embed_batch(texts)
 
@@ -180,18 +181,6 @@ async def test_embed_batch_progress_callback(embedding_client: EmbeddingClient) 
     """Should invoke progress_callback with cumulative progress for each batch."""
     texts = [f"Text {i}" for i in range(250)]  # 3 batches: 100, 100, 50
 
-    def make_response(*args: object, **kwargs: object) -> httpx.Response:
-        """Return embeddings matching the input count."""
-        json_data = kwargs.get("json", {})
-        input_texts = json_data.get("input", []) if isinstance(json_data, dict) else []
-        return httpx.Response(
-            200,
-            json={
-                "data": [{"embedding": [0.1] * 1536} for _ in range(len(input_texts))],
-                "model": "openai/text-embedding-3-small",
-            },
-        )
-
     # Track all progress_callback invocations
     progress_calls: list[tuple[int, int]] = []
 
@@ -199,7 +188,7 @@ async def test_embed_batch_progress_callback(embedding_client: EmbeddingClient) 
         progress_calls.append((processed, total))
 
     with patch("httpx.AsyncClient.post") as mock_post:
-        mock_post.side_effect = make_response
+        mock_post.side_effect = make_batch_response
 
         await embedding_client.embed_batch(texts, progress_callback=progress_callback)
 
@@ -210,3 +199,6 @@ async def test_embed_batch_progress_callback(embedding_client: EmbeddingClient) 
     # Final processed count should equal total
     final_processed = max(p for p, _ in progress_calls)
     assert final_processed == 250
+    # Progress values should be monotonically increasing (100, 200, 250)
+    processed_values = [p for p, _ in progress_calls]
+    assert processed_values == sorted(processed_values), "Progress values should be monotonically increasing"
