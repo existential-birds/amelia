@@ -37,10 +37,12 @@ import {
   Wand2,
   Terminal,
   Cloud,
+  X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { createProfile, updateProfile } from '@/api/settings';
-import type { Profile, ProfileCreate, ProfileUpdate } from '@/api/settings';
+import type { Profile, ProfileCreate, ProfileUpdate, SandboxConfig } from '@/api/settings';
+import { Switch } from '@/components/ui/switch';
 import * as toast from '@/components/Toast';
 import { ApiModelSelect } from '@/components/model-picker';
 
@@ -151,6 +153,10 @@ interface FormData {
   plan_output_dir: string;
   plan_path_pattern: string;
   agents: Record<string, AgentFormData>;
+  sandbox_mode: 'none' | 'container';
+  sandbox_image: string;
+  sandbox_network_allowlist_enabled: boolean;
+  sandbox_network_allowed_hosts: string[];
 }
 
 // =============================================================================
@@ -204,6 +210,10 @@ const DEFAULT_FORM_DATA: FormData = {
   plan_output_dir: 'docs/plans',
   plan_path_pattern: 'docs/plans/{date}-{issue_key}.md',
   agents: buildDefaultAgents(),
+  sandbox_mode: 'none',
+  sandbox_image: 'amelia-sandbox:latest',
+  sandbox_network_allowlist_enabled: false,
+  sandbox_network_allowed_hosts: [],
 };
 
 /** Validation rules for profile fields */
@@ -242,6 +252,10 @@ const profileToFormData = (profile: Profile): FormData => {
     plan_output_dir: profile.plan_output_dir,
     plan_path_pattern: profile.plan_path_pattern,
     agents,
+    sandbox_mode: profile.sandbox?.mode ?? 'none',
+    sandbox_image: profile.sandbox?.image ?? 'amelia-sandbox:latest',
+    sandbox_network_allowlist_enabled: profile.sandbox?.network_allowlist_enabled ?? false,
+    sandbox_network_allowed_hosts: profile.sandbox?.network_allowed_hosts ?? [],
   };
 };
 
@@ -430,6 +444,96 @@ function BulkApply({ onApply }: BulkApplyProps) {
 }
 
 // =============================================================================
+// Host Chip Input Component
+// =============================================================================
+
+interface HostChipInputProps {
+  hosts: string[];
+  onChange: (hosts: string[]) => void;
+}
+
+function HostChipInput({ hosts, onChange }: HostChipInputProps) {
+  const [inputValue, setInputValue] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  const isValidHostname = (host: string): boolean => {
+    return /^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)*$/.test(host);
+  };
+
+  const addHost = () => {
+    const trimmed = inputValue.trim().toLowerCase();
+    if (!trimmed) return;
+
+    if (!isValidHostname(trimmed)) {
+      setError('Invalid hostname');
+      return;
+    }
+    if (hosts.includes(trimmed)) {
+      setError('Host already added');
+      return;
+    }
+
+    onChange([...hosts, trimmed]);
+    setInputValue('');
+    setError(null);
+  };
+
+  const removeHost = (host: string) => {
+    onChange(hosts.filter((h) => h !== host));
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addHost();
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap gap-1.5 min-h-[32px]">
+        {hosts.map((host) => (
+          <Badge
+            key={host}
+            variant="secondary"
+            className="text-xs font-mono gap-1 pl-2 pr-1"
+          >
+            {host}
+            <button
+              type="button"
+              onClick={() => removeHost(host)}
+              className="ml-0.5 rounded-sm hover:bg-muted-foreground/20 p-0.5"
+              aria-label={`Remove ${host}`}
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </Badge>
+        ))}
+      </div>
+      <div className="flex gap-2">
+        <Input
+          value={inputValue}
+          onChange={(e) => {
+            setInputValue(e.target.value);
+            if (error) setError(null);
+          }}
+          onKeyDown={handleKeyDown}
+          placeholder="api.example.com"
+          className={cn(
+            'bg-background/50 font-mono text-sm flex-1',
+            error && 'border-destructive focus-visible:ring-destructive'
+          )}
+        />
+        <Button type="button" variant="outline" size="sm" onClick={addHost}>
+          Add
+        </Button>
+      </div>
+      {error && <p className="text-xs text-destructive">{error}</p>}
+    </div>
+  );
+}
+
+// =============================================================================
 // Main Component
 // =============================================================================
 
@@ -482,6 +586,14 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
       ) {
         return true;
       }
+    }
+    if (
+      formData.sandbox_mode !== original.sandbox_mode ||
+      formData.sandbox_image !== original.sandbox_image ||
+      formData.sandbox_network_allowlist_enabled !== original.sandbox_network_allowlist_enabled ||
+      JSON.stringify(formData.sandbox_network_allowed_hosts) !== JSON.stringify(original.sandbox_network_allowed_hosts)
+    ) {
+      return true;
     }
     return false;
   }, [formData]);
@@ -584,6 +696,13 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
     return agents;
   };
 
+  const formSandboxToApi = (): SandboxConfig => ({
+    mode: formData.sandbox_mode,
+    image: formData.sandbox_image,
+    network_allowlist_enabled: formData.sandbox_network_allowlist_enabled,
+    network_allowed_hosts: formData.sandbox_network_allowed_hosts,
+  });
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -599,6 +718,7 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
           plan_output_dir: formData.plan_output_dir,
           plan_path_pattern: formData.plan_path_pattern,
           agents: formAgentsToApi(),
+          sandbox: formSandboxToApi(),
         };
         await updateProfile(profile!.id, updates);
         toast.success('Profile updated');
@@ -610,6 +730,7 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
           plan_output_dir: formData.plan_output_dir,
           plan_path_pattern: formData.plan_path_pattern,
           agents: formAgentsToApi(),
+          sandbox: formSandboxToApi(),
         };
         await createProfile(newProfile);
         toast.success('Profile created');
@@ -816,7 +937,78 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
 
             {/* Sandbox Tab */}
             <TabsContent value="sandbox" className="space-y-4 pt-4">
-              <p className="text-sm text-muted-foreground">No sandbox configuration.</p>
+              {/* Sandbox Mode */}
+              <div className="space-y-2">
+                <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+                  Sandbox Mode
+                </Label>
+                <Select
+                  value={formData.sandbox_mode}
+                  onValueChange={(v) => handleChange('sandbox_mode', v)}
+                >
+                  <SelectTrigger className="bg-background/50">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    <SelectItem value="container">Container</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  {formData.sandbox_mode === 'none'
+                    ? 'Code runs directly on the host machine.'
+                    : 'Code runs in an isolated Docker container.'}
+                </p>
+              </div>
+
+              {/* Container-specific settings */}
+              {formData.sandbox_mode === 'container' && (
+                <>
+                  {/* Docker Image */}
+                  <div className="space-y-2">
+                    <Label htmlFor="sandbox_image" className="text-xs uppercase tracking-wider text-muted-foreground">
+                      Docker Image
+                    </Label>
+                    <Input
+                      id="sandbox_image"
+                      value={formData.sandbox_image}
+                      onChange={(e) => handleChange('sandbox_image', e.target.value)}
+                      placeholder="amelia-sandbox:latest"
+                      className="bg-background/50 hover:border-muted-foreground/30 transition-colors font-mono text-sm"
+                    />
+                  </div>
+
+                  {/* Network Allowlist Toggle */}
+                  <div className="flex items-center justify-between rounded-lg border border-border/40 p-4">
+                    <div className="space-y-0.5">
+                      <Label htmlFor="sandbox_network_allowlist" className="text-sm font-medium">
+                        Network Allowlist
+                      </Label>
+                      <p className="text-xs text-muted-foreground">
+                        Restrict outbound network to allowed hosts only.
+                      </p>
+                    </div>
+                    <Switch
+                      id="sandbox_network_allowlist"
+                      checked={formData.sandbox_network_allowlist_enabled}
+                      onCheckedChange={(checked) => handleChange('sandbox_network_allowlist_enabled', checked)}
+                    />
+                  </div>
+
+                  {/* Allowed Hosts */}
+                  {formData.sandbox_network_allowlist_enabled && (
+                    <div className="space-y-2">
+                      <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+                        Allowed Hosts
+                      </Label>
+                      <HostChipInput
+                        hosts={formData.sandbox_network_allowed_hosts}
+                        onChange={(hosts) => setFormData((prev) => ({ ...prev, sandbox_network_allowed_hosts: hosts }))}
+                      />
+                    </div>
+                  )}
+                </>
+              )}
             </TabsContent>
           </Tabs>
 
