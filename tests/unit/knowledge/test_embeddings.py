@@ -173,3 +173,40 @@ async def test_async_context_manager() -> None:
 
         # Client should be closed after exiting context
         assert client.client.is_closed
+
+
+@pytest.mark.asyncio
+async def test_embed_batch_progress_callback(embedding_client: EmbeddingClient) -> None:
+    """Should invoke progress_callback with cumulative progress for each batch."""
+    texts = [f"Text {i}" for i in range(250)]  # 3 batches: 100, 100, 50
+
+    def make_response(*args: object, **kwargs: object) -> httpx.Response:
+        """Return embeddings matching the input count."""
+        json_data = kwargs.get("json", {})
+        input_texts = json_data.get("input", []) if isinstance(json_data, dict) else []
+        return httpx.Response(
+            200,
+            json={
+                "data": [{"embedding": [0.1] * 1536} for _ in range(len(input_texts))],
+                "model": "openai/text-embedding-3-small",
+            },
+        )
+
+    # Track all progress_callback invocations
+    progress_calls: list[tuple[int, int]] = []
+
+    def progress_callback(processed: int, total: int) -> None:
+        progress_calls.append((processed, total))
+
+    with patch("httpx.AsyncClient.post") as mock_post:
+        mock_post.side_effect = make_response
+
+        await embedding_client.embed_batch(texts, progress_callback=progress_callback)
+
+    # Should have 3 calls (one per batch)
+    assert len(progress_calls) == 3
+    # Total should always be 250
+    assert all(total == 250 for _, total in progress_calls)
+    # Final processed count should equal total
+    final_processed = max(p for p, _ in progress_calls)
+    assert final_processed == 250
