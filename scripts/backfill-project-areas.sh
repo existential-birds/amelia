@@ -62,8 +62,6 @@ for arg in "$@"; do
   esac
 done
 
-AREA_LABELS="area:core area:agents area:dashboard area:cli area:server area:documentation"
-
 # ── Label → Area mapping ─────────────────────────────────────────────────────
 label_to_area() {
   local label="$1"
@@ -344,7 +342,6 @@ if [[ "$STRIP_LABELS" == "true" ]]; then
   echo ""
   echo "Scanning for area:* labels to remove from issues..."
   STRIPPED=0
-  STRIP_SKIPPED=0
 
   for i in $(seq 0 $((TOTAL - 1))); do
     ITEM=$(echo "$ALL_ITEMS" | jq ".[$i]")
