@@ -11,6 +11,23 @@
 
 ---
 
+## Progress Status
+
+| Phase | Status | Commit/PR | Notes |
+|-------|--------|-----------|-------|
+| 1 - PostgreSQL 17 + pg_vector | ✅ Complete | #437 | Migration, schema, HNSW index |
+| 2 - Pydantic models + repository | ✅ Complete | #437 | Document, DocumentChunk, SearchResult models; CRUD operations |
+| 3 - Embedding client | ✅ Complete | #439 | OpenRouter integration with retry logic and batching |
+| 4 - Ingestion pipeline | ✅ Complete | 325a88a8 | IngestionPipeline + KnowledgeService with event emission |
+| 5 - Search module + agent tool | 🔲 Not started | — | Semantic search, tag filtering, agent tool registration |
+| 6 - Oracle integration | 🔲 Not started | — | Tier 2 deep processing |
+| 7 - API endpoints + WebSocket | 🔲 Not started | — | FastAPI routes, real-time events |
+| 8 - Dashboard UI | 🔲 Not started | — | Knowledge Library tab, upload, progress tracking |
+
+**Last updated:** 2026-02-14
+
+---
+
 ## Background
 
 Amelia's agents need authoritative documentation when planning, coding, and reviewing. The Architect must reference framework APIs. The Reviewer must validate library usage patterns. The Oracle must synthesize large documents. Today, agents rely on training data or web search — both unreliable for specific framework versions and internal standards.
@@ -466,18 +483,19 @@ No new frontend dependencies.
 
 ## Implementation Phases
 
-| Phase | What | Depends On |
-|-------|------|------------|
-| 1 | PostgreSQL 17 upgrade + pg_vector migration | — |
-| 2 | Pydantic models + repository layer | Phase 1 |
-| 3 | Embedding client (OpenRouter wrapper) | — |
-| 4 | Ingestion pipeline (Docling + chunking + embedding + storage) | Phase 2, 3 |
-| 5 | Search module + `knowledge_search` agent tool registration | Phase 2, 3 |
-| 6 | Oracle integration (Tier 2 deep processing) | Phase 5 |
-| 7 | API endpoints + WebSocket events | Phase 4, 5 |
-| 8 | Dashboard Knowledge Library tab | Phase 7 |
+| Phase | Status | What | Depends On |
+|-------|--------|------|------------|
+| 1 | ✅ | PostgreSQL 17 upgrade + pg_vector migration | — |
+| 2 | ✅ | Pydantic models + repository layer | Phase 1 |
+| 3 | ✅ | Embedding client (OpenRouter wrapper) | — |
+| 4 | ✅ | Ingestion pipeline (Docling + chunking + embedding + storage) | Phase 2, 3 |
+| 5 | 🔲 | Search module + `knowledge_search` agent tool registration | Phase 2, 3 |
+| 6 | 🔲 | Oracle integration (Tier 2 deep processing) | Phase 5 |
+| 7 | 🔲 | API endpoints + WebSocket events | Phase 4, 5 |
+| 8 | 🔲 | Dashboard Knowledge Library tab | Phase 7 |
 
-Phases 2+3 run in parallel. Phases 4+5 run in parallel.
+**Completed:** Phases 1-4 (Data layer, embedding, ingestion pipeline)
+**Next:** Phase 5 (Search module) and Phase 7 (API endpoints) can run in parallel.
 
 ---
 
