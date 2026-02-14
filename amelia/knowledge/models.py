@@ -1,6 +1,6 @@
 """Pydantic models for Knowledge Library."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import StrEnum
 
 from pydantic import BaseModel, Field
@@ -52,8 +52,8 @@ class Document(BaseModel):
     token_count: int = 0
     raw_text: str | None = None
     metadata: dict[str, str] = Field(default_factory=dict)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class DocumentChunk(BaseModel):
@@ -79,7 +79,7 @@ class DocumentChunk(BaseModel):
     token_count: int
     embedding: list[float]
     metadata: dict[str, str] = Field(default_factory=dict)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class SearchResult(BaseModel):

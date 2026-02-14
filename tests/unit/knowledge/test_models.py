@@ -1,8 +1,6 @@
 """Test Knowledge Library Pydantic models."""
 
-from datetime import datetime, timezone
 
-import pytest
 
 from amelia.knowledge.models import Document, DocumentChunk, DocumentStatus, SearchResult
 

@@ -5,7 +5,7 @@ from uuid import uuid4
 
 from loguru import logger
 
-from amelia.knowledge.models import Document, DocumentChunk, DocumentStatus, SearchResult
+from amelia.knowledge.models import Document, DocumentStatus, SearchResult
 from amelia.server.database.connection import Database
 
 

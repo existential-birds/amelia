@@ -6,9 +6,10 @@ Mark as integration to skip in unit test runs.
 
 import pytest
 
-from amelia.knowledge.models import Document, DocumentChunk, DocumentStatus
+from amelia.knowledge.models import DocumentStatus
 from amelia.knowledge.repository import KnowledgeRepository
 from amelia.server.database.connection import Database
+
 
 pytestmark = pytest.mark.integration
 
