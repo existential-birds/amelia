@@ -1,6 +1,6 @@
 """PostgreSQL repository for Knowledge Library."""
 
-from typing import Any
+from typing import TypedDict
 from uuid import uuid4
 
 import asyncpg
@@ -8,6 +8,17 @@ from loguru import logger
 
 from amelia.knowledge.models import Document, DocumentStatus, SearchResult
 from amelia.server.database.connection import Database
+
+
+class ChunkData(TypedDict, total=False):
+    """Type for chunk data passed to insert_chunks."""
+
+    chunk_index: int
+    content: str
+    heading_path: list[str]
+    token_count: int
+    embedding: list[float]
+    metadata: dict[str, str]
 
 
 class KnowledgeRepository:
@@ -110,6 +121,9 @@ class KnowledgeRepository:
 
         Returns:
             Updated document.
+
+        Raises:
+            ValueError: If document not found.
         """
         row = await self.db.fetch_one(
             """
@@ -130,6 +144,9 @@ class KnowledgeRepository:
             token_count,
             raw_text,
         )
+
+        if not row:
+            raise ValueError(f"Document not found: {document_id}")
 
         logger.info(
             "Updated document status",
@@ -155,7 +172,7 @@ class KnowledgeRepository:
     async def insert_chunks(
         self,
         document_id: str,
-        chunks: list[dict[str, Any]],
+        chunks: list[ChunkData],
     ) -> None:
         """Insert document chunks in batch.
 
