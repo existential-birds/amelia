@@ -191,7 +191,10 @@ class EmbeddingClient:
             )
 
             if response.status_code != 200:
-                error_msg = response.json().get("error", "Unknown error")
+                try:
+                    error_msg = response.json().get("error", "Unknown error")
+                except ValueError:
+                    error_msg = response.text[:200] or "Non-JSON error response"
                 raise EmbeddingError(
                     f"API returned {response.status_code}: {error_msg}"
                 )

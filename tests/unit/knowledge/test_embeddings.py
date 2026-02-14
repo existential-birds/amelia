@@ -80,7 +80,10 @@ async def test_embed_error_handling(embedding_client: EmbeddingClient) -> None:
 @pytest.mark.asyncio
 async def test_embed_retry_on_failure(embedding_client: EmbeddingClient) -> None:
     """Should retry failed batches with exponential backoff."""
-    with patch("httpx.AsyncClient.post") as mock_post:
+    with (
+        patch("httpx.AsyncClient.post") as mock_post,
+        patch("asyncio.sleep") as mock_sleep,
+    ):
         # First call fails, second succeeds
         mock_post.side_effect = [
             httpx.Response(500, json={"error": "Server error"}),
@@ -97,6 +100,8 @@ async def test_embed_retry_on_failure(embedding_client: EmbeddingClient) -> None
 
         assert len(embedding) == 1536
         assert mock_post.call_count == 2  # Retry after first failure
+        # Verify exponential backoff: 2^0 = 1 second for first retry
+        mock_sleep.assert_called_once_with(1)
 
 
 @pytest.mark.asyncio
