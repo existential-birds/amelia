@@ -78,6 +78,21 @@ async def test_embed_error_handling(embedding_client: EmbeddingClient) -> None:
 
 
 @pytest.mark.asyncio
+async def test_embed_error_handling_non_json_response(
+    embedding_client: EmbeddingClient,
+) -> None:
+    """Should handle non-JSON error responses gracefully."""
+    with patch("httpx.AsyncClient.post") as mock_post:
+        mock_post.return_value = httpx.Response(
+            502,
+            text="<html>Bad Gateway</html>",
+        )
+
+        with pytest.raises(EmbeddingError, match=r"API returned 502.*Bad Gateway"):
+            await embedding_client.embed("Test text")
+
+
+@pytest.mark.asyncio
 async def test_embed_retry_on_failure(embedding_client: EmbeddingClient) -> None:
     """Should retry failed batches with exponential backoff."""
     with (
