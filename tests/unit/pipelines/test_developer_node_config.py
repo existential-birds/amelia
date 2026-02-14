@@ -6,6 +6,7 @@ import pytest
 from langchain_core.runnables.config import RunnableConfig
 
 from amelia.core.types import AgentConfig, DriverType, Profile
+from amelia.drivers.base import AgenticMessage, AgenticMessageType
 from amelia.pipelines.implementation.state import ImplementationState
 from amelia.pipelines.nodes import call_developer_node
 from tests.conftest import AsyncIteratorMock
@@ -41,9 +42,13 @@ async def test_call_developer_node_uses_agent_config(
 
     with patch("amelia.pipelines.nodes.Developer") as MockDeveloper:
         mock_developer = MagicMock()
+        event = AgenticMessage(
+            type=AgenticMessageType.RESULT,
+            content="Done",
+        ).to_workflow_event(workflow_id="wf-1", agent="developer")
         # Use AsyncIteratorMock for async generator return
         mock_developer.run = MagicMock(return_value=AsyncIteratorMock([
-            (state.model_copy(update={"agentic_status": "completed"}), MagicMock())
+            (state.model_copy(update={"agentic_status": "completed"}), event)
         ]))
         mock_developer.driver = MagicMock()
         MockDeveloper.return_value = mock_developer
@@ -88,8 +93,12 @@ async def test_call_developer_node_passes_prompts_to_developer(
 
     with patch("amelia.pipelines.nodes.Developer") as MockDeveloper:
         mock_developer = MagicMock()
+        event = AgenticMessage(
+            type=AgenticMessageType.RESULT,
+            content="Done",
+        ).to_workflow_event(workflow_id="wf-1", agent="developer")
         mock_developer.run = MagicMock(return_value=AsyncIteratorMock([
-            (state.model_copy(update={"agentic_status": "completed"}), MagicMock())
+            (state.model_copy(update={"agentic_status": "completed"}), event)
         ]))
         mock_developer.driver = MagicMock()
         MockDeveloper.return_value = mock_developer
