@@ -104,6 +104,21 @@ async def test_embed_error_handling_non_json_response(
 
 
 @pytest.mark.asyncio
+async def test_embed_error_handling_nested_format(
+    embedding_client: EmbeddingClient,
+) -> None:
+    """Should extract message from nested error format {"error": {"message": "..."}}."""
+    with patch.object(embedding_client.client, "post") as mock_post:
+        mock_post.return_value = httpx.Response(
+            400,
+            json={"error": {"message": "Nested error"}},
+        )
+
+        with pytest.raises(EmbeddingError, match="Nested error"):
+            await embedding_client.embed("Test text")
+
+
+@pytest.mark.asyncio
 async def test_embed_retry_on_failure(embedding_client: EmbeddingClient) -> None:
     """Should retry failed batches with exponential backoff."""
     with (
