@@ -13,7 +13,7 @@ from amelia.agents.schemas.evaluator import Disposition, EvaluatedItem, Evaluati
 from amelia.core.types import ReviewResult
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
 from amelia.pipelines.implementation.nodes import call_architect_node
-from amelia.pipelines.nodes import call_reviewer_node
+from amelia.pipelines.nodes import call_developer_node, call_reviewer_node
 from amelia.pipelines.review.nodes import call_evaluation_node
 from tests.conftest import create_mock_execute_agentic
 from tests.integration.conftest import (
@@ -109,6 +109,35 @@ class TestOrchestratorPromptInjection:
             assert len(captured_kwargs) == 1
             # The prompt should be formatted with base_commit
             assert captured_kwargs[0]["instructions"] == "Custom agentic review prompt with abc123..."
+
+    async def test_developer_uses_injected_system_prompt_via_driver(self, tmp_path: Path) -> None:
+        """Verify Developer uses injected system prompt when calling driver."""
+        custom_developer_prompt = "Custom Amelia developer system prompt"
+        prompts = {"developer.system": custom_developer_prompt}
+
+        profile = make_profile(working_dir=str(tmp_path))
+        state = make_execution_state(
+            profile=profile,
+            goal="Implement feature",
+            plan_markdown="# Plan\n\n## Phase 1\n\n### Task 1: Build\n\nDo it.",
+        )
+        config = make_config(thread_id="test-wf-dev-1", profile=profile, prompts=prompts)
+
+        mock_messages = [
+            AgenticMessage(
+                type=AgenticMessageType.RESULT,
+                content="Completed",
+                session_id="session-dev-1",
+            ),
+        ]
+        captured_kwargs: list[dict[str, Any]] = []
+        mock_execute = create_mock_execute_agentic(mock_messages, captured_kwargs)
+
+        with patch("amelia.drivers.api.deepagents.ApiDriver.execute_agentic", mock_execute):
+            await call_developer_node(state, cast(RunnableConfig, config))
+
+            assert len(captured_kwargs) == 1
+            assert captured_kwargs[0]["instructions"] == custom_developer_prompt
 
     async def test_prompts_not_in_config_uses_defaults(self, tmp_path: Path) -> None:
         """When prompts not in config, agents should use class defaults.

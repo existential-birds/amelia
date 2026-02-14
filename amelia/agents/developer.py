@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 
 from loguru import logger
 
+from amelia.agents.prompts.defaults import PROMPT_DEFAULTS
 from amelia.core.agentic_state import ToolCall, ToolResult
 from amelia.core.types import AgentConfig, Profile
 from amelia.drivers.base import AgenticMessageType
@@ -31,11 +32,16 @@ class Developer:
 
     """
 
-    def __init__(self, config: AgentConfig):
+    # Single source of truth for system prompt is PROMPT_DEFAULTS
+    SYSTEM_PROMPT = PROMPT_DEFAULTS["developer.system"].content
+
+    def __init__(self, config: AgentConfig, prompts: dict[str, str] | None = None):
         """Initialize the Developer agent.
 
         Args:
             config: Agent configuration with driver, model, and options.
+            prompts: Optional dict mapping prompt IDs to custom content.
+                Supports key: "developer.system".
         """
         self.driver = get_driver(
             config.driver,
@@ -45,6 +51,12 @@ class Developer:
             options=config.options,
         )
         self.options = config.options
+        self._prompts = prompts or {}
+
+    @property
+    def system_prompt(self) -> str:
+        """Get the system prompt for developer execution."""
+        return self._prompts.get("developer.system", self.SYSTEM_PROMPT)
 
     async def run(
         self,
@@ -88,7 +100,7 @@ class Developer:
             prompt=prompt,
             cwd=cwd,
             session_id=session_id,
-            instructions=None,
+            instructions=self.system_prompt,
         ):
             event: WorkflowEvent | None = None
 
@@ -211,4 +223,3 @@ IMPLEMENTATION PLAN:
             parts.append(f"\n\nThe reviewer requested the following changes:\n{feedback}")
 
         return "\n".join(parts)
-

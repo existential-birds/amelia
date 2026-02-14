@@ -1,8 +1,8 @@
 /**
  * @fileoverview Tests for PromptConfigPage.
  *
- * Tests the prompt configuration page, including the developer placeholder card
- * that explains why developer prompts are not configurable.
+ * Tests the prompt configuration page, including the fallback placeholder card
+ * shown when an agent has no configurable prompts.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
@@ -164,11 +164,11 @@ describe('PromptConfigPage', () => {
 
       // Should show the placeholder card with explanatory text
       expect(
-        within(developerSection!).getByText('Dynamic Prompts')
+        within(developerSection!).getByText('No Configurable Prompt')
       ).toBeInTheDocument();
     });
 
-    it('should explain that developer prompts are built dynamically', async () => {
+    it('should explain that no prompt template is available', async () => {
       renderWithRouter(mockPromptsWithoutDeveloper);
 
       await screen.findByText('Architect');
@@ -177,12 +177,9 @@ describe('PromptConfigPage', () => {
       const developerSection = screen.getByText('Developer').closest('section');
       expect(developerSection).toBeInTheDocument();
 
-      // Should contain explanation about dynamic prompts
+      // Should contain generic placeholder explanation
       expect(
-        within(developerSection!).getByText(/implementation plan/i)
-      ).toBeInTheDocument();
-      expect(
-        within(developerSection!).getByText(/review feedback/i)
+        within(developerSection!).getByText(/no prompt template available/i)
       ).toBeInTheDocument();
     });
 
@@ -202,7 +199,7 @@ describe('PromptConfigPage', () => {
 
       // Should NOT show the placeholder
       expect(
-        within(developerSection!).queryByText('Dynamic Prompts')
+        within(developerSection!).queryByText('No Configurable Prompt')
       ).not.toBeInTheDocument();
     });
   });
