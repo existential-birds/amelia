@@ -20,6 +20,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import {
   ChevronDown,
@@ -443,7 +444,7 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
   const isEditMode = profile !== null;
   const [isSaving, setIsSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [advancedOpen, setAdvancedOpen] = useState(false);
+
   const [utilityAgentsOpen, setUtilityAgentsOpen] = useState(false);
 
   const [formData, setFormData] = useState<FormData>({ ...DEFAULT_FORM_DATA });
@@ -458,7 +459,6 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
     setErrors({});
     // Reset collapsible states when profile changes
     setUtilityAgentsOpen(false);
-    setAdvancedOpen(false);
   }, [profile, open]);
 
   /**
@@ -646,159 +646,81 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
           </DialogHeader>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6 p-6 pt-4">
-          {/* Basic Info Section */}
-          <div className="grid grid-cols-2 gap-4">
-            {/* Profile ID */}
-            <div className="space-y-2">
-              <Label htmlFor="id" className="text-xs uppercase tracking-wider text-muted-foreground">
-                Profile Name
-              </Label>
-              <Input
-                id="id"
-                value={formData.id}
-                onChange={(e) => handleChange('id', e.target.value)}
-                onBlur={(e) => !isEditMode && handleBlur('id', e.target.value)}
-                disabled={isEditMode}
-                placeholder="e.g., dev, prod"
-                aria-invalid={!!errors.id}
-                className={cn(
-                  'bg-background/50 hover:border-muted-foreground/30 transition-colors',
-                  errors.id && 'border-destructive focus-visible:ring-destructive'
-                )}
-              />
-              {errors.id && (
-                <p className="text-xs text-destructive">{errors.id}</p>
-              )}
-            </div>
+        <form onSubmit={handleSubmit} className="flex flex-col h-full">
+          <Tabs defaultValue="general" className="flex-1 px-6 pt-4">
+            <TabsList className="w-full justify-start">
+              <TabsTrigger value="general">General</TabsTrigger>
+              <TabsTrigger value="agents">Agents</TabsTrigger>
+              <TabsTrigger value="sandbox">Sandbox</TabsTrigger>
+            </TabsList>
 
-            {/* Tracker */}
-            <div className="space-y-2">
-              <Label className="text-xs uppercase tracking-wider text-muted-foreground">
-                Issue Tracker
-              </Label>
-              <Select value={formData.tracker} onValueChange={(v) => handleChange('tracker', v)}>
-                <SelectTrigger className="bg-background/50">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {TRACKER_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          {/* Working Directory */}
-          <div className="space-y-2">
-            <Label htmlFor="working_dir" className="text-xs uppercase tracking-wider text-muted-foreground">
-              Working Directory
-            </Label>
-            <Input
-              id="working_dir"
-              value={formData.working_dir}
-              onChange={(e) => handleChange('working_dir', e.target.value)}
-              onBlur={(e) => handleBlur('working_dir', e.target.value)}
-              placeholder="/path/to/repo"
-              aria-invalid={!!errors.working_dir}
-              className={cn(
-                'bg-background/50 hover:border-muted-foreground/30 transition-colors font-mono text-sm',
-                errors.working_dir && 'border-destructive focus-visible:ring-destructive'
-              )}
-            />
-            {errors.working_dir && (
-              <p className="text-xs text-destructive">{errors.working_dir}</p>
-            )}
-          </div>
-
-          {/* Divider */}
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t border-border/30" />
-            </div>
-            <div className="relative flex justify-center">
-              <span className="bg-background px-3 text-xs uppercase tracking-wider text-muted-foreground">
-                Agent Configuration
-              </span>
-            </div>
-          </div>
-
-          {/* Bulk Apply */}
-          <BulkApply onApply={handleBulkApply} />
-
-          {/* Primary Agents */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <Label className="text-xs uppercase tracking-wider text-muted-foreground">
-                Primary Agents
-              </Label>
-              <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
-                Core workflow
-              </Badge>
-            </div>
-            <div className="grid gap-2 grid-cols-1">
-              {PRIMARY_AGENTS.map((agent) => {
-                const config = formData.agents[agent.key] ?? { driver: 'cli', model: agent.defaultModel };
-                return (
-                  <AgentCard
-                    key={agent.key}
-                    agent={agent}
-                    config={config}
-                    onChange={(field, value) => handleAgentChange(agent.key, field, value)}
+            {/* General Tab */}
+            <TabsContent value="general" className="space-y-4 pt-4">
+              {/* Profile Name + Tracker */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="id" className="text-xs uppercase tracking-wider text-muted-foreground">
+                    Profile Name
+                  </Label>
+                  <Input
+                    id="id"
+                    value={formData.id}
+                    onChange={(e) => handleChange('id', e.target.value)}
+                    onBlur={(e) => !isEditMode && handleBlur('id', e.target.value)}
+                    disabled={isEditMode}
+                    placeholder="e.g., dev, prod"
+                    aria-invalid={!!errors.id}
+                    className={cn(
+                      'bg-background/50 hover:border-muted-foreground/30 transition-colors',
+                      errors.id && 'border-destructive focus-visible:ring-destructive'
+                    )}
                   />
-                );
-              })}
-            </div>
-          </div>
+                  {errors.id && (
+                    <p className="text-xs text-destructive">{errors.id}</p>
+                  )}
+                </div>
 
-          {/* Utility Agents (Collapsible) */}
-          <Collapsible open={utilityAgentsOpen} onOpenChange={setUtilityAgentsOpen}>
-            <CollapsibleTrigger className="flex w-full items-center justify-between rounded-lg border border-border/30 bg-background/30 px-4 py-3 text-sm font-medium hover:bg-muted/30 hover:border-border/50 transition-all">
-              <div className="flex items-center gap-2">
-                <span className="text-xs uppercase tracking-wider">Utility Agents</span>
-                <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4">
-                  {utilityConfigCount} configured
-                </Badge>
+                <div className="space-y-2">
+                  <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+                    Issue Tracker
+                  </Label>
+                  <Select value={formData.tracker} onValueChange={(v) => handleChange('tracker', v)}>
+                    <SelectTrigger className="bg-background/50">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {TRACKER_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-              <ChevronDown
-                className={cn(
-                  'size-4 text-muted-foreground transition-transform duration-200',
-                  utilityAgentsOpen && 'rotate-180'
-                )}
-              />
-            </CollapsibleTrigger>
-            <CollapsibleContent className="pt-3">
-              <div className="grid gap-2 grid-cols-1">
-                {UTILITY_AGENTS.map((agent) => {
-                  const config = formData.agents[agent.key] ?? { driver: 'cli', model: agent.defaultModel };
-                  return (
-                    <AgentCard
-                      key={agent.key}
-                      agent={agent}
-                      config={config}
-                      onChange={(field, value) => handleAgentChange(agent.key, field, value)}
-                    />
-                  );
-                })}
-              </div>
-            </CollapsibleContent>
-          </Collapsible>
 
-          {/* Advanced Settings */}
-          <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
-            <CollapsibleTrigger className="flex w-full items-center justify-between rounded-md border border-border/30 bg-background/30 px-4 py-3 text-sm font-medium hover:bg-muted/30 hover:border-border/50 transition-all">
-              <span className="text-xs uppercase tracking-wider">Advanced Settings</span>
-              <ChevronDown
-                className={cn(
-                  'size-4 text-muted-foreground transition-transform duration-200',
-                  advancedOpen && 'rotate-180'
+              {/* Working Directory */}
+              <div className="space-y-2">
+                <Label htmlFor="working_dir" className="text-xs uppercase tracking-wider text-muted-foreground">
+                  Working Directory
+                </Label>
+                <Input
+                  id="working_dir"
+                  value={formData.working_dir}
+                  onChange={(e) => handleChange('working_dir', e.target.value)}
+                  onBlur={(e) => handleBlur('working_dir', e.target.value)}
+                  placeholder="/path/to/repo"
+                  aria-invalid={!!errors.working_dir}
+                  className={cn(
+                    'bg-background/50 hover:border-muted-foreground/30 transition-colors font-mono text-sm',
+                    errors.working_dir && 'border-destructive focus-visible:ring-destructive'
+                  )}
+                />
+                {errors.working_dir && (
+                  <p className="text-xs text-destructive">{errors.working_dir}</p>
                 )}
-              />
-            </CollapsibleTrigger>
-            <CollapsibleContent className="space-y-4 pt-4">
+              </div>
+
               {/* Plan Output Directory */}
               <div className="space-y-2">
                 <Label htmlFor="plan_output_dir" className="text-xs uppercase tracking-wider text-muted-foreground">
@@ -826,10 +748,79 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
                   className="bg-background/50 hover:border-muted-foreground/30 transition-colors font-mono text-sm"
                 />
               </div>
-            </CollapsibleContent>
-          </Collapsible>
+            </TabsContent>
 
-          <DialogFooter className="border-t border-border/30 pt-4 mt-2 gap-2">
+            {/* Agents Tab */}
+            <TabsContent value="agents" className="space-y-4 pt-4">
+              {/* Bulk Apply */}
+              <BulkApply onApply={handleBulkApply} />
+
+              {/* Primary Agents */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+                    Primary Agents
+                  </Label>
+                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
+                    Core workflow
+                  </Badge>
+                </div>
+                <div className="grid gap-2 grid-cols-1">
+                  {PRIMARY_AGENTS.map((agent) => {
+                    const config = formData.agents[agent.key] ?? { driver: 'cli', model: agent.defaultModel };
+                    return (
+                      <AgentCard
+                        key={agent.key}
+                        agent={agent}
+                        config={config}
+                        onChange={(field, value) => handleAgentChange(agent.key, field, value)}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Utility Agents (Collapsible) */}
+              <Collapsible open={utilityAgentsOpen} onOpenChange={setUtilityAgentsOpen}>
+                <CollapsibleTrigger className="flex w-full items-center justify-between rounded-lg border border-border/30 bg-background/30 px-4 py-3 text-sm font-medium hover:bg-muted/30 hover:border-border/50 transition-all">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs uppercase tracking-wider">Utility Agents</span>
+                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4">
+                      {utilityConfigCount} configured
+                    </Badge>
+                  </div>
+                  <ChevronDown
+                    className={cn(
+                      'size-4 text-muted-foreground transition-transform duration-200',
+                      utilityAgentsOpen && 'rotate-180'
+                    )}
+                  />
+                </CollapsibleTrigger>
+                <CollapsibleContent className="pt-3">
+                  <div className="grid gap-2 grid-cols-1">
+                    {UTILITY_AGENTS.map((agent) => {
+                      const config = formData.agents[agent.key] ?? { driver: 'cli', model: agent.defaultModel };
+                      return (
+                        <AgentCard
+                          key={agent.key}
+                          agent={agent}
+                          config={config}
+                          onChange={(field, value) => handleAgentChange(agent.key, field, value)}
+                        />
+                      );
+                    })}
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
+            </TabsContent>
+
+            {/* Sandbox Tab */}
+            <TabsContent value="sandbox" className="space-y-4 pt-4">
+              <p className="text-sm text-muted-foreground">No sandbox configuration.</p>
+            </TabsContent>
+          </Tabs>
+
+          <DialogFooter className="border-t border-border/30 px-6 py-4 gap-2">
             <Button type="button" variant="outline" onClick={handleClose}>
               Cancel
             </Button>
