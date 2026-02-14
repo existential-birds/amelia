@@ -18,11 +18,13 @@ class EventDomain(StrEnum):
         WORKFLOW: Standard workflow events (orchestrator, agents).
         BRAINSTORM: Brainstorming session events (chat streaming).
         ORACLE: Oracle consultation events.
+        KNOWLEDGE: Knowledge ingestion events.
     """
 
     WORKFLOW = "workflow"
     BRAINSTORM = "brainstorm"
     ORACLE = "oracle"
+    KNOWLEDGE = "knowledge"
 
 
 class EventLevel(StrEnum):
@@ -135,6 +137,12 @@ class EventType(StrEnum):
     ORACLE_CONSULTATION_COMPLETED = "oracle_consultation_completed"
     ORACLE_CONSULTATION_FAILED = "oracle_consultation_failed"
 
+    # Knowledge ingestion
+    DOCUMENT_INGESTION_STARTED = "document_ingestion_started"
+    DOCUMENT_INGESTION_PROGRESS = "document_ingestion_progress"
+    DOCUMENT_INGESTION_COMPLETED = "document_ingestion_completed"
+    DOCUMENT_INGESTION_FAILED = "document_ingestion_failed"
+
 
 # Persisted event types (written to workflow log)
 PERSISTED_TYPES: frozenset[EventType] = frozenset({
@@ -174,6 +182,10 @@ PERSISTED_TYPES: frozenset[EventType] = frozenset({
     EventType.BRAINSTORM_SESSION_CREATED,
     EventType.BRAINSTORM_SESSION_COMPLETED,
     EventType.BRAINSTORM_ARTIFACT_CREATED,
+    # Knowledge ingestion
+    EventType.DOCUMENT_INGESTION_STARTED,
+    EventType.DOCUMENT_INGESTION_COMPLETED,
+    EventType.DOCUMENT_INGESTION_FAILED,
 })
 
 _ERROR_TYPES: frozenset[EventType] = frozenset({
@@ -181,6 +193,7 @@ _ERROR_TYPES: frozenset[EventType] = frozenset({
     EventType.TASK_FAILED,
     EventType.SYSTEM_ERROR,
     EventType.ORACLE_CONSULTATION_FAILED,
+    EventType.DOCUMENT_INGESTION_FAILED,
 })
 
 _WARNING_TYPES: frozenset[EventType] = frozenset({
@@ -200,6 +213,8 @@ _INFO_TYPES: frozenset[EventType] = frozenset({
     EventType.REVIEW_COMPLETED,
     EventType.ORACLE_CONSULTATION_STARTED,
     EventType.ORACLE_CONSULTATION_COMPLETED,
+    EventType.DOCUMENT_INGESTION_STARTED,
+    EventType.DOCUMENT_INGESTION_COMPLETED,
 })
 
 

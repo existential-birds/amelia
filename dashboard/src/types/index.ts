@@ -198,7 +198,12 @@ export type EventType =
   | 'oracle_tool_call'
   | 'oracle_tool_result'
   | 'oracle_consultation_completed'
-  | 'oracle_consultation_failed';
+  | 'oracle_consultation_failed'
+  // Knowledge ingestion
+  | 'document_ingestion_started'
+  | 'document_ingestion_progress'
+  | 'document_ingestion_completed'
+  | 'document_ingestion_failed';
 
 /**
  * A single event emitted during workflow execution.

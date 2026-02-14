@@ -287,6 +287,7 @@ class TestPersistedTypes:
             EventType.BRAINSTORM_MESSAGE_COMPLETE,
             EventType.STREAM,
             EventType.AGENT_MESSAGE,
+            EventType.DOCUMENT_INGESTION_PROGRESS,
         }
         classified = PERSISTED_TYPES | stream_only
         unclassified = all_types - classified
