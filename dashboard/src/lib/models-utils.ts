@@ -28,39 +28,44 @@ interface ProviderData {
 
 /**
  * Flatten the nested models.dev API response into a flat array of ModelInfo.
- * Only includes models with tool_call capability (required for all agents).
+ * Only includes OpenRouter models with tool_call capability (required for all agents).
  */
 export function flattenModelsData(
   data: Record<string, ProviderData>
 ): ModelInfo[] {
   const models: ModelInfo[] = [];
 
-  for (const [providerId, provider] of Object.entries(data)) {
-    if (!provider.models) continue;
+  // Only use OpenRouter models - other providers have different model IDs
+  // that aren't compatible with our API driver (which routes through OpenRouter)
+  const openrouter = data['openrouter'];
+  if (!openrouter?.models) return models;
 
-    for (const rawModel of Object.values(provider.models)) {
-      // Skip models without tool_call - all agents require it
-      if (!rawModel.tool_call) continue;
+  for (const rawModel of Object.values(openrouter.models)) {
+    // Skip models without tool_call - all agents require it
+    if (!rawModel.tool_call) continue;
 
-      // Skip models with missing required fields
-      if (!rawModel.cost || !rawModel.limit) continue;
+    // Skip models with missing required fields
+    if (!rawModel.cost || !rawModel.limit) continue;
 
-      models.push({
-        id: rawModel.id,
-        name: rawModel.name,
-        provider: providerId,
-        capabilities: {
-          tool_call: rawModel.tool_call,
-          reasoning: rawModel.reasoning,
-          structured_output: rawModel.structured_output,
-        },
-        cost: rawModel.cost,
-        limit: rawModel.limit,
-        modalities: rawModel.modalities,
-        release_date: rawModel.release_date,
-        knowledge: rawModel.knowledge,
-      });
-    }
+    // Extract provider from OpenRouter model ID (e.g., "minimax/minimax-m2.5" -> "minimax")
+    const slashIndex = rawModel.id.indexOf('/');
+    const provider = slashIndex !== -1 ? rawModel.id.substring(0, slashIndex) : 'unknown';
+
+    models.push({
+      id: rawModel.id,
+      name: rawModel.name,
+      provider,
+      capabilities: {
+        tool_call: rawModel.tool_call,
+        reasoning: rawModel.reasoning,
+        structured_output: rawModel.structured_output,
+      },
+      cost: rawModel.cost,
+      limit: rawModel.limit,
+      modalities: rawModel.modalities,
+      release_date: rawModel.release_date,
+      knowledge: rawModel.knowledge,
+    });
   }
 
   return models;

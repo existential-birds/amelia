@@ -9,14 +9,14 @@ import type { ModelInfo, AgentRequirements } from '@/components/model-picker/typ
 
 describe('models-utils', () => {
   describe('flattenModelsData', () => {
-    it('should flatten nested provider/models structure', () => {
+    it('should flatten openrouter models and extract provider from ID', () => {
       const apiResponse = {
-        anthropic: {
-          id: 'anthropic',
-          name: 'Anthropic',
+        openrouter: {
+          id: 'openrouter',
+          name: 'OpenRouter',
           models: {
-            'claude-sonnet-4': {
-              id: 'claude-sonnet-4',
+            'anthropic/claude-sonnet-4': {
+              id: 'anthropic/claude-sonnet-4',
               name: 'Claude Sonnet 4',
               tool_call: true,
               reasoning: true,
@@ -25,14 +25,8 @@ describe('models-utils', () => {
               limit: { context: 200000, output: 16000 },
               modalities: { input: ['text', 'image'], output: ['text'] },
             },
-          },
-        },
-        openai: {
-          id: 'openai',
-          name: 'OpenAI',
-          models: {
-            'gpt-4o': {
-              id: 'gpt-4o',
+            'openai/gpt-4o': {
+              id: 'openai/gpt-4o',
               name: 'GPT-4o',
               tool_call: true,
               reasoning: false,
@@ -49,7 +43,7 @@ describe('models-utils', () => {
 
       expect(result).toHaveLength(2);
       expect(result[0]).toEqual({
-        id: 'claude-sonnet-4',
+        id: 'anthropic/claude-sonnet-4',
         name: 'Claude Sonnet 4',
         provider: 'anthropic',
         capabilities: {
@@ -64,19 +58,82 @@ describe('models-utils', () => {
       expect(result[1]?.provider).toBe('openai');
     });
 
-    it('should handle empty providers', () => {
+    it('should handle empty data', () => {
       const result = flattenModelsData({});
       expect(result).toEqual([]);
     });
 
+    it('should handle missing openrouter provider', () => {
+      const result = flattenModelsData({
+        'some-other-provider': {
+          id: 'other',
+          name: 'Other',
+          models: {
+            'model-1': {
+              id: 'model-1',
+              name: 'Model 1',
+              tool_call: true,
+              reasoning: false,
+              structured_output: false,
+              cost: { input: 1, output: 1 },
+              limit: { context: 4096, output: 4096 },
+              modalities: { input: ['text'], output: ['text'] },
+            },
+          },
+        },
+      });
+      expect(result).toEqual([]);
+    });
+
+    it('should ignore non-openrouter providers', () => {
+      const apiResponse = {
+        'nano-gpt': {
+          id: 'nano-gpt',
+          name: 'NanoGPT',
+          models: {
+            'minimax/minimax-m2.5-official': {
+              id: 'minimax/minimax-m2.5-official',
+              name: 'MiniMax M2.5',
+              tool_call: true,
+              reasoning: false,
+              structured_output: false,
+              cost: { input: 1, output: 5 },
+              limit: { context: 128000, output: 8000 },
+              modalities: { input: ['text'], output: ['text'] },
+            },
+          },
+        },
+        openrouter: {
+          id: 'openrouter',
+          name: 'OpenRouter',
+          models: {
+            'minimax/minimax-m2.5': {
+              id: 'minimax/minimax-m2.5',
+              name: 'MiniMax M2.5',
+              tool_call: true,
+              reasoning: false,
+              structured_output: false,
+              cost: { input: 1, output: 5 },
+              limit: { context: 128000, output: 8000 },
+              modalities: { input: ['text'], output: ['text'] },
+            },
+          },
+        },
+      };
+
+      const result = flattenModelsData(apiResponse);
+      expect(result).toHaveLength(1);
+      expect(result[0]?.id).toBe('minimax/minimax-m2.5');
+    });
+
     it('should skip models without tool_call capability', () => {
       const apiResponse = {
-        provider: {
-          id: 'provider',
-          name: 'Provider',
+        openrouter: {
+          id: 'openrouter',
+          name: 'OpenRouter',
           models: {
-            'no-tools': {
-              id: 'no-tools',
+            'provider/no-tools': {
+              id: 'provider/no-tools',
               name: 'No Tools Model',
               tool_call: false,
               reasoning: false,

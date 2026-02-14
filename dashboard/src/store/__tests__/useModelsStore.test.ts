@@ -25,12 +25,12 @@ describe('useModelsStore', () => {
 
   describe('fetchModels', () => {
     const mockApiResponse = {
-      anthropic: {
-        id: 'anthropic',
-        name: 'Anthropic',
+      openrouter: {
+        id: 'openrouter',
+        name: 'OpenRouter',
         models: {
-          'claude-sonnet-4': {
-            id: 'claude-sonnet-4',
+          'anthropic/claude-sonnet-4': {
+            id: 'anthropic/claude-sonnet-4',
             name: 'Claude Sonnet 4',
             tool_call: true,
             reasoning: true,
@@ -53,7 +53,7 @@ describe('useModelsStore', () => {
 
       const state = useModelsStore.getState();
       expect(state.models).toHaveLength(1);
-      expect(state.models[0]?.id).toBe('claude-sonnet-4');
+      expect(state.models[0]?.id).toBe('anthropic/claude-sonnet-4');
       expect(state.providers).toEqual(['anthropic']);
       expect(state.isLoading).toBe(false);
       expect(state.error).toBeNull();
@@ -107,12 +107,12 @@ describe('useModelsStore', () => {
   describe('refreshModels', () => {
     it('should force refetch even if already loaded', async () => {
       const mockApiResponse = {
-        anthropic: {
-          id: 'anthropic',
-          name: 'Anthropic',
+        openrouter: {
+          id: 'openrouter',
+          name: 'OpenRouter',
           models: {
-            'new-model': {
-              id: 'new-model',
+            'test/new-model': {
+              id: 'test/new-model',
               name: 'New Model',
               tool_call: true,
               reasoning: true,
@@ -139,7 +139,7 @@ describe('useModelsStore', () => {
 
       const state = useModelsStore.getState();
       expect(state.models).toHaveLength(1);
-      expect(state.models[0]?.id).toBe('new-model');
+      expect(state.models[0]?.id).toBe('test/new-model');
     });
   });
 
