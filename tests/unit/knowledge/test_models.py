@@ -5,7 +5,7 @@
 from amelia.knowledge.models import Document, DocumentChunk, DocumentStatus, SearchResult
 
 
-def test_document_model_defaults():
+def test_document_model_defaults() -> None:
     """Document model should have correct defaults."""
     doc = Document(
         id="doc-123",
@@ -24,7 +24,7 @@ def test_document_model_defaults():
     assert doc.raw_text is None
 
 
-def test_document_chunk_model():
+def test_document_chunk_model() -> None:
     """DocumentChunk model should validate correctly."""
     chunk = DocumentChunk(
         id="chunk-123",
@@ -42,7 +42,7 @@ def test_document_chunk_model():
     assert chunk.heading_path == ["Introduction"]
 
 
-def test_search_result_model():
+def test_search_result_model() -> None:
     """SearchResult model should include all required fields."""
     result = SearchResult(
         chunk_id="chunk-123",

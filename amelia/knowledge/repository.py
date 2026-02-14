@@ -3,6 +3,8 @@
 from typing import Any
 from uuid import uuid4
 
+import asyncpg
+
 from loguru import logger
 
 from amelia.knowledge.models import Document, DocumentStatus, SearchResult
@@ -298,7 +300,7 @@ class KnowledgeRepository:
         )
         return results
 
-    def _row_to_document(self, row: Any) -> Document:
+    def _row_to_document(self, row: asyncpg.Record) -> Document:
         """Convert database row to Document model."""
         return Document(
             id=row["id"],

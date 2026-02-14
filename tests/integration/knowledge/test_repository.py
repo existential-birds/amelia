@@ -4,6 +4,8 @@ These tests require PostgreSQL 17 with pg_vector extension.
 Mark as integration to skip in unit test runs.
 """
 
+from collections.abc import AsyncGenerator
+
 import pytest
 
 from amelia.knowledge.models import DocumentStatus
@@ -15,7 +17,7 @@ pytestmark = pytest.mark.integration
 
 
 @pytest.fixture
-async def knowledge_repo(test_db: Database):
+async def knowledge_repo(test_db: Database) -> AsyncGenerator[KnowledgeRepository]:
     """Provide Knowledge repository with test database."""
     repo = KnowledgeRepository(test_db)
 
@@ -28,7 +30,7 @@ async def knowledge_repo(test_db: Database):
     await test_db.execute("DELETE FROM documents WHERE name LIKE 'Test%'")
 
 
-async def test_create_document(knowledge_repo):
+async def test_create_document(knowledge_repo: KnowledgeRepository) -> None:
     """Should create document with pending status."""
     doc = await knowledge_repo.create_document(
         name="Test React Docs",
@@ -43,7 +45,7 @@ async def test_create_document(knowledge_repo):
     assert doc.id is not None
 
 
-async def test_get_document(knowledge_repo):
+async def test_get_document(knowledge_repo: KnowledgeRepository) -> None:
     """Should retrieve document by ID."""
     created = await knowledge_repo.create_document(
         name="Test Vue Docs",
@@ -58,7 +60,7 @@ async def test_get_document(knowledge_repo):
     assert retrieved.name == "Test Vue Docs"
 
 
-async def test_update_document_status(knowledge_repo):
+async def test_update_document_status(knowledge_repo: KnowledgeRepository) -> None:
     """Should update document status and error."""
     doc = await knowledge_repo.create_document(
         name="Test Failed Doc",
@@ -76,7 +78,7 @@ async def test_update_document_status(knowledge_repo):
     assert updated.error == "PDF is password-protected"
 
 
-async def test_list_documents(knowledge_repo):
+async def test_list_documents(knowledge_repo: KnowledgeRepository) -> None:
     """Should list all documents."""
     await knowledge_repo.create_document(
         name="Test Doc 1",
@@ -95,7 +97,7 @@ async def test_list_documents(knowledge_repo):
     assert len(test_docs) >= 2
 
 
-async def test_delete_document(knowledge_repo):
+async def test_delete_document(knowledge_repo: KnowledgeRepository) -> None:
     """Should delete document and cascade chunks."""
     doc = await knowledge_repo.create_document(
         name="Test Delete Doc",
