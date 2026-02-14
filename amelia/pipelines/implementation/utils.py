@@ -389,7 +389,6 @@ async def commit_task_changes(state: ImplementationState, config: RunnableConfig
         logger.warning("Timeout checking for hook modifications", task=task_number)
         proc.kill()
         await proc.wait()
-        logger.warning("Failed to commit task changes", error=stderr.decode())
         return False
 
     # returncode 0 = no unstaged changes, 1 = unstaged changes exist
@@ -414,14 +413,12 @@ async def commit_task_changes(state: ImplementationState, config: RunnableConfig
             logger.warning("Timeout re-staging hook modifications", task=task_number)
             proc.kill()
             await proc.wait()
-            logger.warning("Failed to commit task changes", error=stderr.decode())
             return False
         if proc.returncode != 0:
             logger.warning(
                 "Failed to re-stage hook modifications",
                 error=restage_stderr.decode(),
             )
-            logger.warning("Failed to commit task changes", error=stderr.decode())
             return False
 
         # Retry commit
@@ -438,7 +435,6 @@ async def commit_task_changes(state: ImplementationState, config: RunnableConfig
             logger.warning("Timeout on commit retry after hook modifications", task=task_number)
             proc.kill()
             await proc.wait()
-            logger.warning("Failed to commit task changes", error=stderr.decode())
             return False
         if proc.returncode == 0:
             logger.info(
