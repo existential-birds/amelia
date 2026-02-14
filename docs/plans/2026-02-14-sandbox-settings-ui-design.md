@@ -113,7 +113,7 @@ Already complete — `SandboxConfig` type, API routes, and database migration al
 ## New Dependencies
 
 - `@radix-ui/react-tabs` — for the shadcn/ui Tabs component
-- Tabs component added via shadcn CLI or manual copy from `/Users/ka/github/ui`
+- Tabs component added via shadcn CLI or manual copy from a local UI template
 
 ## Files Changed
 

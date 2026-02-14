@@ -10,6 +10,8 @@
 
 ---
 
+## Tasks
+
 ### Task 1: Install Radix Tabs and add Tabs UI component
 
 **Files:**
