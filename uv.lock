@@ -4,7 +4,7 @@ requires-python = ">=3.12"
 
 [[package]]
 name = "amelia"
-version = "0.13.0"
+version = "0.14.0"
 source = { editable = "." }
 dependencies = [
     { name = "asyncpg" },
