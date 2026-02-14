@@ -4,7 +4,6 @@ from typing import Any
 from uuid import uuid4
 
 import asyncpg
-
 from loguru import logger
 
 from amelia.knowledge.models import Document, DocumentStatus, SearchResult

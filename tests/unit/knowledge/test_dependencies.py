@@ -8,4 +8,4 @@ def test_docling_available() -> None:
 
 def test_pgvector_available() -> None:
     """pgvector should be importable."""
-    import pgvector  # noqa: F401  # type: ignore[import-untyped]
+    import pgvector  # type: ignore[import-untyped]  # noqa: F401
