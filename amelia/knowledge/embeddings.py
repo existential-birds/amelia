@@ -33,7 +33,7 @@ class EmbeddingClient:
         api_key: str,
         model: str = "openai/text-embedding-3-small",
     ):
-        self.api_key = api_key
+        self._api_key = api_key
         self.model = model
         self.client = httpx.AsyncClient(
             timeout=httpx.Timeout(EMBEDDING_TIMEOUT_SECONDS)
@@ -192,7 +192,7 @@ class EmbeddingClient:
             response = await self.client.post(
                 OPENROUTER_API_URL,
                 headers={
-                    "Authorization": f"Bearer {self.api_key}",
+                    "Authorization": f"Bearer {self._api_key}",
                     "Content-Type": "application/json",
                 },
                 json={
@@ -203,7 +203,12 @@ class EmbeddingClient:
 
             if not response.is_success:
                 try:
-                    error_msg = response.json().get("error", "Unknown error")
+                    error_data = response.json().get("error", "Unknown error")
+                    # Handle nested {"error": {"message": "..."}} format
+                    if isinstance(error_data, dict):
+                        error_msg = error_data.get("message", str(error_data))
+                    else:
+                        error_msg = str(error_data)
                 except ValueError:
                     error_msg = response.text[:200] or "Non-JSON error response"
                 raise EmbeddingError(

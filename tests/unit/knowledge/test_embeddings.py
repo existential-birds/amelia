@@ -33,7 +33,7 @@ async def embedding_client() -> AsyncGenerator[EmbeddingClient, None]:
 @pytest.mark.asyncio
 async def test_embed_single_text(embedding_client: EmbeddingClient) -> None:
     """Should embed single text and return 1536-dim vector."""
-    with patch("httpx.AsyncClient.post") as mock_post:
+    with patch.object(embedding_client.client, "post") as mock_post:
         mock_post.return_value = httpx.Response(
             200,
             json={
@@ -54,7 +54,7 @@ async def test_embed_batch(embedding_client: EmbeddingClient) -> None:
     """Should embed multiple texts in parallel batches."""
     texts = [f"Text {i}" for i in range(250)]  # Requires 3 batches (100, 100, 50)
 
-    with patch("httpx.AsyncClient.post") as mock_post:
+    with patch.object(embedding_client.client, "post") as mock_post:
         mock_post.side_effect = make_batch_response
 
         embeddings = await embedding_client.embed_batch(texts)
@@ -68,7 +68,7 @@ async def test_embed_batch(embedding_client: EmbeddingClient) -> None:
 @pytest.mark.asyncio
 async def test_embed_batch_empty_input(embedding_client: EmbeddingClient) -> None:
     """Should return empty list for empty input without API call."""
-    with patch("httpx.AsyncClient.post") as mock_post:
+    with patch.object(embedding_client.client, "post") as mock_post:
         embeddings = await embedding_client.embed_batch([])
 
         assert embeddings == []
@@ -78,7 +78,7 @@ async def test_embed_batch_empty_input(embedding_client: EmbeddingClient) -> Non
 @pytest.mark.asyncio
 async def test_embed_error_handling(embedding_client: EmbeddingClient) -> None:
     """Should raise EmbeddingError on API failure."""
-    with patch("httpx.AsyncClient.post") as mock_post:
+    with patch.object(embedding_client.client, "post") as mock_post:
         mock_post.return_value = httpx.Response(
             429,
             json={"error": "Rate limit exceeded"},
@@ -93,7 +93,7 @@ async def test_embed_error_handling_non_json_response(
     embedding_client: EmbeddingClient,
 ) -> None:
     """Should handle non-JSON error responses gracefully."""
-    with patch("httpx.AsyncClient.post") as mock_post:
+    with patch.object(embedding_client.client, "post") as mock_post:
         mock_post.return_value = httpx.Response(
             502,
             text="<html>Bad Gateway</html>",
@@ -107,7 +107,7 @@ async def test_embed_error_handling_non_json_response(
 async def test_embed_retry_on_failure(embedding_client: EmbeddingClient) -> None:
     """Should retry failed batches with exponential backoff."""
     with (
-        patch("httpx.AsyncClient.post") as mock_post,
+        patch.object(embedding_client.client, "post") as mock_post,
         patch("asyncio.sleep") as mock_sleep,
     ):
         # First call fails, second succeeds
@@ -134,7 +134,7 @@ async def test_embed_retry_on_failure(embedding_client: EmbeddingClient) -> None
 async def test_embed_retry_exhaustion(embedding_client: EmbeddingClient) -> None:
     """Should raise EmbeddingError after all 3 retries fail."""
     with (
-        patch("httpx.AsyncClient.post") as mock_post,
+        patch.object(embedding_client.client, "post") as mock_post,
         patch("asyncio.sleep") as mock_sleep,
     ):
         # All 3 attempts fail
@@ -157,7 +157,8 @@ async def test_embed_retry_exhaustion(embedding_client: EmbeddingClient) -> None
 @pytest.mark.asyncio
 async def test_async_context_manager() -> None:
     """Should support async context manager protocol."""
-    with patch("httpx.AsyncClient.post") as mock_post:
+    client = EmbeddingClient(api_key="test-key", model="openai/text-embedding-3-small")
+    with patch.object(client.client, "post") as mock_post:
         mock_post.return_value = httpx.Response(
             200,
             json={
@@ -166,9 +167,7 @@ async def test_async_context_manager() -> None:
             },
         )
 
-        async with EmbeddingClient(
-            api_key="test-key", model="openai/text-embedding-3-small"
-        ) as client:
+        async with client:
             embedding = await client.embed("Test text")
             assert len(embedding) == 1536
 
@@ -187,7 +186,7 @@ async def test_embed_batch_progress_callback(embedding_client: EmbeddingClient) 
     def progress_callback(processed: int, total: int) -> None:
         progress_calls.append((processed, total))
 
-    with patch("httpx.AsyncClient.post") as mock_post:
+    with patch.object(embedding_client.client, "post") as mock_post:
         mock_post.side_effect = make_batch_response
 
         await embedding_client.embed_batch(texts, progress_callback=progress_callback)
