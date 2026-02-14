@@ -1,5 +1,6 @@
 """Test OpenRouter embedding client."""
 
+from collections.abc import AsyncGenerator
 from unittest.mock import patch
 
 import httpx
@@ -9,13 +10,15 @@ from amelia.knowledge.embeddings import EmbeddingClient, EmbeddingError
 
 
 @pytest.fixture
-def embedding_client():
+async def embedding_client() -> AsyncGenerator[EmbeddingClient, None]:
     """Provide embedding client with test API key."""
-    return EmbeddingClient(api_key="test-key", model="openai/text-embedding-3-small")
+    client = EmbeddingClient(api_key="test-key", model="openai/text-embedding-3-small")
+    yield client
+    await client.close()
 
 
 @pytest.mark.asyncio
-async def test_embed_single_text(embedding_client):
+async def test_embed_single_text(embedding_client: EmbeddingClient) -> None:
     """Should embed single text and return 1536-dim vector."""
     with patch("httpx.AsyncClient.post") as mock_post:
         mock_post.return_value = httpx.Response(
@@ -34,13 +37,14 @@ async def test_embed_single_text(embedding_client):
 
 
 @pytest.mark.asyncio
-async def test_embed_batch(embedding_client):
+async def test_embed_batch(embedding_client: EmbeddingClient) -> None:
     """Should embed multiple texts in parallel batches."""
     texts = [f"Text {i}" for i in range(250)]  # Requires 3 batches (100, 100, 50)
 
-    def make_response(*args, **kwargs):
+    def make_response(*args: object, **kwargs: object) -> httpx.Response:
         """Return embeddings matching the input count."""
-        input_texts = kwargs.get("json", {}).get("input", [])
+        json_data = kwargs.get("json", {})
+        input_texts = json_data.get("input", []) if isinstance(json_data, dict) else []
         return httpx.Response(
             200,
             json={
@@ -61,7 +65,7 @@ async def test_embed_batch(embedding_client):
 
 
 @pytest.mark.asyncio
-async def test_embed_error_handling(embedding_client):
+async def test_embed_error_handling(embedding_client: EmbeddingClient) -> None:
     """Should raise EmbeddingError on API failure."""
     with patch("httpx.AsyncClient.post") as mock_post:
         mock_post.return_value = httpx.Response(
@@ -74,7 +78,7 @@ async def test_embed_error_handling(embedding_client):
 
 
 @pytest.mark.asyncio
-async def test_embed_retry_on_failure(embedding_client):
+async def test_embed_retry_on_failure(embedding_client: EmbeddingClient) -> None:
     """Should retry failed batches with exponential backoff."""
     with patch("httpx.AsyncClient.post") as mock_post:
         # First call fails, second succeeds

@@ -1,7 +1,7 @@
 """OpenRouter embedding client for Knowledge Library."""
 
 import asyncio
-from typing import Any
+from collections.abc import Callable
 
 import httpx
 from loguru import logger
@@ -42,6 +42,14 @@ class EmbeddingClient:
         """Close HTTP client."""
         await self.client.aclose()
 
+    async def __aenter__(self) -> "EmbeddingClient":
+        """Enter async context manager."""
+        return self
+
+    async def __aexit__(self, *_: object) -> None:
+        """Exit async context manager and close client."""
+        await self.close()
+
     async def embed(self, text: str) -> list[float]:
         """Embed single text.
 
@@ -60,7 +68,7 @@ class EmbeddingClient:
     async def embed_batch(
         self,
         texts: list[str],
-        progress_callback: Any = None,
+        progress_callback: Callable[[int, int], None] | None = None,
     ) -> list[list[float]]:
         """Embed multiple texts in parallel batches.
 
@@ -108,7 +116,7 @@ class EmbeddingClient:
         self,
         texts: list[str],
         semaphore: asyncio.Semaphore,
-        progress_callback: Any,
+        progress_callback: Callable[[int, int], None] | None,
         total: int,
     ) -> list[list[float]]:
         """Embed batch with retry logic and progress reporting.
