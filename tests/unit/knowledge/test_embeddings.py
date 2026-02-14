@@ -97,3 +97,25 @@ async def test_embed_retry_on_failure(embedding_client: EmbeddingClient) -> None
 
         assert len(embedding) == 1536
         assert mock_post.call_count == 2  # Retry after first failure
+
+
+@pytest.mark.asyncio
+async def test_async_context_manager() -> None:
+    """Should support async context manager protocol."""
+    with patch("httpx.AsyncClient.post") as mock_post:
+        mock_post.return_value = httpx.Response(
+            200,
+            json={
+                "data": [{"embedding": [0.1] * 1536}],
+                "model": "openai/text-embedding-3-small",
+            },
+        )
+
+        async with EmbeddingClient(
+            api_key="test-key", model="openai/text-embedding-3-small"
+        ) as client:
+            embedding = await client.embed("Test text")
+            assert len(embedding) == 1536
+
+        # Client should be closed after exiting context
+        assert client.client.is_closed
