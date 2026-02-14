@@ -20,6 +20,7 @@ import {
   Brain,
   Code,
   Search,
+  Shield,
   MoreHorizontal,
 } from 'lucide-react';
 import {
@@ -202,6 +203,15 @@ export const ProfileCard = forwardRef<HTMLDivElement, ProfileCardProps>(
             </Badge>
             {!allSameDriver && (
               <span className="text-[10px] text-muted-foreground">mixed</span>
+            )}
+            {profile.sandbox?.mode === 'container' && (
+              <Badge
+                variant="outline"
+                className="text-xs bg-emerald-500/10 text-emerald-500 border-emerald-500/30"
+              >
+                <Shield className="mr-1 h-3 w-3" />
+                Sandbox
+              </Badge>
             )}
           </div>
 

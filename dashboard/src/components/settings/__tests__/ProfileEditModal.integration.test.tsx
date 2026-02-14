@@ -2,6 +2,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { ProfileEditModal } from '../ProfileEditModal';
 import { useModelsStore } from '@/store/useModelsStore';
 import type { ModelInfo } from '@/components/model-picker/types';
@@ -66,7 +67,8 @@ describe('ProfileEditModal model selection', () => {
     vi.mocked(useModelsStore).mockImplementation(createMockStore());
   });
 
-  it('should show simple select with CLI model options when driver is cli (default)', () => {
+  it('should show simple select with CLI model options when driver is cli (default)', async () => {
+    const user = userEvent.setup();
     render(
       <ProfileEditModal
         open={true}
@@ -76,6 +78,9 @@ describe('ProfileEditModal model selection', () => {
       />
     );
 
+    // Switch to Agents tab to see agent configuration
+    await user.click(screen.getByRole('tab', { name: /agents/i }));
+
     // Default is CLI driver - should NOT show "Browse all models" link
     expect(screen.queryByText(/Browse all models/i)).not.toBeInTheDocument();
     // Should see opus/sonnet/haiku options in the simple select
@@ -84,6 +89,7 @@ describe('ProfileEditModal model selection', () => {
   });
 
   it('should show ApiModelSelect with browse link when driver is api', async () => {
+    const user = userEvent.setup();
     const profileWithApiDriver = {
       id: 'test-profile',
       tracker: 'noop',
@@ -111,6 +117,9 @@ describe('ProfileEditModal model selection', () => {
       />
     );
 
+    // Switch to Agents tab to see agent configuration
+    await user.click(screen.getByRole('tab', { name: /agents/i }));
+
     // Since architect has api driver, should show Browse all models link
     await waitFor(() => {
       expect(screen.getByText(/Browse all models/i)).toBeInTheDocument();
@@ -118,6 +127,7 @@ describe('ProfileEditModal model selection', () => {
   });
 
   it('should show multiple ApiModelSelect components when multiple agents use api driver', async () => {
+    const user = userEvent.setup();
     const profileWithMultipleApiDrivers = {
       id: 'multi-api-profile',
       tracker: 'noop',
@@ -144,6 +154,9 @@ describe('ProfileEditModal model selection', () => {
         onSaved={vi.fn()}
       />
     );
+
+    // Switch to Agents tab to see agent configuration
+    await user.click(screen.getByRole('tab', { name: /agents/i }));
 
     // Three primary agents have api driver, so should show 3 "Browse all models" links
     await waitFor(() => {

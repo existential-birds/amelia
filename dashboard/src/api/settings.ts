@@ -53,6 +53,16 @@ export interface AgentConfig {
 }
 
 /**
+ * Sandbox execution configuration for a profile.
+ */
+export interface SandboxConfig {
+  mode: 'none' | 'container';
+  image: string;
+  network_allowlist_enabled: boolean;
+  network_allowed_hosts: string[];
+}
+
+/**
  * Profile configuration for workflow execution.
  * Each agent (architect, developer, reviewer) has its own driver/model config.
  */
@@ -63,6 +73,7 @@ export interface Profile {
   plan_output_dir: string;
   plan_path_pattern: string;
   agents: Record<string, AgentConfig>;
+  sandbox?: SandboxConfig;
   is_active: boolean;
 }
 
@@ -85,6 +96,7 @@ export interface ProfileCreate {
   plan_output_dir?: string;
   plan_path_pattern?: string;
   agents: Record<string, AgentConfigInput>;
+  sandbox?: SandboxConfig;
 }
 
 /**
@@ -96,6 +108,7 @@ export interface ProfileUpdate {
   plan_output_dir?: string;
   plan_path_pattern?: string;
   agents?: Record<string, AgentConfigInput>;
+  sandbox?: SandboxConfig;
 }
 
 // =============================================================================

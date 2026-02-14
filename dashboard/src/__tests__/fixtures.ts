@@ -10,7 +10,7 @@ import {
   type TokenSummary,
   type TokenUsage,
 } from '../types';
-import { type Profile } from '../api/settings';
+import { type Profile, type SandboxConfig } from '../api/settings';
 
 // ============================================================================
 // Factory Functions
@@ -174,6 +174,20 @@ export function createMockProfile(overrides?: Partial<Profile>): Profile {
     plan_path_pattern: '',
     agents: {},
     is_active: true,
+    ...overrides,
+  };
+}
+
+/**
+ * Creates a mock SandboxConfig with sensible defaults.
+ * @param overrides - Optional partial object to override default values
+ */
+export function createMockSandboxConfig(overrides?: Partial<SandboxConfig>): SandboxConfig {
+  return {
+    mode: 'none',
+    image: 'amelia-sandbox:latest',
+    network_allowlist_enabled: false,
+    network_allowed_hosts: [],
     ...overrides,
   };
 }
