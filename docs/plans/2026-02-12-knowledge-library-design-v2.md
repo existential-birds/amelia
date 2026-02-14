@@ -157,112 +157,21 @@ CREATE INDEX idx_documents_status ON documents(status);
 
 ---
 
-## Database Configuration
+## Backend Modules
 
-**Connection Pool Sizing:**
+**Implemented (✅):**
+- `models.py` — Pydantic models (Document, Chunk, SearchResult)
+- `repository.py` — PostgreSQL queries for documents + chunks
+- `embeddings.py` — OpenRouter embedding client with batching and retry logic
+- `ingestion.py` — Docling parsing, hierarchical chunking, embedding pipeline
+- `service.py` — KnowledgeService for background ingestion with event emission
 
-The Knowledge Library increases database connection requirements due to background ingestion tasks and concurrent agent searches. Update the default pool size:
-
-```python
-# In server settings (update from default 10 → 20)
-AMELIA_DB_POOL_MAX_SIZE = 20
-```
-
-**Rationale:**
-- Background ingestion tasks hold connections during processing (max `AMELIA_INGESTION_CONCURRENCY`)
-- Concurrent agent searches from multiple workflows
-- Default pool size (10) insufficient for concurrent ingestion + searches
-- Pool size of 20 provides headroom for typical usage patterns
+**To be implemented (🔲):**
+- `search.py` — Semantic search + tag filtering (Phase 5)
 
 ---
 
-## Backend Modules
-
-```
-amelia/knowledge/
-    __init__.py
-    models.py          -- Pydantic models (Document, Chunk, SearchResult)
-    repository.py      -- PostgreSQL queries for documents + chunks
-    ingestion.py       -- Docling parsing, chunking, embedding pipeline
-    search.py          -- Semantic search + tag filtering
-    embeddings.py      -- OpenRouter embedding client
-```
-
-### Ingestion Pipeline
-
-Triggered on upload, runs async in background with concurrency limit:
-
-```python
-# Server setting
-AMELIA_INGESTION_CONCURRENCY = 2  # Max parallel ingestions
-
-# Implementation uses asyncio.Semaphore to limit concurrent processing
-```
-
-**Pipeline stages:**
-
-```
-Upload (PDF/MD)
-    │
-    ▼
-Store metadata → documents row (status='pending')
-    │
-    ▼
-Acquire ingestion semaphore (queue if at limit)
-    │
-    ▼
-status='processing', emit DOCUMENT_INGESTION_STARTED event
-    │
-    ▼
-Stage: Parsing
-Docling DocumentConverter.convert()
-    → DoclingDocument with structural parsing
-    → Extract raw_text for Oracle/Tier 2 use
-    → Emit progress event (stage='parsing', progress=0.25)
-    │
-    ▼
-Stage: Chunking
-HierarchicalChunker.chunk()
-    → Chunks with heading_path metadata
-    → Token counts per chunk
-    → Emit progress event (stage='chunking', progress=0.50)
-    │
-    ▼
-Stage: Embedding
-Embed chunks (parallel batched via OpenRouter, openai/text-embedding-3-small)
-    → vector(1536) per chunk
-    → Batch size: 100 chunks per request
-    → Parallel batches: up to 3 concurrent API requests
-    → Emit progress events after each batch (stage='embedding', progress=0.50-0.90)
-    │
-    ▼
-Stage: Storing
-INSERT chunks → document_chunks rows (batched transaction)
-    → Emit progress event (stage='storing', progress=0.95)
-    │
-    ▼
-status='ready', chunk_count=N, token_count=T
-Release semaphore, emit DOCUMENT_INGESTION_COMPLETED event
-```
-
-**Error Handling:**
-
-If any step fails, status becomes `'failed'` with a classified error message:
-
-```python
-# Error classification examples:
-- "PDF is password-protected. Please upload an unlocked version."
-- "File appears corrupted. Please verify the file and try again."
-- "PDF contains only scanned images. OCR support coming soon."
-- "Embedding API request failed: rate limit exceeded. Please try again later."
-- "Document too large: exceeds maximum token limit (500k tokens)."
-```
-
-The user can delete and re-upload after addressing the error.
-
-**Concurrency:** Queue position shown in dashboard for pending uploads ("Queued — position 3 of 5").
-
-### Search
+## Search (Phase 5)
 
 ```python
 async def knowledge_search(
@@ -321,31 +230,6 @@ class SearchResult(BaseModel):
     token_count: int
 ```
 
-### Embedding Client
-
-Thin async wrapper calling `POST https://openrouter.ai/api/v1/embeddings` with bearer auth. Uses the user's OpenRouter API key. Default model: `openai/text-embedding-3-small` (1536 dimensions). Embedding model is configurable in server settings.
-
-**Batching strategy:**
-
-```python
-EMBEDDING_BATCH_SIZE = 100        # Chunks per API request
-EMBEDDING_MAX_PARALLEL = 3        # Concurrent API requests
-EMBEDDING_MAX_RETRIES = 3         # Retries per batch on failure
-EMBEDDING_TIMEOUT_SECONDS = 30    # Per-request timeout
-```
-
-**Parallel batching implementation:**
-
-1. Split chunks into batches of 100
-2. Process up to 3 batches concurrently using `asyncio.gather()`
-3. Retry failed batches with exponential backoff
-4. Emit progress events after each batch completes
-5. Return embeddings in original order
-
-**Example:** 500 chunks = 5 batches. Process batches 1-3 in parallel, then batches 4-5. Total time ≈ 2 rounds instead of 5 sequential requests.
-
-**Error handling:** If a batch fails after max retries, the entire ingestion fails with a clear error message indicating which batch failed and why (e.g., rate limit, timeout, API error).
-
 ---
 
 ## Agent Tool Integration
@@ -385,6 +269,8 @@ Upload accepts `.pdf` and `.md` files. The ingestion pipeline runs as a backgrou
 ---
 
 ## WebSocket Events
+
+✅ **Event types implemented** in `amelia/server/models/events.py` under `KNOWLEDGE` domain.
 
 ```python
 class EventType(StrEnum):
