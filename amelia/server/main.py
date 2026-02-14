@@ -47,6 +47,7 @@ from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from loguru import logger
 
 from amelia import __version__
 from amelia.drivers.base import DriverInterface
@@ -138,7 +139,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # Connect to database and run migrations
     database = Database(config.database_url, min_size=config.db_pool_min_size, max_size=config.db_pool_max_size)
-    await database.connect()
+    try:
+        await database.connect()
+    except ConnectionError:
+        logger.error("Failed to connect to database. Is PostgreSQL running? Try: docker compose up -d postgres")
+        raise
     migrator = Migrator(database)
     await migrator.run()
     await migrator.initialize_prompts()

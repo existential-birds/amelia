@@ -31,7 +31,7 @@ class TestServerConfig:
 
         assert config.host == "127.0.0.1"
         assert config.port == 8420
-        assert config.database_url == "postgresql://localhost:5434/amelia"
+        assert config.database_url == "postgresql://amelia:amelia@localhost:5434/amelia"
         assert config.db_pool_min_size == 2
         assert config.db_pool_max_size == 10
 
