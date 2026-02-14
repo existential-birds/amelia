@@ -201,7 +201,7 @@ class EmbeddingClient:
                 },
             )
 
-            if response.status_code != 200:
+            if not response.is_success:
                 try:
                     error_msg = response.json().get("error", "Unknown error")
                 except ValueError:
