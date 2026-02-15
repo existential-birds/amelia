@@ -135,7 +135,7 @@ async def call_developer_node(
     developer = Developer(agent_config, prompts=prompts)
 
     final_state = state
-    async for new_state, event in developer.run(state, profile):
+    async for new_state, event in developer.run(state, profile, workflow_id=workflow_id):
         final_state = new_state
         # Stream events are emitted via event_bus if provided
         if event_bus:
