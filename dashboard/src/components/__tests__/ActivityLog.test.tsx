@@ -58,7 +58,7 @@ describe('ActivityLog', () => {
   it('renders debug events alongside info events', () => {
     const events = [
       makeEvent({ id: '1', level: 'info', message: 'Info event' }),
-      makeEvent({ id: '2', level: 'debug', message: 'Debug event', event_type: 'claude_tool_call' }),
+      makeEvent({ id: '2', level: 'debug', message: 'Debug event', event_type: 'task_started' }),
     ];
 
     render(<ActivityLog workflowId="wf-test" initialEvents={events} />);

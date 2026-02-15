@@ -20,6 +20,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import {
   ChevronDown,
@@ -36,10 +37,12 @@ import {
   Wand2,
   Terminal,
   Cloud,
+  X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { createProfile, updateProfile } from '@/api/settings';
-import type { Profile, ProfileCreate, ProfileUpdate } from '@/api/settings';
+import type { Profile, ProfileCreate, ProfileUpdate, SandboxConfig } from '@/api/settings';
+import { Switch } from '@/components/ui/switch';
 import * as toast from '@/components/Toast';
 import { ApiModelSelect } from '@/components/model-picker';
 
@@ -150,6 +153,10 @@ interface FormData {
   plan_output_dir: string;
   plan_path_pattern: string;
   agents: Record<string, AgentFormData>;
+  sandbox_mode: 'none' | 'container';
+  sandbox_image: string;
+  sandbox_network_allowlist_enabled: boolean;
+  sandbox_network_allowed_hosts: string[];
 }
 
 // =============================================================================
@@ -203,6 +210,10 @@ const DEFAULT_FORM_DATA: FormData = {
   plan_output_dir: 'docs/plans',
   plan_path_pattern: 'docs/plans/{date}-{issue_key}.md',
   agents: buildDefaultAgents(),
+  sandbox_mode: 'none',
+  sandbox_image: 'amelia-sandbox:latest',
+  sandbox_network_allowlist_enabled: false,
+  sandbox_network_allowed_hosts: [],
 };
 
 /** Validation rules for profile fields */
@@ -241,6 +252,10 @@ const profileToFormData = (profile: Profile): FormData => {
     plan_output_dir: profile.plan_output_dir,
     plan_path_pattern: profile.plan_path_pattern,
     agents,
+    sandbox_mode: profile.sandbox?.mode ?? 'none',
+    sandbox_image: profile.sandbox?.image ?? 'amelia-sandbox:latest',
+    sandbox_network_allowlist_enabled: profile.sandbox?.network_allowlist_enabled ?? false,
+    sandbox_network_allowed_hosts: profile.sandbox?.network_allowed_hosts ?? [],
   };
 };
 
@@ -429,6 +444,96 @@ function BulkApply({ onApply }: BulkApplyProps) {
 }
 
 // =============================================================================
+// Host Chip Input Component
+// =============================================================================
+
+interface HostChipInputProps {
+  hosts: string[];
+  onChange: (hosts: string[]) => void;
+}
+
+function HostChipInput({ hosts, onChange }: HostChipInputProps) {
+  const [inputValue, setInputValue] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  const isValidHostname = (host: string): boolean => {
+    return /^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)*$/.test(host);
+  };
+
+  const addHost = () => {
+    const trimmed = inputValue.trim().toLowerCase();
+    if (!trimmed) return;
+
+    if (!isValidHostname(trimmed)) {
+      setError('Invalid hostname');
+      return;
+    }
+    if (hosts.includes(trimmed)) {
+      setError('Host already added');
+      return;
+    }
+
+    onChange([...hosts, trimmed]);
+    setInputValue('');
+    setError(null);
+  };
+
+  const removeHost = (host: string) => {
+    onChange(hosts.filter((h) => h !== host));
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addHost();
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap gap-1.5 min-h-[32px]">
+        {hosts.map((host) => (
+          <Badge
+            key={host}
+            variant="secondary"
+            className="text-xs font-mono gap-1 pl-2 pr-1"
+          >
+            {host}
+            <button
+              type="button"
+              onClick={() => removeHost(host)}
+              className="ml-0.5 rounded-sm hover:bg-muted-foreground/20 p-0.5"
+              aria-label={`Remove ${host}`}
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </Badge>
+        ))}
+      </div>
+      <div className="flex gap-2">
+        <Input
+          value={inputValue}
+          onChange={(e) => {
+            setInputValue(e.target.value);
+            if (error) setError(null);
+          }}
+          onKeyDown={handleKeyDown}
+          placeholder="api.example.com"
+          className={cn(
+            'bg-background/50 font-mono text-sm flex-1',
+            error && 'border-destructive focus-visible:ring-destructive'
+          )}
+        />
+        <Button type="button" variant="outline" size="sm" onClick={addHost}>
+          Add
+        </Button>
+      </div>
+      {error && <p className="text-xs text-destructive">{error}</p>}
+    </div>
+  );
+}
+
+// =============================================================================
 // Main Component
 // =============================================================================
 
@@ -443,7 +548,7 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
   const isEditMode = profile !== null;
   const [isSaving, setIsSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [advancedOpen, setAdvancedOpen] = useState(false);
+
   const [utilityAgentsOpen, setUtilityAgentsOpen] = useState(false);
 
   const [formData, setFormData] = useState<FormData>({ ...DEFAULT_FORM_DATA });
@@ -458,7 +563,6 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
     setErrors({});
     // Reset collapsible states when profile changes
     setUtilityAgentsOpen(false);
-    setAdvancedOpen(false);
   }, [profile, open]);
 
   /**
@@ -482,6 +586,14 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
       ) {
         return true;
       }
+    }
+    if (
+      formData.sandbox_mode !== original.sandbox_mode ||
+      formData.sandbox_image !== original.sandbox_image ||
+      formData.sandbox_network_allowlist_enabled !== original.sandbox_network_allowlist_enabled ||
+      JSON.stringify(formData.sandbox_network_allowed_hosts) !== JSON.stringify(original.sandbox_network_allowed_hosts)
+    ) {
+      return true;
     }
     return false;
   }, [formData]);
@@ -584,6 +696,13 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
     return agents;
   };
 
+  const formSandboxToApi = (): SandboxConfig => ({
+    mode: formData.sandbox_mode,
+    image: formData.sandbox_image,
+    network_allowlist_enabled: formData.sandbox_network_allowlist_enabled,
+    network_allowed_hosts: formData.sandbox_network_allowed_hosts,
+  });
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -599,6 +718,7 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
           plan_output_dir: formData.plan_output_dir,
           plan_path_pattern: formData.plan_path_pattern,
           agents: formAgentsToApi(),
+          sandbox: formSandboxToApi(),
         };
         await updateProfile(profile!.id, updates);
         toast.success('Profile updated');
@@ -610,6 +730,7 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
           plan_output_dir: formData.plan_output_dir,
           plan_path_pattern: formData.plan_path_pattern,
           agents: formAgentsToApi(),
+          sandbox: formSandboxToApi(),
         };
         await createProfile(newProfile);
         toast.success('Profile created');
@@ -646,159 +767,81 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
           </DialogHeader>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6 p-6 pt-4">
-          {/* Basic Info Section */}
-          <div className="grid grid-cols-2 gap-4">
-            {/* Profile ID */}
-            <div className="space-y-2">
-              <Label htmlFor="id" className="text-xs uppercase tracking-wider text-muted-foreground">
-                Profile Name
-              </Label>
-              <Input
-                id="id"
-                value={formData.id}
-                onChange={(e) => handleChange('id', e.target.value)}
-                onBlur={(e) => !isEditMode && handleBlur('id', e.target.value)}
-                disabled={isEditMode}
-                placeholder="e.g., dev, prod"
-                aria-invalid={!!errors.id}
-                className={cn(
-                  'bg-background/50 hover:border-muted-foreground/30 transition-colors',
-                  errors.id && 'border-destructive focus-visible:ring-destructive'
-                )}
-              />
-              {errors.id && (
-                <p className="text-xs text-destructive">{errors.id}</p>
-              )}
-            </div>
+        <form onSubmit={handleSubmit} className="flex flex-col h-full">
+          <Tabs defaultValue="general" className="flex-1 px-6 pt-4">
+            <TabsList className="w-full justify-start">
+              <TabsTrigger value="general">General</TabsTrigger>
+              <TabsTrigger value="agents">Agents</TabsTrigger>
+              <TabsTrigger value="sandbox">Sandbox</TabsTrigger>
+            </TabsList>
 
-            {/* Tracker */}
-            <div className="space-y-2">
-              <Label className="text-xs uppercase tracking-wider text-muted-foreground">
-                Issue Tracker
-              </Label>
-              <Select value={formData.tracker} onValueChange={(v) => handleChange('tracker', v)}>
-                <SelectTrigger className="bg-background/50">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {TRACKER_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          {/* Working Directory */}
-          <div className="space-y-2">
-            <Label htmlFor="working_dir" className="text-xs uppercase tracking-wider text-muted-foreground">
-              Working Directory
-            </Label>
-            <Input
-              id="working_dir"
-              value={formData.working_dir}
-              onChange={(e) => handleChange('working_dir', e.target.value)}
-              onBlur={(e) => handleBlur('working_dir', e.target.value)}
-              placeholder="/path/to/repo"
-              aria-invalid={!!errors.working_dir}
-              className={cn(
-                'bg-background/50 hover:border-muted-foreground/30 transition-colors font-mono text-sm',
-                errors.working_dir && 'border-destructive focus-visible:ring-destructive'
-              )}
-            />
-            {errors.working_dir && (
-              <p className="text-xs text-destructive">{errors.working_dir}</p>
-            )}
-          </div>
-
-          {/* Divider */}
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t border-border/30" />
-            </div>
-            <div className="relative flex justify-center">
-              <span className="bg-background px-3 text-xs uppercase tracking-wider text-muted-foreground">
-                Agent Configuration
-              </span>
-            </div>
-          </div>
-
-          {/* Bulk Apply */}
-          <BulkApply onApply={handleBulkApply} />
-
-          {/* Primary Agents */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <Label className="text-xs uppercase tracking-wider text-muted-foreground">
-                Primary Agents
-              </Label>
-              <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
-                Core workflow
-              </Badge>
-            </div>
-            <div className="grid gap-2 grid-cols-1">
-              {PRIMARY_AGENTS.map((agent) => {
-                const config = formData.agents[agent.key] ?? { driver: 'cli', model: agent.defaultModel };
-                return (
-                  <AgentCard
-                    key={agent.key}
-                    agent={agent}
-                    config={config}
-                    onChange={(field, value) => handleAgentChange(agent.key, field, value)}
+            {/* General Tab */}
+            <TabsContent value="general" className="space-y-4 pt-4">
+              {/* Profile Name + Tracker */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="id" className="text-xs uppercase tracking-wider text-muted-foreground">
+                    Profile Name
+                  </Label>
+                  <Input
+                    id="id"
+                    value={formData.id}
+                    onChange={(e) => handleChange('id', e.target.value)}
+                    onBlur={(e) => !isEditMode && handleBlur('id', e.target.value)}
+                    disabled={isEditMode}
+                    placeholder="e.g., dev, prod"
+                    aria-invalid={!!errors.id}
+                    className={cn(
+                      'bg-background/50 hover:border-muted-foreground/30 transition-colors',
+                      errors.id && 'border-destructive focus-visible:ring-destructive'
+                    )}
                   />
-                );
-              })}
-            </div>
-          </div>
+                  {errors.id && (
+                    <p className="text-xs text-destructive">{errors.id}</p>
+                  )}
+                </div>
 
-          {/* Utility Agents (Collapsible) */}
-          <Collapsible open={utilityAgentsOpen} onOpenChange={setUtilityAgentsOpen}>
-            <CollapsibleTrigger className="flex w-full items-center justify-between rounded-lg border border-border/30 bg-background/30 px-4 py-3 text-sm font-medium hover:bg-muted/30 hover:border-border/50 transition-all">
-              <div className="flex items-center gap-2">
-                <span className="text-xs uppercase tracking-wider">Utility Agents</span>
-                <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4">
-                  {utilityConfigCount} configured
-                </Badge>
+                <div className="space-y-2">
+                  <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+                    Issue Tracker
+                  </Label>
+                  <Select value={formData.tracker} onValueChange={(v) => handleChange('tracker', v)}>
+                    <SelectTrigger className="bg-background/50">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {TRACKER_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-              <ChevronDown
-                className={cn(
-                  'size-4 text-muted-foreground transition-transform duration-200',
-                  utilityAgentsOpen && 'rotate-180'
-                )}
-              />
-            </CollapsibleTrigger>
-            <CollapsibleContent className="pt-3">
-              <div className="grid gap-2 grid-cols-1">
-                {UTILITY_AGENTS.map((agent) => {
-                  const config = formData.agents[agent.key] ?? { driver: 'cli', model: agent.defaultModel };
-                  return (
-                    <AgentCard
-                      key={agent.key}
-                      agent={agent}
-                      config={config}
-                      onChange={(field, value) => handleAgentChange(agent.key, field, value)}
-                    />
-                  );
-                })}
-              </div>
-            </CollapsibleContent>
-          </Collapsible>
 
-          {/* Advanced Settings */}
-          <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
-            <CollapsibleTrigger className="flex w-full items-center justify-between rounded-md border border-border/30 bg-background/30 px-4 py-3 text-sm font-medium hover:bg-muted/30 hover:border-border/50 transition-all">
-              <span className="text-xs uppercase tracking-wider">Advanced Settings</span>
-              <ChevronDown
-                className={cn(
-                  'size-4 text-muted-foreground transition-transform duration-200',
-                  advancedOpen && 'rotate-180'
+              {/* Working Directory */}
+              <div className="space-y-2">
+                <Label htmlFor="working_dir" className="text-xs uppercase tracking-wider text-muted-foreground">
+                  Working Directory
+                </Label>
+                <Input
+                  id="working_dir"
+                  value={formData.working_dir}
+                  onChange={(e) => handleChange('working_dir', e.target.value)}
+                  onBlur={(e) => handleBlur('working_dir', e.target.value)}
+                  placeholder="/path/to/repo"
+                  aria-invalid={!!errors.working_dir}
+                  className={cn(
+                    'bg-background/50 hover:border-muted-foreground/30 transition-colors font-mono text-sm',
+                    errors.working_dir && 'border-destructive focus-visible:ring-destructive'
+                  )}
+                />
+                {errors.working_dir && (
+                  <p className="text-xs text-destructive">{errors.working_dir}</p>
                 )}
-              />
-            </CollapsibleTrigger>
-            <CollapsibleContent className="space-y-4 pt-4">
+              </div>
+
               {/* Plan Output Directory */}
               <div className="space-y-2">
                 <Label htmlFor="plan_output_dir" className="text-xs uppercase tracking-wider text-muted-foreground">
@@ -826,10 +869,150 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
                   className="bg-background/50 hover:border-muted-foreground/30 transition-colors font-mono text-sm"
                 />
               </div>
-            </CollapsibleContent>
-          </Collapsible>
+            </TabsContent>
 
-          <DialogFooter className="border-t border-border/30 pt-4 mt-2 gap-2">
+            {/* Agents Tab */}
+            <TabsContent value="agents" className="space-y-4 pt-4">
+              {/* Bulk Apply */}
+              <BulkApply onApply={handleBulkApply} />
+
+              {/* Primary Agents */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+                    Primary Agents
+                  </Label>
+                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
+                    Core workflow
+                  </Badge>
+                </div>
+                <div className="grid gap-2 grid-cols-1">
+                  {PRIMARY_AGENTS.map((agent) => {
+                    const config = formData.agents[agent.key] ?? { driver: 'cli', model: agent.defaultModel };
+                    return (
+                      <AgentCard
+                        key={agent.key}
+                        agent={agent}
+                        config={config}
+                        onChange={(field, value) => handleAgentChange(agent.key, field, value)}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Utility Agents (Collapsible) */}
+              <Collapsible open={utilityAgentsOpen} onOpenChange={setUtilityAgentsOpen}>
+                <CollapsibleTrigger className="flex w-full items-center justify-between rounded-lg border border-border/30 bg-background/30 px-4 py-3 text-sm font-medium hover:bg-muted/30 hover:border-border/50 transition-all">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs uppercase tracking-wider">Utility Agents</span>
+                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4">
+                      {utilityConfigCount} configured
+                    </Badge>
+                  </div>
+                  <ChevronDown
+                    className={cn(
+                      'size-4 text-muted-foreground transition-transform duration-200',
+                      utilityAgentsOpen && 'rotate-180'
+                    )}
+                  />
+                </CollapsibleTrigger>
+                <CollapsibleContent className="pt-3">
+                  <div className="grid gap-2 grid-cols-1">
+                    {UTILITY_AGENTS.map((agent) => {
+                      const config = formData.agents[agent.key] ?? { driver: 'cli', model: agent.defaultModel };
+                      return (
+                        <AgentCard
+                          key={agent.key}
+                          agent={agent}
+                          config={config}
+                          onChange={(field, value) => handleAgentChange(agent.key, field, value)}
+                        />
+                      );
+                    })}
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
+            </TabsContent>
+
+            {/* Sandbox Tab */}
+            <TabsContent value="sandbox" className="space-y-4 pt-4">
+              {/* Sandbox Mode */}
+              <div className="space-y-2">
+                <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+                  Sandbox Mode
+                </Label>
+                <Select
+                  value={formData.sandbox_mode}
+                  onValueChange={(v) => handleChange('sandbox_mode', v)}
+                >
+                  <SelectTrigger className="bg-background/50">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    <SelectItem value="container">Container</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  {formData.sandbox_mode === 'none'
+                    ? 'Code runs directly on the host machine.'
+                    : 'Code runs in an isolated Docker container.'}
+                </p>
+              </div>
+
+              {/* Container-specific settings */}
+              {formData.sandbox_mode === 'container' && (
+                <>
+                  {/* Docker Image */}
+                  <div className="space-y-2">
+                    <Label htmlFor="sandbox_image" className="text-xs uppercase tracking-wider text-muted-foreground">
+                      Docker Image
+                    </Label>
+                    <Input
+                      id="sandbox_image"
+                      value={formData.sandbox_image}
+                      onChange={(e) => handleChange('sandbox_image', e.target.value)}
+                      placeholder="amelia-sandbox:latest"
+                      className="bg-background/50 hover:border-muted-foreground/30 transition-colors font-mono text-sm"
+                    />
+                  </div>
+
+                  {/* Network Allowlist Toggle */}
+                  <div className="flex items-center justify-between rounded-lg border border-border/40 p-4">
+                    <div className="space-y-0.5">
+                      <Label htmlFor="sandbox_network_allowlist" className="text-sm font-medium">
+                        Network Allowlist
+                      </Label>
+                      <p className="text-xs text-muted-foreground">
+                        Restrict outbound network to allowed hosts only.
+                      </p>
+                    </div>
+                    <Switch
+                      id="sandbox_network_allowlist"
+                      checked={formData.sandbox_network_allowlist_enabled}
+                      onCheckedChange={(checked) => handleChange('sandbox_network_allowlist_enabled', checked)}
+                    />
+                  </div>
+
+                  {/* Allowed Hosts */}
+                  {formData.sandbox_network_allowlist_enabled && (
+                    <div className="space-y-2">
+                      <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+                        Allowed Hosts
+                      </Label>
+                      <HostChipInput
+                        hosts={formData.sandbox_network_allowed_hosts}
+                        onChange={(hosts) => setFormData((prev) => ({ ...prev, sandbox_network_allowed_hosts: hosts }))}
+                      />
+                    </div>
+                  )}
+                </>
+              )}
+            </TabsContent>
+          </Tabs>
+
+          <DialogFooter className="border-t border-border/30 px-6 py-4 gap-2">
             <Button type="button" variant="outline" onClick={handleClose}>
               Cancel
             </Button>

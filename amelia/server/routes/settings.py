@@ -22,6 +22,7 @@ from amelia.server.dependencies import (
     get_profile_repository,
     get_settings_repository,
 )
+from amelia.server.routes.websocket import connection_manager
 
 
 router = APIRouter(prefix="/api", tags=["settings"])
@@ -156,6 +157,8 @@ async def update_server_settings(
     """Update server settings."""
     update_dict = {k: v for k, v in updates.model_dump().items() if v is not None}
     settings = await repo.update_server_settings(update_dict)
+    if "stream_tool_results" in update_dict:
+        connection_manager.set_stream_tool_results(settings.stream_tool_results)
     return ServerSettingsResponse(
         log_retention_days=settings.log_retention_days,
         checkpoint_retention_days=settings.checkpoint_retention_days,

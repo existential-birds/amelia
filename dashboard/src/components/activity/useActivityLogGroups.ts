@@ -3,6 +3,13 @@ import type { WorkflowEvent } from '@/types';
 import type { StageGroup, VirtualRow, AgentStage } from './types';
 import { STAGE_ORDER, STAGE_LABELS } from './types';
 
+const TRACE_EVENT_TYPES = new Set([
+  'claude_thinking',
+  'claude_tool_call',
+  'claude_tool_result',
+  'agent_output',
+]);
+
 /**
  * Hook to group workflow events by stage for hierarchical display.
  *
@@ -15,9 +22,14 @@ export function useActivityLogGroups(
   collapsedStages: Set<string>
 ): { groups: StageGroup[]; rows: VirtualRow[] } {
   return useMemo(() => {
+    // Filter out trace events - ActivityLog shows only lifecycle events
+    const lifecycleEvents = events.filter(
+      (e) => !TRACE_EVENT_TYPES.has(e.event_type)
+    );
+
     // Group events by agent
     const byAgent = new Map<string, WorkflowEvent[]>();
-    for (const event of events) {
+    for (const event of lifecycleEvents) {
       const agent = event.agent.toLowerCase();
       // Map unknown agents to developer
       const targetStage = STAGE_ORDER.includes(agent as AgentStage)

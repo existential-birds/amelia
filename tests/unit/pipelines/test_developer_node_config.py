@@ -113,3 +113,48 @@ async def test_call_developer_node_passes_prompts_to_developer(
 
         assert MockDeveloper.call_args is not None
         assert MockDeveloper.call_args.kwargs["prompts"] == prompts
+
+
+@pytest.mark.asyncio
+async def test_call_developer_node_passes_workflow_id(
+    mock_execution_state_factory: Callable[..., tuple[ImplementationState, Profile]],
+    mock_profile_factory: Callable[..., Profile],
+) -> None:
+    """Call developer node should pass workflow_id to developer.run()."""
+    profile = mock_profile_factory(
+        preset="cli_single",
+        agents={
+            "developer": AgentConfig(driver=DriverType.CLI, model="sonnet"),
+        },
+    )
+    state, _ = mock_execution_state_factory(
+        profile=profile,
+        goal="Implement test feature",
+        plan_markdown="## Task 1\n\nDo something",
+    )
+    config: dict[str, Any] = {
+        "configurable": {
+            "profile": profile,
+            "thread_id": "wf-test-123",
+        }
+    }
+
+    with patch("amelia.pipelines.nodes.Developer") as MockDeveloper:
+        mock_developer = MagicMock()
+        event = AgenticMessage(
+            type=AgenticMessageType.RESULT,
+            content="Done",
+        ).to_workflow_event(workflow_id="wf-test-123", agent="developer")
+        mock_developer.run = MagicMock(return_value=AsyncIteratorMock([
+            (state.model_copy(update={"agentic_status": "completed"}), event)
+        ]))
+        mock_developer.driver = MagicMock()
+        MockDeveloper.return_value = mock_developer
+
+        with patch("amelia.pipelines.nodes._save_token_usage", new_callable=AsyncMock):
+            await call_developer_node(state, cast(RunnableConfig, config))
+
+        # Verify workflow_id was passed to developer.run()
+        mock_developer.run.assert_called_once()
+        call_kwargs = mock_developer.run.call_args
+        assert call_kwargs.kwargs["workflow_id"] == "wf-test-123"

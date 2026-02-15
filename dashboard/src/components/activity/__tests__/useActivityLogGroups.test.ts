@@ -34,11 +34,11 @@ describe('useActivityLogGroups', () => {
     expect(result.current.groups[1]?.events).toHaveLength(1);
   });
 
-  it('includes all event levels', () => {
+  it('includes lifecycle events at all levels', () => {
     const events: WorkflowEvent[] = [
       makeEvent({ id: '1', level: 'info', event_type: 'stage_started' }),
       makeEvent({ id: '2', level: 'debug', event_type: 'task_started' }),
-      makeEvent({ id: '3', level: 'debug', event_type: 'claude_tool_call' }),
+      makeEvent({ id: '3', level: 'debug', event_type: 'file_created' }),
     ];
 
     const { result } = renderHook(() =>
@@ -47,6 +47,44 @@ describe('useActivityLogGroups', () => {
 
     const allEvents = result.current.groups.flatMap((g) => g.events);
     expect(allEvents).toHaveLength(3);
+  });
+
+  it('filters out trace events from groups', () => {
+    const events: WorkflowEvent[] = [
+      makeEvent({ id: '1', event_type: 'stage_started' }),
+      makeEvent({ id: '2', event_type: 'claude_thinking' }),
+      makeEvent({ id: '3', event_type: 'claude_tool_call' }),
+      makeEvent({ id: '4', event_type: 'claude_tool_result' }),
+      makeEvent({ id: '5', event_type: 'agent_output' }),
+      makeEvent({ id: '6', event_type: 'stage_completed' }),
+    ];
+
+    const { result } = renderHook(() =>
+      useActivityLogGroups(events, new Set())
+    );
+
+    const allEvents = result.current.groups.flatMap((g) => g.events);
+    expect(allEvents).toHaveLength(2);
+    expect(allEvents.map((e) => e.event_type)).toEqual([
+      'stage_started',
+      'stage_completed',
+    ]);
+  });
+
+  it('passes lifecycle events through unchanged', () => {
+    const events: WorkflowEvent[] = [
+      makeEvent({ id: '1', event_type: 'stage_started', message: 'Start' }),
+      makeEvent({ id: '2', event_type: 'task_started', message: 'Task' }),
+      makeEvent({ id: '3', event_type: 'stage_completed', message: 'Done' }),
+    ];
+
+    const { result } = renderHook(() =>
+      useActivityLogGroups(events, new Set())
+    );
+
+    const allEvents = result.current.groups.flatMap((g) => g.events);
+    expect(allEvents).toHaveLength(3);
+    expect(allEvents.map((e) => e.message)).toEqual(['Start', 'Task', 'Done']);
   });
 
   it('collapses stages in collapsedStages set', () => {
