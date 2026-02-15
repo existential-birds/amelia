@@ -1328,11 +1328,17 @@ class TestStartWorkflowWithTaskFields:
 # =============================================================================
 
 
-async def test_model_provider_error_retried(
-    orchestrator: OrchestratorService,
-    mock_repository: AsyncMock,
-) -> None:
-    """Verify that when graph.astream raises ModelProviderError, approve_workflow retries before failing."""
+class ModelProviderErrorSetup:
+    """Shared setup for ModelProviderError retry tests."""
+
+    def __init__(self, mock_graph: MagicMock, mock_profile: Profile) -> None:
+        self.mock_graph = mock_graph
+        self.mock_profile = mock_profile
+
+
+@pytest.fixture
+def model_provider_error_setup(mock_repository: AsyncMock) -> ModelProviderErrorSetup:
+    """Shared setup for ModelProviderError retry tests."""
     # Setup blocked workflow
     mock_workflow = MagicMock()
     mock_workflow.workflow_id = "wf-1"
@@ -1361,61 +1367,54 @@ async def test_model_provider_error_retried(
     mock_graph.aget_state = AsyncMock()
     mock_graph.astream = MagicMock(side_effect=ModelProviderError("provider blew up"))
 
+    return ModelProviderErrorSetup(mock_graph, mock_profile)
+
+
+@contextlib.contextmanager
+def model_provider_error_patches(
+    orchestrator: OrchestratorService, setup: ModelProviderErrorSetup
+) -> Any:
+    """Context manager for common patches in ModelProviderError tests."""
     with (
-        patch.object(orchestrator, "_get_profile_or_fail", return_value=mock_profile),
-        patch.object(orchestrator, "_create_server_graph", return_value=mock_graph),
+        patch.object(
+            orchestrator, "_get_profile_or_fail", return_value=setup.mock_profile
+        ),
+        patch.object(
+            orchestrator, "_create_server_graph", return_value=setup.mock_graph
+        ),
         patch.object(orchestrator, "_resolve_prompts", return_value={}),
         patch.object(orchestrator, "_emit", new=AsyncMock()),
-        patch("amelia.server.orchestrator.service.asyncio.sleep", new_callable=AsyncMock),
+        patch(
+            "amelia.server.orchestrator.service.asyncio.sleep", new_callable=AsyncMock
+        ),
         pytest.raises(ModelProviderError),
     ):
+        yield
+
+
+async def test_model_provider_error_retried(
+    orchestrator: OrchestratorService,
+    model_provider_error_setup: ModelProviderErrorSetup,
+) -> None:
+    """Verify that when graph.astream raises ModelProviderError, approve_workflow retries before failing."""
+    setup = model_provider_error_setup
+
+    with model_provider_error_patches(orchestrator, setup):
         await orchestrator.approve_workflow("wf-1")
 
     # max_retries=2 means attempts 0, 1, 2 → astream called 3 times
-    assert mock_graph.astream.call_count == 3
+    assert setup.mock_graph.astream.call_count == 3
 
 
 async def test_model_provider_error_friendly_failure_reason(
     orchestrator: OrchestratorService,
     mock_repository: AsyncMock,
+    model_provider_error_setup: ModelProviderErrorSetup,
 ) -> None:
     """Verify that after retries exhausted, the failure_reason in the DB contains the friendly message."""
-    # Setup blocked workflow
-    mock_workflow = MagicMock()
-    mock_workflow.workflow_id = "wf-1"
-    mock_workflow.workflow_status = WorkflowStatus.BLOCKED
-    mock_workflow.profile_id = "prof-1"
-    mock_workflow.worktree_path = "/tmp"
-    mock_repository.get.return_value = mock_workflow
+    setup = model_provider_error_setup
 
-    # Profile with fast retry config
-    agent_config = AgentConfig(driver=DriverType.CLI, model="sonnet")
-    mock_profile = Profile(
-        name="test",
-        tracker=TrackerType.NOOP,
-        working_dir="/tmp",
-        retry=RetryConfig(max_retries=2, base_delay=0.1, max_delay=1.0),
-        agents={
-            "architect": agent_config,
-            "developer": agent_config,
-            "reviewer": agent_config,
-        },
-    )
-
-    # Mock graph whose astream always raises ModelProviderError
-    mock_graph = MagicMock()
-    mock_graph.aupdate_state = AsyncMock()
-    mock_graph.aget_state = AsyncMock()
-    mock_graph.astream = MagicMock(side_effect=ModelProviderError("provider blew up"))
-
-    with (
-        patch.object(orchestrator, "_get_profile_or_fail", return_value=mock_profile),
-        patch.object(orchestrator, "_create_server_graph", return_value=mock_graph),
-        patch.object(orchestrator, "_resolve_prompts", return_value={}),
-        patch.object(orchestrator, "_emit", new=AsyncMock()),
-        patch("amelia.server.orchestrator.service.asyncio.sleep", new_callable=AsyncMock),
-        pytest.raises(ModelProviderError),
-    ):
+    with model_provider_error_patches(orchestrator, setup):
         await orchestrator.approve_workflow("wf-1")
 
     # Verify set_status was called with FAILED and a friendly failure_reason
@@ -1425,9 +1424,7 @@ async def test_model_provider_error_friendly_failure_reason(
         if len(call[0]) >= 2 and call[0][1] == WorkflowStatus.FAILED
     ]
     assert len(failed_calls) == 1
-    failure_reason = failed_calls[0][1].get("failure_reason", "") if failed_calls[0][1] else ""
     # set_status is called as positional + keyword: set_status(wf_id, status, failure_reason=...)
-    if not failure_reason:
-        failure_reason = failed_calls[0].kwargs.get("failure_reason", "")
+    failure_reason = failed_calls[0].kwargs.get("failure_reason", "")
     assert "Failed after" in failure_reason
     assert "attempts" in failure_reason
