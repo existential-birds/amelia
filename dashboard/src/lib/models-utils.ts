@@ -45,7 +45,7 @@ export function flattenModelsData(
     if (!rawModel.tool_call) continue;
 
     // Skip models with missing required fields
-    if (!rawModel.cost || !rawModel.limit) continue;
+    if (!rawModel.cost || !rawModel.limit || !rawModel.modalities) continue;
 
     // Extract provider from OpenRouter model ID (e.g., "minimax/minimax-m2.5" -> "minimax")
     const slashIndex = rawModel.id.indexOf('/');
