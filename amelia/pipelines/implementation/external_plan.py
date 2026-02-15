@@ -185,7 +185,9 @@ async def extract_plan_fields(
             goal = output.goal
             plan_markdown = output.plan_markdown
             key_files = output.key_files
-        except RuntimeError as e:
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
             logger.warning(
                 "Structured extraction failed, using regex fallback",
                 error=str(e),
