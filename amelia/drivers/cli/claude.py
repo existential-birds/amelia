@@ -8,6 +8,7 @@ from collections.abc import AsyncIterator
 from typing import Any, Literal
 
 from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient, query
+from claude_agent_sdk._errors import ProcessError
 from claude_agent_sdk.types import (
     AssistantMessage,
     Message,
@@ -23,6 +24,7 @@ from loguru import logger
 from pydantic import BaseModel, ValidationError
 
 from amelia.core.constants import CANONICAL_TO_CLI, normalize_tool_name
+from amelia.core.exceptions import ModelProviderError
 from amelia.drivers.base import AgenticMessage, AgenticMessageType, DriverUsage, GenerateResult
 from amelia.logging import log_claude_result
 
@@ -388,6 +390,16 @@ class ClaudeCliDriver:
                 else:
                     return ("", session_id_result)
 
+        except ProcessError as e:
+            logger.warning(
+                "Claude CLI process failed, will retry as transient error",
+                error=str(e),
+            )
+            raise ModelProviderError(
+                f"Claude CLI process error: {e}",
+                provider_name="claude-cli",
+                original_message=str(e),
+            ) from e
         except Exception as e:
             if isinstance(e, RuntimeError):
                 raise
@@ -511,6 +523,16 @@ class ClaudeCliDriver:
                             model=self.model,
                         )
 
+        except ProcessError as e:
+            logger.warning(
+                "Claude CLI process failed, will retry as transient error",
+                error=str(e),
+            )
+            raise ModelProviderError(
+                f"Claude CLI process error: {e}",
+                provider_name="claude-cli",
+                original_message=str(e),
+            ) from e
         except Exception:
             logger.exception("Error in agentic execution")
             raise
