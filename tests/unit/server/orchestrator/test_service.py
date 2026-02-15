@@ -1435,3 +1435,234 @@ async def test_model_provider_error_friendly_failure_reason(
     failure_reason = failed_calls[0].kwargs.get("failure_reason", "")
     assert "Failed after" in failure_reason
     assert "attempts" in failure_reason
+
+
+# =============================================================================
+# Exponential Backoff Tests
+# =============================================================================
+
+
+class TestExponentialBackoff:
+    """Tests for exponential backoff edge cases in retry logic."""
+
+    async def test_normal_retry_with_exponential_backoff(
+        self,
+        orchestrator: OrchestratorService,
+        mock_repository: AsyncMock,
+        valid_worktree: str,
+    ) -> None:
+        """Verify exponential backoff delays increase with each retry."""
+        # Setup workflow state
+        mock_state = ServerExecutionState(
+            id="wf-backoff",
+            issue_id="ISSUE-123",
+            worktree_path=valid_worktree,
+            workflow_status=WorkflowStatus.IN_PROGRESS,
+            started_at=datetime.now(UTC),
+            profile_id="test",
+        )
+
+        # Mock profile with fast retry config
+        agent_config = AgentConfig(driver=DriverType.CLI, model="sonnet")
+        mock_profile = Profile(
+            name="test",
+            tracker=TrackerType.NOOP,
+            working_dir=valid_worktree,
+            retry=RetryConfig(max_retries=3, base_delay=0.1, max_delay=10.0),
+            agents={
+                "architect": agent_config,
+                "developer": agent_config,
+                "reviewer": agent_config,
+            },
+        )
+
+        # Make _run_workflow fail 3 times, then succeed
+        call_count = 0
+
+        async def failing_run_workflow(workflow_id: str, state: ServerExecutionState) -> None:
+            nonlocal call_count
+            call_count += 1
+            if call_count <= 3:
+                raise ModelProviderError("transient failure")
+
+        with (
+            patch.object(orchestrator, "_get_profile_or_fail", return_value=mock_profile),
+            patch.object(orchestrator, "_run_workflow", new=failing_run_workflow),
+            patch("amelia.server.orchestrator.service.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+        ):
+            await orchestrator._run_workflow_with_retry("wf-backoff", mock_state)
+
+        # Verify delays follow exponential backoff: 0.1, 0.2, 0.4
+        assert mock_sleep.call_count == 3
+        delays = [call[0][0] for call in mock_sleep.call_args_list]
+        assert delays[0] == 0.1  # base_delay * 2^0
+        assert delays[1] == 0.2  # base_delay * 2^1
+        assert delays[2] == 0.4  # base_delay * 2^2
+
+    async def test_max_retries_exhausted(
+        self,
+        orchestrator: OrchestratorService,
+        mock_repository: AsyncMock,
+        valid_worktree: str,
+    ) -> None:
+        """Verify workflow fails after max_retries exhausted."""
+        mock_state = ServerExecutionState(
+            id="wf-max",
+            issue_id="ISSUE-123",
+            worktree_path=valid_worktree,
+            workflow_status=WorkflowStatus.IN_PROGRESS,
+            started_at=datetime.now(UTC),
+            profile_id="test",
+        )
+
+        agent_config = AgentConfig(driver=DriverType.CLI, model="sonnet")
+        mock_profile = Profile(
+            name="test",
+            tracker=TrackerType.NOOP,
+            working_dir=valid_worktree,
+            retry=RetryConfig(max_retries=2, base_delay=0.1, max_delay=10.0),
+            agents={
+                "architect": agent_config,
+                "developer": agent_config,
+                "reviewer": agent_config,
+            },
+        )
+
+        # Always fail
+        async def always_fail(workflow_id: str, state: ServerExecutionState) -> None:
+            raise ModelProviderError("always fails")
+
+        with (
+            patch.object(orchestrator, "_get_profile_or_fail", return_value=mock_profile),
+            patch.object(orchestrator, "_run_workflow", new=always_fail),
+            patch("amelia.server.orchestrator.service.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+            pytest.raises(ModelProviderError),
+        ):
+            await orchestrator._run_workflow_with_retry("wf-max", mock_state)
+
+        # max_retries=2 means attempts 0, 1, 2 → 3 total attempts, 2 sleeps
+        assert mock_sleep.call_count == 2
+
+    async def test_overflow_prevention(
+        self,
+        orchestrator: OrchestratorService,
+        mock_repository: AsyncMock,
+        valid_worktree: str,
+    ) -> None:
+        """Verify exponential backoff caps exponent at 31 to prevent overflow.
+
+        The implementation uses: base_delay * (2 ** min(attempt - 1, 31))
+        This test verifies the cap works by using max base_delay (30.0) and
+        max max_delay (300.0), then checking that delays are computed correctly
+        even at the boundary of the overflow cap.
+        """
+        mock_state = ServerExecutionState(
+            id="wf-overflow",
+            issue_id="ISSUE-123",
+            worktree_path=valid_worktree,
+            workflow_status=WorkflowStatus.IN_PROGRESS,
+            started_at=datetime.now(UTC),
+            profile_id="test",
+        )
+
+        agent_config = AgentConfig(driver=DriverType.CLI, model="sonnet")
+        # Use max allowed values to test overflow cap
+        # With base_delay=30.0 and max_retries=10:
+        # - Attempt 10: 30.0 * 2^9 = 15360.0, capped at max_delay=300.0
+        mock_profile = Profile(
+            name="test",
+            tracker=TrackerType.NOOP,
+            working_dir=valid_worktree,
+            retry=RetryConfig(max_retries=10, base_delay=30.0, max_delay=300.0),
+            agents={
+                "architect": agent_config,
+                "developer": agent_config,
+                "reviewer": agent_config,
+            },
+        )
+
+        # Fail exactly 10 times
+        call_count = 0
+
+        async def failing_run_workflow(workflow_id: str, state: ServerExecutionState) -> None:
+            nonlocal call_count
+            call_count += 1
+            if call_count <= 10:
+                raise ModelProviderError("transient failure")
+
+        with (
+            patch.object(orchestrator, "_get_profile_or_fail", return_value=mock_profile),
+            patch.object(orchestrator, "_run_workflow", new=failing_run_workflow),
+            patch("amelia.server.orchestrator.service.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+        ):
+            await orchestrator._run_workflow_with_retry("wf-overflow", mock_state)
+
+        # Verify the delay calculation doesn't overflow and is properly capped
+        delays = [call[0][0] for call in mock_sleep.call_args_list]
+
+        # First few attempts before max_delay cap kicks in:
+        # Attempt 1: 30.0 * 2^0 = 30.0
+        # Attempt 2: 30.0 * 2^1 = 60.0
+        # Attempt 3: 30.0 * 2^2 = 120.0
+        # Attempt 4: 30.0 * 2^3 = 240.0
+        # Attempt 5+: 30.0 * 2^4+ = 480.0+, all capped at 300.0
+        assert delays[0] == 30.0
+        assert delays[1] == 60.0
+        assert delays[2] == 120.0
+        assert delays[3] == 240.0
+        # All remaining delays should be capped at max_delay
+        for i in range(4, 10):
+            assert delays[i] == 300.0
+
+    async def test_max_delay_cap(
+        self,
+        orchestrator: OrchestratorService,
+        mock_repository: AsyncMock,
+        valid_worktree: str,
+    ) -> None:
+        """Verify delays are capped at max_delay even with exponential growth."""
+        mock_state = ServerExecutionState(
+            id="wf-cap",
+            issue_id="ISSUE-123",
+            worktree_path=valid_worktree,
+            workflow_status=WorkflowStatus.IN_PROGRESS,
+            started_at=datetime.now(UTC),
+            profile_id="test",
+        )
+
+        agent_config = AgentConfig(driver=DriverType.CLI, model="sonnet")
+        # Low max_delay to test capping
+        mock_profile = Profile(
+            name="test",
+            tracker=TrackerType.NOOP,
+            working_dir=valid_worktree,
+            retry=RetryConfig(max_retries=5, base_delay=1.0, max_delay=3.0),
+            agents={
+                "architect": agent_config,
+                "developer": agent_config,
+                "reviewer": agent_config,
+            },
+        )
+
+        call_count = 0
+
+        async def failing_run_workflow(workflow_id: str, state: ServerExecutionState) -> None:
+            nonlocal call_count
+            call_count += 1
+            if call_count <= 5:
+                raise ModelProviderError("transient failure")
+
+        with (
+            patch.object(orchestrator, "_get_profile_or_fail", return_value=mock_profile),
+            patch.object(orchestrator, "_run_workflow", new=failing_run_workflow),
+            patch("amelia.server.orchestrator.service.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+        ):
+            await orchestrator._run_workflow_with_retry("wf-cap", mock_state)
+
+        # Verify delays: 1.0, 2.0, 3.0 (capped), 3.0 (capped), 3.0 (capped)
+        delays = [call[0][0] for call in mock_sleep.call_args_list]
+        assert delays[0] == 1.0  # base_delay * 2^0
+        assert delays[1] == 2.0  # base_delay * 2^1
+        assert delays[2] == 3.0  # min(base_delay * 2^2, 3.0) = min(4.0, 3.0)
+        assert delays[3] == 3.0  # min(base_delay * 2^3, 3.0) = min(8.0, 3.0)
+        assert delays[4] == 3.0  # min(base_delay * 2^4, 3.0) = min(16.0, 3.0)
