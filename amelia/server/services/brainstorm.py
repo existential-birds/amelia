@@ -26,6 +26,7 @@ from langchain_core.tools import BaseTool, StructuredTool
 from langgraph.types import Command
 from loguru import logger
 
+from amelia.core.text import slugify
 from amelia.drivers.base import (
     AgenticMessage,
     AgenticMessageType,
@@ -976,8 +977,9 @@ class BrainstormService:
 
         # Generate workflow ID - either from orchestrator or fallback
         if orchestrator is not None and worktree_path is not None:
-            # Create issue ID from session ID (safe characters only)
-            issue_id = f"brainstorm-{session_id}"
+            # Generate short, readable issue ID
+            slug = slugify(issue_title, max_length=15) if issue_title else ""
+            issue_id = f"{slug}-{session_id[:8]}" if slug else f"brainstorm-{session_id[:8]}"
 
             # Queue workflow with orchestrator
             request = CreateWorkflowRequest(
