@@ -145,8 +145,9 @@ describe('KnowledgePage', () => {
 
     // Submit - find the dialog's upload button
     const dialogButtons = screen.getAllByRole('button');
-    const uploadButton = dialogButtons.find((btn) => btn.textContent === 'Upload')!;
-    await user.click(uploadButton);
+    const uploadButton = dialogButtons.find((btn) => btn.textContent === 'Upload');
+    expect(uploadButton).toBeDefined();
+    await user.click(uploadButton!);
 
     // Wait for async upload to complete by waiting for button text to change back
     await screen.findByRole('button', { name: 'Upload' });

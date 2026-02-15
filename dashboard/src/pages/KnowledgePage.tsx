@@ -160,6 +160,7 @@ export default function KnowledgePage() {
     // Debounce: clear any pending search
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
     }
 
     // Cancel any in-flight search request
@@ -175,6 +176,9 @@ export default function KnowledgePage() {
         const results = await api.searchKnowledge(query, 5, undefined, abortControllerRef.current?.signal);
         setSearchResults(results);
       } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') {
+          return; // Silently ignore aborted requests
+        }
         setSearchError(error instanceof Error ? error.message : 'Search failed');
       } finally {
         setIsSearching(false);
@@ -199,6 +203,9 @@ export default function KnowledgePage() {
           const results = await api.searchKnowledge(query, 5, undefined, abortControllerRef.current?.signal);
           setSearchResults(results);
         } catch (error) {
+          if (error instanceof Error && error.name === 'AbortError') {
+            return; // Silently ignore aborted requests
+          }
           setSearchError(error instanceof Error ? error.message : 'Search failed');
         } finally {
           setIsSearching(false);
