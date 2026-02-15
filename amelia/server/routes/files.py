@@ -1,15 +1,17 @@
 """File access endpoints for design document import."""
 import asyncio
 import os
+from datetime import UTC, datetime
 from pathlib import Path
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from amelia.server.database import ProfileRepository
 from amelia.server.dependencies import get_profile_repository
 from amelia.server.exceptions import FileOperationError
+from amelia.server.models.responses import FileEntry, FileListResponse
 
 
 router = APIRouter(prefix="/files", tags=["files"])
@@ -140,6 +142,66 @@ async def read_file(
         content=content,
         filename=resolved_path.name,
     )
+
+
+@router.get("/list", response_model=FileListResponse)
+async def list_files(
+    directory: str = Query(..., description="Relative directory path within working_dir"),
+    glob_pattern: str = Query("*.md", description="Glob pattern for filtering files"),
+    profile_repo: ProfileRepository = Depends(get_profile_repository),
+) -> FileListResponse:
+    """List files in a directory within the working directory.
+
+    Args:
+        directory: Relative directory path within working_dir.
+        glob_pattern: Glob pattern for filtering files (default: *.md).
+        profile_repo: Profile repository for getting active profile.
+
+    Returns:
+        List of matching files with metadata.
+
+    Raises:
+        FileOperationError: If directory is outside working_dir.
+    """
+    working_dir = await _get_working_dir(profile_repo)
+    working_dir_resolved = working_dir.resolve()
+    resolved_dir = (working_dir / directory).resolve()
+
+    # Security: verify directory is within working_dir
+    try:
+        common = os.path.commonpath([str(resolved_dir), str(working_dir_resolved)])
+    except ValueError as e:
+        raise FileOperationError(
+            "Directory not accessible (outside working directory)", "PATH_NOT_ACCESSIBLE"
+        ) from e
+
+    if common != str(working_dir_resolved):
+        raise FileOperationError(
+            "Directory not accessible (outside working directory)", "PATH_NOT_ACCESSIBLE"
+        )
+
+    if not resolved_dir.is_dir():
+        return FileListResponse(files=[], directory=directory)
+
+    # List files matching pattern
+    entries = []
+    for path in resolved_dir.glob(glob_pattern):
+        if not path.is_file():
+            continue
+        stat = path.stat()
+        entries.append(
+            FileEntry(
+                name=path.name,
+                relative_path=str(path.relative_to(working_dir_resolved)),
+                size_bytes=stat.st_size,
+                modified_at=datetime.fromtimestamp(stat.st_mtime, tz=UTC).isoformat(),
+            )
+        )
+
+    # Sort by modification time, newest first
+    entries.sort(key=lambda e: e.modified_at, reverse=True)
+
+    return FileListResponse(files=entries, directory=directory)
 
 
 @router.get("/{file_path:path}")

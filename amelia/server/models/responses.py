@@ -209,6 +209,34 @@ class BatchStartResponse(BaseModel):
     ]
 
 
+class FileEntry(BaseModel):
+    """A file entry in a directory listing.
+
+    Attributes:
+        name: Filename.
+        relative_path: Path relative to working_dir.
+        size_bytes: File size in bytes.
+        modified_at: ISO 8601 modification timestamp.
+    """
+
+    name: Annotated[str, Field(description="Filename")]
+    relative_path: Annotated[str, Field(description="Path relative to working_dir")]
+    size_bytes: Annotated[int, Field(description="File size in bytes")]
+    modified_at: Annotated[str, Field(description="ISO 8601 modification timestamp")]
+
+
+class FileListResponse(BaseModel):
+    """Response from listing files in a directory.
+
+    Attributes:
+        files: List of files.
+        directory: Relative directory that was listed.
+    """
+
+    files: Annotated[list[FileEntry], Field(description="List of files")]
+    directory: Annotated[str, Field(description="Relative directory that was listed")]
+
+
 class SetPlanResponse(BaseModel):
     """Response from setting an external plan on a workflow.
 
