@@ -12,6 +12,7 @@ def slugify(text: str, max_length: int = 15) -> str:
 
     Returns:
         Lowercase slug with only alphanumeric chars and dashes.
+        If max_length is 0, returns empty string.
     """
     # Lowercase and replace non-alphanumeric with dashes
     slug = re.sub(r"[^a-z0-9]+", "-", text.lower())
@@ -21,6 +22,7 @@ def slugify(text: str, max_length: int = 15) -> str:
     if len(slug) > max_length:
         truncated = slug[:max_length]
         # Try to break at last dash within limit
+        # Break at last dash to avoid trailing dash and mid-word cuts
         last_dash = truncated.rfind("-")
         slug = truncated[:last_dash] if last_dash > 0 else truncated
     return slug
