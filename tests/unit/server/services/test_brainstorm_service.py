@@ -809,6 +809,146 @@ class TestHandoff(TestBrainstormService):
         assert request.artifact_path == "/path/to/design.md"
         assert result["workflow_id"] == "workflow-456"
 
+    async def test_handoff_generates_short_issue_id_from_title(
+        self,
+        service: BrainstormService,
+        mock_repository: MagicMock,
+    ) -> None:
+        """Should generate slugified issue_id from title + session hash."""
+        now = datetime.now(UTC)
+        mock_session = BrainstormingSession(
+            id="d9336c40-4ce9-4b12-81e1-099bb70eaa01",
+            profile_id="work",
+            status="ready_for_handoff",
+            created_at=now,
+            updated_at=now,
+        )
+        mock_repository.get_session.return_value = mock_session
+        mock_repository.get_artifacts.return_value = [
+            Artifact(
+                id="art-1", session_id="d9336c40-4ce9-4b12-81e1-099bb70eaa01",
+                type="design", path="docs/plans/design.md", created_at=now,
+            )
+        ]
+        mock_orchestrator = MagicMock()
+        mock_orchestrator.queue_workflow = AsyncMock(return_value="wf-123")
+
+        await service.handoff_to_implementation(
+            session_id="d9336c40-4ce9-4b12-81e1-099bb70eaa01",
+            artifact_path="docs/plans/design.md",
+            issue_title="Add dark mode support",
+            orchestrator=mock_orchestrator,
+            worktree_path="/path/to/worktree",
+        )
+
+        request = mock_orchestrator.queue_workflow.call_args[0][0]
+        assert request.issue_id == "add-dark-mode-d9336c40"
+        assert len(request.issue_id) <= 24
+
+    async def test_handoff_falls_back_without_title(
+        self,
+        service: BrainstormService,
+        mock_repository: MagicMock,
+    ) -> None:
+        """Should use brainstorm-{hash} when no title provided."""
+        now = datetime.now(UTC)
+        mock_session = BrainstormingSession(
+            id="d9336c40-4ce9-4b12-81e1-099bb70eaa01",
+            profile_id="work",
+            status="ready_for_handoff",
+            created_at=now,
+            updated_at=now,
+        )
+        mock_repository.get_session.return_value = mock_session
+        mock_repository.get_artifacts.return_value = [
+            Artifact(
+                id="art-1", session_id="d9336c40-4ce9-4b12-81e1-099bb70eaa01",
+                type="design", path="docs/plans/design.md", created_at=now,
+            )
+        ]
+        mock_orchestrator = MagicMock()
+        mock_orchestrator.queue_workflow = AsyncMock(return_value="wf-123")
+
+        await service.handoff_to_implementation(
+            session_id="d9336c40-4ce9-4b12-81e1-099bb70eaa01",
+            artifact_path="docs/plans/design.md",
+            orchestrator=mock_orchestrator,
+            worktree_path="/path/to/worktree",
+        )
+
+        request = mock_orchestrator.queue_workflow.call_args[0][0]
+        assert request.issue_id == "brainstorm-d9336c40"
+
+    async def test_handoff_uses_session_topic_when_no_title(
+        self,
+        service: BrainstormService,
+        mock_repository: MagicMock,
+    ) -> None:
+        """Should slugify session.topic when issue_title is not provided."""
+        now = datetime.now(UTC)
+        mock_session = BrainstormingSession(
+            id="d9336c40-4ce9-4b12-81e1-099bb70eaa01",
+            profile_id="work",
+            status="ready_for_handoff",
+            topic="Add dark mode",
+            created_at=now,
+            updated_at=now,
+        )
+        mock_repository.get_session.return_value = mock_session
+        mock_repository.get_artifacts.return_value = [
+            Artifact(
+                id="art-1", session_id="d9336c40-4ce9-4b12-81e1-099bb70eaa01",
+                type="design", path="docs/plans/design.md", created_at=now,
+            )
+        ]
+        mock_orchestrator = MagicMock()
+        mock_orchestrator.queue_workflow = AsyncMock(return_value="wf-123")
+
+        await service.handoff_to_implementation(
+            session_id="d9336c40-4ce9-4b12-81e1-099bb70eaa01",
+            artifact_path="docs/plans/design.md",
+            orchestrator=mock_orchestrator,
+            worktree_path="/path/to/worktree",
+        )
+
+        request = mock_orchestrator.queue_workflow.call_args[0][0]
+        assert request.issue_id == "add-dark-mode-d9336c40"
+
+    async def test_handoff_falls_back_for_empty_slug(
+        self,
+        service: BrainstormService,
+        mock_repository: MagicMock,
+    ) -> None:
+        """Should use fallback when title produces empty slug."""
+        now = datetime.now(UTC)
+        mock_session = BrainstormingSession(
+            id="d9336c40-4ce9-4b12-81e1-099bb70eaa01",
+            profile_id="work",
+            status="ready_for_handoff",
+            created_at=now,
+            updated_at=now,
+        )
+        mock_repository.get_session.return_value = mock_session
+        mock_repository.get_artifacts.return_value = [
+            Artifact(
+                id="art-1", session_id="d9336c40-4ce9-4b12-81e1-099bb70eaa01",
+                type="design", path="docs/plans/design.md", created_at=now,
+            )
+        ]
+        mock_orchestrator = MagicMock()
+        mock_orchestrator.queue_workflow = AsyncMock(return_value="wf-123")
+
+        await service.handoff_to_implementation(
+            session_id="d9336c40-4ce9-4b12-81e1-099bb70eaa01",
+            artifact_path="docs/plans/design.md",
+            issue_title="!!!@@@",
+            orchestrator=mock_orchestrator,
+            worktree_path="/path/to/worktree",
+        )
+
+        request = mock_orchestrator.queue_workflow.call_args[0][0]
+        assert request.issue_id == "brainstorm-d9336c40"
+
 
 class TestDeleteSessionCleanup(TestBrainstormService):
     """Test driver cleanup on session deletion."""
