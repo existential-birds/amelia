@@ -131,6 +131,7 @@ export const router = createBrowserRouter([
       {
         path: 'knowledge',
         loader: knowledgeLoader,
+        errorElement: <RootErrorBoundary />,
         lazy: async () => {
           const { default: Component } = await import('@/pages/KnowledgePage');
           return { Component };

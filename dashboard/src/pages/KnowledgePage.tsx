@@ -83,8 +83,8 @@ function getDocumentColumns(onDelete: (id: string) => void): ColumnDef<Knowledge
       header: ({ column }) => <DataTableColumnHeader column={column} title="Tags" />,
       cell: ({ row }) => (
         <div className="flex flex-wrap gap-1">
-          {row.original.tags.map((tag, index) => (
-            <Badge key={index} variant="outline" className="text-xs">
+          {row.original.tags.map((tag) => (
+            <Badge key={tag} variant="outline" className="text-xs">
               {tag}
             </Badge>
           ))}
@@ -153,26 +153,29 @@ export default function KnowledgePage() {
   const [uploadTags, setUploadTags] = useState('');
   const [isUploading, setIsUploading] = useState(false);
 
-  const executeSearch = useCallback(async (query: string) => {
-    // Cancel any in-flight search request
-    abortControllerRef.current?.abort();
-    abortControllerRef.current = new AbortController();
+  const executeSearch = useCallback(
+    async (query: string) => {
+      // Cancel any in-flight search request
+      abortControllerRef.current?.abort();
+      abortControllerRef.current = new AbortController();
 
-    setIsSearching(true);
-    setSearchError(null);
+      setIsSearching(true);
+      setSearchError(null);
 
-    try {
-      const results = await api.searchKnowledge(query, 5, undefined, abortControllerRef.current.signal);
-      setSearchResults(results);
-    } catch (error) {
-      if ((error instanceof Error && error.name === 'AbortError') || error instanceof DOMException && error.name === 'AbortError') {
-        return; // Silently ignore aborted requests
+      try {
+        const results = await api.searchKnowledge(query, 5, undefined, abortControllerRef.current.signal);
+        setSearchResults(results);
+      } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') {
+          return; // Silently ignore aborted requests
+        }
+        setSearchError(error instanceof Error ? error.message : 'Search failed');
+      } finally {
+        setIsSearching(false);
       }
-      setSearchError(error instanceof Error ? error.message : 'Search failed');
-    } finally {
-      setIsSearching(false);
-    }
-  }, []);
+    },
+    [] // Stable: only uses refs and stable state setters
+  );
 
   const handleSearch = useCallback(async () => {
     const query = searchQuery.trim();
@@ -316,10 +319,10 @@ export default function KnowledgePage() {
                   const query = newValue.trim();
                   if (query) {
                     debounceTimerRef.current = setTimeout(() => {
-                      debounceTimerRef.current = null;
                       executeSearch(query).catch((error) => {
                         logger.error('Debounced search failed', error);
                       });
+                      debounceTimerRef.current = null;
                     }, 300);
                   }
                 }}
@@ -385,8 +388,8 @@ export default function KnowledgePage() {
                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
                           <FileText className="size-3" />
                           <span>{result.document_name}</span>
-                          {result.tags.map((tag, index) => (
-                            <Badge key={index} variant="outline" className="text-xs">
+                          {result.tags.map((tag) => (
+                            <Badge key={tag} variant="outline" className="text-xs">
                               {tag}
                             </Badge>
                           ))}

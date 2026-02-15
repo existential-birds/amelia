@@ -870,6 +870,9 @@ export const api = {
     tags?: string[],
     signal?: AbortSignal
   ): Promise<SearchResult[]> {
+    if (signal?.aborted) {
+      throw new DOMException('Request aborted', 'AbortError');
+    }
     const response = await fetchWithTimeout(
       `${API_BASE_URL}/knowledge/search`,
       {
