@@ -110,7 +110,7 @@ def _extract_provider_info(exc: ValueError) -> tuple[str | None, str]:
         provider = err_dict.get("provider")
 
         # Handle unexpected dict structures with explicit logging
-        if not isinstance(error_obj, dict) and error_obj != {}:
+        if not isinstance(error_obj, dict):
             logger.debug(
                 "Unexpected error_obj type in provider error",
                 error_obj_type=type(error_obj).__name__,

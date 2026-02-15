@@ -1493,7 +1493,7 @@ class TestExponentialBackoff:
         "workflow_id,max_retries,base_delay,max_delay,expected_delays",
         [
             # Normal exponential backoff without cap
-            ("wf-backoff", 3, 0.1, 10.0, [0.1, 0.2, 0.4]),
+            ("wf-backoff", 3, 0.1, 10.0, [0.1 * (2**i) for i in range(3)]),
             # Max delay cap is hit
             ("wf-cap", 5, 1.0, 3.0, [1.0, 2.0, 3.0, 3.0, 3.0]),
         ],
