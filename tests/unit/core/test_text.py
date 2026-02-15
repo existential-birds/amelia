@@ -1,0 +1,45 @@
+"""Tests for amelia.core.text utilities."""
+
+from amelia.core.text import slugify
+
+
+class TestSlugify:
+    """Tests for slugify()."""
+
+    def test_simple_title(self) -> None:
+        assert slugify("Add dark mode") == "add-dark-mode"
+
+    def test_special_characters_replaced(self) -> None:
+        assert slugify("Fix bug #123!") == "fix-bug-123"
+
+    def test_consecutive_dashes_collapsed(self) -> None:
+        assert slugify("hello   world") == "hello-world"
+
+    def test_leading_trailing_dashes_stripped(self) -> None:
+        assert slugify("--hello--") == "hello"
+
+    def test_truncate_at_dash_boundary(self) -> None:
+        # "add-dark-mode-support" is 21 chars; truncating to 15 should break at dash
+        result = slugify("Add dark mode support", max_length=15)
+        assert result == "add-dark-mode"
+        assert len(result) <= 15
+
+    def test_truncate_single_long_word(self) -> None:
+        # No dash boundary to break at — hard truncate
+        result = slugify("Supercalifragilistic", max_length=10)
+        assert result == "supercalif"
+        assert len(result) <= 10
+
+    def test_empty_string_returns_empty(self) -> None:
+        assert slugify("") == ""
+
+    def test_all_special_chars_returns_empty(self) -> None:
+        assert slugify("!!!@@@###") == ""
+
+    def test_short_title_unchanged(self) -> None:
+        assert slugify("Fix", max_length=15) == "fix"
+
+    def test_default_max_length(self) -> None:
+        # Default max_length is 15
+        result = slugify("This is a very long title that exceeds the limit")
+        assert len(result) <= 15
