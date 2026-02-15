@@ -233,7 +233,22 @@ describe('KnowledgePage', () => {
     renderPage();
 
     // Mock successful upload
-    vi.mocked(api.uploadKnowledgeDocument).mockResolvedValueOnce(undefined);
+    const mockUploadedDoc: KnowledgeDocument = {
+      id: 'doc-new',
+      name: 'Test Document',
+      filename: 'test.pdf',
+      content_type: 'application/pdf',
+      tags: [],
+      status: 'pending',
+      error: null,
+      chunk_count: 0,
+      token_count: 0,
+      raw_text: null,
+      metadata: {},
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    vi.mocked(api.uploadKnowledgeDocument).mockResolvedValueOnce(mockUploadedDoc);
 
     // Open upload dialog
     await user.click(screen.getByRole('button', { name: /upload/i }));
