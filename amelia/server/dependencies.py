@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from amelia.knowledge.repository import KnowledgeRepository
+from amelia.knowledge.service import KnowledgeService
 from amelia.server.config import ServerConfig
 from amelia.server.database import ProfileRepository, SettingsRepository, WorkflowRepository
 from amelia.server.database.connection import Database
@@ -13,6 +15,9 @@ _config: ServerConfig | None = None
 
 # Module-level database instance
 _database: Database | None = None
+
+# Module-level knowledge service instance
+_knowledge_service: KnowledgeService | None = None
 
 # Module-level orchestrator instance
 _orchestrator: OrchestratorService | None = None
@@ -158,3 +163,46 @@ def get_config() -> ServerConfig:
     if _config is None:
         raise RuntimeError("Server config not initialized. Is the server running?")
     return _config
+
+
+def set_knowledge_service(service: KnowledgeService) -> None:
+    """Set the global knowledge service instance.
+
+    Args:
+        service: KnowledgeService instance to set.
+    """
+    global _knowledge_service
+    _knowledge_service = service
+
+
+def clear_knowledge_service() -> None:
+    """Clear the global knowledge service instance."""
+    global _knowledge_service
+    _knowledge_service = None
+
+
+def get_knowledge_service() -> KnowledgeService:
+    """Get the knowledge service instance.
+
+    Returns:
+        The current KnowledgeService instance.
+
+    Raises:
+        RuntimeError: If knowledge service not initialized.
+    """
+    if _knowledge_service is None:
+        raise RuntimeError("Knowledge service not initialized. Is the server running?")
+    return _knowledge_service
+
+
+def get_knowledge_repository() -> KnowledgeRepository:
+    """Get a knowledge repository instance.
+
+    Returns:
+        KnowledgeRepository using the current database pool.
+
+    Raises:
+        RuntimeError: If database not initialized.
+    """
+    db = get_database()
+    return KnowledgeRepository(db.pool)
