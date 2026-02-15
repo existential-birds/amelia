@@ -101,6 +101,60 @@ class TestSummarizeStageOutput:
         assert result["tool_calls_count"] == 1
         assert result["tool_results_count"] == 1
 
+    def test_nested_dict_strings_truncated(self) -> None:
+        """Nested dictionaries should have their string values truncated."""
+        output = {
+            "metadata": {
+                "description": "x" * 600,
+                "short_field": "short",
+            },
+        }
+        result = _summarize_stage_output(output)
+        assert result is not None
+        assert result["metadata"]["description"].endswith("… [truncated]")
+        assert len(result["metadata"]["description"]) == 500 + len("… [truncated]")
+        assert result["metadata"]["short_field"] == "short"
+
+    def test_nested_list_strings_truncated(self) -> None:
+        """Lists containing strings should have those strings truncated."""
+        output = {
+            "messages": ["x" * 600, "short", "y" * 700],
+        }
+        result = _summarize_stage_output(output)
+        assert result is not None
+        assert result["messages"][0].endswith("… [truncated]")
+        assert result["messages"][1] == "short"
+        assert result["messages"][2].endswith("… [truncated]")
+
+    def test_deeply_nested_structures_truncated(self) -> None:
+        """Deeply nested structures should have all strings truncated."""
+        output = {
+            "level1": {
+                "level2": {
+                    "level3": ["a" * 600, {"level4": "b" * 600}],
+                },
+            },
+        }
+        result = _summarize_stage_output(output)
+        assert result is not None
+        assert result["level1"]["level2"]["level3"][0].endswith("… [truncated]")
+        assert result["level1"]["level2"]["level3"][1]["level4"].endswith("… [truncated]")
+
+    def test_list_of_dicts_with_long_strings(self) -> None:
+        """Lists of dicts (common pattern) should be truncated."""
+        output = {
+            "results": [
+                {"content": "x" * 600, "id": "1"},
+                {"content": "short", "id": "2"},
+            ],
+        }
+        result = _summarize_stage_output(output)
+        assert result is not None
+        assert result["results"][0]["content"].endswith("… [truncated]")
+        assert result["results"][0]["id"] == "1"
+        assert result["results"][1]["content"] == "short"
+        assert result["results"][1]["id"] == "2"
+
 
 class TestEmissionPathsSummarize:
     """Tests that both STAGE_COMPLETED emission paths use summarized output."""
@@ -139,9 +193,7 @@ class TestEmissionPathsSummarize:
             ]
             assert len(stage_completed_calls) == 1
 
-            data = stage_completed_calls[0].kwargs.get("data") or stage_completed_calls[
-                0
-            ].args[4]
+            data = stage_completed_calls[0].kwargs["data"]
             assert data["output"]["tool_calls_count"] == 100
             assert data["output"]["tool_results_count"] == 100
             assert "tool_calls" not in data["output"]
@@ -195,9 +247,7 @@ class TestEmissionPathsSummarize:
             ]
             assert len(stage_completed_calls) == 1
 
-            data = stage_completed_calls[0].kwargs.get("data") or stage_completed_calls[
-                0
-            ].args[4]
+            data = stage_completed_calls[0].kwargs["data"]
             assert data["output"]["tool_calls_count"] == 2
             assert "tool_calls" not in data["output"]
             assert data["output"]["raw_architect_output"] == "plan details"
