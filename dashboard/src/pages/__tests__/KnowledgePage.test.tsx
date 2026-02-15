@@ -36,8 +36,19 @@ vi.mock('@/components/Toast', () => ({
   warning: vi.fn(),
 }));
 
+// Mock logger
+vi.mock('@/lib/logger', () => ({
+  logger: {
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+  },
+}));
+
 import { useLoaderData } from 'react-router-dom';
 import * as Toast from '@/components/Toast';
+import { logger } from '@/lib/logger';
 
 const mockDocuments: KnowledgeDocument[] = [
   {
@@ -124,7 +135,6 @@ describe('KnowledgePage', () => {
 
   it('shows toast when upload fails', async () => {
     const user = userEvent.setup();
-    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     renderPage();
 
     // Mock upload failure
@@ -149,18 +159,15 @@ describe('KnowledgePage', () => {
     expect(uploadButton).toBeDefined();
     await user.click(uploadButton!);
 
-    // Wait for async upload to complete by waiting for button text to change back
-    await screen.findByRole('button', { name: 'Upload' });
-
-    // Now verify side effects occurred
-    expect(Toast.error).toHaveBeenCalledWith('File too large');
-    expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('[ERROR] Upload failed'));
-    consoleErrorSpy.mockRestore();
+    // Wait for async upload to complete and verify side effects occurred
+    await vi.waitFor(() => {
+      expect(Toast.error).toHaveBeenCalledWith('File too large');
+    });
+    expect(logger.error).toHaveBeenCalledWith('Upload failed', expect.any(Error));
   });
 
   it('shows toast when delete fails', async () => {
     const user = userEvent.setup();
-    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     renderPage(mockDocuments);
 
     // Mock delete failure
@@ -177,7 +184,6 @@ describe('KnowledgePage', () => {
     await vi.waitFor(() => {
       expect(Toast.error).toHaveBeenCalledWith('Permission denied');
     });
-    expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('[ERROR] Delete failed'));
-    consoleErrorSpy.mockRestore();
+    expect(logger.error).toHaveBeenCalledWith('Delete failed', expect.any(Error));
   });
 });

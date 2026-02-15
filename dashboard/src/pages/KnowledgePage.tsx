@@ -153,16 +153,7 @@ export default function KnowledgePage() {
   const [uploadTags, setUploadTags] = useState('');
   const [isUploading, setIsUploading] = useState(false);
 
-  const handleSearch = useCallback(async () => {
-    const query = searchQuery.trim();
-    if (!query) return;
-
-    // Debounce: clear any pending search
-    if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current);
-      debounceTimerRef.current = null;
-    }
-
+  const executeSearch = useCallback(async (query: string, trigger: 'debounced' | 'enter' = 'debounced') => {
     // Cancel any in-flight search request
     abortControllerRef.current?.abort();
     abortControllerRef.current = new AbortController();
@@ -170,21 +161,36 @@ export default function KnowledgePage() {
     setIsSearching(true);
     setSearchError(null);
 
-    // Debounce delay of 300ms
-    debounceTimerRef.current = setTimeout(async () => {
-      try {
-        const results = await api.searchKnowledge(query, 5, undefined, abortControllerRef.current?.signal);
-        setSearchResults(results);
-      } catch (error) {
-        if (error instanceof Error && error.name === 'AbortError') {
-          return; // Silently ignore aborted requests
-        }
-        setSearchError(error instanceof Error ? error.message : 'Search failed');
-      } finally {
-        setIsSearching(false);
+    try {
+      const results = await api.searchKnowledge(query, 5, undefined, abortControllerRef.current?.signal);
+      setSearchResults(results);
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        return; // Silently ignore aborted requests
       }
+      const prefix = trigger === 'enter' ? 'Enter-key search failed' : 'Debounced search failed';
+      setSearchError(error instanceof Error ? error.message : prefix);
+    } finally {
+      setIsSearching(false);
+    }
+  }, []);
+
+  const handleSearch = useCallback(async () => {
+    const query = searchQuery.trim();
+    if (!query) return;
+
+    // Debounce: clear any pending search
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+
+    // Debounce delay of 300ms
+    debounceTimerRef.current = setTimeout(() => {
+      debounceTimerRef.current = null;
+      void executeSearch(query);
     }, 300);
-  }, [searchQuery]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- setState functions are stable
+  }, [searchQuery, executeSearch]);
 
   const handleSearchKeyDown = useCallback(
     async (e: React.KeyboardEvent) => {
@@ -192,27 +198,10 @@ export default function KnowledgePage() {
         const query = searchQuery.trim();
         if (!query) return;
 
-        // Cancel any in-flight search request
-        abortControllerRef.current?.abort();
-        abortControllerRef.current = new AbortController();
-
-        setIsSearching(true);
-        setSearchError(null);
-
-        try {
-          const results = await api.searchKnowledge(query, 5, undefined, abortControllerRef.current?.signal);
-          setSearchResults(results);
-        } catch (error) {
-          if (error instanceof Error && error.name === 'AbortError') {
-            return; // Silently ignore aborted requests
-          }
-          setSearchError(error instanceof Error ? error.message : 'Search failed');
-        } finally {
-          setIsSearching(false);
-        }
+        await executeSearch(query, 'enter');
       }
     },
-    [searchQuery]
+    [searchQuery, executeSearch]
   );
 
   const handleUpload = useCallback(async () => {
