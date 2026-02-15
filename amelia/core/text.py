@@ -13,7 +13,12 @@ def slugify(text: str, max_length: int = 15) -> str:
     Returns:
         Lowercase slug with only alphanumeric chars and dashes.
         If max_length is 0, returns empty string.
+
+    Raises:
+        ValueError: If max_length is negative.
     """
+    if max_length < 0:
+        raise ValueError(f"max_length must be >= 0, got {max_length}")
     # Lowercase and replace non-alphanumeric with dashes
     slug = re.sub(r"[^a-z0-9]+", "-", text.lower())
     # Strip leading/trailing dashes

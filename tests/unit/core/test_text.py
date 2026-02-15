@@ -1,5 +1,7 @@
 """Tests for amelia.core.text utilities."""
 
+import pytest
+
 from amelia.core.text import slugify
 
 
@@ -43,3 +45,11 @@ class TestSlugify:
         # Default max_length is 15
         result = slugify("This is a very long title that exceeds the limit")
         assert len(result) <= 15
+
+    @pytest.mark.parametrize("negative_value", [-1, -5, -100])
+    def test_negative_max_length_raises(self, negative_value: int) -> None:
+        with pytest.raises(ValueError, match="max_length must be >= 0"):
+            slugify("test", max_length=negative_value)
+
+    def test_max_length_zero_returns_empty(self) -> None:
+        assert slugify("hello world", max_length=0) == ""
