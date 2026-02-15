@@ -173,9 +173,10 @@ export function PlanImportSection({
       ? `${planOutputDir.replace(/\/$/, '')}/${file.name}`
       : file.relative_path;
     setFilePath(relativePath);
-    setComboboxOpen(false);
     setFilePreview(null);
     setFileError(null);
+    // Defer popover close to let cmdk finish processing the click event
+    requestAnimationFrame(() => setComboboxOpen(false));
   }, [planOutputDir]);
 
   const handlePreview = useCallback(async () => {

@@ -72,7 +72,10 @@ export function PendingWorkflowControls({
   const isStartDisabled = isPending || worktreeHasActiveWorkflow;
 
   const handleSetPlanSuccess = useCallback(() => {
-    revalidator.revalidate();
+    // Defer revalidation to avoid race with Dialog close/focus restoration
+    requestAnimationFrame(() => {
+      revalidator.revalidate();
+    });
   }, [revalidator]);
 
   const handleStart = useCallback(async () => {
