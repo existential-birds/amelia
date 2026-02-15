@@ -1,5 +1,5 @@
 # tests/unit/server/models/test_event_types.py
-from amelia.server.models.events import EventType, PERSISTED_TYPES
+from amelia.server.models.events import PERSISTED_TYPES, EventType
 
 
 class TestPlanEventTypes:

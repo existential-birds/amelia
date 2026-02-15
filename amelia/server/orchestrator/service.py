@@ -27,9 +27,8 @@ from amelia.pipelines.implementation.external_plan import (
     read_plan_content,
     write_plan_to_target,
 )
-from amelia.pipelines.implementation.utils import extract_task_count
 from amelia.pipelines.implementation.state import ImplementationState
-from amelia.pipelines.implementation.utils import extract_task_title
+from amelia.pipelines.implementation.utils import extract_task_count, extract_task_title
 from amelia.pipelines.review import create_review_graph
 from amelia.server.database import ProfileRepository
 from amelia.server.database.repository import WorkflowRepository
