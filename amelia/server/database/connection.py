@@ -8,6 +8,7 @@ from urllib.parse import urlparse, urlunparse
 
 import asyncpg
 from loguru import logger
+from pgvector.asyncpg import register_vector  # type: ignore[import-untyped]
 
 
 def in_clause_placeholders(count: int, start: int = 1) -> str:
@@ -102,13 +103,14 @@ class Database:
 
     @staticmethod
     async def _init_connection(conn: asyncpg.Connection) -> None:
-        """Register JSON/JSONB codecs for automatic encoding/decoding."""
+        """Register JSON/JSONB and pgvector codecs for automatic encoding/decoding."""
         await conn.set_type_codec(
             "jsonb",
             encoder=json.dumps,
             decoder=json.loads,
             schema="pg_catalog",
         )
+        await register_vector(conn)
 
     async def close(self) -> None:
         """Close the connection pool."""

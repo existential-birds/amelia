@@ -20,6 +20,9 @@ from amelia.server.dependencies import get_knowledge_repository, get_knowledge_s
 router = APIRouter(prefix="/knowledge", tags=["knowledge"])
 
 ALLOWED_CONTENT_TYPES = {"application/pdf", "text/markdown"}
+# Browsers often send these for .md files instead of text/markdown
+_MARKDOWN_FALLBACK_TYPES = {"text/plain", "application/octet-stream"}
+_MARKDOWN_EXTENSIONS = {".md", ".markdown", ".mdx"}
 
 
 class SearchRequest(BaseModel):
@@ -72,18 +75,25 @@ async def upload_document(
     Raises:
         HTTPException: 400 if file type is unsupported.
     """
-    if file.content_type not in ALLOWED_CONTENT_TYPES:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Unsupported file type: {file.content_type}. Allowed: PDF, Markdown.",
-        )
+    content_type = file.content_type or "application/octet-stream"
+    ext = Path(file.filename or "").suffix.lower()
+
+    # Accept markdown files even when browser sends text/plain or octet-stream
+    if content_type not in ALLOWED_CONTENT_TYPES:
+        if content_type in _MARKDOWN_FALLBACK_TYPES and ext in _MARKDOWN_EXTENSIONS:
+            content_type = "text/markdown"
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unsupported file type: {content_type}. Allowed: PDF, Markdown.",
+            )
 
     tag_list = [t.strip() for t in tags.split(",") if t.strip()]
 
     doc = await repository.create_document(
         name=name,
         filename=file.filename or "unknown",
-        content_type=file.content_type,
+        content_type=content_type,
         tags=tag_list,
     )
 
@@ -96,7 +106,7 @@ async def upload_document(
     service.queue_ingestion(
         document_id=doc.id,
         file_path=tmp_path,
-        content_type=file.content_type,
+        content_type=content_type,
     )
 
     logger.info("Document uploaded", document_id=doc.id, name=name)

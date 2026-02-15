@@ -296,8 +296,8 @@ class KnowledgeRepository:
 
         results = [
             SearchResult(
-                chunk_id=row["chunk_id"],
-                document_id=row["document_id"],
+                chunk_id=str(row["chunk_id"]),
+                document_id=str(row["document_id"]),
                 document_name=row["document_name"],
                 tags=row["tags"],
                 content=row["content"],
@@ -319,7 +319,7 @@ class KnowledgeRepository:
     def _row_to_document(self, row: asyncpg.Record) -> Document:
         """Convert database row to Document model."""
         return Document(
-            id=row["id"],
+            id=str(row["id"]),
             name=row["name"],
             filename=row["filename"],
             content_type=row["content_type"],

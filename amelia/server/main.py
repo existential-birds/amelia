@@ -213,7 +213,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     openrouter_api_key = os.environ.get("OPENROUTER_API_KEY", "")
     if openrouter_api_key:
         embedding_client = EmbeddingClient(api_key=openrouter_api_key)
-        knowledge_repo = KnowledgeRepository(database.pool)
+        knowledge_repo = KnowledgeRepository(database)
         ingestion_pipeline = IngestionPipeline(
             repository=knowledge_repo,
             embedding_client=embedding_client,

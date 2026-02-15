@@ -7,7 +7,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import KnowledgePage from '../KnowledgePage';
 import type { KnowledgeDocument } from '@/types/knowledge';
-import { api } from '@/api/client';
+import { api, ApiError } from '@/api/client';
 
 // Create mock revalidate function that can be accessed in tests
 const mockRevalidate = vi.fn();
@@ -23,13 +23,17 @@ vi.mock('react-router-dom', async (importOriginal) => {
 });
 
 // Mock API client
-vi.mock('@/api/client', () => ({
-  api: {
-    searchKnowledge: vi.fn(),
-    uploadKnowledgeDocument: vi.fn(),
-    deleteKnowledgeDocument: vi.fn(),
-  },
-}));
+vi.mock('@/api/client', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/api/client')>();
+  return {
+    ...actual,
+    api: {
+      searchKnowledge: vi.fn(),
+      uploadKnowledgeDocument: vi.fn(),
+      deleteKnowledgeDocument: vi.fn(),
+    },
+  };
+});
 
 // Mock Toast component
 vi.mock('@/components/Toast', () => ({
@@ -180,6 +184,27 @@ describe('KnowledgePage', () => {
     });
 
     // Verify no error is shown (abort errors are silently ignored)
+    expect(screen.queryByText('Search failed')).not.toBeInTheDocument();
+    expect(screen.getByText('Search your knowledge library')).toBeInTheDocument();
+  });
+
+  it('handles ApiError ABORTED silently', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    // Mock search with ApiError ABORTED (thrown by fetchWithTimeout)
+    const abortError = new ApiError('Request aborted', 'ABORTED', 0);
+    vi.mocked(api.searchKnowledge).mockRejectedValueOnce(abortError);
+
+    const searchInput = screen.getByPlaceholderText('Search documentation...');
+    await user.type(searchInput, 'test query');
+    await user.click(screen.getByRole('button', { name: /search/i }));
+
+    await waitFor(() => {
+      expect(api.searchKnowledge).toHaveBeenCalled();
+    });
+
+    // Verify no error is shown (ApiError ABORTED is silently ignored)
     expect(screen.queryByText('Search failed')).not.toBeInTheDocument();
     expect(screen.getByText('Search your knowledge library')).toBeInTheDocument();
   });

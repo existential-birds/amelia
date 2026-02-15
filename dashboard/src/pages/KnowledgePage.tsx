@@ -31,7 +31,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { api } from '@/api/client';
+import { api, ApiError } from '@/api/client';
 import * as Toast from '@/components/Toast';
 import { logger } from '@/lib/logger';
 import type { KnowledgeLoaderData } from '@/loaders/knowledge';
@@ -168,7 +168,10 @@ export default function KnowledgePage() {
         const results = await api.searchKnowledge(query, 5, undefined, controller.signal);
         setSearchResults(results);
       } catch (error) {
-        if (error instanceof DOMException && error.name === 'AbortError') {
+        if (
+          (error instanceof DOMException && error.name === 'AbortError') ||
+          (error instanceof ApiError && error.code === 'ABORTED')
+        ) {
           return; // Silently ignore aborted requests
         }
         setSearchError(error instanceof Error ? error.message : 'Search failed');

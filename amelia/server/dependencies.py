@@ -199,10 +199,10 @@ def get_knowledge_repository() -> KnowledgeRepository:
     """Get a knowledge repository instance.
 
     Returns:
-        KnowledgeRepository using the current database pool.
+        KnowledgeRepository using the current database.
 
     Raises:
         RuntimeError: If database not initialized.
     """
     db = get_database()
-    return KnowledgeRepository(db.pool)
+    return KnowledgeRepository(db)

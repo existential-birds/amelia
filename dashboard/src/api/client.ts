@@ -3,7 +3,7 @@ import type {
   WorkflowStatus,
   WorkflowDetailResponse,
   WorkflowListResponse,
-  ErrorResponse,
+
   PromptSummary,
   PromptDetail,
   VersionSummary,
@@ -134,7 +134,7 @@ class ApiError extends Error {
  */
 async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
-    let errorData: ErrorResponse;
+    let errorData: Record<string, unknown>;
     try {
       errorData = await response.json();
     } catch {
@@ -145,11 +145,19 @@ async function handleResponse<T>(response: Response): Promise<T> {
       );
     }
 
+    // Handle both our ErrorResponse format ({error, code}) and
+    // FastAPI's HTTPException format ({detail})
+    const message =
+      (errorData.error as string) ||
+      (errorData.detail as string) ||
+      `HTTP ${response.status}: ${response.statusText}`;
+    const code = (errorData.code as string) || 'HTTP_ERROR';
+
     throw new ApiError(
-      errorData.error,
-      errorData.code,
+      message,
+      code,
       response.status,
-      errorData.details
+      errorData.details as Record<string, unknown> | undefined
     );
   }
 
