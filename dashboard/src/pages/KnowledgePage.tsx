@@ -153,7 +153,7 @@ export default function KnowledgePage() {
   const [uploadTags, setUploadTags] = useState('');
   const [isUploading, setIsUploading] = useState(false);
 
-  const executeSearch = useCallback(async (query: string, trigger: 'debounced' | 'enter' = 'debounced') => {
+  const executeSearch = useCallback(async (query: string) => {
     // Cancel any in-flight search request
     abortControllerRef.current?.abort();
     abortControllerRef.current = new AbortController();
@@ -168,8 +168,7 @@ export default function KnowledgePage() {
       if (error instanceof Error && error.name === 'AbortError') {
         return; // Silently ignore aborted requests
       }
-      const prefix = trigger === 'enter' ? 'Enter-key search failed' : 'Debounced search failed';
-      setSearchError(error instanceof Error ? error.message : prefix);
+      setSearchError(error instanceof Error ? error.message : 'Search failed');
     } finally {
       setIsSearching(false);
     }
@@ -189,7 +188,7 @@ export default function KnowledgePage() {
       debounceTimerRef.current = null;
       void executeSearch(query);
     }, 300);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- setState functions are stable
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- debounceTimerRef is intentionally not a dependency (ref object)
   }, [searchQuery, executeSearch]);
 
   const handleSearchKeyDown = useCallback(
@@ -198,7 +197,7 @@ export default function KnowledgePage() {
         const query = searchQuery.trim();
         if (!query) return;
 
-        await executeSearch(query, 'enter');
+        await executeSearch(query);
       }
     },
     [searchQuery, executeSearch]
