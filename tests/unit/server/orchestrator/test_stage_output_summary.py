@@ -2,11 +2,12 @@
 """Tests for STAGE_COMPLETED output summarization (fix for #427)."""
 
 from typing import TYPE_CHECKING, Self
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from amelia.server.orchestrator.service import _summarize_stage_output
+
 
 if TYPE_CHECKING:
     from amelia.server.orchestrator.service import OrchestratorService
@@ -118,53 +119,55 @@ class TestEmissionPathsSummarize:
         """_handle_stream_chunk should summarize output in STAGE_COMPLETED events."""
         from amelia.server.models.events import EventType
 
-        service._emit = AsyncMock()
-        service._emit_agent_messages = AsyncMock()
+        with (
+            patch.object(service, "_emit", new_callable=AsyncMock) as mock_emit,
+            patch.object(service, "_emit_agent_messages", new_callable=AsyncMock),
+        ):
+            big_output = {
+                "tool_calls": [{"id": str(i)} for i in range(100)],
+                "tool_results": [{"output": f"r{i}"} for i in range(100)],
+                "agentic_status": "completed",
+            }
 
-        big_output = {
-            "tool_calls": [{"id": str(i)} for i in range(100)],
-            "tool_results": [{"output": f"r{i}"} for i in range(100)],
-            "agentic_status": "completed",
-        }
+            await service._handle_stream_chunk("wf-1", {"developer_node": big_output})
 
-        await service._handle_stream_chunk("wf-1", {"developer_node": big_output})
+            # Find the STAGE_COMPLETED call
+            stage_completed_calls = [
+                c
+                for c in mock_emit.call_args_list
+                if c.args[1] == EventType.STAGE_COMPLETED
+            ]
+            assert len(stage_completed_calls) == 1
 
-        # Find the STAGE_COMPLETED call
-        stage_completed_calls = [
-            c
-            for c in service._emit.call_args_list
-            if c.args[1] == EventType.STAGE_COMPLETED
-        ]
-        assert len(stage_completed_calls) == 1
-
-        data = stage_completed_calls[0].kwargs.get("data") or stage_completed_calls[
-            0
-        ].args[4]
-        assert data["output"]["tool_calls_count"] == 100
-        assert data["output"]["tool_results_count"] == 100
-        assert "tool_calls" not in data["output"]
-        assert "tool_results" not in data["output"]
-        assert data["output"]["agentic_status"] == "completed"
+            data = stage_completed_calls[0].kwargs.get("data") or stage_completed_calls[
+                0
+            ].args[4]
+            assert data["output"]["tool_calls_count"] == 100
+            assert data["output"]["tool_results_count"] == 100
+            assert "tool_calls" not in data["output"]
+            assert "tool_results" not in data["output"]
+            assert data["output"]["agentic_status"] == "completed"
 
     @pytest.mark.asyncio
     async def test_handle_stream_chunk_passes_raw_to_emit_agent_messages(
         self: Self, service: "OrchestratorService"
     ) -> None:
         """_emit_agent_messages should still receive the raw output."""
-        service._emit = AsyncMock()
-        service._emit_agent_messages = AsyncMock()
+        with (
+            patch.object(service, "_emit", new_callable=AsyncMock),
+            patch.object(service, "_emit_agent_messages", new_callable=AsyncMock) as mock_emit_agent_messages,
+        ):
+            big_output = {
+                "tool_calls": [{"id": "1"}],
+                "agentic_status": "completed",
+            }
 
-        big_output = {
-            "tool_calls": [{"id": "1"}],
-            "agentic_status": "completed",
-        }
+            await service._handle_stream_chunk("wf-1", {"developer_node": big_output})
 
-        await service._handle_stream_chunk("wf-1", {"developer_node": big_output})
-
-        # _emit_agent_messages should get the original, unsummarized output
-        service._emit_agent_messages.assert_called_once_with(
-            "wf-1", "developer_node", big_output
-        )
+            # _emit_agent_messages should get the original, unsummarized output
+            mock_emit_agent_messages.assert_called_once_with(
+                "wf-1", "developer_node", big_output
+            )
 
     @pytest.mark.asyncio
     async def test_handle_graph_event_uses_summary(
@@ -173,29 +176,28 @@ class TestEmissionPathsSummarize:
         """_handle_graph_event should summarize output in STAGE_COMPLETED events."""
         from amelia.server.models.events import EventType
 
-        service._emit = AsyncMock()
+        with patch.object(service, "_emit", new_callable=AsyncMock) as mock_emit:
+            event: dict[str, object] = {
+                "event": "on_chain_end",
+                "name": "architect_node",
+                "data": {
+                    "tool_calls": [{"id": "1"}, {"id": "2"}],
+                    "raw_architect_output": "plan details",
+                },
+            }
 
-        event = {
-            "event": "on_chain_end",
-            "name": "architect_node",
-            "data": {
-                "tool_calls": [{"id": "1"}, {"id": "2"}],
-                "raw_architect_output": "plan details",
-            },
-        }
+            await service._handle_graph_event("wf-1", event)
 
-        await service._handle_graph_event("wf-1", event)
+            stage_completed_calls = [
+                c
+                for c in mock_emit.call_args_list
+                if c.args[1] == EventType.STAGE_COMPLETED
+            ]
+            assert len(stage_completed_calls) == 1
 
-        stage_completed_calls = [
-            c
-            for c in service._emit.call_args_list
-            if c.args[1] == EventType.STAGE_COMPLETED
-        ]
-        assert len(stage_completed_calls) == 1
-
-        data = stage_completed_calls[0].kwargs.get("data") or stage_completed_calls[
-            0
-        ].args[4]
-        assert data["output"]["tool_calls_count"] == 2
-        assert "tool_calls" not in data["output"]
-        assert data["output"]["raw_architect_output"] == "plan details"
+            data = stage_completed_calls[0].kwargs.get("data") or stage_completed_calls[
+                0
+            ].args[4]
+            assert data["output"]["tool_calls_count"] == 2
+            assert "tool_calls" not in data["output"]
+            assert data["output"]["raw_architect_output"] == "plan details"
