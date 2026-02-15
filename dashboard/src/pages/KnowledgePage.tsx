@@ -119,6 +119,7 @@ function getDocumentColumns(onDelete: (id: string) => void): ColumnDef<Knowledge
           variant="ghost"
           size="icon-sm"
           data-testid="delete-document"
+          aria-label="Delete document"
           onClick={(e) => {
             e.stopPropagation();
             onDelete(row.original.id);

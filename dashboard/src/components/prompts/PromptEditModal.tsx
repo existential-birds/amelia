@@ -164,7 +164,7 @@ export function PromptEditModal({
         }
       } catch (err) {
         showError('Failed to load prompt content');
-        console.error('Failed to load prompt:', err);
+        logger.error('Failed to load prompt:', err);
       } finally {
         setIsLoading(false);
       }

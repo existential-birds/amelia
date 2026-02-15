@@ -151,7 +151,7 @@ describe('KnowledgePage', () => {
     // Wait for async upload to complete and toast to be called
     await vi.waitFor(() => {
       expect(Toast.error).toHaveBeenCalledWith('File too large');
-      expect(consoleErrorSpy).toHaveBeenCalledWith('Upload failed:', expect.any(Error));
+      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('[ERROR] Upload failed'));
     });
     consoleErrorSpy.mockRestore();
   });
@@ -174,7 +174,7 @@ describe('KnowledgePage', () => {
     // Wait for async delete to complete and toast to be called
     await vi.waitFor(() => {
       expect(Toast.error).toHaveBeenCalledWith('Permission denied');
-      expect(consoleErrorSpy).toHaveBeenCalledWith('Delete failed:', expect.any(Error));
+      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('[ERROR] Delete failed'));
     });
     consoleErrorSpy.mockRestore();
   });
