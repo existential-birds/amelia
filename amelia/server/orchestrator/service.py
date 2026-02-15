@@ -21,9 +21,14 @@ from amelia.core.types import (
     Profile,
 )
 from amelia.pipelines.implementation import create_implementation_graph
-from amelia.pipelines.implementation.external_plan import import_external_plan
+from amelia.pipelines.implementation.external_plan import (
+    extract_plan_fields,
+    import_external_plan,
+    read_plan_content,
+    write_plan_to_target,
+)
 from amelia.pipelines.implementation.state import ImplementationState
-from amelia.pipelines.implementation.utils import extract_task_title
+from amelia.pipelines.implementation.utils import extract_task_count, extract_task_title
 from amelia.pipelines.review import create_review_graph
 from amelia.server.database import ProfileRepository
 from amelia.server.database.repository import WorkflowRepository
@@ -2709,49 +2714,154 @@ class OrchestratorService:
         working_dir = Path(profile.working_dir) if profile.working_dir else Path(".")
         target_path = working_dir / plan_rel_path
 
-        # Import and validate external plan
-        plan_result = await import_external_plan(
+        # Fast path: read content, write to target, count tasks (no LLM)
+        content = await read_plan_content(
             plan_file=plan_file,
             plan_content=plan_content,
-            target_path=target_path,
-            profile=profile,
-            workflow_id=workflow_id,
+            working_dir=working_dir,
         )
 
-        # Update plan_cache with plan data
+        # Determine resolved source path for skip-write check
+        source_path: Path | None = None
+        if plan_file is not None:
+            source_path = Path(plan_file)
+            if not source_path.is_absolute():
+                source_path = working_dir / plan_file
+            source_path = source_path.expanduser().resolve()
+
+        await write_plan_to_target(
+            content=content,
+            target_path=target_path,
+            working_dir=working_dir,
+            source_path=source_path,
+        )
+
+        total_tasks = extract_task_count(content)
+
+        # Save partial PlanCache with goal=None (signals "validating")
+        resolved_target = target_path.expanduser().resolve()
         plan_cache = PlanCache(
-            goal=plan_result.goal,
-            plan_markdown=plan_result.plan_markdown,
-            plan_path=str(plan_result.plan_path) if plan_result.plan_path else None,
-            total_tasks=plan_result.total_tasks,
+            goal=None,
+            plan_markdown=content,
+            plan_path=str(resolved_target),
+            total_tasks=total_tasks,
         )
         await self._repository.update_plan_cache(workflow_id, plan_cache)
 
-        # Emit plan set event
+        # Emit initial event
         await self._emit(
             workflow_id,
             EventType.AGENT_MESSAGE,
-            f"External plan set: {plan_result.goal}",
+            f"External plan imported ({total_tasks} tasks), validating...",
             agent="system",
-            data={
-                "goal": plan_result.goal,
-                "key_files": plan_result.key_files,
-                "total_tasks": plan_result.total_tasks,
-            },
+            data={"total_tasks": total_tasks},
         )
 
         logger.info(
-            "External plan set",
+            "External plan imported, starting async validation",
             workflow_id=workflow_id,
-            goal=plan_result.goal,
-            total_tasks=plan_result.total_tasks,
+            total_tasks=total_tasks,
+        )
+
+        # Fire-and-forget: background LLM extraction
+        asyncio.create_task(
+            self._extract_plan_metadata(
+                workflow_id=workflow_id,
+                content=content,
+                profile=profile,
+                target_path=resolved_target,
+                total_tasks=total_tasks,
+            )
         )
 
         return {
-            "goal": plan_result.goal,
-            "key_files": plan_result.key_files,
-            "total_tasks": plan_result.total_tasks,
+            "status": "validating",
+            "total_tasks": total_tasks,
         }
+
+    async def _extract_plan_metadata(
+        self,
+        workflow_id: str,
+        content: str,
+        profile: Profile,
+        target_path: Path,
+        total_tasks: int,
+    ) -> None:
+        """Background task: extract plan metadata via LLM and update PlanCache.
+
+        Calls extract_plan_fields for LLM extraction, updates the PlanCache
+        with the extracted goal/key_files, and emits a PLAN_VALIDATED or
+        PLAN_VALIDATION_FAILED event.
+
+        Guards against stale results: if the plan was changed while extraction
+        was running, the update is skipped.
+
+        Args:
+            workflow_id: The workflow ID.
+            content: The raw plan markdown content.
+            profile: Profile for LLM extraction config.
+            target_path: Resolved target path for the plan file.
+            total_tasks: Pre-computed task count.
+        """
+        try:
+            result = await extract_plan_fields(content, profile=profile)
+
+            # Guard against stale extraction overwriting a newer plan
+            current = await self._repository.get(workflow_id)
+            if current is None or current.plan_cache is None:
+                logger.info(
+                    "Skipping plan metadata extraction; workflow or plan_cache missing",
+                    workflow_id=workflow_id,
+                )
+                return
+            current_markdown = await current.plan_cache.get_plan_markdown()
+            if current_markdown != content:
+                logger.info(
+                    "Skipping stale plan metadata extraction; plan was updated",
+                    workflow_id=workflow_id,
+                )
+                return
+
+            # Update PlanCache with extracted metadata
+            plan_cache = PlanCache(
+                goal=result.goal,
+                plan_markdown=result.plan_markdown,
+                plan_path=str(target_path),
+                total_tasks=total_tasks,
+            )
+            await self._repository.update_plan_cache(workflow_id, plan_cache)
+
+            await self._emit(
+                workflow_id,
+                EventType.PLAN_VALIDATED,
+                f"Plan validated: {result.goal}",
+                agent="system",
+                data={
+                    "goal": result.goal,
+                    "key_files": result.key_files,
+                    "total_tasks": total_tasks,
+                },
+            )
+
+            logger.info(
+                "Plan metadata extraction complete",
+                workflow_id=workflow_id,
+                goal=result.goal,
+                key_files_count=len(result.key_files),
+            )
+        except Exception as e:
+            logger.error(
+                "Plan metadata extraction failed",
+                workflow_id=workflow_id,
+                error=str(e),
+            )
+            await self._emit(
+                workflow_id,
+                EventType.PLAN_VALIDATION_FAILED,
+                f"Plan validation failed: {e}",
+                agent="system",
+                data={"error": str(e)},
+            )
 
     async def replan_workflow(self, workflow_id: str) -> None:
         """Regenerate the plan for a blocked workflow.

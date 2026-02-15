@@ -524,11 +524,7 @@ async def set_workflow_plan(
         force=request.force,
     )
 
-    return SetPlanResponse(
-        goal=result["goal"],
-        key_files=result["key_files"],
-        total_tasks=result["total_tasks"],
-    )
+    return SetPlanResponse(**result)
 
 
 @router.post("/{workflow_id}/replan", response_model=ActionResponse)

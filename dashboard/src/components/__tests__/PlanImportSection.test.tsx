@@ -12,17 +12,24 @@ vi.mock('@/api/client', async (importOriginal) => {
   const mod = await importOriginal<typeof import('@/api/client')>();
   return {
     ...mod,
-    api: { readFile: vi.fn() },
+    api: {
+      readFile: vi.fn(),
+      listFiles: vi.fn().mockResolvedValue({ files: [], directory: '' }),
+    },
   };
 });
 
 describe('PlanImportSection', () => {
   const defaultProps = {
     onPlanChange: vi.fn(),
+    // Disable combobox for most tests to preserve existing text-input behavior
+    planOutputDir: undefined as string | undefined,
   };
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // Reset listFiles default
+    vi.mocked(api.listFiles).mockResolvedValue({ files: [], directory: '' });
   });
 
   describe('rendering', () => {
@@ -100,7 +107,7 @@ describe('PlanImportSection', () => {
     it('calls onPlanChange with plan_file when path is entered', async () => {
       const user = userEvent.setup();
       const onPlanChange = vi.fn();
-      render(<PlanImportSection onPlanChange={onPlanChange} defaultExpanded />);
+      render(<PlanImportSection onPlanChange={onPlanChange} defaultExpanded planOutputDir={undefined} />);
 
       const input = screen.getByPlaceholderText(/relative path/i);
       await user.type(input, 'docs/plan.md');
@@ -116,7 +123,7 @@ describe('PlanImportSection', () => {
     it('calls onPlanChange with undefined when path is cleared', async () => {
       const user = userEvent.setup();
       const onPlanChange = vi.fn();
-      render(<PlanImportSection onPlanChange={onPlanChange} defaultExpanded />);
+      render(<PlanImportSection onPlanChange={onPlanChange} defaultExpanded planOutputDir={undefined} />);
 
       const input = screen.getByPlaceholderText(/relative path/i);
       await user.type(input, 'docs/plan.md');
@@ -135,7 +142,7 @@ describe('PlanImportSection', () => {
     it('calls onPlanChange with plan_content when content is pasted', async () => {
       const user = userEvent.setup();
       const onPlanChange = vi.fn();
-      render(<PlanImportSection onPlanChange={onPlanChange} defaultExpanded />);
+      render(<PlanImportSection onPlanChange={onPlanChange} defaultExpanded planOutputDir={undefined} />);
 
       // Switch to paste mode
       await user.click(screen.getByRole('radio', { name: /paste/i }));
@@ -197,7 +204,7 @@ Implement user authentication.
 
     it('accepts dropped .md files and populates content', async () => {
       const onPlanChange = vi.fn();
-      render(<PlanImportSection onPlanChange={onPlanChange} defaultExpanded />);
+      render(<PlanImportSection onPlanChange={onPlanChange} defaultExpanded planOutputDir={undefined} />);
 
       // Switch to paste mode to enable drop target
       const user = userEvent.setup();
@@ -303,7 +310,7 @@ Add new feature.
     });
   });
 
-  describe('file preview', () => {
+  describe('file preview (text input fallback)', () => {
     const planContent = '## Goal\nBuild feature X\n\n## Tasks\n### Task 1\nDo thing\n### Task 2\nDo other thing\n\n## Key Files\n- src/foo.ts\n';
 
     beforeEach(() => {
@@ -317,6 +324,7 @@ Add new feature.
           onPlanChange={vi.fn()}
           defaultExpanded
           worktreePath="/path/to/repo"
+          planOutputDir={undefined}
         />
       );
 
@@ -326,7 +334,7 @@ Add new feature.
 
     it('does not show Preview button when worktreePath not provided', async () => {
       const user = userEvent.setup();
-      render(<PlanImportSection onPlanChange={vi.fn()} defaultExpanded />);
+      render(<PlanImportSection onPlanChange={vi.fn()} defaultExpanded planOutputDir={undefined} />);
 
       await user.type(screen.getByPlaceholderText(/relative path/i), 'docs/plan.md');
       expect(screen.queryByRole('button', { name: /preview/i })).not.toBeInTheDocument();
@@ -338,6 +346,7 @@ Add new feature.
           onPlanChange={vi.fn()}
           defaultExpanded
           worktreePath="/path/to/repo"
+          planOutputDir={undefined}
         />
       );
 
@@ -352,6 +361,7 @@ Add new feature.
           onPlanChange={vi.fn()}
           defaultExpanded
           worktreePath="/path/to/repo"
+          planOutputDir={undefined}
         />
       );
 
@@ -368,6 +378,7 @@ Add new feature.
           onPlanChange={vi.fn()}
           defaultExpanded
           worktreePath="/path/to/repo"
+          planOutputDir={undefined}
         />
       );
 
@@ -384,6 +395,7 @@ Add new feature.
           onPlanChange={vi.fn()}
           defaultExpanded
           worktreePath="/path/to/repo"
+          planOutputDir={undefined}
         />
       );
 
@@ -408,6 +420,7 @@ Add new feature.
           onPlanChange={vi.fn()}
           defaultExpanded
           worktreePath="/path/to/repo"
+          planOutputDir={undefined}
         />
       );
 
@@ -428,6 +441,7 @@ Add new feature.
           onPlanChange={vi.fn()}
           defaultExpanded
           worktreePath="/path/to/repo"
+          planOutputDir={undefined}
         />
       );
 
@@ -446,6 +460,7 @@ Add new feature.
           onPlanChange={vi.fn()}
           defaultExpanded
           worktreePath="/path/to/repo"
+          planOutputDir={undefined}
         />
       );
 
@@ -459,6 +474,162 @@ Add new feature.
       // Change path — preview should clear
       await user.type(screen.getByPlaceholderText(/relative path/i), '-v2');
       expect(screen.queryByTestId('plan-preview')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('file combobox', () => {
+    const mockFiles = [
+      { name: 'plan-1.md', relative_path: 'plan-1.md', size_bytes: 100, modified_at: '2026-02-15T10:00:00Z' },
+      { name: 'plan-2.md', relative_path: 'plan-2.md', size_bytes: 200, modified_at: '2026-02-14T08:00:00Z' },
+    ];
+
+    it('fetches file list on mount when worktreePath and planOutputDir are provided', async () => {
+      vi.mocked(api.listFiles).mockResolvedValue({
+        files: mockFiles,
+        directory: '/tmp/project/docs/plans',
+      });
+
+      render(
+        <PlanImportSection
+          onPlanChange={vi.fn()}
+          defaultExpanded
+          worktreePath="/tmp/project"
+          planOutputDir="docs/plans"
+        />
+      );
+
+      await waitFor(() => {
+        expect(api.listFiles).toHaveBeenCalledWith('docs/plans');
+      });
+    });
+
+    it('shows combobox trigger instead of text input when planOutputDir is set', async () => {
+      vi.mocked(api.listFiles).mockResolvedValue({
+        files: mockFiles,
+        directory: '/tmp/project/docs/plans',
+      });
+
+      render(
+        <PlanImportSection
+          onPlanChange={vi.fn()}
+          defaultExpanded
+          worktreePath="/tmp/project"
+          planOutputDir="docs/plans"
+        />
+      );
+
+      // Should show combobox, not text input
+      expect(screen.queryByPlaceholderText(/relative path/i)).not.toBeInTheDocument();
+      expect(screen.getByRole('combobox')).toBeInTheDocument();
+    });
+
+    it('shows empty state when no files found', async () => {
+      vi.mocked(api.listFiles).mockResolvedValue({
+        files: [],
+        directory: '/tmp/project/docs/plans',
+      });
+
+      const user = userEvent.setup();
+      render(
+        <PlanImportSection
+          onPlanChange={vi.fn()}
+          defaultExpanded
+          worktreePath="/tmp/project"
+          planOutputDir="docs/plans"
+        />
+      );
+
+      // Open combobox
+      await user.click(screen.getByRole('combobox'));
+
+      await waitFor(() => {
+        expect(screen.getByText(/no .md files/i)).toBeInTheDocument();
+      });
+    });
+
+    it('shows file list when combobox is opened', async () => {
+      vi.mocked(api.listFiles).mockResolvedValue({
+        files: mockFiles,
+        directory: '/tmp/project/docs/plans',
+      });
+
+      const user = userEvent.setup();
+      render(
+        <PlanImportSection
+          onPlanChange={vi.fn()}
+          defaultExpanded
+          worktreePath="/tmp/project"
+          planOutputDir="docs/plans"
+        />
+      );
+
+      // Wait for files to load
+      await waitFor(() => {
+        expect(api.listFiles).toHaveBeenCalled();
+      });
+
+      // Open combobox
+      await user.click(screen.getByRole('combobox'));
+
+      await waitFor(() => {
+        expect(screen.getByText('plan-1.md')).toBeInTheDocument();
+        expect(screen.getByText('plan-2.md')).toBeInTheDocument();
+      });
+    });
+
+    it('calls onPlanChange when a file is selected from combobox', async () => {
+      vi.mocked(api.listFiles).mockResolvedValue({
+        files: mockFiles,
+        directory: '/tmp/project/docs/plans',
+      });
+      vi.mocked(api.readFile).mockResolvedValue({
+        content: '## Goal\nTest\n\n## Tasks\n### Task 1\nDo it\n',
+        filename: 'plan-1.md',
+      });
+
+      const onPlanChange = vi.fn();
+      const user = userEvent.setup();
+      render(
+        <PlanImportSection
+          onPlanChange={onPlanChange}
+          defaultExpanded
+          worktreePath="/tmp/project"
+          planOutputDir="docs/plans"
+        />
+      );
+
+      // Wait for files to load
+      await waitFor(() => {
+        expect(api.listFiles).toHaveBeenCalled();
+      });
+
+      // Open combobox and select a file
+      await user.click(screen.getByRole('combobox'));
+      await waitFor(() => {
+        expect(screen.getByText('plan-1.md')).toBeInTheDocument();
+      });
+      await user.click(screen.getByText('plan-1.md'));
+
+      await waitFor(() => {
+        expect(onPlanChange).toHaveBeenLastCalledWith({
+          plan_file: 'docs/plans/plan-1.md',
+          plan_content: undefined,
+        });
+      });
+    });
+
+    it('falls back to text input when planOutputDir is not provided', () => {
+      render(
+        <PlanImportSection
+          onPlanChange={vi.fn()}
+          defaultExpanded
+          worktreePath="/tmp/project"
+          planOutputDir={undefined}
+        />
+      );
+
+      expect(screen.getByPlaceholderText(/relative path/i)).toBeInTheDocument();
+      expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
     });
   });
 });
