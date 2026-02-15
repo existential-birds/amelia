@@ -57,14 +57,18 @@ _DEFAULT_PROVIDER_ERROR_PATTERNS = (
     "invalid function arguments",  # Bad tool call JSON from provider
     "provider returned error",  # Generic provider-side errors
 )
-_PROVIDER_ERROR_PATTERNS: tuple[str, ...] = tuple(
-    p.strip().lower()
-    for p in os.environ.get(
-        "AMELIA_PROVIDER_ERROR_PATTERNS",
-        ",".join(_DEFAULT_PROVIDER_ERROR_PATTERNS),
-    ).split(",")
-    if p.strip()
-)
+
+
+def _get_provider_error_patterns() -> tuple[str, ...]:
+    """Get provider error patterns, reading env var dynamically for reconfiguration."""
+    return tuple(
+        p.strip().lower()
+        for p in os.environ.get(
+            "AMELIA_PROVIDER_ERROR_PATTERNS",
+            ",".join(_DEFAULT_PROVIDER_ERROR_PATTERNS),
+        ).split(",")
+        if p.strip()
+    )
 
 
 def _is_model_provider_error(exc: ValueError) -> bool:
@@ -84,7 +88,7 @@ def _is_model_provider_error(exc: ValueError) -> bool:
         return True
     # String-based detection for known provider error patterns
     msg = str(exc).lower()
-    return any(pattern in msg for pattern in _PROVIDER_ERROR_PATTERNS)
+    return any(pattern in msg for pattern in _get_provider_error_patterns())
 
 
 def _extract_provider_info(exc: ValueError) -> tuple[str | None, str]:

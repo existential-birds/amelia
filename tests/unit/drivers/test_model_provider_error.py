@@ -15,6 +15,34 @@ from amelia.drivers.api.deepagents import _extract_provider_info, _is_model_prov
 # ---------------------------------------------------------------------------
 
 
+class TestModelProviderErrorRepr:
+    """Tests for ModelProviderError __repr__ method."""
+
+    def test_repr_includes_all_fields(self) -> None:
+        """__repr__ should include message, provider_name, and original_message."""
+        exc = ModelProviderError(
+            "Provider error",
+            provider_name="minimax",
+            original_message="invalid json",
+        )
+        result = repr(exc)
+        assert result == (
+            "ModelProviderError('Provider error', "
+            "provider_name='minimax', "
+            "original_message='invalid json')"
+        )
+
+    def test_repr_with_none_fields(self) -> None:
+        """__repr__ should handle None values for optional fields."""
+        exc = ModelProviderError("Provider error")
+        result = repr(exc)
+        assert result == (
+            "ModelProviderError('Provider error', "
+            "provider_name=None, "
+            "original_message=None)"
+        )
+
+
 class TestIsModelProviderError:
     """Tests for _is_model_provider_error helper."""
 
