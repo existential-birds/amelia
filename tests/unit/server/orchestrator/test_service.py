@@ -2,7 +2,7 @@
 
 import asyncio
 import contextlib
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Callable, Generator
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
@@ -1373,7 +1373,7 @@ def model_provider_error_setup(mock_repository: AsyncMock) -> ModelProviderError
 @contextlib.contextmanager
 def model_provider_error_patches(
     orchestrator: OrchestratorService, setup: ModelProviderErrorSetup
-) -> Any:
+) -> Generator[None, None, None]:
     """Context manager for common patches in ModelProviderError tests."""
     with (
         patch.object(
