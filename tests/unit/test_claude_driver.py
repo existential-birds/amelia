@@ -16,7 +16,9 @@ from pydantic import BaseModel
 
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
 from amelia.drivers.cli.claude import (
+    _NESTED_SESSION_ENV_VARS,
     ClaudeCliDriver,
+    _build_sanitized_env,
     _is_clarification_request,
     _strip_markdown_fences,
 )
@@ -1205,3 +1207,52 @@ class TestExecuteAgenticAllowedTools:
             mock_build.assert_called_once()
             call_kwargs = mock_build.call_args
             assert call_kwargs.kwargs.get("allowed_tools") == ["read_file", "glob"]
+
+
+class TestNestedSessionEnvSanitization:
+    """Tests for env sanitization that prevents nested Claude CLI sessions."""
+
+    def test_build_sanitized_env_removes_claudecode(self) -> None:
+        """CLAUDECODE env var must be stripped to prevent nested-session guard."""
+        with patch.dict("os.environ", {"CLAUDECODE": "1", "HOME": "/home/test"}, clear=True):
+            env = _build_sanitized_env()
+            assert "CLAUDECODE" not in env
+            assert env["HOME"] == "/home/test"
+
+    def test_build_sanitized_env_removes_claude_code_entrypoint(self) -> None:
+        """CLAUDE_CODE_ENTRYPOINT env var must also be stripped."""
+        with patch.dict("os.environ", {"CLAUDE_CODE_ENTRYPOINT": "cli", "PATH": "/usr/bin"}, clear=True):
+            env = _build_sanitized_env()
+            assert "CLAUDE_CODE_ENTRYPOINT" not in env
+            assert env["PATH"] == "/usr/bin"
+
+    def test_build_sanitized_env_removes_both_vars(self) -> None:
+        """Both nested-session vars should be removed simultaneously."""
+        with patch.dict(
+            "os.environ",
+            {"CLAUDECODE": "1", "CLAUDE_CODE_ENTRYPOINT": "cli", "USER": "test"},
+            clear=True,
+        ):
+            env = _build_sanitized_env()
+            assert not _NESTED_SESSION_ENV_VARS.intersection(env)
+            assert env["USER"] == "test"
+
+    def test_build_sanitized_env_no_op_when_vars_absent(self) -> None:
+        """When nested-session vars are absent, env should pass through unchanged."""
+        with patch.dict("os.environ", {"HOME": "/home/test", "PATH": "/usr/bin"}, clear=True):
+            env = _build_sanitized_env()
+            assert env == {"HOME": "/home/test", "PATH": "/usr/bin"}
+
+    def test_build_options_includes_sanitized_env(self) -> None:
+        """_build_options must pass sanitized env to ClaudeAgentOptions."""
+        driver = ClaudeCliDriver()
+        with patch.dict(
+            "os.environ",
+            {"CLAUDECODE": "1", "CLAUDE_CODE_ENTRYPOINT": "cli", "HOME": "/home/test"},
+            clear=True,
+        ):
+            options = driver._build_options(cwd="/workspace")
+
+        assert "CLAUDECODE" not in options.env
+        assert "CLAUDE_CODE_ENTRYPOINT" not in options.env
+        assert options.env["HOME"] == "/home/test"

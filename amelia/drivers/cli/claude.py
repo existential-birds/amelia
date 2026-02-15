@@ -4,6 +4,7 @@ This driver wraps the Claude CLI via the official claude-agent-sdk package,
 providing both single-turn generation and agentic execution capabilities.
 """
 import json
+import os
 from collections.abc import AsyncIterator
 from typing import Any, Literal
 
@@ -27,6 +28,18 @@ from amelia.core.constants import CANONICAL_TO_CLI, normalize_tool_name
 from amelia.core.exceptions import ModelProviderError
 from amelia.drivers.base import AgenticMessage, AgenticMessageType, DriverUsage, GenerateResult
 from amelia.logging import log_claude_result
+
+
+# Env vars that trigger Claude CLI's nested-session guard.
+# When Amelia runs inside a Claude Code session these are inherited by the
+# subprocess, causing an immediate exit-code-1 failure.  We strip them so the
+# child process starts cleanly.
+_NESTED_SESSION_ENV_VARS = frozenset({"CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT"})
+
+
+def _build_sanitized_env() -> dict[str, str]:
+    """Return a copy of the current process env without nested-session vars."""
+    return {k: v for k, v in os.environ.items() if k not in _NESTED_SESSION_ENV_VARS}
 
 
 def _strip_markdown_fences(text: str) -> str:
@@ -271,6 +284,7 @@ class ClaudeCliDriver:
             "system_prompt": effective_system_prompt,
             "resume": session_id,
             "output_format": output_format,
+            "env": _build_sanitized_env(),
         }
         if cli_allowed_tools is not None:
             if len(cli_allowed_tools) == 0:
