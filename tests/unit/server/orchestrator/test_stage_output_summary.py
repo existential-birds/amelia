@@ -201,10 +201,10 @@ class TestEmissionPathsSummarize:
             assert data["output"]["agentic_status"] == "completed"
 
     @pytest.mark.asyncio
-    async def test_handle_stream_chunk_passes_raw_to_emit_agent_messages(
+    async def test_handle_stream_chunk_passes_summarized_to_emit_agent_messages(
         self: Self, service: "OrchestratorService"
     ) -> None:
-        """_emit_agent_messages should still receive the raw output."""
+        """_emit_agent_messages should receive the summarized output."""
         with (
             patch.object(service, "_emit", new_callable=AsyncMock),
             patch.object(service, "_emit_agent_messages", new_callable=AsyncMock) as mock_emit_agent_messages,
@@ -216,9 +216,9 @@ class TestEmissionPathsSummarize:
 
             await service._handle_stream_chunk("wf-1", {"developer_node": big_output})
 
-            # _emit_agent_messages should get the original, unsummarized output
+            # _emit_agent_messages should get the summarized output
             mock_emit_agent_messages.assert_called_once_with(
-                "wf-1", "developer_node", big_output
+                "wf-1", "developer_node", _summarize_stage_output(big_output)
             )
 
     @pytest.mark.asyncio

@@ -1725,8 +1725,12 @@ class OrchestratorService:
         """
         for node_name, output in chunk.items():
             if node_name in STAGE_NODES:
+                # output is always a dict here (node state update from LangGraph)
+                summarized = _summarize_stage_output(output)
+                assert summarized is not None
+
                 # Emit agent-specific messages based on node
-                await self._emit_agent_messages(workflow_id, node_name, output)
+                await self._emit_agent_messages(workflow_id, node_name, summarized)
 
                 # Emit STAGE_COMPLETED for the current node
                 await self._emit(
@@ -1734,7 +1738,7 @@ class OrchestratorService:
                     EventType.STAGE_COMPLETED,
                     f"Completed {node_name}",
                     agent=node_name.removesuffix("_node"),
-                    data={"stage": node_name, "output": _summarize_stage_output(output)},
+                    data={"stage": node_name, "output": summarized},
                 )
 
             # Emit TASK_COMPLETED when next_task_node completes
