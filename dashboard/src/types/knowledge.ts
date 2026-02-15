@@ -35,6 +35,7 @@ export interface KnowledgeDocumentListResponse {
   documents: KnowledgeDocument[];
 }
 
+// TODO: Add SSE endpoint for real-time ingestion progress tracking
 export interface IngestionProgressEvent {
   document_id: string;
   stage: 'parsing' | 'chunking' | 'embedding' | 'storing';

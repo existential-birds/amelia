@@ -7,6 +7,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import KnowledgePage from '../KnowledgePage';
 import type { KnowledgeDocument } from '@/types/knowledge';
+import { api } from '@/api/client';
 
 // Mock React Router
 vi.mock('react-router-dom', async (importOriginal) => {
@@ -17,6 +18,15 @@ vi.mock('react-router-dom', async (importOriginal) => {
     useRevalidator: () => ({ revalidate: vi.fn() }),
   };
 });
+
+// Mock API client
+vi.mock('@/api/client', () => ({
+  api: {
+    searchKnowledge: vi.fn(),
+    uploadKnowledgeDocument: vi.fn(),
+    deleteKnowledgeDocument: vi.fn(),
+  },
+}));
 
 import { useLoaderData } from 'react-router-dom';
 
@@ -86,5 +96,81 @@ describe('KnowledgePage', () => {
     renderPage([]);
     await user.click(screen.getByRole('tab', { name: /documents/i }));
     expect(await screen.findByText('No documents')).toBeInTheDocument();
+  });
+
+  it('shows error state when search fails', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    // Mock search failure
+    vi.mocked(api.searchKnowledge).mockRejectedValueOnce(new Error('Search service unavailable'));
+
+    const searchInput = screen.getByPlaceholderText('Search documentation...');
+    await user.type(searchInput, 'test query');
+    await user.click(screen.getByRole('button', { name: /search/i }));
+
+    expect(await screen.findByText('Search failed')).toBeInTheDocument();
+    expect(await screen.findByText('Search service unavailable')).toBeInTheDocument();
+  });
+
+  it('shows alert when upload fails', async () => {
+    const user = userEvent.setup();
+    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    renderPage();
+
+    // Mock upload failure
+    vi.mocked(api.uploadKnowledgeDocument).mockRejectedValueOnce(new Error('File too large'));
+
+    // Open upload dialog
+    await user.click(screen.getByRole('button', { name: /upload/i }));
+
+    // Create a test file
+    const file = new File(['test content'], 'test.pdf', { type: 'application/pdf' });
+    const fileInput = screen.getByLabelText('File');
+    await user.upload(fileInput, file);
+
+    // Fill in name
+    const nameInput = screen.getByLabelText('Name');
+    await user.clear(nameInput);
+    await user.type(nameInput, 'Test Document');
+
+    // Submit - find the dialog's upload button
+    const dialogButtons = screen.getAllByRole('button');
+    const uploadButton = dialogButtons.find((btn) => btn.textContent === 'Upload');
+    await user.click(uploadButton!);
+
+    // Wait for async upload to complete and alert to be called
+    await vi.waitFor(() => {
+      expect(alertSpy).toHaveBeenCalledWith('File too large');
+      expect(consoleErrorSpy).toHaveBeenCalledWith('Upload failed:', expect.any(Error));
+    });
+    alertSpy.mockRestore();
+    consoleErrorSpy.mockRestore();
+  });
+
+  it('shows alert when delete fails', async () => {
+    const user = userEvent.setup();
+    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    renderPage(mockDocuments);
+
+    // Mock delete failure
+    vi.mocked(api.deleteKnowledgeDocument).mockRejectedValueOnce(new Error('Permission denied'));
+
+    // Switch to Documents tab
+    await user.click(screen.getByRole('tab', { name: /documents/i }));
+
+    // Click delete button
+    const deleteButton = await screen.findByRole('button', { name: '' }); // Trash icon button
+    await user.click(deleteButton);
+
+    // Wait for async delete to complete and alert to be called
+    await vi.waitFor(() => {
+      expect(alertSpy).toHaveBeenCalledWith('Permission denied');
+      expect(consoleErrorSpy).toHaveBeenCalledWith('Delete failed:', expect.any(Error));
+    });
+    alertSpy.mockRestore();
+    consoleErrorSpy.mockRestore();
   });
 });

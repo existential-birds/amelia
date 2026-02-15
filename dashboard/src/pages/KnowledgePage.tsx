@@ -1,7 +1,7 @@
 /**
  * @fileoverview Knowledge Library page with Search and Documents tabs.
  */
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLoaderData, useRevalidator } from 'react-router-dom';
 import type { ColumnDef } from '@tanstack/react-table';
 import { format } from 'date-fns';
@@ -64,7 +64,7 @@ function statusBadge(status: DocumentStatus, error?: string | null) {
 /**
  * Document table columns for the Documents tab.
  */
-function useDocumentColumns(onDelete: (id: string) => void): ColumnDef<KnowledgeDocument>[] {
+function getDocumentColumns(onDelete: (id: string) => void): ColumnDef<KnowledgeDocument>[] {
   return [
     {
       accessorKey: 'name',
@@ -136,7 +136,9 @@ export default function KnowledgePage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SearchResult[] | null>(null);
   const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const [activeTab, setActiveTab] = useState('search');
 
   // Upload dialog state
   const [uploadOpen, setUploadOpen] = useState(false);
@@ -150,9 +152,12 @@ export default function KnowledgePage() {
     if (!query) return;
 
     setIsSearching(true);
+    setSearchError(null);
     try {
       const results = await api.searchKnowledge(query);
       setSearchResults(results);
+    } catch (error) {
+      setSearchError(error instanceof Error ? error.message : 'Search failed');
     } finally {
       setIsSearching(false);
     }
@@ -182,6 +187,9 @@ export default function KnowledgePage() {
       setUploadName('');
       setUploadTags('');
       revalidator.revalidate();
+    } catch (error) {
+      console.error('Upload failed:', error);
+      alert(error instanceof Error ? error.message : 'Upload failed');
     } finally {
       setIsUploading(false);
     }
@@ -189,13 +197,25 @@ export default function KnowledgePage() {
 
   const handleDelete = useCallback(
     async (documentId: string) => {
-      await api.deleteKnowledgeDocument(documentId);
-      revalidator.revalidate();
+      try {
+        await api.deleteKnowledgeDocument(documentId);
+        revalidator.revalidate();
+      } catch (error) {
+        console.error('Delete failed:', error);
+        alert(error instanceof Error ? error.message : 'Delete failed');
+      }
     },
     [revalidator]
   );
 
-  const columns = useDocumentColumns(handleDelete);
+  const columns = getDocumentColumns(handleDelete);
+
+  // Focus search input when switching to search tab
+  useEffect(() => {
+    if (activeTab === 'search') {
+      searchInputRef.current?.focus();
+    }
+  }, [activeTab]);
 
   return (
     <div className="flex flex-col h-full">
@@ -216,7 +236,7 @@ export default function KnowledgePage() {
         </PageHeader.Right>
       </PageHeader>
 
-      <Tabs defaultValue="search" className="flex flex-col flex-1 min-h-0">
+      <Tabs defaultValue="search" className="flex flex-col flex-1 min-h-0" onValueChange={setActiveTab}>
         <div className="px-6 pt-4">
           <TabsList>
             <TabsTrigger value="search">
@@ -250,7 +270,17 @@ export default function KnowledgePage() {
             </div>
 
             {/* Search results */}
-            {searchResults === null ? (
+            {searchError ? (
+              <Empty className="flex-1">
+                <EmptyHeader>
+                  <EmptyMedia variant="icon">
+                    <AlertCircle />
+                  </EmptyMedia>
+                  <EmptyTitle>Search failed</EmptyTitle>
+                  <EmptyDescription>{searchError}</EmptyDescription>
+                </EmptyHeader>
+              </Empty>
+            ) : searchResults === null ? (
               <Empty className="flex-1">
                 <EmptyHeader>
                   <EmptyMedia variant="icon">
@@ -281,7 +311,7 @@ export default function KnowledgePage() {
                     <CardContent className="p-4">
                       <div className="flex items-start justify-between gap-2 mb-2">
                         <div className="text-xs text-muted-foreground">
-                          {result.heading_path.join(' > ')}
+                          {result.heading_path.length > 0 ? result.heading_path.join(' > ') : 'Document root'}
                         </div>
                         <Badge variant="outline" className="shrink-0 font-mono text-xs">
                           {(result.similarity * 100).toFixed(0)}%
