@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from fastapi import HTTPException
+
 from amelia.knowledge.repository import KnowledgeRepository
 from amelia.knowledge.service import KnowledgeService
 from amelia.server.config import ServerConfig
@@ -188,10 +190,10 @@ def get_knowledge_service() -> KnowledgeService:
         The current KnowledgeService instance.
 
     Raises:
-        RuntimeError: If knowledge service not initialized.
+        HTTPException: 503 if knowledge service not available.
     """
     if _knowledge_service is None:
-        raise RuntimeError("Knowledge service not initialized. Is the server running?")
+        raise HTTPException(status_code=503, detail="Knowledge service not available")
     return _knowledge_service
 
 
