@@ -155,7 +155,7 @@ async function handleResponse<T>(response: Response): Promise<T> {
 
   // Handle responses with no content (e.g., 204 No Content from DELETE)
   if (response.status === 204 || response.headers.get('content-length') === '0') {
-    return undefined as T;
+    return {} as T;
   }
 
   return response.json();
@@ -826,7 +826,7 @@ export const api = {
     // Validate tags don't contain commas
     const invalidTag = tags.find(tag => tag.includes(','));
     if (invalidTag) {
-      throw new Error(`Tag "${invalidTag}" cannot contain commas`);
+      throw new ApiError(`Tag "${invalidTag}" cannot contain commas`, 'VALIDATION_ERROR', 400);
     }
 
     const formData = new FormData();

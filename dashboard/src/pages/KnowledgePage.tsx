@@ -188,7 +188,7 @@ export default function KnowledgePage() {
       debounceTimerRef.current = null;
       void executeSearch(query);
     }, 300);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- debounceTimerRef is intentionally not a dependency (ref object)
+    // eslint-disable-next-line -- debounceTimerRef is intentionally not a dependency (ref object)
   }, [searchQuery, executeSearch]);
 
   const handleSearchKeyDown = useCallback(
@@ -196,6 +196,12 @@ export default function KnowledgePage() {
       if (e.key === 'Enter') {
         const query = searchQuery.trim();
         if (!query) return;
+
+        // Clear any pending debounced search
+        if (debounceTimerRef.current) {
+          clearTimeout(debounceTimerRef.current);
+          debounceTimerRef.current = null;
+        }
 
         await executeSearch(query);
       }

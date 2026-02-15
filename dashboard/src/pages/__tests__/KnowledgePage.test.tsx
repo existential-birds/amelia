@@ -2,7 +2,7 @@
  * @fileoverview Tests for Knowledge Library page.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import KnowledgePage from '../KnowledgePage';
@@ -160,7 +160,7 @@ describe('KnowledgePage', () => {
     await user.click(uploadButton!);
 
     // Wait for async upload to complete and verify side effects occurred
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(Toast.error).toHaveBeenCalledWith('File too large');
     });
     expect(logger.error).toHaveBeenCalledWith('Upload failed', expect.any(Error));
@@ -181,7 +181,7 @@ describe('KnowledgePage', () => {
     await user.click(deleteButton);
 
     // Wait for async delete to complete and verify side effects occurred
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(Toast.error).toHaveBeenCalledWith('Permission denied');
     });
     expect(logger.error).toHaveBeenCalledWith('Delete failed', expect.any(Error));
