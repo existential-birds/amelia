@@ -157,13 +157,14 @@ export default function KnowledgePage() {
     async (query: string) => {
       // Cancel any in-flight search request
       abortControllerRef.current?.abort();
-      abortControllerRef.current = new AbortController();
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
 
       setIsSearching(true);
       setSearchError(null);
 
       try {
-        const results = await api.searchKnowledge(query, 5, undefined, abortControllerRef.current.signal);
+        const results = await api.searchKnowledge(query, 5, undefined, controller.signal);
         setSearchResults(results);
       } catch (error) {
         if (error instanceof DOMException && error.name === 'AbortError') {
@@ -171,7 +172,10 @@ export default function KnowledgePage() {
         }
         setSearchError(error instanceof Error ? error.message : 'Search failed');
       } finally {
-        setIsSearching(false);
+        // Only clear loading state if this request is still the current one
+        if (abortControllerRef.current === controller) {
+          setIsSearching(false);
+        }
       }
     },
     [] // Stable: only uses refs and stable state setters

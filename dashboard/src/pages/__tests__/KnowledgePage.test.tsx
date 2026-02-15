@@ -157,6 +157,31 @@ describe('KnowledgePage', () => {
     expect(screen.getByText('React Docs')).toBeInTheDocument();
     expect(screen.getByText('react')).toBeInTheDocument();
     expect(screen.getByText('frontend')).toBeInTheDocument();
+
+    // Verify AbortSignal was passed
+    expect(api.searchKnowledge).toHaveBeenCalledWith('hooks', 5, undefined, expect.any(AbortSignal));
+  });
+
+  it('handles aborted search requests silently', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    // Mock search with AbortError
+    const abortError = new DOMException('Request aborted', 'AbortError');
+    vi.mocked(api.searchKnowledge).mockRejectedValueOnce(abortError);
+
+    const searchInput = screen.getByPlaceholderText('Search documentation...');
+    await user.type(searchInput, 'test query');
+    await user.click(screen.getByRole('button', { name: /search/i }));
+
+    // Wait for search to complete
+    await waitFor(() => {
+      expect(api.searchKnowledge).toHaveBeenCalled();
+    });
+
+    // Verify no error is shown (abort errors are silently ignored)
+    expect(screen.queryByText('Search failed')).not.toBeInTheDocument();
+    expect(screen.getByText('Search your knowledge library')).toBeInTheDocument();
   });
 
   it('shows error state when search fails', async () => {
