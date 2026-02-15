@@ -60,6 +60,56 @@ TRANSIENT_EXCEPTIONS: tuple[type[Exception], ...] = (
 )
 
 
+# Truncate strings in workflow summaries to ~500 chars: long enough to be useful
+# for debugging, short enough to avoid bloating PostgreSQL JSONB storage.
+_MAX_SUMMARY_STRING_LENGTH = 500
+
+
+def _truncate_nested(value: Any) -> Any:
+    """Recursively truncate long strings in nested structures.
+
+    Args:
+        value: Any value that may contain nested strings.
+
+    Returns:
+        A copy with all long strings truncated.
+    """
+    if isinstance(value, str):
+        if len(value) > _MAX_SUMMARY_STRING_LENGTH:
+            return value[:_MAX_SUMMARY_STRING_LENGTH] + "… [truncated]"
+        return value
+    if isinstance(value, dict):
+        return {k: _truncate_nested(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_truncate_nested(item) for item in value]
+    return value
+
+
+def _summarize_stage_output(output: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Summarize node output for STAGE_COMPLETED events.
+
+    Replaces large lists (tool_calls, tool_results) with counts and truncates
+    long strings (including in nested structures) to avoid exceeding PostgreSQL's
+    JSONB size limit.
+
+    Args:
+        output: Raw node output dictionary.
+
+    Returns:
+        A summarized copy of the output, or None if input is None.
+    """
+    if output is None:
+        return None
+
+    result: dict[str, Any] = {}
+    for key, value in output.items():
+        if key in ("tool_calls", "tool_results") and isinstance(value, list):
+            result[f"{key}_count"] = len(value)
+        else:
+            result[key] = _truncate_nested(value)
+    return result
+
+
 async def get_git_head(cwd: str | None) -> str | None:
     """Get current git HEAD commit SHA.
 
@@ -1635,7 +1685,12 @@ class OrchestratorService:
                     EventType.STAGE_COMPLETED,
                     f"Completed {node_name}",
                     agent=node_name.removesuffix("_node"),
-                    data={"stage": node_name, "output": event.get("data")},
+                    data={
+                        "stage": node_name,
+                        "output": _summarize_stage_output(
+                            cast(dict[str, Any] | None, event.get("data"))
+                        ),
+                    },
                 )
 
         elif event_type == "on_chain_error":
@@ -1670,8 +1725,12 @@ class OrchestratorService:
         """
         for node_name, output in chunk.items():
             if node_name in STAGE_NODES:
+                # output is always a dict here (node state update from LangGraph)
+                summarized = _summarize_stage_output(output)
+                assert summarized is not None
+
                 # Emit agent-specific messages based on node
-                await self._emit_agent_messages(workflow_id, node_name, output)
+                await self._emit_agent_messages(workflow_id, node_name, summarized)
 
                 # Emit STAGE_COMPLETED for the current node
                 await self._emit(
@@ -1679,7 +1738,7 @@ class OrchestratorService:
                     EventType.STAGE_COMPLETED,
                     f"Completed {node_name}",
                     agent=node_name.removesuffix("_node"),
-                    data={"stage": node_name, "output": output},
+                    data={"stage": node_name, "output": summarized},
                 )
 
             # Emit TASK_COMPLETED when next_task_node completes
