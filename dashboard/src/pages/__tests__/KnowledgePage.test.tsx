@@ -9,13 +9,16 @@ import KnowledgePage from '../KnowledgePage';
 import type { KnowledgeDocument } from '@/types/knowledge';
 import { api } from '@/api/client';
 
+// Create mock revalidate function that can be accessed in tests
+const mockRevalidate = vi.fn();
+
 // Mock React Router
 vi.mock('react-router-dom', async (importOriginal) => {
   const mod = await importOriginal<typeof import('react-router-dom')>();
   return {
     ...mod,
     useLoaderData: vi.fn(),
-    useRevalidator: () => ({ revalidate: vi.fn() }),
+    useRevalidator: () => ({ revalidate: mockRevalidate }),
   };
 });
 
@@ -118,6 +121,44 @@ describe('KnowledgePage', () => {
     expect(await screen.findByText('No documents')).toBeInTheDocument();
   });
 
+  it('renders successful search results with similarity scores, heading paths, and tags', async () => {
+    const user = userEvent.setup();
+    renderPage(mockDocuments);
+
+    // Mock successful search
+    const mockSearchResults = [
+      {
+        chunk_id: 'chunk-1',
+        document_id: 'doc-1',
+        document_name: 'React Docs',
+        tags: ['react', 'frontend'],
+        content: 'React hooks allow you to use state in functional components.',
+        heading_path: ['Getting Started', 'Hooks'],
+        similarity: 0.87,
+        token_count: 12,
+      },
+    ];
+    vi.mocked(api.searchKnowledge).mockResolvedValueOnce(mockSearchResults);
+
+    const searchInput = screen.getByPlaceholderText('Search documentation...');
+    await user.type(searchInput, 'hooks');
+    await user.click(screen.getByRole('button', { name: /search/i }));
+
+    // Verify search result is rendered
+    expect(await screen.findByText('React hooks allow you to use state in functional components.')).toBeInTheDocument();
+
+    // Verify similarity score
+    expect(screen.getByText('87%')).toBeInTheDocument();
+
+    // Verify heading path
+    expect(screen.getByText('Getting Started > Hooks')).toBeInTheDocument();
+
+    // Verify document name and tags
+    expect(screen.getByText('React Docs')).toBeInTheDocument();
+    expect(screen.getByText('react')).toBeInTheDocument();
+    expect(screen.getByText('frontend')).toBeInTheDocument();
+  });
+
   it('shows error state when search fails', async () => {
     const user = userEvent.setup();
     renderPage();
@@ -185,5 +226,63 @@ describe('KnowledgePage', () => {
       expect(Toast.error).toHaveBeenCalledWith('Permission denied');
     });
     expect(logger.error).toHaveBeenCalledWith('Delete failed', expect.any(Error));
+  });
+
+  it('closes dialog and revalidates documents after successful upload', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    // Mock successful upload
+    vi.mocked(api.uploadKnowledgeDocument).mockResolvedValueOnce(undefined);
+
+    // Open upload dialog
+    await user.click(screen.getByRole('button', { name: /upload/i }));
+    expect(screen.getByRole('heading', { name: 'Upload Document' })).toBeInTheDocument();
+
+    // Create a test file
+    const file = new File(['test content'], 'test.pdf', { type: 'application/pdf' });
+    const fileInput = screen.getByLabelText('File');
+    await user.upload(fileInput, file);
+
+    // Fill in name
+    const nameInput = screen.getByLabelText('Name');
+    await user.clear(nameInput);
+    await user.type(nameInput, 'Test Document');
+
+    // Submit - find the dialog's upload button
+    const dialogButtons = screen.getAllByRole('button');
+    const uploadButton = dialogButtons.find((btn) => btn.textContent === 'Upload');
+    expect(uploadButton).toBeDefined();
+    await user.click(uploadButton!);
+
+    // Wait for upload to complete and verify dialog closed
+    await waitFor(() => {
+      expect(api.uploadKnowledgeDocument).toHaveBeenCalledWith(file, 'Test Document', []);
+      expect(screen.queryByRole('heading', { name: 'Upload Document' })).not.toBeInTheDocument();
+    });
+
+    // Verify revalidation was called
+    expect(mockRevalidate).toHaveBeenCalled();
+  });
+
+  it('revalidates documents after successful delete', async () => {
+    const user = userEvent.setup();
+    renderPage(mockDocuments);
+
+    // Mock successful delete
+    vi.mocked(api.deleteKnowledgeDocument).mockResolvedValueOnce(undefined);
+
+    // Switch to Documents tab
+    await user.click(screen.getByRole('tab', { name: /documents/i }));
+
+    // Click delete button
+    const deleteButton = await screen.findByTestId('delete-document');
+    await user.click(deleteButton);
+
+    // Wait for delete to complete and verify revalidation was called
+    await waitFor(() => {
+      expect(api.deleteKnowledgeDocument).toHaveBeenCalledWith('doc-1');
+      expect(mockRevalidate).toHaveBeenCalled();
+    });
   });
 });

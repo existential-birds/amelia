@@ -83,8 +83,8 @@ function getDocumentColumns(onDelete: (id: string) => void): ColumnDef<Knowledge
       header: ({ column }) => <DataTableColumnHeader column={column} title="Tags" />,
       cell: ({ row }) => (
         <div className="flex flex-wrap gap-1">
-          {row.original.tags.map((tag) => (
-            <Badge key={tag} variant="outline" className="text-xs">
+          {row.original.tags.map((tag, index) => (
+            <Badge key={`${tag}-${index}`} variant="outline" className="text-xs">
               {tag}
             </Badge>
           ))}
@@ -162,7 +162,7 @@ export default function KnowledgePage() {
     setSearchError(null);
 
     try {
-      const results = await api.searchKnowledge(query, 5, undefined, abortControllerRef.current?.signal);
+      const results = await api.searchKnowledge(query, 5, undefined, abortControllerRef.current.signal);
       setSearchResults(results);
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
@@ -178,17 +178,13 @@ export default function KnowledgePage() {
     const query = searchQuery.trim();
     if (!query) return;
 
-    // Debounce: clear any pending search
+    // Clear any pending debounced search
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
     }
 
-    // Debounce delay of 300ms
-    debounceTimerRef.current = setTimeout(() => {
-      debounceTimerRef.current = null;
-      void executeSearch(query);
-    }, 300);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- debounceTimerRef is intentionally not a dependency (ref object)
+    await executeSearch(query);
   }, [searchQuery, executeSearch]);
 
   const handleSearchKeyDown = useCallback(
@@ -306,7 +302,24 @@ export default function KnowledgePage() {
                 ref={searchInputRef}
                 placeholder="Search documentation..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => {
+                  const newValue = e.target.value;
+                  setSearchQuery(newValue);
+
+                  // Debounce: clear any pending search
+                  if (debounceTimerRef.current) {
+                    clearTimeout(debounceTimerRef.current);
+                  }
+
+                  // Debounce delay of 300ms
+                  const query = newValue.trim();
+                  if (query) {
+                    debounceTimerRef.current = setTimeout(() => {
+                      debounceTimerRef.current = null;
+                      void executeSearch(query);
+                    }, 300);
+                  }
+                }}
                 onKeyDown={handleSearchKeyDown}
                 className="flex-1"
               />
@@ -369,8 +382,8 @@ export default function KnowledgePage() {
                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
                           <FileText className="size-3" />
                           <span>{result.document_name}</span>
-                          {result.tags.map((tag) => (
-                            <Badge key={tag} variant="outline" className="text-xs">
+                          {result.tags.map((tag, index) => (
+                            <Badge key={`${result.chunk_id}-${tag}-${index}`} variant="outline" className="text-xs">
                               {tag}
                             </Badge>
                           ))}
@@ -412,7 +425,17 @@ export default function KnowledgePage() {
       </Tabs>
 
       {/* Upload Dialog */}
-      <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
+      <Dialog
+        open={uploadOpen}
+        onOpenChange={(open) => {
+          setUploadOpen(open);
+          if (!open) {
+            setUploadFile(null);
+            setUploadName('');
+            setUploadTags('');
+          }
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Upload Document</DialogTitle>
