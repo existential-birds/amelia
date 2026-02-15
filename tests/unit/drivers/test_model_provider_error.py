@@ -60,13 +60,21 @@ class TestIsModelProviderError:
 
     def test_is_model_provider_error_with_custom_env_pattern(self) -> None:
         """Custom patterns via AMELIA_PROVIDER_ERROR_PATTERNS should be detected."""
+        from amelia.drivers.api.deepagents import _get_provider_error_patterns
+
         with patch.dict(os.environ, {"AMELIA_PROVIDER_ERROR_PATTERNS": "custom error,another pattern"}):
+            # Clear the LRU cache so the function re-reads the environment variable
+            _get_provider_error_patterns.cache_clear()
+
             exc = ValueError("A custom error occurred")
             assert _is_model_provider_error(exc) is True
 
             # Original default patterns should NOT match when env var overrides
             exc_default = ValueError("midstream error occurred")
             assert _is_model_provider_error(exc_default) is False
+
+        # Clear cache again to restore default patterns for other tests
+        _get_provider_error_patterns.cache_clear()
 
     def test_is_not_model_provider_error_validation(self) -> None:
         """Amelia validation ValueErrors should NOT be detected as provider errors."""

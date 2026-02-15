@@ -1,5 +1,6 @@
 """DeepAgents-based API driver for LLM generation and agentic execution."""
 import asyncio
+import functools
 import os
 import subprocess
 import threading
@@ -59,6 +60,7 @@ _DEFAULT_PROVIDER_ERROR_PATTERNS = (
 )
 
 
+@functools.lru_cache(maxsize=1)
 def _get_provider_error_patterns() -> tuple[str, ...]:
     """Get provider error patterns from environment or defaults.
 
