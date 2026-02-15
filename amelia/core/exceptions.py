@@ -30,3 +30,10 @@ class ModelProviderError(AmeliaError):
         self.provider_name = provider_name
         self.original_message = original_message
         super().__init__(message)
+
+    def __repr__(self) -> str:
+        return (
+            f"{self.__class__.__name__}({self.args[0]!r}, "
+            f"provider_name={self.provider_name!r}, "
+            f"original_message={self.original_message!r})"
+        )

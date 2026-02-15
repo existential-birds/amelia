@@ -50,10 +50,20 @@ _DEFAULT_TIMEOUT = 300
 # 1. Identify the error message substring from the LLM provider SDK (usually langchain_openai)
 # 2. Add a lowercase pattern that uniquely identifies the provider error
 # 3. Test by triggering the error and verifying ModelProviderError is raised
-_PROVIDER_ERROR_PATTERNS = (
+#
+# Configurable via AMELIA_PROVIDER_ERROR_PATTERNS env var (comma-separated, lowercase).
+_DEFAULT_PROVIDER_ERROR_PATTERNS = (
     "midstream error",  # OpenRouter/provider streaming failures
     "invalid function arguments",  # Bad tool call JSON from provider
     "provider returned error",  # Generic provider-side errors
+)
+_PROVIDER_ERROR_PATTERNS: tuple[str, ...] = tuple(
+    p.strip().lower()
+    for p in os.environ.get(
+        "AMELIA_PROVIDER_ERROR_PATTERNS",
+        ",".join(_DEFAULT_PROVIDER_ERROR_PATTERNS),
+    ).split(",")
+    if p.strip()
 )
 
 
@@ -90,7 +100,11 @@ def _extract_provider_info(exc: ValueError) -> tuple[str | None, str]:
         err_dict = exc.args[0]
         error_obj = err_dict.get("error", {})
         provider = err_dict.get("provider")
-        message = error_obj.get("message", str(err_dict)) if isinstance(error_obj, dict) else str(error_obj)
+        message = (
+            error_obj.get("message", str(err_dict))
+            if isinstance(error_obj, dict)
+            else str(error_obj)
+        )
         return provider, message
     return None, str(exc)
 
