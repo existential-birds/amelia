@@ -95,7 +95,16 @@ export function SetPlanModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent
+        className="sm:max-w-lg"
+        onInteractOutside={(e) => {
+          // Prevent dialog from closing when clicking inside popover portals (e.g. Combobox dropdown)
+          const target = e.target as HTMLElement;
+          if (target?.closest('[data-slot="popover-content"]')) {
+            e.preventDefault();
+          }
+        }}
+      >
         <DialogHeader>
           <DialogTitle>Set Plan</DialogTitle>
           <DialogDescription>
