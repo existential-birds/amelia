@@ -158,3 +158,105 @@ async def test_call_developer_node_passes_workflow_id(
         mock_developer.run.assert_called_once()
         call_kwargs = mock_developer.run.call_args
         assert call_kwargs.kwargs["workflow_id"] == "wf-test-123"
+
+
+@pytest.mark.asyncio
+async def test_call_developer_node_updates_base_commit(
+    mock_execution_state_factory: Callable[..., tuple[ImplementationState, Profile]],
+    mock_profile_factory: Callable[..., Profile],
+) -> None:
+    """Developer node should update base_commit to current HEAD before running.
+
+    This ensures the next reviewer pass only diffs against the developer's
+    latest changes, not the entire branch diff from workflow start.
+    """
+    profile = mock_profile_factory(
+        preset="cli_single",
+        agents={
+            "developer": AgentConfig(driver=DriverType.CLI, model="sonnet"),
+        },
+    )
+    state, _ = mock_execution_state_factory(
+        profile=profile,
+        goal="Implement test feature",
+        plan_markdown="## Task 1\n\nDo something",
+    )
+    # Simulate a base_commit from workflow start
+    state = state.model_copy(update={"base_commit": "old-commit-sha"})
+
+    config: dict[str, Any] = {
+        "configurable": {
+            "profile": profile,
+            "thread_id": "wf-1",
+        }
+    }
+
+    current_head = "new-head-commit-sha"
+
+    with patch("amelia.pipelines.nodes.Developer") as MockDeveloper:
+        mock_developer = MagicMock()
+        event = AgenticMessage(
+            type=AgenticMessageType.RESULT,
+            content="Done",
+        ).to_workflow_event(workflow_id="wf-1", agent="developer")
+        mock_developer.run = MagicMock(return_value=AsyncIteratorMock([
+            (state.model_copy(update={"agentic_status": "completed"}), event)
+        ]))
+        mock_developer.driver = MagicMock()
+        MockDeveloper.return_value = mock_developer
+
+        with (
+            patch("amelia.pipelines.nodes._save_token_usage", new_callable=AsyncMock),
+            patch("amelia.pipelines.nodes.get_current_commit", new_callable=AsyncMock, return_value=current_head),
+        ):
+            result = await call_developer_node(state, cast(RunnableConfig, config))
+
+    assert result["base_commit"] == current_head
+
+
+@pytest.mark.asyncio
+async def test_call_developer_node_keeps_base_commit_on_git_failure(
+    mock_execution_state_factory: Callable[..., tuple[ImplementationState, Profile]],
+    mock_profile_factory: Callable[..., Profile],
+) -> None:
+    """Developer node should keep original base_commit if git fails."""
+    profile = mock_profile_factory(
+        preset="cli_single",
+        agents={
+            "developer": AgentConfig(driver=DriverType.CLI, model="sonnet"),
+        },
+    )
+    state, _ = mock_execution_state_factory(
+        profile=profile,
+        goal="Implement test feature",
+        plan_markdown="## Task 1\n\nDo something",
+    )
+    original_base = "original-base-commit"
+    state = state.model_copy(update={"base_commit": original_base})
+
+    config: dict[str, Any] = {
+        "configurable": {
+            "profile": profile,
+            "thread_id": "wf-1",
+        }
+    }
+
+    with patch("amelia.pipelines.nodes.Developer") as MockDeveloper:
+        mock_developer = MagicMock()
+        event = AgenticMessage(
+            type=AgenticMessageType.RESULT,
+            content="Done",
+        ).to_workflow_event(workflow_id="wf-1", agent="developer")
+        mock_developer.run = MagicMock(return_value=AsyncIteratorMock([
+            (state.model_copy(update={"agentic_status": "completed"}), event)
+        ]))
+        mock_developer.driver = MagicMock()
+        MockDeveloper.return_value = mock_developer
+
+        with (
+            patch("amelia.pipelines.nodes._save_token_usage", new_callable=AsyncMock),
+            patch("amelia.pipelines.nodes.get_current_commit", new_callable=AsyncMock, return_value=None),
+        ):
+            result = await call_developer_node(state, cast(RunnableConfig, config))
+
+    assert result["base_commit"] == original_base
