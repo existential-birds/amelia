@@ -1387,7 +1387,6 @@ def model_provider_error_patches(
         patch(
             "amelia.server.orchestrator.service.asyncio.sleep", new_callable=AsyncMock
         ) as mock_sleep,
-        pytest.raises(ModelProviderError),
     ):
         yield mock_sleep
 
@@ -1399,7 +1398,10 @@ async def test_model_provider_error_retried(
     """Verify that when graph.astream raises ModelProviderError, approve_workflow retries before failing."""
     setup = model_provider_error_setup
 
-    with model_provider_error_patches(orchestrator, setup) as mock_sleep:
+    with (
+        model_provider_error_patches(orchestrator, setup) as mock_sleep,
+        pytest.raises(ModelProviderError),
+    ):
         await orchestrator.approve_workflow("wf-1")
 
     # max_retries=2 means attempts 0, 1, 2 → astream called 3 times
@@ -1416,7 +1418,10 @@ async def test_model_provider_error_friendly_failure_reason(
     """Verify that after retries exhausted, the failure_reason in the DB contains the friendly message."""
     setup = model_provider_error_setup
 
-    with model_provider_error_patches(orchestrator, setup):
+    with (
+        model_provider_error_patches(orchestrator, setup),
+        pytest.raises(ModelProviderError),
+    ):
         await orchestrator.approve_workflow("wf-1")
 
     # Verify set_status was called with FAILED and a friendly failure_reason

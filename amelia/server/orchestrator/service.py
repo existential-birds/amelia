@@ -1480,8 +1480,9 @@ class OrchestratorService:
         # Resume execution from checkpoint with retry for transient errors
         retry_config = profile.retry
         attempt = 0
+        success = False
 
-        while attempt <= retry_config.max_retries:
+        while attempt <= retry_config.max_retries and not success:
             try:
                 async for chunk in graph.astream(
                     None,  # Resume from checkpoint, no new input needed
@@ -1518,7 +1519,7 @@ class OrchestratorService:
                     "Workflow completed successfully",
                 )
                 await self._repository.set_status(workflow_id, WorkflowStatus.COMPLETED)
-                return  # Success
+                success = True
 
             except TRANSIENT_EXCEPTIONS as e:
                 attempt += 1
@@ -1567,6 +1568,10 @@ class OrchestratorService:
                     workflow_id, WorkflowStatus.FAILED, failure_reason=str(e)
                 )
                 raise
+
+        # Return after successful completion
+        if success:
+            return
 
     async def reject_workflow(
         self,
