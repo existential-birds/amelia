@@ -60,6 +60,36 @@ TRANSIENT_EXCEPTIONS: tuple[type[Exception], ...] = (
 )
 
 
+
+_MAX_SUMMARY_STRING_LENGTH = 500
+
+
+def _summarize_stage_output(output: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Summarize node output for STAGE_COMPLETED events.
+
+    Replaces large lists (tool_calls, tool_results) with counts and truncates
+    long strings to avoid exceeding PostgreSQL's JSONB size limit.
+
+    Args:
+        output: Raw node output dictionary.
+
+    Returns:
+        A summarized copy of the output, or None if input is None.
+    """
+    if output is None:
+        return None
+
+    result: dict[str, Any] = {}
+    for key, value in output.items():
+        if key in ("tool_calls", "tool_results") and isinstance(value, list):
+            result[f"{key}_count"] = len(value)
+        elif isinstance(value, str) and len(value) > _MAX_SUMMARY_STRING_LENGTH:
+            result[key] = value[:_MAX_SUMMARY_STRING_LENGTH] + "… [truncated]"
+        else:
+            result[key] = value
+    return result
+
+
 async def get_git_head(cwd: str | None) -> str | None:
     """Get current git HEAD commit SHA.
 
@@ -1635,7 +1665,12 @@ class OrchestratorService:
                     EventType.STAGE_COMPLETED,
                     f"Completed {node_name}",
                     agent=node_name.removesuffix("_node"),
-                    data={"stage": node_name, "output": event.get("data")},
+                    data={
+                        "stage": node_name,
+                        "output": _summarize_stage_output(
+                            cast(dict[str, Any] | None, event.get("data"))
+                        ),
+                    },
                 )
 
         elif event_type == "on_chain_error":
@@ -1679,7 +1714,7 @@ class OrchestratorService:
                     EventType.STAGE_COMPLETED,
                     f"Completed {node_name}",
                     agent=node_name.removesuffix("_node"),
-                    data={"stage": node_name, "output": output},
+                    data={"stage": node_name, "output": _summarize_stage_output(output)},
                 )
 
             # Emit TASK_COMPLETED when next_task_node completes
