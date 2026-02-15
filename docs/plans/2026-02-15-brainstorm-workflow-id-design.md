@@ -23,7 +23,7 @@ Examples:
 
 ### 1. `slugify()` utility
 
-New function (location TBD, likely `amelia/utils/`):
+New function in `amelia/core/text.py`:
 
 - Lowercase the input
 - Replace spaces and non-alphanumeric chars with dashes

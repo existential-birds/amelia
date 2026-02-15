@@ -978,7 +978,8 @@ class BrainstormService:
         # Generate workflow ID - either from orchestrator or fallback
         if orchestrator is not None and worktree_path is not None:
             # Generate short, readable issue ID
-            slug = slugify(issue_title, max_length=15) if issue_title else ""
+            base_title = issue_title or session.topic or ""
+            slug = slugify(base_title, max_length=15) if base_title else ""
             issue_id = f"{slug}-{session_id[:8]}" if slug else f"brainstorm-{session_id[:8]}"
 
             # Queue workflow with orchestrator
