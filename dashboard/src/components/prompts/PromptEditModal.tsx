@@ -20,6 +20,7 @@ import { cn } from '@/lib/utils';
 import { getAgentAccentStyle } from '@/lib/constants';
 import { api } from '@/api/client';
 import { success, error as showError } from '@/components/Toast';
+import { logger } from '@/lib/logger';
 import type { DefaultContent } from '@/types';
 
 /** Character count thresholds for progressive color feedback. */
@@ -201,7 +202,7 @@ export function PromptEditModal({
       onOpenChange(false);
     } catch (err) {
       showError('Failed to save prompt');
-      console.error('Failed to save prompt:', err);
+      logger.error('Failed to save prompt', err);
     } finally {
       setIsSaving(false);
     }

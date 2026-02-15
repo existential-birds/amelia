@@ -28,7 +28,16 @@ vi.mock('@/api/client', () => ({
   },
 }));
 
+// Mock Toast component
+vi.mock('@/components/Toast', () => ({
+  error: vi.fn(),
+  success: vi.fn(),
+  info: vi.fn(),
+  warning: vi.fn(),
+}));
+
 import { useLoaderData } from 'react-router-dom';
+import * as Toast from '@/components/Toast';
 
 const mockDocuments: KnowledgeDocument[] = [
   {
@@ -113,9 +122,8 @@ describe('KnowledgePage', () => {
     expect(await screen.findByText('Search service unavailable')).toBeInTheDocument();
   });
 
-  it('shows alert when upload fails', async () => {
+  it('shows toast when upload fails', async () => {
     const user = userEvent.setup();
-    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     renderPage();
 
@@ -140,18 +148,16 @@ describe('KnowledgePage', () => {
     const uploadButton = dialogButtons.find((btn) => btn.textContent === 'Upload');
     await user.click(uploadButton!);
 
-    // Wait for async upload to complete and alert to be called
+    // Wait for async upload to complete and toast to be called
     await vi.waitFor(() => {
-      expect(alertSpy).toHaveBeenCalledWith('File too large');
+      expect(Toast.error).toHaveBeenCalledWith('File too large');
       expect(consoleErrorSpy).toHaveBeenCalledWith('Upload failed:', expect.any(Error));
     });
-    alertSpy.mockRestore();
     consoleErrorSpy.mockRestore();
   });
 
-  it('shows alert when delete fails', async () => {
+  it('shows toast when delete fails', async () => {
     const user = userEvent.setup();
-    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     renderPage(mockDocuments);
 
@@ -162,15 +168,14 @@ describe('KnowledgePage', () => {
     await user.click(screen.getByRole('tab', { name: /documents/i }));
 
     // Click delete button
-    const deleteButton = await screen.findByRole('button', { name: '' }); // Trash icon button
+    const deleteButton = await screen.findByTestId('delete-document');
     await user.click(deleteButton);
 
-    // Wait for async delete to complete and alert to be called
+    // Wait for async delete to complete and toast to be called
     await vi.waitFor(() => {
-      expect(alertSpy).toHaveBeenCalledWith('Permission denied');
+      expect(Toast.error).toHaveBeenCalledWith('Permission denied');
       expect(consoleErrorSpy).toHaveBeenCalledWith('Delete failed:', expect.any(Error));
     });
-    alertSpy.mockRestore();
     consoleErrorSpy.mockRestore();
   });
 });

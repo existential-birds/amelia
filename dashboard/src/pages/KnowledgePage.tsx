@@ -32,6 +32,8 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { api } from '@/api/client';
+import * as Toast from '@/components/Toast';
+import { logger } from '@/lib/logger';
 import type { KnowledgeLoaderData } from '@/loaders/knowledge';
 import type { KnowledgeDocument, SearchResult, DocumentStatus } from '@/types/knowledge';
 
@@ -116,6 +118,7 @@ function getDocumentColumns(onDelete: (id: string) => void): ColumnDef<Knowledge
         <Button
           variant="ghost"
           size="icon-sm"
+          data-testid="delete-document"
           onClick={(e) => {
             e.stopPropagation();
             onDelete(row.original.id);
@@ -188,8 +191,8 @@ export default function KnowledgePage() {
       setUploadTags('');
       revalidator.revalidate();
     } catch (error) {
-      console.error('Upload failed:', error);
-      alert(error instanceof Error ? error.message : 'Upload failed');
+      logger.error('Upload failed', error);
+      Toast.error(error instanceof Error ? error.message : 'Upload failed');
     } finally {
       setIsUploading(false);
     }
@@ -201,8 +204,8 @@ export default function KnowledgePage() {
         await api.deleteKnowledgeDocument(documentId);
         revalidator.revalidate();
       } catch (error) {
-        console.error('Delete failed:', error);
-        alert(error instanceof Error ? error.message : 'Delete failed');
+        logger.error('Delete failed', error);
+        Toast.error(error instanceof Error ? error.message : 'Delete failed');
       }
     },
     [revalidator]
