@@ -19,6 +19,7 @@ from amelia.server.routes.health import router as health_router
 from amelia.server.routes.paths import router as paths_router
 from amelia.server.routes.usage import router as usage_router
 from amelia.server.routes.websocket import router as websocket_router
+from amelia.server.routes.knowledge import router as knowledge_router
 from amelia.server.routes.workflows import router as workflows_router
 
 
@@ -26,6 +27,7 @@ __all__ = [
     "config_router",
     "files_router",
     "health_router",
+    "knowledge_router",
     "paths_router",
     "usage_router",
     "websocket_router",

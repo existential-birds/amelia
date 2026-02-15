@@ -68,10 +68,12 @@ from amelia.server.database.prompt_repository import PromptRepository
 from amelia.server.dependencies import (
     clear_config,
     clear_database,
+    clear_knowledge_service,
     clear_orchestrator,
     get_profile_repository,
     set_config,
     set_database,
+    set_knowledge_service,
     set_orchestrator,
 )
 from amelia.server.events.bus import EventBus
@@ -83,6 +85,7 @@ from amelia.server.routes import (
     config_router,
     files_router,
     health_router,
+    knowledge_router,
     paths_router,
     usage_router,
     websocket_router,
@@ -102,6 +105,10 @@ from amelia.server.routes.prompts import get_prompt_repository, router as prompt
 from amelia.server.routes.settings import router as settings_router
 from amelia.server.routes.websocket import connection_manager
 from amelia.server.routes.workflows import configure_exception_handlers
+from amelia.knowledge.embeddings import EmbeddingClient
+from amelia.knowledge.ingestion import IngestionPipeline
+from amelia.knowledge.repository import KnowledgeRepository
+from amelia.knowledge.service import KnowledgeService
 from amelia.server.services.brainstorm import BrainstormService
 
 
@@ -203,6 +210,24 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.brainstorm_service = brainstorm_service
     app.state.event_bus = event_bus
 
+    # Create knowledge service
+    openrouter_api_key = os.environ.get("OPENROUTER_API_KEY", "")
+    if openrouter_api_key:
+        embedding_client = EmbeddingClient(api_key=openrouter_api_key)
+        knowledge_repo = KnowledgeRepository(database.pool)
+        ingestion_pipeline = IngestionPipeline(
+            repository=knowledge_repo,
+            embedding_client=embedding_client,
+        )
+        knowledge_service = KnowledgeService(
+            event_bus=event_bus,
+            ingestion_pipeline=ingestion_pipeline,
+        )
+        set_knowledge_service(knowledge_service)
+    else:
+        knowledge_service = None
+        logger.warning("OPENROUTER_API_KEY not set, knowledge service disabled")
+
     # Create lifecycle components
     log_retention = LogRetentionService(
         db=database, config=server_settings, checkpointer=checkpointer
@@ -237,6 +262,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     await health_checker.stop()
     await lifecycle.shutdown()
+    if knowledge_service is not None:
+        await knowledge_service.cleanup()
+        clear_knowledge_service()
     await teardown_all_sandbox_containers()
     clear_orchestrator()
     await exit_stack.aclose()  # Also cleans up proxy HTTP client
@@ -288,6 +316,7 @@ def create_app() -> FastAPI:
     application.include_router(workflows_router, prefix="/api")
     application.include_router(brainstorm_router, prefix="/api/brainstorm")
     application.include_router(oracle_router, prefix="/api/oracle")
+    application.include_router(knowledge_router, prefix="/api")
     application.include_router(websocket_router)  # No prefix - route is /ws/events
     application.include_router(prompts_router)  # Already has /api/prompts prefix
     application.include_router(settings_router)  # Already has /api prefix
