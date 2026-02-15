@@ -25,6 +25,7 @@ vi.mock('@/api/client', () => ({
       has_changes: false,
       message: 'Git repository on branch main',
     }),
+    listFiles: vi.fn().mockResolvedValue({ files: [], directory: '' }),
   },
   ApiError: class ApiError extends Error {
     constructor(
@@ -485,22 +486,40 @@ describe('QuickShotModal', () => {
 
       await user.click(screen.getByText(/external plan/i));
 
+      // When expanded, should show the File/Paste mode toggle
       await waitFor(() => {
-        expect(screen.getByPlaceholderText(/relative path to plan file/i)).toBeInTheDocument();
+        expect(screen.getByRole('radio', { name: /file/i })).toBeInTheDocument();
       });
     });
 
     it('disables Plan & Queue button when external plan is provided', async () => {
+      vi.mocked(api.listFiles).mockResolvedValue({
+        files: [
+          { name: 'plan.md', relative_path: 'plan.md', size_bytes: 100, modified_at: '2026-02-15T10:00:00Z' },
+        ],
+        directory: '/path/to/repo/docs/plans',
+      });
+
       const user = userEvent.setup();
       await renderAndWaitForInit();
 
       // Fill required fields
       await fillRequiredFields();
 
-      // Expand External Plan and add a plan file
+      // Expand External Plan and select a file via combobox
       await user.click(screen.getByText(/external plan/i));
-      const planInput = screen.getByPlaceholderText(/relative path to plan file/i);
-      await user.type(planInput, 'docs/plan.md');
+      const planCombobox = await waitFor(() => {
+        // Multiple comboboxes may exist (profile select + plan file select)
+        const comboboxes = screen.getAllByRole('combobox');
+        const planCb = comboboxes.find(el => el.textContent?.includes('Select a plan file'));
+        expect(planCb).toBeDefined();
+        return planCb!;
+      });
+      await user.click(planCombobox);
+      await waitFor(() => {
+        expect(screen.getByText('plan.md')).toBeInTheDocument();
+      });
+      await user.click(screen.getByText('plan.md'));
 
       // Plan & Queue should be disabled since we have an external plan
       await waitFor(() => {
@@ -513,6 +532,13 @@ describe('QuickShotModal', () => {
     });
 
     it('passes plan_file to api.createWorkflow when provided', async () => {
+      vi.mocked(api.listFiles).mockResolvedValue({
+        files: [
+          { name: 'plan.md', relative_path: 'plan.md', size_bytes: 100, modified_at: '2026-02-15T10:00:00Z' },
+        ],
+        directory: '/Users/me/repo/docs/plans',
+      });
+
       const user = userEvent.setup();
       await renderAndWaitForInit();
 
@@ -521,10 +547,19 @@ describe('QuickShotModal', () => {
       await user.type(screen.getByLabelText(/worktree path/i), '/Users/me/repo');
       await user.type(screen.getByLabelText(/task title/i), 'Test title');
 
-      // Expand External Plan and add a plan file
+      // Expand External Plan and select a file via combobox
       await user.click(screen.getByText(/external plan/i));
-      const planInput = screen.getByPlaceholderText(/relative path to plan file/i);
-      await user.type(planInput, 'docs/plan.md');
+      const planCombobox = await waitFor(() => {
+        const comboboxes = screen.getAllByRole('combobox');
+        const planCb = comboboxes.find(el => el.textContent?.includes('Select a plan file'));
+        expect(planCb).toBeDefined();
+        return planCb!;
+      });
+      await user.click(planCombobox);
+      await waitFor(() => {
+        expect(screen.getByText('plan.md')).toBeInTheDocument();
+      });
+      await user.click(screen.getByText('plan.md'));
 
       // Click Queue
       await user.click(screen.getByRole('button', { name: /^queue$/i }));
@@ -532,7 +567,7 @@ describe('QuickShotModal', () => {
       await waitFor(() => {
         expect(api.createWorkflow).toHaveBeenCalledWith(
           expect.objectContaining({
-            plan_file: 'docs/plan.md',
+            plan_file: 'docs/plans/plan.md',
           })
         );
       });
@@ -566,19 +601,21 @@ describe('QuickShotModal', () => {
       });
     });
 
-    it('passes worktree_path to PlanImportSection for file preview', async () => {
+    it('passes worktree_path to PlanImportSection for file browsing', async () => {
       const user = userEvent.setup();
       await renderAndWaitForInit();
 
       // Fill worktree path field
       await user.type(screen.getByLabelText(/worktree path/i), '/test/repo');
 
-      // Expand PlanImportSection and enter file path
+      // Expand PlanImportSection - plan file combobox should be visible (with worktreePath + planOutputDir)
       await user.click(screen.getByText(/external plan/i));
-      await user.type(screen.getByPlaceholderText(/relative path/i), 'plan.md');
 
-      // Preview button should be visible (only appears when worktreePath is provided)
-      expect(screen.getByRole('button', { name: /preview/i })).toBeInTheDocument();
+      await waitFor(() => {
+        const comboboxes = screen.getAllByRole('combobox');
+        const planCb = comboboxes.find(el => el.textContent?.includes('Select a plan file'));
+        expect(planCb).toBeDefined();
+      });
     });
   });
 });

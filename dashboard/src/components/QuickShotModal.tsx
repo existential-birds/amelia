@@ -512,7 +512,7 @@ export function QuickShotModal({ open, onOpenChange, defaults }: QuickShotModalP
             className="animate-quick-shot-field"
             style={{ animationDelay: `${(fields.length + 2) * 50}ms` }}
           >
-            <PlanImportSection onPlanChange={handlePlanChange} worktreePath={worktreePath} />
+            <PlanImportSection onPlanChange={handlePlanChange} worktreePath={worktreePath} planOutputDir="docs/plans" />
           </div>
 
           <DialogFooter className="gap-2 pt-4">

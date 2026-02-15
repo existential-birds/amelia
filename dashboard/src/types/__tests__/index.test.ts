@@ -139,10 +139,12 @@ describe('SetPlanRequest', () => {
 describe('SetPlanResponse', () => {
   it('should have goal, key_files, and total_tasks', () => {
     const response: SetPlanResponse = {
+      status: 'validated',
       goal: 'Implement feature X',
       key_files: ['src/feature.ts', 'tests/feature.test.ts'],
       total_tasks: 5,
     };
+    expect(response.status).toBe('validated');
     expect(response.goal).toBe('Implement feature X');
     expect(response.key_files).toHaveLength(2);
     expect(response.total_tasks).toBe(5);

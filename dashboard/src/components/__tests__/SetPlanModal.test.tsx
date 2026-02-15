@@ -7,12 +7,14 @@ import { render, screen, waitFor, cleanup, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { SetPlanModal } from '../SetPlanModal';
 import { api, ApiError } from '@/api/client';
+import type { SetPlanResponse } from '@/types';
 import { toast } from 'sonner';
 
 // Mock the API client
 vi.mock('@/api/client', () => ({
   api: {
     setPlan: vi.fn(),
+    listFiles: vi.fn().mockResolvedValue({ files: [], directory: '' }),
   },
   ApiError: class ApiError extends Error {
     constructor(
@@ -39,11 +41,13 @@ describe('SetPlanModal', () => {
     onOpenChange: vi.fn(),
     workflowId: 'wf-123',
     worktreePath: '/path/to/repo',
+    planOutputDir: undefined,
   };
 
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(api.setPlan).mockResolvedValue({
+      status: 'validating',
       goal: 'Test goal',
       key_files: ['src/main.ts'],
       total_tasks: 3,
@@ -190,6 +194,7 @@ describe('SetPlanModal', () => {
 
     it('shows success toast with task count from response', async () => {
       vi.mocked(api.setPlan).mockResolvedValue({
+        status: 'validating',
         goal: 'Implement authentication',
         key_files: ['src/auth.ts'],
         total_tasks: 5,
@@ -213,6 +218,7 @@ describe('SetPlanModal', () => {
 
     it('shows generic success toast when total_tasks is 0', async () => {
       vi.mocked(api.setPlan).mockResolvedValue({
+        status: 'validating',
         goal: 'Some goal',
         key_files: [],
         total_tasks: 0,
@@ -226,7 +232,7 @@ describe('SetPlanModal', () => {
       await user.click(screen.getByRole('button', { name: /apply/i }));
 
       await waitFor(() => {
-        expect(toast.success).toHaveBeenCalledWith('Plan applied successfully');
+        expect(toast.success).toHaveBeenCalledWith('Plan imported, validating...');
       });
     });
 
@@ -249,7 +255,7 @@ describe('SetPlanModal', () => {
 
     it('shows loading state during submission', async () => {
       const user = userEvent.setup();
-      let resolvePromise: (value: { goal: string; key_files: string[]; total_tasks: number }) => void;
+      let resolvePromise: (value: SetPlanResponse) => void;
       vi.mocked(api.setPlan).mockReturnValueOnce(
         new Promise((resolve) => {
           resolvePromise = resolve;
@@ -269,7 +275,7 @@ describe('SetPlanModal', () => {
 
       // Resolve the promise and wait for the submission to complete
       await act(async () => {
-        resolvePromise!({ goal: 'Test', key_files: [], total_tasks: 1 });
+        resolvePromise!({ status: 'validating', goal: 'Test', key_files: [], total_tasks: 1 });
       });
     });
   });

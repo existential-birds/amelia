@@ -25,6 +25,7 @@ vi.mock('@/api/client', () => ({
     startWorkflow: vi.fn(),
     cancelWorkflow: vi.fn(),
     setPlan: vi.fn(),
+    listFiles: vi.fn().mockResolvedValue({ files: [], directory: '' }),
   },
   ApiError: class ApiError extends Error {
     constructor(
@@ -59,6 +60,7 @@ describe('PendingWorkflowControls', () => {
     });
     vi.mocked(api.cancelWorkflow).mockResolvedValue(undefined);
     vi.mocked(api.setPlan).mockResolvedValue({
+      status: 'validating',
       goal: 'Test goal',
       key_files: [],
       total_tasks: 1,
@@ -131,14 +133,32 @@ describe('PendingWorkflowControls', () => {
     });
 
     it('closes modal when plan is applied successfully', async () => {
+      vi.mocked(api.listFiles).mockResolvedValue({
+        files: [
+          { name: 'plan.md', relative_path: 'plan.md', size_bytes: 100, modified_at: '2026-02-15T10:00:00Z' },
+        ],
+        directory: '/path/to/repo/docs/plans',
+      });
+
       const user = userEvent.setup();
       render(<PendingWorkflowControls {...defaultProps} />);
 
       await user.click(screen.getByRole('button', { name: /set plan/i }));
 
-      // Enter plan file path and apply
-      const input = screen.getByPlaceholderText(/relative path/i);
-      await user.type(input, 'docs/plan.md');
+      // Select a file via combobox
+      await waitFor(() => {
+        expect(screen.getByRole('combobox')).toBeInTheDocument();
+      });
+      await user.click(screen.getByRole('combobox'));
+      await waitFor(() => {
+        expect(screen.getByText('plan.md')).toBeInTheDocument();
+      });
+      await user.click(screen.getByText('plan.md'));
+
+      // Apply the plan
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /apply/i })).not.toBeDisabled();
+      });
       await user.click(screen.getByRole('button', { name: /apply/i }));
 
       // Modal should close

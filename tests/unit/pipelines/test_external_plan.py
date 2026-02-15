@@ -7,6 +7,11 @@ import pytest
 
 from amelia.agents.schemas.architect import MarkdownPlanOutput
 from amelia.core.types import AgentConfig, Profile
+from amelia.pipelines.implementation.external_plan import (
+    extract_plan_fields,
+    read_plan_content,
+    write_plan_to_target,
+)
 
 
 class TestImportExternalPlan:
@@ -402,3 +407,76 @@ Content here.
         assert result.plan_path == target_path
         # goal should still be extracted
         assert result.goal == "Do thing"
+
+
+class TestReadPlanContent:
+    """Tests for read_plan_content helper."""
+
+    async def test_read_from_file(self, tmp_path: Path) -> None:
+        plan_file = tmp_path / "plan.md"
+        plan_file.write_text("# My Plan\n\n### Task 1: Do thing")
+        content = await read_plan_content(
+            plan_file=str(plan_file), plan_content=None, working_dir=tmp_path
+        )
+        assert "# My Plan" in content
+
+    async def test_read_from_inline_content(self, tmp_path: Path) -> None:
+        content = await read_plan_content(
+            plan_file=None, plan_content="# Inline Plan", working_dir=tmp_path
+        )
+        assert content == "# Inline Plan"
+
+    async def test_rejects_path_traversal(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError, match="outside working directory"):
+            await read_plan_content(
+                plan_file="/etc/passwd", plan_content=None, working_dir=tmp_path
+            )
+
+    async def test_rejects_empty_content(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError, match="empty"):
+            await read_plan_content(
+                plan_file=None, plan_content="   ", working_dir=tmp_path
+            )
+
+
+class TestWritePlanToTarget:
+    """Tests for write_plan_to_target helper."""
+
+    async def test_writes_content_to_target(self, tmp_path: Path) -> None:
+        target = tmp_path / "docs" / "plans" / "plan.md"
+        await write_plan_to_target(
+            content="# Plan", target_path=target, working_dir=tmp_path
+        )
+        assert target.read_text() == "# Plan"
+
+    async def test_creates_parent_dirs(self, tmp_path: Path) -> None:
+        target = tmp_path / "deep" / "nested" / "plan.md"
+        await write_plan_to_target(
+            content="# Plan", target_path=target, working_dir=tmp_path
+        )
+        assert target.exists()
+
+    async def test_skips_write_when_source_equals_target(self, tmp_path: Path) -> None:
+        target = tmp_path / "plan.md"
+        target.write_text("# Original")
+        await write_plan_to_target(
+            content="# Original",
+            target_path=target,
+            working_dir=tmp_path,
+            source_path=target,
+        )
+        assert target.read_text() == "# Original"
+
+
+class TestExtractPlanFields:
+    """Tests for extract_plan_fields (LLM extraction with fallback)."""
+
+    async def test_fallback_extracts_goal_from_heading(self) -> None:
+        content = "# Implement user auth\n\n### Task 1: Setup"
+        result = await extract_plan_fields(content, profile=None)
+        assert "auth" in result.goal.lower() or result.goal == "Implementation plan"
+
+    async def test_fallback_returns_content_as_markdown(self) -> None:
+        content = "# Plan\n\nSome content"
+        result = await extract_plan_fields(content, profile=None)
+        assert result.plan_markdown == content

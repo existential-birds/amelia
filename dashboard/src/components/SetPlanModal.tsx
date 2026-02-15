@@ -27,6 +27,8 @@ export interface SetPlanModalProps {
   workflowId: string;
   /** The worktree path for relative file resolution. */
   worktreePath: string;
+  /** Directory to list plan files from (relative to worktree). */
+  planOutputDir?: string;
   /** Whether the workflow already has a plan. */
   hasPlan?: boolean;
   /** Callback when plan is successfully applied. */
@@ -41,6 +43,7 @@ export function SetPlanModal({
   onOpenChange,
   workflowId,
   worktreePath,
+  planOutputDir,
   hasPlan = false,
   onSuccess,
 }: SetPlanModalProps) {
@@ -70,8 +73,8 @@ export function SetPlanModal({
       });
 
       const summary = result.total_tasks > 0
-        ? `Plan applied: ${result.total_tasks} tasks`
-        : 'Plan applied successfully';
+        ? `Plan imported (${result.total_tasks} tasks), validating...`
+        : 'Plan imported, validating...';
       toast.success(summary);
       onOpenChange(false);
       onSuccess?.();
@@ -92,7 +95,15 @@ export function SetPlanModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent
+        className="sm:max-w-lg"
+        onInteractOutside={(e) => {
+          // Prevent outside-click dismiss entirely: this form dialog has Cancel/X close buttons,
+          // and portalled popovers (e.g. Combobox dropdown) cause spurious focus-outside events
+          // when they close, which would incorrectly dismiss the dialog.
+          e.preventDefault();
+        }}
+      >
         <DialogHeader>
           <DialogTitle>Set Plan</DialogTitle>
           <DialogDescription>
@@ -107,6 +118,7 @@ export function SetPlanModal({
             defaultExpanded
             error={error}
             worktreePath={worktreePath}
+            planOutputDir={planOutputDir}
           />
 
           {hasPlan && (

@@ -143,6 +143,10 @@ class EventType(StrEnum):
     DOCUMENT_INGESTION_COMPLETED = "document_ingestion_completed"
     DOCUMENT_INGESTION_FAILED = "document_ingestion_failed"
 
+    # Plan validation (async extraction results)
+    PLAN_VALIDATED = "plan_validated"
+    PLAN_VALIDATION_FAILED = "plan_validation_failed"
+
 
 # Persisted event types (written to workflow log)
 PERSISTED_TYPES: frozenset[EventType] = frozenset({
@@ -186,6 +190,9 @@ PERSISTED_TYPES: frozenset[EventType] = frozenset({
     EventType.DOCUMENT_INGESTION_STARTED,
     EventType.DOCUMENT_INGESTION_COMPLETED,
     EventType.DOCUMENT_INGESTION_FAILED,
+    # Plan validation
+    EventType.PLAN_VALIDATED,
+    EventType.PLAN_VALIDATION_FAILED,
 })
 
 _ERROR_TYPES: frozenset[EventType] = frozenset({
@@ -194,6 +201,7 @@ _ERROR_TYPES: frozenset[EventType] = frozenset({
     EventType.SYSTEM_ERROR,
     EventType.ORACLE_CONSULTATION_FAILED,
     EventType.DOCUMENT_INGESTION_FAILED,
+    EventType.PLAN_VALIDATION_FAILED,
 })
 
 _WARNING_TYPES: frozenset[EventType] = frozenset({

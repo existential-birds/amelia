@@ -2,10 +2,9 @@
 
 from typing import Any
 
+from deepagents.backends.protocol import BackendProtocol
 from langchain_core.language_models import BaseChatModel
 from langgraph.checkpoint.base import BaseCheckpointSaver
-
-from deepagents.backends.protocol import BackendProtocol
 
 def create_deep_agent(
     model: BaseChatModel,

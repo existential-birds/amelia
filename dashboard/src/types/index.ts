@@ -203,7 +203,10 @@ export type EventType =
   | 'document_ingestion_started'
   | 'document_ingestion_progress'
   | 'document_ingestion_completed'
-  | 'document_ingestion_failed';
+  | 'document_ingestion_failed'
+  // Plan validation
+  | 'plan_validated'
+  | 'plan_validation_failed';
 
 /**
  * A single event emitted during workflow execution.
@@ -574,14 +577,45 @@ export interface SetPlanRequest {
  * Returned by POST /api/workflows/:id/plan endpoint.
  */
 export interface SetPlanResponse {
-  /** Extracted goal from the plan. */
-  goal: string;
-
-  /** List of key files from the plan. */
-  key_files: string[];
+  /** Current validation status. */
+  status: 'validating' | 'validated';
 
   /** Number of tasks in the plan. */
   total_tasks: number;
+
+  /** Extracted goal from the plan, if available. */
+  goal?: string;
+
+  /** List of key files from the plan, if available. */
+  key_files?: string[];
+}
+
+/**
+ * A single file entry returned by the file listing API.
+ */
+export interface FileEntry {
+  /** Filename without path. */
+  name: string;
+
+  /** Path relative to the listed directory. */
+  relative_path: string;
+
+  /** File size in bytes. */
+  size_bytes: number;
+
+  /** ISO 8601 timestamp of last modification. */
+  modified_at: string;
+}
+
+/**
+ * Response from GET /api/files/list endpoint.
+ */
+export interface FileListResponse {
+  /** Array of matching file entries. */
+  files: FileEntry[];
+
+  /** The directory that was listed. */
+  directory: string;
 }
 
 // ============================================================================
