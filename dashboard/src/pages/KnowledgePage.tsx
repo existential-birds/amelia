@@ -143,6 +143,8 @@ export default function KnowledgePage() {
   const [searchError, setSearchError] = useState<string | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [activeTab, setActiveTab] = useState('search');
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Upload dialog state
   const [uploadOpen, setUploadOpen] = useState(false);
@@ -155,16 +157,29 @@ export default function KnowledgePage() {
     const query = searchQuery.trim();
     if (!query) return;
 
+    // Debounce: clear any pending search
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+
+    // Cancel any in-flight search request
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = new AbortController();
+
     setIsSearching(true);
     setSearchError(null);
-    try {
-      const results = await api.searchKnowledge(query);
-      setSearchResults(results);
-    } catch (error) {
-      setSearchError(error instanceof Error ? error.message : 'Search failed');
-    } finally {
-      setIsSearching(false);
-    }
+
+    // Debounce delay of 300ms
+    debounceTimerRef.current = setTimeout(async () => {
+      try {
+        const results = await api.searchKnowledge(query);
+        setSearchResults(results);
+      } catch (error) {
+        setSearchError(error instanceof Error ? error.message : 'Search failed');
+      } finally {
+        setIsSearching(false);
+      }
+    }, 300);
   }, [searchQuery]);
 
   const handleSearchKeyDown = useCallback(
@@ -194,6 +209,10 @@ export default function KnowledgePage() {
     } catch (error) {
       logger.error('Upload failed', error);
       Toast.error(error instanceof Error ? error.message : 'Upload failed');
+      setUploadOpen(false);
+      setUploadFile(null);
+      setUploadName('');
+      setUploadTags('');
     } finally {
       setIsUploading(false);
     }
@@ -220,6 +239,16 @@ export default function KnowledgePage() {
       searchInputRef.current?.focus();
     }
   }, [activeTab]);
+
+  // Cleanup: abort pending search and clear debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      abortControllerRef.current?.abort();
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, []);
 
   return (
     <div className="flex flex-col h-full">
@@ -321,7 +350,7 @@ export default function KnowledgePage() {
                           {(result.similarity * 100).toFixed(0)}%
                         </Badge>
                       </div>
-                      <p className="text-sm mb-3 whitespace-pre-wrap">{result.content}</p>
+                      <p className="text-sm mb-3 whitespace-pre-wrap break-words">{result.content}</p>
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
                           <FileText className="size-3" />

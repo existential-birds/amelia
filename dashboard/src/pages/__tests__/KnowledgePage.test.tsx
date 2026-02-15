@@ -146,13 +146,15 @@ describe('KnowledgePage', () => {
     // Submit - find the dialog's upload button
     const dialogButtons = screen.getAllByRole('button');
     const uploadButton = dialogButtons.find((btn) => btn.textContent === 'Upload');
-    await user.click(uploadButton!);
+    if (!uploadButton) throw new Error('Upload button not found in dialog');
+    await user.click(uploadButton);
 
-    // Wait for async upload to complete and toast to be called
-    await vi.waitFor(() => {
-      expect(Toast.error).toHaveBeenCalledWith('File too large');
-      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('[ERROR] Upload failed'));
-    });
+    // Wait for async upload to complete by waiting for button text to change back
+    await screen.findByRole('button', { name: 'Upload' });
+
+    // Now verify side effects occurred
+    expect(Toast.error).toHaveBeenCalledWith('File too large');
+    expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('[ERROR] Upload failed'));
     consoleErrorSpy.mockRestore();
   });
 
@@ -171,11 +173,13 @@ describe('KnowledgePage', () => {
     const deleteButton = await screen.findByTestId('delete-document');
     await user.click(deleteButton);
 
-    // Wait for async delete to complete and toast to be called
-    await vi.waitFor(() => {
-      expect(Toast.error).toHaveBeenCalledWith('Permission denied');
-      expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('[ERROR] Delete failed'));
-    });
+    // Wait for async delete to complete by checking the mock's returned promise
+    const deletePromise = vi.mocked(api.deleteKnowledgeDocument).mock.results[0]?.value;
+    await expect(deletePromise).rejects.toThrow('Permission denied');
+
+    // Now verify side effects occurred
+    expect(Toast.error).toHaveBeenCalledWith('Permission denied');
+    expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('[ERROR] Delete failed'));
     consoleErrorSpy.mockRestore();
   });
 });

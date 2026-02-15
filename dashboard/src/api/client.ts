@@ -818,6 +818,12 @@ export const api = {
     name: string,
     tags: string[]
   ): Promise<KnowledgeDocument> {
+    // Validate tags don't contain commas
+    const invalidTag = tags.find(tag => tag.includes(','));
+    if (invalidTag) {
+      throw new Error(`Tag "${invalidTag}" cannot contain commas`);
+    }
+
     const formData = new FormData();
     formData.append('file', file);
     formData.append('name', name);
@@ -841,9 +847,7 @@ export const api = {
       `${API_BASE_URL}/knowledge/documents/${documentId}`,
       { method: 'DELETE' }
     );
-    if (!response.ok) {
-      await handleResponse(response);
-    }
+    await handleResponse(response);
   },
 
   /**
