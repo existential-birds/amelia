@@ -211,6 +211,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # Create knowledge service
     openrouter_api_key = os.environ.get("OPENROUTER_API_KEY", "")
+    embedding_client: EmbeddingClient | None = None
     if openrouter_api_key:
         embedding_client = EmbeddingClient(api_key=openrouter_api_key)
         knowledge_repo = KnowledgeRepository(database)
@@ -264,6 +265,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if knowledge_service is not None:
         await knowledge_service.cleanup()
         clear_knowledge_service()
+    if embedding_client is not None:
+        await embedding_client.close()
     await teardown_all_sandbox_containers()
     clear_orchestrator()
     await exit_stack.aclose()  # Also cleans up proxy HTTP client

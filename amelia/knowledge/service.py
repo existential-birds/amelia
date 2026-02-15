@@ -141,6 +141,8 @@ class KnowledgeService:
                     "error": str(exc),
                 },
             )
+        finally:
+            file_path.unlink(missing_ok=True)
 
     def _emit_event(
         self,
