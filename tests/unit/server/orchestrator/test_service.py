@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from langchain_core.runnables.config import RunnableConfig
 
-from amelia.core.types import AgentConfig, Profile
+from amelia.core.types import AgentConfig, DriverType, Profile, TrackerType
 from amelia.pipelines.implementation.state import (
     ImplementationState,
     rebuild_implementation_state,
@@ -1342,10 +1342,10 @@ async def test_model_provider_error_retried(
     mock_repository.get.return_value = mock_workflow
 
     # Profile with fast retry config
-    agent_config = AgentConfig(driver="cli", model="sonnet")
+    agent_config = AgentConfig(driver=DriverType.CLI, model="sonnet")
     mock_profile = Profile(
         name="test",
-        tracker="noop",
+        tracker=TrackerType.NOOP,
         working_dir="/tmp",
         retry=RetryConfig(max_retries=2, base_delay=0.1, max_delay=1.0),
         agents={
@@ -1389,10 +1389,10 @@ async def test_model_provider_error_friendly_failure_reason(
     mock_repository.get.return_value = mock_workflow
 
     # Profile with fast retry config
-    agent_config = AgentConfig(driver="cli", model="sonnet")
+    agent_config = AgentConfig(driver=DriverType.CLI, model="sonnet")
     mock_profile = Profile(
         name="test",
-        tracker="noop",
+        tracker=TrackerType.NOOP,
         working_dir="/tmp",
         retry=RetryConfig(max_retries=2, base_delay=0.1, max_delay=1.0),
         agents={

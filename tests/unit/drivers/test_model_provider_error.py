@@ -61,17 +61,18 @@ class TestExtractProviderInfo:
 # ---------------------------------------------------------------------------
 
 
+@pytest.fixture
+def mock_deepagents() -> Generator[MagicMock, None, None]:
+    """Set up mocks for ApiDriver with provider error testing."""
+    with patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-key"}), \
+         patch("amelia.drivers.api.deepagents.create_deep_agent") as mock_create, \
+         patch("amelia.drivers.api.deepagents.init_chat_model"), \
+         patch("amelia.drivers.api.deepagents.LocalSandbox"):
+        yield mock_create
+
+
 class TestExecuteAgenticProviderErrorWrapping:
     """Tests that execute_agentic wraps model provider ValueErrors."""
-
-    @pytest.fixture
-    def mock_deepagents(self) -> Generator[MagicMock, None, None]:
-        """Set up mocks for ApiDriver with provider error testing."""
-        with patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-key"}), \
-             patch("amelia.drivers.api.deepagents.create_deep_agent") as mock_create, \
-             patch("amelia.drivers.api.deepagents.init_chat_model"), \
-             patch("amelia.drivers.api.deepagents.LocalSandbox"):
-            yield mock_create
 
     async def test_execute_agentic_wraps_model_provider_error(
         self, mock_deepagents: MagicMock
@@ -122,15 +123,6 @@ class TestExecuteAgenticProviderErrorWrapping:
 
 class TestGenerateProviderErrorWrapping:
     """Tests that generate wraps model provider ValueErrors."""
-
-    @pytest.fixture
-    def mock_deepagents(self) -> Generator[MagicMock, None, None]:
-        """Set up mocks for ApiDriver with provider error testing."""
-        with patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-key"}), \
-             patch("amelia.drivers.api.deepagents.create_deep_agent") as mock_create, \
-             patch("amelia.drivers.api.deepagents.init_chat_model"), \
-             patch("amelia.drivers.api.deepagents.LocalSandbox"):
-            yield mock_create
 
     async def test_generate_wraps_model_provider_error(
         self, mock_deepagents: MagicMock
