@@ -21,6 +21,11 @@ import type {
   PathValidationResponse,
   UsageResponse,
 } from '../types';
+import type {
+  KnowledgeDocument,
+  KnowledgeDocumentListResponse,
+  SearchResult,
+} from '../types/knowledge';
 
 /**
  * Base URL for all API requests.
@@ -781,6 +786,86 @@ export const api = {
       `${API_BASE_URL}/usage?${searchParams.toString()}`
     );
     return handleResponse<UsageResponse>(response);
+  },
+
+  // ==========================================================================
+  // Knowledge API
+  // ==========================================================================
+
+  /**
+   * List all knowledge documents.
+   *
+   * @returns Array of knowledge documents.
+   * @throws {ApiError} When the API request fails.
+   */
+  async getKnowledgeDocuments(): Promise<KnowledgeDocument[]> {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/knowledge/documents`);
+    const data = await handleResponse<KnowledgeDocumentListResponse>(response);
+    return data.documents;
+  },
+
+  /**
+   * Upload a document for ingestion.
+   *
+   * @param file - File to upload (PDF or Markdown).
+   * @param name - Document display name.
+   * @param tags - Tags for filtering.
+   * @returns Created document with pending status.
+   * @throws {ApiError} When upload fails or file type unsupported.
+   */
+  async uploadKnowledgeDocument(
+    file: File,
+    name: string,
+    tags: string[]
+  ): Promise<KnowledgeDocument> {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('name', name);
+    formData.append('tags', tags.join(','));
+
+    const response = await fetchWithTimeout(`${API_BASE_URL}/knowledge/documents`, {
+      method: 'POST',
+      body: formData,
+    });
+    return handleResponse<KnowledgeDocument>(response);
+  },
+
+  /**
+   * Delete a knowledge document.
+   *
+   * @param documentId - Document UUID.
+   * @throws {ApiError} When document not found or API request fails.
+   */
+  async deleteKnowledgeDocument(documentId: string): Promise<void> {
+    const response = await fetchWithTimeout(
+      `${API_BASE_URL}/knowledge/documents/${documentId}`,
+      { method: 'DELETE' }
+    );
+    if (!response.ok) {
+      await handleResponse(response);
+    }
+  },
+
+  /**
+   * Search knowledge documents.
+   *
+   * @param query - Natural language search query.
+   * @param topK - Maximum results (default 5).
+   * @param tags - Optional tags to filter.
+   * @returns Ranked search results.
+   * @throws {ApiError} When search fails.
+   */
+  async searchKnowledge(
+    query: string,
+    topK: number = 5,
+    tags?: string[]
+  ): Promise<SearchResult[]> {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/knowledge/search`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query, top_k: topK, tags }),
+    });
+    return handleResponse<SearchResult[]>(response);
   },
 };
 
