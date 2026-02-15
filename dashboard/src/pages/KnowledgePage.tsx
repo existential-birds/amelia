@@ -172,7 +172,7 @@ export default function KnowledgePage() {
     // Debounce delay of 300ms
     debounceTimerRef.current = setTimeout(async () => {
       try {
-        const results = await api.searchKnowledge(query);
+        const results = await api.searchKnowledge(query, 5, undefined, abortControllerRef.current?.signal);
         setSearchResults(results);
       } catch (error) {
         setSearchError(error instanceof Error ? error.message : 'Search failed');
@@ -183,12 +183,29 @@ export default function KnowledgePage() {
   }, [searchQuery]);
 
   const handleSearchKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
+    async (e: React.KeyboardEvent) => {
       if (e.key === 'Enter') {
-        handleSearch();
+        const query = searchQuery.trim();
+        if (!query) return;
+
+        // Cancel any in-flight search request
+        abortControllerRef.current?.abort();
+        abortControllerRef.current = new AbortController();
+
+        setIsSearching(true);
+        setSearchError(null);
+
+        try {
+          const results = await api.searchKnowledge(query, 5, undefined, abortControllerRef.current?.signal);
+          setSearchResults(results);
+        } catch (error) {
+          setSearchError(error instanceof Error ? error.message : 'Search failed');
+        } finally {
+          setIsSearching(false);
+        }
       }
     },
-    [handleSearch]
+    [searchQuery]
   );
 
   const handleUpload = useCallback(async () => {
@@ -209,10 +226,6 @@ export default function KnowledgePage() {
     } catch (error) {
       logger.error('Upload failed', error);
       Toast.error(error instanceof Error ? error.message : 'Upload failed');
-      setUploadOpen(false);
-      setUploadFile(null);
-      setUploadName('');
-      setUploadTags('');
     } finally {
       setIsUploading(false);
     }

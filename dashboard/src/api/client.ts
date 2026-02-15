@@ -153,6 +153,11 @@ async function handleResponse<T>(response: Response): Promise<T> {
     );
   }
 
+  // Handle responses with no content (e.g., 204 No Content from DELETE)
+  if (response.status === 204 || response.headers.get('content-length') === '0') {
+    return undefined as T;
+  }
+
   return response.json();
 }
 
@@ -862,13 +867,18 @@ export const api = {
   async searchKnowledge(
     query: string,
     topK: number = 5,
-    tags?: string[]
+    tags?: string[],
+    signal?: AbortSignal
   ): Promise<SearchResult[]> {
-    const response = await fetchWithTimeout(`${API_BASE_URL}/knowledge/search`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query, top_k: topK, tags }),
-    });
+    const response = await fetchWithTimeout(
+      `${API_BASE_URL}/knowledge/search`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query, top_k: topK, tags }),
+      },
+      signal
+    );
     return handleResponse<SearchResult[]>(response);
   },
 };
