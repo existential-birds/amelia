@@ -203,7 +203,10 @@ export type EventType =
   | 'document_ingestion_started'
   | 'document_ingestion_progress'
   | 'document_ingestion_completed'
-  | 'document_ingestion_failed';
+  | 'document_ingestion_failed'
+  // Plan validation
+  | 'plan_validated'
+  | 'plan_validation_failed';
 
 /**
  * A single event emitted during workflow execution.

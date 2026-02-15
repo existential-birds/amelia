@@ -4,8 +4,10 @@
  * Industrial card design with status indicator rail on left edge.
  * Optimized for information density without truncation.
  */
+import { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
-import type { WorkflowSummary, WorkflowStatus } from '@/types';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import type { WorkflowSummary, WorkflowStatus, WorkflowEvent } from '@/types';
 
 /**
  * Props for the JobQueueItem component.
@@ -84,6 +86,7 @@ function getRepoName(path: string): string {
  * - Issue ID as primary identifier
  * - Repository name (extracted from worktree path)
  * - Compact status dot with label
+ * - Plan validation status indicator (pulsing dot while validating, red dot on error)
  *
  * Supports keyboard navigation and visual selection state.
  *
@@ -94,6 +97,30 @@ export function JobQueueItem({ workflow, selected, onSelect, className }: JobQue
   const handleClick = () => onSelect(workflow.id);
   const style = statusStyles[workflow.status];
   const repoName = getRepoName(workflow.worktree_path);
+
+  const [planValidating, setPlanValidating] = useState(false);
+  const [planError, setPlanError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const event = (e as CustomEvent).detail as WorkflowEvent;
+      if (event.workflow_id !== workflow.id) return;
+
+      if (event.event_type === 'plan_validated') {
+        setPlanValidating(false);
+        setPlanError(null);
+      } else if (event.event_type === 'plan_validation_failed') {
+        setPlanValidating(false);
+        setPlanError((event.data?.error as string) ?? 'Validation failed');
+      } else if (event.event_type === 'agent_message' && event.data?.total_tasks != null) {
+        setPlanValidating(true);
+        setPlanError(null);
+      }
+    };
+
+    window.addEventListener('workflow-event', handler);
+    return () => window.removeEventListener('workflow-event', handler);
+  }, [workflow.id]);
 
   return (
     <button
@@ -122,6 +149,22 @@ export function JobQueueItem({ workflow, selected, onSelect, className }: JobQue
             {workflow.issue_id}
           </span>
           <div className={cn('flex items-center gap-1.5 shrink-0', style.text)}>
+            {planValidating && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="size-2 rounded-full bg-primary animate-pulse" />
+                </TooltipTrigger>
+                <TooltipContent>Plan validation in progress...</TooltipContent>
+              </Tooltip>
+            )}
+            {planError && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="size-2 rounded-full bg-destructive" />
+                </TooltipTrigger>
+                <TooltipContent>{planError}</TooltipContent>
+              </Tooltip>
+            )}
             <span className={cn('size-1.5 rounded-full', style.dot)} />
             <span className="font-heading text-[10px] font-semibold tracking-wider">
               {statusLabels[workflow.status]}
