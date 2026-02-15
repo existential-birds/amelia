@@ -84,7 +84,7 @@ class TestExecuteAgenticProviderErrorWrapping:
             raise ValueError(
                 {"error": {"message": "invalid function arguments json string"}, "provider": "minimax"}
             )
-            yield  # make it a generator
+            yield  # noqa: B901 - unreachable but required for AsyncIterator type
 
         mock_agent = MagicMock()
         mock_agent.astream = failing_stream
@@ -106,7 +106,7 @@ class TestExecuteAgenticProviderErrorWrapping:
 
         async def failing_stream(*args: Any, **kwargs: Any) -> AsyncIterator[dict[str, Any]]:
             raise ValueError("Prompt cannot be empty")
-            yield  # make it a generator
+            yield  # noqa: B901 - unreachable but required for AsyncIterator type
 
         mock_agent = MagicMock()
         mock_agent.astream = failing_stream

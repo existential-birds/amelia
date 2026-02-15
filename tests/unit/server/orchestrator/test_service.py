@@ -62,10 +62,10 @@ def mock_repository() -> AsyncMock:
 def mock_profile_repo() -> AsyncMock:
     """Create mock profile repository."""
     repo = AsyncMock()
-    agent_config = AgentConfig(driver="cli", model="sonnet")
+    agent_config = AgentConfig(driver=DriverType.CLI, model="sonnet")
     default_profile = Profile(
         name="test",
-        tracker="noop",
+        tracker=TrackerType.NOOP,
         working_dir="/default/repo",
         agents={
             "architect": agent_config,
@@ -229,7 +229,7 @@ async def test_start_workflow_success(
         assert state.id == workflow_id
         assert state.issue_id == "ISSUE-123"
         assert state.worktree_path == valid_worktree
-        assert state.workflow_status == "pending"
+        assert state.workflow_status == WorkflowStatus.PENDING
         # Verify profile_id is stored on ServerExecutionState
         assert state.profile_id == "test"
 
@@ -299,7 +299,7 @@ async def test_cancel_workflow(
         id="wf-1",
         issue_id="ISSUE-123",
         worktree_path="/path/to/worktree",
-        workflow_status="in_progress",
+        workflow_status=WorkflowStatus.IN_PROGRESS,
         started_at=datetime.now(UTC),
     )
     mock_repository.get.return_value = mock_state
@@ -318,7 +318,7 @@ async def test_cancel_workflow(
     assert task.cancelled()
 
     # Status should be persisted to database
-    mock_repository.set_status.assert_called_once_with("wf-1", "cancelled")
+    mock_repository.set_status.assert_called_once_with("wf-1", WorkflowStatus.CANCELLED)
 
 
 @pytest.mark.parametrize(
@@ -342,7 +342,7 @@ async def test_cancel_workflow(
                 id="wf-1",
                 issue_id="ISSUE-123",
                 worktree_path="/path/to/worktree",
-                    workflow_status="completed",
+                    workflow_status=WorkflowStatus.COMPLETED,
                 started_at=datetime.now(UTC),
             ),
         ),
@@ -364,7 +364,7 @@ async def test_cancel_workflow(
                 id="wf-1",
                 issue_id="ISSUE-123",
                 worktree_path="/path/to/worktree",
-                    workflow_status="in_progress",
+                    workflow_status=WorkflowStatus.IN_PROGRESS,
                 started_at=datetime.now(UTC),
             ),
         ),
@@ -386,7 +386,7 @@ async def test_cancel_workflow(
                 id="wf-1",
                 issue_id="ISSUE-123",
                 worktree_path="/path/to/worktree",
-                    workflow_status="in_progress",
+                    workflow_status=WorkflowStatus.IN_PROGRESS,
                 started_at=datetime.now(UTC),
             ),
         ),
@@ -458,7 +458,7 @@ async def test_approve_workflow_success(
         id="wf-1",
         issue_id="ISSUE-123",
         worktree_path="/path/to/worktree",
-        workflow_status="blocked",
+        workflow_status=WorkflowStatus.BLOCKED,
         started_at=datetime.now(UTC),
         profile_id="test",
     )
@@ -478,8 +478,8 @@ async def test_approve_workflow_success(
     assert mock_repository.set_status.call_count == 2
     # First call is in_progress, second is completed
     calls = mock_repository.set_status.call_args_list
-    assert calls[0][0] == ("wf-1", "in_progress")
-    assert calls[1][0] == ("wf-1", "completed")
+    assert calls[0][0] == ("wf-1", WorkflowStatus.IN_PROGRESS)
+    assert calls[1][0] == ("wf-1", WorkflowStatus.COMPLETED)
 
     # Should emit APPROVAL_GRANTED
     approval_granted = [e for e in received_events if e.event_type == EventType.APPROVAL_GRANTED]
@@ -503,7 +503,7 @@ async def test_reject_workflow_success(
         id="wf-1",
         issue_id="ISSUE-123",
         worktree_path="/path/to/worktree",
-        workflow_status="blocked",
+        workflow_status=WorkflowStatus.BLOCKED,
         started_at=datetime.now(UTC),
         profile_id="test",
     )
@@ -523,7 +523,7 @@ async def test_reject_workflow_success(
 
     # Should update status to failed
     mock_repository.set_status.assert_called_once_with(
-        "wf-1", "failed", failure_reason="Plan too complex"
+        "wf-1", WorkflowStatus.FAILED, failure_reason="Plan too complex"
     )
 
     # Should cancel task - wait for cancellation to complete
@@ -553,7 +553,7 @@ class TestRejectWorkflowGraphState:
             id="wf-123",
             issue_id="ISSUE-456",
             worktree_path="/tmp/test",
-            workflow_status="blocked",
+            workflow_status=WorkflowStatus.BLOCKED,
             profile_id="test",
         )
         mock_repository.get.return_value = workflow
@@ -587,7 +587,7 @@ class TestApproveWorkflowResume:
             id="wf-123",
             issue_id="ISSUE-456",
             worktree_path="/tmp/test",
-            workflow_status="blocked",
+            workflow_status=WorkflowStatus.BLOCKED,
             profile_id="test",
         )
         mock_repository.get.return_value = workflow
@@ -776,7 +776,7 @@ async def test_get_workflow_by_worktree_uses_cache(
         id="wf-cached",
         issue_id="ISSUE-123",
         worktree_path="/cached/worktree",
-        workflow_status="in_progress",
+        workflow_status=WorkflowStatus.IN_PROGRESS,
         started_at=datetime.now(UTC),
     )
     mock_repository.get.return_value = mock_state
@@ -935,7 +935,7 @@ class TestRunWorkflowCheckpointResume:
             id="wf-retry-test",
             issue_id="ISSUE-123",
             worktree_path="/path/to/worktree",
-            workflow_status="in_progress",
+            workflow_status=WorkflowStatus.IN_PROGRESS,
             started_at=datetime.now(UTC),
             profile_id="test",
         )
@@ -965,16 +965,16 @@ class TestRunWorkflowCheckpointResume:
         mock_graph.astream.return_value = empty_stream()
 
         # Create mock profile
-        from amelia.core.types import AgentConfig, Profile
+        from amelia.core.types import AgentConfig, DriverType, Profile, TrackerType
 
         mock_profile = Profile(
             name="test",
-            tracker="noop",
+            tracker=TrackerType.NOOP,
             working_dir="/tmp/test",
             agents={
-                "architect": AgentConfig(driver="cli", model="sonnet"),
-                "developer": AgentConfig(driver="cli", model="sonnet"),
-                "reviewer": AgentConfig(driver="cli", model="sonnet"),
+                "architect": AgentConfig(driver=DriverType.CLI, model="sonnet"),
+                "developer": AgentConfig(driver=DriverType.CLI, model="sonnet"),
+                "reviewer": AgentConfig(driver=DriverType.CLI, model="sonnet"),
             },
         )
 
@@ -1018,16 +1018,16 @@ class TestRunWorkflowCheckpointResume:
 
         mock_graph.astream.return_value = empty_stream()
 
-        from amelia.core.types import AgentConfig, Profile
+        from amelia.core.types import AgentConfig, DriverType, Profile, TrackerType
 
         mock_profile = Profile(
             name="test",
-            tracker="noop",
+            tracker=TrackerType.NOOP,
             working_dir="/tmp/test",
             agents={
-                "architect": AgentConfig(driver="cli", model="sonnet"),
-                "developer": AgentConfig(driver="cli", model="sonnet"),
-                "reviewer": AgentConfig(driver="cli", model="sonnet"),
+                "architect": AgentConfig(driver=DriverType.CLI, model="sonnet"),
+                "developer": AgentConfig(driver=DriverType.CLI, model="sonnet"),
+                "reviewer": AgentConfig(driver=DriverType.CLI, model="sonnet"),
             },
         )
 
@@ -1068,7 +1068,7 @@ class TestTaskProgressEvents:
             id="wf-no-cache",
             issue_id="ISSUE-123",
             worktree_path="/path/to/worktree",
-            workflow_status="in_progress",
+            workflow_status=WorkflowStatus.IN_PROGRESS,
             started_at=datetime.now(UTC),
             profile_id="test",
             plan_cache=None,
@@ -1093,7 +1093,7 @@ class TestTaskProgressEvents:
             id="wf-non-task",
             issue_id="ISSUE-123",
             worktree_path="/path/to/worktree",
-            workflow_status="in_progress",
+            workflow_status=WorkflowStatus.IN_PROGRESS,
             started_at=datetime.now(UTC),
             profile_id="test",
             plan_cache=PlanCache(goal="Test goal", total_tasks=None),  # Not task mode
@@ -1120,7 +1120,7 @@ class TestTaskProgressEvents:
             id="wf-task",
             issue_id="ISSUE-123",
             worktree_path="/path/to/worktree",
-            workflow_status="in_progress",
+            workflow_status=WorkflowStatus.IN_PROGRESS,
             started_at=datetime.now(UTC),
             profile_id="test",
             plan_cache=PlanCache(goal="Test goal", total_tasks=3, current_task_index=1),
@@ -1189,7 +1189,7 @@ class TestTaskProgressEvents:
             id="wf-789",
             issue_id="ISSUE-123",
             worktree_path="/path/to/worktree",
-            workflow_status="in_progress",
+            workflow_status=WorkflowStatus.IN_PROGRESS,
             started_at=datetime.now(UTC),
             profile_id="test",
             plan_cache=PlanCache(total_tasks=5, current_task_index=0),
@@ -1268,10 +1268,10 @@ class TestStartWorkflowWithTaskFields:
         (worktree / ".git").touch()
 
         # Override the mock profile to use github tracker
-        agent_config = AgentConfig(driver="cli", model="sonnet")
+        agent_config = AgentConfig(driver=DriverType.CLI, model="sonnet")
         mock_profile_repo.get_profile.return_value = Profile(
             name="github",
-            tracker="github",
+            tracker=TrackerType.GITHUB,
             working_dir="/default/repo",
             agents={
                 "architect": agent_config,

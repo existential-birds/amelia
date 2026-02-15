@@ -40,11 +40,20 @@ _MAX_OUTPUT_SIZE = 100_000
 # Default command timeout in seconds
 _DEFAULT_TIMEOUT = 300
 
-# Patterns in ValueError messages that indicate a model provider error (not Amelia's fault)
+# Patterns in ValueError messages that indicate a model provider error (not Amelia's fault).
+#
+# These patterns are matched case-insensitively against the exception message.
+# When a ValueError contains any of these patterns, it's wrapped in ModelProviderError
+# instead of being raised directly, providing better error UX for transient LLM issues.
+#
+# To add a new pattern:
+# 1. Identify the error message substring from the LLM provider SDK (usually langchain_openai)
+# 2. Add a lowercase pattern that uniquely identifies the provider error
+# 3. Test by triggering the error and verifying ModelProviderError is raised
 _PROVIDER_ERROR_PATTERNS = (
-    "midstream error",
-    "invalid function arguments",
-    "provider returned error",
+    "midstream error",  # OpenRouter/provider streaming failures
+    "invalid function arguments",  # Bad tool call JSON from provider
+    "provider returned error",  # Generic provider-side errors
 )
 
 
