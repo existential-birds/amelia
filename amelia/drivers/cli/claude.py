@@ -315,6 +315,10 @@ class ClaudeCliDriver:
             schema=schema,
         )
 
+        # Capture stderr lines for diagnostics on failure
+        stderr_lines: list[str] = []
+        options.stderr = lambda line: stderr_lines.append(line)
+
         try:
             # Collect all messages
             result_message: ResultMessage | None = None
@@ -391,12 +395,17 @@ class ClaudeCliDriver:
                     return ("", session_id_result)
 
         except ProcessError as e:
+            exit_code = getattr(e, "exit_code", None)
+            captured_stderr = "\n".join(stderr_lines) if stderr_lines else ""
             logger.warning(
                 "Claude CLI process failed, will retry as transient error",
+                exit_code=exit_code,
+                stderr=captured_stderr,
                 error=str(e),
             )
+            detail = captured_stderr or str(e)
             raise ModelProviderError(
-                f"Claude CLI process error: {e}",
+                f"Claude CLI process error (exit code {exit_code}): {detail}",
                 provider_name="claude-cli",
                 original_message=str(e),
             ) from e
@@ -441,6 +450,12 @@ class ClaudeCliDriver:
             bypass_permissions=True,  # Agentic execution always bypasses permissions
             allowed_tools=allowed_tools,
         )
+
+        # Capture stderr lines from the CLI subprocess for diagnostics.
+        # The SDK hardcodes a placeholder in ProcessError.stderr, so we
+        # collect the real output via the stderr callback.
+        stderr_lines: list[str] = []
+        options.stderr = lambda line: stderr_lines.append(line)
 
         logger.info("Starting agentic execution", cwd=cwd)
 
@@ -524,12 +539,18 @@ class ClaudeCliDriver:
                         )
 
         except ProcessError as e:
+            exit_code = getattr(e, "exit_code", None)
+            # Use captured stderr lines (real output) over SDK placeholder
+            captured_stderr = "\n".join(stderr_lines) if stderr_lines else ""
             logger.warning(
                 "Claude CLI process failed, will retry as transient error",
+                exit_code=exit_code,
+                stderr=captured_stderr,
                 error=str(e),
             )
+            detail = captured_stderr or str(e)
             raise ModelProviderError(
-                f"Claude CLI process error: {e}",
+                f"Claude CLI process error (exit code {exit_code}): {detail}",
                 provider_name="claude-cli",
                 original_message=str(e),
             ) from e

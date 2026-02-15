@@ -224,6 +224,45 @@ class TestCliDriverProcessErrorWrapping:
             assert exc_info.value.provider_name == "claude-cli"
             assert "exit code 1" in str(exc_info.value.original_message)
 
+    async def test_execute_agentic_captures_stderr_via_callback(self) -> None:
+        """execute_agentic should capture real stderr via callback and include it in error."""
+        with patch("amelia.drivers.cli.claude.ClaudeSDKClient") as mock_client_cls:
+
+            def fake_init(options: Any) -> AsyncMock:
+                """Simulate SDK calling stderr callback before raising."""
+                mock = AsyncMock()
+
+                async def aenter(*_: Any) -> AsyncMock:
+                    # Simulate the SDK firing stderr callback before process exit
+                    if options.stderr:
+                        options.stderr("Error: ANTHROPIC_API_KEY not set")
+                        options.stderr("Please set your API key")
+                    raise ProcessError(
+                        "Command failed",
+                        exit_code=1,
+                        stderr="Check stderr output for details",
+                    )
+
+                mock.__aenter__ = aenter
+                mock.__aexit__ = AsyncMock(return_value=False)
+                return mock
+
+            mock_client_cls.side_effect = fake_init
+
+            from amelia.drivers.cli.claude import ClaudeCliDriver
+
+            driver = ClaudeCliDriver(model="sonnet", cwd="/tmp")
+
+            with pytest.raises(ModelProviderError) as exc_info:
+                async for _ in driver.execute_agentic(prompt="test", cwd="/tmp"):
+                    pass
+
+            # Real stderr captured via callback, not the SDK placeholder
+            assert "ANTHROPIC_API_KEY not set" in str(exc_info.value)
+            assert "Please set your API key" in str(exc_info.value)
+            assert "Check stderr output for details" not in str(exc_info.value)
+            assert "exit code 1" in str(exc_info.value)
+
     async def test_generate_wraps_process_error(self) -> None:
         """generate should wrap ProcessError as ModelProviderError."""
         with patch("amelia.drivers.cli.claude.query") as mock_query:
