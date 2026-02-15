@@ -2,8 +2,6 @@
 
 from unittest.mock import AsyncMock
 
-import pytest
-
 from amelia.tools.knowledge import create_knowledge_tool
 
 

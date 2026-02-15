@@ -16,6 +16,7 @@ from amelia.knowledge.search import knowledge_search
 from amelia.knowledge.service import KnowledgeService
 from amelia.server.dependencies import get_knowledge_repository, get_knowledge_service
 
+
 router = APIRouter(prefix="/knowledge", tags=["knowledge"])
 
 ALLOWED_CONTENT_TYPES = {"application/pdf", "text/markdown"}

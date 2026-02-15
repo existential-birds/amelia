@@ -55,6 +55,10 @@ from amelia.drivers.factory import (
     cleanup_driver_session,
     get_driver as factory_get_driver,
 )
+from amelia.knowledge.embeddings import EmbeddingClient
+from amelia.knowledge.ingestion import IngestionPipeline
+from amelia.knowledge.repository import KnowledgeRepository
+from amelia.knowledge.service import KnowledgeService
 from amelia.logging import configure_logging, log_server_startup
 from amelia.pipelines.implementation.state import rebuild_implementation_state
 from amelia.sandbox.proxy import ProviderConfig, create_proxy_router
@@ -105,10 +109,6 @@ from amelia.server.routes.prompts import get_prompt_repository, router as prompt
 from amelia.server.routes.settings import router as settings_router
 from amelia.server.routes.websocket import connection_manager
 from amelia.server.routes.workflows import configure_exception_handlers
-from amelia.knowledge.embeddings import EmbeddingClient
-from amelia.knowledge.ingestion import IngestionPipeline
-from amelia.knowledge.repository import KnowledgeRepository
-from amelia.knowledge.service import KnowledgeService
 from amelia.server.services.brainstorm import BrainstormService
 
 
