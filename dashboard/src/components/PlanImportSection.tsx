@@ -2,10 +2,11 @@
  * @fileoverview Reusable collapsible section for importing external plans.
  */
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { ChevronDown, FileText, ClipboardPaste, File, Eye, Loader2, AlertCircle } from 'lucide-react';
+import { ChevronDown, FileText, ClipboardPaste, File, Eye, Loader2, AlertCircle, ChevronsUpDown, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { parsePlanPreview, type PlanPreview } from '@/lib/plan-parser';
 import { api, ApiError } from '@/api/client';
+import type { FileEntry } from '@/types';
 import {
   Collapsible,
   CollapsibleContent,
@@ -16,6 +17,19 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
 import { toast } from 'sonner';
 
 /**
@@ -37,11 +51,28 @@ export interface PlanImportSectionProps {
   error?: string;
   /** Worktree path for resolving relative file paths. Enables Preview button in file mode. */
   worktreePath?: string;
+  /** Directory to list plan files from (relative to worktree). */
+  planOutputDir?: string;
   /** Additional CSS classes. */
   className?: string;
 }
 
 type InputMode = 'file' | 'paste';
+
+/**
+ * Formats an ISO date string as a human-readable relative time.
+ */
+function formatRelativeTime(isoDate: string): string {
+  const diff = Date.now() - new Date(isoDate).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return new Date(isoDate).toLocaleDateString();
+}
 
 /**
  * Collapsible section for importing external plans via file path or pasted content.
@@ -51,6 +82,7 @@ export function PlanImportSection({
   defaultExpanded = false,
   error,
   worktreePath,
+  planOutputDir,
   className,
 }: PlanImportSectionProps) {
   const [isOpen, setIsOpen] = useState(defaultExpanded);
@@ -62,6 +94,10 @@ export function PlanImportSection({
   const [previewLoading, setPreviewLoading] = useState(false);
   const [filePreview, setFilePreview] = useState<PlanPreview | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
+  const [files, setFiles] = useState<FileEntry[]>([]);
+  const [filesLoading, setFilesLoading] = useState(false);
+  const [comboboxOpen, setComboboxOpen] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<FileEntry | null>(null);
   const isInitialMount = useRef(true);
   const previewRequestId = useRef(0);
 
@@ -99,6 +135,21 @@ export function PlanImportSection({
     }
   }, [mode, filePath, content, onPlanChange]);
 
+  // Fetch file list when in file mode and planOutputDir is available
+  useEffect(() => {
+    if (mode !== 'file' || !planOutputDir || !worktreePath) return;
+
+    const absoluteDir = planOutputDir.startsWith('/')
+      ? planOutputDir
+      : `${worktreePath.replace(/\/$/, '')}/${planOutputDir}`;
+
+    setFilesLoading(true);
+    api.listFiles(absoluteDir)
+      .then((res) => setFiles(res.files))
+      .catch(() => setFiles([]))
+      .finally(() => setFilesLoading(false));
+  }, [mode, planOutputDir, worktreePath]);
+
   const handleModeChange = useCallback((value: string) => {
     if (value) {
       setMode(value as InputMode);
@@ -115,6 +166,17 @@ export function PlanImportSection({
     },
     []
   );
+
+  const handleFileSelect = useCallback((file: FileEntry) => {
+    setSelectedFile(file);
+    const relativePath = planOutputDir
+      ? `${planOutputDir.replace(/\/$/, '')}/${file.name}`
+      : file.relative_path;
+    setFilePath(relativePath);
+    setComboboxOpen(false);
+    setFilePreview(null);
+    setFileError(null);
+  }, [planOutputDir]);
 
   const handlePreview = useCallback(async () => {
     const trimmedPath = filePath.trim();
@@ -194,6 +256,15 @@ export function PlanImportSection({
     }
   }, []);
 
+  // Auto-trigger preview when a file is selected from the combobox
+  const selectedFileRef = useRef<FileEntry | null>(null);
+  useEffect(() => {
+    if (selectedFile && selectedFile !== selectedFileRef.current && filePath.trim() && worktreePath) {
+      selectedFileRef.current = selectedFile;
+      handlePreview();
+    }
+  }, [selectedFile, filePath, worktreePath, handlePreview]);
+
   // Derived state: select active preview based on current input mode
   const activePreview = mode === 'paste' ? preview : filePreview;
 
@@ -244,30 +315,110 @@ export function PlanImportSection({
 
         {/* File path input */}
         {mode === 'file' && (
-          <div className="flex gap-2">
-            <Input
-              type="text"
-              placeholder="Relative path to plan file (e.g., docs/plan.md)"
-              value={filePath}
-              onChange={handleFilePathChange}
-              className="flex-1"
-            />
-            {worktreePath && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={!filePath.trim() || previewLoading}
-                onClick={handlePreview}
-                aria-label="Preview plan"
-                className="shrink-0"
-              >
-                {previewLoading ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Eye className="w-4 h-4" />
+          <div className="space-y-2">
+            {worktreePath && planOutputDir ? (
+              /* Combobox for browsing plan files */
+              <div className="flex gap-2">
+                <Popover open={comboboxOpen} onOpenChange={setComboboxOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={comboboxOpen}
+                      className="w-full justify-between font-mono text-sm"
+                      disabled={filesLoading}
+                    >
+                      {filesLoading ? (
+                        <span className="flex items-center gap-2 text-muted-foreground">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Loading files...
+                        </span>
+                      ) : selectedFile ? (
+                        <span className="truncate">{selectedFile.name}</span>
+                      ) : (
+                        <span className="text-muted-foreground">Select a plan file...</span>
+                      )}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Search files..." />
+                      <CommandList>
+                        <CommandEmpty>No .md files found in {planOutputDir}</CommandEmpty>
+                        <CommandGroup>
+                          {files.map((file) => (
+                            <CommandItem
+                              key={file.relative_path}
+                              value={file.name}
+                              onSelect={() => handleFileSelect(file)}
+                              className="font-mono text-xs"
+                            >
+                              <Check
+                                className={cn(
+                                  'mr-2 h-4 w-4',
+                                  selectedFile?.relative_path === file.relative_path
+                                    ? 'opacity-100'
+                                    : 'opacity-0'
+                                )}
+                              />
+                              <span className="flex-1 truncate">{file.name}</span>
+                              <span className="text-muted-foreground text-xs ml-2">
+                                {formatRelativeTime(file.modified_at)}
+                              </span>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+                {worktreePath && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={!filePath.trim() || previewLoading}
+                    onClick={handlePreview}
+                    aria-label="Preview plan"
+                    className="shrink-0"
+                  >
+                    {previewLoading ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Eye className="w-4 h-4" />
+                    )}
+                  </Button>
                 )}
-              </Button>
+              </div>
+            ) : (
+              /* Fallback: text input when no planOutputDir or worktreePath */
+              <div className="flex gap-2">
+                <Input
+                  type="text"
+                  placeholder="Relative path to plan file (e.g., docs/plan.md)"
+                  value={filePath}
+                  onChange={handleFilePathChange}
+                  className="flex-1"
+                />
+                {worktreePath && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={!filePath.trim() || previewLoading}
+                    onClick={handlePreview}
+                    aria-label="Preview plan"
+                    className="shrink-0"
+                  >
+                    {previewLoading ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Eye className="w-4 h-4" />
+                    )}
+                  </Button>
+                )}
+              </div>
             )}
           </div>
         )}

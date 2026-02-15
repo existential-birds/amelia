@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 vi.mock('@/api/client', () => ({
   api: {
     setPlan: vi.fn(),
+    listFiles: vi.fn().mockResolvedValue({ files: [], directory: '' }),
   },
   ApiError: class ApiError extends Error {
     constructor(
@@ -39,6 +40,7 @@ describe('SetPlanModal', () => {
     onOpenChange: vi.fn(),
     workflowId: 'wf-123',
     worktreePath: '/path/to/repo',
+    planOutputDir: undefined,
   };
 
   beforeEach(() => {
@@ -226,7 +228,7 @@ describe('SetPlanModal', () => {
       await user.click(screen.getByRole('button', { name: /apply/i }));
 
       await waitFor(() => {
-        expect(toast.success).toHaveBeenCalledWith('Plan applied successfully');
+        expect(toast.success).toHaveBeenCalledWith('Plan imported, validating...');
       });
     });
 

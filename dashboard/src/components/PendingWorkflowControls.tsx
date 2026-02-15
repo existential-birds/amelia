@@ -192,6 +192,7 @@ export function PendingWorkflowControls({
         onOpenChange={setIsSetPlanOpen}
         workflowId={workflowId}
         worktreePath={worktreePath}
+        planOutputDir="docs/plans"
         hasPlan={hasPlan}
         onSuccess={handleSetPlanSuccess}
       />

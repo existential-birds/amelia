@@ -27,6 +27,8 @@ export interface SetPlanModalProps {
   workflowId: string;
   /** The worktree path for relative file resolution. */
   worktreePath: string;
+  /** Directory to list plan files from (relative to worktree). */
+  planOutputDir?: string;
   /** Whether the workflow already has a plan. */
   hasPlan?: boolean;
   /** Callback when plan is successfully applied. */
@@ -41,6 +43,7 @@ export function SetPlanModal({
   onOpenChange,
   workflowId,
   worktreePath,
+  planOutputDir,
   hasPlan = false,
   onSuccess,
 }: SetPlanModalProps) {
@@ -107,6 +110,7 @@ export function SetPlanModal({
             defaultExpanded
             error={error}
             worktreePath={worktreePath}
+            planOutputDir={planOutputDir}
           />
 
           {hasPlan && (
