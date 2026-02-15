@@ -145,6 +145,7 @@ export default function KnowledgePage() {
   const [activeTab, setActiveTab] = useState('search');
   const abortControllerRef = useRef<AbortController | null>(null);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const isMountedRef = useRef(true);
 
   // Upload dialog state
   const [uploadOpen, setUploadOpen] = useState(false);
@@ -260,6 +261,7 @@ export default function KnowledgePage() {
   // Cleanup: abort pending search and clear debounce timer on unmount
   useEffect(() => {
     return () => {
+      isMountedRef.current = false;
       abortControllerRef.current?.abort();
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current);
@@ -323,6 +325,7 @@ export default function KnowledgePage() {
                   const query = newValue.trim();
                   if (query) {
                     debounceTimerRef.current = setTimeout(() => {
+                      if (!isMountedRef.current) return;
                       executeSearch(query).catch((error) => {
                         logger.error('Debounced search failed', error);
                       });
