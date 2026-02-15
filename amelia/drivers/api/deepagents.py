@@ -62,20 +62,17 @@ _DEFAULT_PROVIDER_ERROR_PATTERNS = (
 def _get_provider_error_patterns() -> tuple[str, ...]:
     """Get provider error patterns from environment or defaults.
 
-    Reads from AMELIA_PROVIDER_ERROR_PATTERNS env var each time to support
-    dynamic configuration in tests and runtime environments.
+    Reads AMELIA_PROVIDER_ERROR_PATTERNS environment variable dynamically
+    to support runtime configuration and testing with mocked environments.
 
     Returns:
-        Tuple of lowercase pattern strings.
+        Tuple of lowercase pattern strings to match against error messages.
     """
-    return tuple(
-        p.strip().lower()
-        for p in os.environ.get(
-            "AMELIA_PROVIDER_ERROR_PATTERNS",
-            ",".join(_DEFAULT_PROVIDER_ERROR_PATTERNS),
-        ).split(",")
-        if p.strip()
+    patterns_str = os.environ.get(
+        "AMELIA_PROVIDER_ERROR_PATTERNS",
+        ",".join(_DEFAULT_PROVIDER_ERROR_PATTERNS),
     )
+    return tuple(p.strip().lower() for p in patterns_str.split(",") if p.strip())
 
 
 def _is_model_provider_error(exc: ValueError) -> bool:
@@ -95,8 +92,7 @@ def _is_model_provider_error(exc: ValueError) -> bool:
         return True
     # String-based detection for known provider error patterns
     msg = str(exc).lower()
-    patterns = _get_provider_error_patterns()
-    return any(pattern in msg for pattern in patterns)
+    return any(pattern in msg for pattern in _get_provider_error_patterns())
 
 
 def _extract_provider_info(exc: ValueError) -> tuple[str | None, str]:
@@ -112,6 +108,16 @@ def _extract_provider_info(exc: ValueError) -> tuple[str | None, str]:
         err_dict = exc.args[0]
         error_obj = err_dict.get("error", {})
         provider = err_dict.get("provider")
+
+        # Handle unexpected dict structures with explicit logging
+        if not isinstance(error_obj, dict) and error_obj != {}:
+            logger.debug(
+                "Unexpected error_obj type in provider error",
+                error_obj_type=type(error_obj).__name__,
+                error_obj_value=str(error_obj)[:200],
+                err_dict_keys=list(err_dict.keys()),
+            )
+
         message = (
             error_obj.get("message", str(err_dict))
             if isinstance(error_obj, dict)

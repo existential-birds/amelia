@@ -1569,10 +1569,6 @@ class OrchestratorService:
                 )
                 raise
 
-        # Return after successful completion
-        if success:
-            return
-
     async def reject_workflow(
         self,
         workflow_id: str,
