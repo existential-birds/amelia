@@ -169,6 +169,10 @@ async def test_call_developer_node_updates_base_commit(
 
     This ensures the next reviewer pass only diffs against the developer's
     latest changes, not the entire branch diff from workflow start.
+
+    Args:
+        mock_execution_state_factory: Factory for execution state and profile.
+        mock_profile_factory: Factory for profile instances.
     """
     profile = mock_profile_factory(
         preset="cli_single",
@@ -219,7 +223,12 @@ async def test_call_developer_node_keeps_base_commit_on_git_failure(
     mock_execution_state_factory: Callable[..., tuple[ImplementationState, Profile]],
     mock_profile_factory: Callable[..., Profile],
 ) -> None:
-    """Developer node should keep original base_commit if git fails."""
+    """Developer node should keep original base_commit if git fails.
+
+    Args:
+        mock_execution_state_factory: Factory for execution state and profile.
+        mock_profile_factory: Factory for profile instances.
+    """
     profile = mock_profile_factory(
         preset="cli_single",
         agents={
