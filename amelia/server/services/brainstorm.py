@@ -26,6 +26,7 @@ from langchain_core.tools import BaseTool, StructuredTool
 from langgraph.types import Command
 from loguru import logger
 
+from amelia.core.constants import resolve_plan_path
 from amelia.core.text import slugify
 from amelia.drivers.base import (
     AgenticMessage,
@@ -194,7 +195,7 @@ You are a design collaborator that helps turn ideas into fully formed designs th
 - Go back and clarify when needed
 
 **Finalizing:**
-- Write the validated design to `docs/plans/YYYY-MM-DD-<topic>-design.md`
+- Write the validated design to `{plan_path}`
 - The document should contain enough detail for a developer to implement
 - Include pseudocode or interface sketches if helpful, but NOT runnable code
 - After writing the document, tell the user it's ready for handoff to implementation
@@ -211,6 +212,21 @@ You are a design collaborator that helps turn ideas into fully formed designs th
 
 # User prompt template for the first message in a session
 BRAINSTORMER_USER_PROMPT_TEMPLATE = "Help me design: {idea}"
+
+# Default plan path pattern used when no profile is available
+_DEFAULT_PLAN_PATH_PATTERN = "docs/plans/{date}-{issue_key}.md"
+
+
+def _build_brainstormer_instructions(plan_path: str) -> str:
+    """Format BRAINSTORMER_SYSTEM_PROMPT with the resolved plan path.
+
+    Args:
+        plan_path: Resolved relative path for the design document.
+
+    Returns:
+        System prompt with the plan_path placeholder filled in.
+    """
+    return BRAINSTORMER_SYSTEM_PROMPT.format(plan_path=plan_path)
 
 
 class BrainstormerFilesystemMiddleware(FilesystemMiddleware):
@@ -288,7 +304,7 @@ Start by understanding the current project context, then ask questions one at a 
 ## After the Design
 
 **Documentation:**
-- Write the validated design to `docs/plans/YYYY-MM-DD-<topic>-design.md`
+- Write the validated design to `{plan_path}`
 
 ## Key Principles
 
@@ -625,6 +641,21 @@ class BrainstormService:
             driver_session_id: str | None = None
             pending_write_files: dict[str, str] = {}  # tool_call_id -> path
 
+            # Resolve plan path from profile settings
+            plan_path_pattern = _DEFAULT_PLAN_PATH_PATTERN
+            if self._profile_repo is not None:
+                profile = await self._profile_repo.get_profile(session.profile_id)
+                if profile is not None:
+                    plan_path_pattern = profile.plan_path_pattern
+
+            topic_slug = (
+                slugify(session.topic)
+                if session.topic
+                else f"brainstorm-{session_id[:8]}"
+            )
+            plan_path = resolve_plan_path(plan_path_pattern, topic_slug)
+            instructions = _build_brainstormer_instructions(plan_path)
+
             # Create restricted middleware for brainstormer
             # The middleware will be bound to the backend created by the driver
             brainstormer_middleware = [BrainstormerFilesystemMiddleware()]
@@ -633,7 +664,7 @@ class BrainstormService:
                 prompt=formatted_prompt,
                 cwd=cwd,
                 session_id=session.driver_session_id,
-                instructions=BRAINSTORMER_SYSTEM_PROMPT,
+                instructions=instructions,
                 middleware=brainstormer_middleware,
             ):
                 # Convert to event and emit
