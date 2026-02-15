@@ -171,7 +171,6 @@ amelia config server set <key> <value>
 | `websocket_idle_timeout_seconds` | float | `300.0` | WebSocket idle timeout |
 | `workflow_start_timeout_seconds` | float | `60.0` | Workflow start timeout |
 | `max_concurrent` | int | `5` | Max concurrent workflows |
-| `stream_tool_results` | bool | `false` | Stream tool results to dashboard |
 
 Example:
 
@@ -179,8 +178,6 @@ Example:
 # Allow more concurrent workflows
 amelia config server set max_concurrent 10
 
-# Enable tool result streaming for debugging
-amelia config server set stream_tool_results true
 ```
 
 ## Environment Variable Overrides
@@ -194,7 +191,6 @@ Server settings can also be overridden via environment variables with the `AMELI
 | `AMELIA_DATABASE_PATH` | SQLite database location |
 | `AMELIA_LOG_RETENTION_DAYS` | Days to retain logs |
 | `AMELIA_MAX_CONCURRENT` | Max concurrent workflows |
-| `AMELIA_STREAM_TOOL_RESULTS` | Stream tool results (`true`/`false`) |
 
 Environment variables take precedence over database settings.
 
@@ -238,7 +234,7 @@ The dashboard provides a visual interface for managing configuration at `/settin
 
 - Adjust retention policies (log, trace)
 - Set execution limits (max concurrent workflows)
-- Toggle debugging options (stream tool results)
+- Toggle debugging options
 
 ## Example
 

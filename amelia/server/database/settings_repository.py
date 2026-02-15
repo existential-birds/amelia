@@ -16,7 +16,6 @@ class ServerSettings(BaseModel):
     websocket_idle_timeout_seconds: float
     workflow_start_timeout_seconds: float
     max_concurrent: int
-    stream_tool_results: bool
     created_at: datetime
     updated_at: datetime
 
@@ -75,7 +74,6 @@ class SettingsRepository:
             "websocket_idle_timeout_seconds",
             "workflow_start_timeout_seconds",
             "max_concurrent",
-            "stream_tool_results",
         }
         invalid = set(updates.keys()) - valid_fields
         if invalid:
@@ -113,7 +111,6 @@ class SettingsRepository:
             websocket_idle_timeout_seconds=row["websocket_idle_timeout_seconds"],
             workflow_start_timeout_seconds=row["workflow_start_timeout_seconds"],
             max_concurrent=row["max_concurrent"],
-            stream_tool_results=row["stream_tool_results"],
             created_at=row["created_at"],
             updated_at=row["updated_at"],
         )

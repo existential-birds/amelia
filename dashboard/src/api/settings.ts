@@ -40,7 +40,6 @@ export interface ServerSettings {
   websocket_idle_timeout_seconds: number;
   workflow_start_timeout_seconds: number;
   max_concurrent: number;
-  stream_tool_results: boolean;
 }
 
 /**

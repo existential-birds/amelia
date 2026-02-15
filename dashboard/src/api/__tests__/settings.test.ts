@@ -35,7 +35,6 @@ describe("settings API", () => {
         websocket_idle_timeout_seconds: 300,
         workflow_start_timeout_seconds: 30,
         max_concurrent: 5,
-        stream_tool_results: false,
       };
 
       vi.mocked(fetch).mockResolvedValueOnce({
@@ -77,7 +76,6 @@ describe("settings API", () => {
         websocket_idle_timeout_seconds: 300,
         workflow_start_timeout_seconds: 30,
         max_concurrent: 10,
-        stream_tool_results: false,
       };
 
       vi.mocked(fetch).mockResolvedValueOnce({
