@@ -9,6 +9,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any, Literal
 
+from loguru import logger
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -79,6 +80,12 @@ class AgentConfig(BaseModel):
     profile_name: str = "default"
 
 
+REQUIRED_AGENTS: frozenset[str] = frozenset({
+    "architect", "developer", "reviewer", "task_reviewer",
+    "evaluator", "brainstormer", "plan_validator",
+})
+
+
 class RetryConfig(BaseModel):
     """Retry configuration for transient failures.
 
@@ -140,6 +147,12 @@ class Profile(BaseModel):
             ValueError: If agent not configured in this profile.
         """
         if agent_name not in self.agents:
+            logger.warning(
+                "Agent not configured in profile",
+                agent=agent_name,
+                profile=self.name,
+                available_agents=sorted(self.agents.keys()),
+            )
             raise ValueError(f"Agent '{agent_name}' not configured in profile '{self.name}'")
         return self.agents[agent_name].model_copy(
             update={"sandbox": self.sandbox, "profile_name": self.name}

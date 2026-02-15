@@ -4,9 +4,16 @@ from typing import Any
 
 from asyncpg import UniqueViolationError
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
-from amelia.core.types import AgentConfig, DriverType, Profile, SandboxConfig, TrackerType
+from amelia.core.types import (
+    REQUIRED_AGENTS,
+    AgentConfig,
+    DriverType,
+    Profile,
+    SandboxConfig,
+    TrackerType,
+)
 from amelia.server.database import (
     ProfileRepository,
     SettingsRepository,
@@ -90,6 +97,14 @@ class ProfileCreate(BaseModel):
     agents: dict[str, AgentConfigCreate]
     sandbox: SandboxConfig = Field(default_factory=SandboxConfig)
 
+    @model_validator(mode="after")
+    def validate_required_agents(self) -> "ProfileCreate":
+        """Validate that all required agents are present."""
+        missing = REQUIRED_AGENTS - self.agents.keys()
+        if missing:
+            raise ValueError(f"Missing required agents: {', '.join(sorted(missing))}")
+        return self
+
 
 class ProfileUpdate(BaseModel):
     """Profile update request.
@@ -103,6 +118,17 @@ class ProfileUpdate(BaseModel):
     plan_path_pattern: str | None = None
     agents: dict[str, AgentConfigCreate] | None = None
     sandbox: SandboxConfig | None = None
+
+    @model_validator(mode="after")
+    def validate_required_agents(self) -> "ProfileUpdate":
+        """Validate that all required agents are present when agents are provided."""
+        if self.agents is not None:
+            missing = REQUIRED_AGENTS - self.agents.keys()
+            if missing:
+                raise ValueError(
+                    f"Missing required agents: {', '.join(sorted(missing))}"
+                )
+        return self
 
 
 # Server settings endpoints
