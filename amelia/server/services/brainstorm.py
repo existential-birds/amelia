@@ -600,11 +600,9 @@ class BrainstormService:
                 if profile is not None:
                     plan_path_pattern = profile.plan_path_pattern
 
-            topic_slug = (
-                slugify(session.topic)
-                if session.topic
-                else f"brainstorm-{session_id[:8]}"
-            )
+            topic_slug = slugify(session.topic) if session.topic else ""
+            if not topic_slug:
+                topic_slug = f"brainstorm-{session_id[:8]}"
             plan_path = resolve_plan_path(plan_path_pattern, topic_slug)
             instructions = _build_brainstormer_instructions(plan_path)
 

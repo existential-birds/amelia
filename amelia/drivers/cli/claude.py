@@ -8,8 +8,7 @@ import os
 from collections.abc import AsyncIterator
 from typing import Any, Literal
 
-from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient, query
-from claude_agent_sdk._errors import ProcessError
+from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient, ProcessError, query
 from claude_agent_sdk.types import (
     AssistantMessage,
     Message,
@@ -40,6 +39,14 @@ _NESTED_SESSION_ENV_VARS = frozenset({"CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT"})
 def _build_sanitized_env() -> dict[str, str]:
     """Return a copy of the current process env without nested-session vars."""
     return {k: v for k, v in os.environ.items() if k not in _NESTED_SESSION_ENV_VARS}
+
+
+def _sanitize_stderr(stderr: str, max_len: int = 1000) -> str:
+    """Return a redacted, size-limited stderr snippet safe for logs."""
+    snippet = stderr.replace("\n", " ").strip()
+    if len(snippet) > max_len:
+        snippet = f"{snippet[:max_len]}…"
+    return snippet
 
 
 def _strip_markdown_fences(text: str) -> str:
@@ -411,13 +418,14 @@ class ClaudeCliDriver:
         except ProcessError as e:
             exit_code = getattr(e, "exit_code", None)
             captured_stderr = "\n".join(stderr_lines) if stderr_lines else ""
+            safe_stderr = _sanitize_stderr(captured_stderr)
             logger.warning(
                 "Claude CLI process failed, will retry as transient error",
                 exit_code=exit_code,
-                stderr=captured_stderr,
+                stderr=safe_stderr,
                 error=str(e),
             )
-            detail = captured_stderr or str(e)
+            detail = safe_stderr or str(e)
             raise ModelProviderError(
                 f"Claude CLI process error (exit code {exit_code}): {detail}",
                 provider_name="claude-cli",
@@ -556,13 +564,14 @@ class ClaudeCliDriver:
             exit_code = getattr(e, "exit_code", None)
             # Use captured stderr lines (real output) over SDK placeholder
             captured_stderr = "\n".join(stderr_lines) if stderr_lines else ""
+            safe_stderr = _sanitize_stderr(captured_stderr)
             logger.warning(
                 "Claude CLI process failed, will retry as transient error",
                 exit_code=exit_code,
-                stderr=captured_stderr,
+                stderr=safe_stderr,
                 error=str(e),
             )
-            detail = captured_stderr or str(e)
+            detail = safe_stderr or str(e)
             raise ModelProviderError(
                 f"Claude CLI process error (exit code {exit_code}): {detail}",
                 provider_name="claude-cli",
