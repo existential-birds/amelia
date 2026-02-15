@@ -12,7 +12,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from amelia.core.types import AgentConfig, DriverType, Profile, TrackerType
+from amelia.core.types import REQUIRED_AGENTS, AgentConfig, DriverType, Profile, TrackerType
 from amelia.server.config import ServerConfig
 from amelia.server.database import (
     Database,
@@ -150,15 +150,7 @@ def _build_default_agents(driver: DriverType, model: str) -> dict[str, AgentConf
         Dict mapping agent names to AgentConfig.
     """
     driver_type = DriverType(driver)
-    return {
-        "architect": AgentConfig(driver=driver_type, model=model),
-        "developer": AgentConfig(driver=driver_type, model=model),
-        "reviewer": AgentConfig(driver=driver_type, model=model),
-        "task_reviewer": AgentConfig(driver=driver_type, model=model),
-        "evaluator": AgentConfig(driver=driver_type, model=model),
-        "brainstormer": AgentConfig(driver=driver_type, model=model),
-        "plan_validator": AgentConfig(driver=driver_type, model=model),
-    }
+    return {name: AgentConfig(driver=driver_type, model=model) for name in REQUIRED_AGENTS}
 
 
 # =============================================================================

@@ -88,15 +88,33 @@ body:
     id: area
     attributes:
       label: Affected area
-      description: Which part of Amelia is affected?
+      description: |
+        Which part of Amelia is affected? Choose the area that best matches:
+        - **Core**: State types, shared models, orchestrator logic
+        - **Agents**: Architect, Developer, Reviewer agent behavior
+        - **Dashboard**: React frontend and UI components
+        - **CLI**: Typer CLI commands and interface
+        - **Server**: FastAPI backend, WebSocket, API endpoints
+        - **Knowledge**: Document ingestion, embeddings, vector store, RAG
+        - **Sandbox**: Container isolation, Docker driver, worktrees
+        - **Pipelines**: LangGraph workflows, routing, pipeline registry
+        - **Drivers**: LLM abstraction layer (API and CLI drivers)
+        - **Integrations**: Trackers (Jira, GitHub), client SDK
+        - **Docs**: Documentation site
+        - **Infrastructure**: CI/CD, GitHub Actions, Docker, release process
       options:
-        - Core orchestrator
-        - Agents (Architect/Developer/Reviewer)
-        - CLI
-        - Drivers (LLM integration)
-        - Trackers (Issue sources)
+        - Core
+        - Agents
         - Dashboard
-        - Configuration/Profiles
+        - CLI
+        - Server
+        - Knowledge
+        - Sandbox
+        - Pipelines
+        - Drivers
+        - Integrations
+        - Docs
+        - Infrastructure
         - Other
     validations:
       required: true

@@ -141,6 +141,7 @@ def make_test_profile(
         "task_reviewer": agent_config,
         "evaluator": agent_config,
         "brainstormer": agent_config,
+        "plan_validator": agent_config,
     }
     return Profile(
         name=name,
@@ -196,8 +197,13 @@ class TestProfileRoutes:
                 "id": "new-profile",
                 "working_dir": "/path/to/repo",
                 "agents": {
+                    "architect": {"driver": "cli", "model": "opus"},
                     "developer": {"driver": "cli", "model": "opus"},
                     "reviewer": {"driver": "cli", "model": "haiku"},
+                    "task_reviewer": {"driver": "cli", "model": "opus"},
+                    "evaluator": {"driver": "cli", "model": "opus"},
+                    "brainstormer": {"driver": "cli", "model": "opus"},
+                    "plan_validator": {"driver": "cli", "model": "opus"},
                 },
             },
         )
@@ -230,7 +236,13 @@ class TestProfileRoutes:
                 "plan_output_dir": "custom/plans",
                 "plan_path_pattern": "custom/{date}.md",
                 "agents": {
+                    "architect": {"driver": "api", "model": "gpt-4"},
                     "developer": {"driver": "api", "model": "gpt-4"},
+                    "reviewer": {"driver": "api", "model": "gpt-4"},
+                    "task_reviewer": {"driver": "api", "model": "gpt-4"},
+                    "evaluator": {"driver": "api", "model": "gpt-4"},
+                    "brainstormer": {"driver": "api", "model": "gpt-4"},
+                    "plan_validator": {"driver": "api", "model": "gpt-4"},
                 },
             },
         )
@@ -289,7 +301,13 @@ class TestProfileRoutes:
             json={
                 "tracker": "jira",
                 "agents": {
+                    "architect": {"driver": "api", "model": "gpt-4"},
                     "developer": {"driver": "api", "model": "gpt-4"},
+                    "reviewer": {"driver": "api", "model": "gpt-4"},
+                    "task_reviewer": {"driver": "api", "model": "gpt-4"},
+                    "evaluator": {"driver": "api", "model": "gpt-4"},
+                    "brainstormer": {"driver": "api", "model": "gpt-4"},
+                    "plan_validator": {"driver": "api", "model": "gpt-4"},
                 },
             },
         )
@@ -345,3 +363,66 @@ class TestProfileRoutes:
         response = profile_client.post("/api/profiles/nonexistent/activate")
         assert response.status_code == 404
         assert "not found" in response.json()["detail"].lower()
+
+    def test_create_profile_missing_agents_returns_422(
+        self, profile_client, mock_profile_repo
+    ):
+        """POST /api/profiles with missing agents returns 422."""
+        response = profile_client.post(
+            "/api/profiles",
+            json={
+                "id": "bad-profile",
+                "working_dir": "/path/to/repo",
+                "agents": {
+                    "architect": {"driver": "cli", "model": "opus"},
+                    "developer": {"driver": "cli", "model": "opus"},
+                    "reviewer": {"driver": "cli", "model": "opus"},
+                },
+            },
+        )
+        assert response.status_code == 422
+        detail = response.json()["detail"]
+        assert any("Missing required agents" in str(e) for e in detail)
+
+    def test_update_profile_missing_agents_returns_422(
+        self, profile_client, mock_profile_repo
+    ):
+        """PUT /api/profiles/{id} with partial agents returns 422."""
+        response = profile_client.put(
+            "/api/profiles/dev",
+            json={
+                "agents": {
+                    "developer": {"driver": "api", "model": "gpt-4"},
+                },
+            },
+        )
+        assert response.status_code == 422
+        detail = response.json()["detail"]
+        assert any("Missing required agents" in str(e) for e in detail)
+
+    def test_create_profile_extra_agents_accepted(
+        self, profile_client, mock_profile_repo
+    ):
+        """POST /api/profiles with extra agents is accepted."""
+        mock_profile_repo.create_profile.return_value = make_test_profile(
+            name="extra-profile"
+        )
+
+        response = profile_client.post(
+            "/api/profiles",
+            json={
+                "id": "extra-profile",
+                "working_dir": "/path/to/repo",
+                "agents": {
+                    "architect": {"driver": "cli", "model": "opus"},
+                    "developer": {"driver": "cli", "model": "opus"},
+                    "reviewer": {"driver": "cli", "model": "opus"},
+                    "task_reviewer": {"driver": "cli", "model": "opus"},
+                    "evaluator": {"driver": "cli", "model": "opus"},
+                    "brainstormer": {"driver": "cli", "model": "opus"},
+                    "plan_validator": {"driver": "cli", "model": "opus"},
+                    "custom_agent": {"driver": "cli", "model": "opus"},
+                },
+            },
+        )
+        assert response.status_code == 201
