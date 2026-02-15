@@ -16,6 +16,7 @@ import type {
   BatchStartResponse,
   SetPlanRequest,
   SetPlanResponse,
+  FileListResponse,
   ConfigResponse,
   FileReadResponse,
   PathValidationResponse,
@@ -442,6 +443,29 @@ export const api = {
       body: JSON.stringify(request),
     });
     return handleResponse<SetPlanResponse>(response);
+  },
+
+  /**
+   * Lists files in a directory matching a glob pattern.
+   *
+   * @param directory - Absolute path to the directory to list.
+   * @param globPattern - Glob pattern to filter files (default: '*.md').
+   * @returns Response with matching file entries and directory path.
+   * @throws {ApiError} When directory not found or API request fails.
+   *
+   * @example
+   * ```typescript
+   * const result = await api.listFiles('/path/to/repo/docs', '*.md');
+   * console.log(`Found ${result.files.length} files in ${result.directory}`);
+   * ```
+   */
+  async listFiles(
+    directory: string,
+    globPattern: string = '*.md'
+  ): Promise<FileListResponse> {
+    const params = new URLSearchParams({ directory, glob_pattern: globPattern });
+    const response = await fetchWithTimeout(`${API_BASE_URL}/files/list?${params}`);
+    return handleResponse<FileListResponse>(response);
   },
 
   /**
