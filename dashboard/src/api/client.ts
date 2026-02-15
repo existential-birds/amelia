@@ -155,7 +155,7 @@ async function handleResponse<T>(response: Response): Promise<T> {
 
   // Handle responses with no content (e.g., 204 No Content from DELETE)
   if (response.status === 204 || response.headers.get('content-length') === '0') {
-    return {} as T;
+    return (void 0) as T;
   }
 
   return response.json();
