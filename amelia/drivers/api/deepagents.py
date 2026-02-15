@@ -25,6 +25,7 @@ from loguru import logger
 from pydantic import BaseModel
 
 from amelia.core.constants import normalize_tool_name
+from amelia.core.exceptions import ModelProviderError
 from amelia.drivers.base import (
     AgenticMessage,
     AgenticMessageType,
@@ -38,6 +39,51 @@ from amelia.drivers.base import (
 _MAX_OUTPUT_SIZE = 100_000
 # Default command timeout in seconds
 _DEFAULT_TIMEOUT = 300
+
+# Patterns in ValueError messages that indicate a model provider error (not Amelia's fault)
+_PROVIDER_ERROR_PATTERNS = (
+    "midstream error",
+    "invalid function arguments",
+    "provider returned error",
+)
+
+
+def _is_model_provider_error(exc: ValueError) -> bool:
+    """Check if a ValueError originates from a model provider rather than Amelia validation.
+
+    langchain_openai raises ValueError with a dict arg when the provider returns
+    an error (e.g. bad JSON from Minimax). Amelia's own validation uses string args.
+
+    Args:
+        exc: The ValueError to inspect.
+
+    Returns:
+        True if this looks like a model provider error.
+    """
+    # langchain_openai pattern: ValueError({"error": {...}, "provider": "..."})
+    if exc.args and isinstance(exc.args[0], dict):
+        return True
+    # String-based detection for known provider error patterns
+    msg = str(exc).lower()
+    return any(pattern in msg for pattern in _PROVIDER_ERROR_PATTERNS)
+
+
+def _extract_provider_info(exc: ValueError) -> tuple[str | None, str]:
+    """Extract provider name and error message from a model provider ValueError.
+
+    Args:
+        exc: The ValueError to extract info from.
+
+    Returns:
+        Tuple of (provider_name, error_message). provider_name may be None.
+    """
+    if exc.args and isinstance(exc.args[0], dict):
+        err_dict = exc.args[0]
+        error_obj = err_dict.get("error", {})
+        provider = err_dict.get("provider")
+        message = error_obj.get("message", str(err_dict)) if isinstance(error_obj, dict) else str(error_obj)
+        return provider, message
+    return None, str(exc)
 
 
 class LocalSandbox(FilesystemBackend, SandboxBackendProtocol):
@@ -345,7 +391,15 @@ class ApiDriver(DriverInterface):
 
             return (output, None)
 
-        except ValueError:
+        except ValueError as e:
+            if _is_model_provider_error(e):
+                provider_name, raw_msg = _extract_provider_info(e)
+                raise ModelProviderError(
+                    f"Model provider error ({provider_name or 'unknown'}): {raw_msg}. "
+                    "This is a temporary issue with the AI provider, not a bug in Amelia.",
+                    provider_name=provider_name,
+                    original_message=raw_msg,
+                ) from e
             raise
         except Exception as e:
             raise RuntimeError(f"ApiDriver generation failed: {e}") from e
@@ -749,7 +803,15 @@ class ApiDriver(DriverInterface):
                     model=self.model,
                 )
 
-        except ValueError:
+        except ValueError as e:
+            if _is_model_provider_error(e):
+                provider_name, raw_msg = _extract_provider_info(e)
+                raise ModelProviderError(
+                    f"Model provider error ({provider_name or 'unknown'}): {raw_msg}. "
+                    "This is a temporary issue with the AI provider, not a bug in Amelia.",
+                    provider_name=provider_name,
+                    original_message=raw_msg,
+                ) from e
             raise
         except Exception as e:
             raise RuntimeError(f"Agentic execution failed: {e}") from e
