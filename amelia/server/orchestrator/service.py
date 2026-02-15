@@ -2793,6 +2793,9 @@ class OrchestratorService:
         with the extracted goal/key_files, and emits a PLAN_VALIDATED or
         PLAN_VALIDATION_FAILED event.
 
+        Guards against stale results: if the plan was changed while extraction
+        was running, the update is skipped.
+
         Args:
             workflow_id: The workflow ID.
             content: The raw plan markdown content.
@@ -2802,6 +2805,22 @@ class OrchestratorService:
         """
         try:
             result = await extract_plan_fields(content, profile=profile)
+
+            # Guard against stale extraction overwriting a newer plan
+            current = await self._repository.get(workflow_id)
+            if current is None or current.plan_cache is None:
+                logger.info(
+                    "Skipping plan metadata extraction; workflow or plan_cache missing",
+                    workflow_id=workflow_id,
+                )
+                return
+            current_markdown = await current.plan_cache.get_plan_markdown()
+            if current_markdown != content:
+                logger.info(
+                    "Skipping stale plan metadata extraction; plan was updated",
+                    workflow_id=workflow_id,
+                )
+                return
 
             # Update PlanCache with extracted metadata
             plan_cache = PlanCache(

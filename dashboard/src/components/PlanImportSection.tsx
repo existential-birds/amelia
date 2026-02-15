@@ -139,12 +139,8 @@ export function PlanImportSection({
   useEffect(() => {
     if (mode !== 'file' || !planOutputDir || !worktreePath) return;
 
-    const absoluteDir = planOutputDir.startsWith('/')
-      ? planOutputDir
-      : `${worktreePath.replace(/\/$/, '')}/${planOutputDir}`;
-
     setFilesLoading(true);
-    api.listFiles(absoluteDir)
+    api.listFiles(planOutputDir)
       .then((res) => setFiles(res.files))
       .catch(() => setFiles([]))
       .finally(() => setFilesLoading(false));

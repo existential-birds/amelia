@@ -499,7 +499,7 @@ Add new feature.
       );
 
       await waitFor(() => {
-        expect(api.listFiles).toHaveBeenCalledWith('/tmp/project/docs/plans');
+        expect(api.listFiles).toHaveBeenCalledWith('docs/plans');
       });
     });
 
