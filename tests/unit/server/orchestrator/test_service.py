@@ -1339,12 +1339,15 @@ class ModelProviderErrorSetup:
 @pytest.fixture
 def model_provider_error_setup(mock_repository: AsyncMock) -> ModelProviderErrorSetup:
     """Shared setup for ModelProviderError retry tests."""
-    # Setup blocked workflow
-    mock_workflow = MagicMock()
-    mock_workflow.workflow_id = "wf-1"
-    mock_workflow.workflow_status = WorkflowStatus.BLOCKED
-    mock_workflow.profile_id = "prof-1"
-    mock_workflow.worktree_path = "/tmp"
+    # Setup blocked workflow with real ServerExecutionState
+    mock_workflow = ServerExecutionState(
+        id="wf-1",
+        issue_id="ISSUE-TEST",
+        worktree_path="/tmp",
+        workflow_status=WorkflowStatus.BLOCKED,
+        profile_id="prof-1",
+        started_at=datetime.now(UTC),
+    )
     mock_repository.get.return_value = mock_workflow
 
     # Profile with fast retry config

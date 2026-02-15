@@ -1199,8 +1199,9 @@ class OrchestratorService:
                     )
                     raise
 
+                # Cap exponent at 31 to prevent overflow (2^32 exceeds 32-bit int)
                 delay = min(
-                    retry_config.base_delay * (2 ** min(attempt - 1, 31)),  # Cap at 31 to prevent overflow (2^32 exceeds 32-bit int)
+                    retry_config.base_delay * (2 ** min(attempt - 1, 31)),
                     retry_config.max_delay,
                 )
                 logger.warning(
