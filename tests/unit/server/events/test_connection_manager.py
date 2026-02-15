@@ -142,9 +142,7 @@ class TestConnectionManagerTraceEvents:
     async def test_broadcast_sends_trace_events_to_all_clients(
         self, manager, mock_websocket
     ) -> None:
-        """broadcast() sends trace events to all clients when stream_tool_results is enabled."""
-        manager.set_stream_tool_results(True)
-
+        """broadcast() sends trace events to all clients."""
         # Create a second mock websocket for this test
         mock_ws2 = AsyncMock()
         mock_ws2.accept = AsyncMock()
@@ -173,70 +171,6 @@ class TestConnectionManagerTraceEvents:
         # Both clients receive trace events (no workflow filtering)
         assert mock_websocket.send_json.called
         assert mock_ws2.send_json.called
-
-    @pytest.mark.asyncio
-    async def test_broadcast_suppresses_trace_when_stream_tool_results_disabled(
-        self, manager, mock_websocket
-    ) -> None:
-        """broadcast() suppresses trace events when stream_tool_results is False."""
-        manager.set_stream_tool_results(False)
-        await manager.connect(mock_websocket)
-
-        trace_event = WorkflowEvent(
-            id="evt-1",
-            workflow_id="wf-1",
-            sequence=1,
-            timestamp=datetime.now(UTC),
-            agent="developer",
-            event_type=EventType.CLAUDE_TOOL_CALL,
-            level=EventLevel.DEBUG,
-            message="Tool call",
-        )
-
-        await manager.broadcast(trace_event)
-
-        mock_websocket.send_json.assert_not_awaited()
-
-    @pytest.mark.asyncio
-    async def test_broadcast_persisted_events_unaffected_by_setting(
-        self, manager, mock_websocket, event_factory
-    ) -> None:
-        """broadcast() always sends persisted events regardless of stream_tool_results."""
-        manager.set_stream_tool_results(False)
-        await manager.connect(mock_websocket)
-
-        event = event_factory(
-            id="evt-1",
-            workflow_id="wf-1",
-            event_type=EventType.WORKFLOW_STARTED,
-            message="Started",
-        )
-
-        await manager.broadcast(event)
-
-        mock_websocket.send_json.assert_awaited_once()
-
-    @pytest.mark.asyncio
-    async def test_broadcast_trace_suppressed_by_default(
-        self, manager, mock_websocket
-    ) -> None:
-        """broadcast() suppresses trace events by default (stream_tool_results defaults to False)."""
-        await manager.connect(mock_websocket)
-
-        trace_event = WorkflowEvent(
-            id="evt-1",
-            workflow_id="wf-1",
-            sequence=1,
-            timestamp=datetime.now(UTC),
-            agent="developer",
-            event_type=EventType.CLAUDE_THINKING,
-            level=EventLevel.DEBUG,
-            message="Thinking...",
-        )
-
-        await manager.broadcast(trace_event)
-
-        mock_websocket.send_json.assert_not_awaited()
 
 
 class TestBroadcastDomainRouting:
@@ -274,7 +208,6 @@ class TestBroadcastDomainRouting:
         self, manager, mock_websocket
     ):
         """Brainstorm domain events are sent as {type: 'brainstorm', ...}."""
-        manager.set_stream_tool_results(True)
         await manager.connect(mock_websocket)
         await manager.subscribe_all(mock_websocket)
 

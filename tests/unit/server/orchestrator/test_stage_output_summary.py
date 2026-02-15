@@ -222,6 +222,34 @@ class TestEmissionPathsSummarize:
             )
 
     @pytest.mark.asyncio
+    async def test_handle_stream_chunk_none_output_emits_stage_completed(
+        self: Self, service: "OrchestratorService"
+    ) -> None:
+        """Nodes like human_approval_node may produce None output."""
+        from amelia.server.models.events import EventType
+
+        with (
+            patch.object(service, "_emit", new_callable=AsyncMock) as mock_emit,
+            patch.object(service, "_emit_agent_messages", new_callable=AsyncMock) as mock_agent_msgs,
+        ):
+            await service._handle_stream_chunk("wf-1", {"human_approval_node": None})
+
+            # Should still emit STAGE_COMPLETED
+            stage_completed_calls = [
+                c
+                for c in mock_emit.call_args_list
+                if c.args[1] == EventType.STAGE_COMPLETED
+            ]
+            assert len(stage_completed_calls) == 1
+
+            data = stage_completed_calls[0].kwargs["data"]
+            assert data["stage"] == "human_approval_node"
+            assert "output" not in data
+
+            # Should NOT call _emit_agent_messages for None output
+            mock_agent_msgs.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_handle_graph_event_uses_summary(
         self: Self, service: "OrchestratorService"
     ) -> None:

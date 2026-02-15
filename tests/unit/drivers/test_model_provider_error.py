@@ -1,10 +1,11 @@
-"""Tests for model provider error detection and wrapping in ApiDriver."""
+"""Tests for model provider error detection and wrapping in drivers."""
 import os
 from collections.abc import AsyncIterator, Generator
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from claude_agent_sdk._errors import ProcessError
 
 from amelia.core.exceptions import ModelProviderError
 from amelia.drivers.api.deepagents import _extract_provider_info, _is_model_provider_error
@@ -192,3 +193,93 @@ class TestGenerateProviderErrorWrapping:
             await driver.generate(prompt="test")
 
         assert "minimax" in str(exc_info.value)
+
+
+# ---------------------------------------------------------------------------
+# CLI driver ProcessError wrapping tests
+# ---------------------------------------------------------------------------
+
+
+class TestCliDriverProcessErrorWrapping:
+    """Tests that ClaudeCliDriver wraps ProcessError as ModelProviderError."""
+
+    async def test_execute_agentic_wraps_process_error(self) -> None:
+        """execute_agentic should wrap ProcessError as ModelProviderError."""
+        with patch("amelia.drivers.cli.claude.ClaudeSDKClient") as mock_client_cls:
+            mock_client = AsyncMock()
+            mock_client.__aenter__ = AsyncMock(
+                side_effect=ProcessError("Command failed with exit code 1")
+            )
+            mock_client.__aexit__ = AsyncMock(return_value=False)
+            mock_client_cls.return_value = mock_client
+
+            from amelia.drivers.cli.claude import ClaudeCliDriver
+
+            driver = ClaudeCliDriver(model="sonnet", cwd="/tmp")
+
+            with pytest.raises(ModelProviderError) as exc_info:
+                async for _ in driver.execute_agentic(prompt="test", cwd="/tmp"):
+                    pass
+
+            assert exc_info.value.provider_name == "claude-cli"
+            assert "exit code 1" in str(exc_info.value.original_message)
+
+    async def test_execute_agentic_captures_stderr_via_callback(self) -> None:
+        """execute_agentic should capture real stderr via callback and include it in error."""
+        with patch("amelia.drivers.cli.claude.ClaudeSDKClient") as mock_client_cls:
+
+            def fake_init(options: Any) -> AsyncMock:
+                """Simulate SDK calling stderr callback before raising."""
+                mock = AsyncMock()
+
+                async def aenter(*_: Any) -> AsyncMock:
+                    # Simulate the SDK firing stderr callback before process exit
+                    if options.stderr:
+                        options.stderr("Error: ANTHROPIC_API_KEY not set")
+                        options.stderr("Please set your API key")
+                    raise ProcessError(
+                        "Command failed",
+                        exit_code=1,
+                        stderr="Check stderr output for details",
+                    )
+
+                mock.__aenter__ = aenter
+                mock.__aexit__ = AsyncMock(return_value=False)
+                return mock
+
+            mock_client_cls.side_effect = fake_init
+
+            from amelia.drivers.cli.claude import ClaudeCliDriver
+
+            driver = ClaudeCliDriver(model="sonnet", cwd="/tmp")
+
+            with pytest.raises(ModelProviderError) as exc_info:
+                async for _ in driver.execute_agentic(prompt="test", cwd="/tmp"):
+                    pass
+
+            # Real stderr captured via callback, not the SDK placeholder
+            assert "ANTHROPIC_API_KEY not set" in str(exc_info.value)
+            assert "Please set your API key" in str(exc_info.value)
+            assert "Check stderr output for details" not in str(exc_info.value)
+            assert "exit code 1" in str(exc_info.value)
+
+    async def test_generate_wraps_process_error(self) -> None:
+        """generate should wrap ProcessError as ModelProviderError."""
+        with patch("amelia.drivers.cli.claude.query") as mock_query:
+
+            async def failing_query(*args: Any, **kwargs: Any) -> AsyncIterator[Any]:
+                if False:
+                    yield
+                raise ProcessError("Command failed with exit code 1")
+
+            mock_query.side_effect = failing_query
+
+            from amelia.drivers.cli.claude import ClaudeCliDriver
+
+            driver = ClaudeCliDriver(model="sonnet", cwd="/tmp")
+
+            with pytest.raises(ModelProviderError) as exc_info:
+                await driver.generate(prompt="test")
+
+            assert exc_info.value.provider_name == "claude-cli"
+            assert "exit code 1" in str(exc_info.value.original_message)

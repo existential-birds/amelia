@@ -33,7 +33,6 @@ class TestGetConfig:
                 websocket_idle_timeout_seconds=300.0,
                 workflow_start_timeout_seconds=30.0,
                 max_concurrent=5,
-                stream_tool_results=False,
                 created_at=datetime.now(),
                 updated_at=datetime.now(),
             )
@@ -121,7 +120,6 @@ class TestGetConfig:
                 websocket_idle_timeout_seconds=300.0,
                 workflow_start_timeout_seconds=30.0,
                 max_concurrent=10,  # Different value
-                stream_tool_results=False,
                 created_at=datetime.now(),
                 updated_at=datetime.now(),
             )

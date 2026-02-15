@@ -385,7 +385,6 @@ class TestServerShow:
             websocket_idle_timeout_seconds=300.0,
             workflow_start_timeout_seconds=60.0,
             max_concurrent=5,
-            stream_tool_results=False,
             created_at=datetime.now(),
             updated_at=datetime.now(),
         )
@@ -437,26 +436,6 @@ class TestServerSet:
         assert result.exit_code == 0
         assert "Set max_concurrent = 10" in result.stdout
         mock_repo.update_server_settings.assert_called_once_with({"max_concurrent": 10})
-
-    def test_server_set_bool_value(
-        self, runner: CliRunner, mock_db: MagicMock
-    ) -> None:
-        """'amelia config server set' sets boolean value."""
-        mock_repo = MagicMock()
-        mock_repo.ensure_defaults = AsyncMock()
-        mock_repo.update_server_settings = AsyncMock()
-
-        with patch("amelia.cli.config.get_database", return_value=mock_db), \
-             patch("amelia.cli.config.SettingsRepository", return_value=mock_repo):
-            result = runner.invoke(
-                app, ["config", "server", "set", "stream_tool_results", "true"]
-            )
-
-        assert result.exit_code == 0
-        assert "Set stream_tool_results = True" in result.stdout
-        mock_repo.update_server_settings.assert_called_once_with(
-            {"stream_tool_results": True}
-        )
 
     def test_server_set_unknown_setting(
         self, runner: CliRunner, mock_db: MagicMock

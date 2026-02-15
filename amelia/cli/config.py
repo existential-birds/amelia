@@ -485,7 +485,6 @@ def server_show() -> None:
                 str(settings.workflow_start_timeout_seconds),
             )
             table.add_row("Max Concurrent Workflows", str(settings.max_concurrent))
-            table.add_row("Stream Tool Results", str(settings.stream_tool_results))
             table.add_row("Created", settings.created_at.isoformat())
             table.add_row("Updated", settings.updated_at.isoformat())
 
@@ -509,7 +508,6 @@ def server_set(
     - websocket_idle_timeout_seconds (float)
     - workflow_start_timeout_seconds (float)
     - max_concurrent (int)
-    - stream_tool_results (bool: true/false)
     """
     # Convert value to appropriate type
     int_fields = {
@@ -518,30 +516,17 @@ def server_set(
         "max_concurrent",
     }
     float_fields = {"websocket_idle_timeout_seconds", "workflow_start_timeout_seconds"}
-    bool_fields = {"stream_tool_results"}
 
-    parsed_value: int | float | bool | str
+    parsed_value: int | float | str
     try:
         if setting in int_fields:
             parsed_value = int(value)
         elif setting in float_fields:
             parsed_value = float(value)
-        elif setting in bool_fields:
-            value_lower = value.lower()
-            if value_lower in ("true", "1", "yes"):
-                parsed_value = True
-            elif value_lower in ("false", "0", "no"):
-                parsed_value = False
-            else:
-                console.print(
-                    f"[red]Invalid boolean for {setting}: {value}. "
-                    "Use true/false, yes/no, or 1/0.[/red]"
-                )
-                raise typer.Exit(code=1)
         else:
             console.print(f"[red]Unknown setting: {setting}[/red]")
             console.print("\nValid settings:")
-            all_fields = int_fields | float_fields | bool_fields
+            all_fields = int_fields | float_fields
             for field in sorted(all_fields):
                 console.print(f"  - {field}")
             raise typer.Exit(code=1)
