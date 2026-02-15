@@ -60,7 +60,14 @@ _DEFAULT_PROVIDER_ERROR_PATTERNS = (
 
 
 def _get_provider_error_patterns() -> tuple[str, ...]:
-    """Get provider error patterns, reading env var dynamically for reconfiguration."""
+    """Get provider error patterns from environment or defaults.
+
+    Reads from AMELIA_PROVIDER_ERROR_PATTERNS env var each time to support
+    dynamic configuration in tests and runtime environments.
+
+    Returns:
+        Tuple of lowercase pattern strings.
+    """
     return tuple(
         p.strip().lower()
         for p in os.environ.get(
@@ -88,7 +95,8 @@ def _is_model_provider_error(exc: ValueError) -> bool:
         return True
     # String-based detection for known provider error patterns
     msg = str(exc).lower()
-    return any(pattern in msg for pattern in _get_provider_error_patterns())
+    patterns = _get_provider_error_patterns()
+    return any(pattern in msg for pattern in patterns)
 
 
 def _extract_provider_info(exc: ValueError) -> tuple[str | None, str]:

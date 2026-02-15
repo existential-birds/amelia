@@ -1373,7 +1373,7 @@ def model_provider_error_setup(mock_repository: AsyncMock) -> ModelProviderError
 @contextlib.contextmanager
 def model_provider_error_patches(
     orchestrator: OrchestratorService, setup: ModelProviderErrorSetup
-) -> Generator[None, None, None]:
+) -> Generator[AsyncMock, None, None]:
     """Context manager for common patches in ModelProviderError tests."""
     with (
         patch.object(
@@ -1386,10 +1386,10 @@ def model_provider_error_patches(
         patch.object(orchestrator, "_emit", new=AsyncMock()),
         patch(
             "amelia.server.orchestrator.service.asyncio.sleep", new_callable=AsyncMock
-        ),
+        ) as mock_sleep,
         pytest.raises(ModelProviderError),
     ):
-        yield
+        yield mock_sleep
 
 
 async def test_model_provider_error_retried(
@@ -1399,11 +1399,13 @@ async def test_model_provider_error_retried(
     """Verify that when graph.astream raises ModelProviderError, approve_workflow retries before failing."""
     setup = model_provider_error_setup
 
-    with model_provider_error_patches(orchestrator, setup):
+    with model_provider_error_patches(orchestrator, setup) as mock_sleep:
         await orchestrator.approve_workflow("wf-1")
 
     # max_retries=2 means attempts 0, 1, 2 → astream called 3 times
     assert setup.mock_graph.astream.call_count == 3
+    # Verify asyncio.sleep was called 2 times (after attempt 0 and attempt 1)
+    assert mock_sleep.call_count == 2
 
 
 async def test_model_provider_error_friendly_failure_reason(

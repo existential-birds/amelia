@@ -1542,7 +1542,7 @@ class OrchestratorService:
                     raise
 
                 delay = min(
-                    retry_config.base_delay * (2 ** (attempt - 1)),
+                    retry_config.base_delay * (2 ** min(attempt - 1, 31)),
                     retry_config.max_delay,
                 )
                 logger.warning(

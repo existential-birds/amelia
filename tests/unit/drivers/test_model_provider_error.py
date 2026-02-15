@@ -119,10 +119,11 @@ class TestExecuteAgenticProviderErrorWrapping:
         from amelia.drivers.api.deepagents import ApiDriver
 
         async def failing_stream(*args: Any, **kwargs: Any) -> AsyncIterator[dict[str, Any]]:
+            if False:
+                yield
             raise ValueError(
                 {"error": {"message": "invalid function arguments json string"}, "provider": "minimax"}
             )
-            yield  # noqa: B901 - unreachable but required for AsyncIterator type
 
         mock_agent = MagicMock()
         mock_agent.astream = failing_stream
@@ -143,8 +144,9 @@ class TestExecuteAgenticProviderErrorWrapping:
         from amelia.drivers.api.deepagents import ApiDriver
 
         async def failing_stream(*args: Any, **kwargs: Any) -> AsyncIterator[dict[str, Any]]:
+            if False:
+                yield
             raise ValueError("Prompt cannot be empty")
-            yield  # noqa: B901 - unreachable but required for AsyncIterator type
 
         mock_agent = MagicMock()
         mock_agent.astream = failing_stream
