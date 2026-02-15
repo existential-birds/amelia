@@ -60,7 +60,6 @@ TRANSIENT_EXCEPTIONS: tuple[type[Exception], ...] = (
 )
 
 
-
 _MAX_SUMMARY_STRING_LENGTH = 500
 
 
