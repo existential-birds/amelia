@@ -84,7 +84,7 @@ function getDocumentColumns(onDelete: (id: string) => void): ColumnDef<Knowledge
       cell: ({ row }) => (
         <div className="flex flex-wrap gap-1">
           {row.original.tags.map((tag, index) => (
-            <Badge key={`${tag}-${index}`} variant="outline" className="text-xs">
+            <Badge key={index} variant="outline" className="text-xs">
               {tag}
             </Badge>
           ))}
@@ -165,7 +165,7 @@ export default function KnowledgePage() {
       const results = await api.searchKnowledge(query, 5, undefined, abortControllerRef.current.signal);
       setSearchResults(results);
     } catch (error) {
-      if (error instanceof Error && error.name === 'AbortError') {
+      if ((error instanceof Error && error.name === 'AbortError') || error instanceof DOMException && error.name === 'AbortError') {
         return; // Silently ignore aborted requests
       }
       setSearchError(error instanceof Error ? error.message : 'Search failed');
@@ -213,7 +213,7 @@ export default function KnowledgePage() {
       const tags = uploadTags
         .split(',')
         .map((t) => t.trim())
-        .filter(Boolean);
+        .filter((t) => t.length > 0);
       await api.uploadKnowledgeDocument(uploadFile, uploadName.trim(), tags);
       setUploadOpen(false);
       setUploadFile(null);
@@ -317,7 +317,9 @@ export default function KnowledgePage() {
                   if (query) {
                     debounceTimerRef.current = setTimeout(() => {
                       debounceTimerRef.current = null;
-                      void executeSearch(query);
+                      executeSearch(query).catch((error) => {
+                        logger.error('Debounced search failed', error);
+                      });
                     }, 300);
                   }
                 }}
@@ -384,7 +386,7 @@ export default function KnowledgePage() {
                           <FileText className="size-3" />
                           <span>{result.document_name}</span>
                           {result.tags.map((tag, index) => (
-                            <Badge key={`${tag}-${index}`} variant="outline" className="text-xs">
+                            <Badge key={index} variant="outline" className="text-xs">
                               {tag}
                             </Badge>
                           ))}

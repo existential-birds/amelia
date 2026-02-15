@@ -200,10 +200,13 @@ describe('KnowledgePage', () => {
     expect(uploadButton).toBeDefined();
     await user.click(uploadButton!);
 
-    // Wait for async upload to complete and verify side effects occurred
+    // Wait for upload to complete (button returns to "Upload" state)
     await waitFor(() => {
-      expect(Toast.error).toHaveBeenCalledWith('File too large');
+      const dialogButtons = screen.getAllByRole('button');
+      const uploadButton = dialogButtons.find((btn) => btn.textContent === 'Upload');
+      expect(uploadButton).toBeDefined();
     });
+    expect(Toast.error).toHaveBeenCalledWith('File too large');
     expect(logger.error).toHaveBeenCalledWith('Upload failed', expect.any(Error));
   });
 

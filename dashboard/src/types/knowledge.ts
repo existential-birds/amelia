@@ -15,6 +15,7 @@ export interface KnowledgeDocument {
   chunk_count: number;
   token_count: number;
   raw_text: string | null;
+  /** Custom key-value metadata for filtering and categorization (e.g., "author": "John", "project": "amelia") */
   metadata: Record<string, string>;
   created_at: string;
   updated_at: string;
