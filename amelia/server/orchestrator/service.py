@@ -1769,6 +1769,17 @@ class OrchestratorService:
         """
         for node_name, output in chunk.items():
             if node_name in STAGE_NODES:
+                # Some nodes (e.g. human_approval_node) produce None output
+                if output is None:
+                    await self._emit(
+                        workflow_id,
+                        EventType.STAGE_COMPLETED,
+                        f"Completed {node_name}",
+                        agent=node_name.removesuffix("_node"),
+                        data={"stage": node_name},
+                    )
+                    continue
+
                 # output is always a dict here (node state update from LangGraph)
                 summarized = _summarize_stage_output(output)
                 assert summarized is not None
