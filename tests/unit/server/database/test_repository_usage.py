@@ -7,7 +7,7 @@ import pytest
 
 from amelia.server.database.connection import Database
 from amelia.server.database.repository import WorkflowRepository
-from amelia.server.models.state import ServerExecutionState
+from amelia.server.models.state import ServerExecutionState, WorkflowStatus
 from amelia.server.models.tokens import TokenUsage
 
 
@@ -41,21 +41,21 @@ class TestUsageTrend:
             id=wf1_id,
             issue_id="ISSUE-1",
             worktree_path="/tmp/test-usage-1",
-            workflow_status="completed",
+            workflow_status=WorkflowStatus.COMPLETED,
             started_at=datetime(2026, 1, 15, 10, 0, 0, tzinfo=UTC),
         )
         wf2 = ServerExecutionState(
             id=wf2_id,
             issue_id="ISSUE-2",
             worktree_path="/tmp/test-usage-2",
-            workflow_status="completed",
+            workflow_status=WorkflowStatus.COMPLETED,
             started_at=datetime(2026, 1, 16, 10, 0, 0, tzinfo=UTC),
         )
         wf3 = ServerExecutionState(
             id=wf3_id,
             issue_id="ISSUE-3",
             worktree_path="/tmp/test-usage-3",
-            workflow_status="completed",
+            workflow_status=WorkflowStatus.COMPLETED,
             started_at=datetime(2026, 1, 17, 10, 0, 0, tzinfo=UTC),
         )
         await repo.create(wf1)
@@ -253,7 +253,7 @@ class TestUsageSummaryWithSuccessMetrics:
             id=wf_prev1_id,
             issue_id="ISSUE-P1",
             worktree_path="/tmp/test-prev-1",
-            workflow_status="completed",
+            workflow_status=WorkflowStatus.COMPLETED,
             started_at=datetime(2026, 1, 10, 10, 0, 0, tzinfo=UTC),
             completed_at=datetime(2026, 1, 10, 12, 0, 0, tzinfo=UTC),
         )
@@ -261,7 +261,7 @@ class TestUsageSummaryWithSuccessMetrics:
             id=wf_prev2_id,
             issue_id="ISSUE-P2",
             worktree_path="/tmp/test-prev-2",
-            workflow_status="completed",
+            workflow_status=WorkflowStatus.COMPLETED,
             started_at=datetime(2026, 1, 12, 10, 0, 0, tzinfo=UTC),
             completed_at=datetime(2026, 1, 12, 12, 0, 0, tzinfo=UTC),
         )
@@ -305,7 +305,7 @@ class TestUsageSummaryWithSuccessMetrics:
             id=wf_curr1_id,
             issue_id="ISSUE-C1",
             worktree_path="/tmp/test-curr-1",
-            workflow_status="completed",
+            workflow_status=WorkflowStatus.COMPLETED,
             started_at=datetime(2026, 1, 15, 10, 0, 0, tzinfo=UTC),
             completed_at=datetime(2026, 1, 15, 12, 0, 0, tzinfo=UTC),
         )
@@ -313,7 +313,7 @@ class TestUsageSummaryWithSuccessMetrics:
             id=wf_curr2_id,
             issue_id="ISSUE-C2",
             worktree_path="/tmp/test-curr-2",
-            workflow_status="completed",
+            workflow_status=WorkflowStatus.COMPLETED,
             started_at=datetime(2026, 1, 16, 10, 0, 0, tzinfo=UTC),
             completed_at=datetime(2026, 1, 16, 12, 0, 0, tzinfo=UTC),
         )
@@ -321,7 +321,7 @@ class TestUsageSummaryWithSuccessMetrics:
             id=wf_curr3_id,
             issue_id="ISSUE-C3",
             worktree_path="/tmp/test-curr-3",
-            workflow_status="completed",
+            workflow_status=WorkflowStatus.COMPLETED,
             started_at=datetime(2026, 1, 17, 10, 0, 0, tzinfo=UTC),
             completed_at=datetime(2026, 1, 17, 12, 0, 0, tzinfo=UTC),
         )
@@ -329,7 +329,7 @@ class TestUsageSummaryWithSuccessMetrics:
             id=wf_curr4_id,
             issue_id="ISSUE-C4",
             worktree_path="/tmp/test-curr-4",
-            workflow_status="failed",
+            workflow_status=WorkflowStatus.FAILED,
             started_at=datetime(2026, 1, 18, 10, 0, 0, tzinfo=UTC),
             completed_at=datetime(2026, 1, 18, 11, 0, 0, tzinfo=UTC),
             failure_reason="Test failure",
@@ -498,7 +498,7 @@ class TestUsageByModelWithTrendAndSuccess:
             id=wf1_id,
             issue_id="ISSUE-M1",
             worktree_path="/tmp/test-model-1",
-            workflow_status="completed",
+            workflow_status=WorkflowStatus.COMPLETED,
             started_at=datetime(2026, 1, 15, 10, 0, 0, tzinfo=UTC),
             completed_at=datetime(2026, 1, 15, 12, 0, 0, tzinfo=UTC),
         )
@@ -506,7 +506,7 @@ class TestUsageByModelWithTrendAndSuccess:
             id=wf2_id,
             issue_id="ISSUE-M2",
             worktree_path="/tmp/test-model-2",
-            workflow_status="completed",
+            workflow_status=WorkflowStatus.COMPLETED,
             started_at=datetime(2026, 1, 16, 10, 0, 0, tzinfo=UTC),
             completed_at=datetime(2026, 1, 16, 12, 0, 0, tzinfo=UTC),
         )
@@ -514,7 +514,7 @@ class TestUsageByModelWithTrendAndSuccess:
             id=wf3_id,
             issue_id="ISSUE-M3",
             worktree_path="/tmp/test-model-3",
-            workflow_status="completed",
+            workflow_status=WorkflowStatus.COMPLETED,
             started_at=datetime(2026, 1, 17, 10, 0, 0, tzinfo=UTC),
             completed_at=datetime(2026, 1, 17, 12, 0, 0, tzinfo=UTC),
         )
@@ -522,7 +522,7 @@ class TestUsageByModelWithTrendAndSuccess:
             id=wf4_id,
             issue_id="ISSUE-M4",
             worktree_path="/tmp/test-model-4",
-            workflow_status="failed",
+            workflow_status=WorkflowStatus.FAILED,
             started_at=datetime(2026, 1, 18, 10, 0, 0, tzinfo=UTC),
             completed_at=datetime(2026, 1, 18, 11, 0, 0, tzinfo=UTC),
             failure_reason="Test failure",

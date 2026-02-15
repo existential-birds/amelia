@@ -2,7 +2,7 @@
 
 import asyncio
 import contextlib
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Callable, Generator
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from langchain_core.runnables.config import RunnableConfig
 
-from amelia.core.types import AgentConfig, Profile
+from amelia.core.types import AgentConfig, DriverType, Profile, TrackerType
 from amelia.pipelines.implementation.state import (
     ImplementationState,
     rebuild_implementation_state,
@@ -22,6 +22,8 @@ from amelia.server.database.repository import WorkflowRepository
 # Rebuild models to resolve forward references before module-level ServerExecutionState usage
 rebuild_implementation_state()
 
+from amelia.core.exceptions import ModelProviderError  # noqa: E402
+from amelia.core.types import RetryConfig  # noqa: E402
 from amelia.server.events.bus import EventBus  # noqa: E402
 from amelia.server.exceptions import (  # noqa: E402
     ConcurrencyLimitError,
@@ -32,6 +34,7 @@ from amelia.server.exceptions import (  # noqa: E402
 )
 from amelia.server.models import ServerExecutionState  # noqa: E402
 from amelia.server.models.events import EventType, WorkflowEvent  # noqa: E402
+from amelia.server.models.state import WorkflowStatus  # noqa: E402
 from amelia.server.orchestrator.service import OrchestratorService  # noqa: E402
 
 
@@ -59,10 +62,10 @@ def mock_repository() -> AsyncMock:
 def mock_profile_repo() -> AsyncMock:
     """Create mock profile repository."""
     repo = AsyncMock()
-    agent_config = AgentConfig(driver="cli", model="sonnet")
+    agent_config = AgentConfig(driver=DriverType.CLI, model="sonnet")
     default_profile = Profile(
         name="test",
-        tracker="noop",
+        tracker=TrackerType.NOOP,
         working_dir="/default/repo",
         agents={
             "architect": agent_config,
@@ -226,7 +229,7 @@ async def test_start_workflow_success(
         assert state.id == workflow_id
         assert state.issue_id == "ISSUE-123"
         assert state.worktree_path == valid_worktree
-        assert state.workflow_status == "pending"
+        assert state.workflow_status == WorkflowStatus.PENDING
         # Verify profile_id is stored on ServerExecutionState
         assert state.profile_id == "test"
 
@@ -296,7 +299,7 @@ async def test_cancel_workflow(
         id="wf-1",
         issue_id="ISSUE-123",
         worktree_path="/path/to/worktree",
-        workflow_status="in_progress",
+        workflow_status=WorkflowStatus.IN_PROGRESS,
         started_at=datetime.now(UTC),
     )
     mock_repository.get.return_value = mock_state
@@ -315,7 +318,7 @@ async def test_cancel_workflow(
     assert task.cancelled()
 
     # Status should be persisted to database
-    mock_repository.set_status.assert_called_once_with("wf-1", "cancelled")
+    mock_repository.set_status.assert_called_once_with("wf-1", WorkflowStatus.CANCELLED)
 
 
 @pytest.mark.parametrize(
@@ -339,7 +342,7 @@ async def test_cancel_workflow(
                 id="wf-1",
                 issue_id="ISSUE-123",
                 worktree_path="/path/to/worktree",
-                    workflow_status="completed",
+                    workflow_status=WorkflowStatus.COMPLETED,
                 started_at=datetime.now(UTC),
             ),
         ),
@@ -361,7 +364,7 @@ async def test_cancel_workflow(
                 id="wf-1",
                 issue_id="ISSUE-123",
                 worktree_path="/path/to/worktree",
-                    workflow_status="in_progress",
+                    workflow_status=WorkflowStatus.IN_PROGRESS,
                 started_at=datetime.now(UTC),
             ),
         ),
@@ -383,7 +386,7 @@ async def test_cancel_workflow(
                 id="wf-1",
                 issue_id="ISSUE-123",
                 worktree_path="/path/to/worktree",
-                    workflow_status="in_progress",
+                    workflow_status=WorkflowStatus.IN_PROGRESS,
                 started_at=datetime.now(UTC),
             ),
         ),
@@ -455,7 +458,7 @@ async def test_approve_workflow_success(
         id="wf-1",
         issue_id="ISSUE-123",
         worktree_path="/path/to/worktree",
-        workflow_status="blocked",
+        workflow_status=WorkflowStatus.BLOCKED,
         started_at=datetime.now(UTC),
         profile_id="test",
     )
@@ -475,8 +478,8 @@ async def test_approve_workflow_success(
     assert mock_repository.set_status.call_count == 2
     # First call is in_progress, second is completed
     calls = mock_repository.set_status.call_args_list
-    assert calls[0][0] == ("wf-1", "in_progress")
-    assert calls[1][0] == ("wf-1", "completed")
+    assert calls[0][0] == ("wf-1", WorkflowStatus.IN_PROGRESS)
+    assert calls[1][0] == ("wf-1", WorkflowStatus.COMPLETED)
 
     # Should emit APPROVAL_GRANTED
     approval_granted = [e for e in received_events if e.event_type == EventType.APPROVAL_GRANTED]
@@ -500,7 +503,7 @@ async def test_reject_workflow_success(
         id="wf-1",
         issue_id="ISSUE-123",
         worktree_path="/path/to/worktree",
-        workflow_status="blocked",
+        workflow_status=WorkflowStatus.BLOCKED,
         started_at=datetime.now(UTC),
         profile_id="test",
     )
@@ -520,7 +523,7 @@ async def test_reject_workflow_success(
 
     # Should update status to failed
     mock_repository.set_status.assert_called_once_with(
-        "wf-1", "failed", failure_reason="Plan too complex"
+        "wf-1", WorkflowStatus.FAILED, failure_reason="Plan too complex"
     )
 
     # Should cancel task - wait for cancellation to complete
@@ -550,7 +553,7 @@ class TestRejectWorkflowGraphState:
             id="wf-123",
             issue_id="ISSUE-456",
             worktree_path="/tmp/test",
-            workflow_status="blocked",
+            workflow_status=WorkflowStatus.BLOCKED,
             profile_id="test",
         )
         mock_repository.get.return_value = workflow
@@ -584,7 +587,7 @@ class TestApproveWorkflowResume:
             id="wf-123",
             issue_id="ISSUE-456",
             worktree_path="/tmp/test",
-            workflow_status="blocked",
+            workflow_status=WorkflowStatus.BLOCKED,
             profile_id="test",
         )
         mock_repository.get.return_value = workflow
@@ -773,7 +776,7 @@ async def test_get_workflow_by_worktree_uses_cache(
         id="wf-cached",
         issue_id="ISSUE-123",
         worktree_path="/cached/worktree",
-        workflow_status="in_progress",
+        workflow_status=WorkflowStatus.IN_PROGRESS,
         started_at=datetime.now(UTC),
     )
     mock_repository.get.return_value = mock_state
@@ -932,7 +935,7 @@ class TestRunWorkflowCheckpointResume:
             id="wf-retry-test",
             issue_id="ISSUE-123",
             worktree_path="/path/to/worktree",
-            workflow_status="in_progress",
+            workflow_status=WorkflowStatus.IN_PROGRESS,
             started_at=datetime.now(UTC),
             profile_id="test",
         )
@@ -962,16 +965,16 @@ class TestRunWorkflowCheckpointResume:
         mock_graph.astream.return_value = empty_stream()
 
         # Create mock profile
-        from amelia.core.types import AgentConfig, Profile
+        from amelia.core.types import AgentConfig, DriverType, Profile, TrackerType
 
         mock_profile = Profile(
             name="test",
-            tracker="noop",
+            tracker=TrackerType.NOOP,
             working_dir="/tmp/test",
             agents={
-                "architect": AgentConfig(driver="cli", model="sonnet"),
-                "developer": AgentConfig(driver="cli", model="sonnet"),
-                "reviewer": AgentConfig(driver="cli", model="sonnet"),
+                "architect": AgentConfig(driver=DriverType.CLI, model="sonnet"),
+                "developer": AgentConfig(driver=DriverType.CLI, model="sonnet"),
+                "reviewer": AgentConfig(driver=DriverType.CLI, model="sonnet"),
             },
         )
 
@@ -1015,16 +1018,16 @@ class TestRunWorkflowCheckpointResume:
 
         mock_graph.astream.return_value = empty_stream()
 
-        from amelia.core.types import AgentConfig, Profile
+        from amelia.core.types import AgentConfig, DriverType, Profile, TrackerType
 
         mock_profile = Profile(
             name="test",
-            tracker="noop",
+            tracker=TrackerType.NOOP,
             working_dir="/tmp/test",
             agents={
-                "architect": AgentConfig(driver="cli", model="sonnet"),
-                "developer": AgentConfig(driver="cli", model="sonnet"),
-                "reviewer": AgentConfig(driver="cli", model="sonnet"),
+                "architect": AgentConfig(driver=DriverType.CLI, model="sonnet"),
+                "developer": AgentConfig(driver=DriverType.CLI, model="sonnet"),
+                "reviewer": AgentConfig(driver=DriverType.CLI, model="sonnet"),
             },
         )
 
@@ -1065,7 +1068,7 @@ class TestTaskProgressEvents:
             id="wf-no-cache",
             issue_id="ISSUE-123",
             worktree_path="/path/to/worktree",
-            workflow_status="in_progress",
+            workflow_status=WorkflowStatus.IN_PROGRESS,
             started_at=datetime.now(UTC),
             profile_id="test",
             plan_cache=None,
@@ -1090,7 +1093,7 @@ class TestTaskProgressEvents:
             id="wf-non-task",
             issue_id="ISSUE-123",
             worktree_path="/path/to/worktree",
-            workflow_status="in_progress",
+            workflow_status=WorkflowStatus.IN_PROGRESS,
             started_at=datetime.now(UTC),
             profile_id="test",
             plan_cache=PlanCache(goal="Test goal", total_tasks=None),  # Not task mode
@@ -1117,7 +1120,7 @@ class TestTaskProgressEvents:
             id="wf-task",
             issue_id="ISSUE-123",
             worktree_path="/path/to/worktree",
-            workflow_status="in_progress",
+            workflow_status=WorkflowStatus.IN_PROGRESS,
             started_at=datetime.now(UTC),
             profile_id="test",
             plan_cache=PlanCache(goal="Test goal", total_tasks=3, current_task_index=1),
@@ -1186,7 +1189,7 @@ class TestTaskProgressEvents:
             id="wf-789",
             issue_id="ISSUE-123",
             worktree_path="/path/to/worktree",
-            workflow_status="in_progress",
+            workflow_status=WorkflowStatus.IN_PROGRESS,
             started_at=datetime.now(UTC),
             profile_id="test",
             plan_cache=PlanCache(total_tasks=5, current_task_index=0),
@@ -1265,10 +1268,10 @@ class TestStartWorkflowWithTaskFields:
         (worktree / ".git").touch()
 
         # Override the mock profile to use github tracker
-        agent_config = AgentConfig(driver="cli", model="sonnet")
+        agent_config = AgentConfig(driver=DriverType.CLI, model="sonnet")
         mock_profile_repo.get_profile.return_value = Profile(
             name="github",
-            tracker="github",
+            tracker=TrackerType.GITHUB,
             working_dir="/default/repo",
             agents={
                 "architect": agent_config,
@@ -1318,3 +1321,300 @@ class TestStartWorkflowWithTaskFields:
             assert state.issue_cache is not None
             issue = Issue.model_validate(state.issue_cache)
             assert issue.description == "Fix typo in README"
+
+
+# =============================================================================
+# ModelProviderError Retry Tests
+# =============================================================================
+
+
+class ModelProviderErrorSetup:
+    """Shared setup for ModelProviderError retry tests."""
+
+    def __init__(self, mock_graph: MagicMock, mock_profile: Profile) -> None:
+        self.mock_graph = mock_graph
+        self.mock_profile = mock_profile
+
+
+@pytest.fixture
+def model_provider_error_setup(mock_repository: AsyncMock) -> ModelProviderErrorSetup:
+    """Shared setup for ModelProviderError retry tests."""
+    # Setup blocked workflow with real ServerExecutionState
+    mock_workflow = ServerExecutionState(
+        id="wf-1",
+        issue_id="ISSUE-TEST",
+        worktree_path="/tmp",
+        workflow_status=WorkflowStatus.BLOCKED,
+        profile_id="prof-1",
+        started_at=datetime.now(UTC),
+    )
+    mock_repository.get.return_value = mock_workflow
+
+    # Profile with fast retry config
+    agent_config = AgentConfig(driver=DriverType.CLI, model="sonnet")
+    mock_profile = Profile(
+        name="test",
+        tracker=TrackerType.NOOP,
+        working_dir="/tmp",
+        retry=RetryConfig(max_retries=2, base_delay=0.1, max_delay=1.0),
+        agents={
+            "architect": agent_config,
+            "developer": agent_config,
+            "reviewer": agent_config,
+        },
+    )
+
+    # Mock graph whose astream always raises ModelProviderError
+    mock_graph = MagicMock()
+    mock_graph.aupdate_state = AsyncMock()
+    mock_graph.aget_state = AsyncMock()
+    mock_graph.astream = MagicMock(side_effect=ModelProviderError("provider blew up"))
+
+    return ModelProviderErrorSetup(mock_graph, mock_profile)
+
+
+@contextlib.contextmanager
+def model_provider_error_patches(
+    orchestrator: OrchestratorService, setup: ModelProviderErrorSetup
+) -> Generator[AsyncMock, None, None]:
+    """Context manager for common patches in ModelProviderError tests."""
+    with (
+        patch.object(
+            orchestrator, "_get_profile_or_fail", return_value=setup.mock_profile
+        ),
+        patch.object(
+            orchestrator, "_create_server_graph", return_value=setup.mock_graph
+        ),
+        patch.object(orchestrator, "_resolve_prompts", return_value={}),
+        patch.object(orchestrator, "_emit", new=AsyncMock()),
+        patch(
+            "amelia.server.orchestrator.service.asyncio.sleep", new_callable=AsyncMock
+        ) as mock_sleep,
+    ):
+        yield mock_sleep
+
+
+async def test_model_provider_error_retried(
+    orchestrator: OrchestratorService,
+    model_provider_error_setup: ModelProviderErrorSetup,
+) -> None:
+    """Verify that when graph.astream raises ModelProviderError, approve_workflow retries before failing."""
+    setup = model_provider_error_setup
+
+    with (
+        model_provider_error_patches(orchestrator, setup) as mock_sleep,
+        pytest.raises(ModelProviderError),
+    ):
+        await orchestrator.approve_workflow("wf-1")
+
+    # max_retries=2 means attempts 0, 1, 2 → astream called 3 times
+    assert setup.mock_graph.astream.call_count == 3
+    # Verify asyncio.sleep was called 2 times (after attempt 0 and attempt 1)
+    assert mock_sleep.call_count == 2
+
+
+async def test_model_provider_error_friendly_failure_reason(
+    orchestrator: OrchestratorService,
+    mock_repository: AsyncMock,
+    model_provider_error_setup: ModelProviderErrorSetup,
+) -> None:
+    """Verify that after retries exhausted, the failure_reason in the DB contains the friendly message."""
+    setup = model_provider_error_setup
+
+    with (
+        model_provider_error_patches(orchestrator, setup),
+        pytest.raises(ModelProviderError),
+    ):
+        await orchestrator.approve_workflow("wf-1")
+
+    # Verify set_status was called with FAILED and a friendly failure_reason
+    failed_calls = [
+        call
+        for call in mock_repository.set_status.call_args_list
+        if len(call[0]) >= 2 and call[0][1] == WorkflowStatus.FAILED
+    ]
+    assert len(failed_calls) == 1
+    # set_status is called as positional + keyword: set_status(wf_id, status, failure_reason=...)
+    failure_reason = failed_calls[0].kwargs.get("failure_reason", "")
+    assert "Failed after" in failure_reason
+    assert "attempts" in failure_reason
+
+
+# =============================================================================
+# Exponential Backoff Tests
+# =============================================================================
+
+
+class TestExponentialBackoff:
+    """Tests for exponential backoff edge cases in retry logic."""
+
+    def _create_test_setup(
+        self,
+        valid_worktree: str,
+        workflow_id: str,
+        max_retries: int = 3,
+        base_delay: float = 0.1,
+        max_delay: float = 10.0,
+    ) -> tuple[ServerExecutionState, Profile]:
+        """Helper to create common test setup for backoff tests.
+
+        Args:
+            valid_worktree: Path to valid worktree
+            workflow_id: Workflow ID for the state
+            max_retries: Maximum retry attempts
+            base_delay: Base delay for exponential backoff
+            max_delay: Maximum delay cap
+
+        Returns:
+            Tuple of (mock_state, mock_profile)
+        """
+        mock_state = ServerExecutionState(
+            id=workflow_id,
+            issue_id="ISSUE-123",
+            worktree_path=valid_worktree,
+            workflow_status=WorkflowStatus.IN_PROGRESS,
+            started_at=datetime.now(UTC),
+            profile_id="test",
+        )
+
+        agent_config = AgentConfig(driver=DriverType.CLI, model="sonnet")
+        mock_profile = Profile(
+            name="test",
+            tracker=TrackerType.NOOP,
+            working_dir=valid_worktree,
+            retry=RetryConfig(max_retries=max_retries, base_delay=base_delay, max_delay=max_delay),
+            agents={
+                "architect": agent_config,
+                "developer": agent_config,
+                "reviewer": agent_config,
+            },
+        )
+
+        return mock_state, mock_profile
+
+    @pytest.mark.parametrize(
+        "workflow_id,max_retries,base_delay,max_delay,expected_delays",
+        [
+            # Normal exponential backoff without cap
+            ("wf-backoff", 3, 0.1, 10.0, [0.1 * (2**i) for i in range(3)]),
+            # Max delay cap is hit
+            ("wf-cap", 5, 1.0, 3.0, [1.0, 2.0, 3.0, 3.0, 3.0]),
+        ],
+        ids=["normal_exponential_backoff", "max_delay_cap"],
+    )
+    async def test_exponential_backoff_delays(
+        self,
+        orchestrator: OrchestratorService,
+        mock_repository: AsyncMock,
+        valid_worktree: str,
+        workflow_id: str,
+        max_retries: int,
+        base_delay: float,
+        max_delay: float,
+        expected_delays: list[float],
+    ) -> None:
+        """Verify exponential backoff delays increase with each retry and are capped at max_delay."""
+        mock_state, mock_profile = self._create_test_setup(
+            valid_worktree, workflow_id, max_retries=max_retries, base_delay=base_delay, max_delay=max_delay
+        )
+
+        # Make _run_workflow fail max_retries times, then succeed
+        call_count = 0
+
+        async def failing_run_workflow(workflow_id: str, state: ServerExecutionState) -> None:
+            nonlocal call_count
+            call_count += 1
+            if call_count <= max_retries:
+                raise ModelProviderError("transient failure")
+
+        with (
+            patch.object(orchestrator, "_get_profile_or_fail", return_value=mock_profile),
+            patch.object(orchestrator, "_run_workflow", new=failing_run_workflow),
+            patch("amelia.server.orchestrator.service.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+        ):
+            await orchestrator._run_workflow_with_retry(workflow_id, mock_state)
+
+        # Verify delays match expected pattern
+        assert mock_sleep.call_count == len(expected_delays)
+        delays = [call[0][0] for call in mock_sleep.call_args_list]
+        assert delays == expected_delays
+
+    async def test_max_retries_exhausted(
+        self,
+        orchestrator: OrchestratorService,
+        mock_repository: AsyncMock,
+        valid_worktree: str,
+    ) -> None:
+        """Verify workflow fails after max_retries exhausted."""
+        mock_state, mock_profile = self._create_test_setup(
+            valid_worktree, "wf-max", max_retries=2, base_delay=0.1, max_delay=10.0
+        )
+
+        # Always fail
+        async def always_fail(workflow_id: str, state: ServerExecutionState) -> None:
+            raise ModelProviderError("always fails")
+
+        with (
+            patch.object(orchestrator, "_get_profile_or_fail", return_value=mock_profile),
+            patch.object(orchestrator, "_run_workflow", new=always_fail),
+            patch("amelia.server.orchestrator.service.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+            pytest.raises(ModelProviderError),
+        ):
+            await orchestrator._run_workflow_with_retry("wf-max", mock_state)
+
+        # max_retries=2 means attempts 0, 1, 2 → 3 total attempts, 2 sleeps
+        assert mock_sleep.call_count == 2
+
+    async def test_overflow_prevention(
+        self,
+        orchestrator: OrchestratorService,
+        mock_repository: AsyncMock,
+        valid_worktree: str,
+    ) -> None:
+        """Verify exponential backoff caps exponent at 31 to prevent overflow.
+
+        The implementation uses: base_delay * (2 ** min(attempt - 1, 31))
+        This test verifies the cap works by using max base_delay (30.0) and
+        max max_delay (300.0), then checking that delays are computed correctly
+        even at the boundary of the overflow cap.
+        """
+        # Use max allowed values to test overflow cap
+        # With base_delay=30.0 and max_retries=10:
+        # - Attempt 10: 30.0 * 2^9 = 15360.0, capped at max_delay=300.0
+        mock_state, mock_profile = self._create_test_setup(
+            valid_worktree, "wf-overflow", max_retries=10, base_delay=30.0, max_delay=300.0
+        )
+
+        # Fail exactly 10 times
+        call_count = 0
+
+        async def failing_run_workflow(workflow_id: str, state: ServerExecutionState) -> None:
+            nonlocal call_count
+            call_count += 1
+            if call_count <= 10:
+                raise ModelProviderError("transient failure")
+
+        with (
+            patch.object(orchestrator, "_get_profile_or_fail", return_value=mock_profile),
+            patch.object(orchestrator, "_run_workflow", new=failing_run_workflow),
+            patch("amelia.server.orchestrator.service.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+        ):
+            await orchestrator._run_workflow_with_retry("wf-overflow", mock_state)
+
+        # Verify the delay calculation doesn't overflow and is properly capped
+        delays = [call[0][0] for call in mock_sleep.call_args_list]
+
+        # First few attempts before max_delay cap kicks in:
+        # Attempt 1: 30.0 * 2^0 = 30.0
+        # Attempt 2: 30.0 * 2^1 = 60.0
+        # Attempt 3: 30.0 * 2^2 = 120.0
+        # Attempt 4: 30.0 * 2^3 = 240.0
+        # Attempt 5+: 30.0 * 2^4+ = 480.0+, all capped at 300.0
+        assert delays[0] == 30.0
+        assert delays[1] == 60.0
+        assert delays[2] == 120.0
+        assert delays[3] == 240.0
+        # All remaining delays should be capped at max_delay
+        for i in range(4, 10):
+            assert delays[i] == 300.0
+

@@ -113,6 +113,9 @@ async def call_developer_node(
     # Extract event_bus, workflow_id, and profile from config
     event_bus, workflow_id, profile = extract_config_params(config or {})
 
+    # Capture current HEAD so the next reviewer only diffs against this point
+    pre_dev_commit = await get_current_commit(cwd=profile.working_dir)
+
     # Task-based execution: clear session and inject task-scoped context
     task_number = state.current_task_index + 1  # 1-indexed for display
     logger.info(
@@ -160,6 +163,7 @@ async def call_developer_node(
         "final_response": final_state.final_response,
         "error": final_state.error,
         "driver_session_id": final_state.driver_session_id,
+        "base_commit": pre_dev_commit or state.base_commit,
     }
 
 

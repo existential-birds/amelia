@@ -4,10 +4,11 @@ This driver wraps the Claude CLI via the official claude-agent-sdk package,
 providing both single-turn generation and agentic execution capabilities.
 """
 import json
+import os
 from collections.abc import AsyncIterator
 from typing import Any, Literal
 
-from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient, query
+from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient, ProcessError, query
 from claude_agent_sdk.types import (
     AssistantMessage,
     Message,
@@ -23,8 +24,29 @@ from loguru import logger
 from pydantic import BaseModel, ValidationError
 
 from amelia.core.constants import CANONICAL_TO_CLI, normalize_tool_name
+from amelia.core.exceptions import ModelProviderError
 from amelia.drivers.base import AgenticMessage, AgenticMessageType, DriverUsage, GenerateResult
 from amelia.logging import log_claude_result
+
+
+# Env vars that trigger Claude CLI's nested-session guard.
+# When Amelia runs inside a Claude Code session these are inherited by the
+# subprocess, causing an immediate exit-code-1 failure.  We strip them so the
+# child process starts cleanly.
+_NESTED_SESSION_ENV_VARS = frozenset({"CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT"})
+
+
+def _build_sanitized_env() -> dict[str, str]:
+    """Return a copy of the current process env without nested-session vars."""
+    return {k: v for k, v in os.environ.items() if k not in _NESTED_SESSION_ENV_VARS}
+
+
+def _sanitize_stderr(stderr: str, max_len: int = 1000) -> str:
+    """Return a redacted, size-limited stderr snippet safe for logs."""
+    snippet = stderr.replace("\n", " ").strip()
+    if len(snippet) > max_len:
+        snippet = f"{snippet[:max_len]}…"
+    return snippet
 
 
 def _strip_markdown_fences(text: str) -> str:
@@ -269,6 +291,7 @@ class ClaudeCliDriver:
             "system_prompt": effective_system_prompt,
             "resume": session_id,
             "output_format": output_format,
+            "env": _build_sanitized_env(),
         }
         if cli_allowed_tools is not None:
             if len(cli_allowed_tools) == 0:
@@ -312,6 +335,10 @@ class ClaudeCliDriver:
             system_prompt=system_prompt,
             schema=schema,
         )
+
+        # Capture stderr lines for diagnostics on failure
+        stderr_lines: list[str] = []
+        options.stderr = lambda line: stderr_lines.append(line)
 
         try:
             # Collect all messages
@@ -388,6 +415,22 @@ class ClaudeCliDriver:
                 else:
                     return ("", session_id_result)
 
+        except ProcessError as e:
+            exit_code = getattr(e, "exit_code", None)
+            captured_stderr = "\n".join(stderr_lines) if stderr_lines else ""
+            safe_stderr = _sanitize_stderr(captured_stderr)
+            logger.warning(
+                "Claude CLI process failed, will retry as transient error",
+                exit_code=exit_code,
+                stderr=safe_stderr,
+                error=str(e),
+            )
+            detail = safe_stderr or str(e)
+            raise ModelProviderError(
+                f"Claude CLI process error (exit code {exit_code}): {detail}",
+                provider_name="claude-cli",
+                original_message=str(e),
+            ) from e
         except Exception as e:
             if isinstance(e, RuntimeError):
                 raise
@@ -429,6 +472,12 @@ class ClaudeCliDriver:
             bypass_permissions=True,  # Agentic execution always bypasses permissions
             allowed_tools=allowed_tools,
         )
+
+        # Capture stderr lines from the CLI subprocess for diagnostics.
+        # The SDK hardcodes a placeholder in ProcessError.stderr, so we
+        # collect the real output via the stderr callback.
+        stderr_lines: list[str] = []
+        options.stderr = lambda line: stderr_lines.append(line)
 
         logger.info("Starting agentic execution", cwd=cwd)
 
@@ -511,6 +560,23 @@ class ClaudeCliDriver:
                             model=self.model,
                         )
 
+        except ProcessError as e:
+            exit_code = getattr(e, "exit_code", None)
+            # Use captured stderr lines (real output) over SDK placeholder
+            captured_stderr = "\n".join(stderr_lines) if stderr_lines else ""
+            safe_stderr = _sanitize_stderr(captured_stderr)
+            logger.warning(
+                "Claude CLI process failed, will retry as transient error",
+                exit_code=exit_code,
+                stderr=safe_stderr,
+                error=str(e),
+            )
+            detail = safe_stderr or str(e)
+            raise ModelProviderError(
+                f"Claude CLI process error (exit code {exit_code}): {detail}",
+                provider_name="claude-cli",
+                original_message=str(e),
+            ) from e
         except Exception:
             logger.exception("Error in agentic execution")
             raise

@@ -103,7 +103,6 @@ CREATE TABLE server_settings (
     websocket_idle_timeout_seconds NUMERIC NOT NULL DEFAULT 300.0,
     workflow_start_timeout_seconds NUMERIC NOT NULL DEFAULT 60.0,
     max_concurrent INTEGER NOT NULL DEFAULT 5,
-    stream_tool_results BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

@@ -83,7 +83,6 @@ class TestBootstrapServerConfig:
         # These should NOT exist (moved to database)
         assert not hasattr(config, "log_retention_days")
         assert not hasattr(config, "max_concurrent")
-        assert not hasattr(config, "stream_tool_results")
         assert not hasattr(config, "database_path")
 
     def test_defaults(self):

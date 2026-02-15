@@ -1,5 +1,6 @@
 """DeepAgents-based API driver for LLM generation and agentic execution."""
 import asyncio
+import functools
 import os
 import subprocess
 import threading
@@ -25,6 +26,7 @@ from loguru import logger
 from pydantic import BaseModel
 
 from amelia.core.constants import normalize_tool_name
+from amelia.core.exceptions import ModelProviderError
 from amelia.drivers.base import (
     AgenticMessage,
     AgenticMessageType,
@@ -38,6 +40,93 @@ from amelia.drivers.base import (
 _MAX_OUTPUT_SIZE = 100_000
 # Default command timeout in seconds
 _DEFAULT_TIMEOUT = 300
+
+# Patterns in ValueError messages that indicate a model provider error (not Amelia's fault).
+#
+# These patterns are matched case-insensitively against the exception message.
+# When a ValueError contains any of these patterns, it's wrapped in ModelProviderError
+# instead of being raised directly, providing better error UX for transient LLM issues.
+#
+# To add a new pattern:
+# 1. Identify the error message substring from the LLM provider SDK (usually langchain_openai)
+# 2. Add a lowercase pattern that uniquely identifies the provider error
+# 3. Test by triggering the error and verifying ModelProviderError is raised
+#
+# Configurable via AMELIA_PROVIDER_ERROR_PATTERNS env var (comma-separated, lowercase).
+_DEFAULT_PROVIDER_ERROR_PATTERNS = (
+    "midstream error",  # OpenRouter/provider streaming failures
+    "invalid function arguments",  # Bad tool call JSON from provider
+    "provider returned error",  # Generic provider-side errors
+)
+
+
+@functools.lru_cache(maxsize=1)
+def _get_provider_error_patterns() -> tuple[str, ...]:
+    """Get provider error patterns from environment or defaults.
+
+    Reads AMELIA_PROVIDER_ERROR_PATTERNS environment variable dynamically
+    to support runtime configuration and testing with mocked environments.
+
+    Returns:
+        Tuple of lowercase pattern strings to match against error messages.
+    """
+    patterns_str = os.environ.get(
+        "AMELIA_PROVIDER_ERROR_PATTERNS",
+        ",".join(_DEFAULT_PROVIDER_ERROR_PATTERNS),
+    )
+    return tuple(p.strip().lower() for p in patterns_str.split(",") if p.strip())
+
+
+def _is_model_provider_error(exc: ValueError) -> bool:
+    """Check if a ValueError originates from a model provider rather than Amelia validation.
+
+    langchain_openai raises ValueError with a dict arg when the provider returns
+    an error (e.g. bad JSON from Minimax). Amelia's own validation uses string args.
+
+    Args:
+        exc: The ValueError to inspect.
+
+    Returns:
+        True if this looks like a model provider error.
+    """
+    # langchain_openai pattern: ValueError({"error": {...}, "provider": "..."})
+    if exc.args and isinstance(exc.args[0], dict):
+        return True
+    # String-based detection for known provider error patterns
+    msg = str(exc).lower()
+    return any(pattern in msg for pattern in _get_provider_error_patterns())
+
+
+def _extract_provider_info(exc: ValueError) -> tuple[str | None, str]:
+    """Extract provider name and error message from a model provider ValueError.
+
+    Args:
+        exc: The ValueError to extract info from.
+
+    Returns:
+        Tuple of (provider_name, error_message). provider_name may be None.
+    """
+    if exc.args and isinstance(exc.args[0], dict):
+        err_dict = exc.args[0]
+        error_obj = err_dict.get("error", {})
+        provider = err_dict.get("provider")
+
+        # Handle unexpected dict structures with explicit logging
+        if not isinstance(error_obj, dict):
+            logger.debug(
+                "Unexpected error_obj type in provider error",
+                error_obj_type=type(error_obj).__name__,
+                error_obj_value=str(error_obj)[:200],
+                err_dict_keys=list(err_dict.keys()),
+            )
+
+        message = (
+            error_obj.get("message", str(err_dict))
+            if isinstance(error_obj, dict)
+            else str(error_obj)
+        )
+        return provider, message
+    return None, str(exc)
 
 
 class LocalSandbox(FilesystemBackend, SandboxBackendProtocol):
@@ -345,7 +434,15 @@ class ApiDriver(DriverInterface):
 
             return (output, None)
 
-        except ValueError:
+        except ValueError as e:
+            if _is_model_provider_error(e):
+                provider_name, raw_msg = _extract_provider_info(e)
+                raise ModelProviderError(
+                    f"Model provider error ({provider_name or 'unknown'}): {raw_msg}. "
+                    "This is a temporary issue with the AI provider, not a bug in Amelia.",
+                    provider_name=provider_name,
+                    original_message=raw_msg,
+                ) from e
             raise
         except Exception as e:
             raise RuntimeError(f"ApiDriver generation failed: {e}") from e
@@ -749,7 +846,15 @@ class ApiDriver(DriverInterface):
                     model=self.model,
                 )
 
-        except ValueError:
+        except ValueError as e:
+            if _is_model_provider_error(e):
+                provider_name, raw_msg = _extract_provider_info(e)
+                raise ModelProviderError(
+                    f"Model provider error ({provider_name or 'unknown'}): {raw_msg}. "
+                    "This is a temporary issue with the AI provider, not a bug in Amelia.",
+                    provider_name=provider_name,
+                    original_message=raw_msg,
+                ) from e
             raise
         except Exception as e:
             raise RuntimeError(f"Agentic execution failed: {e}") from e

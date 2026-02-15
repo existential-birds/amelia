@@ -215,7 +215,7 @@ Return your evaluation as an EvaluationOutput with all items and a summary.""")
                 items_needing_clarification=[],
                 summary="No review comments to evaluate.",
             )
-            return result, state.driver_session_id
+            return result, None
 
         # Build prompt and call driver
         prompt = self._build_prompt(state)
@@ -232,7 +232,7 @@ Return your evaluation as an EvaluationOutput with all items and a summary.""")
             system_prompt=self.system_prompt,
             schema=EvaluationOutput,
             cwd=profile.working_dir,
-            session_id=state.driver_session_id,
+            session_id=None,  # Fresh session to avoid bias from prior agent context
         )
 
         # Partition items by disposition

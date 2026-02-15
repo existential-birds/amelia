@@ -39,7 +39,6 @@ class TestSettingsRepository:
         assert isinstance(settings, ServerSettings)
         assert settings.log_retention_days == 30
         assert settings.max_concurrent == 5
-        assert settings.stream_tool_results is False
 
     async def test_get_server_settings_raises_if_not_initialized(self, repo: SettingsRepository) -> None:
         """Verify get_server_settings raises ValueError if ensure_defaults not called."""
@@ -92,7 +91,6 @@ class TestSettingsRepository:
             "websocket_idle_timeout_seconds": 600.0,
             "workflow_start_timeout_seconds": 120.0,
             "max_concurrent": 10,
-            "stream_tool_results": True,
         }
         updated = await repo.update_server_settings(updates)
 
@@ -101,4 +99,3 @@ class TestSettingsRepository:
         assert updated.websocket_idle_timeout_seconds == 600.0
         assert updated.workflow_start_timeout_seconds == 120.0
         assert updated.max_concurrent == 10
-        assert updated.stream_tool_results is True

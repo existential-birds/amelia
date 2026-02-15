@@ -14,6 +14,7 @@ from langgraph.graph.state import CompiledStateGraph
 from loguru import logger
 
 from amelia.core.constants import resolve_plan_path
+from amelia.core.exceptions import ModelProviderError
 from amelia.core.types import (
     Design,
     Issue,
@@ -57,6 +58,7 @@ TRANSIENT_EXCEPTIONS: tuple[type[Exception], ...] = (
     asyncio.TimeoutError,
     TimeoutException,
     ConnectionError,
+    ModelProviderError,
 )
 
 
@@ -1247,8 +1249,9 @@ class OrchestratorService:
                     )
                     raise
 
+                # Cap exponent at 31 to prevent overflow (2^32 exceeds 32-bit int)
                 delay = min(
-                    retry_config.base_delay * (2 ** (attempt - 1)),
+                    retry_config.base_delay * (2 ** min(attempt - 1, 31)),
                     retry_config.max_delay,
                 )
                 logger.warning(
@@ -1525,56 +1528,97 @@ class OrchestratorService:
         # Update status to in_progress before resuming
         await self._repository.set_status(workflow_id, WorkflowStatus.IN_PROGRESS)
 
-        # Resume execution from checkpoint
-        try:
-            async for chunk in graph.astream(
-                None,  # Resume from checkpoint, no new input needed
-                config=config,
-                stream_mode=["updates", "tasks"],
-            ):
-                # Combined mode returns (mode, data) tuples
-                # Cast for type checker - astream with list mode returns tuples
-                chunk_tuple = cast(tuple[str, Any], chunk)
-                # In agentic mode, no interrupts expected after initial approval
-                if self._is_interrupt_chunk(chunk_tuple):
-                    _, data = chunk_tuple
-                    state = await graph.aget_state(config)
-                    next_nodes = state.next if state else []
-                    logger.warning(
-                        "Unexpected interrupt after approval",
+        # Resume execution from checkpoint with retry for transient errors
+        retry_config = profile.retry
+        attempt = 0
+        success = False
+
+        while attempt <= retry_config.max_retries and not success:
+            try:
+                async for chunk in graph.astream(
+                    None,  # Resume from checkpoint, no new input needed
+                    config=config,
+                    stream_mode=["updates", "tasks"],
+                ):
+                    # Combined mode returns (mode, data) tuples
+                    # Cast for type checker - astream with list mode returns tuples
+                    chunk_tuple = cast(tuple[str, Any], chunk)
+                    # In agentic mode, no interrupts expected after initial approval
+                    if self._is_interrupt_chunk(chunk_tuple):
+                        _, data = chunk_tuple
+                        state = await graph.aget_state(config)
+                        next_nodes = state.next if state else []
+                        logger.warning(
+                            "Unexpected interrupt after approval",
+                            workflow_id=workflow_id,
+                            next_nodes=next_nodes,
+                        )
+                        continue
+                    await self._handle_combined_stream_chunk(workflow_id, chunk_tuple)
+
+                # Workflow completed after human approval.
+                # Note: A separate COMPLETED emission exists in _run_workflow() for
+                # workflows that complete without interruption. These are mutually exclusive
+                # code paths - only one COMPLETED event is ever emitted per workflow.
+
+                # Check for task failure before marking complete (multi-task mode)
+                await self._emit_task_failed_if_applicable(workflow_id)
+
+                await self._emit(
+                    workflow_id,
+                    EventType.WORKFLOW_COMPLETED,
+                    "Workflow completed successfully",
+                )
+                await self._repository.set_status(workflow_id, WorkflowStatus.COMPLETED)
+                success = True
+
+            except TRANSIENT_EXCEPTIONS as e:
+                attempt += 1
+
+                if attempt > retry_config.max_retries:
+                    logger.exception(
+                        "Workflow failed after approval retries exhausted",
                         workflow_id=workflow_id,
-                        next_nodes=next_nodes,
                     )
-                    continue
-                await self._handle_combined_stream_chunk(workflow_id, chunk_tuple)
+                    await self._emit(
+                        workflow_id,
+                        EventType.WORKFLOW_FAILED,
+                        f"Workflow failed after {attempt} attempts: {e!s}",
+                        data={"error": str(e), "attempts": attempt},
+                    )
+                    await self._repository.set_status(
+                        workflow_id,
+                        WorkflowStatus.FAILED,
+                        failure_reason=f"Failed after {attempt} attempts: {e}",
+                    )
+                    raise
 
-            # Workflow completed after human approval.
-            # Note: A separate COMPLETED emission exists in _run_workflow() for
-            # workflows that complete without interruption. These are mutually exclusive
-            # code paths - only one COMPLETED event is ever emitted per workflow.
+                delay = min(
+                    retry_config.base_delay * (2 ** min(attempt - 1, 31)),
+                    retry_config.max_delay,
+                )
+                logger.warning(
+                    "Transient error after approval, retrying",
+                    workflow_id=workflow_id,
+                    attempt=attempt,
+                    max_retries=retry_config.max_retries,
+                    delay=delay,
+                    error=str(e),
+                )
+                await asyncio.sleep(delay)
 
-            # Check for task failure before marking complete (multi-task mode)
-            await self._emit_task_failed_if_applicable(workflow_id)
-
-            await self._emit(
-                workflow_id,
-                EventType.WORKFLOW_COMPLETED,
-                "Workflow completed successfully",
-            )
-            await self._repository.set_status(workflow_id, WorkflowStatus.COMPLETED)
-
-        except Exception as e:
-            logger.exception("Workflow failed after approval", workflow_id=workflow_id)
-            await self._emit(
-                workflow_id,
-                EventType.WORKFLOW_FAILED,
-                f"Workflow failed: {e!s}",
-                data={"error": str(e)},
-            )
-            await self._repository.set_status(
-                workflow_id, WorkflowStatus.FAILED, failure_reason=str(e)
-            )
-            raise
+            except Exception as e:
+                logger.exception("Workflow failed after approval", workflow_id=workflow_id)
+                await self._emit(
+                    workflow_id,
+                    EventType.WORKFLOW_FAILED,
+                    f"Workflow failed: {e!s}",
+                    data={"error": str(e)},
+                )
+                await self._repository.set_status(
+                    workflow_id, WorkflowStatus.FAILED, failure_reason=str(e)
+                )
+                raise
 
     async def reject_workflow(
         self,
@@ -1725,6 +1769,17 @@ class OrchestratorService:
         """
         for node_name, output in chunk.items():
             if node_name in STAGE_NODES:
+                # Some nodes (e.g. human_approval_node) produce None output
+                if output is None:
+                    await self._emit(
+                        workflow_id,
+                        EventType.STAGE_COMPLETED,
+                        f"Completed {node_name}",
+                        agent=node_name.removesuffix("_node"),
+                        data={"stage": node_name},
+                    )
+                    continue
+
                 # output is always a dict here (node state update from LangGraph)
                 summarized = _summarize_stage_output(output)
                 assert summarized is not None

@@ -5,7 +5,6 @@ import { useState, useEffect } from 'react';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { ToggleField } from './ToggleField';
 import type { ServerSettings } from '@/api/settings';
 
 interface ServerSettingsFormProps {
@@ -109,24 +108,6 @@ export function ServerSettingsForm({ settings, onSave, isSaving }: ServerSetting
             </SelectContent>
           </Select>
         </div>
-      </section>
-
-      {/* Debugging */}
-      <section className="space-y-4">
-        <div>
-          <h3 className="text-lg font-medium">Debugging</h3>
-          <p className="text-sm text-muted-foreground">
-            Options for debugging workflow execution.
-          </p>
-        </div>
-
-        <ToggleField
-          id="stream_tool_results"
-          label="Stream Tool Results"
-          description="Enable streaming of tool results to dashboard WebSocket."
-          checked={formData.stream_tool_results}
-          onCheckedChange={(checked) => handleChange('stream_tool_results', checked)}
-        />
       </section>
 
       {/* Footer */}

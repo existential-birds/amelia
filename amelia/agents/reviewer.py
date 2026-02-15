@@ -279,7 +279,9 @@ The changes are in git - diff against commit: {base_commit}"""
                 workflow_id=workflow_id,
             )
         cwd = profile.working_dir or "."
-        session_id = state.driver_session_id
+        # Always start a fresh session — the reviewer must not resume the
+        # developer's session (different agent, different system prompt).
+        session_id = None
         new_session_id: str | None = None
         final_result: str | None = None
         has_error: bool = False

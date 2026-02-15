@@ -174,7 +174,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Wire WebSocket broadcasting and repository
     event_bus.set_connection_manager(connection_manager)
     connection_manager.set_repository(repository)
-    connection_manager.set_stream_tool_results(server_settings.stream_tool_results)
 
     # Create and register orchestrator
     from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
