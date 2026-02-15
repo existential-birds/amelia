@@ -36,6 +36,7 @@ class ConnectionManager:
         self._connections: dict[WebSocket, set[str]] = {}
         self._lock = asyncio.Lock()
         self._repository: WorkflowRepository | None = None
+        self._stream_tool_results: bool = False
 
     def set_repository(self, repository: WorkflowRepository) -> None:
         """Set the workflow repository for event backfill.
@@ -54,6 +55,14 @@ class ConnectionManager:
             this is set during lifespan startup.
         """
         return self._repository
+
+    def set_stream_tool_results(self, enabled: bool) -> None:
+        """Set whether trace events should be broadcast via WebSocket.
+
+        Args:
+            enabled: If True, trace events are broadcast to clients.
+        """
+        self._stream_tool_results = enabled
 
     async def connect(self, websocket: WebSocket) -> None:
         """Accept and register a new WebSocket connection.
@@ -132,8 +141,9 @@ class ConnectionManager:
     async def broadcast(self, event: WorkflowEvent) -> None:
         """Broadcast event to connected WebSocket clients.
 
-        For trace-level events: broadcasts to ALL clients (no workflow filtering)
-        For other events: broadcasts only to clients subscribed to the workflow
+        For trace-level events: broadcasts to ALL clients (no workflow filtering),
+        but only when stream_tool_results is enabled.
+        For other events: broadcasts only to clients subscribed to the workflow.
 
         Sends to all target clients concurrently with a timeout. Slow or hung
         clients are disconnected after timeout to prevent blocking other subscribers.
@@ -142,6 +152,9 @@ class ConnectionManager:
             event: The workflow event to broadcast.
         """
         is_trace = event.event_type not in PERSISTED_TYPES
+
+        if is_trace and not self._stream_tool_results:
+            return
 
         targets: list[WebSocket] = []
         async with self._lock:

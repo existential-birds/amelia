@@ -19,7 +19,6 @@ from amelia.server.models.events import WorkflowEvent
 
 if TYPE_CHECKING:
     from amelia.pipelines.implementation.state import ImplementationState
-    from amelia.server.events.bus import EventBus
 
 
 class Architect:
@@ -60,14 +59,12 @@ Before planning, discover:
     def __init__(
         self,
         config: AgentConfig,
-        event_bus: "EventBus | None" = None,
         prompts: dict[str, str] | None = None,
     ):
         """Initialize the Architect agent.
 
         Args:
             config: Agent configuration with driver, model, and options.
-            event_bus: Optional EventBus for emitting workflow events.
             prompts: Optional dict mapping prompt IDs to custom content.
                 Supports keys: "architect.system", "architect.plan".
 
@@ -80,7 +77,6 @@ Before planning, discover:
             options=config.options,
         )
         self.options = config.options
-        self._event_bus = event_bus
         self._prompts = prompts or {}
 
     @property

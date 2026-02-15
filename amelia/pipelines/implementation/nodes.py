@@ -159,7 +159,7 @@ async def call_architect_node(
     prompts = configurable.get("prompts", {})
 
     agent_config = profile.get_agent_config("architect")
-    architect = Architect(agent_config, event_bus=event_bus, prompts=prompts)
+    architect = Architect(agent_config, prompts=prompts)
 
     # Ensure the plan directory exists before the architect runs
     plan_rel_path = resolve_plan_path(profile.plan_path_pattern, state.issue.id)
