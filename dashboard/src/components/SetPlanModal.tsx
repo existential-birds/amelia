@@ -98,11 +98,10 @@ export function SetPlanModal({
       <DialogContent
         className="sm:max-w-lg"
         onInteractOutside={(e) => {
-          // Prevent dialog from closing when clicking inside popover portals (e.g. Combobox dropdown)
-          const target = e.target as HTMLElement;
-          if (target?.closest('[data-slot="popover-content"]')) {
-            e.preventDefault();
-          }
+          // Prevent outside-click dismiss entirely: this form dialog has Cancel/X close buttons,
+          // and portalled popovers (e.g. Combobox dropdown) cause spurious focus-outside events
+          // when they close, which would incorrectly dismiss the dialog.
+          e.preventDefault();
         }}
       >
         <DialogHeader>
