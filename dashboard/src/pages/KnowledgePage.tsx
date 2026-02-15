@@ -83,8 +83,8 @@ function getDocumentColumns(onDelete: (id: string) => void): ColumnDef<Knowledge
       header: ({ column }) => <DataTableColumnHeader column={column} title="Tags" />,
       cell: ({ row }) => (
         <div className="flex flex-wrap gap-1">
-          {row.original.tags.map((tag) => (
-            <Badge key={tag} variant="outline" className="text-xs">
+          {row.original.tags.map((tag, index) => (
+            <Badge key={`${tag}-${index}`} variant="outline" className="text-xs">
               {tag}
             </Badge>
           ))}
@@ -383,8 +383,8 @@ export default function KnowledgePage() {
                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
                           <FileText className="size-3" />
                           <span>{result.document_name}</span>
-                          {result.tags.map((tag) => (
-                            <Badge key={tag} variant="outline" className="text-xs">
+                          {result.tags.map((tag, index) => (
+                            <Badge key={`${tag}-${index}`} variant="outline" className="text-xs">
                               {tag}
                             </Badge>
                           ))}
