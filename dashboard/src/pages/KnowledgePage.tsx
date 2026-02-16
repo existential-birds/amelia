@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLoaderData, useRevalidator } from 'react-router-dom';
 import type { ColumnDef } from '@tanstack/react-table';
 import { format } from 'date-fns';
-import { Library, Upload, Search, FileText, Trash2, AlertCircle, Loader2, Tag } from 'lucide-react';
+import { Library, Upload, Search, FileText, Trash2, AlertCircle, Loader2, Tag, ChevronRight } from 'lucide-react';
 import { PageHeader } from '@/components/PageHeader';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils';
 import { Card, CardContent } from '@/components/ui/card';
 import { DataTable } from '@/components/ui/data-table';
 import { DataTableColumnHeader } from '@/components/ui/data-table-column-header';
+import { extractDocumentPreview } from '@/lib/preview';
 import {
   Dialog,
   DialogContent,
@@ -203,6 +204,36 @@ function statusBadge(status: DocumentStatus, error?: string | null) {
  */
 function getDocumentColumns(onDelete: (id: string) => void): ColumnDef<KnowledgeDocument>[] {
   return [
+    {
+      id: 'expand',
+      size: 40, // Fixed narrow width
+      cell: ({ row }) => {
+        // Disable expand for processing/failed status
+        const canExpand = row.original.status === 'ready';
+
+        return (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={(e) => {
+              e.stopPropagation(); // Don't trigger row click
+              row.toggleExpanded();
+            }}
+            disabled={!canExpand}
+            aria-label={row.getIsExpanded() ? "Collapse row" : "Expand row"}
+            className="h-8 w-8"
+            title={!canExpand ? "Processing..." : undefined}
+          >
+            <ChevronRight
+              className={cn(
+                "h-4 w-4 transition-transform duration-200",
+                row.getIsExpanded() && "rotate-90"
+              )}
+            />
+          </Button>
+        );
+      },
+    },
     {
       accessorKey: 'name',
       header: ({ column }) => <DataTableColumnHeader column={column} title="Name" />,
@@ -633,7 +664,30 @@ export default function KnowledgePage() {
               </Button>
             </Empty>
           ) : (
-            <DataTable columns={columns} data={documents} />
+            <DataTable
+              columns={columns}
+              data={documents}
+              renderSubComponent={({ row }) => {
+                const rawText = row.original.raw_text;
+                const preview = extractDocumentPreview(rawText);
+
+                return (
+                  <div className="bg-muted/30 p-4">
+                    {preview ? (
+                      <p className="font-mono text-sm text-muted-foreground line-clamp-4">
+                        {preview}
+                      </p>
+                    ) : (
+                      <p className="text-sm text-muted-foreground italic">
+                        {row.original.status === 'ready'
+                          ? 'No preview available'
+                          : 'Document is being processed...'}
+                      </p>
+                    )}
+                  </div>
+                );
+              }}
+            />
           )}
         </TabsContent>
       </Tabs>
