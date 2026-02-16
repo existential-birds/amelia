@@ -50,6 +50,7 @@ from fastapi.staticfiles import StaticFiles
 from loguru import logger
 
 from amelia import __version__
+from amelia.core.types import DriverType
 from amelia.drivers.base import DriverInterface
 from amelia.drivers.factory import (
     cleanup_driver_session,
@@ -221,10 +222,21 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             "AMELIA_KNOWLEDGE_TAG_MODEL",
             "openai/gpt-oss-120b",  # Fast and cost-effective
         )
-        tag_driver = os.environ.get(
+        tag_driver_raw = os.environ.get(
             "AMELIA_KNOWLEDGE_TAG_DRIVER",
             "api",  # Default to API driver
-        )
+        ).lower()  # Normalize to lowercase
+
+        # Validate driver type
+        try:
+            tag_driver = DriverType(tag_driver_raw)
+        except ValueError:
+            logger.warning(
+                "Invalid AMELIA_KNOWLEDGE_TAG_DRIVER value, using default 'api'",
+                provided=tag_driver_raw,
+                valid_values=["api", "cli"],
+            )
+            tag_driver = DriverType.API
 
         ingestion_pipeline = IngestionPipeline(
             repository=knowledge_repo,

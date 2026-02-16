@@ -121,6 +121,8 @@ Server settings configurable via `amelia config server set` or dashboard. Enviro
 | `AMELIA_DB_POOL_MAX_SIZE` | `10` | Maximum pool connections |
 | `AMELIA_MAX_CONCURRENT` | `5` | Maximum concurrent workflows |
 | `AMELIA_PROVIDER_ERROR_PATTERNS` | `midstream error,invalid function arguments,provider returned error` | Comma-separated patterns to detect LLM provider errors (case-insensitive) |
+| `AMELIA_KNOWLEDGE_TAG_MODEL` | `openai/gpt-oss-120b` | LLM model for automatic tag extraction. Set to empty string to disable tag derivation. |
+| `AMELIA_KNOWLEDGE_TAG_DRIVER` | `api` | Driver type for tag extraction ("api" or "cli"). |
 
 **Debugging tip**: Set `AMELIA_CHECKPOINT_RETENTION_DAYS=-1` to preserve checkpoints for debugging workflow issues.
 
