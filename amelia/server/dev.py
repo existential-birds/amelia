@@ -27,8 +27,6 @@ from amelia.server.banner import (
     GOLD,
     GRAY,
     MOSS,
-    PINK,
-    PURPLE,
     RUST,
     TWILIGHT,
     get_service_urls_display,
