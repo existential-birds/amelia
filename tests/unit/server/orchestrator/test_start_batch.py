@@ -1,6 +1,7 @@
 # tests/unit/server/orchestrator/test_start_batch.py
 """Tests for start_batch_workflows orchestrator method."""
 
+import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
@@ -91,7 +92,10 @@ class TestStartBatchWorkflows:
     ) -> None:
         """Start only specified workflow IDs."""
 
-        def mock_get(workflow_id: str) -> ServerExecutionState:
+        wf_id_1 = uuid4()
+        wf_id_2 = uuid4()
+
+        def mock_get(workflow_id: uuid.UUID) -> ServerExecutionState:
             return ServerExecutionState(
                 id=workflow_id,
                 issue_id=f"ISSUE-{workflow_id}",
@@ -104,10 +108,10 @@ class TestStartBatchWorkflows:
         with patch.object(
             orchestrator, "start_pending_workflow", new_callable=AsyncMock
         ):
-            request = BatchStartRequest(workflow_ids=["wf-1", "wf-2"])
+            request = BatchStartRequest(workflow_ids=[str(wf_id_1), str(wf_id_2)])
             response = await orchestrator.start_batch_workflows(request)
 
-        assert set(response.started) == {"wf-1", "wf-2"}
+        assert set(response.started) == {str(wf_id_1), str(wf_id_2)}
         assert response.errors == {}
 
     @pytest.mark.asyncio
@@ -170,8 +174,8 @@ class TestStartBatchWorkflows:
 
         # wf_id_1 succeeds, wf_id_2 fails due to worktree conflict
         async def mock_start(wf_id: object) -> None:
-            if wf_id == str(wf_id_2):
-                raise WorkflowConflictError("/repo", str(wf_id_1))
+            if wf_id == wf_id_2:
+                raise WorkflowConflictError("/repo", wf_id_1)
 
         with patch.object(orchestrator, "start_pending_workflow", side_effect=mock_start):
             request = BatchStartRequest()

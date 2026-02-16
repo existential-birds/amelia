@@ -85,11 +85,12 @@ class TestWebSocketEndpoint:
 
         mock_websocket.receive_json.side_effect = Exception("disconnect")
 
+        since_id = uuid4()
         with patch("amelia.server.routes.websocket.connection_manager", mock_connection_manager):
-            await websocket_endpoint(mock_websocket, since="evt-1")
+            await websocket_endpoint(mock_websocket, since=str(since_id))
 
-        # Should get events after evt-1 with limit
-        mock_repository.get_events_after.assert_awaited_once_with("evt-1", limit=1000)
+        # Should get events after since_id with limit
+        mock_repository.get_events_after.assert_awaited_once_with(since_id, limit=1000)
 
         # Should send backfilled events
         assert mock_websocket.send_json.call_count >= 2
@@ -108,7 +109,7 @@ class TestWebSocketEndpoint:
         mock_websocket.receive_json.side_effect = Exception("disconnect")
 
         with patch("amelia.server.routes.websocket.connection_manager", mock_connection_manager):
-            await websocket_endpoint(mock_websocket, since="evt-nonexistent")
+            await websocket_endpoint(mock_websocket, since=str(uuid4()))
 
         # Should send backfill_expired message
         backfill_expired_sent = any(
@@ -138,8 +139,9 @@ class TestWebSocketEndpoint:
 
         mock_websocket.receive_json.side_effect = Exception("disconnect")
 
+        since_id = uuid4()
         with patch("amelia.server.routes.websocket.connection_manager", mock_connection_manager):
-            await websocket_endpoint(mock_websocket, since="evt-1")
+            await websocket_endpoint(mock_websocket, since=str(since_id))
 
         # Should request with limit
-        mock_repository.get_events_after.assert_awaited_once_with("evt-1", limit=1000)
+        mock_repository.get_events_after.assert_awaited_once_with(since_id, limit=1000)

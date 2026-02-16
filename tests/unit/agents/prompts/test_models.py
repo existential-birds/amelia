@@ -31,14 +31,15 @@ class TestPrompt:
 
     def test_prompt_with_version(self):
         """Should allow setting current_version_id."""
+        vid = uuid4()
         prompt = Prompt(
             id="architect.system",
             agent="architect",
             name="Architect System Prompt",
             description="Defines the architect's role",
-            current_version_id="version-123",
+            current_version_id=vid,
         )
-        assert prompt.current_version_id == "version-123"
+        assert prompt.current_version_id == vid
 
 
 class TestPromptVersion:

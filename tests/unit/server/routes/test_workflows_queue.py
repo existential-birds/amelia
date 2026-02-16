@@ -37,9 +37,9 @@ def mock_repository() -> MagicMock:
 def mock_orchestrator() -> MagicMock:
     """Create a mock OrchestratorService with queue methods."""
     orch = MagicMock()
-    orch.start_workflow = AsyncMock(return_value="wf-started")
-    orch.queue_workflow = AsyncMock(return_value="wf-queued")
-    orch.queue_and_plan_workflow = AsyncMock(return_value="wf-planned")
+    orch.start_workflow = AsyncMock(return_value=uuid4())
+    orch.queue_workflow = AsyncMock(return_value=uuid4())
+    orch.queue_and_plan_workflow = AsyncMock(return_value=uuid4())
     return orch
 
 
