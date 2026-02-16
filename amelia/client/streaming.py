@@ -117,7 +117,7 @@ async def stream_workflow_events(
     ws_url = base_url.replace("http://", "ws://").replace("https://", "wss://") + "/ws/events"
 
     async with websockets.connect(ws_url) as ws:
-        await ws.send(json.dumps({"type": "subscribe", "workflow_id": workflow_id}))
+        await ws.send(json.dumps({"type": "subscribe", "workflow_id": str(workflow_id)}))
 
         async for message in ws:
             data = json.loads(message)

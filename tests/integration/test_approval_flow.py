@@ -59,10 +59,10 @@ class TestMissingRequiredFields:
         )
 
         await mock_repository.create(server_state)
-        await service._run_workflow("wf-error-test", server_state)
+        await service._run_workflow(server_state.id, server_state)
 
         # Verify status is "failed"
-        persisted = await mock_repository.get("wf-error-test")
+        persisted = await mock_repository.get(server_state.id)
         assert persisted is not None
         assert persisted.workflow_status == "failed"
         assert persisted.failure_reason is not None
@@ -102,7 +102,7 @@ class TestLifecycleEvents:
         )
 
         await mock_repository.create(server_state)
-        await service._run_workflow("wf-lifecycle-test", server_state)
+        await service._run_workflow(server_state.id, server_state)
 
         # Check WORKFLOW_STARTED was emitted
         started_events = event_tracker.get_by_type(EventType.WORKFLOW_STARTED)
@@ -147,10 +147,10 @@ class TestGraphInterruptHandling:
         )
 
         await mock_repository.create(server_state)
-        await service._run_workflow("wf-interrupt-test", server_state)
+        await service._run_workflow(server_state.id, server_state)
 
         # Verify status is blocked
-        persisted = await mock_repository.get("wf-interrupt-test")
+        persisted = await mock_repository.get(server_state.id)
         assert persisted is not None
         assert persisted.workflow_status == "blocked"
 
