@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
@@ -33,7 +34,7 @@ class KnowledgeService:
 
     def queue_ingestion(
         self,
-        document_id: str,
+        document_id: uuid.UUID,
         file_path: Path,
         content_type: str,
     ) -> None:
@@ -63,7 +64,7 @@ class KnowledgeService:
 
     async def _ingest_with_events(
         self,
-        document_id: str,
+        document_id: uuid.UUID,
         file_path: Path,
         content_type: str,
     ) -> None:
@@ -146,7 +147,7 @@ class KnowledgeService:
 
     def _emit_event(
         self,
-        document_id: str,
+        document_id: uuid.UUID,
         event_type: EventType,
         message: str,
         data: dict[str, object],

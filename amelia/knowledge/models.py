@@ -1,5 +1,6 @@
 """Pydantic models for Knowledge Library."""
 
+import uuid
 from datetime import UTC, datetime
 from enum import StrEnum
 
@@ -41,7 +42,7 @@ class Document(BaseModel):
         updated_at: Last status update timestamp.
     """
 
-    id: str
+    id: uuid.UUID
     name: str
     filename: str
     content_type: str
@@ -71,8 +72,8 @@ class DocumentChunk(BaseModel):
         created_at: Chunk creation timestamp.
     """
 
-    id: str
-    document_id: str
+    id: uuid.UUID
+    document_id: uuid.UUID
     chunk_index: int
     content: str
     heading_path: list[str] = Field(default_factory=list)
@@ -96,8 +97,8 @@ class SearchResult(BaseModel):
         token_count: Token count for context window management.
     """
 
-    chunk_id: str
-    document_id: str
+    chunk_id: uuid.UUID
+    document_id: uuid.UUID
     document_name: str
     tags: list[str]
     content: str
