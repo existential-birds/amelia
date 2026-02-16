@@ -8,6 +8,7 @@ This module defines the foundational abstractions for the pipeline system:
 """
 
 import operator
+import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, Annotated, Any, Literal, Protocol, TypeVar
 
@@ -76,7 +77,7 @@ class BasePipelineState(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     # Identity (immutable, self-describing for serialization)
-    workflow_id: str
+    workflow_id: uuid.UUID
     pipeline_type: str
     profile_id: str
     created_at: datetime

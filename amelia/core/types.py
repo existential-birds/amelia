@@ -4,6 +4,7 @@ Contains StrEnum types (DriverType, TrackerType, Severity) and
 Pydantic models (RetryConfig, SandboxConfig, Profile, Settings, Issue) used throughout
 the Amelia agentic coding orchestrator.
 """
+import uuid
 from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
@@ -260,8 +261,8 @@ class OracleConsultation(BaseModel):
     problem: str
     advice: str | None = None
     model: str
-    session_id: str
-    workflow_id: str | None = None
+    session_id: uuid.UUID
+    workflow_id: uuid.UUID | None = None
     tokens: dict[str, int] = Field(default_factory=dict)
     cost_usd: float | None = None
     files_consulted: list[str] = Field(default_factory=list)

@@ -3,6 +3,7 @@
 This module defines the state model for agentic (tool-calling) execution,
 replacing the structured batch/step execution model.
 """
+import uuid
 from enum import StrEnum
 from typing import Any
 
@@ -80,7 +81,7 @@ class AgenticState(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    workflow_id: str
+    workflow_id: uuid.UUID
     issue_key: str
     goal: str
     system_prompt: str | None = None
@@ -95,4 +96,4 @@ class AgenticState(BaseModel):
     error: str | None = None
 
     # Session continuity
-    session_id: str | None = None
+    session_id: uuid.UUID | None = None
