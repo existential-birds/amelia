@@ -131,7 +131,7 @@ A comprehensive long-context benchmark shows reasoning-enhanced models (o1-previ
 
 A systematic comparison shows RAPTOR (summarization-based retrieval) achieves 38.5% vs 20-22% for chunk-based methods. Self-contained narratives favor Long Context while fragmented sources favor RAG. Context relevance is the most overlooked factor.
 
-**Key influence:** Single file analysis uses Long Context, multi-file codebase search uses RAG with summarization. The Knowledge Library's semantic search implements the RAPTOR pattern for hierarchical code understanding. Context quality over quantity drives retrieval design.
+**Key influence:** Single-file analysis uses Long Context, multi-file codebase search uses RAG with summarization. The Knowledge Library's semantic search implements the RAPTOR pattern for hierarchical code understanding. Context quality over quantity drives retrieval design.
 
 #### [ONERULER: Benchmarking Multilingual Long-Context Language Models](https://arxiv.org/abs/2503.01996)
 *Kim et al., 2025*
