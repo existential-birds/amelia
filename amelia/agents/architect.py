@@ -39,6 +39,11 @@ Write comprehensive implementation plans assuming the executor has ZERO context 
 
 You have read-only access to explore the codebase before planning.
 
+## File Paths
+When creating or referencing files, use virtual absolute paths starting with / (e.g., /docs/plan.md, /src/component.ts).
+DO NOT use real filesystem absolute paths like /Users/... or C:\\... - these will be rejected.
+All paths are relative to the working directory but must start with /.
+
 ## Principles
 - DRY, YAGNI, TDD, frequent commits
 - Assume executor is skilled but knows nothing about this toolset or problem domain
@@ -288,6 +293,9 @@ Before planning, discover:
         # IMPORTANT: Explicitly require writing to file - without this,
         # the LLM may just output the plan as text instead of writing to the file.
         plan_path = resolve_plan_path(profile.plan_path_pattern, state.issue.id)
+        # Ensure path has leading slash for deepagents virtual_mode compatibility
+        if not plan_path.startswith('/'):
+            plan_path = f'/{plan_path}'
         parts.append("\n## Output (CRITICAL)")
         parts.append(
             f"**CRITICAL REQUIREMENT**: Create a markdown file at `{plan_path}` containing your implementation plan. "

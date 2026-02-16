@@ -466,22 +466,28 @@ export const api = {
   /**
    * Lists files in a directory matching a glob pattern.
    *
-   * @param directory - Absolute path to the directory to list.
+   * @param directory - Relative directory path within the base directory.
    * @param globPattern - Glob pattern to filter files (default: '*.md').
+   * @param worktreePath - Optional worktree path to use as base directory.
+   *                      If not provided, uses active profile's working_dir.
    * @returns Response with matching file entries and directory path.
    * @throws {ApiError} When directory not found or API request fails.
    *
    * @example
    * ```typescript
-   * const result = await api.listFiles('/path/to/repo/docs', '*.md');
+   * const result = await api.listFiles('docs/plans', '*.md', '/path/to/worktree');
    * console.log(`Found ${result.files.length} files in ${result.directory}`);
    * ```
    */
   async listFiles(
     directory: string,
-    globPattern: string = '*.md'
+    globPattern: string = '*.md',
+    worktreePath?: string
   ): Promise<FileListResponse> {
     const params = new URLSearchParams({ directory, glob_pattern: globPattern });
+    if (worktreePath) {
+      params.append('worktree_path', worktreePath);
+    }
     const response = await fetchWithTimeout(`${API_BASE_URL}/files/list?${params}`);
     return handleResponse<FileListResponse>(response);
   },
@@ -734,17 +740,25 @@ export const api = {
    * Reads file content for design document import.
    *
    * @param path - Absolute path to the file to read.
+   * @param worktreePath - Optional worktree path to use as base directory. If not provided, uses active profile's working_dir.
    * @returns File content and filename.
    * @throws {ApiError} When file not found, path invalid, or API request fails.
    *
    * @example
    * ```typescript
-   * const file = await api.readFile('/path/to/design.md');
+   * const file = await api.readFile('/path/to/design.md', '/path/to/worktree');
    * console.log(`Content: ${file.content}`);
    * ```
    */
-  async readFile(path: string): Promise<FileReadResponse> {
-    const response = await fetchWithTimeout(`${API_BASE_URL}/files/read`, {
+  async readFile(path: string, worktreePath?: string): Promise<FileReadResponse> {
+    const params = new URLSearchParams();
+    if (worktreePath) {
+      params.append('worktree_path', worktreePath);
+    }
+    const url = params.toString()
+      ? `${API_BASE_URL}/files/read?${params}`
+      : `${API_BASE_URL}/files/read`;
+    const response = await fetchWithTimeout(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ path }),

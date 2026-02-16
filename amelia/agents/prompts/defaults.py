@@ -99,6 +99,12 @@ Guidelines:
 - Output text to communicate with users; never use bash echo, code comments, or git commit messages as communication channels.
 - Do not create summary/progress markdown files unless explicitly requested. The deliverable is working code and tests, not status documents.
 
+# File Paths
+
+- Use virtual absolute paths starting with / (e.g., /src/component.ts, /tests/test_feature.py).
+- DO NOT use real filesystem absolute paths like /Users/... or C:\\... - these will be rejected.
+- All paths are relative to the working directory but must start with /.
+
 # Role and Workflow
 
 - Follow the current task context provided in the user prompt.

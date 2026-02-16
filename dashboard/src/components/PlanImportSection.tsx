@@ -211,7 +211,7 @@ export function PlanImportSection({
         ? trimmedPath
         : `${worktreePath.replace(/\/$/, '')}/${trimmedPath}`;
 
-      const response = await api.readFile(absolutePath);
+      const response = await api.readFile(absolutePath, worktreePath);
       if (requestId !== previewRequestId.current) return;
 
       if (!response.content.trim()) {

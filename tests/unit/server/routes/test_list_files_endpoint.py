@@ -213,3 +213,93 @@ class TestListFiles:
         file_names = [f["name"] for f in data["files"]]
         # "archive" is a subdirectory, should not appear
         assert "archive" not in file_names
+
+    def test_worktree_path_overrides_working_dir(
+        self, client: TestClient, tmp_path: Path
+    ) -> None:
+        """Should use worktree_path as base directory instead of active profile's working_dir."""
+        # Create a separate worktree with different files
+        worktree = tmp_path / "worktree"
+        worktree_docs = worktree / "docs" / "plans"
+        worktree_docs.mkdir(parents=True)
+        (worktree_docs / "worktree-plan.md").write_text("# Worktree Plan")
+
+        response = client.get(
+            "/api/files/list",
+            params={
+                "directory": "docs/plans",
+                "worktree_path": str(worktree),
+            },
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        file_names = [f["name"] for f in data["files"]]
+        assert "worktree-plan.md" in file_names
+        # Files from the active profile's working_dir should NOT appear
+        assert "plan-a.md" not in file_names
+        assert "plan-b.md" not in file_names
+
+    def test_worktree_path_requires_absolute_path(
+        self, client: TestClient
+    ) -> None:
+        """Should reject relative worktree_path."""
+        response = client.get(
+            "/api/files/list",
+            params={
+                "directory": "docs/plans",
+                "worktree_path": "relative/path",
+            },
+        )
+
+        assert response.status_code == 400
+        data = response.json()
+        assert "must be an absolute path" in data["error"].lower()
+
+    def test_worktree_path_requires_existing_directory(
+        self, client: TestClient
+    ) -> None:
+        """Should reject nonexistent worktree_path."""
+        response = client.get(
+            "/api/files/list",
+            params={
+                "directory": "docs/plans",
+                "worktree_path": "/nonexistent/worktree",
+            },
+        )
+
+        assert response.status_code == 400
+        data = response.json()
+        assert "does not exist" in data["error"].lower()
+
+    def test_worktree_path_prevents_traversal(
+        self, client: TestClient, tmp_path: Path
+    ) -> None:
+        """Should prevent path traversal even when worktree_path is provided."""
+        worktree = tmp_path / "worktree"
+        worktree.mkdir(parents=True)
+
+        response = client.get(
+            "/api/files/list",
+            params={
+                "directory": "../../etc",
+                "worktree_path": str(worktree),
+            },
+        )
+
+        assert response.status_code == 400
+        assert "not accessible" in response.json()["error"].lower()
+
+    def test_backward_compatibility_without_worktree_path(
+        self, client: TestClient, working_dir: Path
+    ) -> None:
+        """Should still use active profile's working_dir when worktree_path is not provided."""
+        # This is essentially a duplicate of existing tests, but explicitly verifies backward compat
+        response = client.get("/api/files/list", params={"directory": "docs/plans"})
+
+        assert response.status_code == 200
+        data = response.json()
+        file_names = [f["name"] for f in data["files"]]
+        # Should still see files from active profile's working_dir
+        assert "plan-a.md" in file_names
+        assert "plan-b.md" in file_names

@@ -410,7 +410,7 @@ class OrchestratorService:
                 except ValueError:
                     # Absolute path outside worktree - treat as worktree-relative
                     # (strip leading slash and resolve against worktree)
-                    relative_artifact = artifact_path.lstrip("/")
+                    relative_artifact = artifact_path.removeprefix("/")
                     full_artifact_path = (worktree_resolved / relative_artifact).resolve()
             else:
                 # Relative path: resolve against worktree

@@ -112,12 +112,17 @@ async def _get_working_dir(profile_repo: ProfileRepository) -> Path:
 @router.post("/read", response_model=FileReadResponse)
 async def read_file(
     request: FileReadRequest,
+    worktree_path: str | None = Query(
+        None, description="Optional worktree path to use as base directory. If not provided, uses active profile's working_dir"
+    ),
     profile_repo: ProfileRepository = Depends(get_profile_repository),
 ) -> FileReadResponse:
     """Read file content for design document import.
 
     Args:
         request: File read request with path.
+        worktree_path: Optional worktree path to use as base directory.
+                      If not provided, uses active profile's working_dir.
         profile_repo: Profile repository for getting active profile.
 
     Returns:
@@ -126,11 +131,23 @@ async def read_file(
     Raises:
         FileOperationError: If path is invalid, outside working_dir, or file doesn't exist.
     """
-    # Get working_dir from active profile
-    working_dir = await _get_working_dir(profile_repo)
+    # Determine base directory
+    if worktree_path:
+        base_dir = Path(worktree_path)
+        if not base_dir.is_absolute():
+            raise FileOperationError(
+                "worktree_path must be an absolute path", "INVALID_WORKTREE_PATH"
+            )
+        if not base_dir.is_dir():
+            raise FileOperationError(
+                f"worktree_path does not exist or is not a directory: {worktree_path}",
+                "WORKTREE_NOT_FOUND",
+            )
+    else:
+        base_dir = await _get_working_dir(profile_repo)
 
     # Validate and resolve path - returns only after all security checks pass
-    resolved_path = _validate_and_resolve_path(request.path, working_dir)
+    resolved_path = _validate_and_resolve_path(request.path, base_dir)
 
     # Read content (use thread pool to avoid blocking event loop)
     try:
@@ -146,38 +163,57 @@ async def read_file(
 
 @router.get("/list", response_model=FileListResponse)
 async def list_files(
-    directory: str = Query(..., description="Relative directory path within working_dir"),
+    directory: str = Query(..., description="Relative directory path within base directory"),
     glob_pattern: str = Query("*.md", description="Glob pattern for filtering files"),
+    worktree_path: str | None = Query(
+        None, description="Optional worktree path to use as base directory. If not provided, uses active profile's working_dir"
+    ),
     profile_repo: ProfileRepository = Depends(get_profile_repository),
 ) -> FileListResponse:
-    """List files in a directory within the working directory.
+    """List files in a directory within a base directory.
 
     Args:
-        directory: Relative directory path within working_dir.
+        directory: Relative directory path within base directory.
         glob_pattern: Glob pattern for filtering files (default: *.md).
+        worktree_path: Optional worktree path to use as base directory.
+                      If not provided, uses active profile's working_dir.
         profile_repo: Profile repository for getting active profile.
 
     Returns:
         List of matching files with metadata.
 
     Raises:
-        FileOperationError: If directory is outside working_dir.
+        FileOperationError: If directory is outside base directory or base directory doesn't exist.
     """
-    working_dir = await _get_working_dir(profile_repo)
-    working_dir_resolved = working_dir.resolve()
-    resolved_dir = (working_dir / directory).resolve()
+    # Determine base directory
+    if worktree_path:
+        base_dir = Path(worktree_path)
+        if not base_dir.is_absolute():
+            raise FileOperationError(
+                "worktree_path must be an absolute path", "INVALID_WORKTREE_PATH"
+            )
+        if not base_dir.is_dir():
+            raise FileOperationError(
+                f"worktree_path does not exist or is not a directory: {worktree_path}",
+                "WORKTREE_NOT_FOUND",
+            )
+    else:
+        base_dir = await _get_working_dir(profile_repo)
 
-    # Security: verify directory is within working_dir
+    base_dir_resolved = base_dir.resolve()
+    resolved_dir = (base_dir / directory).resolve()
+
+    # Security: verify directory is within base_dir
     try:
-        common = os.path.commonpath([str(resolved_dir), str(working_dir_resolved)])
+        common = os.path.commonpath([str(resolved_dir), str(base_dir_resolved)])
     except ValueError as e:
         raise FileOperationError(
-            "Directory not accessible (outside working directory)", "PATH_NOT_ACCESSIBLE"
+            "Directory not accessible (outside base directory)", "PATH_NOT_ACCESSIBLE"
         ) from e
 
-    if common != str(working_dir_resolved):
+    if common != str(base_dir_resolved):
         raise FileOperationError(
-            "Directory not accessible (outside working directory)", "PATH_NOT_ACCESSIBLE"
+            "Directory not accessible (outside base directory)", "PATH_NOT_ACCESSIBLE"
         )
 
     if not resolved_dir.is_dir():
@@ -192,7 +228,7 @@ async def list_files(
         entries.append(
             FileEntry(
                 name=path.name,
-                relative_path=str(path.relative_to(working_dir_resolved)),
+                relative_path=str(path.relative_to(base_dir_resolved)),
                 size_bytes=stat.st_size,
                 modified_at=datetime.fromtimestamp(stat.st_mtime, tz=UTC).isoformat(),
             )
@@ -207,12 +243,17 @@ async def list_files(
 @router.get("/{file_path:path}")
 async def get_file(
     file_path: str,
+    worktree_path: str | None = Query(
+        None, description="Optional worktree path to use as base directory. If not provided, uses active profile's working_dir"
+    ),
     profile_repo: ProfileRepository = Depends(get_profile_repository),
 ) -> Response:
     """Get file content by path.
 
     Args:
         file_path: Absolute path to the file.
+        worktree_path: Optional worktree path to use as base directory.
+                      If not provided, uses active profile's working_dir.
         profile_repo: Profile repository for getting active profile.
 
     Returns:
@@ -221,11 +262,23 @@ async def get_file(
     Raises:
         FileOperationError: If path is invalid, outside working_dir, or file doesn't exist.
     """
-    # Get working_dir from active profile
-    working_dir = await _get_working_dir(profile_repo)
+    # Determine base directory
+    if worktree_path:
+        base_dir = Path(worktree_path)
+        if not base_dir.is_absolute():
+            raise FileOperationError(
+                "worktree_path must be an absolute path", "INVALID_WORKTREE_PATH"
+            )
+        if not base_dir.is_dir():
+            raise FileOperationError(
+                f"worktree_path does not exist or is not a directory: {worktree_path}",
+                "WORKTREE_NOT_FOUND",
+            )
+    else:
+        base_dir = await _get_working_dir(profile_repo)
 
     # Validate and resolve path - returns only after all security checks pass
-    resolved_path = _validate_and_resolve_path(file_path, working_dir)
+    resolved_path = _validate_and_resolve_path(file_path, base_dir)
 
     # Read content
     try:
