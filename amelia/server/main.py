@@ -215,9 +215,22 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if openrouter_api_key:
         embedding_client = EmbeddingClient(api_key=openrouter_api_key)
         knowledge_repo = KnowledgeRepository(database)
+
+        # Tag derivation configuration
+        tag_model = os.environ.get(
+            "AMELIA_KNOWLEDGE_TAG_MODEL",
+            "openai/gpt-oss-120b",  # Fast and cost-effective
+        )
+        tag_driver = os.environ.get(
+            "AMELIA_KNOWLEDGE_TAG_DRIVER",
+            "api",  # Default to API driver
+        )
+
         ingestion_pipeline = IngestionPipeline(
             repository=knowledge_repo,
             embedding_client=embedding_client,
+            tag_derivation_model=tag_model if tag_model else None,
+            tag_derivation_driver=tag_driver,
         )
         knowledge_service = KnowledgeService(
             event_bus=event_bus,
