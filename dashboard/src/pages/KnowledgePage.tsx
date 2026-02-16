@@ -207,12 +207,7 @@ function getDocumentColumns(onDelete: (id: string) => void): ColumnDef<Knowledge
       accessorKey: 'name',
       header: ({ column }) => <DataTableColumnHeader column={column} title="Name" />,
       cell: ({ row }) => (
-        <div className="flex items-center gap-3 py-1">
-          <div className="size-9 shrink-0 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center">
-            <FileText className="size-4 text-primary" />
-          </div>
-          <span className="truncate font-semibold text-sm">{row.original.name}</span>
-        </div>
+        <span className="truncate font-semibold text-sm">{row.original.name}</span>
       ),
     },
     {
