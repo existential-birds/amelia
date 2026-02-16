@@ -156,6 +156,45 @@ class KnowledgeRepository:
         )
         return self._row_to_document(row)
 
+    async def update_document_tags(
+        self,
+        document_id: str,
+        tags: list[str],
+    ) -> Document:
+        """Update document tags.
+
+        Args:
+            document_id: Document UUID.
+            tags: New tags to set (replaces existing tags).
+
+        Returns:
+            Updated document.
+
+        Raises:
+            ValueError: If document not found.
+        """
+        row = await self.db.fetch_one(
+            """
+            UPDATE documents
+            SET tags = $2,
+                updated_at = NOW()
+            WHERE id = $1
+            RETURNING *
+            """,
+            document_id,
+            tags,
+        )
+
+        if not row:
+            raise ValueError(f"Document not found: {document_id}")
+
+        logger.info(
+            "Updated document tags",
+            document_id=document_id,
+            tag_count=len(tags),
+        )
+        return self._row_to_document(row)
+
     async def delete_document(self, document_id: str) -> None:
         """Delete document and all associated chunks.
 
