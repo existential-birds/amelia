@@ -583,7 +583,7 @@ def configure_exception_handlers(app: FastAPI) -> None:
             code="WORKFLOW_CONFLICT",
             error=str(exc),
             details={
-                "workflow_id": exc.workflow_id,
+                "workflow_id": str(exc.workflow_id) if exc.workflow_id else None,
                 "worktree_path": exc.worktree_path,
             },
         )
@@ -664,7 +664,7 @@ def configure_exception_handlers(app: FastAPI) -> None:
         error = ErrorResponse(
             code="NOT_FOUND",
             error=str(exc),
-            details={"workflow_id": exc.workflow_id},
+            details={"workflow_id": str(exc.workflow_id)},
         )
         return JSONResponse(
             status_code=404,
