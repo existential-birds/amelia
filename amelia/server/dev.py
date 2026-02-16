@@ -18,6 +18,7 @@ from typing import Annotated
 
 import typer
 from rich.console import Console
+from rich.style import Style
 from rich.text import Text
 
 from amelia.cli.config import run_first_time_setup
@@ -258,7 +259,7 @@ async def stream_output(
         if text:
             # Enhanced log level detection for both uvicorn and loguru formats
             style = _get_log_level_style(text)
-            console.print(prefix + Text(text, style=style))
+            console.print(prefix + Text(text, style=Style(color=style)))
 
 
 class ProcessManager:
