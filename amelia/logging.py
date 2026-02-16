@@ -93,6 +93,36 @@ def _log_format(record: "Record") -> str:
     return fmt
 
 
+def _plain_log_format(record: "Record") -> str:
+    """Generate plain log format without colors for piped output.
+
+    Used when stderr is piped (e.g., under `amelia dev` subprocess) to avoid
+    ANSI escape code issues. The dev command handles coloring instead.
+
+    Args:
+        record: Loguru record containing log metadata, message, and level.
+
+    Returns:
+        Plain formatted string without color codes.
+    """
+    # Format: timestamp | level | module | message [extra]
+    fmt = "{time:HH:mm:ss} │ {level: <8} │ {name}:{message}"
+
+    # Add structured fields if present
+    extra = record["extra"]
+    if extra:
+        extra_str = " ".join(f"{k}={v!r}" for k, v in extra.items())
+        fmt += f" │ {extra_str}"
+
+    fmt += "\n"
+
+    # Add exception formatting if present
+    if record["exception"]:
+        fmt += "{exception}\n"
+
+    return fmt
+
+
 def configure_logging(level: str = "INFO") -> None:
     """Configure loguru logging with Amelia dashboard color palette.
 
@@ -105,12 +135,18 @@ def configure_logging(level: str = "INFO") -> None:
     # Remove default handler
     logger.remove()
 
-    # Add custom formatted handler
+    # Detect if stderr is a TTY (terminal) or piped
+    # When piped (e.g., under `amelia dev` subprocess), use plain format
+    is_tty = sys.stderr.isatty()
+
+    # Add custom formatted handler with explicit flushing for piped output
     logger.add(
         sys.stderr,
         level=level,
-        format=_log_format,
-        colorize=True,
+        format=_log_format if is_tty else _plain_log_format,
+        colorize=is_tty,
+        enqueue=False,  # Disable async queue to avoid buffering delays
+        diagnose=False,  # Disable diagnostic mode for cleaner output
     )
 
 

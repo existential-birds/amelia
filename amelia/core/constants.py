@@ -35,6 +35,8 @@ class ToolName(StrEnum):
     # Web
     WEB_FETCH = "web_fetch"
     WEB_SEARCH = "web_search"
+    # Knowledge
+    KNOWLEDGE_SEARCH = "knowledge_search"
 
 
 TOOL_NAME_ALIASES: dict[str, str] = {
@@ -58,6 +60,7 @@ TOOL_NAME_ALIASES: dict[str, str] = {
     "TaskList": ToolName.TASK_LIST,
     "WebFetch": ToolName.WEB_FETCH,
     "WebSearch": ToolName.WEB_SEARCH,
+    "KnowledgeSearch": ToolName.KNOWLEDGE_SEARCH,
 }
 
 # Inverse mapping: canonical → CLI name.  Built iteratively so that duplicate

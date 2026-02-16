@@ -3,9 +3,12 @@
  */
 import {
   type ColumnDef,
+  type ExpandedState,
+  type Row,
   type SortingState,
   flexRender,
   getCoreRowModel,
+  getExpandedRowModel,
   getSortedRowModel,
   useReactTable,
 } from '@tanstack/react-table';
@@ -16,23 +19,29 @@ interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
   onRowClick?: (row: TData) => void;
+  renderSubComponent?: (props: { row: Row<TData> }) => React.ReactNode;
 }
 
 export function DataTable<TData, TValue>({
   columns,
   data,
   onRowClick,
+  renderSubComponent,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([]);
+  const [expanded, setExpanded] = useState<ExpandedState>({});
 
   const table = useReactTable({
     data,
     columns,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
+    getExpandedRowModel: getExpandedRowModel(),
     onSortingChange: setSorting,
+    onExpandedChange: setExpanded,
     state: {
       sorting,
+      expanded,
     },
   });
 
@@ -68,29 +77,38 @@ export function DataTable<TData, TValue>({
         </thead>
         <tbody>
           {table.getRowModel().rows.map((row) => (
-            <tr
-              key={row.id}
-              onClick={() => onRowClick?.(row.original)}
-              onKeyDown={(e) => {
-                if ((e.key === 'Enter' || e.key === ' ') && onRowClick) {
-                  e.preventDefault();
-                  onRowClick(row.original);
-                }
-              }}
-              role={onRowClick ? 'button' : undefined}
-              tabIndex={onRowClick ? 0 : undefined}
-              className={cn(
-                'border-b border-border/50 last:border-0',
-                onRowClick &&
-                  'cursor-pointer hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:outline-none transition-colors'
+            <>
+              <tr
+                key={row.id}
+                onClick={() => onRowClick?.(row.original)}
+                onKeyDown={(e) => {
+                  if ((e.key === 'Enter' || e.key === ' ') && onRowClick) {
+                    e.preventDefault();
+                    onRowClick(row.original);
+                  }
+                }}
+                role={onRowClick ? 'button' : undefined}
+                tabIndex={onRowClick ? 0 : undefined}
+                className={cn(
+                  'border-b border-border/50 last:border-0',
+                  onRowClick &&
+                    'cursor-pointer hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:outline-none transition-colors'
+                )}
+              >
+                {row.getVisibleCells().map((cell) => (
+                  <td key={cell.id} className="py-2 px-3">
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </td>
+                ))}
+              </tr>
+              {row.getIsExpanded() && renderSubComponent && (
+                <tr key={`${row.id}-expanded`}>
+                  <td colSpan={columns.length}>
+                    {renderSubComponent({ row })}
+                  </td>
+                </tr>
               )}
-            >
-              {row.getVisibleCells().map((cell) => (
-                <td key={cell.id} className="py-2 px-3">
-                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                </td>
-              ))}
-            </tr>
+            </>
           ))}
         </tbody>
       </table>

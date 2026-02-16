@@ -25,6 +25,9 @@ class IngestionError(Exception):
 # Supported MIME types
 _SUPPORTED_TYPES = {"application/pdf", "text/markdown"}
 
+# Max text length for tag extraction (~2000 tokens)
+MAX_RAW_TEXT_FOR_TAGS = 8000
+
 
 class IngestionPipeline:
     """Parse, chunk, embed, and store documents.
@@ -33,6 +36,8 @@ class IngestionPipeline:
         repository: Data layer for documents and chunks.
         embedding_client: OpenRouter embedding client.
         concurrency_limit: Max simultaneous document ingestions.
+        tag_derivation_model: LLM model for tag extraction (None = disabled).
+        tag_derivation_driver: Driver type for tag extraction ("api" or "cli").
     """
 
     def __init__(
@@ -40,10 +45,14 @@ class IngestionPipeline:
         repository: KnowledgeRepository,
         embedding_client: EmbeddingClient,
         concurrency_limit: int = 2,
+        tag_derivation_model: str | None = None,
+        tag_derivation_driver: str = "api",
     ) -> None:
         self.repository = repository
         self.embedding_client = embedding_client
         self._semaphore = asyncio.Semaphore(concurrency_limit)
+        self.tag_derivation_model = tag_derivation_model
+        self.tag_derivation_driver = tag_derivation_driver
 
     async def ingest_document(
         self,
@@ -124,9 +133,36 @@ class IngestionPipeline:
                         )
                     )
 
+                # Stage 3.5: Derive tags (if enabled)
+                if self.tag_derivation_model:
+                    if progress_callback:
+                        progress_callback("deriving_tags", 0.89, total_chunks, total_chunks)
+
+                    derived_tags = await self._derive_tags(
+                        document_name=file_path.name,
+                        raw_text=raw_text,
+                        chunk_data=chunk_data,
+                        model=self.tag_derivation_model,
+                        driver_type=self.tag_derivation_driver,
+                    )
+
+                    # Update document with derived tags (non-blocking)
+                    if derived_tags:
+                        try:
+                            await self.repository.update_document_tags(document_id, derived_tags)
+                        except Exception as exc:
+                            logger.warning(
+                                "Failed to update document tags",
+                                document_id=document_id,
+                                error=str(exc),
+                            )
+
+                    if progress_callback:
+                        progress_callback("deriving_tags", 0.90, total_chunks, total_chunks)
+
                 # Stage 4: Store
                 if progress_callback:
-                    progress_callback("storing", 0.9, total_chunks, total_chunks)
+                    progress_callback("storing", 0.91, total_chunks, total_chunks)
                 await self.repository.insert_chunks(document_id, chunk_data)
                 doc = await self.repository.update_document_status(
                     document_id,
@@ -223,3 +259,172 @@ class IngestionPipeline:
                 "Failed to update document status",
                 document_id=document_id,
             )
+
+    def _prepare_tag_extraction_input(
+        self,
+        raw_text: str,
+        chunk_data: list[ChunkData],
+        document_name: str,
+    ) -> tuple[str, list[list[str]]]:
+        """Prepare text excerpt and heading structure for tag extraction.
+
+        Args:
+            raw_text: Full document text.
+            chunk_data: List of chunks with heading paths.
+            document_name: Original filename.
+
+        Returns:
+            Tuple of (text_excerpt, unique_heading_paths).
+        """
+        # Extract unique heading paths from chunks
+        unique_headings: list[list[str]] = []
+        seen_paths = set()
+        for chunk in chunk_data:
+            path_tuple = tuple(chunk["heading_path"])
+            if path_tuple and path_tuple not in seen_paths:
+                unique_headings.append(chunk["heading_path"])
+                seen_paths.add(path_tuple)
+
+        # Truncate text if needed
+        text_excerpt = raw_text[:MAX_RAW_TEXT_FOR_TAGS]
+        if len(raw_text) > MAX_RAW_TEXT_FOR_TAGS:
+            text_excerpt += "\n\n[... content truncated for tag extraction ...]"
+
+        return text_excerpt, unique_headings
+
+    def _build_tag_extraction_prompt(
+        self,
+        raw_text_excerpt: str,
+        heading_paths: list[list[str]],
+        document_name: str,
+    ) -> str:
+        """Build prompt for tag extraction from document content.
+
+        Args:
+            raw_text_excerpt: Truncated document text.
+            heading_paths: Unique heading paths from document structure.
+            document_name: Original filename.
+
+        Returns:
+            Prompt string for LLM tag extraction.
+        """
+        # Format heading tree
+        heading_tree = ""
+        if heading_paths:
+            for path in heading_paths:
+                indent = "  " * (len(path) - 1)
+                heading_tree += f"{indent}- {path[-1]}\n"
+
+        return f"""Extract 5-10 relevant tags for the following document to enable effective filtering and discovery.
+
+Document name: {document_name}
+
+Document structure (headings):
+{heading_tree if heading_tree else "(No headings found)"}
+
+Document content excerpt (first ~8000 chars):
+{raw_text_excerpt}
+
+Guidelines for tag selection:
+- Focus on main topics, technologies, concepts, and document purpose
+- Use concise tags (1-3 words each)
+- Prefer specific over generic tags (e.g., "kubernetes" over "cloud")
+- Include both broad categories and specific details
+- Use lowercase for consistency
+- Avoid overly generic tags like "document" or "information"
+
+Return 5-10 tags that best describe this document's content and purpose."""
+
+    def _validate_tags(self, tags: list[str]) -> list[str]:
+        """Validate and clean extracted tags.
+
+        Args:
+            tags: Raw tags from LLM.
+
+        Returns:
+            Cleaned and deduplicated tags.
+        """
+        cleaned = []
+        seen = set()
+
+        for tag in tags:
+            # Strip whitespace and lowercase
+            tag = tag.strip().lower()
+
+            # Skip empty or very long tags
+            if not tag or len(tag) > 50:
+                continue
+
+            # Deduplicate (case-insensitive)
+            if tag not in seen:
+                cleaned.append(tag)
+                seen.add(tag)
+
+        return cleaned
+
+    async def _derive_tags(
+        self,
+        document_name: str,
+        raw_text: str,
+        chunk_data: list[ChunkData],
+        model: str,
+        driver_type: str,
+    ) -> list[str]:
+        """Derive tags from document content using LLM extraction.
+
+        Args:
+            document_name: Original filename for context.
+            raw_text: Full document text.
+            chunk_data: List of chunks with heading paths.
+            model: LLM model identifier for extraction.
+            driver_type: Driver type ("api" or "cli").
+
+        Returns:
+            List of validated tags (empty list if extraction fails).
+
+        Note:
+            Failures are logged but not raised - returns empty list on error.
+        """
+        try:
+            # Prepare input (truncate text, extract headings)
+            text_excerpt, heading_paths = self._prepare_tag_extraction_input(
+                raw_text, chunk_data, document_name
+            )
+
+            # Build prompt
+            prompt = self._build_tag_extraction_prompt(
+                text_excerpt, heading_paths, document_name
+            )
+
+            # Extract structured output using LLM
+            from amelia.core.extraction import extract_structured  # noqa: PLC0415
+            from amelia.knowledge.models import TagExtractionOutput  # noqa: PLC0415
+
+            result = await extract_structured(
+                prompt=prompt,
+                schema=TagExtractionOutput,
+                model=model,
+                driver_type=driver_type,
+            )
+
+            # Validate and clean tags
+            tags = self._validate_tags(result.tags)
+
+            logger.info(
+                "Derived tags from document",
+                document_name=document_name,
+                tag_count=len(tags),
+                tags=tags,
+                reasoning=result.reasoning,
+            )
+
+            return tags
+
+        except Exception as exc:
+            # Non-blocking: log error and return empty list
+            logger.warning(
+                "Tag derivation failed, continuing without tags",
+                document_name=document_name,
+                error=str(exc),
+            )
+            return []

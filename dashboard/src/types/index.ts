@@ -209,12 +209,20 @@ export type EventType =
   | 'plan_validation_failed';
 
 /**
+ * Domain of event origin.
+ */
+export type EventDomain = 'workflow' | 'brainstorm' | 'oracle' | 'knowledge';
+
+/**
  * A single event emitted during workflow execution.
  * Events are streamed in real-time via WebSocket and stored for historical viewing.
  */
 export interface WorkflowEvent {
   /** Unique identifier for this event. */
   id: string;
+
+  /** Event domain (workflow, brainstorm, oracle, or knowledge). */
+  domain?: EventDomain;
 
   /** ID of the workflow this event belongs to. */
   workflow_id: string;

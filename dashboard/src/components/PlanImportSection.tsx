@@ -140,9 +140,31 @@ export function PlanImportSection({
     if (mode !== 'file' || !planOutputDir || !worktreePath) return;
 
     setFilesLoading(true);
-    api.listFiles(planOutputDir)
-      .then((res) => setFiles(res.files))
-      .catch(() => setFiles([]))
+    setFileError(null); // Clear previous errors
+    api.listFiles(planOutputDir, '*.md', worktreePath)
+      .then((res) => {
+        setFiles(res.files);
+        if (res.files.length === 0) {
+          console.warn(`No .md files found in ${planOutputDir}`);
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to list plan files:', err);
+        setFiles([]);
+
+        // Show helpful error message to user
+        const errorMsg = err instanceof ApiError
+          ? err.message
+          : 'Failed to load plan files';
+
+        if (errorMsg.includes('No active profile')) {
+          setFileError('No active profile set. Please create and activate a profile in Settings.');
+          toast.error('Cannot list files: No active profile set');
+        } else {
+          setFileError(errorMsg);
+          toast.error(`Failed to load plan files: ${errorMsg}`);
+        }
+      })
       .finally(() => setFilesLoading(false));
   }, [mode, planOutputDir, worktreePath]);
 
@@ -189,7 +211,7 @@ export function PlanImportSection({
         ? trimmedPath
         : `${worktreePath.replace(/\/$/, '')}/${trimmedPath}`;
 
-      const response = await api.readFile(absolutePath);
+      const response = await api.readFile(absolutePath, worktreePath);
       if (requestId !== previewRequestId.current) return;
 
       if (!response.content.trim()) {

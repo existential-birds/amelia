@@ -1,0 +1,201 @@
+version: 1
+metadata:
+  branch: feat/knowledge-search-ui
+  base: main
+  generated: "2026-02-15T00:00:00Z"
+  changes_summary: |
+    Adds a Knowledge Library feature with:
+    - Backend API routes for document upload, listing, deletion, and semantic search
+    - Knowledge service and repository with pgvector-based embedding search
+    - Dashboard UI with Search and Documents tabs, upload dialog, and search results
+    - Agent tool for knowledge_search
+
+setup:
+  stack:
+    - type: python
+      package_manager: uv
+    - type: docker
+      services: [postgres]
+  commands:
+    - docker compose up -d postgres
+    - uv sync
+    - uv run amelia dev
+  health_checks:
+    - url: http://localhost:8420/api/health
+      timeout: 30
+
+tests:
+  # ── Core Functionality: Upload + Ingest + Search ──────────────────────
+
+  - id: TC-01
+    name: Upload a markdown document via the Knowledge Library UI
+    context: |
+      Tests the primary upload flow through the dashboard UI.
+      Changed files: dashboard/src/pages/KnowledgePage.tsx, amelia/server/routes/knowledge.py
+      The upload dialog accepts a file, name, and tags, then POSTs to /api/knowledge/documents.
+    steps:
+      - run: agent-browser open http://localhost:8420/knowledge
+      - run: agent-browser snapshot -i
+        note: Verify page loads with Search and Documents tabs
+      - run: agent-browser screenshot evidence/tc-01-initial.png
+        note: Capture initial state of Knowledge Library page
+
+      # Open upload dialog
+      - run: agent-browser click @Upload
+        note: Click the "Upload" button in the page header to open the dialog
+      - run: agent-browser snapshot -i
+        note: Verify upload dialog appeared with File, Name, and Tags fields
+
+      # Upload a markdown file
+      - run: agent-browser upload @file docs/testing/fixtures/sample-knowledge.md
+        note: Select the sample markdown file using the file input
+      - run: agent-browser snapshot -i
+        note: After file selection, the Name field should auto-populate from filename
+      - run: agent-browser fill @tags "testing, sample"
+        note: Add comma-separated tags
+      - run: agent-browser click @Upload
+        note: Click the Upload button in the dialog footer to submit
+      - run: agent-browser wait --load networkidle
+      - run: agent-browser snapshot -i
+        note: Dialog should close and document list should refresh
+      - run: agent-browser screenshot evidence/tc-01-uploaded.png
+
+    expected: |
+      - Upload dialog opens with File, Name, and Tags fields
+      - Selecting a .md file auto-fills the Name field (filename without extension)
+      - After clicking Upload, the dialog closes
+      - The document count in the page header increments
+      - Switching to the Documents tab shows the new document with status "Pending" or "Processing"
+
+  - id: TC-02
+    name: Verify uploaded document is chunked and reaches Ready status
+    context: |
+      After upload (TC-01), the backend ingestion pipeline parses, chunks, and embeds
+      the document asynchronously. This test confirms the document transitions to "Ready"
+      status with a non-zero chunk count.
+      Changed files: amelia/knowledge/service.py, amelia/knowledge/repository.py
+    steps:
+      # Navigate to Documents tab to check ingestion status
+      - run: agent-browser open http://localhost:8420/knowledge
+      - run: agent-browser snapshot -i
+      - run: agent-browser click @Documents
+        note: Switch to the Documents tab
+      - run: agent-browser snapshot -i
+        note: Check document status — may be Processing initially
+
+      # Wait for ingestion to complete (poll by refreshing)
+      - run: agent-browser wait --text "Ready"
+        timeout: 30000
+        note: Wait up to 30s for the document status to change to Ready
+      - run: agent-browser snapshot -i
+      - run: agent-browser screenshot evidence/tc-02-ready.png
+
+    expected: |
+      - The uploaded document appears in the Documents table
+      - Status transitions from "Pending" → "Processing" → "Ready"
+      - The "Chunks" column shows a number greater than 0
+      - No "Failed" status badge appears
+
+  - id: TC-03
+    name: Search for uploaded document content and verify results
+    context: |
+      Core functionality test: after a document is ingested and indexed (TC-02),
+      perform a semantic search query and verify the document appears in results.
+      Changed files: dashboard/src/pages/KnowledgePage.tsx, amelia/server/routes/knowledge.py,
+      amelia/knowledge/search.py
+    steps:
+      - run: agent-browser open http://localhost:8420/knowledge
+      - run: agent-browser snapshot -i
+        note: Page opens on Search tab by default
+
+      # Enter a search query related to the uploaded document content
+      - run: agent-browser fill @search "sample knowledge document content"
+        note: Type a query that matches content from the uploaded markdown file
+      - run: agent-browser snapshot -i
+      - run: agent-browser click @Search
+        note: Click the Search button to execute the query
+      - run: agent-browser wait --load networkidle
+      - run: agent-browser snapshot -i
+        note: Search results should appear as cards with similarity scores
+      - run: agent-browser screenshot evidence/tc-03-results.png
+
+    expected: |
+      - Search results appear as cards below the search input
+      - At least one result card shows content from the uploaded document
+      - Each result card displays:
+        - A heading path or "Document root"
+        - A similarity percentage badge
+        - The chunk text content
+        - The document name matching what was uploaded
+        - Tags ("testing", "sample") shown as badges
+        - Token count
+      - The document name in results matches the document uploaded in TC-01
+
+  # ── Search UX ────────────────────────────────────────────────────────
+
+  - id: TC-04
+    name: Search triggers on Enter key press
+    context: |
+      Tests keyboard interaction for search. The search input has an onKeyDown
+      handler that triggers search on Enter.
+      Changed files: dashboard/src/pages/KnowledgePage.tsx
+    steps:
+      - run: agent-browser open http://localhost:8420/knowledge
+      - run: agent-browser snapshot -i
+      - run: agent-browser fill @search "test query"
+      - run: agent-browser key Enter
+        note: Press Enter to trigger search instead of clicking the button
+      - run: agent-browser wait --load networkidle
+      - run: agent-browser snapshot -i
+      - run: agent-browser screenshot evidence/tc-04-enter-search.png
+
+    expected: |
+      - Pressing Enter in the search input triggers the search
+      - Results appear (or "No results found" if no matching documents)
+      - The Search button shows "Searching..." briefly during the request
+
+  - id: TC-05
+    name: Search debounces on typing input
+    context: |
+      The search input has a 300ms debounce that auto-searches as the user types.
+      Changed files: dashboard/src/pages/KnowledgePage.tsx
+    steps:
+      - run: agent-browser open http://localhost:8420/knowledge
+      - run: agent-browser snapshot -i
+      - run: agent-browser fill @search "sample"
+        note: Type a query — debounce should auto-trigger search after 300ms
+      - run: agent-browser wait --load networkidle
+        timeout: 5000
+      - run: agent-browser snapshot -i
+      - run: agent-browser screenshot evidence/tc-05-debounce.png
+
+    expected: |
+      - After typing and waiting ~300ms, search results appear automatically
+      - No explicit click on Search button is needed
+      - Results correspond to the typed query
+
+  # ── Document Management ──────────────────────────────────────────────
+
+  - id: TC-06
+    name: Delete a document from the Documents tab
+    context: |
+      Tests the delete functionality in the Documents tab.
+      Changed files: dashboard/src/pages/KnowledgePage.tsx, amelia/server/routes/knowledge.py
+    steps:
+      - run: agent-browser open http://localhost:8420/knowledge
+      - run: agent-browser snapshot -i
+      - run: agent-browser click @Documents
+        note: Switch to Documents tab
+      - run: agent-browser snapshot -i
+      - run: agent-browser screenshot evidence/tc-06-before-delete.png
+        note: Capture document list before deletion
+      - run: agent-browser click @delete-document
+        note: Click the trash icon on the document row
+      - run: agent-browser wait --load networkidle
+      - run: agent-browser snapshot -i
+      - run: agent-browser screenshot evidence/tc-06-after-delete.png
+
+    expected: |
+      - The document row is removed from the table after clicking delete
+      - The document count in the page header decrements
+      - If no documents remain, the empty state ("No documents") is shown

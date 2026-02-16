@@ -138,6 +138,73 @@ class TestReadFile:
         assert response.status_code == 400
         assert "no active profile" in response.json()["error"].lower()
 
+    def test_worktree_path_overrides_working_dir(
+        self, app: FastAPI, tmp_path: Path
+    ) -> None:
+        """Should use worktree_path as base directory instead of active profile's working_dir."""
+        # Create active profile with a specific working_dir
+        profile_working_dir = tmp_path / "profile-dir"
+        profile_working_dir.mkdir()
+        mock_profile_repo = _create_mock_profile_repo(profile_working_dir)
+        app.dependency_overrides[get_profile_repository] = lambda: mock_profile_repo
+
+        # Create a separate worktree with a file (OUTSIDE profile's working_dir)
+        worktree = tmp_path / "worktree"
+        worktree_docs = worktree / "docs" / "plans"
+        worktree_docs.mkdir(parents=True)
+        worktree_plan = worktree_docs / "worktree-plan.md"
+        worktree_plan.write_text("# Worktree Plan\n\nContent from worktree.")
+
+        client = TestClient(app)
+        response = client.post(
+            "/api/files/read",
+            json={"path": str(worktree_plan)},
+            params={"worktree_path": str(worktree)},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "Worktree Plan" in data["content"]
+        assert data["filename"] == "worktree-plan.md"
+
+    def test_worktree_path_requires_absolute_path(
+        self, client: TestClient, temp_file: str
+    ) -> None:
+        """Should reject relative worktree_path."""
+        response = client.post(
+            "/api/files/read",
+            json={"path": temp_file},
+            params={"worktree_path": "relative/path"},
+        )
+
+        assert response.status_code == 400
+        data = response.json()
+        assert "must be an absolute path" in data["error"].lower()
+
+    def test_worktree_path_requires_existing_directory(
+        self, client: TestClient, temp_file: str
+    ) -> None:
+        """Should reject nonexistent worktree_path."""
+        response = client.post(
+            "/api/files/read",
+            json={"path": temp_file},
+            params={"worktree_path": "/nonexistent/worktree"},
+        )
+
+        assert response.status_code == 400
+        data = response.json()
+        assert "does not exist" in data["error"].lower()
+
+    def test_backward_compatibility_without_worktree_path(
+        self, client: TestClient, temp_file: str
+    ) -> None:
+        """Should still use active profile's working_dir when worktree_path is not provided."""
+        response = client.post("/api/files/read", json={"path": temp_file})
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "Queue Workflows Design" in data["content"]
+
 
 class TestGetFile:
     """Tests for GET /api/files/{file_path:path} endpoint."""
@@ -215,3 +282,64 @@ class TestGetFile:
 
         assert response.status_code == 400
         assert "no active profile" in response.json()["error"].lower()
+
+    def test_worktree_path_overrides_working_dir(
+        self, app: FastAPI, tmp_path: Path
+    ) -> None:
+        """Should use worktree_path as base directory instead of active profile's working_dir."""
+        # Create active profile with a specific working_dir
+        profile_working_dir = tmp_path / "profile-dir"
+        profile_working_dir.mkdir()
+        mock_profile_repo = _create_mock_profile_repo(profile_working_dir)
+        app.dependency_overrides[get_profile_repository] = lambda: mock_profile_repo
+
+        # Create a separate worktree with a file (OUTSIDE profile's working_dir)
+        worktree = tmp_path / "worktree"
+        worktree_docs = worktree / "docs" / "plans"
+        worktree_docs.mkdir(parents=True)
+        worktree_plan = worktree_docs / "worktree-plan.md"
+        worktree_plan.write_text("# Worktree Plan\n\nContent from worktree.")
+
+        client = TestClient(app)
+        response = client.get(
+            f"/api/files/{worktree_plan}",
+            params={"worktree_path": str(worktree)},
+        )
+
+        assert response.status_code == 200
+        assert "Worktree Plan" in response.text
+
+    def test_worktree_path_requires_absolute_path(
+        self, client: TestClient, temp_file: str
+    ) -> None:
+        """Should reject relative worktree_path."""
+        response = client.get(
+            f"/api/files/{temp_file}",
+            params={"worktree_path": "relative/path"},
+        )
+
+        assert response.status_code == 400
+        data = response.json()
+        assert "must be an absolute path" in data["error"].lower()
+
+    def test_worktree_path_requires_existing_directory(
+        self, client: TestClient, temp_file: str
+    ) -> None:
+        """Should reject nonexistent worktree_path."""
+        response = client.get(
+            f"/api/files/{temp_file}",
+            params={"worktree_path": "/nonexistent/worktree"},
+        )
+
+        assert response.status_code == 400
+        data = response.json()
+        assert "does not exist" in data["error"].lower()
+
+    def test_backward_compatibility_without_worktree_path(
+        self, client: TestClient, temp_file: str
+    ) -> None:
+        """Should still use active profile's working_dir when worktree_path is not provided."""
+        response = client.get(f"/api/files/{temp_file}")
+
+        assert response.status_code == 200
+        assert "Design Document" in response.text

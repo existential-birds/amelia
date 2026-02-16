@@ -66,12 +66,55 @@ def mock_chunker() -> MagicMock:
 @pytest.fixture
 def pipeline(mock_repo: AsyncMock, mock_embedding: AsyncMock) -> IngestionPipeline:
     """Provide an IngestionPipeline with mocked dependencies."""
-    return IngestionPipeline(repository=mock_repo, embedding_client=mock_embedding)
+    return IngestionPipeline(
+        repository=mock_repo,
+        embedding_client=mock_embedding,
+        concurrency_limit=2,
+        tag_derivation_model=None,
+        tag_derivation_driver="api",
+    )
 
 
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_pipeline_initialization_stores_tag_config(
+    mock_repo: AsyncMock,
+    mock_embedding: AsyncMock,
+) -> None:
+    """Should store tag derivation configuration parameters as instance variables."""
+    # Test with tag derivation enabled
+    pipeline_enabled = IngestionPipeline(
+        repository=mock_repo,
+        embedding_client=mock_embedding,
+        concurrency_limit=3,
+        tag_derivation_model="openai/gpt-4o-mini",
+        tag_derivation_driver="cli",
+    )
+    assert pipeline_enabled.tag_derivation_model == "openai/gpt-4o-mini"
+    assert pipeline_enabled.tag_derivation_driver == "cli"
+
+    # Test with tag derivation disabled (None model)
+    pipeline_disabled = IngestionPipeline(
+        repository=mock_repo,
+        embedding_client=mock_embedding,
+        concurrency_limit=2,
+        tag_derivation_model=None,
+        tag_derivation_driver="api",
+    )
+    assert pipeline_disabled.tag_derivation_model is None
+    assert pipeline_disabled.tag_derivation_driver == "api"
+
+    # Test with default parameters (backwards compatibility)
+    pipeline_defaults = IngestionPipeline(
+        repository=mock_repo,
+        embedding_client=mock_embedding,
+    )
+    assert pipeline_defaults.tag_derivation_model is None
+    assert pipeline_defaults.tag_derivation_driver == "api"
 
 
 @pytest.mark.asyncio
@@ -422,3 +465,536 @@ async def test_concurrency_semaphore(
         await asyncio.gather(*tasks)
 
     assert snapshot <= 2, f"Expected at most 2 concurrent, got {snapshot}"
+
+
+# ---------------------------------------------------------------------------
+# Tag Extraction Helper Tests
+# ---------------------------------------------------------------------------
+
+
+def test_prepare_tag_extraction_input_truncates_long_text(
+    pipeline: IngestionPipeline,
+) -> None:
+    """Should truncate text to MAX_RAW_TEXT_FOR_TAGS (8000 chars) and add note."""
+    # Create text longer than 8000 chars
+    long_text = "a" * 10000
+    chunks: list[ChunkData] = [
+        ChunkData(
+            chunk_index=0,
+            content="chunk1",
+            heading_path=["Heading 1"],
+            token_count=10,
+            embedding=[0.1] * 1536,
+        )
+    ]
+
+    excerpt, headings = pipeline._prepare_tag_extraction_input(
+        raw_text=long_text,
+        chunk_data=chunks,
+        document_name="test.pdf",
+    )
+
+    # Should truncate at 8000 chars
+    assert len(excerpt) > 8000  # Has truncation notice
+    assert excerpt[:8000] == "a" * 8000
+    assert "[... content truncated for tag extraction ...]" in excerpt
+    assert headings == [["Heading 1"]]
+
+
+def test_prepare_tag_extraction_input_extracts_unique_headings(
+    pipeline: IngestionPipeline,
+) -> None:
+    """Should extract unique heading paths and deduplicate them."""
+    raw_text = "Short document"
+    chunks: list[ChunkData] = [
+        ChunkData(
+            chunk_index=0,
+            content="chunk1",
+            heading_path=["Heading 1"],
+            token_count=10,
+            embedding=[0.1] * 1536,
+        ),
+        ChunkData(
+            chunk_index=1,
+            content="chunk2",
+            heading_path=["Heading 1"],  # Duplicate
+            token_count=10,
+            embedding=[0.1] * 1536,
+        ),
+        ChunkData(
+            chunk_index=2,
+            content="chunk3",
+            heading_path=["Heading 2", "Subheading"],
+            token_count=10,
+            embedding=[0.1] * 1536,
+        ),
+        ChunkData(
+            chunk_index=3,
+            content="chunk4",
+            heading_path=[],  # Empty heading path
+            token_count=10,
+            embedding=[0.1] * 1536,
+        ),
+    ]
+
+    excerpt, headings = pipeline._prepare_tag_extraction_input(
+        raw_text=raw_text,
+        chunk_data=chunks,
+        document_name="test.pdf",
+    )
+
+    # Should deduplicate and exclude empty
+    assert len(headings) == 2
+    assert ["Heading 1"] in headings
+    assert ["Heading 2", "Subheading"] in headings
+    assert excerpt == raw_text
+
+
+def test_validate_tags_deduplicates_and_cleans(
+    pipeline: IngestionPipeline,
+) -> None:
+    """Should clean tags: lowercase, strip, deduplicate, filter empty and long."""
+    raw_tags = [
+        "Python",
+        "  Django  ",
+        "PYTHON",  # Duplicate (case-insensitive)
+        "kubernetes",
+        "",  # Empty
+        "   ",  # Whitespace only
+        "a" * 60,  # Too long (>50 chars)
+        "React",
+        "react",  # Duplicate
+    ]
+
+    cleaned = pipeline._validate_tags(raw_tags)
+
+    # Should clean and deduplicate
+    assert cleaned == ["python", "django", "kubernetes", "react"]
+    assert len(cleaned) == 4
+
+
+def test_build_tag_extraction_prompt(
+    pipeline: IngestionPipeline,
+) -> None:
+    """Should build prompt with document name, heading tree, and content."""
+    raw_text_excerpt = "This is sample content from the document."
+    heading_paths = [
+        ["Introduction"],
+        ["Chapter 1", "Section 1.1"],
+        ["Chapter 1", "Section 1.2"],
+    ]
+    document_name = "technical_guide.pdf"
+
+    prompt = pipeline._build_tag_extraction_prompt(
+        raw_text_excerpt=raw_text_excerpt,
+        heading_paths=heading_paths,
+        document_name=document_name,
+    )
+
+    # Should contain document name
+    assert document_name in prompt
+
+    # Should contain formatted heading tree with indentation
+    assert "- Introduction" in prompt
+    assert "  - Section 1.1" in prompt
+    assert "  - Section 1.2" in prompt
+
+    # Should contain content excerpt
+    assert raw_text_excerpt in prompt
+
+    # Should contain guidelines
+    assert "5-10 relevant tags" in prompt
+    assert "lowercase" in prompt
+
+
+# ---------------------------------------------------------------------------
+# Tag Derivation Method Tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_derive_tags_success(
+    pipeline: IngestionPipeline,
+) -> None:
+    """Should derive tags using LLM extraction and return validated tags."""
+    from amelia.knowledge.models import TagExtractionOutput
+
+    raw_text = "This is a Python Django tutorial document."
+    chunk_data: list[ChunkData] = [
+        ChunkData(
+            chunk_index=0,
+            content="chunk1",
+            heading_path=["Introduction"],
+            token_count=10,
+            embedding=[0.1] * 1536,
+        )
+    ]
+    document_name = "django_tutorial.pdf"
+    model = "openai/gpt-4o-mini"
+    driver_type = "api"
+
+    # Mock the extract_structured function
+    mock_output = TagExtractionOutput(
+        tags=["Python", "  Django  ", "PYTHON", "web-framework", "tutorial"],
+        reasoning="Document focuses on Django web framework tutorial using Python",
+    )
+
+    with patch("amelia.core.extraction.extract_structured") as mock_extract:
+        mock_extract.return_value = mock_output
+
+        result = await pipeline._derive_tags(
+            document_name=document_name,
+            raw_text=raw_text,
+            chunk_data=chunk_data,
+            model=model,
+            driver_type=driver_type,
+        )
+
+    # Should return validated and cleaned tags (deduplicated, lowercase)
+    assert result == ["python", "django", "web-framework", "tutorial"]
+
+    # Should have called extract_structured with correct arguments
+    mock_extract.assert_called_once()
+    call_kwargs = mock_extract.call_args.kwargs
+    assert call_kwargs["model"] == model
+    assert call_kwargs["driver_type"] == driver_type
+    assert call_kwargs["schema"] == TagExtractionOutput
+    # Prompt should contain document name
+    assert document_name in call_kwargs["prompt"]
+
+
+@pytest.mark.asyncio
+async def test_derive_tags_handles_llm_failure(
+    pipeline: IngestionPipeline,
+) -> None:
+    """Should return empty list when LLM extraction fails."""
+    raw_text = "Sample document text"
+    chunk_data: list[ChunkData] = [
+        ChunkData(
+            chunk_index=0,
+            content="chunk1",
+            heading_path=["Heading 1"],
+            token_count=10,
+            embedding=[0.1] * 1536,
+        )
+    ]
+    document_name = "test.pdf"
+    model = "openai/gpt-4o-mini"
+    driver_type = "api"
+
+    # Mock extract_structured to raise an exception
+    with patch("amelia.core.extraction.extract_structured") as mock_extract:
+        mock_extract.side_effect = RuntimeError("LLM API unavailable")
+
+        result = await pipeline._derive_tags(
+            document_name=document_name,
+            raw_text=raw_text,
+            chunk_data=chunk_data,
+            model=model,
+            driver_type=driver_type,
+        )
+
+    # Should return empty list on error (non-blocking)
+    assert result == []
+
+    # Should have attempted extraction
+    mock_extract.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Tag Derivation Integration Tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_ingest_with_tag_derivation_enabled(
+    mock_repo: AsyncMock,
+    mock_embedding: AsyncMock,
+    mock_converter: MagicMock,
+    mock_chunker: MagicMock,
+) -> None:
+    """Should derive tags and update document when tag derivation is enabled."""
+    from amelia.knowledge.models import TagExtractionOutput
+
+    # Create pipeline with tag derivation enabled
+    pipeline = IngestionPipeline(
+        repository=mock_repo,
+        embedding_client=mock_embedding,
+        concurrency_limit=2,
+        tag_derivation_model="openai/gpt-4o-mini",
+        tag_derivation_driver="api",
+    )
+
+    # Mock the tag extraction to return tags
+    mock_output = TagExtractionOutput(
+        tags=["python", "django", "tutorial"],
+        reasoning="Document is a Python Django tutorial",
+    )
+
+    with (
+        patch(
+            "docling.document_converter.DocumentConverter",
+            return_value=mock_converter,
+        ),
+        patch(
+            "docling.chunking.HierarchicalChunker",
+            return_value=mock_chunker,
+        ),
+        patch("amelia.core.extraction.extract_structured") as mock_extract,
+    ):
+        mock_extract.return_value = mock_output
+
+        result = await pipeline.ingest_document(
+            document_id="doc-1",
+            file_path=Path("/tmp/test.pdf"),
+            content_type="application/pdf",
+        )
+
+    # Should have called extract_structured
+    mock_extract.assert_called_once()
+
+    # Should have updated document tags
+    mock_repo.update_document_tags.assert_called_once_with(
+        "doc-1", ["python", "django", "tutorial"]
+    )
+
+    # Should still complete successfully
+    assert isinstance(result, Document)
+    assert result.status == DocumentStatus.READY
+
+
+@pytest.mark.asyncio
+async def test_ingest_with_tag_derivation_disabled(
+    mock_repo: AsyncMock,
+    mock_embedding: AsyncMock,
+    mock_converter: MagicMock,
+    mock_chunker: MagicMock,
+) -> None:
+    """Should skip tag derivation when tag_derivation_model is None."""
+    # Create pipeline with tag derivation disabled (None model)
+    pipeline = IngestionPipeline(
+        repository=mock_repo,
+        embedding_client=mock_embedding,
+        concurrency_limit=2,
+        tag_derivation_model=None,
+        tag_derivation_driver="api",
+    )
+
+    with (
+        patch(
+            "docling.document_converter.DocumentConverter",
+            return_value=mock_converter,
+        ),
+        patch(
+            "docling.chunking.HierarchicalChunker",
+            return_value=mock_chunker,
+        ),
+        patch("amelia.core.extraction.extract_structured") as mock_extract,
+    ):
+        result = await pipeline.ingest_document(
+            document_id="doc-1",
+            file_path=Path("/tmp/test.pdf"),
+            content_type="application/pdf",
+        )
+
+    # Should NOT have called extract_structured
+    mock_extract.assert_not_called()
+
+    # Should NOT have updated document tags
+    mock_repo.update_document_tags.assert_not_called()
+
+    # Should complete successfully
+    assert isinstance(result, Document)
+    assert result.status == DocumentStatus.READY
+
+
+@pytest.mark.asyncio
+async def test_progress_callback_includes_tag_derivation(
+    mock_repo: AsyncMock,
+    mock_embedding: AsyncMock,
+    mock_converter: MagicMock,
+    mock_chunker: MagicMock,
+) -> None:
+    """Should include deriving_tags stage in progress callbacks when enabled."""
+    from amelia.knowledge.models import TagExtractionOutput
+
+    # Create pipeline with tag derivation enabled
+    pipeline = IngestionPipeline(
+        repository=mock_repo,
+        embedding_client=mock_embedding,
+        concurrency_limit=2,
+        tag_derivation_model="openai/gpt-4o-mini",
+        tag_derivation_driver="api",
+    )
+
+    progress_calls: list[tuple[str, float, int, int]] = []
+
+    def progress_callback(
+        stage: str, progress: float, chunks_processed: int, total_chunks: int
+    ) -> None:
+        progress_calls.append((stage, progress, chunks_processed, total_chunks))
+
+    mock_output = TagExtractionOutput(
+        tags=["python", "django", "tutorial"],
+        reasoning="Python Django tutorial document",
+    )
+
+    with (
+        patch(
+            "docling.document_converter.DocumentConverter",
+            return_value=mock_converter,
+        ),
+        patch(
+            "docling.chunking.HierarchicalChunker",
+            return_value=mock_chunker,
+        ),
+        patch("amelia.core.extraction.extract_structured") as mock_extract,
+    ):
+        mock_extract.return_value = mock_output
+
+        await pipeline.ingest_document(
+            document_id="doc-1",
+            file_path=Path("/tmp/test.pdf"),
+            content_type="application/pdf",
+            progress_callback=progress_callback,
+        )
+
+    # Extract stages
+    stages_seen = [c[0] for c in progress_calls]
+
+    # All 5 stages should appear (parsing, chunking, embedding, deriving_tags, storing)
+    assert "parsing" in stages_seen
+    assert "chunking" in stages_seen
+    assert "embedding" in stages_seen
+    assert "deriving_tags" in stages_seen
+    assert "storing" in stages_seen
+
+    # Progress values should be monotonically non-decreasing
+    progress_values = [c[1] for c in progress_calls]
+    for i in range(1, len(progress_values)):
+        assert progress_values[i] >= progress_values[i - 1], (
+            f"Progress should be non-decreasing: {progress_values}"
+        )
+
+    # Final progress should be 1.0
+    assert progress_values[-1] == pytest.approx(1.0)
+
+    # Verify deriving_tags progress is between embedding and storing
+    deriving_tags_indices = [
+        i for i, (stage, _, _, _) in enumerate(progress_calls) if stage == "deriving_tags"
+    ]
+    storing_indices = [
+        i for i, (stage, _, _, _) in enumerate(progress_calls) if stage == "storing"
+    ]
+
+    # deriving_tags should come before storing
+    assert any(dt < s for dt in deriving_tags_indices for s in storing_indices)
+
+
+@pytest.mark.asyncio
+async def test_ingest_continues_when_tag_update_fails(
+    mock_repo: AsyncMock,
+    mock_embedding: AsyncMock,
+    mock_converter: MagicMock,
+    mock_chunker: MagicMock,
+) -> None:
+    """Should continue pipeline when update_document_tags fails (non-blocking error)."""
+    from amelia.knowledge.models import TagExtractionOutput
+
+    # Create pipeline with tag derivation enabled
+    pipeline = IngestionPipeline(
+        repository=mock_repo,
+        embedding_client=mock_embedding,
+        concurrency_limit=2,
+        tag_derivation_model="openai/gpt-4o-mini",
+        tag_derivation_driver="api",
+    )
+
+    # Mock update_document_tags to raise exception
+    mock_repo.update_document_tags.side_effect = RuntimeError("Database connection lost")
+
+    mock_output = TagExtractionOutput(
+        tags=["python", "django", "tutorial"],
+        reasoning="Document is a Python Django tutorial",
+    )
+
+    with (
+        patch(
+            "docling.document_converter.DocumentConverter",
+            return_value=mock_converter,
+        ),
+        patch(
+            "docling.chunking.HierarchicalChunker",
+            return_value=mock_chunker,
+        ),
+        patch("amelia.core.extraction.extract_structured") as mock_extract,
+    ):
+        mock_extract.return_value = mock_output
+
+        # Should NOT raise exception - should continue pipeline
+        result = await pipeline.ingest_document(
+            document_id="doc-1",
+            file_path=Path("/tmp/test.pdf"),
+            content_type="application/pdf",
+        )
+
+    # Should have attempted to update tags
+    mock_repo.update_document_tags.assert_called_once_with(
+        "doc-1", ["python", "django", "tutorial"]
+    )
+
+    # Should still complete successfully despite tag update failure
+    assert isinstance(result, Document)
+    assert result.status == DocumentStatus.READY
+
+
+@pytest.mark.asyncio
+async def test_ingest_skips_tag_update_when_no_tags_derived(
+    mock_repo: AsyncMock,
+    mock_embedding: AsyncMock,
+    mock_converter: MagicMock,
+    mock_chunker: MagicMock,
+) -> None:
+    """Should skip update_document_tags call when no tags are derived."""
+    from amelia.knowledge.models import TagExtractionOutput
+
+    # Create pipeline with tag derivation enabled
+    pipeline = IngestionPipeline(
+        repository=mock_repo,
+        embedding_client=mock_embedding,
+        concurrency_limit=2,
+        tag_derivation_model="openai/gpt-4o-mini",
+        tag_derivation_driver="api",
+    )
+
+    # Mock tag extraction to return empty tags
+    mock_output = TagExtractionOutput(
+        tags=["", "  ", "a" * 60],  # All will be filtered out by validation
+        reasoning="Could not identify clear tags",
+    )
+
+    with (
+        patch(
+            "docling.document_converter.DocumentConverter",
+            return_value=mock_converter,
+        ),
+        patch(
+            "docling.chunking.HierarchicalChunker",
+            return_value=mock_chunker,
+        ),
+        patch("amelia.core.extraction.extract_structured") as mock_extract,
+    ):
+        mock_extract.return_value = mock_output
+
+        result = await pipeline.ingest_document(
+            document_id="doc-1",
+            file_path=Path("/tmp/test.pdf"),
+            content_type="application/pdf",
+        )
+
+    # Should NOT have called update_document_tags (no tags to update)
+    mock_repo.update_document_tags.assert_not_called()
+
+    # Should complete successfully
+    assert isinstance(result, Document)
+    assert result.status == DocumentStatus.READY

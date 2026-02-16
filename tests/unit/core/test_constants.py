@@ -45,7 +45,7 @@ def test_tool_name_enum_has_all_canonical_names() -> None:
     invertible) are verified by other tests. This test catches unintentional
     enum changes — update the count when adding a new tool deliberately.
     """
-    assert len(ToolName) == 20
+    assert len(ToolName) == 21
 
 
 def test_tool_name_aliases_covers_all_cli_sdk_names() -> None:
@@ -55,7 +55,7 @@ def test_tool_name_aliases_covers_all_cli_sdk_names() -> None:
         "Read", "Write", "Edit", "NotebookEdit", "Glob", "Grep", "Bash",
         "Task", "TaskOutput", "TaskStop", "EnterPlanMode", "ExitPlanMode",
         "AskUserQuestion", "Skill", "TaskCreate", "TaskGet", "TaskUpdate",
-        "TaskList", "WebFetch", "WebSearch",
+        "TaskList", "WebFetch", "WebSearch", "KnowledgeSearch",
     }
     assert set(TOOL_NAME_ALIASES.keys()) == expected_cli_names
 

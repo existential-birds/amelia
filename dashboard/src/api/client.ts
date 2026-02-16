@@ -3,7 +3,7 @@ import type {
   WorkflowStatus,
   WorkflowDetailResponse,
   WorkflowListResponse,
-  ErrorResponse,
+
   PromptSummary,
   PromptDetail,
   VersionSummary,
@@ -22,6 +22,11 @@ import type {
   PathValidationResponse,
   UsageResponse,
 } from '../types';
+import type {
+  KnowledgeDocument,
+  KnowledgeDocumentListResponse,
+  SearchResult,
+} from '../types/knowledge';
 
 /**
  * Base URL for all API requests.
@@ -130,7 +135,7 @@ class ApiError extends Error {
  */
 async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
-    let errorData: ErrorResponse;
+    let errorData: Record<string, unknown>;
     try {
       errorData = await response.json();
     } catch {
@@ -141,12 +146,25 @@ async function handleResponse<T>(response: Response): Promise<T> {
       );
     }
 
+    // Handle both our ErrorResponse format ({error, code}) and
+    // FastAPI's HTTPException format ({detail})
+    const message =
+      (errorData.error as string) ||
+      (errorData.detail as string) ||
+      `HTTP ${response.status}: ${response.statusText}`;
+    const code = (errorData.code as string) || 'HTTP_ERROR';
+
     throw new ApiError(
-      errorData.error,
-      errorData.code,
+      message,
+      code,
       response.status,
-      errorData.details
+      errorData.details as Record<string, unknown> | undefined
     );
+  }
+
+  // Handle responses with no content (e.g., 204 No Content from DELETE)
+  if (response.status === 204 || response.headers?.get('content-length') === '0') {
+    return (void 0) as T;
   }
 
   return response.json();
@@ -448,22 +466,28 @@ export const api = {
   /**
    * Lists files in a directory matching a glob pattern.
    *
-   * @param directory - Absolute path to the directory to list.
+   * @param directory - Relative directory path within the base directory.
    * @param globPattern - Glob pattern to filter files (default: '*.md').
+   * @param worktreePath - Optional worktree path to use as base directory.
+   *                      If not provided, uses active profile's working_dir.
    * @returns Response with matching file entries and directory path.
    * @throws {ApiError} When directory not found or API request fails.
    *
    * @example
    * ```typescript
-   * const result = await api.listFiles('/path/to/repo/docs', '*.md');
+   * const result = await api.listFiles('docs/plans', '*.md', '/path/to/worktree');
    * console.log(`Found ${result.files.length} files in ${result.directory}`);
    * ```
    */
   async listFiles(
     directory: string,
-    globPattern: string = '*.md'
+    globPattern: string = '*.md',
+    worktreePath?: string
   ): Promise<FileListResponse> {
     const params = new URLSearchParams({ directory, glob_pattern: globPattern });
+    if (worktreePath) {
+      params.append('worktree_path', worktreePath);
+    }
     const response = await fetchWithTimeout(`${API_BASE_URL}/files/list?${params}`);
     return handleResponse<FileListResponse>(response);
   },
@@ -716,17 +740,25 @@ export const api = {
    * Reads file content for design document import.
    *
    * @param path - Absolute path to the file to read.
+   * @param worktreePath - Optional worktree path to use as base directory. If not provided, uses active profile's working_dir.
    * @returns File content and filename.
    * @throws {ApiError} When file not found, path invalid, or API request fails.
    *
    * @example
    * ```typescript
-   * const file = await api.readFile('/path/to/design.md');
+   * const file = await api.readFile('/path/to/design.md', '/path/to/worktree');
    * console.log(`Content: ${file.content}`);
    * ```
    */
-  async readFile(path: string): Promise<FileReadResponse> {
-    const response = await fetchWithTimeout(`${API_BASE_URL}/files/read`, {
+  async readFile(path: string, worktreePath?: string): Promise<FileReadResponse> {
+    const params = new URLSearchParams();
+    if (worktreePath) {
+      params.append('worktree_path', worktreePath);
+    }
+    const url = params.toString()
+      ? `${API_BASE_URL}/files/read?${params}`
+      : `${API_BASE_URL}/files/read`;
+    const response = await fetchWithTimeout(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ path }),
@@ -805,6 +837,98 @@ export const api = {
       `${API_BASE_URL}/usage?${searchParams.toString()}`
     );
     return handleResponse<UsageResponse>(response);
+  },
+
+  // ==========================================================================
+  // Knowledge API
+  // ==========================================================================
+
+  /**
+   * List all knowledge documents.
+   *
+   * @returns Array of knowledge documents.
+   * @throws {ApiError} When the API request fails.
+   */
+  async getKnowledgeDocuments(): Promise<KnowledgeDocument[]> {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/knowledge/documents`);
+    const data = await handleResponse<KnowledgeDocumentListResponse>(response);
+    return data.documents;
+  },
+
+  /**
+   * Upload a document for ingestion.
+   *
+   * @param file - File to upload (PDF or Markdown).
+   * @param name - Document display name.
+   * @param tags - Tags for filtering.
+   * @returns Created document with pending status.
+   * @throws {ApiError} When upload fails or file type unsupported.
+   */
+  async uploadKnowledgeDocument(
+    file: File,
+    name: string,
+    tags: string[]
+  ): Promise<KnowledgeDocument> {
+    // Validate tags don't contain commas
+    const invalidTag = tags.find(tag => tag.includes(','));
+    if (invalidTag) {
+      throw new ApiError(`Tag "${invalidTag}" cannot contain commas`, 'VALIDATION_ERROR', 400);
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('name', name);
+    formData.append('tags', tags.join(','));
+
+    const response = await fetchWithTimeout(`${API_BASE_URL}/knowledge/documents`, {
+      method: 'POST',
+      body: formData,
+    });
+    return handleResponse<KnowledgeDocument>(response);
+  },
+
+  /**
+   * Delete a knowledge document.
+   *
+   * @param documentId - Document UUID.
+   * @throws {ApiError} When document not found or API request fails.
+   */
+  async deleteKnowledgeDocument(documentId: string): Promise<void> {
+    const response = await fetchWithTimeout(
+      `${API_BASE_URL}/knowledge/documents/${documentId}`,
+      { method: 'DELETE' }
+    );
+    await handleResponse(response);
+  },
+
+  /**
+   * Search knowledge documents.
+   *
+   * @param query - Natural language search query.
+   * @param topK - Maximum results (default 5).
+   * @param tags - Optional tags to filter.
+   * @returns Ranked search results.
+   * @throws {ApiError} When search fails.
+   */
+  async searchKnowledge(
+    query: string,
+    topK: number = 5,
+    tags?: string[],
+    signal?: AbortSignal
+  ): Promise<SearchResult[]> {
+    if (signal?.aborted) {
+      throw new DOMException('Request aborted', 'AbortError');
+    }
+    const response = await fetchWithTimeout(
+      `${API_BASE_URL}/knowledge/search`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query, top_k: topK, tags }),
+      },
+      signal
+    );
+    return handleResponse<SearchResult[]>(response);
   },
 };
 

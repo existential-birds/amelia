@@ -6,7 +6,7 @@ import pytest
 from typer.testing import CliRunner
 
 from amelia.main import app
-from amelia.server.banner import CREAM, GOLD, MOSS, RUST
+from amelia.server.banner import CREAM, GOLD, MOSS, PURPLE, RUST
 from amelia.server.dev import (
     _get_log_level_style,
     check_dashboard_built,
@@ -293,6 +293,16 @@ class TestGetLogLevelStyle:
             ("Random text without level", CREAM),
             ("", CREAM),
             ("   Leading whitespace", CREAM),
+            # Knowledge library logs should be PURPLE
+            ("INFO:     amelia.knowledge.search:Knowledge search completed", PURPLE),
+            ("INFO:     amelia.knowledge.repository:Inserted chunks", PURPLE),
+            ("info:     amelia.knowledge.loader:Loading documents", PURPLE),
+            # Loguru-style knowledge library logs
+            ("21:59:25 │ INFO     │ amelia.knowledge.search:Knowledge search completed", PURPLE),
+            ("22:00:14 │ INFO     │ amelia.knowledge.repository:Inserted chunks", PURPLE),
+            # Regular INFO logs should remain MOSS
+            ("INFO:     amelia.server.routes.websocket:websocket_connected", MOSS),
+            ("21:59:25 │ INFO     │ amelia.server.routes.websocket:websocket_connected", MOSS),
         ],
         ids=[
             "INFO-uppercase",
@@ -311,6 +321,13 @@ class TestGetLogLevelStyle:
             "no-level",
             "empty-string",
             "leading-whitespace",
+            "knowledge-search-uvicorn",
+            "knowledge-repository-uvicorn",
+            "knowledge-loader-uvicorn-lowercase",
+            "knowledge-search-loguru",
+            "knowledge-repository-loguru",
+            "regular-server-uvicorn",
+            "regular-server-loguru",
         ],
     )
     def test_log_level_detection(self, text: str, expected: str) -> None:

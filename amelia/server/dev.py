@@ -18,6 +18,7 @@ from typing import Annotated
 
 import typer
 from rich.console import Console
+from rich.style import Style
 from rich.text import Text
 
 from amelia.cli.config import run_first_time_setup
@@ -26,6 +27,7 @@ from amelia.server.banner import (
     GOLD,
     GRAY,
     MOSS,
+    PURPLE,
     RUST,
     TWILIGHT,
     get_service_urls_display,
@@ -181,18 +183,27 @@ async def run_pnpm_build() -> bool:
 
 
 def _get_log_level_style(text: str) -> str:
-    """Determine the color style based on log level prefix in text.
+    """Determine the color style based on log level and module.
 
-    Parses uvicorn-style log output (e.g., "INFO:     message") and returns
+    Parses both uvicorn-style (e.g., "INFO:     message") and loguru-style
+    (e.g., "HH:mm:ss │ INFO     │ module:message") log output and returns
     the appropriate color from the Amelia dashboard palette.
+
+    Knowledge library logs (amelia.knowledge.*) are highlighted in PURPLE
+    to distinguish them from regular server logs.
 
     Args:
         text: Log line text to parse for level detection.
 
     Returns:
-        Color style string from Amelia palette (RUST, GOLD, CREAM, or MOSS).
+        Color style string from Amelia palette (RUST, GOLD, CREAM, MOSS, or PURPLE).
     """
     text_upper = text.upper()
+
+    # Check if this is a knowledge library log (use PURPLE for visibility)
+    is_knowledge_log = "AMELIA.KNOWLEDGE" in text_upper
+
+    # Check for uvicorn-style logs (starts with level)
     if text_upper.startswith("ERROR") or text_upper.startswith("CRITICAL"):
         return RUST
     if text_upper.startswith("WARNING") or text_upper.startswith("WARN"):
@@ -200,7 +211,23 @@ def _get_log_level_style(text: str) -> str:
     if text_upper.startswith("DEBUG"):
         return CREAM
     if text_upper.startswith("INFO"):
-        return MOSS
+        return PURPLE if is_knowledge_log else MOSS
+
+    # Check for loguru-style logs (level appears after │ separator)
+    if "│" in text_upper:
+        # Extract the level field (second segment between │ separators)
+        parts = text_upper.split("│")
+        if len(parts) >= 2:
+            level = parts[1].strip()
+            if "ERROR" in level or "CRITICAL" in level:
+                return RUST
+            if "WARNING" in level or "WARN" in level:
+                return GOLD
+            if "DEBUG" in level or "TRACE" in level:
+                return CREAM
+            if "INFO" in level or "SUCCESS" in level:
+                return PURPLE if is_knowledge_log else MOSS
+
     # Default for unparseable lines
     return CREAM
 
@@ -230,8 +257,9 @@ async def stream_output(
             break
         text = line.decode().rstrip()
         if text:
+            # Enhanced log level detection for both uvicorn and loguru formats
             style = _get_log_level_style(text)
-            console.print(prefix + Text(text, style=style))
+            console.print(prefix + Text(text, style=Style(color=style)))
 
 
 class ProcessManager:
@@ -268,6 +296,7 @@ class ProcessManager:
 
         process = await asyncio.create_subprocess_exec(
             sys.executable,
+            "-u",  # Unbuffered output for immediate log visibility
             "-m",
             "uvicorn",
             "amelia.server.main:app",
@@ -279,6 +308,7 @@ class ProcessManager:
             "info",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            env={**os.environ, "PYTHONUNBUFFERED": "1"},  # Force unbuffered I/O
         )
 
         self.server_process = process
@@ -403,6 +433,33 @@ class ProcessManager:
         await self._shutdown_event.wait()
 
 
+async def wait_for_server_ready(host: str, port: int, timeout: float = 10.0) -> bool:
+    """Wait for the server to be ready to accept connections.
+
+    Polls the server port until it accepts connections or timeout is reached.
+
+    Args:
+        host: Host address of the server.
+        port: Port number of the server.
+        timeout: Maximum seconds to wait for server to be ready.
+
+    Returns:
+        True if server is ready, False if timeout reached.
+    """
+    start_time = asyncio.get_event_loop().time()
+    while asyncio.get_event_loop().time() - start_time < timeout:
+        try:
+            # Try to connect to the server
+            _, writer = await asyncio.open_connection(host, port)
+            writer.close()
+            await writer.wait_closed()
+            return True
+        except (ConnectionRefusedError, OSError):
+            # Server not ready yet, wait and retry
+            await asyncio.sleep(0.1)
+    return False
+
+
 async def run_dev_mode(
     host: str,
     port: int,
@@ -464,8 +521,21 @@ async def run_dev_mode(
             )
         ]
 
-        # Start Vite dev server for HMR
+        # Wait for server to be ready before starting dashboard
         if is_dev_repo and not no_dashboard:
+            console.print(
+                DASHBOARD_PREFIX
+                + Text("Waiting for server to be ready...", style=CREAM)
+            )
+            server_ready = await wait_for_server_ready(host, port)
+            if not server_ready:
+                console.print(
+                    DASHBOARD_PREFIX
+                    + Text("Server failed to start within timeout", style=RUST)
+                )
+                return 1
+
+            # Start Vite dev server for HMR
             dashboard = await manager.start_dashboard()
             tasks.append(
                 asyncio.create_task(

@@ -7,7 +7,7 @@ import { Layout } from '@/components/Layout';
 import { RootErrorBoundary } from '@/components/ErrorBoundary';
 import { workflowsLoader, workflowDetailLoader, historyLoader } from '@/loaders/workflows';
 import { promptsLoader } from '@/loaders/prompts';
-import { costsLoader } from '@/loaders';
+import { costsLoader, knowledgeLoader } from '@/loaders';
 import { profilesLoader, serverSettingsLoader } from '@/loaders/settings';
 import { approveAction, rejectAction, cancelAction, replanAction } from '@/actions/workflows';
 
@@ -27,6 +27,7 @@ import { approveAction, rejectAction, cancelAction, replanAction } from '@/actio
  * - `/logs` → System logs view (lazy-loaded)
  * - `/prompts` → Prompts configuration page (lazy-loaded)
  * - `/specs` → Spec Builder page (lazy-loaded)
+ * - `/knowledge` → Knowledge Library page (lazy-loaded)
  * - `/settings` → Redirects to `/settings/profiles`
  * - `/settings/profiles` → Profile management (lazy-loaded)
  * - `/settings/server` → Server configuration (lazy-loaded)
@@ -124,6 +125,15 @@ export const router = createBrowserRouter([
         loader: costsLoader,
         lazy: async () => {
           const { default: Component } = await import('@/pages/CostsPage');
+          return { Component };
+        },
+      },
+      {
+        path: 'knowledge',
+        loader: knowledgeLoader,
+        errorElement: <RootErrorBoundary />,
+        lazy: async () => {
+          const { default: Component } = await import('@/pages/KnowledgePage');
           return { Component };
         },
       },

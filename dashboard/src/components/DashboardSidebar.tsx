@@ -263,7 +263,6 @@ export function DashboardSidebar() {
                 to="/knowledge"
                 icon={Library}
                 label="Knowledge"
-                comingSoon
               />
             </SidebarMenu>
           </SidebarGroupContent>
