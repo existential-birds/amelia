@@ -154,8 +154,8 @@ describe('KnowledgePage', () => {
     // Verify similarity score
     expect(screen.getByText('87%')).toBeInTheDocument();
 
-    // Verify heading path
-    expect(screen.getByText('Getting Started > Hooks')).toBeInTheDocument();
+    // Verify heading path (using › separator for better visual hierarchy)
+    expect(screen.getByText('Getting Started › Hooks')).toBeInTheDocument();
 
     // Verify document name and tags
     expect(screen.getByText('React Docs')).toBeInTheDocument();

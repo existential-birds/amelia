@@ -9,6 +9,7 @@ import { Library, Upload, Search, FileText, Trash2, AlertCircle, Loader2, Tag } 
 import { PageHeader } from '@/components/PageHeader';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { Card, CardContent } from '@/components/ui/card';
 import { DataTable } from '@/components/ui/data-table';
 import { DataTableColumnHeader } from '@/components/ui/data-table-column-header';
@@ -43,6 +44,72 @@ import type { KnowledgeLoaderData } from '@/loaders/knowledge';
 import type { KnowledgeDocument, SearchResult, DocumentStatus } from '@/types/knowledge';
 
 /**
+ * Tag color palette - organic, forest-inspired colors.
+ * Each tag gets a deterministic color based on its name hash.
+ */
+const TAG_COLORS = [
+  // Moss & lichen greens
+  { bg: 'oklch(45% 0.08 140 / 0.15)', border: 'oklch(55% 0.10 140 / 0.3)', text: 'oklch(75% 0.12 140)' },
+  // Amber & honey
+  { bg: 'oklch(70% 0.12 80 / 0.15)', border: 'oklch(75% 0.14 80 / 0.3)', text: 'oklch(85% 0.14 80)' },
+  // Sage & eucalyptus
+  { bg: 'oklch(60% 0.08 160 / 0.15)', border: 'oklch(65% 0.10 160 / 0.3)', text: 'oklch(78% 0.10 160)' },
+  // Lavender & twilight
+  { bg: 'oklch(60% 0.10 280 / 0.15)', border: 'oklch(65% 0.12 280 / 0.3)', text: 'oklch(75% 0.12 280)' },
+  // Coral & sunset
+  { bg: 'oklch(65% 0.12 40 / 0.15)', border: 'oklch(70% 0.14 40 / 0.3)', text: 'oklch(80% 0.14 40)' },
+  // Mint & frost
+  { bg: 'oklch(65% 0.08 180 / 0.15)', border: 'oklch(70% 0.10 180 / 0.3)', text: 'oklch(80% 0.10 180)' },
+  // Sky & dawn
+  { bg: 'oklch(60% 0.10 230 / 0.15)', border: 'oklch(65% 0.12 230 / 0.3)', text: 'oklch(75% 0.12 230)' },
+  // Rose & dusk
+  { bg: 'oklch(60% 0.12 350 / 0.15)', border: 'oklch(65% 0.14 350 / 0.3)', text: 'oklch(75% 0.14 350)' },
+] as const;
+
+/**
+ * Simple string hash function for deterministic color assignment.
+ */
+function hashString(str: string): number {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32-bit integer
+  }
+  return Math.abs(hash);
+}
+
+/**
+ * Get a deterministic color for a tag based on its name.
+ */
+function getTagColor(tag: string) {
+  const index = hashString(tag) % TAG_COLORS.length;
+  return TAG_COLORS[index]!; // Safe: modulo ensures valid index
+}
+
+/**
+ * TagBadge component - a single tag with organic color styling.
+ */
+function TagBadge({ tag, className }: { tag: string; className?: string }) {
+  const color = getTagColor(tag);
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium border transition-colors',
+        className
+      )}
+      style={{
+        backgroundColor: color.bg,
+        borderColor: color.border,
+        color: color.text,
+      }}
+    >
+      {tag}
+    </span>
+  );
+}
+
+/**
  * TagStack component - displays tags as layered, stacked cards.
  * Shows first 3 tags clearly, hints at more with visual depth.
  */
@@ -61,18 +128,16 @@ function TagStack({ tags }: { tags: string[] }) {
     <Popover open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger asChild>
         <button
-          className="flex items-center gap-1"
+          className="flex items-center gap-1.5 flex-wrap"
           onClick={(e) => e.stopPropagation()}
         >
           {visibleTags.map((tag) => (
-            <Badge key={tag} variant="outline" className="text-xs">
-              {tag.length > 12 ? `${tag.slice(0, 10)}...` : tag}
-            </Badge>
+            <TagBadge key={tag} tag={tag} />
           ))}
           {hasMore && (
-            <Badge variant="secondary" className="text-xs">
+            <span className="inline-flex items-center rounded-full px-2 py-1 text-xs font-medium bg-secondary/50 text-secondary-foreground border border-border">
               +{hiddenCount}
-            </Badge>
+            </span>
           )}
         </button>
       </PopoverTrigger>
@@ -91,11 +156,9 @@ function TagStack({ tags }: { tags: string[] }) {
             </span>
           </div>
 
-          <div className="flex flex-wrap gap-1.5 max-h-60 overflow-y-auto">
+          <div className="flex flex-wrap gap-2 max-h-60 overflow-y-auto">
             {tags.map((tag) => (
-              <Badge key={tag} variant="outline" className="text-xs">
-                {tag}
-              </Badge>
+              <TagBadge key={tag} tag={tag} />
             ))}
           </div>
         </div>
@@ -144,9 +207,11 @@ function getDocumentColumns(onDelete: (id: string) => void): ColumnDef<Knowledge
       accessorKey: 'name',
       header: ({ column }) => <DataTableColumnHeader column={column} title="Name" />,
       cell: ({ row }) => (
-        <div className="flex items-center gap-2">
-          <FileText className="size-4 text-muted-foreground shrink-0" />
-          <span className="truncate font-medium">{row.original.name}</span>
+        <div className="flex items-center gap-3 py-1">
+          <div className="size-9 shrink-0 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center">
+            <FileText className="size-4 text-primary" />
+          </div>
+          <span className="truncate font-semibold text-sm">{row.original.name}</span>
         </div>
       ),
     },
@@ -184,12 +249,13 @@ function getDocumentColumns(onDelete: (id: string) => void): ColumnDef<Knowledge
           size="icon-sm"
           data-testid="delete-document"
           aria-label="Delete document"
+          className="text-destructive hover:text-destructive-foreground hover:bg-destructive/10"
           onClick={(e) => {
             e.stopPropagation();
             onDelete(row.original.id);
           }}
         >
-          <Trash2 className="size-4 text-muted-foreground" />
+          <Trash2 className="size-4" />
         </Button>
       ),
     },
@@ -514,29 +580,34 @@ export default function KnowledgePage() {
               </Empty>
             ) : (
               <div className="flex flex-col gap-3 overflow-auto">
-                {searchResults.map((result) => (
-                  <Card key={result.chunk_id}>
-                    <CardContent className="p-4">
-                      <div className="flex items-start justify-between gap-2 mb-2">
-                        <div className="text-xs text-muted-foreground">
-                          {result.heading_path.length > 0 ? result.heading_path.join(' > ') : 'Document root'}
+                {searchResults.map((result, index) => (
+                  <Card
+                    key={result.chunk_id}
+                    className="hover:shadow-lg hover:shadow-primary/5 transition-all duration-200 hover:border-primary/30"
+                    style={{ animationDelay: `${index * 50}ms` }}
+                  >
+                    <CardContent className="p-5">
+                      <div className="flex items-start justify-between gap-3 mb-3">
+                        <div className="text-xs text-muted-foreground font-medium">
+                          {result.heading_path.length > 0 ? result.heading_path.join(' › ') : 'Document root'}
                         </div>
-                        <Badge variant="outline" className="shrink-0 font-mono text-xs">
-                          {(result.similarity * 100).toFixed(0)}%
-                        </Badge>
+                        <div className="shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/15 border border-primary/30">
+                          <div className="size-1.5 rounded-full bg-primary animate-pulse" />
+                          <span className="text-xs font-mono font-semibold text-primary">
+                            {(result.similarity * 100).toFixed(0)}%
+                          </span>
+                        </div>
                       </div>
-                      <p className="text-sm mb-3 whitespace-pre-wrap break-words">{result.content}</p>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <FileText className="size-3" />
-                          <span>{result.document_name}</span>
+                      <p className="text-sm mb-4 whitespace-pre-wrap break-words leading-relaxed">{result.content}</p>
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
+                          <FileText className="size-3 shrink-0" />
+                          <span className="shrink-0">{result.document_name}</span>
                           {result.tags.map((tag) => (
-                            <Badge key={tag} variant="outline" className="text-xs">
-                              {tag}
-                            </Badge>
+                            <TagBadge key={tag} tag={tag} />
                           ))}
                         </div>
-                        <span className="text-xs text-muted-foreground">
+                        <span className="text-xs text-muted-foreground shrink-0">
                           {result.token_count} tokens
                         </span>
                       </div>

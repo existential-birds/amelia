@@ -433,6 +433,33 @@ class ProcessManager:
         await self._shutdown_event.wait()
 
 
+async def wait_for_server_ready(host: str, port: int, timeout: float = 10.0) -> bool:
+    """Wait for the server to be ready to accept connections.
+
+    Polls the server port until it accepts connections or timeout is reached.
+
+    Args:
+        host: Host address of the server.
+        port: Port number of the server.
+        timeout: Maximum seconds to wait for server to be ready.
+
+    Returns:
+        True if server is ready, False if timeout reached.
+    """
+    start_time = asyncio.get_event_loop().time()
+    while asyncio.get_event_loop().time() - start_time < timeout:
+        try:
+            # Try to connect to the server
+            _, writer = await asyncio.open_connection(host, port)
+            writer.close()
+            await writer.wait_closed()
+            return True
+        except (ConnectionRefusedError, OSError):
+            # Server not ready yet, wait and retry
+            await asyncio.sleep(0.1)
+    return False
+
+
 async def run_dev_mode(
     host: str,
     port: int,
@@ -494,8 +521,21 @@ async def run_dev_mode(
             )
         ]
 
-        # Start Vite dev server for HMR
+        # Wait for server to be ready before starting dashboard
         if is_dev_repo and not no_dashboard:
+            console.print(
+                DASHBOARD_PREFIX
+                + Text("Waiting for server to be ready...", style=CREAM)
+            )
+            server_ready = await wait_for_server_ready(host, port)
+            if not server_ready:
+                console.print(
+                    DASHBOARD_PREFIX
+                    + Text("Server failed to start within timeout", style=RUST)
+                )
+                return 1
+
+            # Start Vite dev server for HMR
             dashboard = await manager.start_dashboard()
             tasks.append(
                 asyncio.create_task(
