@@ -7,6 +7,7 @@ from typer.testing import CliRunner
 
 from amelia.main import app
 
+
 MOCK_WORKFLOW_ID = "b2c3d4e5-f6a7-8901-bcde-f12345678901"
 
 

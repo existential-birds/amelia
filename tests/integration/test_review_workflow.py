@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from pathlib import Path
 from unittest.mock import AsyncMock
-from uuid import UUID
 
 import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
+
 
 REVIEW_WORKFLOW_ID = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
 
