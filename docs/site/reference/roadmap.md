@@ -294,7 +294,7 @@ Engineering work attribution for financial reporting (OPEX vs CAPEX) ([#70](http
 | F12: Stateless Reducer | ✅ Complete | Core Orchestration | Frozen Pydantic state, `operator.add` reducers, pure node functions |
 | F13: Pre-fetch Context | 🟡 Partial | Phase 1 | Issue/commit/design/prompts pre-fetched; codebase context via runtime exploration |
 
-**Current:** 5 Complete, 1 In Progress, 7 Partial
+**Current:** 6 Complete, 1 In Progress, 6 Partial
 
 ---
 

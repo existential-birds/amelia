@@ -142,28 +142,28 @@ A multilingual extension of RULER shows performance degrades significantly at 12
 
 ## Blog Posts & Talks
 
-#### [How to Build Agents with Filesystems and Bash](https://vercel.com/blog/how-to-build-agents-with-filesystems-and-bash)
+### [How to Build Agents with Filesystems and Bash](https://vercel.com/blog/how-to-build-agents-with-filesystems-and-bash)
 *Vercel*
 
 Argues that the filesystem is the most underrated tool for agent memory and coordination. Files provide persistent state, human-readable artifacts, and natural checkpoints. Bash gives agents the same power that developers already use — composable commands over a shared filesystem.
 
 **Key influence:** Amelia treats the working directory as the agent's primary workspace. Plan files, code changes, and review feedback all persist as filesystem artifacts. The Oracle system extends this pattern into structured long-term memory, and the Knowledge Library provides semantic retrieval over accumulated project knowledge.
 
-#### [Claude Code SDK and HaaS](https://www.vtrivedy.com/posts/claude-code-sdk-haas-harness-as-a-service)
+### [Claude Code SDK and HaaS](https://www.vtrivedy.com/posts/claude-code-sdk-haas-harness-as-a-service)
 *by Vikram Trivedy*
 
 Introduced **Harness as a Service (HaaS)**, arguing that agent infrastructure is commoditizing. A harness provides complete runtime environments (context management, tool invocation, permissions, loop control) so developers can focus on domain specialization rather than building infrastructure from scratch.
 
 **Key influence:** Amelia's driver abstraction (`api` vs `cli`), profile-based configuration, and multi-agent architecture (Architect, Developer, Reviewer as specialized subagents).
 
-#### [Ralph Wiggum as a Software Engineer](https://ghuntley.com/ralph/)
+### [Ralph Wiggum as a Software Engineer](https://ghuntley.com/ralph/)
 *by Geoffrey Huntley*
 
 Frames LLMs as "deterministically bad in an undeterministic world." Success comes from iteration, not expecting perfection. The Ralph technique represents continuous refinement through an iterative loop where each failure teaches you about gaps in your instructions.
 
 **Key influence:** Validates the Developer-Reviewer iteration loop. Each review rejection "tunes" the developer like tuning a guitar. Eventual consistency over immediate correctness.
 
-#### [Software is Changing (Again)](https://www.youtube.com/watch?v=zDmW5hJPsvQ)
+### [Software is Changing (Again)](https://www.youtube.com/watch?v=zDmW5hJPsvQ)
 *by Andrej Karpathy*
 
 Introduces **Software 3.0**: prompts are programs, English is the programming language, and LLMs are the new CPUs. Karpathy frames LLMs as operating systems with context windows as working memory, notes their "jagged intelligence," and advocates partial autonomy ("Iron Man suit") over full autonomy.
