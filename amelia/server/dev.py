@@ -24,10 +24,10 @@ from rich.text import Text
 from amelia.cli.config import run_first_time_setup
 from amelia.server.banner import (
     CREAM,
-    CYAN,
     GOLD,
     GRAY,
     MOSS,
+    PURPLE,
     RUST,
     TWILIGHT,
     get_service_urls_display,
@@ -189,18 +189,18 @@ def _get_log_level_style(text: str) -> str:
     (e.g., "HH:mm:ss │ INFO     │ module:message") log output and returns
     the appropriate color from the Amelia dashboard palette.
 
-    Knowledge library logs (amelia.knowledge.*) are highlighted in CYAN
+    Knowledge library logs (amelia.knowledge.*) are highlighted in PURPLE
     to distinguish them from regular server logs.
 
     Args:
         text: Log line text to parse for level detection.
 
     Returns:
-        Color style string from Amelia palette (RUST, GOLD, CREAM, MOSS, or CYAN).
+        Color style string from Amelia palette (RUST, GOLD, CREAM, MOSS, or PURPLE).
     """
     text_upper = text.upper()
 
-    # Check if this is a knowledge library log (use CYAN for visibility)
+    # Check if this is a knowledge library log (use PURPLE for visibility)
     is_knowledge_log = "AMELIA.KNOWLEDGE" in text_upper
 
     # Check for uvicorn-style logs (starts with level)
@@ -211,7 +211,7 @@ def _get_log_level_style(text: str) -> str:
     if text_upper.startswith("DEBUG"):
         return CREAM
     if text_upper.startswith("INFO"):
-        return CYAN if is_knowledge_log else MOSS
+        return PURPLE if is_knowledge_log else MOSS
 
     # Check for loguru-style logs (level appears after │ separator)
     if "│" in text_upper:
@@ -226,7 +226,7 @@ def _get_log_level_style(text: str) -> str:
             if "DEBUG" in level or "TRACE" in level:
                 return CREAM
             if "INFO" in level or "SUCCESS" in level:
-                return CYAN if is_knowledge_log else MOSS
+                return PURPLE if is_knowledge_log else MOSS
 
     # Default for unparseable lines
     return CREAM
