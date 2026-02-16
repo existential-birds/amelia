@@ -1,4 +1,5 @@
 """Pydantic models for API requests and responses."""
+import uuid
 from datetime import datetime
 
 from pydantic import BaseModel, Field
@@ -57,7 +58,7 @@ class CreateWorkflowResponse(BaseModel):
         message: Human-readable status message.
     """
 
-    id: str
+    id: uuid.UUID
     status: str
     message: str
 
@@ -85,7 +86,7 @@ class WorkflowResponse(BaseModel):
         failure_reason: Error message if the workflow failed.
     """
 
-    id: str
+    id: uuid.UUID
     issue_id: str
     status: str
     worktree_path: str
@@ -105,7 +106,7 @@ class WorkflowSummary(BaseModel):
         started_at: Timestamp when the workflow started.
     """
 
-    id: str
+    id: uuid.UUID
     issue_id: str
     status: str
     worktree_path: str
