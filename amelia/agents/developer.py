@@ -20,7 +20,7 @@ from amelia.server.models.events import WorkflowEvent
 if TYPE_CHECKING:
     from amelia.pipelines.implementation.state import ImplementationState
 
-_ZERO_UUID = uuid.UUID(int=0)
+_NO_WORKFLOW_UUID = uuid.UUID(int=0)
 
 
 class Developer:
@@ -65,7 +65,7 @@ class Developer:
         self,
         state: "ImplementationState",
         profile: Profile,
-        workflow_id: uuid.UUID = _ZERO_UUID,
+        workflow_id: uuid.UUID = _NO_WORKFLOW_UUID,
     ) -> AsyncIterator[tuple["ImplementationState", WorkflowEvent]]:
         """Execute development task agentically.
 

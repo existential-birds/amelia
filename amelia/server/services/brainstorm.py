@@ -587,7 +587,13 @@ class BrainstormService:
             await self._repository.save_message(user_message)
 
             # Generate assistant message ID before streaming so events can reference it
-            resolved_message_id = uuid.UUID(assistant_message_id) if assistant_message_id else uuid4()
+            if assistant_message_id:
+                try:
+                    resolved_message_id = uuid.UUID(assistant_message_id)
+                except (ValueError, AttributeError) as e:
+                    raise ValueError(f"Invalid assistant_message_id: {assistant_message_id!r}") from e
+            else:
+                resolved_message_id = uuid4()
 
             # Invoke driver and stream events
             assistant_content_parts: list[str] = []

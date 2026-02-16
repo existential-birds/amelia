@@ -318,7 +318,7 @@ async def get_workflow(
     """
     workflow = await repository.get(workflow_id)
     if workflow is None:
-        raise WorkflowNotFoundError(workflow_id=str(workflow_id))
+        raise WorkflowNotFoundError(workflow_id=workflow_id)
 
     # Fetch token usage summary
     token_usage = await repository.get_token_summary(workflow_id)
@@ -633,7 +633,7 @@ def configure_exception_handlers(app: FastAPI) -> None:
         Returns:
             JSONResponse with 422 status code.
         """
-        logger.warning("Invalid state for workflow", workflow_id=exc.workflow_id, current_status=exc.current_status)
+        logger.warning("Invalid state for workflow", workflow_id=str(exc.workflow_id), current_status=exc.current_status)
         error = ErrorResponse(
             code="INVALID_STATE",
             error=str(exc),

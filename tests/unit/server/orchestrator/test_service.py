@@ -323,8 +323,6 @@ async def test_cancel_workflow(
     mock_repository.set_status.assert_called_once_with(cancel_wf_id, WorkflowStatus.CANCELLED)
 
 
-_PARAM_WF_ID = uuid4()
-
 @pytest.mark.parametrize(
     "operation,method_name,args,expected_exception,mock_state",
     [
@@ -332,7 +330,7 @@ _PARAM_WF_ID = uuid4()
         (
             "cancel",
             "cancel_workflow",
-            (_PARAM_WF_ID,),
+            (uuid4(),),
             WorkflowNotFoundError,
             None,
         ),
@@ -340,7 +338,7 @@ _PARAM_WF_ID = uuid4()
         (
             "cancel",
             "cancel_workflow",
-            (_PARAM_WF_ID,),
+            (uuid4(),),
             InvalidStateError,
             ServerExecutionState(
                 id=uuid4(),
@@ -354,7 +352,7 @@ _PARAM_WF_ID = uuid4()
         (
             "approve",
             "approve_workflow",
-            (_PARAM_WF_ID,),
+            (uuid4(),),
             WorkflowNotFoundError,
             None,
         ),
@@ -362,7 +360,7 @@ _PARAM_WF_ID = uuid4()
         (
             "approve",
             "approve_workflow",
-            (_PARAM_WF_ID,),
+            (uuid4(),),
             InvalidStateError,
             ServerExecutionState(
                 id=uuid4(),
@@ -376,7 +374,7 @@ _PARAM_WF_ID = uuid4()
         (
             "reject",
             "reject_workflow",
-            (_PARAM_WF_ID, "Nope"),
+            (uuid4(), "Nope"),
             WorkflowNotFoundError,
             None,
         ),
@@ -384,7 +382,7 @@ _PARAM_WF_ID = uuid4()
         (
             "reject",
             "reject_workflow",
-            (_PARAM_WF_ID, "Nope"),
+            (uuid4(), "Nope"),
             InvalidStateError,
             ServerExecutionState(
                 id=uuid4(),
@@ -1416,7 +1414,7 @@ async def test_model_provider_error_retried(
         model_provider_error_patches(orchestrator, setup) as mock_sleep,
         pytest.raises(ModelProviderError),
     ):
-        await orchestrator.approve_workflow(_PARAM_WF_ID)
+        await orchestrator.approve_workflow(uuid4())
 
     # max_retries=2 means attempts 0, 1, 2 → astream called 3 times
     assert setup.mock_graph.astream.call_count == 3
@@ -1436,7 +1434,7 @@ async def test_model_provider_error_friendly_failure_reason(
         model_provider_error_patches(orchestrator, setup),
         pytest.raises(ModelProviderError),
     ):
-        await orchestrator.approve_workflow(_PARAM_WF_ID)
+        await orchestrator.approve_workflow(uuid4())
 
     # Verify set_status was called with FAILED and a friendly failure_reason
     failed_calls = [
