@@ -1,5 +1,6 @@
 """Response schemas for REST API endpoints."""
 
+import uuid
 from datetime import datetime
 from typing import Annotated, Any
 
@@ -38,7 +39,7 @@ class WorkflowSummary(BaseModel):
         total_duration_ms: Total execution duration in milliseconds (optional)
     """
 
-    id: Annotated[str, Field(description="Unique workflow identifier")]
+    id: Annotated[uuid.UUID, Field(description="Unique workflow identifier")]
     issue_id: Annotated[str, Field(description="Issue identifier")]
     worktree_path: Annotated[str, Field(description="Absolute path to worktree")]
     profile: Annotated[
@@ -116,7 +117,7 @@ class WorkflowDetailResponse(BaseModel):
         final_response: Final response from the agent when complete (optional)
     """
 
-    id: Annotated[str, Field(description="Unique workflow identifier")]
+    id: Annotated[uuid.UUID, Field(description="Unique workflow identifier")]
     issue_id: Annotated[str, Field(description="Issue identifier")]
     worktree_path: Annotated[str, Field(description="Absolute path to worktree")]
     status: Annotated[WorkflowStatus, Field(description="Current workflow status")]
@@ -171,7 +172,7 @@ class ActionResponse(BaseModel):
     """
 
     status: Annotated[str, Field(description="Action status")]
-    workflow_id: Annotated[str, Field(description="Workflow ID")]
+    workflow_id: Annotated[uuid.UUID, Field(description="Workflow ID")]
 
 
 class ErrorResponse(BaseModel):

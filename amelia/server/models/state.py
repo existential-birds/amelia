@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import uuid
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
@@ -155,7 +156,7 @@ class ServerExecutionState(BaseModel):
         failure_reason: Error message when status is "failed".
     """
 
-    id: str = Field(..., description="Unique workflow identifier")
+    id: uuid.UUID = Field(..., description="Unique workflow identifier")
     issue_id: str = Field(..., description="Issue being worked on")
     worktree_path: str = Field(..., description="Absolute path to worktree")
     workflow_type: WorkflowType = Field(

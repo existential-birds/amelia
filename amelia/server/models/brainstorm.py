@@ -4,6 +4,7 @@ These models support the chat-based brainstorming system where users
 collaborate with an AI agent to produce design documents.
 """
 
+import uuid
 from datetime import datetime
 from enum import StrEnum
 from typing import Any
@@ -81,7 +82,7 @@ class BrainstormingSession(BaseModel):
         usage_summary: Aggregated token usage for the session.
     """
 
-    id: str
+    id: uuid.UUID
     profile_id: str
     driver_session_id: str | None = None
     driver_type: str | None = None
@@ -128,8 +129,8 @@ class Message(BaseModel):
         created_at: When the message was created.
     """
 
-    id: str
-    session_id: str
+    id: uuid.UUID
+    session_id: uuid.UUID
     sequence: int
     role: MessageRole
     content: str
@@ -150,8 +151,8 @@ class Artifact(BaseModel):
         created_at: When the artifact was created.
     """
 
-    id: str
-    session_id: str
+    id: uuid.UUID
+    session_id: uuid.UUID
     type: str
     path: str
     title: str | None = None
