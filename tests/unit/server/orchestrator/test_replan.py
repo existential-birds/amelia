@@ -78,16 +78,15 @@ def orchestrator(
 
 
 def make_blocked_workflow(
-    workflow_id: str = "wf-replan-1",
     issue_id: str = "ISSUE-REPLAN",
 ) -> ServerExecutionState:
     """Create a blocked workflow with a plan ready for replan testing."""
     return ServerExecutionState(
-        id=workflow_id,
+        id=uuid4(),
         issue_id=issue_id,
         worktree_path="/tmp/test-repo",
         workflow_status=WorkflowStatus.BLOCKED,
-        profile_id=uuid4(),
+        profile_id="test",
         plan_cache=PlanCache(
             goal="Original goal",
             plan_markdown="# Original plan",
@@ -134,28 +133,29 @@ class TestReplanWorkflow:
     ) -> None:
         """replan_workflow should clear plan_cache, delete checkpoint, and spawn planning task."""
         workflow = make_blocked_workflow()
+        wf_id = workflow.id
         mock_repository.get.return_value = workflow
 
         with (
             patch.object(orchestrator, "_delete_checkpoint", new_callable=AsyncMock) as mock_delete,
             patch.object(orchestrator, "_run_planning_task", new_callable=AsyncMock),
         ):
-            await orchestrator.replan_workflow("wf-replan-1")
+            await orchestrator.replan_workflow(wf_id)
 
         # Should have deleted checkpoint
-        mock_delete.assert_awaited_once_with("wf-replan-1")
+        mock_delete.assert_awaited_once_with(wf_id)
 
         # Should have cleared plan_cache
         mock_repository.update_plan_cache.assert_awaited_once()
         call_args = mock_repository.update_plan_cache.call_args
-        assert call_args[0][0] == "wf-replan-1"
+        assert call_args[0][0] == wf_id
         cleared_cache = call_args[0][1]
         assert isinstance(cleared_cache, PlanCache)
         assert cleared_cache.goal is None
         assert cleared_cache.plan_markdown is None
 
         # Should have set status to PENDING
-        mock_repository.set_status.assert_awaited_once_with("wf-replan-1", WorkflowStatus.PENDING)
+        mock_repository.set_status.assert_awaited_once_with(wf_id, WorkflowStatus.PENDING)
 
     async def test_replan_wrong_status_raises(
         self,
@@ -168,7 +168,7 @@ class TestReplanWorkflow:
         mock_repository.get.return_value = workflow
 
         with pytest.raises(InvalidStateError, match="blocked"):
-            await orchestrator.replan_workflow("wf-replan-1")
+            await orchestrator.replan_workflow(workflow.id)
 
     async def test_replan_not_found_raises(
         self,
@@ -188,13 +188,14 @@ class TestReplanWorkflow:
     ) -> None:
         """replan_workflow should raise conflict if planning task already active."""
         workflow = make_blocked_workflow()
+        wf_id = workflow.id
         mock_repository.get.return_value = workflow
 
         # Simulate an active planning task
-        orchestrator._planning_tasks["wf-replan-1"] = MagicMock(spec=asyncio.Task)
+        orchestrator._planning_tasks[wf_id] = MagicMock(spec=asyncio.Task)
 
         with pytest.raises(WorkflowConflictError, match="already running"):
-            await orchestrator.replan_workflow("wf-replan-1")
+            await orchestrator.replan_workflow(wf_id)
 
     async def test_replan_emits_event(
         self,
@@ -213,7 +214,7 @@ class TestReplanWorkflow:
             patch.object(orchestrator, "_delete_checkpoint", new_callable=AsyncMock),
             patch.object(orchestrator, "_run_planning_task", new_callable=AsyncMock),
         ):
-            await orchestrator.replan_workflow("wf-replan-1")
+            await orchestrator.replan_workflow(workflow.id)
 
         # Should have emitted replanning event
         stage_events = [e for e in received_events if e.event_type == EventType.STAGE_STARTED]
@@ -232,7 +233,7 @@ class TestReplanWorkflow:
         mock_profile_repo.get_profile.return_value = None
 
         with pytest.raises(ValueError, match="not found"):
-            await orchestrator.replan_workflow("wf-replan-1")
+            await orchestrator.replan_workflow(workflow.id)
 
         # Workflow should NOT be set to FAILED — the user should be able to
         # fix the profile and retry since the workflow is still BLOCKED.
@@ -245,19 +246,20 @@ class TestReplanWorkflow:
     ) -> None:
         """cancel_workflow should cancel an active planning task."""
         workflow = make_blocked_workflow()
+        wf_id = workflow.id
         # Set to PENDING (as if planning is in progress)
         workflow.workflow_status = WorkflowStatus.PENDING
         mock_repository.get.return_value = workflow
 
         # Simulate an active planning task
         mock_task = MagicMock(spec=asyncio.Task)
-        orchestrator._planning_tasks["wf-replan-1"] = mock_task
+        orchestrator._planning_tasks[wf_id] = mock_task
 
-        await orchestrator.cancel_workflow("wf-replan-1")
+        await orchestrator.cancel_workflow(wf_id)
 
         # Planning task should have been cancelled
         mock_task.cancel.assert_called_once()
         # Status should be set to cancelled
         mock_repository.set_status.assert_awaited_once_with(
-            "wf-replan-1", WorkflowStatus.CANCELLED
+            wf_id, WorkflowStatus.CANCELLED
         )

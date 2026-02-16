@@ -1,6 +1,7 @@
 """Unit tests for Knowledge Library repository."""
 
 from unittest.mock import AsyncMock, MagicMock
+from uuid import uuid4
 
 import pytest
 
@@ -90,7 +91,7 @@ class TestUpdateDocumentTags:
     ) -> None:
         """Should handle empty tag list (clear all tags)."""
         # Arrange
-        document_id = "doc-456"
+        document_id = uuid4()
         new_tags = []
 
         mock_row = {

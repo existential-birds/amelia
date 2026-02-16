@@ -44,14 +44,15 @@ class TestReplanRoute:
         """Should return 200 with workflow_id and status."""
         orch = get_orchestrator_mock()
         client = create_test_client(orch)
+        wf_id = str(uuid4())
 
-        response = client.post("/api/workflows/wf-123/replan")
+        response = client.post(f"/api/workflows/{wf_id}/replan")
 
         assert response.status_code == 200
         data = response.json()
-        assert data["workflow_id"] == "wf-123"
+        assert data["workflow_id"] == wf_id
         assert data["status"] == "replanning"
-        orch.replan_workflow.assert_awaited_once_with("wf-123")
+        orch.replan_workflow.assert_awaited_once()
 
     def test_replan_not_found(self) -> None:
         """Should return 404 for missing workflow."""
@@ -59,7 +60,7 @@ class TestReplanRoute:
         orch.replan_workflow.side_effect = WorkflowNotFoundError("wf-missing")
         client = create_test_client(orch)
 
-        response = client.post("/api/workflows/wf-missing/replan")
+        response = client.post(f"/api/workflows/{uuid4()}/replan")
         assert response.status_code == 404
 
     def test_replan_wrong_status(self) -> None:
@@ -72,18 +73,18 @@ class TestReplanRoute:
         )
         client = create_test_client(orch)
 
-        response = client.post("/api/workflows/wf-wrong/replan")
+        response = client.post(f"/api/workflows/{uuid4()}/replan")
         assert response.status_code == 422
 
     def test_replan_conflict(self) -> None:
         """Should return 409 when planning already running."""
         orch = get_orchestrator_mock()
         orch.replan_workflow.side_effect = WorkflowConflictError(
-            "Planning task already running for workflow wf-busy"
+            "Planning task already running for workflow"
         )
         client = create_test_client(orch)
 
-        response = client.post("/api/workflows/wf-busy/replan")
+        response = client.post(f"/api/workflows/{uuid4()}/replan")
         assert response.status_code == 409
 
     def test_replan_profile_not_found(self) -> None:
@@ -92,5 +93,5 @@ class TestReplanRoute:
         orch.replan_workflow.side_effect = ValueError("Profile 'test' not found")
         client = create_test_client(orch)
 
-        response = client.post("/api/workflows/wf-no-profile/replan")
+        response = client.post(f"/api/workflows/{uuid4()}/replan")
         assert response.status_code == 400

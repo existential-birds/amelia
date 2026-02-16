@@ -9,8 +9,9 @@ from unittest.mock import AsyncMock, patch
 import httpx
 import pytest
 
-from amelia.client.api import (
 from uuid import uuid4
+
+from amelia.client.api import (
     AmeliaClient,
     RateLimitError,
     ServerUnreachableError,
@@ -89,6 +90,7 @@ class TestCreateReviewWorkflow:
         worktree = tmp_path / "repo"
         worktree.mkdir()
 
+        wf_id = str(uuid4())
         mock_resp = AsyncMock()
         mock_resp.status_code = 409
         # json() is a synchronous method, not async
@@ -96,7 +98,7 @@ class TestCreateReviewWorkflow:
             "detail": {
                 "message": "Workflow already active",
                 "active_workflow": {
-                    "id": str(uuid4()),
+                    "id": wf_id,
                     "issue_id": "ISSUE-123",
                     "status": "in_progress",
                 },
@@ -113,7 +115,7 @@ class TestCreateReviewWorkflow:
             )
 
         assert exc_info.value.active_workflow is not None
-        assert exc_info.value.active_workflow["id"] == "wf-existing"
+        assert exc_info.value.active_workflow["id"] == wf_id
 
     async def test_raises_rate_limit_on_429(
         self,

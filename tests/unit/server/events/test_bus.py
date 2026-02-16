@@ -16,7 +16,7 @@ from uuid import uuid4
 def sample_event(event_factory: Callable[..., WorkflowEvent]) -> WorkflowEvent:
     """Create sample event."""
     return event_factory(
-        id="evt-1",
+        id=uuid4(),
         workflow_id=uuid4(),
         timestamp=datetime.now(UTC),
         message="Workflow started",

@@ -63,9 +63,9 @@ class TestConnectionManager:
     @pytest.mark.parametrize(
         "subscription_workflow,event_workflow,should_send",
         [
-            (None, "wf-456", True),  # subscribed to all
-            ("wf-456", "wf-456", True),  # specific match
-            ("wf-999", "wf-456", False),  # no match
+            (None, uuid4(), True),  # subscribed to all
+            ("SAME", "SAME", True),  # specific match (sentinel replaced below)
+            (uuid4(), uuid4(), False),  # no match
         ],
         ids=["subscribe_all", "specific_match", "no_match"],
     )
@@ -73,12 +73,18 @@ class TestConnectionManager:
         self, manager, mock_websocket, subscription_workflow, event_workflow, should_send, event_factory
     ) -> None:
         """broadcast() respects subscription filters."""
+        # Handle the "same workflow" sentinel
+        if subscription_workflow == "SAME" and event_workflow == "SAME":
+            shared_wf_id = uuid4()
+            subscription_workflow = shared_wf_id
+            event_workflow = shared_wf_id
+
         await manager.connect(mock_websocket)
         if subscription_workflow:
             await manager.subscribe(mock_websocket, subscription_workflow)
 
         event = event_factory(
-            id="evt-123",
+            id=uuid4(),
             workflow_id=event_workflow,
             timestamp=datetime.now(UTC),
             message="Started",
@@ -97,7 +103,7 @@ class TestConnectionManager:
         mock_websocket.send_json.side_effect = WebSocketDisconnect()
 
         event = event_factory(
-            id="evt-123",
+            id=uuid4(),
             workflow_id=uuid4(),
             timestamp=datetime.now(UTC),
             message="Started",
@@ -203,7 +209,7 @@ class TestBroadcastDomainRouting:
         payload = mock_websocket.send_json.call_args[0][0]
         assert payload["type"] == "event"
         assert "payload" in payload
-        assert payload["payload"]["id"] == "evt-1"
+        assert payload["payload"]["id"] == str(event.id)
 
     @pytest.mark.asyncio
     async def test_broadcast_brainstorm_event_uses_brainstorm_wrapper(

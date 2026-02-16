@@ -5,6 +5,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from uuid import uuid4
 
 from amelia.knowledge.embeddings import EmbeddingClient, EmbeddingError
 from amelia.knowledge.ingestion import IngestionPipeline
@@ -32,7 +33,7 @@ def mock_repo() -> AsyncMock:
     """Provide a mocked KnowledgeRepository."""
     repo = AsyncMock(spec=KnowledgeRepository)
     repo.update_document_status.return_value = Document(
-        id="doc-1",
+        id=uuid4(),
         name="test.pdf",
         filename="test.pdf",
         content_type="application/pdf",

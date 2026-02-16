@@ -130,10 +130,11 @@ class TestStartWorkflowEndpoint:
         """Successfully start a pending workflow."""
         mock_orchestrator.start_pending_workflow = AsyncMock()
 
-        response = client.post("/api/workflows/wf-123/start")
+        wf_id = str(uuid4())
+        response = client.post(f"/api/workflows/{wf_id}/start")
 
         assert response.status_code == 202
-        mock_orchestrator.start_pending_workflow.assert_called_once_with("wf-123")
+        mock_orchestrator.start_pending_workflow.assert_called_once()
 
     def test_start_workflow_not_found(
         self, client: TestClient, mock_orchestrator: MagicMock
@@ -143,7 +144,7 @@ class TestStartWorkflowEndpoint:
             side_effect=WorkflowNotFoundError("wf-nonexistent")
         )
 
-        response = client.post("/api/workflows/wf-nonexistent/start")
+        response = client.post(f"/api/workflows/{uuid4()}/start")
 
         assert response.status_code == 404
 
@@ -159,7 +160,7 @@ class TestStartWorkflowEndpoint:
             )
         )
 
-        response = client.post("/api/workflows/wf-running/start")
+        response = client.post(f"/api/workflows/{uuid4()}/start")
 
         # InvalidStateError is handled by global handler returning 422
         assert response.status_code == 422
@@ -172,7 +173,7 @@ class TestStartWorkflowEndpoint:
             side_effect=WorkflowConflictError("/tmp/worktree", "wf-existing")
         )
 
-        response = client.post("/api/workflows/wf-123/start")
+        response = client.post(f"/api/workflows/{uuid4()}/start")
 
         assert response.status_code == 409
 

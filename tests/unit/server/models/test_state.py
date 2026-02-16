@@ -6,8 +6,9 @@ from typing import Any
 
 import pytest
 
-from amelia.server.models.state import (
 from uuid import uuid4
+
+from amelia.server.models.state import (
     InvalidStateTransitionError,
     PlanCache,
     ServerExecutionState,
@@ -19,7 +20,7 @@ from uuid import uuid4
 def make_state(**overrides: Any) -> ServerExecutionState:
     """Create a ServerExecutionState with sensible defaults."""
     defaults: dict[str, Any] = {
-        "id": str(uuid4()),
+        "id": uuid4(),
         "issue_id": "ISSUE-456",
         "worktree_path": "/path/to/repo",
     }
@@ -109,9 +110,10 @@ class TestServerExecutionState:
 
     def test_create_state(self) -> None:
         """ServerExecutionState can be created with required fields."""
-        state = make_state()
+        wf_id = uuid4()
+        state = make_state(id=wf_id)
 
-        assert state.id == "wf-123"
+        assert state.id == wf_id
         assert state.issue_id == "ISSUE-456"
         assert state.worktree_path == "/path/to/repo"
         assert state.workflow_status == "pending"

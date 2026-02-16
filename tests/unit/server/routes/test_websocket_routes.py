@@ -124,7 +124,7 @@ class TestWebSocketEndpoint:
         # Create 1500 mock events (exceeds 1000 limit)
         many_events = [
             WorkflowEvent(
-                id=f"evt-{i}",
+                id=uuid4(),
                 workflow_id=uuid4(),
                 sequence=i,
                 timestamp=datetime.now(UTC),

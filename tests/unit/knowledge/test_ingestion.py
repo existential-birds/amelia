@@ -5,6 +5,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
+from uuid import uuid4
 
 from amelia.knowledge.embeddings import EmbeddingClient, EmbeddingError
 from amelia.knowledge.ingestion import IngestionError, IngestionPipeline
@@ -22,7 +23,7 @@ def mock_repo() -> AsyncMock:
     """Provide a mocked KnowledgeRepository."""
     repo = AsyncMock(spec=KnowledgeRepository)
     repo.update_document_status.return_value = Document(
-        id="doc-1",
+        id=uuid4(),
         name="test.pdf",
         filename="test.pdf",
         content_type="application/pdf",
@@ -177,7 +178,7 @@ async def test_ingest_markdown_document(
 ) -> None:
     """Should ingest markdown documents the same as PDF."""
     mock_repo.update_document_status.return_value = Document(
-        id="doc-2",
+        id=uuid4(),
         name="readme.md",
         filename="readme.md",
         content_type="text/markdown",
@@ -406,7 +407,7 @@ async def test_concurrency_semaphore(
             await release.wait()
             current_concurrent -= 1
         return Document(
-            id=str(args[0]) if args else "doc-x",
+            id=uuid4(),
             name="test.pdf",
             filename="test.pdf",
             content_type="application/pdf",
