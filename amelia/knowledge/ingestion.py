@@ -133,9 +133,36 @@ class IngestionPipeline:
                         )
                     )
 
+                # Stage 3.5: Derive tags (if enabled)
+                if self.tag_derivation_model:
+                    if progress_callback:
+                        progress_callback("deriving_tags", 0.89, total_chunks, total_chunks)
+
+                    derived_tags = await self._derive_tags(
+                        document_name=file_path.name,
+                        raw_text=raw_text,
+                        chunk_data=chunk_data,
+                        model=self.tag_derivation_model,
+                        driver_type=self.tag_derivation_driver,
+                    )
+
+                    # Update document with derived tags (non-blocking)
+                    if derived_tags:
+                        try:
+                            await self.repository.update_document_tags(document_id, derived_tags)
+                        except Exception as exc:
+                            logger.warning(
+                                "Failed to update document tags",
+                                document_id=document_id,
+                                error=str(exc),
+                            )
+
+                    if progress_callback:
+                        progress_callback("deriving_tags", 0.90, total_chunks, total_chunks)
+
                 # Stage 4: Store
                 if progress_callback:
-                    progress_callback("storing", 0.9, total_chunks, total_chunks)
+                    progress_callback("storing", 0.91, total_chunks, total_chunks)
                 await self.repository.insert_chunks(document_id, chunk_data)
                 doc = await self.repository.update_document_status(
                     document_id,
