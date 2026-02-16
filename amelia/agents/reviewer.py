@@ -2,6 +2,7 @@
 
 import re
 from datetime import UTC, datetime
+import uuid
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
@@ -215,7 +216,7 @@ class Reviewer:
                 content_parts.append(f"- {comment}")
 
         event = WorkflowEvent(
-            id=str(uuid4()),
+            id=uuid4(),
             workflow_id=workflow_id,
             sequence=0,
             timestamp=datetime.now(UTC),

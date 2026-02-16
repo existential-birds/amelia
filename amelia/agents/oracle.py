@@ -5,6 +5,7 @@ an agentic LLM session with tool access, and returns structured advice.
 """
 
 from datetime import UTC, datetime
+import uuid
 from typing import Any
 from uuid import uuid4
 
@@ -82,7 +83,7 @@ class Oracle:
         """Create a WorkflowEvent for Oracle consultations."""
         self._seq += 1
         return WorkflowEvent(
-            id=str(uuid4()),
+            id=uuid4(),
             domain=EventDomain.ORACLE,
             workflow_id=workflow_id or session_id,
             session_id=session_id,
@@ -116,7 +117,7 @@ class Oracle:
         Returns:
             OracleConsultResult with advice and consultation record.
         """
-        session_id = str(uuid4())
+        session_id = uuid4()
         timestamp = datetime.now(tz=UTC)
 
         logger.info(
