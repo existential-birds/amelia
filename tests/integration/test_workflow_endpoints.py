@@ -23,6 +23,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import uuid4
 
 import pytest
 from fastapi import status
@@ -37,7 +38,6 @@ from amelia.server.events.bus import EventBus
 from amelia.server.main import create_app
 from amelia.server.models.state import ServerExecutionState, WorkflowStatus
 from amelia.server.orchestrator.service import OrchestratorService
-from uuid import uuid4
 
 
 DATABASE_URL = "postgresql://amelia:amelia@localhost:5432/amelia_test"

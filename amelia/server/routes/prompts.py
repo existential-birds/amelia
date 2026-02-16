@@ -57,7 +57,7 @@ class PromptSummary(BaseModel):
     agent: str
     name: str
     description: str | None
-    current_version_id: str | None
+    current_version_id: uuid.UUID | None
     current_version_number: int | None
 
 
@@ -103,7 +103,7 @@ class PromptDetailResponse(BaseModel):
     agent: str
     name: str
     description: str | None
-    current_version_id: str | None
+    current_version_id: uuid.UUID | None
     versions: list[VersionSummary]
 
 

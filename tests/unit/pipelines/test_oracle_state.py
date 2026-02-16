@@ -1,10 +1,9 @@
 """Tests for Oracle consultation state integration."""
 
 from datetime import UTC, datetime
-
-from amelia.core.types import OracleConsultation
 from uuid import uuid4
 
+from amelia.core.types import OracleConsultation
 from amelia.pipelines.implementation.state import (
     ImplementationState,
     rebuild_implementation_state,

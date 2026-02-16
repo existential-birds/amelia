@@ -1,12 +1,12 @@
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import uuid4
 
 import pytest
 
 from amelia.core.types import AgentConfig, Issue, Profile, ReviewResult
 from amelia.pipelines.implementation.state import ImplementationState
 from amelia.pipelines.nodes import call_reviewer_node
-from uuid import uuid4
 
 
 @pytest.fixture

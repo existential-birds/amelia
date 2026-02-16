@@ -1,5 +1,7 @@
 """Custom exception classes for server API error handling."""
 
+import uuid
+
 
 class WorkflowConflictError(Exception):
     """Raised when a workflow conflict occurs.
@@ -13,12 +15,12 @@ class WorkflowConflictError(Exception):
     """
 
     worktree_path: str | None
-    workflow_id: str | None
+    workflow_id: str | uuid.UUID | None
 
     def __init__(
         self,
         message_or_worktree: str,
-        workflow_id: str | None = None,
+        workflow_id: str | uuid.UUID | None = None,
     ):
         """Initialize WorkflowConflictError.
 
@@ -69,7 +71,7 @@ class InvalidStateError(Exception):
     def __init__(
         self,
         message: str,
-        workflow_id: str,
+        workflow_id: str | uuid.UUID,
         current_status: str | None = None,
     ):
         """Initialize InvalidStateError.
@@ -90,7 +92,7 @@ class WorkflowNotFoundError(Exception):
     HTTP Status: 404 Not Found
     """
 
-    def __init__(self, workflow_id: str):
+    def __init__(self, workflow_id: str | uuid.UUID):
         """Initialize WorkflowNotFoundError.
 
         Args:

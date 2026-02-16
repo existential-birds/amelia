@@ -1,6 +1,7 @@
 """Unit tests for replan_workflow orchestrator method."""
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import uuid4
 
 import pytest
 
@@ -11,7 +12,6 @@ from amelia.server.exceptions import InvalidStateError, WorkflowConflictError, W
 from amelia.server.models.events import EventType
 from amelia.server.models.state import PlanCache, ServerExecutionState, WorkflowStatus
 from amelia.server.orchestrator.service import OrchestratorService
-from uuid import uuid4
 
 
 # Rebuild Pydantic models so forward references resolve correctly

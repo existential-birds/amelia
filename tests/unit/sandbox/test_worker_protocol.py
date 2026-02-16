@@ -1,8 +1,8 @@
 """Tests for the USAGE message type added to the worker protocol."""
 
-import pytest
-
 from uuid import uuid4
+
+import pytest
 
 from amelia.drivers.base import (
     AgenticMessage,

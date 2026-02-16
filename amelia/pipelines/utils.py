@@ -4,6 +4,7 @@ This module contains helper functions used across multiple pipelines
 for LangGraph configuration handling and token tracking.
 """
 
+import uuid
 from typing import TYPE_CHECKING, Any
 
 from langchain_core.runnables.config import RunnableConfig
@@ -17,7 +18,7 @@ if TYPE_CHECKING:
 
 def extract_config_params(
     config: RunnableConfig | dict[str, Any],
-) -> tuple["EventBus | None", str, Profile]:
+) -> tuple["EventBus | None", uuid.UUID, Profile]:
     """Extract common parameters from LangGraph config.
 
     Args:

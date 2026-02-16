@@ -4,12 +4,12 @@ import asyncio
 from collections.abc import Callable
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock
+from uuid import uuid4
 
 import pytest
 
 from amelia.server.events.bus import EventBus
 from amelia.server.models import WorkflowEvent
-from uuid import uuid4
 
 
 @pytest.fixture

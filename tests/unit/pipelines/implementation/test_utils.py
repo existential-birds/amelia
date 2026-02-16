@@ -3,13 +3,13 @@
 from datetime import UTC
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import uuid4
 
 import pytest
 
 from amelia.core.types import AgentConfig, Issue, Profile
 from amelia.pipelines.implementation.state import ImplementationState
 from amelia.pipelines.implementation.utils import _looks_like_plan, commit_task_changes
-from uuid import uuid4
 
 
 class TestLooksLikePlan:

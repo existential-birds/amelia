@@ -2,11 +2,10 @@
 from collections.abc import AsyncIterator
 from typing import Any
 from unittest.mock import AsyncMock
+from uuid import uuid4
 
 import pytest
 from pydantic import BaseModel
-
-from uuid import uuid4
 
 from amelia.drivers.base import (
     AgenticMessage,

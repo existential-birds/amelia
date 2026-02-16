@@ -10,13 +10,13 @@ These tests verify the interrupt/resume cycle works end-to-end:
 
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, patch
+from uuid import uuid4
 
 import pytest
 
 from amelia.server.models.events import EventType, WorkflowEvent
 from amelia.server.models.state import ServerExecutionState
 from amelia.server.orchestrator.service import OrchestratorService
-from uuid import uuid4
 
 
 @pytest.fixture

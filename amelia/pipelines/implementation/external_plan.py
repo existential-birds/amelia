@@ -5,6 +5,7 @@ used by both workflow creation and the POST /plan endpoint.
 """
 
 import asyncio
+import uuid
 from pathlib import Path
 
 from loguru import logger
@@ -231,7 +232,7 @@ async def import_external_plan(
     plan_content: str | None,
     target_path: Path,
     profile: Profile,
-    workflow_id: str,
+    workflow_id: str | uuid.UUID,
 ) -> ExternalPlanImportResult:
     """Import and validate an external plan.
 

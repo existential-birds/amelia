@@ -19,7 +19,7 @@ class CreateWorkflowResponse(BaseModel):
         message: Human-readable status message
     """
 
-    id: Annotated[str, Field(description="Unique workflow identifier")]
+    id: Annotated[uuid.UUID, Field(description="Unique workflow identifier")]
     status: Annotated[WorkflowStatus, Field(description="Initial workflow status")]
     message: Annotated[str, Field(description="Human-readable status message")]
 

@@ -1,7 +1,9 @@
 """Thin client CLI commands that delegate to the REST API."""
 import asyncio
+import uuid
 from pathlib import Path
 from typing import Annotated
+from uuid import uuid4
 
 import httpx
 import typer
@@ -313,7 +315,7 @@ def status_command(
 
         for wf in result.workflows:
             table.add_row(
-                wf.id,
+                str(wf.id),
                 wf.issue_id,
                 wf.status,
                 wf.worktree_path,
@@ -365,7 +367,7 @@ def cancel_command(
 
         return result.workflows[0]
 
-    async def _do_cancel(workflow_id: str) -> None:
+    async def _do_cancel(workflow_id: str | uuid.UUID) -> None:
         """Cancel the workflow via API."""
         await client.cancel_workflow(workflow_id=workflow_id)
 
@@ -549,7 +551,7 @@ def plan_command(
         from datetime import UTC, datetime  # noqa: PLC0415
 
         state = ImplementationState(
-            workflow_id=f"plan-{issue_id}",
+            workflow_id=uuid4(),
             created_at=datetime.now(UTC),
             status="running",
             profile_id=profile.name,
@@ -565,7 +567,7 @@ def plan_command(
         async for new_state, _event in architect.plan(
             state=state,
             profile=profile,
-            workflow_id=f"plan-{issue_id}",
+            workflow_id=state.workflow_id,
         ):
             final_state = new_state
 

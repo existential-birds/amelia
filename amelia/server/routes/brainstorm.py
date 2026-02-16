@@ -296,7 +296,7 @@ async def send_message(
         )
 
     # Generate message ID upfront for tracking
-    message_id = str(uuid4())
+    message_id = uuid4()
 
     async def _process_message() -> None:
         """Background task to process the message."""
@@ -305,7 +305,7 @@ async def send_message(
             content=request.content,
             driver=driver,
             cwd=cwd,
-            assistant_message_id=message_id,
+            assistant_message_id=str(message_id),
         ):
             pass
 

@@ -1,6 +1,7 @@
 from collections.abc import Callable
 from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import uuid4
 
 import pytest
 from langchain_core.runnables.config import RunnableConfig
@@ -10,7 +11,6 @@ from amelia.drivers.base import AgenticMessage, AgenticMessageType
 from amelia.pipelines.implementation.state import ImplementationState
 from amelia.pipelines.nodes import call_developer_node
 from tests.conftest import AsyncIteratorMock
-from uuid import uuid4
 
 
 @pytest.mark.asyncio

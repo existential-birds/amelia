@@ -3,6 +3,7 @@
 from datetime import UTC, date, datetime
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import uuid4
 
 import pytest
 from langchain_core.runnables.config import RunnableConfig
@@ -10,7 +11,6 @@ from langchain_core.runnables.config import RunnableConfig
 from amelia.agents.schemas.architect import MarkdownPlanOutput
 from amelia.core.types import AgentConfig, Issue, Profile
 from amelia.pipelines.implementation.state import ImplementationState
-from uuid import uuid4
 
 
 @pytest.fixture

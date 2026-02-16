@@ -1,8 +1,9 @@
 """Test Knowledge Library Pydantic models."""
 
+from uuid import uuid4
+
 import pytest
 from pydantic import ValidationError
-from uuid import uuid4
 
 from amelia.knowledge.models import (
     Document,

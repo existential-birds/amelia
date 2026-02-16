@@ -1,6 +1,6 @@
+import uuid
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
-import uuid
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any, Protocol
 from uuid import uuid4
@@ -86,7 +86,7 @@ class AgenticMessage(BaseModel):
 
     def to_workflow_event(
         self,
-        workflow_id: str,
+        workflow_id: uuid.UUID,
         agent: str,
         sequence: int = 0,
     ) -> "WorkflowEvent":

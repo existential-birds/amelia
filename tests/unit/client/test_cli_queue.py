@@ -1,13 +1,13 @@
 """Tests for CLI queue commands (start --queue, run)."""
 
 from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import uuid4
 
 import pytest
 from typer.testing import CliRunner
 
 from amelia.client.models import CreateWorkflowResponse
 from amelia.main import app
-from uuid import uuid4
 
 
 class TestStartCommandQueue:

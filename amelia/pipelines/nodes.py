@@ -5,6 +5,7 @@ that can be used across multiple pipelines. These nodes handle common agentic
 operations like developer execution and code review.
 """
 
+import uuid
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
@@ -25,7 +26,7 @@ if TYPE_CHECKING:
 
 async def _save_token_usage(
     driver: Any,
-    workflow_id: str,
+    workflow_id: uuid.UUID,
     agent: str,
     repository: "WorkflowRepository | None",
 ) -> None:

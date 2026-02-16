@@ -1,11 +1,11 @@
 """Tests for orchestrator profile loading from database."""
 
 from unittest.mock import AsyncMock, MagicMock
+from uuid import uuid4
 
 from amelia.core.types import AgentConfig, Profile, TrackerType
 from amelia.server.models.state import WorkflowStatus
 from amelia.server.orchestrator.service import OrchestratorService
-from uuid import uuid4
 
 
 def _make_test_profile(

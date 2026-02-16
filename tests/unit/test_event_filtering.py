@@ -1,10 +1,9 @@
 """Unit tests for event filtering edge cases."""
 
 from datetime import UTC, datetime
+from uuid import uuid4
 
 import pytest
-
-from uuid import uuid4
 
 from amelia.server.models.events import (
     PERSISTED_TYPES,

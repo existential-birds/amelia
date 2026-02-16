@@ -3,6 +3,7 @@ import inspect
 from collections.abc import Callable
 from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
+from uuid import uuid4
 
 import pytest
 
@@ -12,7 +13,6 @@ from amelia.drivers.base import AgenticMessage, AgenticMessageType
 from amelia.pipelines.implementation.state import ImplementationState
 from amelia.server.models.events import EventType
 from tests.conftest import AsyncIteratorMock
-from uuid import uuid4
 
 
 @pytest.fixture

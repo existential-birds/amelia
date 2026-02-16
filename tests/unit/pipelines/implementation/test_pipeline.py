@@ -1,9 +1,9 @@
 """Unit tests for ImplementationPipeline."""
 
-from amelia.pipelines.base import PipelineMetadata
-from amelia.pipelines.implementation.pipeline import ImplementationPipeline
 from uuid import uuid4
 
+from amelia.pipelines.base import PipelineMetadata
+from amelia.pipelines.implementation.pipeline import ImplementationPipeline
 from amelia.pipelines.implementation.state import (
     ImplementationState,
     rebuild_implementation_state,

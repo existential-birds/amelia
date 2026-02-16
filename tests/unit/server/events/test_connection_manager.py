@@ -2,13 +2,12 @@
 """Tests for WebSocket connection manager."""
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock
+from uuid import uuid4
 
 import pytest
 from fastapi import WebSocketDisconnect
 
 from amelia.server.events.connection_manager import ConnectionManager
-from uuid import uuid4
-
 from amelia.server.models.events import (
     EventDomain,
     EventLevel,

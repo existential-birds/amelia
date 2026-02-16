@@ -1,11 +1,10 @@
 """Unit tests for pipeline base types."""
 
 from datetime import UTC, datetime
+from uuid import uuid4
 
 import pytest
 from pydantic import ValidationError
-
-from uuid import uuid4
 
 from amelia.pipelines.base import (
     BasePipelineState,

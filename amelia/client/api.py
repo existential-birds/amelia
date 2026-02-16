@@ -1,4 +1,5 @@
 """REST API client for Amelia server."""
+import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
@@ -234,7 +235,7 @@ class AmeliaClient:
         # This should never be reached, but mypy needs it
         raise RuntimeError("Unexpected code path in create_review_workflow")
 
-    async def approve_workflow(self, workflow_id: str) -> None:
+    async def approve_workflow(self, workflow_id: str | uuid.UUID) -> None:
         """Approve a workflow plan.
 
         Args:
@@ -259,7 +260,7 @@ class AmeliaClient:
             else:
                 response.raise_for_status()
 
-    async def reject_workflow(self, workflow_id: str, reason: str) -> None:
+    async def reject_workflow(self, workflow_id: str | uuid.UUID, reason: str) -> None:
         """Reject a workflow plan.
 
         Args:
@@ -288,7 +289,7 @@ class AmeliaClient:
             else:
                 response.raise_for_status()
 
-    async def cancel_workflow(self, workflow_id: str) -> None:
+    async def cancel_workflow(self, workflow_id: str | uuid.UUID) -> None:
         """Cancel an active workflow.
 
         Args:

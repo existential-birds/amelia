@@ -1,10 +1,10 @@
 """Unit tests for graph routing with external plans."""
 
 from datetime import UTC, datetime
+from uuid import uuid4
 
 from amelia.pipelines.implementation.graph import create_implementation_graph
 from amelia.pipelines.implementation.state import ImplementationState
-from uuid import uuid4
 
 
 class TestGraphExternalPlanRouting:

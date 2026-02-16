@@ -1,6 +1,7 @@
 """Tests for agentic execution state model."""
-from amelia.core.agentic_state import AgenticState, ToolCall, ToolResult
 from uuid import uuid4
+
+from amelia.core.agentic_state import AgenticState, ToolCall, ToolResult
 
 
 class TestToolCall:

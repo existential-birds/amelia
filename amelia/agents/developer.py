@@ -3,6 +3,7 @@
 This module provides the Developer agent that executes code changes using
 autonomous tool-calling LLM execution rather than structured step-by-step plans.
 """
+import uuid
 from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING
 
@@ -18,6 +19,8 @@ from amelia.server.models.events import WorkflowEvent
 
 if TYPE_CHECKING:
     from amelia.pipelines.implementation.state import ImplementationState
+
+_ZERO_UUID = uuid.UUID(int=0)
 
 
 class Developer:
@@ -62,7 +65,7 @@ class Developer:
         self,
         state: "ImplementationState",
         profile: Profile,
-        workflow_id: str = "developer",
+        workflow_id: uuid.UUID = _ZERO_UUID,
     ) -> AsyncIterator[tuple["ImplementationState", WorkflowEvent]]:
         """Execute development task agentically.
 

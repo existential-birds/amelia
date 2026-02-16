@@ -2,13 +2,12 @@
 
 from pathlib import Path
 from unittest.mock import patch
+from uuid import uuid4
 
 import pytest
 
 from amelia.agents.schemas.architect import MarkdownPlanOutput
 from amelia.core.types import AgentConfig, Profile
-from uuid import uuid4
-
 from amelia.pipelines.implementation.external_plan import (
     extract_plan_fields,
     read_plan_content,

@@ -1,13 +1,13 @@
 # tests/unit/agents/prompts/test_resolver.py
 """Tests for PromptResolver."""
 from unittest.mock import AsyncMock, MagicMock
+from uuid import uuid4
 
 import pytest
 
 from amelia.agents.prompts.defaults import PROMPT_DEFAULTS
 from amelia.agents.prompts.models import Prompt, PromptVersion
 from amelia.agents.prompts.resolver import PromptResolver
-from uuid import uuid4
 
 
 @pytest.fixture

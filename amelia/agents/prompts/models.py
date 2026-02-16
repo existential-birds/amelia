@@ -26,7 +26,7 @@ class Prompt(BaseModel):
     agent: str
     name: str
     description: str | None = None
-    current_version_id: str | None = None
+    current_version_id: uuid.UUID | None = None
 
 
 class PromptVersion(BaseModel):

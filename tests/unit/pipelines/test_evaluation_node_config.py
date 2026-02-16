@@ -7,6 +7,7 @@ see: tests/integration/test_evaluation_node.py
 
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import uuid4
 
 import pytest
 
@@ -14,7 +15,6 @@ from amelia.agents.schemas.evaluator import EvaluationResult
 from amelia.core.types import AgentConfig, Issue, Profile
 from amelia.pipelines.implementation.state import ImplementationState
 from amelia.pipelines.review.nodes import call_evaluation_node
-from uuid import uuid4
 
 
 @pytest.fixture

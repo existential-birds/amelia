@@ -3,6 +3,7 @@
 from datetime import UTC, date, datetime
 from typing import Any
 from unittest.mock import MagicMock, patch
+from uuid import uuid4
 
 import pytest
 
@@ -11,7 +12,6 @@ from amelia.core.constants import ToolName
 from amelia.core.types import AgentConfig, Issue, Profile
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
 from amelia.pipelines.implementation.state import ImplementationState
-from uuid import uuid4
 
 
 class TestArchitectPlanPath:

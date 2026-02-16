@@ -2,9 +2,9 @@
 """Tests for LangGraph combined stream mode handling."""
 
 from unittest.mock import AsyncMock, MagicMock
+from uuid import uuid4
 
 import pytest
-from uuid import uuid4
 
 
 @pytest.fixture

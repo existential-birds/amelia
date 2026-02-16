@@ -303,7 +303,7 @@ class BrainstormService:
         """
         self._repository = repository
         self._event_bus = event_bus
-        self._session_locks: dict[str, asyncio.Lock] = {}
+        self._session_locks: dict[uuid.UUID, asyncio.Lock] = {}
         self._driver_cleanup = driver_cleanup
         self._profile_repo = profile_repo
 
@@ -587,7 +587,7 @@ class BrainstormService:
             await self._repository.save_message(user_message)
 
             # Generate assistant message ID before streaming so events can reference it
-            resolved_message_id = assistant_message_id or str(uuid4())
+            resolved_message_id = uuid.UUID(assistant_message_id) if assistant_message_id else uuid4()
 
             # Invoke driver and stream events
             assistant_content_parts: list[str] = []
@@ -786,7 +786,7 @@ class BrainstormService:
         self,
         agentic_msg: AgenticMessage,
         session_id: uuid.UUID,
-        message_id: str,
+        message_id: uuid.UUID,
     ) -> WorkflowEvent:
         """Convert an AgenticMessage to a WorkflowEvent.
 
@@ -929,7 +929,7 @@ class BrainstormService:
         issue_description: str | None = None,
         orchestrator: "OrchestratorService | None" = None,
         worktree_path: str | None = None,
-    ) -> dict[str, str]:
+    ) -> dict[str, Any]:
         """Hand off brainstorming session to implementation pipeline.
 
         Args:

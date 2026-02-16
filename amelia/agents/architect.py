@@ -3,6 +3,7 @@
 This module provides the Architect agent that analyzes issues and produces
 rich markdown implementation plans for agentic execution.
 """
+import uuid
 from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -97,7 +98,7 @@ Before planning, discover:
         state: "ImplementationState",
         profile: Profile,
         *,
-        workflow_id: str,
+        workflow_id: uuid.UUID,
     ) -> AsyncIterator[tuple["ImplementationState", WorkflowEvent]]:
         """Generate a markdown implementation plan from an issue using agentic execution.
 

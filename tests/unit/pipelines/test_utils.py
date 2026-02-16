@@ -1,12 +1,12 @@
 """Unit tests for pipeline utilities."""
 
 from unittest.mock import MagicMock
+from uuid import uuid4
 
 import pytest
 
 from amelia.core.types import Profile
 from amelia.pipelines.utils import extract_config_params
-from uuid import uuid4
 
 
 class TestExtractConfigParams:

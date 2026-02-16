@@ -1,9 +1,10 @@
 """Unit tests for ReviewPipeline."""
 
+from uuid import uuid4
+
 from amelia.pipelines.base import PipelineMetadata
 from amelia.pipelines.implementation.state import ImplementationState
 from amelia.pipelines.review.pipeline import ReviewPipeline
-from uuid import uuid4
 
 
 class TestReviewPipelineProtocol:

@@ -1,14 +1,13 @@
 """Unit tests for ImplementationState."""
 
 from datetime import UTC, datetime
+from uuid import uuid4
 
 import pytest
 from pydantic import ValidationError
 
 from amelia.core.types import Design, Issue
 from amelia.pipelines.base import BasePipelineState
-from uuid import uuid4
-
 from amelia.pipelines.implementation.state import (
     ImplementationState,
     rebuild_implementation_state,

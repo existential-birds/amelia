@@ -15,6 +15,7 @@ from collections.abc import Generator
 from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import uuid4
 
 import pytest
 from typer.testing import CliRunner
@@ -27,7 +28,6 @@ from amelia.client.models import (
 from amelia.core.types import AgentConfig, Issue, Profile
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
 from amelia.main import app
-from uuid import uuid4
 
 
 runner = CliRunner()

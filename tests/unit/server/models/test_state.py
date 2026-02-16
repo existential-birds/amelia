@@ -3,10 +3,9 @@
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 import pytest
-
-from uuid import uuid4
 
 from amelia.server.models.state import (
     InvalidStateTransitionError,

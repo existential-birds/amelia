@@ -4,6 +4,7 @@ Note: Plan extraction tests are in test_orchestrator_plan_extraction.py
 """
 
 from unittest.mock import MagicMock
+from uuid import uuid4
 
 import pytest
 from langchain_core.runnables.config import RunnableConfig
@@ -15,7 +16,6 @@ from amelia.pipelines.implementation.utils import (
     extract_task_title,
 )
 from amelia.pipelines.utils import extract_config_params
-from uuid import uuid4
 
 
 SAMPLE_PLAN = """# Model Selection Dropdown Implementation Plan

@@ -3,6 +3,7 @@
 from collections.abc import Callable
 from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
+from uuid import uuid4
 
 import pytest
 
@@ -11,7 +12,6 @@ from amelia.core.types import AgentConfig, DriverType, Issue, Profile
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
 from amelia.pipelines.implementation.state import ImplementationState
 from tests.conftest import create_mock_execute_agentic
-from uuid import uuid4
 
 
 @pytest.fixture

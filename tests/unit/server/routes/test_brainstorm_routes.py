@@ -3,6 +3,7 @@
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
+from uuid import uuid4
 
 import pytest
 from fastapi import FastAPI
@@ -11,7 +12,6 @@ from fastapi.testclient import TestClient
 from amelia.server.database import ProfileRepository
 from amelia.server.models.brainstorm import BrainstormingSession
 from amelia.server.routes.brainstorm import router
-from uuid import uuid4
 
 
 class TestBrainstormRoutes:

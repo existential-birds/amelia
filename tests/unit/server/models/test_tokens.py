@@ -6,6 +6,7 @@ from uuid import uuid4
 
 from amelia.server.models.tokens import TokenUsage, calculate_token_cost
 
+
 _default_wf_id = uuid4()
 
 

@@ -676,7 +676,7 @@ class WorkflowRepository:
 
     async def get_token_summaries_batch(
         self, workflow_ids: list[uuid.UUID]
-    ) -> dict[str, TokenSummary | None]:
+    ) -> dict[uuid.UUID, TokenSummary | None]:
         """Get aggregated token usage summaries for multiple workflows.
 
         Fetches all token usage records for the given workflow IDs in a single
@@ -708,7 +708,7 @@ class WorkflowRepository:
         )
 
         # Group usages by workflow_id
-        usages_by_workflow: dict[str, list[TokenUsage]] = {
+        usages_by_workflow: dict[uuid.UUID, list[TokenUsage]] = {
             wid: [] for wid in workflow_ids
         }
         for row in rows:
@@ -716,7 +716,7 @@ class WorkflowRepository:
             usages_by_workflow[usage.workflow_id].append(usage)
 
         # Build summaries for each workflow
-        result: dict[str, TokenSummary | None] = {}
+        result: dict[uuid.UUID, TokenSummary | None] = {}
         for wid in workflow_ids:
             usages = usages_by_workflow[wid]
             if not usages:

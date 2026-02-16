@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import uuid4
 
 import pytest
 from langchain_core.runnables.config import RunnableConfig
@@ -36,7 +37,6 @@ from amelia.server.models import ServerExecutionState  # noqa: E402
 from amelia.server.models.events import EventType, WorkflowEvent  # noqa: E402
 from amelia.server.models.state import WorkflowStatus  # noqa: E402
 from amelia.server.orchestrator.service import OrchestratorService  # noqa: E402
-from uuid import uuid4
 
 
 @pytest.fixture

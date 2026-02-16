@@ -2,6 +2,7 @@
 """Tests for start_batch_workflows orchestrator method."""
 
 from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import uuid4
 
 import pytest
 
@@ -9,7 +10,6 @@ from amelia.server.exceptions import WorkflowConflictError
 from amelia.server.models.requests import BatchStartRequest
 from amelia.server.models.state import ServerExecutionState
 from amelia.server.orchestrator.service import OrchestratorService
-from uuid import uuid4
 
 
 @pytest.fixture

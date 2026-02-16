@@ -1,6 +1,7 @@
 """Unit tests for the replan workflow route handler."""
 
 from unittest.mock import AsyncMock, MagicMock
+from uuid import uuid4
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -13,7 +14,6 @@ from amelia.server.exceptions import (
 from amelia.server.routes.workflows import configure_exception_handlers, router
 
 from .conftest import patch_lifespan
-from uuid import uuid4
 
 
 def get_orchestrator_mock() -> MagicMock:

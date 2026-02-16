@@ -3,9 +3,9 @@
 import asyncio
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import uuid4
 
 import pytest
-from uuid import uuid4
 
 from amelia.knowledge.embeddings import EmbeddingClient, EmbeddingError
 from amelia.knowledge.ingestion import IngestionPipeline

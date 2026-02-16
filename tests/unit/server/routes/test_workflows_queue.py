@@ -2,6 +2,7 @@
 """Tests for queue-related workflow endpoints."""
 
 from unittest.mock import AsyncMock, MagicMock
+from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
@@ -16,7 +17,6 @@ from amelia.server.main import create_app
 from amelia.server.models.responses import BatchStartResponse
 
 from .conftest import patch_lifespan
-from uuid import uuid4
 
 
 @pytest.fixture

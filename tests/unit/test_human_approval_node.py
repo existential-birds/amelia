@@ -2,13 +2,13 @@
 
 from datetime import UTC, datetime
 from unittest.mock import patch
+from uuid import uuid4
 
 import pytest
 
 from amelia.core.types import AgentConfig, Profile
 from amelia.pipelines.implementation.nodes import human_approval_node
 from amelia.pipelines.implementation.state import ImplementationState
-from uuid import uuid4
 
 
 @pytest.fixture

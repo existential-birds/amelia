@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 from amelia.server.dependencies import get_orchestrator
 from amelia.server.main import create_app
 
+
 # Fixed UUID for deterministic URL paths in tests
 _WF_ID = uuid4()
 _WF_URL = f"/api/workflows/{_WF_ID}/plan"

@@ -1,8 +1,8 @@
 """Reviewer agent for code review in the Amelia orchestrator."""
 
 import re
-from datetime import UTC, datetime
 import uuid
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
@@ -184,7 +184,7 @@ class Reviewer:
 
     def _emit_review_completion(
         self,
-        workflow_id: str,
+        workflow_id: uuid.UUID,
         approved: bool,
         severity: Severity,
         comments: list[str],
@@ -233,7 +233,7 @@ class Reviewer:
         base_commit: str,
         profile: Profile,
         *,
-        workflow_id: str,
+        workflow_id: uuid.UUID,
     ) -> tuple[ReviewResult, str | None]:
         """Perform agentic code review that fetches diff using git tools.
 
@@ -364,7 +364,7 @@ The changes are in git - diff against commit: {base_commit}"""
 
         return result, new_session_id
 
-    def _parse_review_result(self, output: str | None, workflow_id: str) -> ReviewResult:
+    def _parse_review_result(self, output: str | None, workflow_id: uuid.UUID) -> ReviewResult:
         """Parse the agent's output to extract ReviewResult.
 
         Parses the beagle review markdown format with sections:

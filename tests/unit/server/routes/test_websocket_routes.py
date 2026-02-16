@@ -1,6 +1,7 @@
 """Tests for WebSocket endpoint."""
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, patch
+from uuid import uuid4
 
 import pytest
 from fastapi import WebSocket, WebSocketDisconnect
@@ -8,7 +9,6 @@ from fastapi import WebSocket, WebSocketDisconnect
 from amelia.server.events.connection_manager import ConnectionManager
 from amelia.server.models.events import EventType, WorkflowEvent
 from amelia.server.routes.websocket import websocket_endpoint
-from uuid import uuid4
 
 
 class TestWebSocketEndpoint:

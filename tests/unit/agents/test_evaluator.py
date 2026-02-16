@@ -1,6 +1,7 @@
 """Tests for the Evaluator agent."""
 from collections.abc import Callable
 from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import uuid4
 
 import pytest
 
@@ -13,7 +14,6 @@ from amelia.agents.schemas.evaluator import (
 )
 from amelia.core.types import AgentConfig, Profile, ReviewResult, Severity
 from amelia.pipelines.implementation.state import ImplementationState
-from uuid import uuid4
 
 
 class TestEvaluatedItem:

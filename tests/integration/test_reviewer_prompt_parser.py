@@ -8,6 +8,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import MagicMock, patch
+from uuid import uuid4
 
 import pytest
 
@@ -17,7 +18,6 @@ from amelia.drivers.base import AgenticMessage, AgenticMessageType
 from amelia.pipelines.implementation.routing import route_after_task_review
 from amelia.pipelines.implementation.state import ImplementationState
 from tests.conftest import AsyncIteratorMock
-from uuid import uuid4
 
 
 WELL_FORMED_REVIEW = """## Review Summary

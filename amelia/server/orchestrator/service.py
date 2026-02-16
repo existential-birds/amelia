@@ -172,12 +172,12 @@ class OrchestratorService:
         self._profile_repo = profile_repo
         self._max_concurrent = max_concurrent
         self._checkpointer = checkpointer
-        self._active_tasks: dict[str, tuple[str, asyncio.Task[None]]] = {}  # worktree_path -> (workflow_id, task)
-        self._planning_tasks: dict[str, asyncio.Task[None]] = {}  # workflow_id -> planning task
+        self._active_tasks: dict[str, tuple[uuid.UUID, asyncio.Task[None]]] = {}  # worktree_path -> (workflow_id, task)
+        self._planning_tasks: dict[uuid.UUID, asyncio.Task[None]] = {}  # workflow_id -> planning task
         self._approval_lock = asyncio.Lock()  # Prevents race conditions on approvals
         self._start_lock = asyncio.Lock()  # Prevents race conditions on workflow start
-        self._sequence_counters: dict[str, int] = {}  # workflow_id -> next sequence
-        self._sequence_locks: dict[str, asyncio.Lock] = {}  # workflow_id -> lock
+        self._sequence_counters: dict[uuid.UUID, int] = {}  # workflow_id -> next sequence
+        self._sequence_locks: dict[uuid.UUID, asyncio.Lock] = {}  # workflow_id -> lock
 
     def _create_server_graph(
         self,
@@ -488,7 +488,7 @@ class OrchestratorService:
         driver: str | None = None,
         task_title: str | None = None,
         task_description: str | None = None,
-    ) -> str:
+    ) -> uuid.UUID:
         """Start a new workflow.
 
         Args:
@@ -587,7 +587,7 @@ class OrchestratorService:
 
         return workflow_id
 
-    async def queue_workflow(self, request: CreateWorkflowRequest) -> str:
+    async def queue_workflow(self, request: CreateWorkflowRequest) -> uuid.UUID:
         """Queue a workflow without starting it.
 
         Creates a workflow in pending state with execution_state populated
@@ -688,7 +688,7 @@ class OrchestratorService:
         diff_content: str,
         worktree_path: str,
         profile: str | None = None,
-    ) -> str:
+    ) -> uuid.UUID:
         """Start a review-fix workflow.
 
         Args:
@@ -1395,7 +1395,7 @@ class OrchestratorService:
         message: str,
         agent: str = "system",
         data: dict[str, object] | None = None,
-        correlation_id: str | None = None,
+        correlation_id: uuid.UUID | None = None,
     ) -> WorkflowEvent:
         """Emit a workflow event.
 
@@ -1462,7 +1462,7 @@ class OrchestratorService:
         """
         if self._checkpointer is None:
             return
-        await self._checkpointer.adelete_thread(workflow_id)
+        await self._checkpointer.adelete_thread(str(workflow_id))
         logger.info("Deleted checkpoint", workflow_id=workflow_id)
 
     async def approve_workflow(self, workflow_id: uuid.UUID) -> None:
@@ -2399,7 +2399,7 @@ class OrchestratorService:
     async def queue_and_plan_workflow(
         self,
         request: CreateWorkflowRequest,
-    ) -> str:
+    ) -> uuid.UUID:
         """Queue a workflow and run Architect to generate plan.
 
         Creates workflow, runs Architect to generate plan, stores plan,
@@ -2602,7 +2602,7 @@ class OrchestratorService:
         # Attempt to start each workflow
         for workflow_id in workflow_ids:
             try:
-                await self.start_pending_workflow(workflow_id)
+                await self.start_pending_workflow(uuid.UUID(workflow_id))
                 started.append(workflow_id)
             except asyncio.CancelledError:
                 # Don't swallow cancellation (e.g., during shutdown)

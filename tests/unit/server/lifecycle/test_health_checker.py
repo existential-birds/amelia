@@ -3,12 +3,12 @@
 from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
+from uuid import uuid4
 
 import pytest
 
 from amelia.server.lifecycle.health_checker import WorktreeHealthChecker
 from amelia.server.models import ServerExecutionState
-from uuid import uuid4
 
 
 @pytest.fixture

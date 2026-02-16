@@ -3,6 +3,7 @@ from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import uuid4
 
 import pytest
 
@@ -11,7 +12,6 @@ from amelia.core.types import AgentConfig, Profile, SandboxConfig
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
 from amelia.pipelines.implementation.state import ImplementationState
 from amelia.server.models.events import EventType, WorkflowEvent
-from uuid import uuid4
 
 
 class TestArchitectInitWithAgentConfig:

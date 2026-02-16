@@ -2,6 +2,7 @@
 
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import uuid4
 
 import pytest
 
@@ -13,7 +14,6 @@ from amelia.server.exceptions import (
 )
 from amelia.server.models.state import WorkflowStatus
 from amelia.server.orchestrator.service import OrchestratorService
-from uuid import uuid4
 
 
 class TestSetWorkflowPlan:

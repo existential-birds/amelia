@@ -2,6 +2,7 @@
 from collections.abc import Callable
 from typing import Any
 from unittest.mock import MagicMock, patch
+from uuid import uuid4
 
 import pytest
 
@@ -10,7 +11,6 @@ from amelia.agents.schemas.architect import MarkdownPlanOutput
 from amelia.core.types import AgentConfig, Profile
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
 from amelia.pipelines.implementation.state import ImplementationState
-from uuid import uuid4
 
 
 class TestArchitectPromptInjection:
