@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-02-16
+
+### Added
+
+- **knowledge:** Add Knowledge Library with document ingestion, semantic search, and dashboard UI for uploading, searching, and managing knowledge documents ([#437](https://github.com/existential-birds/amelia/pull/437), [#439](https://github.com/existential-birds/amelia/pull/439), [#441](https://github.com/existential-birds/amelia/pull/441), [#449](https://github.com/existential-birds/amelia/pull/449))
+- **dashboard:** Add sandbox configuration UI to profile settings for configuring container-based isolation ([#440](https://github.com/existential-birds/amelia/pull/440))
+- **dashboard:** Improve plan import UX with better file handling and validation feedback ([#452](https://github.com/existential-birds/amelia/pull/452))
+- **core:** Use slugified IDs for brainstorm workflow handoff to implementation ([#445](https://github.com/existential-birds/amelia/pull/445))
+
+### Fixed
+
+- **pipelines:** Scope reviewer diff to last developer pass instead of entire branch history ([#450](https://github.com/existential-birds/amelia/pull/450))
+- **drivers:** Retry transient model provider errors instead of crashing the workflow ([#446](https://github.com/existential-birds/amelia/pull/446))
+- **server:** Summarize STAGE_COMPLETED output to avoid JSONB size limit errors ([#444](https://github.com/existential-birds/amelia/pull/444))
+- **server:** Respect stream_tool_results setting for trace event broadcasting ([#442](https://github.com/existential-birds/amelia/pull/442))
+- **brainstorm:** Resolve plan output path and handle None stage output gracefully ([#447](https://github.com/existential-birds/amelia/pull/447))
+
 ## [0.14.0] - 2026-02-14
 
 ### Added
