@@ -16,6 +16,11 @@ GRAY = "#6d726a"
 MOSS = "#88976b"
 DARK_GREEN = "#1f332e"
 
+# Additional colors for specialized log types
+CYAN = "#17a2b8"      # Knowledge library operations
+PURPLE = "#6f42c1"    # Oracle operations (future)
+PINK = "#e83e8c"      # Other specialized operations (future)
+
 # --- ASCII Art ---
 # Combined plane and text for unified gradient handling
 # The plane is a stylized twin-engine (nod to the Electra)

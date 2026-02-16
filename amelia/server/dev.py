@@ -23,9 +23,12 @@ from rich.text import Text
 from amelia.cli.config import run_first_time_setup
 from amelia.server.banner import (
     CREAM,
+    CYAN,
     GOLD,
     GRAY,
     MOSS,
+    PINK,
+    PURPLE,
     RUST,
     TWILIGHT,
     get_service_urls_display,
@@ -181,18 +184,27 @@ async def run_pnpm_build() -> bool:
 
 
 def _get_log_level_style(text: str) -> str:
-    """Determine the color style based on log level prefix in text.
+    """Determine the color style based on log level and module.
 
-    Parses uvicorn-style log output (e.g., "INFO:     message") and returns
+    Parses both uvicorn-style (e.g., "INFO:     message") and loguru-style
+    (e.g., "HH:mm:ss │ INFO     │ module:message") log output and returns
     the appropriate color from the Amelia dashboard palette.
+
+    Knowledge library logs (amelia.knowledge.*) are highlighted in CYAN
+    to distinguish them from regular server logs.
 
     Args:
         text: Log line text to parse for level detection.
 
     Returns:
-        Color style string from Amelia palette (RUST, GOLD, CREAM, or MOSS).
+        Color style string from Amelia palette (RUST, GOLD, CREAM, MOSS, or CYAN).
     """
     text_upper = text.upper()
+
+    # Check if this is a knowledge library log (use CYAN for visibility)
+    is_knowledge_log = "AMELIA.KNOWLEDGE" in text_upper
+
+    # Check for uvicorn-style logs (starts with level)
     if text_upper.startswith("ERROR") or text_upper.startswith("CRITICAL"):
         return RUST
     if text_upper.startswith("WARNING") or text_upper.startswith("WARN"):
@@ -200,7 +212,23 @@ def _get_log_level_style(text: str) -> str:
     if text_upper.startswith("DEBUG"):
         return CREAM
     if text_upper.startswith("INFO"):
-        return MOSS
+        return CYAN if is_knowledge_log else MOSS
+
+    # Check for loguru-style logs (level appears after │ separator)
+    if "│" in text_upper:
+        # Extract the level field (second segment between │ separators)
+        parts = text_upper.split("│")
+        if len(parts) >= 2:
+            level = parts[1].strip()
+            if "ERROR" in level or "CRITICAL" in level:
+                return RUST
+            if "WARNING" in level or "WARN" in level:
+                return GOLD
+            if "DEBUG" in level or "TRACE" in level:
+                return CREAM
+            if "INFO" in level or "SUCCESS" in level:
+                return CYAN if is_knowledge_log else MOSS
+
     # Default for unparseable lines
     return CREAM
 
@@ -230,6 +258,7 @@ async def stream_output(
             break
         text = line.decode().rstrip()
         if text:
+            # Enhanced log level detection for both uvicorn and loguru formats
             style = _get_log_level_style(text)
             console.print(prefix + Text(text, style=style))
 
@@ -268,6 +297,7 @@ class ProcessManager:
 
         process = await asyncio.create_subprocess_exec(
             sys.executable,
+            "-u",  # Unbuffered output for immediate log visibility
             "-m",
             "uvicorn",
             "amelia.server.main:app",
@@ -279,6 +309,7 @@ class ProcessManager:
             "info",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            env={**os.environ, "PYTHONUNBUFFERED": "1"},  # Force unbuffered I/O
         )
 
         self.server_process = process
