@@ -2,7 +2,7 @@
  * @fileoverview Tests for Knowledge Library page.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import KnowledgePage from '../KnowledgePage';
@@ -351,6 +351,167 @@ describe('KnowledgePage', () => {
     await waitFor(() => {
       expect(api.deleteKnowledgeDocument).toHaveBeenCalledWith('doc-1');
       expect(mockRevalidate).toHaveBeenCalled();
+    });
+  });
+
+  describe('Real-time WebSocket updates', () => {
+    it('updates document status to processing when ingestion starts', async () => {
+      const user = userEvent.setup();
+      const pendingDoc = {
+        ...mockDocuments[0],
+        id: 'doc-pending',
+        status: 'pending' as const,
+      } as KnowledgeDocument;
+      renderPage([pendingDoc]);
+
+      // Switch to Documents tab
+      await user.click(screen.getByRole('tab', { name: /documents/i }));
+      expect(await screen.findByText('Pending')).toBeInTheDocument();
+
+      // Simulate WebSocket event for ingestion started
+      act(() => {
+        const event = new CustomEvent('workflow-event', {
+          detail: {
+            domain: 'knowledge',
+            workflow_id: 'doc-pending',
+            event_type: 'document_ingestion_started',
+            data: { document_id: 'doc-pending', status: 'processing' },
+          },
+        });
+        window.dispatchEvent(event);
+      });
+
+      // Verify status updated to processing
+      expect(await screen.findByText('Processing')).toBeInTheDocument();
+      expect(screen.queryByText('Pending')).not.toBeInTheDocument();
+    });
+
+    it('updates document status to ready when ingestion completes', async () => {
+      const user = userEvent.setup();
+      const processingDoc = {
+        ...mockDocuments[0],
+        id: 'doc-processing',
+        status: 'processing' as const,
+        chunk_count: 0,
+        token_count: 0,
+      } as KnowledgeDocument;
+      renderPage([processingDoc]);
+
+      // Switch to Documents tab
+      await user.click(screen.getByRole('tab', { name: /documents/i }));
+      expect(await screen.findByText('Processing')).toBeInTheDocument();
+
+      // Simulate WebSocket event for ingestion completed
+      act(() => {
+        const event = new CustomEvent('workflow-event', {
+          detail: {
+            domain: 'knowledge',
+            workflow_id: 'doc-processing',
+            event_type: 'document_ingestion_completed',
+            data: {
+              document_id: 'doc-processing',
+              status: 'ready',
+              chunk_count: 42,
+              token_count: 8500,
+            },
+          },
+        });
+        window.dispatchEvent(event);
+      });
+
+      // Verify status updated to ready
+      expect(await screen.findByText('Ready')).toBeInTheDocument();
+      expect(screen.queryByText('Processing')).not.toBeInTheDocument();
+    });
+
+    it('updates document status to failed when ingestion fails', async () => {
+      const user = userEvent.setup();
+      const processingDoc = {
+        ...mockDocuments[0],
+        id: 'doc-fail',
+        status: 'processing' as const,
+      } as KnowledgeDocument;
+      renderPage([processingDoc]);
+
+      // Switch to Documents tab
+      await user.click(screen.getByRole('tab', { name: /documents/i }));
+      expect(await screen.findByText('Processing')).toBeInTheDocument();
+
+      // Simulate WebSocket event for ingestion failed
+      act(() => {
+        const event = new CustomEvent('workflow-event', {
+          detail: {
+            domain: 'knowledge',
+            workflow_id: 'doc-fail',
+            event_type: 'document_ingestion_failed',
+            data: {
+              document_id: 'doc-fail',
+              status: 'failed',
+              error: 'Embedding service unavailable',
+            },
+          },
+        });
+        window.dispatchEvent(event);
+      });
+
+      // Verify status updated to failed
+      expect(await screen.findByText('Failed')).toBeInTheDocument();
+      expect(screen.queryByText('Processing')).not.toBeInTheDocument();
+    });
+
+    it('ignores non-knowledge domain events', async () => {
+      const user = userEvent.setup();
+      const pendingDoc = {
+        ...mockDocuments[0],
+        id: 'doc-unchanged',
+        status: 'pending' as const,
+      } as KnowledgeDocument;
+      renderPage([pendingDoc]);
+
+      // Switch to Documents tab
+      await user.click(screen.getByRole('tab', { name: /documents/i }));
+      expect(await screen.findByText('Pending')).toBeInTheDocument();
+
+      // Simulate workflow domain event (should be ignored)
+      act(() => {
+        const event = new CustomEvent('workflow-event', {
+          detail: {
+            domain: 'workflow',
+            workflow_id: 'doc-unchanged',
+            event_type: 'workflow_started',
+            data: {},
+          },
+        });
+        window.dispatchEvent(event);
+      });
+
+      // Wait a bit to ensure no update happened
+      await waitFor(
+        () => {
+          expect(screen.getByText('Pending')).toBeInTheDocument();
+        },
+        { timeout: 100 }
+      );
+    });
+
+    it('shows animated spinner for processing status', async () => {
+      const user = userEvent.setup();
+      const processingDoc = {
+        ...mockDocuments[0],
+        status: 'processing' as const,
+      } as KnowledgeDocument;
+      renderPage([processingDoc]);
+
+      // Switch to Documents tab
+      await user.click(screen.getByRole('tab', { name: /documents/i }));
+
+      // Verify Processing badge with spinner
+      const processingBadge = await screen.findByText('Processing');
+      expect(processingBadge).toBeInTheDocument();
+
+      // Verify spinner is present (has animate-spin class)
+      const spinner = processingBadge.parentElement?.querySelector('.animate-spin');
+      expect(spinner).toBeInTheDocument();
     });
   });
 });

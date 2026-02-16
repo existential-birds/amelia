@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLoaderData, useRevalidator } from 'react-router-dom';
 import type { ColumnDef } from '@tanstack/react-table';
 import { format } from 'date-fns';
-import { Library, Upload, Search, FileText, Trash2, AlertCircle } from 'lucide-react';
+import { Library, Upload, Search, FileText, Trash2, AlertCircle, Loader2, Tag } from 'lucide-react';
 import { PageHeader } from '@/components/PageHeader';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -31,11 +31,78 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 import { api, ApiError } from '@/api/client';
 import * as Toast from '@/components/Toast';
 import { logger } from '@/lib/logger';
 import type { KnowledgeLoaderData } from '@/loaders/knowledge';
 import type { KnowledgeDocument, SearchResult, DocumentStatus } from '@/types/knowledge';
+
+/**
+ * TagStack component - displays tags as layered, stacked cards.
+ * Shows first 3 tags clearly, hints at more with visual depth.
+ */
+function TagStack({ tags }: { tags: string[] }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const visibleCount = 3;
+  const hasMore = tags.length > visibleCount;
+  const visibleTags = tags.slice(0, visibleCount);
+  const hiddenCount = tags.length - visibleCount;
+
+  if (tags.length === 0) {
+    return <span className="text-muted-foreground text-xs">No tags</span>;
+  }
+
+  return (
+    <Popover open={isOpen} onOpenChange={setIsOpen}>
+      <PopoverTrigger asChild>
+        <button
+          className="flex items-center gap-1"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {visibleTags.map((tag) => (
+            <Badge key={tag} variant="outline" className="text-xs">
+              {tag.length > 12 ? `${tag.slice(0, 10)}...` : tag}
+            </Badge>
+          ))}
+          {hasMore && (
+            <Badge variant="secondary" className="text-xs">
+              +{hiddenCount}
+            </Badge>
+          )}
+        </button>
+      </PopoverTrigger>
+
+      <PopoverContent
+        className="w-96 p-4"
+        align="start"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 pb-2 border-b">
+            <Tag className="size-4 text-muted-foreground" />
+            <h4 className="font-semibold text-sm">Document Tags</h4>
+            <span className="text-xs text-muted-foreground ml-auto">
+              {tags.length} total
+            </span>
+          </div>
+
+          <div className="flex flex-wrap gap-1.5 max-h-60 overflow-y-auto">
+            {tags.map((tag) => (
+              <Badge key={tag} variant="outline" className="text-xs">
+                {tag}
+              </Badge>
+            ))}
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 /**
  * Status badge variant mapping.
@@ -45,7 +112,12 @@ function statusBadge(status: DocumentStatus, error?: string | null) {
     case 'pending':
       return <Badge variant="secondary">Pending</Badge>;
     case 'processing':
-      return <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30">Processing</Badge>;
+      return (
+        <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30 gap-1">
+          <Loader2 className="size-3 animate-spin" />
+          Processing
+        </Badge>
+      );
     case 'ready':
       return <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30">Ready</Badge>;
     case 'failed':
@@ -81,15 +153,7 @@ function getDocumentColumns(onDelete: (id: string) => void): ColumnDef<Knowledge
     {
       accessorKey: 'tags',
       header: ({ column }) => <DataTableColumnHeader column={column} title="Tags" />,
-      cell: ({ row }) => (
-        <div className="flex flex-wrap gap-1">
-          {row.original.tags.map((tag) => (
-            <Badge key={tag} variant="outline" className="text-xs">
-              {tag}
-            </Badge>
-          ))}
-        </div>
-      ),
+      cell: ({ row }) => <TagStack tags={row.original.tags} />,
     },
     {
       accessorKey: 'status',
@@ -133,8 +197,11 @@ function getDocumentColumns(onDelete: (id: string) => void): ColumnDef<Knowledge
 }
 
 export default function KnowledgePage() {
-  const { documents } = useLoaderData() as KnowledgeLoaderData;
+  const loaderData = useLoaderData() as KnowledgeLoaderData;
   const revalidator = useRevalidator();
+
+  // Local state: merge loader data with real-time updates from WebSocket
+  const [documents, setDocuments] = useState<KnowledgeDocument[]>(loaderData.documents);
 
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
@@ -253,6 +320,71 @@ export default function KnowledgePage() {
   );
 
   const columns = getDocumentColumns(handleDelete);
+
+  // Sync local state when loader data changes
+  useEffect(() => {
+    setDocuments(loaderData.documents);
+  }, [loaderData.documents]);
+
+  // Listen for knowledge domain events from WebSocket
+  useEffect(() => {
+    const handleKnowledgeEvent = (event: Event) => {
+      const customEvent = event as CustomEvent<import('../types').WorkflowEvent>;
+      const { domain, workflow_id: documentId, event_type, data } = customEvent.detail;
+
+      // Only handle knowledge domain events
+      if (domain !== 'knowledge') return;
+
+      switch (event_type) {
+        case 'document_ingestion_started':
+          setDocuments((prev) =>
+            prev.map((doc) =>
+              doc.id === documentId ? { ...doc, status: 'processing' as const } : doc
+            )
+          );
+          break;
+
+        case 'document_ingestion_progress':
+          // Could update progress percentage here if needed
+          break;
+
+        case 'document_ingestion_completed':
+          setDocuments((prev) =>
+            prev.map((doc) =>
+              doc.id === documentId
+                ? {
+                    ...doc,
+                    status: 'ready' as const,
+                    chunk_count: (data?.chunk_count as number) || doc.chunk_count,
+                    token_count: (data?.token_count as number) || doc.token_count,
+                    error: null,
+                  }
+                : doc
+            )
+          );
+          break;
+
+        case 'document_ingestion_failed':
+          setDocuments((prev) =>
+            prev.map((doc) =>
+              doc.id === documentId
+                ? {
+                    ...doc,
+                    status: 'failed' as const,
+                    error: (data?.error as string) || 'Ingestion failed',
+                  }
+                : doc
+            )
+          );
+          break;
+      }
+    };
+
+    window.addEventListener('workflow-event', handleKnowledgeEvent);
+    return () => {
+      window.removeEventListener('workflow-event', handleKnowledgeEvent);
+    };
+  }, []);
 
   // Focus search input when switching to search tab
   useEffect(() => {
