@@ -1,8 +1,15 @@
 """Test Knowledge Library Pydantic models."""
 
+import pytest
+from pydantic import ValidationError
 
-
-from amelia.knowledge.models import Document, DocumentChunk, DocumentStatus, SearchResult
+from amelia.knowledge.models import (
+    Document,
+    DocumentChunk,
+    DocumentStatus,
+    SearchResult,
+    TagExtractionOutput,
+)
 
 
 def test_document_model_defaults() -> None:
@@ -58,3 +65,70 @@ def test_search_result_model() -> None:
     assert result.similarity == 0.85
     assert result.tags == ["react", "frontend"]
     assert result.chunk_id == "chunk-123"
+
+
+def test_tag_extraction_output_valid() -> None:
+    """TagExtractionOutput should validate with valid tags list."""
+    output = TagExtractionOutput(
+        tags=["python", "async", "testing"],
+        reasoning="Tags extracted based on code patterns and domain",
+    )
+
+    assert len(output.tags) == 3
+    assert output.tags == ["python", "async", "testing"]
+    assert output.reasoning == "Tags extracted based on code patterns and domain"
+
+
+def test_tag_extraction_output_min_tags() -> None:
+    """TagExtractionOutput should accept minimum 3 tags."""
+    output = TagExtractionOutput(
+        tags=["tag1", "tag2", "tag3"],
+    )
+
+    assert len(output.tags) == 3
+
+
+def test_tag_extraction_output_max_tags() -> None:
+    """TagExtractionOutput should accept maximum 15 tags."""
+    tags = [f"tag{i}" for i in range(15)]
+    output = TagExtractionOutput(tags=tags)
+
+    assert len(output.tags) == 15
+
+
+def test_tag_extraction_output_no_reasoning() -> None:
+    """TagExtractionOutput should allow None reasoning."""
+    output = TagExtractionOutput(
+        tags=["python", "async", "testing", "pydantic"],
+    )
+
+    assert output.reasoning is None
+
+
+def test_tag_extraction_output_too_few_tags() -> None:
+    """TagExtractionOutput should reject fewer than 3 tags."""
+    with pytest.raises(ValidationError) as exc_info:
+        TagExtractionOutput(tags=["tag1", "tag2"])
+
+    errors = exc_info.value.errors()
+    assert any("at least 3 items" in str(error) for error in errors)
+
+
+def test_tag_extraction_output_too_many_tags() -> None:
+    """TagExtractionOutput should reject more than 15 tags."""
+    tags = [f"tag{i}" for i in range(16)]
+
+    with pytest.raises(ValidationError) as exc_info:
+        TagExtractionOutput(tags=tags)
+
+    errors = exc_info.value.errors()
+    assert any("at most 15 items" in str(error) for error in errors)
+
+
+def test_tag_extraction_output_empty_tags() -> None:
+    """TagExtractionOutput should reject empty tags list."""
+    with pytest.raises(ValidationError) as exc_info:
+        TagExtractionOutput(tags=[])
+
+    errors = exc_info.value.errors()
+    assert any("at least 3 items" in str(error) for error in errors)

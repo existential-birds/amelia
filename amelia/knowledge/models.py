@@ -104,3 +104,22 @@ class SearchResult(BaseModel):
     heading_path: list[str]
     similarity: float
     token_count: int
+
+
+class TagExtractionOutput(BaseModel):
+    """LLM output schema for document tag extraction.
+
+    Attributes:
+        tags: List of 3-15 relevant tags extracted from document.
+        reasoning: Brief explanation of why these tags were chosen.
+    """
+
+    tags: list[str] = Field(
+        min_length=3,
+        max_length=15,
+        description="3-15 relevant tags describing document content, topic, and purpose",
+    )
+    reasoning: str | None = Field(
+        default=None,
+        description="Brief explanation of tag selection strategy",
+    )
