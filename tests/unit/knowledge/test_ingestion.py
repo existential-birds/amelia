@@ -422,3 +422,143 @@ async def test_concurrency_semaphore(
         await asyncio.gather(*tasks)
 
     assert snapshot <= 2, f"Expected at most 2 concurrent, got {snapshot}"
+
+
+# ---------------------------------------------------------------------------
+# Tag Extraction Helper Tests
+# ---------------------------------------------------------------------------
+
+
+def test_prepare_tag_extraction_input_truncates_long_text(
+    pipeline: IngestionPipeline,
+) -> None:
+    """Should truncate text to MAX_RAW_TEXT_FOR_TAGS (8000 chars) and add note."""
+    # Create text longer than 8000 chars
+    long_text = "a" * 10000
+    chunks: list[ChunkData] = [
+        ChunkData(
+            chunk_index=0,
+            content="chunk1",
+            heading_path=["Heading 1"],
+            token_count=10,
+            embedding=[0.1] * 1536,
+        )
+    ]
+
+    excerpt, headings = pipeline._prepare_tag_extraction_input(
+        raw_text=long_text,
+        chunk_data=chunks,
+        document_name="test.pdf",
+    )
+
+    # Should truncate at 8000 chars
+    assert len(excerpt) > 8000  # Has truncation notice
+    assert excerpt[:8000] == "a" * 8000
+    assert "[... content truncated for tag extraction ...]" in excerpt
+    assert headings == [["Heading 1"]]
+
+
+def test_prepare_tag_extraction_input_extracts_unique_headings(
+    pipeline: IngestionPipeline,
+) -> None:
+    """Should extract unique heading paths and deduplicate them."""
+    raw_text = "Short document"
+    chunks: list[ChunkData] = [
+        ChunkData(
+            chunk_index=0,
+            content="chunk1",
+            heading_path=["Heading 1"],
+            token_count=10,
+            embedding=[0.1] * 1536,
+        ),
+        ChunkData(
+            chunk_index=1,
+            content="chunk2",
+            heading_path=["Heading 1"],  # Duplicate
+            token_count=10,
+            embedding=[0.1] * 1536,
+        ),
+        ChunkData(
+            chunk_index=2,
+            content="chunk3",
+            heading_path=["Heading 2", "Subheading"],
+            token_count=10,
+            embedding=[0.1] * 1536,
+        ),
+        ChunkData(
+            chunk_index=3,
+            content="chunk4",
+            heading_path=[],  # Empty heading path
+            token_count=10,
+            embedding=[0.1] * 1536,
+        ),
+    ]
+
+    excerpt, headings = pipeline._prepare_tag_extraction_input(
+        raw_text=raw_text,
+        chunk_data=chunks,
+        document_name="test.pdf",
+    )
+
+    # Should deduplicate and exclude empty
+    assert len(headings) == 2
+    assert ["Heading 1"] in headings
+    assert ["Heading 2", "Subheading"] in headings
+    assert excerpt == raw_text
+
+
+def test_validate_tags_deduplicates_and_cleans(
+    pipeline: IngestionPipeline,
+) -> None:
+    """Should clean tags: lowercase, strip, deduplicate, filter empty and long."""
+    raw_tags = [
+        "Python",
+        "  Django  ",
+        "PYTHON",  # Duplicate (case-insensitive)
+        "kubernetes",
+        "",  # Empty
+        "   ",  # Whitespace only
+        "a" * 60,  # Too long (>50 chars)
+        "React",
+        "react",  # Duplicate
+    ]
+
+    cleaned = pipeline._validate_tags(raw_tags)
+
+    # Should clean and deduplicate
+    assert cleaned == ["python", "django", "kubernetes", "react"]
+    assert len(cleaned) == 4
+
+
+def test_build_tag_extraction_prompt(
+    pipeline: IngestionPipeline,
+) -> None:
+    """Should build prompt with document name, heading tree, and content."""
+    raw_text_excerpt = "This is sample content from the document."
+    heading_paths = [
+        ["Introduction"],
+        ["Chapter 1", "Section 1.1"],
+        ["Chapter 1", "Section 1.2"],
+    ]
+    document_name = "technical_guide.pdf"
+
+    prompt = pipeline._build_tag_extraction_prompt(
+        raw_text_excerpt=raw_text_excerpt,
+        heading_paths=heading_paths,
+        document_name=document_name,
+    )
+
+    # Should contain document name
+    assert document_name in prompt
+
+    # Should contain formatted heading tree with indentation
+    assert "- Introduction" in prompt
+    assert "  - Section 1.1" in prompt
+    assert "  - Section 1.2" in prompt
+
+    # Should contain content excerpt
+    assert raw_text_excerpt in prompt
+
+    # Should contain guidelines
+    assert "5-10 relevant tags" in prompt
+    assert "lowercase" in prompt

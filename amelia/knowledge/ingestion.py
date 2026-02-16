@@ -25,6 +25,9 @@ class IngestionError(Exception):
 # Supported MIME types
 _SUPPORTED_TYPES = {"application/pdf", "text/markdown"}
 
+# Max text length for tag extraction (~2000 tokens)
+MAX_RAW_TEXT_FOR_TAGS = 8000
+
 
 class IngestionPipeline:
     """Parse, chunk, embed, and store documents.
@@ -223,3 +226,105 @@ class IngestionPipeline:
                 "Failed to update document status",
                 document_id=document_id,
             )
+
+    def _prepare_tag_extraction_input(
+        self,
+        raw_text: str,
+        chunk_data: list[ChunkData],
+        document_name: str,
+    ) -> tuple[str, list[list[str]]]:
+        """Prepare text excerpt and heading structure for tag extraction.
+
+        Args:
+            raw_text: Full document text.
+            chunk_data: List of chunks with heading paths.
+            document_name: Original filename.
+
+        Returns:
+            Tuple of (text_excerpt, unique_heading_paths).
+        """
+        # Extract unique heading paths from chunks
+        unique_headings: list[list[str]] = []
+        seen_paths = set()
+        for chunk in chunk_data:
+            path_tuple = tuple(chunk["heading_path"])
+            if path_tuple and path_tuple not in seen_paths:
+                unique_headings.append(chunk["heading_path"])
+                seen_paths.add(path_tuple)
+
+        # Truncate text if needed
+        text_excerpt = raw_text[:MAX_RAW_TEXT_FOR_TAGS]
+        if len(raw_text) > MAX_RAW_TEXT_FOR_TAGS:
+            text_excerpt += "\n\n[... content truncated for tag extraction ...]"
+
+        return text_excerpt, unique_headings
+
+    def _build_tag_extraction_prompt(
+        self,
+        raw_text_excerpt: str,
+        heading_paths: list[list[str]],
+        document_name: str,
+    ) -> str:
+        """Build prompt for tag extraction from document content.
+
+        Args:
+            raw_text_excerpt: Truncated document text.
+            heading_paths: Unique heading paths from document structure.
+            document_name: Original filename.
+
+        Returns:
+            Prompt string for LLM tag extraction.
+        """
+        # Format heading tree
+        heading_tree = ""
+        if heading_paths:
+            for path in heading_paths:
+                indent = "  " * (len(path) - 1)
+                heading_tree += f"{indent}- {path[-1]}\n"
+
+        return f"""Extract 5-10 relevant tags for the following document to enable effective filtering and discovery.
+
+Document name: {document_name}
+
+Document structure (headings):
+{heading_tree if heading_tree else "(No headings found)"}
+
+Document content excerpt (first ~8000 chars):
+{raw_text_excerpt}
+
+Guidelines for tag selection:
+- Focus on main topics, technologies, concepts, and document purpose
+- Use concise tags (1-3 words each)
+- Prefer specific over generic tags (e.g., "kubernetes" over "cloud")
+- Include both broad categories and specific details
+- Use lowercase for consistency
+- Avoid overly generic tags like "document" or "information"
+
+Return 5-10 tags that best describe this document's content and purpose."""
+
+    def _validate_tags(self, tags: list[str]) -> list[str]:
+        """Validate and clean extracted tags.
+
+        Args:
+            tags: Raw tags from LLM.
+
+        Returns:
+            Cleaned and deduplicated tags.
+        """
+        cleaned = []
+        seen = set()
+
+        for tag in tags:
+            # Strip whitespace and lowercase
+            tag = tag.strip().lower()
+
+            # Skip empty or very long tags
+            if not tag or len(tag) > 50:
+                continue
+
+            # Deduplicate (case-insensitive)
+            if tag not in seen:
+                cleaned.append(tag)
+                seen.add(tag)
+
+        return cleaned
