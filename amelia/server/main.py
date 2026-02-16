@@ -220,7 +220,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         # Tag derivation configuration
         tag_model = os.environ.get(
             "AMELIA_KNOWLEDGE_TAG_MODEL",
-            "openai/gpt-oss-120b",  # Fast and cost-effective
+            "minimax/minimax-m2.5",  # Reliable tool calling support
         )
         tag_driver_raw = os.environ.get(
             "AMELIA_KNOWLEDGE_TAG_DRIVER",
