@@ -562,3 +562,97 @@ def test_build_tag_extraction_prompt(
     # Should contain guidelines
     assert "5-10 relevant tags" in prompt
     assert "lowercase" in prompt
+
+
+# ---------------------------------------------------------------------------
+# Tag Derivation Method Tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_derive_tags_success(
+    pipeline: IngestionPipeline,
+) -> None:
+    """Should derive tags using LLM extraction and return validated tags."""
+    from amelia.knowledge.models import TagExtractionOutput
+
+    raw_text = "This is a Python Django tutorial document."
+    chunk_data: list[ChunkData] = [
+        ChunkData(
+            chunk_index=0,
+            content="chunk1",
+            heading_path=["Introduction"],
+            token_count=10,
+            embedding=[0.1] * 1536,
+        )
+    ]
+    document_name = "django_tutorial.pdf"
+    model = "openai/gpt-4o-mini"
+    driver_type = "api"
+
+    # Mock the extract_structured function
+    mock_output = TagExtractionOutput(
+        tags=["Python", "  Django  ", "PYTHON", "web-framework", "tutorial"],
+        reasoning="Document focuses on Django web framework tutorial using Python",
+    )
+
+    with patch("amelia.core.extraction.extract_structured") as mock_extract:
+        mock_extract.return_value = mock_output
+
+        result = await pipeline._derive_tags(
+            document_name=document_name,
+            raw_text=raw_text,
+            chunk_data=chunk_data,
+            model=model,
+            driver_type=driver_type,
+        )
+
+    # Should return validated and cleaned tags (deduplicated, lowercase)
+    assert result == ["python", "django", "web-framework", "tutorial"]
+
+    # Should have called extract_structured with correct arguments
+    mock_extract.assert_called_once()
+    call_kwargs = mock_extract.call_args.kwargs
+    assert call_kwargs["model"] == model
+    assert call_kwargs["driver_type"] == driver_type
+    assert call_kwargs["schema"] == TagExtractionOutput
+    # Prompt should contain document name
+    assert document_name in call_kwargs["prompt"]
+
+
+@pytest.mark.asyncio
+async def test_derive_tags_handles_llm_failure(
+    pipeline: IngestionPipeline,
+) -> None:
+    """Should return empty list when LLM extraction fails."""
+    raw_text = "Sample document text"
+    chunk_data: list[ChunkData] = [
+        ChunkData(
+            chunk_index=0,
+            content="chunk1",
+            heading_path=["Heading 1"],
+            token_count=10,
+            embedding=[0.1] * 1536,
+        )
+    ]
+    document_name = "test.pdf"
+    model = "openai/gpt-4o-mini"
+    driver_type = "api"
+
+    # Mock extract_structured to raise an exception
+    with patch("amelia.core.extraction.extract_structured") as mock_extract:
+        mock_extract.side_effect = RuntimeError("LLM API unavailable")
+
+        result = await pipeline._derive_tags(
+            document_name=document_name,
+            raw_text=raw_text,
+            chunk_data=chunk_data,
+            model=model,
+            driver_type=driver_type,
+        )
+
+    # Should return empty list on error (non-blocking)
+    assert result == []
+
+    # Should have attempted extraction
+    mock_extract.assert_called_once()

@@ -328,3 +328,70 @@ Return 5-10 tags that best describe this document's content and purpose."""
                 seen.add(tag)
 
         return cleaned
+
+    async def _derive_tags(
+        self,
+        document_name: str,
+        raw_text: str,
+        chunk_data: list[ChunkData],
+        model: str,
+        driver_type: str,
+    ) -> list[str]:
+        """Derive tags from document content using LLM extraction.
+
+        Args:
+            document_name: Original filename for context.
+            raw_text: Full document text.
+            chunk_data: List of chunks with heading paths.
+            model: LLM model identifier for extraction.
+            driver_type: Driver type ("api" or "cli").
+
+        Returns:
+            List of validated tags (empty list if extraction fails).
+
+        Note:
+            Failures are logged but not raised - returns empty list on error.
+        """
+        try:
+            # Prepare input (truncate text, extract headings)
+            text_excerpt, heading_paths = self._prepare_tag_extraction_input(
+                raw_text, chunk_data, document_name
+            )
+
+            # Build prompt
+            prompt = self._build_tag_extraction_prompt(
+                text_excerpt, heading_paths, document_name
+            )
+
+            # Extract structured output using LLM
+            from amelia.core.extraction import extract_structured  # noqa: PLC0415
+            from amelia.knowledge.models import TagExtractionOutput  # noqa: PLC0415
+
+            result = await extract_structured(
+                prompt=prompt,
+                schema=TagExtractionOutput,
+                model=model,
+                driver_type=driver_type,
+            )
+
+            # Validate and clean tags
+            tags = self._validate_tags(result.tags)
+
+            logger.info(
+                "Derived tags from document",
+                document_name=document_name,
+                tag_count=len(tags),
+                tags=tags,
+                reasoning=result.reasoning,
+            )
+
+            return tags
+
+        except Exception as exc:
+            # Non-blocking: log error and return empty list
+            logger.warning(
+                "Tag derivation failed, continuing without tags",
+                document_name=document_name,
+                error=str(exc),
+            )
+            return []
