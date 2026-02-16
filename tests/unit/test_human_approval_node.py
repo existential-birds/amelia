@@ -8,6 +8,7 @@ import pytest
 from amelia.core.types import AgentConfig, Profile
 from amelia.pipelines.implementation.nodes import human_approval_node
 from amelia.pipelines.implementation.state import ImplementationState
+from uuid import uuid4
 
 
 @pytest.fixture
@@ -24,7 +25,7 @@ def base_state():
         },
     )
     return ImplementationState(
-        workflow_id="wf-test-123",
+        workflow_id=uuid4(),
         created_at=datetime.now(UTC),
         status="running",
         profile_id=profile.name,

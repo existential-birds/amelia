@@ -3,6 +3,8 @@
 from datetime import UTC, datetime
 
 from amelia.core.types import OracleConsultation
+from uuid import uuid4
+
 from amelia.pipelines.implementation.state import (
     ImplementationState,
     rebuild_implementation_state,
@@ -19,7 +21,7 @@ class TestOracleConsultationsState:
     def test_default_empty(self):
         """oracle_consultations should default to empty list."""
         state = ImplementationState(
-            workflow_id="wf-1",
+            workflow_id=uuid4(),
             pipeline_type="implementation",
             profile_id="prof-1",
             created_at=datetime.now(tz=UTC),
@@ -37,7 +39,7 @@ class TestOracleConsultationsState:
             session_id="sess-1",
         )
         state = ImplementationState(
-            workflow_id="wf-1",
+            workflow_id=uuid4(),
             pipeline_type="implementation",
             profile_id="prof-1",
             created_at=datetime.now(tz=UTC),

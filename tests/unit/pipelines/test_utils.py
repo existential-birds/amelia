@@ -6,6 +6,7 @@ import pytest
 
 from amelia.core.types import Profile
 from amelia.pipelines.utils import extract_config_params
+from uuid import uuid4
 
 
 class TestExtractConfigParams:
@@ -19,7 +20,7 @@ class TestExtractConfigParams:
         config = {
             "configurable": {
                 "event_bus": mock_event_bus,
-                "thread_id": "wf-123",
+                "thread_id": str(uuid4()),
                 "profile": mock_profile,
             }
         }
@@ -36,7 +37,7 @@ class TestExtractConfigParams:
 
         config = {
             "configurable": {
-                "thread_id": "wf-456",
+                "thread_id": str(uuid4()),
                 "profile": mock_profile,
             }
         }
@@ -55,7 +56,7 @@ class TestExtractConfigParams:
 
     def test_raises_on_missing_profile(self) -> None:
         """Should raise ValueError if profile is missing."""
-        config = {"configurable": {"thread_id": "wf-1"}}
+        config = {"configurable": {"thread_id": str(uuid4())}}
 
         with pytest.raises(ValueError, match="profile"):
             extract_config_params(config)

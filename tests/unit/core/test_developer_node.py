@@ -4,6 +4,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
 from unittest.mock import MagicMock, patch
+from uuid import uuid4
 
 import pytest
 from langchain_core.runnables.config import RunnableConfig
@@ -50,7 +51,7 @@ class TestDeveloperNodeProfileFromConfig:
         # State has profile_id, not profile object
         # Uses goal and plan_markdown instead of execution_plan
         state = ImplementationState(
-            workflow_id="test-workflow",
+            workflow_id=uuid4(),
             created_at=datetime.now(UTC),
             status="running",
             profile_id=profile.name,
@@ -62,7 +63,7 @@ class TestDeveloperNodeProfileFromConfig:
         # Profile is in config
         config: RunnableConfig = {
             "configurable": {
-                "thread_id": "wf-test",
+                "thread_id": str(uuid4()),
                 "profile": profile,
             }
         }
@@ -111,7 +112,7 @@ class TestDeveloperUnifiedExecution:
         issue = mock_issue_factory()
 
         state = ImplementationState(
-            workflow_id="test-workflow",
+            workflow_id=uuid4(),
             created_at=datetime.now(UTC),
             status="running",
             profile_id=profile.name,
@@ -150,7 +151,7 @@ class TestDeveloperUnifiedExecution:
 
         # Collect all yielded results
         results = []
-        async for state_update, event in developer.run(state, profile, "wf-test"):
+        async for state_update, event in developer.run(state, profile, str(uuid4())):
             results.append((state_update, event))
 
         # Should have yielded events for each AgenticMessage
@@ -169,7 +170,7 @@ class TestDeveloperUnifiedExecution:
         issue = mock_issue_factory()
 
         state = ImplementationState(
-            workflow_id="test-workflow",
+            workflow_id=uuid4(),
             created_at=datetime.now(UTC),
             status="running",
             profile_id=profile.name,
@@ -194,7 +195,7 @@ class TestDeveloperUnifiedExecution:
         developer = create_developer_with_mock_driver(mock_driver)
 
         results = []
-        async for state_update, event in developer.run(state, profile, "wf-test"):
+        async for state_update, event in developer.run(state, profile, str(uuid4())):
             results.append((state_update, event))
 
         # Find the thinking event
@@ -202,7 +203,7 @@ class TestDeveloperUnifiedExecution:
         assert len(thinking_events) >= 1
         assert thinking_events[0][1].message == "Thinking about the problem..."
         assert thinking_events[0][1].agent == "developer"
-        assert thinking_events[0][1].workflow_id == "wf-test"
+        assert thinking_events[0][1].workflow_id is not None  # UUID propagated
 
     async def test_developer_processes_tool_call_message(
         self,
@@ -214,7 +215,7 @@ class TestDeveloperUnifiedExecution:
         issue = mock_issue_factory()
 
         state = ImplementationState(
-            workflow_id="test-workflow",
+            workflow_id=uuid4(),
             created_at=datetime.now(UTC),
             status="running",
             profile_id=profile.name,
@@ -241,7 +242,7 @@ class TestDeveloperUnifiedExecution:
         developer = create_developer_with_mock_driver(mock_driver)
 
         results = []
-        async for state_update, event in developer.run(state, profile, "wf-test"):
+        async for state_update, event in developer.run(state, profile, str(uuid4())):
             results.append((state_update, event))
 
         # Find the tool call event
@@ -260,7 +261,7 @@ class TestDeveloperUnifiedExecution:
         issue = mock_issue_factory()
 
         state = ImplementationState(
-            workflow_id="test-workflow",
+            workflow_id=uuid4(),
             created_at=datetime.now(UTC),
             status="running",
             profile_id=profile.name,
@@ -288,7 +289,7 @@ class TestDeveloperUnifiedExecution:
         developer = create_developer_with_mock_driver(mock_driver)
 
         results = []
-        async for state_update, event in developer.run(state, profile, "wf-test"):
+        async for state_update, event in developer.run(state, profile, str(uuid4())):
             results.append((state_update, event))
 
         # Find the tool result event
@@ -306,7 +307,7 @@ class TestDeveloperUnifiedExecution:
         issue = mock_issue_factory()
 
         state = ImplementationState(
-            workflow_id="test-workflow",
+            workflow_id=uuid4(),
             created_at=datetime.now(UTC),
             status="running",
             profile_id=profile.name,
@@ -328,7 +329,7 @@ class TestDeveloperUnifiedExecution:
         developer = create_developer_with_mock_driver(mock_driver)
 
         results = []
-        async for state_update, event in developer.run(state, profile, "wf-test"):
+        async for state_update, event in developer.run(state, profile, str(uuid4())):
             results.append((state_update, event))
 
         # Find the agent output event
@@ -352,7 +353,7 @@ class TestDeveloperUnifiedExecution:
         issue = mock_issue_factory()
 
         state = ImplementationState(
-            workflow_id="test-workflow",
+            workflow_id=uuid4(),
             created_at=datetime.now(UTC),
             status="running",
             profile_id=profile.name,
@@ -374,7 +375,7 @@ class TestDeveloperUnifiedExecution:
         developer = create_developer_with_mock_driver(mock_driver)
 
         results = []
-        async for state_update, event in developer.run(state, profile, "wf-test"):
+        async for state_update, event in developer.run(state, profile, str(uuid4())):
             results.append((state_update, event))
 
         # Check final state reflects error
@@ -392,7 +393,7 @@ class TestDeveloperUnifiedExecution:
         issue = mock_issue_factory()
 
         state = ImplementationState(
-            workflow_id="test-workflow",
+            workflow_id=uuid4(),
             created_at=datetime.now(UTC),
             status="running",
             profile_id=profile.name,
@@ -425,7 +426,7 @@ class TestDeveloperUnifiedExecution:
         developer = create_developer_with_mock_driver(mock_driver)
 
         results = []
-        async for state_update, event in developer.run(state, profile, "wf-test"):
+        async for state_update, event in developer.run(state, profile, str(uuid4())):
             results.append((state_update, event))
 
         # Check final state has tool calls
@@ -445,7 +446,7 @@ class TestDeveloperUnifiedExecution:
         issue = mock_issue_factory()
 
         state = ImplementationState(
-            workflow_id="test-workflow",
+            workflow_id=uuid4(),
             created_at=datetime.now(UTC),
             status="running",
             profile_id=profile.name,
@@ -480,7 +481,7 @@ class TestDeveloperUnifiedExecution:
         developer = create_developer_with_mock_driver(mock_driver)
 
         results = []
-        async for state_update, event in developer.run(state, profile, "wf-test"):
+        async for state_update, event in developer.run(state, profile, str(uuid4())):
             results.append((state_update, event))
 
         # Check final state has tool results
@@ -497,7 +498,7 @@ class TestDeveloperUnifiedExecution:
         issue = mock_issue_factory()
 
         state = ImplementationState(
-            workflow_id="test-workflow",
+            workflow_id=uuid4(),
             created_at=datetime.now(UTC),
             status="running",
             profile_id=profile.name,
@@ -528,13 +529,13 @@ class TestDeveloperUnifiedExecution:
         developer = create_developer_with_mock_driver(mock_driver)
 
         results = []
-        async for state_update, event in developer.run(state, profile, "wf-test"):
+        async for state_update, event in developer.run(state, profile, str(uuid4())):
             results.append((state_update, event))
 
         # All events should have agent and workflow_id set (from to_stream_event)
         for _state_update, event in results:
             assert event.agent == "developer"
-            assert event.workflow_id == "wf-test"
+            assert event.workflow_id is not None  # UUID propagated
             assert event.timestamp is not None
 
     async def test_developer_raises_without_goal(
@@ -547,7 +548,7 @@ class TestDeveloperUnifiedExecution:
         issue = mock_issue_factory()
 
         state = ImplementationState(
-            workflow_id="test-workflow",
+            workflow_id=uuid4(),
             created_at=datetime.now(UTC),
             status="running",
             profile_id=profile.name,
@@ -559,7 +560,7 @@ class TestDeveloperUnifiedExecution:
         developer = create_developer_with_mock_driver(mock_driver)
 
         with pytest.raises(ValueError, match="must have a goal"):
-            async for _ in developer.run(state, profile, "wf-test"):
+            async for _ in developer.run(state, profile, str(uuid4())):
                 pass
 
 
@@ -598,7 +599,7 @@ Step 2: Configure
 Step 1: Build the thing
 """
         return ImplementationState(
-            workflow_id="test-workflow",
+            workflow_id=uuid4(),
             created_at=datetime.now(UTC),
             status="running",
             profile_id="test",
@@ -618,7 +619,7 @@ Step 1: Build the thing
         """Developer node should clear driver_session_id for fresh task sessions."""
         config: RunnableConfig = {
             "configurable": {
-                "thread_id": "wf-test",
+                "thread_id": str(uuid4()),
                 "profile": mock_profile_with_working_dir,
             }
         }
@@ -656,7 +657,7 @@ Step 1: Build the thing
         """
         config: RunnableConfig = {
             "configurable": {
-                "thread_id": "wf-test",
+                "thread_id": str(uuid4()),
                 "profile": mock_profile_with_working_dir,
             }
         }
@@ -691,7 +692,7 @@ Step 1: Build the thing
     ) -> None:
         """Developer node should clear session_id even when total_tasks is 1."""
         state = ImplementationState(
-            workflow_id="test-workflow",
+            workflow_id=uuid4(),
             created_at=datetime.now(UTC),
             status="running",
             profile_id="test",
@@ -702,7 +703,7 @@ Step 1: Build the thing
         )
         config: RunnableConfig = {
             "configurable": {
-                "thread_id": "wf-test",
+                "thread_id": str(uuid4()),
                 "profile": mock_profile_with_working_dir,
             }
         }

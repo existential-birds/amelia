@@ -6,6 +6,8 @@ from unittest.mock import AsyncMock
 import pytest
 from pydantic import BaseModel
 
+from uuid import uuid4
+
 from amelia.drivers.base import (
     AgenticMessage,
     AgenticMessageType,
@@ -319,7 +321,7 @@ class TestWorkflowId:
         driver = ContainerDriver(model="test", provider=provider)
 
         async for _ in driver.execute_agentic(
-            prompt="test", cwd="/work", workflow_id="wf-abc",
+            prompt="test", cwd="/work", workflow_id=uuid4(),
         ):
             pass
 
@@ -355,7 +357,7 @@ class TestWorkflowId:
         provider.exec_stream = tracking_exec_stream
         driver = ContainerDriver(model="test", provider=provider)
 
-        await driver.generate(prompt="test", workflow_id="wf-xyz")
+        await driver.generate(prompt="test", workflow_id=uuid4())
 
         # calls[0] is the tee command for _write_prompt
         tee_cmd = calls[0][0]

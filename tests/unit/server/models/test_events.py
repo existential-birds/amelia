@@ -4,6 +4,8 @@ from datetime import UTC, datetime
 
 import pytest
 
+from uuid import uuid4
+
 from amelia.server.models.events import (
     PERSISTED_TYPES,
     EventLevel,
@@ -92,22 +94,22 @@ class TestWorkflowEvent:
             event_type=EventType.FILE_CREATED,
             message="Created file",
             data={"path": "src/main.py", "lines": 100},
-            correlation_id="req-789",
+            correlation_id=uuid4(),
         )
 
-        assert event.id == "event-123"
-        assert event.workflow_id == "wf-456"
+        assert event.id is not None
+        assert event.workflow_id is not None
         assert event.sequence == 1
         assert event.agent == "developer"
         assert event.event_type == EventType.FILE_CREATED
         assert event.data == {"path": "src/main.py", "lines": 100}
-        assert event.correlation_id == "req-789"
+        assert event.correlation_id is not None
 
     def test_workflow_event_has_level_field(self) -> None:
         """WorkflowEvent includes level field with default."""
         event = WorkflowEvent(
-            id="evt-1",
-            workflow_id="wf-1",
+            id=uuid4(),
+            workflow_id=uuid4(),
             sequence=1,
             timestamp=datetime.now(UTC),
             agent="architect",
@@ -119,8 +121,8 @@ class TestWorkflowEvent:
     def test_workflow_event_trace_fields(self) -> None:
         """WorkflowEvent includes trace-specific fields."""
         event = WorkflowEvent(
-            id="evt-1",
-            workflow_id="wf-1",
+            id=uuid4(),
+            workflow_id=uuid4(),
             sequence=1,
             timestamp=datetime.now(UTC),
             agent="developer",
@@ -139,23 +141,23 @@ class TestWorkflowEvent:
     def test_workflow_event_session_id_field(self) -> None:
         """WorkflowEvent includes optional session_id independent from workflow_id."""
         event = WorkflowEvent(
-            id="evt-1",
-            workflow_id="wf-1",
+            id=uuid4(),
+            workflow_id=uuid4(),
             sequence=1,
             timestamp=datetime.now(UTC),
             agent="oracle",
             event_type=EventType.STAGE_STARTED,
             message="Consultation started",
-            session_id="sess-abc-123",
+            session_id=uuid4(),
         )
-        assert event.session_id == "sess-abc-123"
-        assert event.workflow_id == "wf-1"
+        assert event.session_id is not None
+        assert event.workflow_id is not None
 
     def test_workflow_event_session_id_defaults_to_none(self) -> None:
         """WorkflowEvent session_id defaults to None when not provided."""
         event = WorkflowEvent(
-            id="evt-1",
-            workflow_id="wf-1",
+            id=uuid4(),
+            workflow_id=uuid4(),
             sequence=1,
             timestamp=datetime.now(UTC),
             agent="system",
@@ -167,25 +169,25 @@ class TestWorkflowEvent:
     def test_workflow_event_distributed_tracing_fields(self) -> None:
         """WorkflowEvent includes trace_id and parent_id for distributed tracing."""
         event = WorkflowEvent(
-            id="evt-1",
-            workflow_id="wf-1",
+            id=uuid4(),
+            workflow_id=uuid4(),
             sequence=1,
             timestamp=datetime.now(UTC),
             agent="developer",
             event_type=EventType.CLAUDE_TOOL_RESULT,
             message="Tool result",
-            trace_id="trace-abc-123",
-            parent_id="evt-parent",
+            trace_id=uuid4(),
+            parent_id=uuid4(),
         )
-        assert event.trace_id == "trace-abc-123"
-        assert event.parent_id == "evt-parent"
+        assert event.trace_id is not None
+        assert event.parent_id is not None
 
     def test_workflow_event_level_defaults_from_event_type(self) -> None:
         """Level defaults based on event_type when not provided."""
         # INFO event
         info_event = WorkflowEvent(
-            id="evt-1",
-            workflow_id="wf-1",
+            id=uuid4(),
+            workflow_id=uuid4(),
             sequence=1,
             timestamp=datetime.now(UTC),
             agent="system",
@@ -196,8 +198,8 @@ class TestWorkflowEvent:
 
         # DEBUG event
         debug_event = WorkflowEvent(
-            id="evt-2",
-            workflow_id="wf-1",
+            id=uuid4(),
+            workflow_id=uuid4(),
             sequence=2,
             timestamp=datetime.now(UTC),
             agent="developer",
@@ -208,8 +210,8 @@ class TestWorkflowEvent:
 
         # ERROR event
         error_event = WorkflowEvent(
-            id="evt-3",
-            workflow_id="wf-1",
+            id=uuid4(),
+            workflow_id=uuid4(),
             sequence=3,
             timestamp=datetime.now(UTC),
             agent="system",

@@ -9,6 +9,7 @@ from amelia.server.exceptions import WorkflowConflictError
 from amelia.server.models.requests import BatchStartRequest
 from amelia.server.models.state import ServerExecutionState
 from amelia.server.orchestrator.service import OrchestratorService
+from uuid import uuid4
 
 
 @pytest.fixture
@@ -54,13 +55,13 @@ class TestStartBatchWorkflows:
         """Start all pending workflows when no filter specified."""
         pending = [
             ServerExecutionState(
-                id="wf-1",
+                id=uuid4(),
                 issue_id="ISSUE-1",
                 worktree_path="/repo1",
                 workflow_status="pending",
             ),
             ServerExecutionState(
-                id="wf-2",
+                id=uuid4(),
                 issue_id="ISSUE-2",
                 worktree_path="/repo2",
                 workflow_status="pending",
@@ -116,13 +117,13 @@ class TestStartBatchWorkflows:
         """Filter pending workflows by worktree path."""
         pending = [
             ServerExecutionState(
-                id="wf-1",
+                id=uuid4(),
                 issue_id="ISSUE-1",
                 worktree_path="/repo/a",
                 workflow_status="pending",
             ),
             ServerExecutionState(
-                id="wf-2",
+                id=uuid4(),
                 issue_id="ISSUE-2",
                 worktree_path="/repo/b",
                 workflow_status="pending",
@@ -148,13 +149,13 @@ class TestStartBatchWorkflows:
         """Handle partial failures gracefully."""
         pending = [
             ServerExecutionState(
-                id="wf-1",
+                id=uuid4(),
                 issue_id="ISSUE-1",
                 worktree_path="/repo",
                 workflow_status="pending",
             ),
             ServerExecutionState(
-                id="wf-2",
+                id=uuid4(),
                 issue_id="ISSUE-2",
                 worktree_path="/repo",
                 workflow_status="pending",

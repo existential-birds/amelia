@@ -19,7 +19,9 @@ async def test_call_architect_node_creates_plan_directory_if_missing(
     mock_execution_state_factory: Callable[..., tuple[ImplementationState, Profile]],
 ) -> None:
     """The docs/plans directory should be created if it doesn't exist."""
-    from amelia.pipelines.implementation.nodes import call_architect_node
+    from uuid import uuid4  # noqa: PLC0415
+
+    from amelia.pipelines.implementation.nodes import call_architect_node  # noqa: PLC0415
 
     today = date.today().isoformat()
     plan_dir = tmp_path / "docs" / "plans"
@@ -74,7 +76,7 @@ async def test_call_architect_node_creates_plan_directory_if_missing(
 
         config: RunnableConfig = {
             "configurable": {
-                "thread_id": "wf-123",
+                "thread_id": str(uuid4()),
                 "profile": profile,
             }
         }

@@ -11,6 +11,7 @@ from amelia.core.types import AgentConfig, DriverType, Issue, Profile
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
 from amelia.pipelines.implementation.state import ImplementationState
 from tests.conftest import create_mock_execute_agentic
+from uuid import uuid4
 
 
 @pytest.fixture
@@ -62,7 +63,7 @@ class TestDeveloperBuildPrompt:
     def test_single_task_uses_full_plan(self, mock_developer: Developer) -> None:
         """When total_tasks is 1, use full plan without extraction."""
         state = ImplementationState(
-            workflow_id="test-workflow",
+            workflow_id=uuid4(),
             created_at=datetime.now(UTC),
             status="running",
             profile_id="test",
@@ -81,7 +82,7 @@ class TestDeveloperBuildPrompt:
     ) -> None:
         """For multi-task execution, extract only the current task section."""
         state = ImplementationState(
-            workflow_id="test-workflow",
+            workflow_id=uuid4(),
             created_at=datetime.now(UTC),
             status="running",
             profile_id="test",
@@ -104,7 +105,7 @@ class TestDeveloperBuildPrompt:
     ) -> None:
         """Breadcrumb shows task progress for context."""
         state = ImplementationState(
-            workflow_id="test-workflow",
+            workflow_id=uuid4(),
             created_at=datetime.now(UTC),
             status="running",
             profile_id="test",
@@ -124,7 +125,7 @@ class TestDeveloperBuildPrompt:
     ) -> None:
         """First task shows appropriate breadcrumb."""
         state = ImplementationState(
-            workflow_id="test-workflow",
+            workflow_id=uuid4(),
             created_at=datetime.now(UTC),
             status="running",
             profile_id="test",
@@ -143,7 +144,7 @@ class TestDeveloperBuildPrompt:
     def test_missing_plan_raises_error(self, mock_developer: Developer) -> None:
         """Developer requires plan_markdown from Architect."""
         state = ImplementationState(
-            workflow_id="test-workflow",
+            workflow_id=uuid4(),
             created_at=datetime.now(UTC),
             status="running",
             profile_id="test",
@@ -185,7 +186,7 @@ class TestDeveloperSystemPrompt:
             developer = Developer(config, prompts={"developer.system": custom_prompt})
 
         state = ImplementationState(
-            workflow_id="test-workflow",
+            workflow_id=uuid4(),
             created_at=datetime.now(UTC),
             status="running",
             profile_id=profile.name,
@@ -194,7 +195,7 @@ class TestDeveloperSystemPrompt:
             plan_markdown="# Plan\n\nDo work",
         )
 
-        async for _state_update, _event in developer.run(state, profile, "wf-test"):
+        async for _state_update, _event in developer.run(state, profile, str(uuid4())):
             pass
 
         assert len(captured_kwargs) == 1
@@ -226,7 +227,7 @@ class TestDeveloperSystemPrompt:
             developer = Developer(config)
 
         state = ImplementationState(
-            workflow_id="test-workflow",
+            workflow_id=uuid4(),
             created_at=datetime.now(UTC),
             status="running",
             profile_id=profile.name,
@@ -235,7 +236,7 @@ class TestDeveloperSystemPrompt:
             plan_markdown="# Plan\n\nDo work",
         )
 
-        async for _state_update, _event in developer.run(state, profile, "wf-test"):
+        async for _state_update, _event in developer.run(state, profile, str(uuid4())):
             pass
 
         assert len(captured_kwargs) == 1

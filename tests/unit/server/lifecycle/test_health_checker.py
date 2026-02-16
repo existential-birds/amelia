@@ -8,6 +8,7 @@ import pytest
 
 from amelia.server.lifecycle.health_checker import WorktreeHealthChecker
 from amelia.server.models import ServerExecutionState
+from uuid import uuid4
 
 
 @pytest.fixture
@@ -65,7 +66,7 @@ async def test_check_deleted_worktree(
     """Deleted worktree should trigger cancellation."""
     # Mock workflow
     mock_workflow = ServerExecutionState(
-        id="wf-1",
+        id=uuid4(),
         issue_id="ISSUE-123",
         worktree_path="/nonexistent/path",
         workflow_status="in_progress",

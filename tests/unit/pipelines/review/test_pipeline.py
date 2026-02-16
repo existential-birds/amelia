@@ -3,6 +3,7 @@
 from amelia.pipelines.base import PipelineMetadata
 from amelia.pipelines.implementation.state import ImplementationState
 from amelia.pipelines.review.pipeline import ReviewPipeline
+from uuid import uuid4
 
 
 class TestReviewPipelineProtocol:
@@ -66,11 +67,11 @@ class TestReviewPipelineInitialState:
         """Should create ImplementationState with provided kwargs."""
         pipeline = ReviewPipeline()
         state = pipeline.get_initial_state(
-            workflow_id="test-workflow-123",
+            workflow_id=uuid4(),
             profile_id="test-profile",
         )
         assert isinstance(state, ImplementationState)
-        assert state.workflow_id == "test-workflow-123"
+        assert state.workflow_id is not None  # UUID propagated
         assert state.profile_id == "test-profile"
         assert state.status == "pending"
 

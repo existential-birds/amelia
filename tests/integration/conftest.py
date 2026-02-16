@@ -138,7 +138,7 @@ def make_execution_state(
         profile = make_profile()
 
     # Provide defaults for required BasePipelineState fields
-    workflow_id = kwargs.pop("workflow_id", str(uuid4()))
+    workflow_id = kwargs.pop("workflow_id", uuid4())
     created_at = kwargs.pop("created_at", datetime.now(UTC))
     status = kwargs.pop("status", "pending")
 

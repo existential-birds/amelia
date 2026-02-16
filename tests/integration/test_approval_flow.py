@@ -16,6 +16,7 @@ import pytest
 from amelia.server.models.events import EventType, WorkflowEvent
 from amelia.server.models.state import ServerExecutionState
 from amelia.server.orchestrator.service import OrchestratorService
+from uuid import uuid4
 
 
 @pytest.fixture
@@ -50,7 +51,7 @@ class TestMissingRequiredFields:
 
         # Create state without profile_id
         server_state = ServerExecutionState(
-            id="wf-error-test",
+            id=uuid4(),
             issue_id="TEST-ERR",
             worktree_path="/tmp/test-error",
             started_at=datetime.now(UTC),
@@ -93,7 +94,7 @@ class TestLifecycleEvents:
         )
 
         server_state = ServerExecutionState(
-            id="wf-lifecycle-test",
+            id=uuid4(),
             issue_id="TEST-123",
             worktree_path="/tmp/test-lifecycle",
             started_at=datetime.now(UTC),
@@ -138,7 +139,7 @@ class TestGraphInterruptHandling:
         )
 
         server_state = ServerExecutionState(
-            id="wf-interrupt-test",
+            id=uuid4(),
             issue_id="TEST-456",
             worktree_path="/tmp/test-interrupt",
             started_at=datetime.now(UTC),

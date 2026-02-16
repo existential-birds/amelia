@@ -7,6 +7,8 @@ from pydantic import ValidationError
 
 from amelia.core.types import Design, Issue
 from amelia.pipelines.base import BasePipelineState
+from uuid import uuid4
+
 from amelia.pipelines.implementation.state import (
     ImplementationState,
     rebuild_implementation_state,
@@ -27,7 +29,7 @@ class TestImplementationState:
     def test_pipeline_type_is_implementation(self) -> None:
         """ImplementationState should have pipeline_type='implementation'."""
         state = ImplementationState(
-            workflow_id="wf-1",
+            workflow_id=uuid4(),
             profile_id="default",
             created_at=datetime.now(UTC),
             status="pending",
@@ -42,7 +44,7 @@ class TestImplementationState:
     def test_optional_domain_fields(self) -> None:
         """Should have optional domain fields with defaults."""
         state = ImplementationState(
-            workflow_id="wf-1",
+            workflow_id=uuid4(),
             profile_id="default",
             created_at=datetime.now(UTC),
             status="pending",
@@ -57,7 +59,7 @@ class TestImplementationState:
         """Should accept Issue object."""
         issue = Issue(id="ISSUE-123", title="Test", description="Description")
         state = ImplementationState(
-            workflow_id="wf-1",
+            workflow_id=uuid4(),
             profile_id="default",
             created_at=datetime.now(UTC),
             status="running",
@@ -69,7 +71,7 @@ class TestImplementationState:
         """Should accept Design object."""
         design = Design(content="# Design doc", source="file")
         state = ImplementationState(
-            workflow_id="wf-1",
+            workflow_id=uuid4(),
             profile_id="default",
             created_at=datetime.now(UTC),
             status="running",
@@ -80,7 +82,7 @@ class TestImplementationState:
     def test_task_tracking_fields(self) -> None:
         """Should have multi-task execution tracking fields."""
         state = ImplementationState(
-            workflow_id="wf-1",
+            workflow_id=uuid4(),
             profile_id="default",
             created_at=datetime.now(UTC),
             status="running",
@@ -95,7 +97,7 @@ class TestImplementationState:
     def test_state_is_frozen(self) -> None:
         """ImplementationState should be immutable."""
         state = ImplementationState(
-            workflow_id="wf-1",
+            workflow_id=uuid4(),
             profile_id="default",
             created_at=datetime.now(UTC),
             status="pending",

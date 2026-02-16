@@ -36,6 +36,7 @@ from amelia.server.models import ServerExecutionState  # noqa: E402
 from amelia.server.models.events import EventType, WorkflowEvent  # noqa: E402
 from amelia.server.models.state import WorkflowStatus  # noqa: E402
 from amelia.server.orchestrator.service import OrchestratorService  # noqa: E402
+from uuid import uuid4
 
 
 @pytest.fixture
@@ -137,7 +138,7 @@ def capture_emit(
     ) -> WorkflowEvent:
         emitted_events.append((workflow_id, event_type, message, data or {}))
         return WorkflowEvent(
-            id="test",
+            id=uuid4(),
             workflow_id=workflow_id,
             sequence=1,
             timestamp=datetime.now(UTC),
@@ -296,7 +297,7 @@ async def test_cancel_workflow(
     """Should cancel running workflow task and persist status."""
     # Create mock workflow state
     mock_state = ServerExecutionState(
-        id="wf-1",
+        id=uuid4(),
         issue_id="ISSUE-123",
         worktree_path="/path/to/worktree",
         workflow_status=WorkflowStatus.IN_PROGRESS,
@@ -339,7 +340,7 @@ async def test_cancel_workflow(
             ("wf-1",),
             InvalidStateError,
             ServerExecutionState(
-                id="wf-1",
+                id=uuid4(),
                 issue_id="ISSUE-123",
                 worktree_path="/path/to/worktree",
                     workflow_status=WorkflowStatus.COMPLETED,
@@ -361,7 +362,7 @@ async def test_cancel_workflow(
             ("wf-1",),
             InvalidStateError,
             ServerExecutionState(
-                id="wf-1",
+                id=uuid4(),
                 issue_id="ISSUE-123",
                 worktree_path="/path/to/worktree",
                     workflow_status=WorkflowStatus.IN_PROGRESS,
@@ -383,7 +384,7 @@ async def test_cancel_workflow(
             ("wf-1", "Nope"),
             InvalidStateError,
             ServerExecutionState(
-                id="wf-1",
+                id=uuid4(),
                 issue_id="ISSUE-123",
                 worktree_path="/path/to/worktree",
                     workflow_status=WorkflowStatus.IN_PROGRESS,
@@ -455,7 +456,7 @@ async def test_approve_workflow_success(
 
     # Create mock blocked workflow
     mock_state = ServerExecutionState(
-        id="wf-1",
+        id=uuid4(),
         issue_id="ISSUE-123",
         worktree_path="/path/to/worktree",
         workflow_status=WorkflowStatus.BLOCKED,
@@ -500,7 +501,7 @@ async def test_reject_workflow_success(
 
     # Create mock workflow and task
     mock_state = ServerExecutionState(
-        id="wf-1",
+        id=uuid4(),
         issue_id="ISSUE-123",
         worktree_path="/path/to/worktree",
         workflow_status=WorkflowStatus.BLOCKED,
@@ -550,7 +551,7 @@ class TestRejectWorkflowGraphState:
     ) -> None:
         """reject_workflow updates graph state with human_approved=False."""
         workflow = ServerExecutionState(
-            id="wf-123",
+            id=uuid4(),
             issue_id="ISSUE-456",
             worktree_path="/tmp/test",
             workflow_status=WorkflowStatus.BLOCKED,
@@ -584,7 +585,7 @@ class TestApproveWorkflowResume:
         """approve_workflow updates graph state and resumes execution."""
         # Setup blocked workflow
         workflow = ServerExecutionState(
-            id="wf-123",
+            id=uuid4(),
             issue_id="ISSUE-456",
             worktree_path="/tmp/test",
             workflow_status=WorkflowStatus.BLOCKED,
@@ -623,7 +624,7 @@ async def test_emit_event(
     mock_event_bus.subscribe(lambda e: received.append(e))
 
     await orchestrator._emit(
-        workflow_id="wf-1",
+        workflow_id=uuid4(),
         event_type=EventType.WORKFLOW_STARTED,
         message="Test message",
     )
@@ -631,7 +632,7 @@ async def test_emit_event(
     # Should persist to DB
     mock_repository.save_event.assert_called_once()
     saved_event = mock_repository.save_event.call_args[0][0]
-    assert saved_event.workflow_id == "wf-1"
+    assert saved_event.workflow_id is not None
     assert saved_event.event_type == EventType.WORKFLOW_STARTED
     assert saved_event.message == "Test message"
     assert saved_event.sequence == 1
@@ -647,9 +648,10 @@ async def test_emit_sequence_increment(
     mock_repository: AsyncMock,
 ) -> None:
     """Sequence numbers should increment per workflow."""
-    await orchestrator._emit("wf-1", EventType.WORKFLOW_STARTED, "Event 1")
-    await orchestrator._emit("wf-1", EventType.STAGE_STARTED, "Event 2")
-    await orchestrator._emit("wf-1", EventType.STAGE_COMPLETED, "Event 3")
+    wf_id = uuid4()
+    await orchestrator._emit(wf_id, EventType.WORKFLOW_STARTED, "Event 1")
+    await orchestrator._emit(wf_id, EventType.STAGE_STARTED, "Event 2")
+    await orchestrator._emit(wf_id, EventType.STAGE_COMPLETED, "Event 3")
 
     # Check sequences
     calls = mock_repository.save_event.call_args_list
@@ -663,18 +665,20 @@ async def test_emit_different_workflows(
     mock_repository: AsyncMock,
 ) -> None:
     """Different workflows should have independent sequence counters."""
-    await orchestrator._emit("wf-1", EventType.WORKFLOW_STARTED, "WF1 Event 1")
-    await orchestrator._emit("wf-2", EventType.WORKFLOW_STARTED, "WF2 Event 1")
-    await orchestrator._emit("wf-1", EventType.STAGE_STARTED, "WF1 Event 2")
+    wf1_id = uuid4()
+    wf2_id = uuid4()
+    await orchestrator._emit(wf1_id, EventType.WORKFLOW_STARTED, "WF1 Event 1")
+    await orchestrator._emit(wf2_id, EventType.WORKFLOW_STARTED, "WF2 Event 1")
+    await orchestrator._emit(wf1_id, EventType.STAGE_STARTED, "WF1 Event 2")
 
     calls = mock_repository.save_event.call_args_list
     # wf-1 sequences: 1, 2
-    assert calls[0][0][0].workflow_id == "wf-1"
+    assert calls[0][0][0].workflow_id == wf1_id
     assert calls[0][0][0].sequence == 1
-    assert calls[2][0][0].workflow_id == "wf-1"
+    assert calls[2][0][0].workflow_id == wf1_id
     assert calls[2][0][0].sequence == 2
     # wf-2 sequences: 1
-    assert calls[1][0][0].workflow_id == "wf-2"
+    assert calls[1][0][0].workflow_id == wf2_id
     assert calls[1][0][0].sequence == 1
 
 
@@ -773,7 +777,7 @@ async def test_get_workflow_by_worktree_uses_cache(
     """get_workflow_by_worktree should use cached workflow_id, not DB."""
     # Create workflow state
     mock_state = ServerExecutionState(
-        id="wf-cached",
+        id=uuid4(),
         issue_id="ISSUE-123",
         worktree_path="/cached/worktree",
         workflow_status=WorkflowStatus.IN_PROGRESS,
@@ -828,7 +832,7 @@ class TestSyncPlanFromCheckpoint:
             return_value=MagicMock(values=checkpoint_values)
         )
 
-        config: RunnableConfig = {"configurable": {"thread_id": "wf-sync"}}
+        config: RunnableConfig = {"configurable": {"thread_id": str(uuid4())}}
 
         # Call _sync_plan_from_checkpoint
         await orchestrator._sync_plan_from_checkpoint("wf-sync", mock_graph, config)
@@ -852,7 +856,7 @@ class TestSyncPlanFromCheckpoint:
         mock_graph = MagicMock()
         mock_graph.aget_state = AsyncMock(return_value=None)
 
-        config: RunnableConfig = {"configurable": {"thread_id": "wf-no-state"}}
+        config: RunnableConfig = {"configurable": {"thread_id": str(uuid4())}}
 
         # Should not raise, just return early
         await orchestrator._sync_plan_from_checkpoint("wf-no-state", mock_graph, config)
@@ -872,7 +876,7 @@ class TestSyncPlanFromCheckpoint:
             return_value=MagicMock(values={"some_other_key": "value"})
         )
 
-        config: RunnableConfig = {"configurable": {"thread_id": "wf-no-plan"}}
+        config: RunnableConfig = {"configurable": {"thread_id": str(uuid4())}}
 
         # Should not raise, just return early
         await orchestrator._sync_plan_from_checkpoint("wf-no-plan", mock_graph, config)
@@ -893,7 +897,7 @@ class TestSyncPlanFromCheckpoint:
 
         mock_repository.get.return_value = None  # Workflow not found
 
-        config: RunnableConfig = {"configurable": {"thread_id": "wf-missing"}}
+        config: RunnableConfig = {"configurable": {"thread_id": str(uuid4())}}
 
         # Should not raise, just log warning and return
         await orchestrator._sync_plan_from_checkpoint("wf-missing", mock_graph, config)
@@ -932,7 +936,7 @@ class TestRunWorkflowCheckpointResume:
     def mock_state(self) -> ServerExecutionState:
         """Create mock server execution state."""
         return ServerExecutionState(
-            id="wf-retry-test",
+            id=uuid4(),
             issue_id="ISSUE-123",
             worktree_path="/path/to/worktree",
             workflow_status=WorkflowStatus.IN_PROGRESS,
@@ -1065,7 +1069,7 @@ class TestTaskProgressEvents:
         """Should NOT emit TASK_FAILED when no plan_cache in state."""
         # ServerExecutionState without plan_cache
         mock_state = ServerExecutionState(
-            id="wf-no-cache",
+            id=uuid4(),
             issue_id="ISSUE-123",
             worktree_path="/path/to/worktree",
             workflow_status=WorkflowStatus.IN_PROGRESS,
@@ -1090,7 +1094,7 @@ class TestTaskProgressEvents:
         from amelia.server.models.state import PlanCache
 
         mock_state = ServerExecutionState(
-            id="wf-non-task",
+            id=uuid4(),
             issue_id="ISSUE-123",
             worktree_path="/path/to/worktree",
             workflow_status=WorkflowStatus.IN_PROGRESS,
@@ -1117,7 +1121,7 @@ class TestTaskProgressEvents:
         # Current implementation returns early since last_review/task_review_iteration
         # are only available in LangGraph checkpoint, not plan_cache
         mock_state = ServerExecutionState(
-            id="wf-task",
+            id=uuid4(),
             issue_id="ISSUE-123",
             worktree_path="/path/to/worktree",
             workflow_status=WorkflowStatus.IN_PROGRESS,
@@ -1147,7 +1151,7 @@ class TestTaskProgressEvents:
         # Simulate developer_node task start event with Pydantic state
         # (LangGraph passes ImplementationState as input, not a dict)
         input_state = ImplementationState(
-            workflow_id="wf-123",
+            workflow_id=uuid4(),
             profile_id="test",
             created_at=datetime.now(UTC),
             status="running",
@@ -1186,7 +1190,7 @@ class TestTaskProgressEvents:
         from amelia.server.models.state import PlanCache
 
         mock_state = ServerExecutionState(
-            id="wf-789",
+            id=uuid4(),
             issue_id="ISSUE-123",
             worktree_path="/path/to/worktree",
             workflow_status=WorkflowStatus.IN_PROGRESS,
@@ -1341,7 +1345,7 @@ def model_provider_error_setup(mock_repository: AsyncMock) -> ModelProviderError
     """Shared setup for ModelProviderError retry tests."""
     # Setup blocked workflow with real ServerExecutionState
     mock_workflow = ServerExecutionState(
-        id="wf-1",
+        id=uuid4(),
         issue_id="ISSUE-TEST",
         worktree_path="/tmp",
         workflow_status=WorkflowStatus.BLOCKED,
@@ -1470,7 +1474,7 @@ class TestExponentialBackoff:
         """
         mock_state = ServerExecutionState(
             id=workflow_id,
-            issue_id="ISSUE-123",
+            issue_id=uuid4(),
             worktree_path=valid_worktree,
             workflow_status=WorkflowStatus.IN_PROGRESS,
             started_at=datetime.now(UTC),

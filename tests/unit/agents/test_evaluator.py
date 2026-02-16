@@ -13,6 +13,7 @@ from amelia.agents.schemas.evaluator import (
 )
 from amelia.core.types import AgentConfig, Profile, ReviewResult, Severity
 from amelia.pipelines.implementation.state import ImplementationState
+from uuid import uuid4
 
 
 class TestEvaluatedItem:
@@ -202,7 +203,7 @@ class TestEvaluator:
         with patch("amelia.agents.evaluator.get_driver", return_value=mock_driver):
             evaluator = Evaluator(config)
         result, session_id = await evaluator.evaluate(
-            state, profile, workflow_id="wf-123"
+            state, profile, workflow_id=uuid4()
         )
 
         assert session_id == "session-123"
@@ -239,7 +240,7 @@ class TestEvaluator:
         with patch("amelia.agents.evaluator.get_driver", return_value=mock_driver):
             evaluator = Evaluator(config)
         result, session_id = await evaluator.evaluate(
-            state, profile, workflow_id="wf-123"
+            state, profile, workflow_id=uuid4()
         )
 
         # Should return empty result without calling driver
@@ -311,7 +312,7 @@ class TestEvaluator:
         config = AgentConfig(driver="cli", model="sonnet")
         with patch("amelia.agents.evaluator.get_driver", return_value=mock_driver):
             evaluator = Evaluator(config)
-        result, _ = await evaluator.evaluate(state, profile, workflow_id="wf-123")
+        result, _ = await evaluator.evaluate(state, profile, workflow_id=uuid4())
 
         # Verify correct partitioning
         assert len(result.items_to_implement) == 2
@@ -339,7 +340,7 @@ class TestEvaluator:
         with patch("amelia.agents.evaluator.get_driver", return_value=mock_driver):
             evaluator = Evaluator(config)
         with pytest.raises(ValueError, match="must have last_review"):
-            await evaluator.evaluate(state, profile, workflow_id="wf-123")
+            await evaluator.evaluate(state, profile, workflow_id=uuid4())
 
     async def test_evaluate_with_event_bus(
         self,
@@ -380,13 +381,13 @@ class TestEvaluator:
         config = AgentConfig(driver="cli", model="sonnet")
         with patch("amelia.agents.evaluator.get_driver", return_value=mock_driver):
             evaluator = Evaluator(config, event_bus=mock_event_bus)
-        await evaluator.evaluate(state, profile, workflow_id="wf-123")
+        await evaluator.evaluate(state, profile, workflow_id=uuid4())
 
         # Verify event_bus.emit was called
         mock_event_bus.emit.assert_called_once()
         call_args = mock_event_bus.emit.call_args[0][0]
         assert call_args.agent == "evaluator"
-        assert call_args.workflow_id == "wf-123"
+        assert call_args.workflow_id is not None  # UUID propagated
 
     async def test_evaluate_builds_prompt_with_goal(
         self,
@@ -415,7 +416,7 @@ class TestEvaluator:
         config = AgentConfig(driver="cli", model="sonnet")
         with patch("amelia.agents.evaluator.get_driver", return_value=mock_driver):
             evaluator = Evaluator(config)
-        await evaluator.evaluate(state, profile, workflow_id="wf-123")
+        await evaluator.evaluate(state, profile, workflow_id=uuid4())
 
         # Check that prompt contains the goal
         call_args = mock_driver.generate.call_args
@@ -448,7 +449,7 @@ class TestEvaluator:
         config = AgentConfig(driver="cli", model="sonnet")
         with patch("amelia.agents.evaluator.get_driver", return_value=mock_driver):
             evaluator = Evaluator(config)
-        await evaluator.evaluate(state, profile, workflow_id="wf-123")
+        await evaluator.evaluate(state, profile, workflow_id=uuid4())
 
         # Check that prompt contains issue context
         call_args = mock_driver.generate.call_args

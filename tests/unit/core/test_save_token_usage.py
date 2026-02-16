@@ -1,5 +1,6 @@
 """Tests for orchestrator _save_token_usage using DriverUsage."""
 from unittest.mock import AsyncMock, MagicMock
+from uuid import uuid4
 
 from amelia.drivers.base import DriverUsage
 from amelia.server.models.tokens import TokenUsage
@@ -7,6 +8,8 @@ from amelia.server.models.tokens import TokenUsage
 
 class TestSaveTokenUsageWithDriverUsage:
     """Tests for _save_token_usage() using get_usage() method."""
+
+    _wf_id = uuid4()
 
     async def test_saves_usage_from_driver_get_usage(self) -> None:
         """_save_token_usage should call driver.get_usage() and save to repository."""
@@ -28,7 +31,7 @@ class TestSaveTokenUsageWithDriverUsage:
 
         await _save_token_usage(
             driver=mock_driver,
-            workflow_id="wf-123",
+            workflow_id=str(self._wf_id),
             agent="developer",
             repository=mock_repository,
         )
@@ -38,7 +41,7 @@ class TestSaveTokenUsageWithDriverUsage:
 
         saved_usage = mock_repository.save_token_usage.call_args[0][0]
         assert isinstance(saved_usage, TokenUsage)
-        assert saved_usage.workflow_id == "wf-123"
+        assert saved_usage.workflow_id == self._wf_id
         assert saved_usage.agent == "developer"
         assert saved_usage.model == "test-model"
         assert saved_usage.input_tokens == 1500
@@ -60,7 +63,7 @@ class TestSaveTokenUsageWithDriverUsage:
 
         await _save_token_usage(
             driver=mock_driver,
-            workflow_id="wf-123",
+            workflow_id=str(self._wf_id),
             agent="developer",
             repository=mock_repository,
         )
@@ -77,7 +80,7 @@ class TestSaveTokenUsageWithDriverUsage:
         # Should not raise
         await _save_token_usage(
             driver=mock_driver,
-            workflow_id="wf-123",
+            workflow_id=str(self._wf_id),
             agent="developer",
             repository=None,
         )
@@ -100,7 +103,7 @@ class TestSaveTokenUsageWithDriverUsage:
 
         await _save_token_usage(
             driver=mock_driver,
-            workflow_id="wf-123",
+            workflow_id=str(self._wf_id),
             agent="architect",
             repository=mock_repository,
         )
@@ -130,7 +133,7 @@ class TestSaveTokenUsageWithDriverUsage:
 
         await _save_token_usage(
             driver=mock_driver,
-            workflow_id="wf-123",
+            workflow_id=str(self._wf_id),
             agent="developer",
             repository=mock_repository,
         )
@@ -153,7 +156,7 @@ class TestSaveTokenUsageWithDriverUsage:
 
         await _save_token_usage(
             driver=mock_driver,
-            workflow_id="wf-123",
+            workflow_id=str(self._wf_id),
             agent="reviewer",
             repository=mock_repository,
         )
@@ -173,7 +176,7 @@ class TestSaveTokenUsageWithDriverUsage:
         # Should not raise
         await _save_token_usage(
             driver=mock_driver,
-            workflow_id="wf-123",
+            workflow_id=str(self._wf_id),
             agent="developer",
             repository=mock_repository,
         )
@@ -196,7 +199,7 @@ class TestSaveTokenUsageWithDriverUsage:
         # Should not raise
         await _save_token_usage(
             driver=mock_driver,
-            workflow_id="wf-123",
+            workflow_id=str(self._wf_id),
             agent="developer",
             repository=mock_repository,
         )

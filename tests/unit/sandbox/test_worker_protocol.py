@@ -2,6 +2,8 @@
 
 import pytest
 
+from uuid import uuid4
+
 from amelia.drivers.base import (
     AgenticMessage,
     AgenticMessageType,
@@ -51,4 +53,4 @@ class TestUsageMessageType:
         consumed by the driver, never reaching the event bus."""
         msg = AgenticMessage(type=AgenticMessageType.USAGE)
         with pytest.raises(KeyError):
-            msg.to_workflow_event(workflow_id="wf-1", agent="developer")
+            msg.to_workflow_event(workflow_id=uuid4(), agent="developer")

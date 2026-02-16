@@ -4,6 +4,8 @@ from datetime import UTC, datetime
 
 import pytest
 
+from uuid import uuid4
+
 from amelia.server.models.events import (
     PERSISTED_TYPES,
     EventType,
@@ -34,8 +36,8 @@ class TestEventFilteringEdgeCases:
     def test_workflow_event_with_none_agent_is_valid(self):
         """workflow_log allows NULL agent — verify model accepts None."""
         event = WorkflowEvent(
-            id="evt-test",
-            workflow_id="wf-test",
+            id=uuid4(),
+            workflow_id=uuid4(),
             sequence=1,
             timestamp=datetime.now(UTC),
             agent="system",

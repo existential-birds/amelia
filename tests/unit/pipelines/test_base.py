@@ -5,6 +5,8 @@ from datetime import UTC, datetime
 import pytest
 from pydantic import ValidationError
 
+from uuid import uuid4
+
 from amelia.pipelines.base import (
     BasePipelineState,
     HistoryEntry,
@@ -70,13 +72,13 @@ class TestBasePipelineState:
     def test_valid_state_creation(self) -> None:
         """BasePipelineState should accept valid identity fields."""
         state = BasePipelineState(
-            workflow_id="wf-123",
+            workflow_id=uuid4(),
             pipeline_type="implementation",
             profile_id="default",
             created_at=datetime.now(UTC),
             status="pending",
         )
-        assert state.workflow_id == "wf-123"
+        assert state.workflow_id is not None  # UUID propagated
         assert state.pipeline_type == "implementation"
         assert state.status == "pending"
         assert state.history == []
@@ -85,7 +87,7 @@ class TestBasePipelineState:
         """Status should only accept valid literals."""
         for status in ("pending", "running", "paused", "completed", "failed"):
             state = BasePipelineState(
-                workflow_id="wf-1",
+                workflow_id=uuid4(),
                 pipeline_type="test",
                 profile_id="p1",
                 created_at=datetime.now(UTC),
@@ -96,7 +98,7 @@ class TestBasePipelineState:
     def test_defaults(self) -> None:
         """BasePipelineState should have sensible defaults."""
         state = BasePipelineState(
-            workflow_id="wf-1",
+            workflow_id=uuid4(),
             pipeline_type="test",
             profile_id="p1",
             created_at=datetime.now(UTC),

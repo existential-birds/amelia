@@ -11,6 +11,7 @@ from amelia.server.exceptions import InvalidStateError, WorkflowConflictError, W
 from amelia.server.models.events import EventType
 from amelia.server.models.state import PlanCache, ServerExecutionState, WorkflowStatus
 from amelia.server.orchestrator.service import OrchestratorService
+from uuid import uuid4
 
 
 # Rebuild Pydantic models so forward references resolve correctly
@@ -86,7 +87,7 @@ def make_blocked_workflow(
         issue_id=issue_id,
         worktree_path="/tmp/test-repo",
         workflow_status=WorkflowStatus.BLOCKED,
-        profile_id="test",
+        profile_id=uuid4(),
         plan_cache=PlanCache(
             goal="Original goal",
             plan_markdown="# Original plan",

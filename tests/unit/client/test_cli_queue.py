@@ -7,6 +7,7 @@ from typer.testing import CliRunner
 
 from amelia.client.models import CreateWorkflowResponse
 from amelia.main import app
+from uuid import uuid4
 
 
 class TestStartCommandQueue:
@@ -29,7 +30,7 @@ class TestStartCommandQueue:
             mock_ctx.return_value = (str(worktree), "repo")
             mock_client = mock_client_class.return_value
             mock_client.create_workflow = AsyncMock(return_value=CreateWorkflowResponse(
-                id="wf-123", status="running", message="Workflow started"
+                id=str(uuid4()), status="running", message="Workflow started"
             ))
 
             result = runner.invoke(app, ["start", "ISSUE-123"])
@@ -51,7 +52,7 @@ class TestStartCommandQueue:
             mock_ctx.return_value = (str(worktree), "repo")
             mock_client = mock_client_class.return_value
             mock_client.create_workflow = AsyncMock(return_value=CreateWorkflowResponse(
-                id="wf-123", status="pending", message="Workflow queued"
+                id=str(uuid4()), status="pending", message="Workflow queued"
             ))
 
             result = runner.invoke(app, ["start", "ISSUE-123", "--queue"])
@@ -72,7 +73,7 @@ class TestStartCommandQueue:
             mock_ctx.return_value = (str(worktree), "repo")
             mock_client = mock_client_class.return_value
             mock_client.create_workflow = AsyncMock(return_value=CreateWorkflowResponse(
-                id="wf-123", status="pending", message="Workflow queued with planning"
+                id=str(uuid4()), status="pending", message="Workflow queued with planning"
             ))
 
             result = runner.invoke(app, ["start", "ISSUE-123", "--queue", "--plan"])

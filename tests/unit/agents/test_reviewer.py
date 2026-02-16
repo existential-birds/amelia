@@ -12,6 +12,7 @@ from amelia.drivers.base import AgenticMessage, AgenticMessageType
 from amelia.pipelines.implementation.state import ImplementationState
 from amelia.server.models.events import EventType
 from tests.conftest import AsyncIteratorMock
+from uuid import uuid4
 
 
 @pytest.fixture
@@ -153,7 +154,7 @@ Rationale: No issues found, code is ready to merge.
             state,
             base_commit="abc123",
             profile=profile,
-            workflow_id="wf-123",
+            workflow_id=uuid4(),
         )
 
         assert result.approved is True
@@ -205,7 +206,7 @@ Rationale: No issues found, code is ready to merge.
             state,
             base_commit="abc123",
             profile=profile,
-            workflow_id="wf-123",
+            workflow_id=uuid4(),
         )
 
         # Should emit events for THINKING, TOOL_CALL, TOOL_RESULT + final output
@@ -248,7 +249,7 @@ Rationale: No issues found, code is ready to merge.
             state,
             base_commit="abc123",
             profile=profile,
-            workflow_id="wf-123",
+            workflow_id=uuid4(),
         )
 
         # Should still return a result, but not approved
@@ -286,14 +287,14 @@ Rationale: No issues found, code is ready to merge.
             state,
             base_commit="abc123",
             profile=profile,
-            workflow_id="wf-123",
+            workflow_id=uuid4(),
         )
 
         # Verify workflow events have correct agent and workflow_id (set by to_workflow_event)
         for call in mock_event_bus.emit.call_args_list:
             event = call.args[0]
             assert event.agent == "reviewer"
-            assert event.workflow_id == "wf-123"
+            assert event.workflow_id is not None  # UUID propagated
 
     async def test_agentic_review_parses_beagle_markdown_result(
         self,
@@ -352,7 +353,7 @@ Rationale: Two major issues need to be fixed first.
             state,
             base_commit="abc123",
             profile=profile,
-            workflow_id="wf-123",
+            workflow_id=uuid4(),
         )
 
         assert result.approved is False
@@ -419,7 +420,7 @@ Rationale: Critical security issue must be fixed.
             state,
             base_commit="abc123",
             profile=profile,
-            workflow_id="wf-123",
+            workflow_id=uuid4(),
         )
 
         # Overall severity should be critical (highest)
@@ -490,7 +491,7 @@ Code looks good overall with no issues found.
 Rationale: Code needs fixes for edge cases but they are out of scope.
 """
         reviewer = create_reviewer()
-        result = reviewer._parse_review_result(beagle_output, workflow_id="wf-test")
+        result = reviewer._parse_review_result(beagle_output, workflow_id=uuid4())
 
         # Should be approved because verdict says "Ready: Yes"
         assert result.approved is True, (
@@ -530,7 +531,7 @@ Code looks good overall.
 Rationale: All checks pass.
 """
         reviewer = create_reviewer()
-        result = reviewer._parse_review_result(beagle_output, workflow_id="wf-test")
+        result = reviewer._parse_review_result(beagle_output, workflow_id=uuid4())
 
         assert result.approved is True, (
             "Review should be approved when **Ready**: Yes is present "
@@ -572,7 +573,7 @@ The implementation looks solid with the following highlights:
 Rationale: Code is production-ready with no issues.
 """
         reviewer = create_reviewer()
-        result = reviewer._parse_review_result(beagle_output, workflow_id="wf-test")
+        result = reviewer._parse_review_result(beagle_output, workflow_id=uuid4())
 
         assert result.approved is True
         # BUG: Legacy parsing incorrectly captures bullets from Review Summary
@@ -619,7 +620,7 @@ Verified the changes work correctly.
 Rationale: All verification checks pass.
 """
         reviewer = create_reviewer()
-        result = reviewer._parse_review_result(beagle_output, workflow_id="wf-test")
+        result = reviewer._parse_review_result(beagle_output, workflow_id=uuid4())
 
         assert result.approved is True
         # BUG: Legacy parsing captures verification success messages as issues
@@ -660,7 +661,7 @@ The changes introduce architectural concerns that need discussion:
 Rationale: Architectural approach needs team discussion before proceeding.
 """
         reviewer = create_reviewer()
-        result = reviewer._parse_review_result(beagle_output, workflow_id="wf-test")
+        result = reviewer._parse_review_result(beagle_output, workflow_id=uuid4())
 
         assert result.approved is False
         # BUG: Legacy parsing captures bullets from Review Summary instead of fallback
@@ -705,7 +706,7 @@ Rationale: The code is ready because:
 - Documentation is complete and accurate
 """
         reviewer = create_reviewer()
-        result = reviewer._parse_review_result(beagle_output, workflow_id="wf-test")
+        result = reviewer._parse_review_result(beagle_output, workflow_id=uuid4())
 
         assert result.approved is True
         # BUG: Legacy parsing captures Verdict rationale bullets as issues
@@ -732,7 +733,7 @@ None
 The code is approved and looks good to merge.
 Rationale: All checks pass."""
 
-        result = reviewer._parse_review_result(output, workflow_id="wf-test")
+        result = reviewer._parse_review_result(output, workflow_id=uuid4())
         # No Ready: verdict AND no structured issues → approve
         assert result.approved is True
 
@@ -743,7 +744,7 @@ Rationale: All checks pass."""
         reviewer = create_reviewer()
         output = '{"approved": true, "comments": [], "severity": "none"}'
 
-        result = reviewer._parse_review_result(output, workflow_id="wf-test")
+        result = reviewer._parse_review_result(output, workflow_id=uuid4())
         # No Ready: verdict AND no structured issues → approve
         assert result.approved is True
 
@@ -759,7 +760,7 @@ Code changes implement the feature correctly.
 ### Minor (Nice to Have)
 1. [src/main.py:42] Consider adding type hint"""
 
-        result = reviewer._parse_review_result(output, workflow_id="wf-test")
+        result = reviewer._parse_review_result(output, workflow_id=uuid4())
         assert result.approved is False
         assert len(result.comments) >= 1
 
@@ -770,7 +771,7 @@ Code changes implement the feature correctly.
         reviewer = create_reviewer()
         output = "Build passed. The implementation is ready for the next task."
 
-        result = reviewer._parse_review_result(output, workflow_id="wf-test")
+        result = reviewer._parse_review_result(output, workflow_id=uuid4())
         assert result.approved is True
         assert result.comments == []
 
@@ -793,7 +794,7 @@ There are problems to address.
 ## Good Patterns
 - Good test coverage"""
 
-        result = reviewer._parse_review_result(output, workflow_id="wf-test")
+        result = reviewer._parse_review_result(output, workflow_id=uuid4())
         assert result.approved is False
         assert len(result.comments) >= 1
 
@@ -827,7 +828,7 @@ Third task content.
     ) -> None:
         """When total_tasks is 1, return full plan."""
         state = ImplementationState(
-            workflow_id="test-workflow",
+            workflow_id=uuid4(),
             created_at=datetime.now(UTC),
             status="running",
             profile_id="test",
@@ -850,7 +851,7 @@ Third task content.
     ) -> None:
         """For multi-task, extract current task with index label."""
         state = ImplementationState(
-            workflow_id="test-workflow",
+            workflow_id=uuid4(),
             created_at=datetime.now(UTC),
             status="running",
             profile_id="test",
@@ -872,7 +873,7 @@ Third task content.
     ) -> None:
         """Without plan, fall back to goal."""
         state = ImplementationState(
-            workflow_id="test-workflow",
+            workflow_id=uuid4(),
             created_at=datetime.now(UTC),
             status="running",
             profile_id="test",

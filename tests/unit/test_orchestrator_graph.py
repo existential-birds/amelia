@@ -17,6 +17,8 @@ from amelia.pipelines.implementation.routing import route_after_task_review
 from amelia.pipelines.implementation.state import ImplementationState
 from amelia.pipelines.nodes import call_reviewer_node
 from amelia.pipelines.review import create_review_graph
+from uuid import uuid4
+
 from amelia.pipelines.review.routing import (
     route_after_evaluation,
     route_after_fixes,
@@ -186,7 +188,7 @@ class TestRouteAfterTaskReview:
     ) -> None:
         """Should END when approved and all tasks complete."""
         state = ImplementationState(
-            workflow_id="test-workflow",
+            workflow_id=uuid4(),
             created_at=datetime.now(UTC),
             status="running",
             profile_id="test",
@@ -203,7 +205,7 @@ class TestRouteAfterTaskReview:
     ) -> None:
         """Should go to next_task_node when approved and more tasks remain."""
         state = ImplementationState(
-            workflow_id="test-workflow",
+            workflow_id=uuid4(),
             created_at=datetime.now(UTC),
             status="running",
             profile_id="test",
@@ -220,7 +222,7 @@ class TestRouteAfterTaskReview:
     ) -> None:
         """Should retry developer when review not approved and iterations remain."""
         state = ImplementationState(
-            workflow_id="test-workflow",
+            workflow_id=uuid4(),
             created_at=datetime.now(UTC),
             status="running",
             profile_id="test",
@@ -238,7 +240,7 @@ class TestRouteAfterTaskReview:
     ) -> None:
         """Should advance to next task when max iterations reached on non-final task."""
         state = ImplementationState(
-            workflow_id="test-workflow",
+            workflow_id=uuid4(),
             created_at=datetime.now(UTC),
             status="running",
             profile_id="test",
@@ -256,7 +258,7 @@ class TestRouteAfterTaskReview:
     ) -> None:
         """Should END when max iterations reached on final task."""
         state = ImplementationState(
-            workflow_id="test-workflow",
+            workflow_id=uuid4(),
             created_at=datetime.now(UTC),
             status="running",
             profile_id="test",
@@ -291,7 +293,7 @@ class TestRouteAfterTaskReview:
             severity=Severity.MINOR,
         )
         state = ImplementationState(
-            workflow_id="test-workflow",
+            workflow_id=uuid4(),
             created_at=datetime.now(UTC),
             status="running",
             profile_id="test",
@@ -311,7 +313,7 @@ class TestNextTaskNode:
     @pytest.fixture
     def task_state_for_next(self) -> ImplementationState:
         return ImplementationState(
-            workflow_id="test-workflow",
+            workflow_id=uuid4(),
             created_at=datetime.now(UTC),
             status="running",
             profile_id="test",
@@ -406,7 +408,7 @@ class TestReviewerNodeTaskIteration:
     async def test_reviewer_node_increments_task_review_iteration(self) -> None:
         """Reviewer node should increment task_review_iteration for task-based execution."""
         state = ImplementationState(
-            workflow_id="test-workflow",
+            workflow_id=uuid4(),
             created_at=datetime.now(UTC),
             status="running",
             profile_id="test",

@@ -10,6 +10,7 @@ from amelia.drivers.base import AgenticMessage, AgenticMessageType
 from amelia.pipelines.implementation.state import ImplementationState
 from amelia.pipelines.nodes import call_developer_node
 from tests.conftest import AsyncIteratorMock
+from uuid import uuid4
 
 
 @pytest.mark.asyncio
@@ -36,7 +37,7 @@ async def test_call_developer_node_uses_agent_config(
     config: dict[str, Any] = {
         "configurable": {
             "profile": profile,
-            "thread_id": "wf-1",
+            "thread_id": str(uuid4()),
         }
     }
 
@@ -45,7 +46,7 @@ async def test_call_developer_node_uses_agent_config(
         event = AgenticMessage(
             type=AgenticMessageType.RESULT,
             content="Done",
-        ).to_workflow_event(workflow_id="wf-1", agent="developer")
+        ).to_workflow_event(workflow_id=uuid4(), agent="developer")
         # Use AsyncIteratorMock for async generator return
         mock_developer.run = MagicMock(return_value=AsyncIteratorMock([
             (state.model_copy(update={"agentic_status": "completed"}), event)
@@ -91,7 +92,7 @@ async def test_call_developer_node_passes_prompts_to_developer(
     config: dict[str, Any] = {
         "configurable": {
             "profile": profile,
-            "thread_id": "wf-1",
+            "thread_id": str(uuid4()),
             "prompts": prompts,
         }
     }
@@ -101,7 +102,7 @@ async def test_call_developer_node_passes_prompts_to_developer(
         event = AgenticMessage(
             type=AgenticMessageType.RESULT,
             content="Done",
-        ).to_workflow_event(workflow_id="wf-1", agent="developer")
+        ).to_workflow_event(workflow_id=uuid4(), agent="developer")
         mock_developer.run = MagicMock(return_value=AsyncIteratorMock([
             (state.model_copy(update={"agentic_status": "completed"}), event)
         ]))
@@ -135,7 +136,7 @@ async def test_call_developer_node_passes_workflow_id(
     config: dict[str, Any] = {
         "configurable": {
             "profile": profile,
-            "thread_id": "wf-test-123",
+            "thread_id": str(uuid4()),
         }
     }
 
@@ -144,7 +145,7 @@ async def test_call_developer_node_passes_workflow_id(
         event = AgenticMessage(
             type=AgenticMessageType.RESULT,
             content="Done",
-        ).to_workflow_event(workflow_id="wf-test-123", agent="developer")
+        ).to_workflow_event(workflow_id=uuid4(), agent="developer")
         mock_developer.run = MagicMock(return_value=AsyncIteratorMock([
             (state.model_copy(update={"agentic_status": "completed"}), event)
         ]))
@@ -191,7 +192,7 @@ async def test_call_developer_node_updates_base_commit(
     config: dict[str, Any] = {
         "configurable": {
             "profile": profile,
-            "thread_id": "wf-1",
+            "thread_id": str(uuid4()),
         }
     }
 
@@ -202,7 +203,7 @@ async def test_call_developer_node_updates_base_commit(
         event = AgenticMessage(
             type=AgenticMessageType.RESULT,
             content="Done",
-        ).to_workflow_event(workflow_id="wf-1", agent="developer")
+        ).to_workflow_event(workflow_id=uuid4(), agent="developer")
         mock_developer.run = MagicMock(return_value=AsyncIteratorMock([
             (state.model_copy(update={"agentic_status": "completed"}), event)
         ]))
@@ -246,7 +247,7 @@ async def test_call_developer_node_keeps_base_commit_on_git_failure(
     config: dict[str, Any] = {
         "configurable": {
             "profile": profile,
-            "thread_id": "wf-1",
+            "thread_id": str(uuid4()),
         }
     }
 
@@ -255,7 +256,7 @@ async def test_call_developer_node_keeps_base_commit_on_git_failure(
         event = AgenticMessage(
             type=AgenticMessageType.RESULT,
             content="Done",
-        ).to_workflow_event(workflow_id="wf-1", agent="developer")
+        ).to_workflow_event(workflow_id=uuid4(), agent="developer")
         mock_developer.run = MagicMock(return_value=AsyncIteratorMock([
             (state.model_copy(update={"agentic_status": "completed"}), event)
         ]))

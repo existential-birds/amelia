@@ -16,6 +16,7 @@ from amelia.server.main import create_app
 from amelia.server.models.responses import BatchStartResponse
 
 from .conftest import patch_lifespan
+from uuid import uuid4
 
 
 @pytest.fixture
@@ -153,7 +154,7 @@ class TestStartWorkflowEndpoint:
         mock_orchestrator.start_pending_workflow = AsyncMock(
             side_effect=InvalidStateError(
                 "Workflow is not in pending state",
-                workflow_id="wf-running",
+                workflow_id=uuid4(),
                 current_status="in_progress",
             )
         )

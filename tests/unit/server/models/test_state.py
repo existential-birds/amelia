@@ -7,6 +7,7 @@ from typing import Any
 import pytest
 
 from amelia.server.models.state import (
+from uuid import uuid4
     InvalidStateTransitionError,
     PlanCache,
     ServerExecutionState,
@@ -18,7 +19,7 @@ from amelia.server.models.state import (
 def make_state(**overrides: Any) -> ServerExecutionState:
     """Create a ServerExecutionState with sensible defaults."""
     defaults: dict[str, Any] = {
-        "id": "wf-123",
+        "id": str(uuid4()),
         "issue_id": "ISSUE-456",
         "worktree_path": "/path/to/repo",
     }

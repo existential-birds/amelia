@@ -8,6 +8,7 @@ from fastapi import WebSocket, WebSocketDisconnect
 from amelia.server.events.connection_manager import ConnectionManager
 from amelia.server.models.events import EventType, WorkflowEvent
 from amelia.server.routes.websocket import websocket_endpoint
+from uuid import uuid4
 
 
 class TestWebSocketEndpoint:
@@ -61,8 +62,8 @@ class TestWebSocketEndpoint:
         # Mock backfill events
         backfill_events = [
             WorkflowEvent(
-                id="evt-2",
-                workflow_id="wf-123",
+                id=uuid4(),
+                workflow_id=uuid4(),
                 sequence=2,
                 timestamp=datetime.now(UTC),
                 agent="system",
@@ -70,8 +71,8 @@ class TestWebSocketEndpoint:
                 message="Event 2",
             ),
             WorkflowEvent(
-                id="evt-3",
-                workflow_id="wf-123",
+                id=uuid4(),
+                workflow_id=uuid4(),
                 sequence=3,
                 timestamp=datetime.now(UTC),
                 agent="system",
@@ -124,7 +125,7 @@ class TestWebSocketEndpoint:
         many_events = [
             WorkflowEvent(
                 id=f"evt-{i}",
-                workflow_id="wf-123",
+                workflow_id=uuid4(),
                 sequence=i,
                 timestamp=datetime.now(UTC),
                 agent="system",

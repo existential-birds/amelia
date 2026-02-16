@@ -13,6 +13,7 @@ from amelia.server.exceptions import (
 )
 from amelia.server.models.state import WorkflowStatus
 from amelia.server.orchestrator.service import OrchestratorService
+from uuid import uuid4
 
 
 class TestSetWorkflowPlan:
@@ -111,7 +112,7 @@ class TestSetWorkflowPlan:
             mock_update_profile.return_value = mock_profile
 
             result = await mock_orchestrator.set_workflow_plan(
-                workflow_id="wf-001",
+                workflow_id=uuid4(),
                 plan_content=plan_content,
             )
 
@@ -165,7 +166,7 @@ class TestSetWorkflowPlan:
             mock_update_profile.return_value = mock_profile
 
             await mock_orchestrator.set_workflow_plan(
-                workflow_id="wf-001",
+                workflow_id=uuid4(),
                 plan_content=plan_content,
             )
 
@@ -184,7 +185,7 @@ class TestSetWorkflowPlan:
 
         with pytest.raises(InvalidStateError, match="pending"):
             await mock_orchestrator.set_workflow_plan(
-                workflow_id="wf-001",
+                workflow_id=uuid4(),
                 plan_content="# Plan",
             )
 
@@ -199,7 +200,7 @@ class TestSetWorkflowPlan:
 
         with pytest.raises(WorkflowConflictError, match="Plan already exists"):
             await mock_orchestrator.set_workflow_plan(
-                workflow_id="wf-001",
+                workflow_id=uuid4(),
                 plan_content="# New plan",
                 force=False,
             )
@@ -249,7 +250,7 @@ class TestSetWorkflowPlan:
             mock_update_profile.return_value = mock_profile
 
             result = await mock_orchestrator.set_workflow_plan(
-                workflow_id="wf-001",
+                workflow_id=uuid4(),
                 plan_content=plan_content,
                 force=True,
             )
@@ -266,7 +267,7 @@ class TestSetWorkflowPlan:
 
         with pytest.raises(WorkflowNotFoundError):
             await mock_orchestrator.set_workflow_plan(
-                workflow_id="wf-nonexistent",
+                workflow_id=uuid4(),
                 plan_content="# Plan",
             )
 
@@ -284,7 +285,7 @@ class TestSetWorkflowPlan:
 
         with pytest.raises(WorkflowConflictError, match="Architect is currently running"):
             await mock_orchestrator.set_workflow_plan(
-                workflow_id="wf-001",
+                workflow_id=uuid4(),
                 plan_content="# Plan",
             )
 
@@ -297,6 +298,6 @@ class TestSetWorkflowPlan:
 
         with pytest.raises(InvalidStateError, match="pending"):
             await mock_orchestrator.set_workflow_plan(
-                workflow_id="wf-001",
+                workflow_id=uuid4(),
                 plan_content="# Plan",
             )

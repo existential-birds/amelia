@@ -15,6 +15,7 @@ from amelia.pipelines.implementation.utils import (
     extract_task_title,
 )
 from amelia.pipelines.utils import extract_config_params
+from uuid import uuid4
 
 
 SAMPLE_PLAN = """# Model Selection Dropdown Implementation Plan
@@ -168,7 +169,7 @@ class TestExtractConfigParams:
         )
         config: RunnableConfig = {
             "configurable": {
-                "thread_id": "wf-123",
+                "thread_id": str(uuid4()),
                 "profile": profile,
             }
         }
@@ -193,7 +194,7 @@ class TestExtractConfigParams:
         )
         config: RunnableConfig = {
             "configurable": {
-                "thread_id": "wf-123",
+                "thread_id": str(uuid4()),
                 "profile": profile,
                 "event_bus": mock_event_bus,
             }
@@ -207,7 +208,7 @@ class TestExtractConfigParams:
         """Should raise ValueError if profile not in config."""
         config: RunnableConfig = {
             "configurable": {
-                "thread_id": "wf-123",
+                "thread_id": str(uuid4()),
             }
         }
         with pytest.raises(ValueError, match="profile is required"):

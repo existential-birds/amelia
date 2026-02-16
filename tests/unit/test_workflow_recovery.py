@@ -15,6 +15,7 @@ from amelia.server.models.state import (
     validate_transition,
 )
 from amelia.server.orchestrator.service import OrchestratorService
+from uuid import uuid4
 
 
 class TestValidTransitions:
@@ -334,7 +335,7 @@ class TestResumeEndpoint:
         mock_orchestrator.resume_workflow = AsyncMock(
             side_effect=InvalidStateError(
                 "Cannot resume",
-                workflow_id="wf-1",
+                workflow_id=uuid4(),
                 current_status=WorkflowStatus.IN_PROGRESS,
             )
         )

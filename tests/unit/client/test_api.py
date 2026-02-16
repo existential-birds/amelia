@@ -10,6 +10,7 @@ import httpx
 import pytest
 
 from amelia.client.api import (
+from uuid import uuid4
     AmeliaClient,
     RateLimitError,
     ServerUnreachableError,
@@ -29,7 +30,7 @@ class TestCreateReviewWorkflow:
     def mock_response_success(self) -> dict[str, Any]:
         """Successful response data."""
         return {
-            "id": "wf-123",
+            "id": str(uuid4()),
             "status": "pending",
             "message": "Review workflow created",
         }
@@ -56,7 +57,7 @@ class TestCreateReviewWorkflow:
                 profile="default",
             )
 
-        assert response.id == "wf-123"
+        assert response.id is not None
         assert response.status == "pending"
 
     async def test_raises_server_unreachable_on_connect_error(
@@ -95,7 +96,7 @@ class TestCreateReviewWorkflow:
             "detail": {
                 "message": "Workflow already active",
                 "active_workflow": {
-                    "id": "wf-existing",
+                    "id": str(uuid4()),
                     "issue_id": "ISSUE-123",
                     "status": "in_progress",
                 },

@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 from amelia.core.types import AgentConfig, Profile, TrackerType
 from amelia.server.orchestrator.service import OrchestratorService
+from uuid import uuid4
 
 
 def _make_test_profile(
@@ -57,7 +58,7 @@ class TestOrchestratorProfileLoading:
         )
 
         profile = await service._get_profile_or_fail(
-            workflow_id="wf-123",
+            workflow_id=uuid4(),
             profile_id="dev",
             worktree_path="/some/worktree",
         )
@@ -83,7 +84,7 @@ class TestOrchestratorProfileLoading:
         )
 
         profile = await service._get_profile_or_fail(
-            workflow_id="wf-123",
+            workflow_id=uuid4(),
             profile_id="nonexistent",
             worktree_path="/some/worktree",
         )

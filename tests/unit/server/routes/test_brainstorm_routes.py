@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 from amelia.server.database import ProfileRepository
 from amelia.server.models.brainstorm import BrainstormingSession
 from amelia.server.routes.brainstorm import router
+from uuid import uuid4
 
 
 class TestBrainstormRoutes:
@@ -225,8 +226,8 @@ class TestSendMessage(TestBrainstormRoutes):
             *args: object, **kwargs: object
         ) -> AsyncIterator[WorkflowEvent]:
             yield WorkflowEvent(
-                id="evt-1",
-                workflow_id="sess-123",
+                id=uuid4(),
+                workflow_id=uuid4(),
                 sequence=0,
                 timestamp=now,
                 agent="brainstormer",

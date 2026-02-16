@@ -17,20 +17,20 @@ pytestmark = pytest.mark.integration
 @pytest.fixture
 async def seed_data(db_with_schema: Database, repository: WorkflowRepository) -> None:
     """Seed test data for usage queries."""
-    wf1_id = str(uuid4())
-    wf2_id = str(uuid4())
+    wf1_id = uuid4()
+    wf2_id = uuid4()
 
     # Create two workflows
     wf1 = ServerExecutionState(
         id=wf1_id,
-        issue_id="ISSUE-1",
+        issue_id=uuid4(),
         worktree_path="/tmp/repo1",
         workflow_status="completed",
         started_at=datetime(2026, 1, 10, 10, 0, 0, tzinfo=UTC),
     )
     wf2 = ServerExecutionState(
         id=wf2_id,
-        issue_id="ISSUE-2",
+        issue_id=uuid4(),
         worktree_path="/tmp/repo2",
         workflow_status="completed",
         started_at=datetime(2026, 1, 15, 10, 0, 0, tzinfo=UTC),

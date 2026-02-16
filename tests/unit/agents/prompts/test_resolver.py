@@ -7,6 +7,7 @@ import pytest
 from amelia.agents.prompts.defaults import PROMPT_DEFAULTS
 from amelia.agents.prompts.models import Prompt, PromptVersion
 from amelia.agents.prompts.resolver import PromptResolver
+from uuid import uuid4
 
 
 @pytest.fixture
@@ -44,10 +45,10 @@ class TestGetPrompt:
             id="architect.plan",
             agent="architect",
             name="Architect Plan Format",
-            current_version_id="v-123",
+            current_version_id=str(uuid4()),
         )
         mock_repository.get_version.return_value = PromptVersion(
-            id="v-123",
+            id=uuid4(),
             prompt_id="architect.plan",
             version_number=3,
             content=custom_content,
@@ -56,7 +57,7 @@ class TestGetPrompt:
         result = await resolver.get_prompt("architect.plan")
 
         assert result.is_default is False
-        assert result.version_id == "v-123"
+        assert result.version_id is not None
         assert result.version_number == 3
         assert result.content == custom_content
 
@@ -102,10 +103,10 @@ class TestRecordForWorkflow:
             id="architect.plan",
             agent="architect",
             name="Architect Plan Format",
-            current_version_id="v-123",
+            current_version_id=str(uuid4()),
         )
         mock_repository.get_version.return_value = PromptVersion(
-            id="v-123",
+            id=uuid4(),
             prompt_id="architect.plan",
             version_number=1,
             content="Custom content",

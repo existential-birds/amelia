@@ -58,9 +58,11 @@ def event_factory() -> Callable[..., WorkflowEvent]:
 
     def _create(**overrides: Any) -> WorkflowEvent:
         """Create a WorkflowEvent with sensible defaults."""
+        from uuid import uuid4 as _uuid4  # noqa: PLC0415
+
         defaults: dict[str, Any] = {
-            "id": "event-123",
-            "workflow_id": "wf-456",
+            "id": _uuid4(),
+            "workflow_id": _uuid4(),
             "sequence": 1,
             "timestamp": datetime(2025, 1, 1, 12, 0, 0),
             "agent": "system",
@@ -321,7 +323,7 @@ def mock_execution_state_factory(
         profile_id = kwargs.pop("profile_id", profile.name)
 
         # Provide defaults for required BasePipelineState fields
-        workflow_id = kwargs.pop("workflow_id", str(uuid4()))
+        workflow_id = kwargs.pop("workflow_id", uuid4())
         created_at = kwargs.pop("created_at", datetime.now(UTC))
         status = kwargs.pop("status", "pending")
 

@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 
 from amelia.server.dependencies import get_orchestrator
 from amelia.server.main import create_app
+from uuid import uuid4
 
 
 class TestSetPlanEndpoint:
@@ -70,7 +71,7 @@ class TestSetPlanEndpoint:
 
         assert response.status_code == status.HTTP_200_OK
         mock_orchestrator.set_workflow_plan.assert_called_once_with(
-            workflow_id="wf-001",
+            workflow_id=uuid4(),
             plan_file="docs/plan.md",
             plan_content=None,
             force=False,
@@ -87,7 +88,7 @@ class TestSetPlanEndpoint:
 
         assert response.status_code == status.HTTP_200_OK
         mock_orchestrator.set_workflow_plan.assert_called_once_with(
-            workflow_id="wf-001",
+            workflow_id=uuid4(),
             plan_file=None,
             plan_content="# Plan",
             force=True,

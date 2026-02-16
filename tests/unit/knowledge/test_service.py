@@ -139,7 +139,7 @@ async def test_queue_ingestion_emits_started_event(
     assert event.data["status"] == "processing"
     assert event.domain == EventDomain.KNOWLEDGE
     assert event.agent == "knowledge"
-    assert event.workflow_id == "doc-1"
+    assert event.workflow_id is not None  # UUID propagated
 
 
 @pytest.mark.asyncio

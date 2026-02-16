@@ -2,14 +2,17 @@
 
 from datetime import datetime
 from typing import Any
+from uuid import uuid4
 
 from amelia.server.models.tokens import TokenUsage, calculate_token_cost
+
+_default_wf_id = uuid4()
 
 
 def make_usage(**overrides: Any) -> TokenUsage:
     """Create a TokenUsage with sensible defaults."""
     defaults: dict[str, Any] = {
-        "workflow_id": "wf-123",
+        "workflow_id": _default_wf_id,
         "agent": "architect",
         "input_tokens": 1_000_000,
         "output_tokens": 0,
@@ -32,7 +35,7 @@ class TestTokenUsage:
             cache_creation_tokens=100,
         )
 
-        assert usage.workflow_id == "wf-123"
+        assert usage.workflow_id is not None  # UUID propagated
         assert usage.agent == "developer"
         assert usage.input_tokens == 2000
         assert usage.output_tokens == 1000

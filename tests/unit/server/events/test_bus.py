@@ -9,6 +9,7 @@ import pytest
 
 from amelia.server.events.bus import EventBus
 from amelia.server.models import WorkflowEvent
+from uuid import uuid4
 
 
 @pytest.fixture
@@ -16,7 +17,7 @@ def sample_event(event_factory: Callable[..., WorkflowEvent]) -> WorkflowEvent:
     """Create sample event."""
     return event_factory(
         id="evt-1",
-        workflow_id="wf-1",
+        workflow_id=uuid4(),
         timestamp=datetime.now(UTC),
         message="Workflow started",
     )

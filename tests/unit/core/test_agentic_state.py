@@ -1,5 +1,6 @@
 """Tests for agentic execution state model."""
 from amelia.core.agentic_state import AgenticState, ToolCall, ToolResult
+from uuid import uuid4
 
 
 class TestToolCall:
@@ -50,11 +51,11 @@ class TestAgenticState:
     def test_create_initial_state(self) -> None:
         """Should create state with conversation history."""
         state = AgenticState(
-            workflow_id="wf-123",
+            workflow_id=uuid4(),
             issue_key="ISSUE-1",
             goal="Implement feature X",
         )
-        assert state.workflow_id == "wf-123"
+        assert state.workflow_id is not None  # UUID propagated
         assert state.tool_calls == ()
         assert state.tool_results == ()
         assert state.status == "running"
@@ -65,7 +66,7 @@ class TestAgenticState:
         result = ToolResult(call_id="1", tool_name="shell", output="ok", success=True)
 
         state = AgenticState(
-            workflow_id="wf-1",
+            workflow_id=uuid4(),
             issue_key="ISSUE-1",
             goal="test",
             tool_calls=(call,),

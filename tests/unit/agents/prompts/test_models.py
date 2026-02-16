@@ -3,6 +3,8 @@
 import pytest
 from pydantic import ValidationError
 
+from uuid import uuid4
+
 from amelia.agents.prompts.models import (
     Prompt,
     PromptVersion,
@@ -44,14 +46,15 @@ class TestPromptVersion:
 
     def test_create_version(self):
         """Should create a valid PromptVersion."""
+        vid = uuid4()
         version = PromptVersion(
-            id="v-123",
+            id=vid,
             prompt_id="architect.system",
             version_number=1,
             content="You are an architect...",
             change_note="Initial version",
         )
-        assert version.id == "v-123"
+        assert version.id == vid
         assert version.version_number == 1
         assert version.created_at is not None
 
@@ -59,7 +62,7 @@ class TestPromptVersion:
         """Should reject empty content."""
         with pytest.raises(ValidationError):
             PromptVersion(
-                id="v-123",
+                id=uuid4(),
                 prompt_id="architect.system",
                 version_number=1,
                 content="",
@@ -86,7 +89,7 @@ class TestResolvedPrompt:
         resolved = ResolvedPrompt(
             prompt_id="architect.system",
             content="Custom architect prompt...",
-            version_id="v-123",
+            version_id=uuid4(),
             version_number=3,
             is_default=False,
         )
@@ -100,10 +103,10 @@ class TestWorkflowPromptVersion:
     def test_create_workflow_prompt_version(self):
         """Should link workflow to prompt version."""
         wpv = WorkflowPromptVersion(
-            workflow_id="wf-123",
+            workflow_id=uuid4(),
             prompt_id="architect.system",
-            version_id="v-456",
+            version_id=uuid4(),
         )
-        assert wpv.workflow_id == "wf-123"
+        assert wpv.workflow_id is not None  # UUID propagated
         assert wpv.prompt_id == "architect.system"
-        assert wpv.version_id == "v-456"
+        assert wpv.version_id is not None

@@ -34,26 +34,26 @@ class TestUsageTrend:
         repo = WorkflowRepository(db_with_schema)
 
         # Create workflows
-        wf1_id = str(uuid4())
-        wf2_id = str(uuid4())
-        wf3_id = str(uuid4())
+        wf1_id = uuid4()
+        wf2_id = uuid4()
+        wf3_id = uuid4()
         wf1 = ServerExecutionState(
             id=wf1_id,
-            issue_id="ISSUE-1",
+            issue_id=uuid4(),
             worktree_path="/tmp/test-usage-1",
             workflow_status=WorkflowStatus.COMPLETED,
             started_at=datetime(2026, 1, 15, 10, 0, 0, tzinfo=UTC),
         )
         wf2 = ServerExecutionState(
             id=wf2_id,
-            issue_id="ISSUE-2",
+            issue_id=uuid4(),
             worktree_path="/tmp/test-usage-2",
             workflow_status=WorkflowStatus.COMPLETED,
             started_at=datetime(2026, 1, 16, 10, 0, 0, tzinfo=UTC),
         )
         wf3 = ServerExecutionState(
             id=wf3_id,
-            issue_id="ISSUE-3",
+            issue_id=uuid4(),
             worktree_path="/tmp/test-usage-3",
             workflow_status=WorkflowStatus.COMPLETED,
             started_at=datetime(2026, 1, 17, 10, 0, 0, tzinfo=UTC),
@@ -247,11 +247,11 @@ class TestUsageSummaryWithSuccessMetrics:
         repo = WorkflowRepository(db_with_schema)
 
         # Previous period workflows (Jan 8-14)
-        wf_prev1_id = str(uuid4())
-        wf_prev2_id = str(uuid4())
+        wf_prev1_id = uuid4()
+        wf_prev2_id = uuid4()
         wf_prev1 = ServerExecutionState(
             id=wf_prev1_id,
-            issue_id="ISSUE-P1",
+            issue_id=uuid4(),
             worktree_path="/tmp/test-prev-1",
             workflow_status=WorkflowStatus.COMPLETED,
             started_at=datetime(2026, 1, 10, 10, 0, 0, tzinfo=UTC),
@@ -259,7 +259,7 @@ class TestUsageSummaryWithSuccessMetrics:
         )
         wf_prev2 = ServerExecutionState(
             id=wf_prev2_id,
-            issue_id="ISSUE-P2",
+            issue_id=uuid4(),
             worktree_path="/tmp/test-prev-2",
             workflow_status=WorkflowStatus.COMPLETED,
             started_at=datetime(2026, 1, 12, 10, 0, 0, tzinfo=UTC),
@@ -297,13 +297,13 @@ class TestUsageSummaryWithSuccessMetrics:
         )
 
         # Current period workflows (Jan 15-21): 3 completed, 1 failed
-        wf_curr1_id = str(uuid4())
-        wf_curr2_id = str(uuid4())
-        wf_curr3_id = str(uuid4())
-        wf_curr4_id = str(uuid4())
+        wf_curr1_id = uuid4()
+        wf_curr2_id = uuid4()
+        wf_curr3_id = uuid4()
+        wf_curr4_id = uuid4()
         wf_curr1 = ServerExecutionState(
             id=wf_curr1_id,
-            issue_id="ISSUE-C1",
+            issue_id=uuid4(),
             worktree_path="/tmp/test-curr-1",
             workflow_status=WorkflowStatus.COMPLETED,
             started_at=datetime(2026, 1, 15, 10, 0, 0, tzinfo=UTC),
@@ -311,7 +311,7 @@ class TestUsageSummaryWithSuccessMetrics:
         )
         wf_curr2 = ServerExecutionState(
             id=wf_curr2_id,
-            issue_id="ISSUE-C2",
+            issue_id=uuid4(),
             worktree_path="/tmp/test-curr-2",
             workflow_status=WorkflowStatus.COMPLETED,
             started_at=datetime(2026, 1, 16, 10, 0, 0, tzinfo=UTC),
@@ -319,7 +319,7 @@ class TestUsageSummaryWithSuccessMetrics:
         )
         wf_curr3 = ServerExecutionState(
             id=wf_curr3_id,
-            issue_id="ISSUE-C3",
+            issue_id=uuid4(),
             worktree_path="/tmp/test-curr-3",
             workflow_status=WorkflowStatus.COMPLETED,
             started_at=datetime(2026, 1, 17, 10, 0, 0, tzinfo=UTC),
@@ -327,7 +327,7 @@ class TestUsageSummaryWithSuccessMetrics:
         )
         wf_curr4 = ServerExecutionState(
             id=wf_curr4_id,
-            issue_id="ISSUE-C4",
+            issue_id=uuid4(),
             worktree_path="/tmp/test-curr-4",
             workflow_status=WorkflowStatus.FAILED,
             started_at=datetime(2026, 1, 18, 10, 0, 0, tzinfo=UTC),
@@ -490,13 +490,13 @@ class TestUsageByModelWithTrendAndSuccess:
         repo = WorkflowRepository(db_with_schema)
 
         # Create workflows with mixed statuses
-        wf1_id = str(uuid4())
-        wf2_id = str(uuid4())
-        wf3_id = str(uuid4())
-        wf4_id = str(uuid4())
+        wf1_id = uuid4()
+        wf2_id = uuid4()
+        wf3_id = uuid4()
+        wf4_id = uuid4()
         wf1 = ServerExecutionState(
             id=wf1_id,
-            issue_id="ISSUE-M1",
+            issue_id=uuid4(),
             worktree_path="/tmp/test-model-1",
             workflow_status=WorkflowStatus.COMPLETED,
             started_at=datetime(2026, 1, 15, 10, 0, 0, tzinfo=UTC),
@@ -504,7 +504,7 @@ class TestUsageByModelWithTrendAndSuccess:
         )
         wf2 = ServerExecutionState(
             id=wf2_id,
-            issue_id="ISSUE-M2",
+            issue_id=uuid4(),
             worktree_path="/tmp/test-model-2",
             workflow_status=WorkflowStatus.COMPLETED,
             started_at=datetime(2026, 1, 16, 10, 0, 0, tzinfo=UTC),
@@ -512,7 +512,7 @@ class TestUsageByModelWithTrendAndSuccess:
         )
         wf3 = ServerExecutionState(
             id=wf3_id,
-            issue_id="ISSUE-M3",
+            issue_id=uuid4(),
             worktree_path="/tmp/test-model-3",
             workflow_status=WorkflowStatus.COMPLETED,
             started_at=datetime(2026, 1, 17, 10, 0, 0, tzinfo=UTC),
@@ -520,7 +520,7 @@ class TestUsageByModelWithTrendAndSuccess:
         )
         wf4 = ServerExecutionState(
             id=wf4_id,
-            issue_id="ISSUE-M4",
+            issue_id=uuid4(),
             worktree_path="/tmp/test-model-4",
             workflow_status=WorkflowStatus.FAILED,
             started_at=datetime(2026, 1, 18, 10, 0, 0, tzinfo=UTC),

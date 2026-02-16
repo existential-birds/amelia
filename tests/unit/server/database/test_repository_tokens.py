@@ -1,5 +1,6 @@
 """Tests for WorkflowRepository token usage methods."""
 
+import uuid
 from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
@@ -28,7 +29,7 @@ class TestTokenUsageRepository:
             Created workflow.
         """
         wf = ServerExecutionState(
-            id=str(uuid4()),
+            id=uuid4(),
             issue_id="ISSUE-TOKEN",
             worktree_path="/tmp/test-tokens",
             workflow_status="in_progress",
@@ -39,7 +40,7 @@ class TestTokenUsageRepository:
 
     def _make_token_usage(
         self,
-        workflow_id: str,
+        workflow_id: uuid.UUID,
         agent: str = "architect",
         **overrides: Any,
     ) -> TokenUsage:
@@ -126,7 +127,7 @@ class TestTokenUsageRepository:
     ) -> None:
         """Should preserve all token usage fields after save and retrieve."""
         timestamp = datetime.now(UTC)
-        usage_id = str(uuid4())
+        usage_id = uuid4()
         usage = TokenUsage(
             id=usage_id,
             workflow_id=workflow.id,
@@ -176,7 +177,7 @@ class TestTokenUsageRepository:
         self, repository: WorkflowRepository
     ) -> None:
         """Should return empty list for non-existent workflow."""
-        usages = await repository.get_token_usage(str(uuid4()))
+        usages = await repository.get_token_usage(uuid4())
         assert usages == []
 
     async def test_get_token_usage_ordered_by_timestamp(
@@ -221,7 +222,7 @@ class TestTokenUsageRepository:
         """Should only return token usage for the specified workflow."""
         # Create another workflow
         other_wf = ServerExecutionState(
-            id=str(uuid4()),
+            id=uuid4(),
             issue_id="ISSUE-OTHER",
             worktree_path="/tmp/test-other",
             workflow_status="in_progress",
@@ -382,7 +383,7 @@ class TestTokenUsageRepository:
         self, repository: WorkflowRepository
     ) -> None:
         """Should return None for non-existent workflow."""
-        summary = await repository.get_token_summary(str(uuid4()))
+        summary = await repository.get_token_summary(uuid4())
         assert summary is None
 
     # =========================================================================
@@ -427,7 +428,7 @@ class TestTokenUsageRepository:
         workflows = []
         for i in range(3):
             wf = ServerExecutionState(
-                id=str(uuid4()),
+                id=uuid4(),
                 issue_id=f"ISSUE-{i}",
                 worktree_path=f"/tmp/test-batch-{i}",
                 workflow_status="in_progress",
@@ -504,8 +505,8 @@ class TestTokenUsageRepository:
         self, repository: WorkflowRepository
     ) -> None:
         """Should return None for non-existent workflow IDs."""
-        id1 = str(uuid4())
-        id2 = str(uuid4())
+        id1 = uuid4()
+        id2 = uuid4()
         summaries = await repository.get_token_summaries_batch(
             [id1, id2]
         )

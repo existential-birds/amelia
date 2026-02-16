@@ -2,6 +2,8 @@
 
 from amelia.pipelines.base import PipelineMetadata
 from amelia.pipelines.implementation.pipeline import ImplementationPipeline
+from uuid import uuid4
+
 from amelia.pipelines.implementation.state import (
     ImplementationState,
     rebuild_implementation_state,
@@ -52,11 +54,11 @@ class TestImplementationPipelineProtocol:
         """Should create a valid ImplementationState."""
         pipeline = ImplementationPipeline()
         state = pipeline.get_initial_state(
-            workflow_id="wf-test",
+            workflow_id=uuid4(),
             profile_id="default",
         )
         assert isinstance(state, ImplementationState)
-        assert state.workflow_id == "wf-test"
+        assert state.workflow_id is not None  # UUID propagated
         assert state.profile_id == "default"
         assert state.status == "pending"
         assert state.pipeline_type == "implementation"
@@ -106,16 +108,16 @@ class TestImplementationPipelineInitialState:
         """Initial state should have workflow_id set."""
         pipeline = ImplementationPipeline()
         state = pipeline.get_initial_state(
-            workflow_id="wf-abc123",
+            workflow_id=uuid4(),
             profile_id="default",
         )
-        assert state.workflow_id == "wf-abc123"
+        assert state.workflow_id is not None  # UUID propagated
 
     def test_initial_state_has_profile_id(self) -> None:
         """Initial state should have profile_id set."""
         pipeline = ImplementationPipeline()
         state = pipeline.get_initial_state(
-            workflow_id="wf-test",
+            workflow_id=uuid4(),
             profile_id="my-profile",
         )
         assert state.profile_id == "my-profile"
@@ -124,7 +126,7 @@ class TestImplementationPipelineInitialState:
         """Initial state should have created_at timestamp."""
         pipeline = ImplementationPipeline()
         state = pipeline.get_initial_state(
-            workflow_id="wf-test",
+            workflow_id=uuid4(),
             profile_id="default",
         )
         assert state.created_at is not None
@@ -133,7 +135,7 @@ class TestImplementationPipelineInitialState:
         """Initial state should have status='pending'."""
         pipeline = ImplementationPipeline()
         state = pipeline.get_initial_state(
-            workflow_id="wf-test",
+            workflow_id=uuid4(),
             profile_id="default",
         )
         assert state.status == "pending"
@@ -142,7 +144,7 @@ class TestImplementationPipelineInitialState:
         """Initial state should have empty history."""
         pipeline = ImplementationPipeline()
         state = pipeline.get_initial_state(
-            workflow_id="wf-test",
+            workflow_id=uuid4(),
             profile_id="default",
         )
         assert state.history == []

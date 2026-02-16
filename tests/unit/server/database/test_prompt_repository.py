@@ -132,7 +132,7 @@ class TestWorkflowLinking:
             "ISSUE-1", "/path",
         )
         wf = await db.fetch_one("SELECT id FROM workflows WHERE issue_id = 'ISSUE-1'")
-        wf_id = str(wf["id"])
+        wf_id = wf["id"]
         # Create prompt and version
         await repo.create_prompt(Prompt(id="test.prompt", agent="test", name="Test"))
         version = await repo.create_version("test.prompt", "Content", None)
@@ -147,5 +147,5 @@ class TestWorkflowLinking:
         """Should return empty list for workflow with no prompts."""
         from uuid import uuid4
 
-        results = await repo.get_workflow_prompts(str(uuid4()))
+        results = await repo.get_workflow_prompts(uuid4())
         assert results == []

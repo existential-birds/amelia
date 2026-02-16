@@ -4,6 +4,7 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from uuid import uuid4
 
 
 @pytest.fixture
@@ -181,7 +182,7 @@ class TestTaskStartedEvents:
 
         # Create a real Pydantic state object (what LangGraph actually passes)
         input_state = ImplementationState(
-            workflow_id="test-workflow",
+            workflow_id=uuid4(),
             profile_id="test-profile",
             created_at=datetime.now(UTC),
             status="running",

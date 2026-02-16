@@ -13,6 +13,7 @@ from amelia.server.exceptions import (
 from amelia.server.routes.workflows import configure_exception_handlers, router
 
 from .conftest import patch_lifespan
+from uuid import uuid4
 
 
 def get_orchestrator_mock() -> MagicMock:
@@ -66,7 +67,7 @@ class TestReplanRoute:
         orch = get_orchestrator_mock()
         orch.replan_workflow.side_effect = InvalidStateError(
             "Workflow must be in blocked status",
-            workflow_id="wf-wrong",
+            workflow_id=uuid4(),
             current_status="in_progress",
         )
         client = create_test_client(orch)

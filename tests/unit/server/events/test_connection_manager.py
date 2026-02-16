@@ -7,6 +7,8 @@ import pytest
 from fastapi import WebSocketDisconnect
 
 from amelia.server.events.connection_manager import ConnectionManager
+from uuid import uuid4
+
 from amelia.server.models.events import (
     EventDomain,
     EventLevel,
@@ -96,7 +98,7 @@ class TestConnectionManager:
 
         event = event_factory(
             id="evt-123",
-            workflow_id="wf-456",
+            workflow_id=uuid4(),
             timestamp=datetime.now(UTC),
             message="Started",
         )
@@ -156,8 +158,8 @@ class TestConnectionManagerTraceEvents:
         await manager.subscribe(mock_ws2, "wf-2")
 
         trace_event = WorkflowEvent(
-            id="evt-1",
-            workflow_id="wf-1",
+            id=uuid4(),
+            workflow_id=uuid4(),
             sequence=1,
             timestamp=datetime.now(UTC),
             agent="developer",
@@ -185,8 +187,8 @@ class TestBroadcastDomainRouting:
         await manager.subscribe_all(mock_websocket)
 
         event = WorkflowEvent(
-            id="evt-1",
-            workflow_id="wf-1",
+            id=uuid4(),
+            workflow_id=uuid4(),
             sequence=1,
             timestamp=datetime.now(UTC),
             agent="system",
@@ -212,8 +214,8 @@ class TestBroadcastDomainRouting:
         await manager.subscribe_all(mock_websocket)
 
         event = WorkflowEvent(
-            id="evt-2",
-            workflow_id="session-1",
+            id=uuid4(),
+            workflow_id=uuid4(),
             sequence=0,
             timestamp=datetime.now(UTC),
             agent="brainstormer",

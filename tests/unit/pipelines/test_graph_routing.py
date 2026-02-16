@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 
 from amelia.pipelines.implementation.graph import create_implementation_graph
 from amelia.pipelines.implementation.state import ImplementationState
+from uuid import uuid4
 
 
 class TestGraphExternalPlanRouting:
@@ -50,7 +51,7 @@ class TestGraphExternalPlanRouting:
 
         # External plan should route to validator
         external_state = ImplementationState(
-            workflow_id="wf-001",
+            workflow_id=uuid4(),
             profile_id="test",
             created_at=datetime.now(UTC),
             status="pending",
@@ -60,7 +61,7 @@ class TestGraphExternalPlanRouting:
 
         # Normal plan should route to architect
         normal_state = ImplementationState(
-            workflow_id="wf-001",
+            workflow_id=uuid4(),
             profile_id="test",
             created_at=datetime.now(UTC),
             status="pending",

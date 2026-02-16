@@ -10,6 +10,7 @@ from amelia.agents.schemas.architect import MarkdownPlanOutput
 from amelia.core.types import AgentConfig, Profile
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
 from amelia.pipelines.implementation.state import ImplementationState
+from uuid import uuid4
 
 
 class TestArchitectPromptInjection:
@@ -59,7 +60,7 @@ class TestArchitectPromptInjection:
 
         with patch("amelia.agents.architect.get_driver", return_value=mock_driver):
             architect = Architect(config, prompts=prompts)
-            async for _ in architect.plan(state, profile, workflow_id="wf-1"):
+            async for _ in architect.plan(state, profile, workflow_id=uuid4()):
                 pass
 
         assert len(captured_instructions) == 1
@@ -97,7 +98,7 @@ class TestArchitectPromptInjection:
 
         with patch("amelia.agents.architect.get_driver", return_value=mock_driver):
             architect = Architect(config)  # No prompts injected
-            async for _ in architect.plan(state, profile, workflow_id="wf-1"):
+            async for _ in architect.plan(state, profile, workflow_id=uuid4()):
                 pass
 
         # Verify a non-empty default plan prompt is used

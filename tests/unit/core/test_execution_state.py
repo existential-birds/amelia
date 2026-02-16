@@ -1,8 +1,11 @@
 """Tests for ImplementationState model."""
 
 from datetime import UTC, datetime
+from uuid import uuid4
 
 from amelia.pipelines.implementation.state import ImplementationState
+
+_wf_id = uuid4()
 
 
 class TestExecutionStateRawArchitectOutput:
@@ -11,7 +14,7 @@ class TestExecutionStateRawArchitectOutput:
     def test_raw_architect_output_defaults_to_none(self) -> None:
         """raw_architect_output should default to None."""
         state = ImplementationState(
-            workflow_id="test-workflow",
+            workflow_id=_wf_id,
             created_at=datetime.now(UTC),
             status="running",
             profile_id="test",
@@ -22,7 +25,7 @@ class TestExecutionStateRawArchitectOutput:
         """raw_architect_output should store markdown string."""
         markdown = "# Plan\n\n**Goal:** Do something"
         state = ImplementationState(
-            workflow_id="test-workflow",
+            workflow_id=_wf_id,
             created_at=datetime.now(UTC),
             status="running",
             profile_id="test",
@@ -33,7 +36,7 @@ class TestExecutionStateRawArchitectOutput:
     def test_raw_architect_output_in_model_copy(self) -> None:
         """raw_architect_output should work with model_copy."""
         state = ImplementationState(
-            workflow_id="test-workflow",
+            workflow_id=_wf_id,
             created_at=datetime.now(UTC),
             status="running",
             profile_id="test",
@@ -49,7 +52,7 @@ class TestArchitectErrorField:
     def test_architect_error_defaults_to_none(self) -> None:
         """architect_error should default to None."""
         state = ImplementationState(
-            workflow_id="test-workflow",
+            workflow_id=_wf_id,
             created_at=datetime.now(UTC),
             status="running",
             profile_id="test",
@@ -60,7 +63,7 @@ class TestArchitectErrorField:
         """architect_error should store error message string."""
         error_msg = "RuntimeError: LLM call failed"
         state = ImplementationState(
-            workflow_id="test-workflow",
+            workflow_id=_wf_id,
             created_at=datetime.now(UTC),
             status="running",
             profile_id="test",
@@ -71,7 +74,7 @@ class TestArchitectErrorField:
     def test_architect_error_separate_from_raw_output(self) -> None:
         """architect_error and raw_architect_output should be independent."""
         state = ImplementationState(
-            workflow_id="test-workflow",
+            workflow_id=_wf_id,
             created_at=datetime.now(UTC),
             status="running",
             profile_id="test",
@@ -88,7 +91,7 @@ class TestTaskExecutionFields:
     def test_task_execution_fields_have_correct_defaults(self) -> None:
         """Task execution tracking fields should have sensible defaults."""
         state = ImplementationState(
-            workflow_id="test-workflow",
+            workflow_id=_wf_id,
             created_at=datetime.now(UTC),
             status="running",
             profile_id="test",
@@ -102,7 +105,7 @@ class TestTaskExecutionFields:
     def test_task_execution_fields_are_settable(self) -> None:
         """Task execution fields should be settable via model_copy."""
         state = ImplementationState(
-            workflow_id="test-workflow",
+            workflow_id=_wf_id,
             created_at=datetime.now(UTC),
             status="running",
             profile_id="test",

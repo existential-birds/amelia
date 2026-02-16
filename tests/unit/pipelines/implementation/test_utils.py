@@ -9,6 +9,7 @@ import pytest
 from amelia.core.types import AgentConfig, Issue, Profile
 from amelia.pipelines.implementation.state import ImplementationState
 from amelia.pipelines.implementation.utils import _looks_like_plan, commit_task_changes
+from uuid import uuid4
 
 
 class TestLooksLikePlan:
@@ -159,7 +160,7 @@ class TestCommitTaskChanges:
 
         # Create state
         state = ImplementationState(
-            workflow_id="test-workflow",
+            workflow_id=uuid4(),
             pipeline_type="implementation",
             profile_id="test",
             created_at=datetime.now(UTC),
