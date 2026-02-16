@@ -603,7 +603,7 @@ class BrainstormService:
 
             topic_slug = slugify(session.topic) if session.topic else ""
             if not topic_slug:
-                topic_slug = f"brainstorm-{session_id[:8]}"
+                topic_slug = f"brainstorm-{str(session_id)[:8]}"
             plan_path = resolve_plan_path(plan_path_pattern, topic_slug)
             instructions = _build_brainstormer_instructions(plan_path)
 
@@ -962,7 +962,8 @@ class BrainstormService:
             # Generate short, readable issue ID
             base_title = issue_title or session.topic or ""
             slug = slugify(base_title, max_length=15) if base_title else ""
-            issue_id = f"{slug}-{session_id[:8]}" if slug else f"brainstorm-{session_id[:8]}"
+            sid_prefix = str(session_id)[:8]
+            issue_id = f"{slug}-{sid_prefix}" if slug else f"brainstorm-{sid_prefix}"
 
             # Queue workflow with orchestrator
             request = CreateWorkflowRequest(

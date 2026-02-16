@@ -1,6 +1,7 @@
 """Test knowledge search function."""
 
 from unittest.mock import AsyncMock
+from uuid import uuid4
 
 import pytest
 
@@ -66,8 +67,8 @@ async def test_knowledge_search_returns_results(mock_embedding_client, mock_repo
     """Should return search results from repository."""
     expected = [
         SearchResult(
-            chunk_id="c1",
-            document_id="d1",
+            chunk_id=uuid4(),
+            document_id=uuid4(),
             document_name="React Docs",
             tags=["react"],
             content="Hook content",

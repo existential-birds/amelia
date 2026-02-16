@@ -3,6 +3,7 @@
 from unittest.mock import AsyncMock, MagicMock
 
 from amelia.core.types import AgentConfig, Profile, TrackerType
+from amelia.server.models.state import WorkflowStatus
 from amelia.server.orchestrator.service import OrchestratorService
 from uuid import uuid4
 
@@ -83,8 +84,9 @@ class TestOrchestratorProfileLoading:
             profile_repo=mock_profile_repo,
         )
 
+        wf_id = uuid4()
         profile = await service._get_profile_or_fail(
-            workflow_id=uuid4(),
+            workflow_id=wf_id,
             profile_id="nonexistent",
             worktree_path="/some/worktree",
         )
@@ -92,8 +94,8 @@ class TestOrchestratorProfileLoading:
         assert profile is None
         mock_repository.set_status.assert_called_once()
         call_args = mock_repository.set_status.call_args
-        assert call_args[0][0] == "wf-123"
-        assert call_args[0][1] == "failed"
+        assert call_args[0][0] == wf_id
+        assert call_args[0][1] == WorkflowStatus.FAILED
         assert "nonexistent" in call_args[1]["failure_reason"]
 
     async def test_update_profile_working_dir_conversion(self):

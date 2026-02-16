@@ -1,7 +1,9 @@
 """Tests for workflow recovery and resume functionality."""
 
+import uuid
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
+from uuid import uuid4
 
 import pytest
 from fastapi import FastAPI
@@ -15,7 +17,6 @@ from amelia.server.models.state import (
     validate_transition,
 )
 from amelia.server.orchestrator.service import OrchestratorService
-from uuid import uuid4
 
 
 class TestValidTransitions:
@@ -61,14 +62,15 @@ def service(event_bus: MagicMock, repository: AsyncMock) -> OrchestratorService:
 
 
 def _make_workflow(
-    workflow_id: str,
-    status: WorkflowStatus,
+    workflow_id: uuid.UUID | str | None = None,
+    status: WorkflowStatus = WorkflowStatus.PENDING,
     worktree_path: str = "/tmp/test-worktree",
 ) -> MagicMock:
     """Create a mock ServerExecutionState with the given status."""
+    wf_id = workflow_id if isinstance(workflow_id, uuid.UUID) else uuid4()
     wf = MagicMock()
-    wf.id = workflow_id
-    wf.issue_id = f"ISSUE-{workflow_id}"
+    wf.id = wf_id
+    wf.issue_id = f"ISSUE-{wf_id}"
     wf.workflow_status = status
     wf.worktree_path = worktree_path
     return wf
@@ -84,7 +86,7 @@ class TestRecoverInterruptedWorkflows:
         event_bus: MagicMock,
     ) -> None:
         """IN_PROGRESS workflow should be marked FAILED with recoverable flag."""
-        wf = _make_workflow("wf-1", WorkflowStatus.IN_PROGRESS)
+        wf = _make_workflow(status=WorkflowStatus.IN_PROGRESS)
         repository.find_by_status = AsyncMock(
             side_effect=lambda statuses: [wf] if WorkflowStatus.IN_PROGRESS in statuses else []
         )
@@ -92,7 +94,7 @@ class TestRecoverInterruptedWorkflows:
         await service.recover_interrupted_workflows()
 
         repository.set_status.assert_called_once_with(
-            "wf-1",
+            wf.id,
             WorkflowStatus.FAILED,
             failure_reason="Server restarted while workflow was running",
         )
@@ -109,7 +111,7 @@ class TestRecoverInterruptedWorkflows:
         event_bus: MagicMock,
     ) -> None:
         """BLOCKED workflow should stay BLOCKED with APPROVAL_REQUIRED re-emitted."""
-        wf = _make_workflow("wf-2", WorkflowStatus.BLOCKED)
+        wf = _make_workflow(status=WorkflowStatus.BLOCKED)
         repository.find_by_status = AsyncMock(
             side_effect=lambda statuses: [wf] if WorkflowStatus.BLOCKED in statuses else []
         )
@@ -158,11 +160,11 @@ class TestResumeWorkflow:
         repository: AsyncMock,
     ) -> None:
         """Resuming a non-FAILED workflow should raise InvalidStateError."""
-        wf = _make_workflow("wf-1", WorkflowStatus.IN_PROGRESS)
+        wf = _make_workflow(status=WorkflowStatus.IN_PROGRESS)
         repository.get = AsyncMock(return_value=wf)
 
         with pytest.raises(InvalidStateError, match="must be in 'failed' status"):
-            await service.resume_workflow("wf-1")
+            await service.resume_workflow(wf.id)
 
     async def test_resume_validates_workflow_exists(
         self,
@@ -173,7 +175,7 @@ class TestResumeWorkflow:
         repository.get = AsyncMock(return_value=None)
 
         with pytest.raises(WorkflowNotFoundError):
-            await service.resume_workflow("wf-nonexistent")
+            await service.resume_workflow(uuid4())
 
     async def test_resume_validates_worktree_available(
         self,
@@ -181,7 +183,7 @@ class TestResumeWorkflow:
         repository: AsyncMock,
     ) -> None:
         """Resuming when worktree is occupied should raise InvalidStateError."""
-        wf = _make_workflow("wf-1", WorkflowStatus.FAILED, worktree_path="/tmp/wt")
+        wf = _make_workflow(status=WorkflowStatus.FAILED, worktree_path="/tmp/wt")
         wf.execution_state = MagicMock()
         repository.get = AsyncMock(return_value=wf)
 
@@ -197,7 +199,7 @@ class TestResumeWorkflow:
         service._create_server_graph = MagicMock(return_value=mock_graph)
 
         with pytest.raises(InvalidStateError, match="worktree.*occupied"):
-            await service.resume_workflow("wf-1")
+            await service.resume_workflow(wf.id)
 
         # Cleanup
         service._active_tasks.clear()
@@ -209,7 +211,7 @@ class TestResumeWorkflow:
         event_bus: MagicMock,
     ) -> None:
         """Successful resume should clear error fields and set IN_PROGRESS."""
-        wf = _make_workflow("wf-1", WorkflowStatus.FAILED)
+        wf = _make_workflow(status=WorkflowStatus.FAILED)
         wf.failure_reason = "Server restarted"
         wf.completed_at = datetime(2026, 1, 1, tzinfo=UTC)
         wf.execution_state = MagicMock()
@@ -226,7 +228,7 @@ class TestResumeWorkflow:
 
         service._run_workflow_with_retry = AsyncMock()
 
-        await service.resume_workflow("wf-1")
+        await service.resume_workflow(wf.id)
 
         # Verify error fields cleared
         assert wf.failure_reason is None
@@ -243,7 +245,7 @@ class TestResumeWorkflow:
         event_bus: MagicMock,
     ) -> None:
         """Successful resume should emit WORKFLOW_STARTED with resumed=True."""
-        wf = _make_workflow("wf-1", WorkflowStatus.FAILED)
+        wf = _make_workflow(status=WorkflowStatus.FAILED)
         wf.failure_reason = "Server restarted"
         wf.completed_at = None
         wf.execution_state = MagicMock()
@@ -258,7 +260,7 @@ class TestResumeWorkflow:
         service._create_server_graph = MagicMock(return_value=mock_graph)
         service._run_workflow_with_retry = AsyncMock()
 
-        await service.resume_workflow("wf-1")
+        await service.resume_workflow(wf.id)
 
         # Check WORKFLOW_STARTED event with resumed=True
         saved_events = [c[0][0] for c in repository.save_event.call_args_list]
@@ -288,20 +290,21 @@ class TestResumeEndpoint:
 
         app = self._get_test_app()
 
+        wf_id = uuid4()
         mock_orchestrator = AsyncMock()
         mock_workflow = MagicMock()
-        mock_workflow.id = "wf-1"
+        mock_workflow.id = wf_id
         mock_orchestrator.resume_workflow = AsyncMock(return_value=mock_workflow)
 
         app.dependency_overrides[get_orchestrator] = lambda: mock_orchestrator
 
         client = TestClient(app)
-        response = client.post("/api/workflows/wf-1/resume")
+        response = client.post(f"/api/workflows/{wf_id}/resume")
 
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "resumed"
-        assert data["workflow_id"] == "wf-1"
+        assert data["workflow_id"] == str(wf_id)
 
     async def test_resume_endpoint_not_found(self) -> None:
         """POST /resume for missing workflow should return 404."""
@@ -311,15 +314,16 @@ class TestResumeEndpoint:
 
         app = self._get_test_app()
 
+        wf_id = uuid4()
         mock_orchestrator = AsyncMock()
         mock_orchestrator.resume_workflow = AsyncMock(
-            side_effect=WorkflowNotFoundError("wf-missing")
+            side_effect=WorkflowNotFoundError(str(wf_id))
         )
 
         app.dependency_overrides[get_orchestrator] = lambda: mock_orchestrator
 
         client = TestClient(app)
-        response = client.post("/api/workflows/wf-missing/resume")
+        response = client.post(f"/api/workflows/{wf_id}/resume")
 
         assert response.status_code == 404
 
@@ -342,7 +346,8 @@ class TestResumeEndpoint:
 
         app.dependency_overrides[get_orchestrator] = lambda: mock_orchestrator
 
+        wf_id = uuid4()
         client = TestClient(app)
-        response = client.post("/api/workflows/wf-1/resume")
+        response = client.post(f"/api/workflows/{wf_id}/resume")
 
         assert response.status_code == 422

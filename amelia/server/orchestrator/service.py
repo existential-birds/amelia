@@ -2597,7 +2597,7 @@ class OrchestratorService:
                     if w.worktree_path == request.worktree_path
                 ]
 
-            workflow_ids = [w.id for w in pending_workflows]
+            workflow_ids = [str(w.id) for w in pending_workflows]
 
         # Attempt to start each workflow
         for workflow_id in workflow_ids:

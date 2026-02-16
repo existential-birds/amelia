@@ -65,8 +65,9 @@ async def test_check_deleted_worktree(
 ) -> None:
     """Deleted worktree should trigger cancellation."""
     # Mock workflow
+    wf_id = uuid4()
     mock_workflow = ServerExecutionState(
-        id=uuid4(),
+        id=wf_id,
         issue_id="ISSUE-123",
         worktree_path="/nonexistent/path",
         workflow_status="in_progress",
@@ -80,7 +81,7 @@ async def test_check_deleted_worktree(
     # Should cancel workflow
     mock_orchestrator.cancel_workflow.assert_called_once()
     call_args = mock_orchestrator.cancel_workflow.call_args
-    assert call_args[0][0] == "wf-1"
+    assert call_args[0][0] == wf_id
 
 
 @pytest.mark.parametrize(

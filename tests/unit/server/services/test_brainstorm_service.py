@@ -3,6 +3,7 @@
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
+from uuid import UUID, uuid4
 
 import pytest
 
@@ -82,7 +83,7 @@ class TestCreateSession(TestBrainstormService):
         )
 
         assert session.id is not None
-        assert len(session.id) == 36  # UUID format
+        assert len(str(session.id)) == 36  # UUID format
         mock_repository.create_session.assert_called_once()
 
     async def test_create_session_sets_defaults(
@@ -114,23 +115,24 @@ class TestGetSession(TestBrainstormService):
     ) -> None:
         """Should return session with messages and artifacts."""
         now = datetime.now(UTC)
+        sess_id = uuid4()
         mock_session = BrainstormingSession(
-            id="sess-1", profile_id="work", status=SessionStatus.ACTIVE,
+            id=sess_id, profile_id="work", status=SessionStatus.ACTIVE,
             created_at=now, updated_at=now,
         )
         mock_repository.get_session.return_value = mock_session
         mock_repository.get_messages.return_value = [
             Message(
-                id="msg-1", session_id="sess-1", sequence=1,
+                id=uuid4(), session_id=sess_id, sequence=1,
                 role=MessageRole.USER, content="Hello", created_at=now,
             )
         ]
         mock_repository.get_artifacts.return_value = []
 
-        result = await service.get_session_with_history("sess-1")
+        result = await service.get_session_with_history(str(sess_id))
 
         assert result is not None
-        assert result["session"].id == "sess-1"
+        assert result["session"].id == sess_id
         assert len(result["messages"]) == 1
         assert result["artifacts"] == []
 
@@ -140,7 +142,7 @@ class TestGetSession(TestBrainstormService):
         """Should return None for non-existent session."""
         mock_repository.get_session.return_value = None
 
-        result = await service.get_session_with_history("nonexistent")
+        result = await service.get_session_with_history(uuid4())
 
         assert result is None
 
@@ -152,8 +154,9 @@ class TestDeleteSession(TestBrainstormService):
         self, service: BrainstormService, mock_repository: MagicMock
     ) -> None:
         """Should delete session."""
-        await service.delete_session("sess-1")
-        mock_repository.delete_session.assert_called_once_with("sess-1")
+        sess_id = uuid4()
+        await service.delete_session(sess_id)
+        mock_repository.delete_session.assert_called_once_with(sess_id)
 
 
 class TestUpdateSessionStatus(TestBrainstormService):
@@ -164,13 +167,14 @@ class TestUpdateSessionStatus(TestBrainstormService):
     ) -> None:
         """Should update session status."""
         now = datetime.now(UTC)
+        sess_id = uuid4()
         mock_session = BrainstormingSession(
-            id="sess-1", profile_id="work", status=SessionStatus.ACTIVE,
+            id=sess_id, profile_id="work", status=SessionStatus.ACTIVE,
             created_at=now, updated_at=now,
         )
         mock_repository.get_session.return_value = mock_session
 
-        await service.update_session_status("sess-1", SessionStatus.READY_FOR_HANDOFF)
+        await service.update_session_status(str(sess_id), SessionStatus.READY_FOR_HANDOFF)
 
         mock_repository.update_session.assert_called_once()
         updated = mock_repository.update_session.call_args[0][0]
@@ -183,7 +187,7 @@ class TestUpdateSessionStatus(TestBrainstormService):
         mock_repository.get_session.return_value = None
 
         with pytest.raises(ValueError, match="Session not found"):
-            await service.update_session_status("nonexistent", SessionStatus.COMPLETED)
+            await service.update_session_status(uuid4(), SessionStatus.COMPLETED)
 
 
 class TestSendMessage(TestBrainstormService):
@@ -221,8 +225,9 @@ class TestSendMessage(TestBrainstormService):
     ) -> None:
         """Should save user message to database."""
         now = datetime.now(UTC)
+        sess_id = uuid4()
         mock_session = BrainstormingSession(
-            id="sess-1",
+            id=sess_id,
             profile_id="work",
             status=SessionStatus.ACTIVE,
             created_at=now,
@@ -234,7 +239,7 @@ class TestSendMessage(TestBrainstormService):
         # Consume the async generator
         messages = []
         async for msg in service.send_message(
-            session_id="sess-1",
+            session_id=sess_id,
             content="Design a cache",
             driver=mock_driver,
             cwd="/tmp/project",
@@ -257,8 +262,9 @@ class TestSendMessage(TestBrainstormService):
     ) -> None:
         """Should emit events for driver messages."""
         now = datetime.now(UTC)
+        sess_id = uuid4()
         mock_session = BrainstormingSession(
-            id="sess-1",
+            id=sess_id,
             profile_id="work",
             status=SessionStatus.ACTIVE,
             created_at=now,
@@ -269,7 +275,7 @@ class TestSendMessage(TestBrainstormService):
 
         messages = []
         async for msg in service.send_message(
-            session_id="sess-1",
+            session_id=sess_id,
             content="Design a cache",
             driver=mock_driver,
             cwd="/tmp/project",
@@ -287,8 +293,9 @@ class TestSendMessage(TestBrainstormService):
     ) -> None:
         """Should update driver_session_id from result."""
         now = datetime.now(UTC)
+        sess_id = uuid4()
         mock_session = BrainstormingSession(
-            id="sess-1",
+            id=sess_id,
             profile_id="work",
             status=SessionStatus.ACTIVE,
             created_at=now,
@@ -299,7 +306,7 @@ class TestSendMessage(TestBrainstormService):
 
         messages = []
         async for msg in service.send_message(
-            session_id="sess-1",
+            session_id=sess_id,
             content="Hello",
             driver=mock_driver,
             cwd="/tmp/project",
@@ -324,7 +331,7 @@ class TestSendMessage(TestBrainstormService):
 
         with pytest.raises(ValueError, match="Session not found"):
             async for _ in service.send_message(
-                session_id="nonexistent",
+                session_id=uuid4(),
                 content="Hello",
                 driver=mock_driver,
                 cwd="/tmp/project",
@@ -412,8 +419,9 @@ class TestArtifactDetection(TestBrainstormService):
     ) -> None:
         """Should save artifact when write_file tool is used."""
         now = datetime.now(UTC)
+        sess_id = uuid4()
         mock_session = BrainstormingSession(
-            id="sess-1",
+            id=sess_id,
             profile_id="work",
             status=SessionStatus.ACTIVE,
             created_at=now,
@@ -424,7 +432,7 @@ class TestArtifactDetection(TestBrainstormService):
 
         messages = []
         async for msg in service.send_message(
-            session_id="sess-1",
+            session_id=sess_id,
             content="Write the design doc",
             driver=mock_driver_with_write,
             cwd="/tmp/project",
@@ -448,8 +456,9 @@ class TestArtifactDetection(TestBrainstormService):
         from amelia.server.models.events import EventType
 
         now = datetime.now(UTC)
+        sess_id = uuid4()
         mock_session = BrainstormingSession(
-            id="sess-1",
+            id=sess_id,
             profile_id="work",
             status=SessionStatus.ACTIVE,
             created_at=now,
@@ -460,7 +469,7 @@ class TestArtifactDetection(TestBrainstormService):
 
         messages = []
         async for msg in service.send_message(
-            session_id="sess-1",
+            session_id=sess_id,
             content="Write the design doc",
             driver=mock_driver_with_write,
             cwd="/tmp/project",
@@ -491,8 +500,9 @@ class TestArtifactDetection(TestBrainstormService):
         Write tool is used (file_path key instead of path key).
         """
         now = datetime.now(UTC)
+        sess_id = uuid4()
         mock_session = BrainstormingSession(
-            id="sess-1",
+            id=sess_id,
             profile_id="work",
             status=SessionStatus.ACTIVE,
             created_at=now,
@@ -503,7 +513,7 @@ class TestArtifactDetection(TestBrainstormService):
 
         messages = []
         async for msg in service.send_message(
-            session_id="sess-1",
+            session_id=sess_id,
             content="Write the spec",
             driver=mock_cli_driver_with_write,
             cwd="/tmp/test-project",
@@ -578,8 +588,9 @@ class TestArtifactDetection(TestBrainstormService):
         first, then ToolResultBlock later, both with matching tool_call_id.
         """
         now = datetime.now(UTC)
+        sess_id = uuid4()
         mock_session = BrainstormingSession(
-            id="sess-1",
+            id=sess_id,
             profile_id="work",
             status=SessionStatus.ACTIVE,
             created_at=now,
@@ -590,7 +601,7 @@ class TestArtifactDetection(TestBrainstormService):
 
         messages = []
         async for msg in service.send_message(
-            session_id="sess-1",
+            session_id=sess_id,
             content="Create a design doc",
             driver=mock_driver_with_separate_tool_messages,
             cwd="/project",
@@ -613,20 +624,21 @@ class TestHandoff(TestBrainstormService):
     ) -> None:
         """Should update session status to completed."""
         now = datetime.now(UTC)
+        sess_id = uuid4()
         mock_session = BrainstormingSession(
-            id="sess-1", profile_id="work", status=SessionStatus.READY_FOR_HANDOFF,
+            id=sess_id, profile_id="work", status=SessionStatus.READY_FOR_HANDOFF,
             created_at=now, updated_at=now,
         )
         mock_repository.get_session.return_value = mock_session
         mock_repository.get_artifacts.return_value = [
             Artifact(
-                id="art-1", session_id="sess-1", type="design",
+                id=uuid4(), session_id=sess_id, type="design",
                 path="docs/plans/design.md", created_at=now,
             )
         ]
 
         result = await service.handoff_to_implementation(
-            session_id="sess-1",
+            session_id=sess_id,
             artifact_path="docs/plans/design.md",
         )
 
@@ -643,25 +655,26 @@ class TestHandoff(TestBrainstormService):
     ) -> None:
         """Should return a new workflow ID."""
         now = datetime.now(UTC)
+        sess_id = uuid4()
         mock_session = BrainstormingSession(
-            id="sess-1", profile_id="work", status=SessionStatus.READY_FOR_HANDOFF,
+            id=sess_id, profile_id="work", status=SessionStatus.READY_FOR_HANDOFF,
             created_at=now, updated_at=now,
         )
         mock_repository.get_session.return_value = mock_session
         mock_repository.get_artifacts.return_value = [
             Artifact(
-                id="art-1", session_id="sess-1", type="design",
+                id=uuid4(), session_id=sess_id, type="design",
                 path="docs/plans/design.md", created_at=now,
             )
         ]
 
         result = await service.handoff_to_implementation(
-            session_id="sess-1",
+            session_id=sess_id,
             artifact_path="docs/plans/design.md",
         )
 
         assert "workflow_id" in result
-        assert len(result["workflow_id"]) == 36  # UUID
+        assert len(str(result["workflow_id"])) == 36  # UUID
 
     async def test_handoff_artifact_not_found(
         self,
@@ -670,8 +683,9 @@ class TestHandoff(TestBrainstormService):
     ) -> None:
         """Should raise error if artifact not found."""
         now = datetime.now(UTC)
+        sess_id = uuid4()
         mock_session = BrainstormingSession(
-            id="sess-1", profile_id="work", status=SessionStatus.READY_FOR_HANDOFF,
+            id=sess_id, profile_id="work", status=SessionStatus.READY_FOR_HANDOFF,
             created_at=now, updated_at=now,
         )
         mock_repository.get_session.return_value = mock_session
@@ -679,7 +693,7 @@ class TestHandoff(TestBrainstormService):
 
         with pytest.raises(ValueError, match="Artifact not found"):
             await service.handoff_to_implementation(
-                session_id="sess-1",
+                session_id=sess_id,
                 artifact_path="docs/plans/design.md",
             )
 
@@ -693,7 +707,7 @@ class TestHandoff(TestBrainstormService):
 
         with pytest.raises(ValueError, match="Session not found"):
             await service.handoff_to_implementation(
-                session_id="nonexistent",
+                session_id=uuid4(),
                 artifact_path="docs/plans/design.md",
             )
 
@@ -704,14 +718,15 @@ class TestHandoff(TestBrainstormService):
     ) -> None:
         """Should call orchestrator.queue_workflow with correct parameters."""
         now = datetime.now(UTC)
+        sess_id = uuid4()
         mock_session = BrainstormingSession(
-            id="sess-1", profile_id="work", status=SessionStatus.READY_FOR_HANDOFF,
+            id=sess_id, profile_id="work", status=SessionStatus.READY_FOR_HANDOFF,
             created_at=now, updated_at=now,
         )
         mock_repository.get_session.return_value = mock_session
         mock_repository.get_artifacts.return_value = [
             Artifact(
-                id="art-1", session_id="sess-1", type="design",
+                id=uuid4(), session_id=sess_id, type="design",
                 path="docs/plans/design.md", created_at=now,
             )
         ]
@@ -720,7 +735,7 @@ class TestHandoff(TestBrainstormService):
         mock_orchestrator.queue_workflow = AsyncMock(return_value="wf-real-123")
 
         result = await service.handoff_to_implementation(
-            session_id="sess-1",
+            session_id=sess_id,
             artifact_path="docs/plans/design.md",
             issue_title="Implement feature X",
             orchestrator=mock_orchestrator,
@@ -737,14 +752,15 @@ class TestHandoff(TestBrainstormService):
     ) -> None:
         """Should raise ValueError for non-none tracker."""
         now = datetime.now(UTC)
+        sess_id = uuid4()
         mock_session = BrainstormingSession(
-            id="sess-1", profile_id="work", status=SessionStatus.READY_FOR_HANDOFF,
+            id=sess_id, profile_id="work", status=SessionStatus.READY_FOR_HANDOFF,
             created_at=now, updated_at=now,
         )
         mock_repository.get_session.return_value = mock_session
         mock_repository.get_artifacts.return_value = [
             Artifact(
-                id="art-1", session_id="sess-1", type="design",
+                id=uuid4(), session_id=sess_id, type="design",
                 path="docs/plans/design.md", created_at=now,
             )
         ]
@@ -757,7 +773,7 @@ class TestHandoff(TestBrainstormService):
 
         with pytest.raises(ValueError, match="none tracker"):
             await service.handoff_to_implementation(
-                session_id="sess-1",
+                session_id=sess_id,
                 artifact_path="docs/plans/design.md",
                 issue_title="Implement feature X",
                 orchestrator=mock_orchestrator,
@@ -771,8 +787,9 @@ class TestHandoff(TestBrainstormService):
     ) -> None:
         """Should pass artifact_path when creating workflow request."""
         # Setup session and artifact
+        sess_id = uuid4()
         session = BrainstormingSession(
-            id="session-123",
+            id=sess_id,
             profile_id="work",
             driver_session_id=None,
             status=SessionStatus.ACTIVE,
@@ -781,8 +798,8 @@ class TestHandoff(TestBrainstormService):
             updated_at=datetime.now(UTC),
         )
         artifact = Artifact(
-            id="artifact-1",
-            session_id="session-123",
+            id=uuid4(),
+            session_id=sess_id,
             path="/path/to/design.md",
             type="design",
             title="Design Doc",
@@ -797,7 +814,7 @@ class TestHandoff(TestBrainstormService):
 
         # Execute handoff
         result = await service.handoff_to_implementation(
-            session_id="session-123",
+            session_id=sess_id,
             artifact_path="/path/to/design.md",
             issue_title="Implement design",
             orchestrator=mock_orchestrator,
@@ -817,8 +834,9 @@ class TestHandoff(TestBrainstormService):
     ) -> None:
         """Should generate slugified issue_id from title + session hash."""
         now = datetime.now(UTC)
+        sess_id = UUID("d9336c40-4ce9-4b12-81e1-099bb70eaa01")
         mock_session = BrainstormingSession(
-            id="d9336c40-4ce9-4b12-81e1-099bb70eaa01",
+            id=sess_id,
             profile_id="work",
             status=SessionStatus.READY_FOR_HANDOFF,
             created_at=now,
@@ -827,7 +845,7 @@ class TestHandoff(TestBrainstormService):
         mock_repository.get_session.return_value = mock_session
         mock_repository.get_artifacts.return_value = [
             Artifact(
-                id="art-1", session_id="d9336c40-4ce9-4b12-81e1-099bb70eaa01",
+                id=uuid4(), session_id=sess_id,
                 type="design", path="docs/plans/design.md", created_at=now,
             )
         ]
@@ -835,7 +853,7 @@ class TestHandoff(TestBrainstormService):
         mock_orchestrator.queue_workflow = AsyncMock(return_value="wf-123")
 
         await service.handoff_to_implementation(
-            session_id="d9336c40-4ce9-4b12-81e1-099bb70eaa01",
+            session_id=sess_id,
             artifact_path="docs/plans/design.md",
             issue_title="Add dark mode support",
             orchestrator=mock_orchestrator,
@@ -853,8 +871,9 @@ class TestHandoff(TestBrainstormService):
     ) -> None:
         """Should use brainstorm-{hash} when no title provided."""
         now = datetime.now(UTC)
+        sess_id = UUID("d9336c40-4ce9-4b12-81e1-099bb70eaa01")
         mock_session = BrainstormingSession(
-            id="d9336c40-4ce9-4b12-81e1-099bb70eaa01",
+            id=sess_id,
             profile_id="work",
             status=SessionStatus.READY_FOR_HANDOFF,
             created_at=now,
@@ -863,7 +882,7 @@ class TestHandoff(TestBrainstormService):
         mock_repository.get_session.return_value = mock_session
         mock_repository.get_artifacts.return_value = [
             Artifact(
-                id="art-1", session_id="d9336c40-4ce9-4b12-81e1-099bb70eaa01",
+                id=uuid4(), session_id=sess_id,
                 type="design", path="docs/plans/design.md", created_at=now,
             )
         ]
@@ -871,7 +890,7 @@ class TestHandoff(TestBrainstormService):
         mock_orchestrator.queue_workflow = AsyncMock(return_value="wf-123")
 
         await service.handoff_to_implementation(
-            session_id="d9336c40-4ce9-4b12-81e1-099bb70eaa01",
+            session_id=sess_id,
             artifact_path="docs/plans/design.md",
             orchestrator=mock_orchestrator,
             worktree_path="/path/to/worktree",
@@ -887,8 +906,9 @@ class TestHandoff(TestBrainstormService):
     ) -> None:
         """Should slugify session.topic when issue_title is not provided."""
         now = datetime.now(UTC)
+        sess_id = UUID("d9336c40-4ce9-4b12-81e1-099bb70eaa01")
         mock_session = BrainstormingSession(
-            id="d9336c40-4ce9-4b12-81e1-099bb70eaa01",
+            id=sess_id,
             profile_id="work",
             status=SessionStatus.READY_FOR_HANDOFF,
             topic="Add dark mode",
@@ -898,7 +918,7 @@ class TestHandoff(TestBrainstormService):
         mock_repository.get_session.return_value = mock_session
         mock_repository.get_artifacts.return_value = [
             Artifact(
-                id="art-1", session_id="d9336c40-4ce9-4b12-81e1-099bb70eaa01",
+                id=uuid4(), session_id=sess_id,
                 type="design", path="docs/plans/design.md", created_at=now,
             )
         ]
@@ -906,7 +926,7 @@ class TestHandoff(TestBrainstormService):
         mock_orchestrator.queue_workflow = AsyncMock(return_value="wf-123")
 
         await service.handoff_to_implementation(
-            session_id="d9336c40-4ce9-4b12-81e1-099bb70eaa01",
+            session_id=sess_id,
             artifact_path="docs/plans/design.md",
             orchestrator=mock_orchestrator,
             worktree_path="/path/to/worktree",
@@ -922,8 +942,9 @@ class TestHandoff(TestBrainstormService):
     ) -> None:
         """Should use fallback when title produces empty slug."""
         now = datetime.now(UTC)
+        sess_id = UUID("d9336c40-4ce9-4b12-81e1-099bb70eaa01")
         mock_session = BrainstormingSession(
-            id="d9336c40-4ce9-4b12-81e1-099bb70eaa01",
+            id=sess_id,
             profile_id="work",
             status=SessionStatus.READY_FOR_HANDOFF,
             created_at=now,
@@ -932,7 +953,7 @@ class TestHandoff(TestBrainstormService):
         mock_repository.get_session.return_value = mock_session
         mock_repository.get_artifacts.return_value = [
             Artifact(
-                id="art-1", session_id="d9336c40-4ce9-4b12-81e1-099bb70eaa01",
+                id=uuid4(), session_id=sess_id,
                 type="design", path="docs/plans/design.md", created_at=now,
             )
         ]
@@ -940,7 +961,7 @@ class TestHandoff(TestBrainstormService):
         mock_orchestrator.queue_workflow = AsyncMock(return_value="wf-123")
 
         await service.handoff_to_implementation(
-            session_id="d9336c40-4ce9-4b12-81e1-099bb70eaa01",
+            session_id=sess_id,
             artifact_path="docs/plans/design.md",
             issue_title="!!!@@@",
             orchestrator=mock_orchestrator,
@@ -962,8 +983,9 @@ class TestDeleteSessionCleanup(TestBrainstormService):
     ) -> None:
         """Should call driver cleanup when deleting session with driver_session_id."""
         now = datetime.now(UTC)
+        sess_id = uuid4()
         mock_session = BrainstormingSession(
-            id="sess-1",
+            id=sess_id,
             profile_id="work",
             driver_type="cli",
             driver_session_id="driver-sess-123",
@@ -973,7 +995,7 @@ class TestDeleteSessionCleanup(TestBrainstormService):
         )
         mock_repository.get_session.return_value = mock_session
 
-        await service_with_cleanup.delete_session("sess-1")
+        await service_with_cleanup.delete_session(sess_id)
 
         mock_cleanup.assert_called_once_with("cli", "driver-sess-123")
 
@@ -985,8 +1007,9 @@ class TestDeleteSessionCleanup(TestBrainstormService):
     ) -> None:
         """Should not call cleanup when session has no driver_session_id."""
         now = datetime.now(UTC)
+        sess_id = uuid4()
         mock_session = BrainstormingSession(
-            id="sess-1",
+            id=sess_id,
             profile_id="work",
             driver_session_id=None,
             status=SessionStatus.ACTIVE,
@@ -995,7 +1018,7 @@ class TestDeleteSessionCleanup(TestBrainstormService):
         )
         mock_repository.get_session.return_value = mock_session
 
-        await service_with_cleanup.delete_session("sess-1")
+        await service_with_cleanup.delete_session(sess_id)
 
         mock_cleanup.assert_not_called()
 
@@ -1011,8 +1034,9 @@ class TestDeleteSessionCleanup(TestBrainstormService):
 
         # Create a session with driver_type and driver_session_id
         now = datetime.now(UTC)
+        sess_id = uuid4()
         mock_session = BrainstormingSession(
-            id="sess-1",
+            id=sess_id,
             profile_id="work",
             driver_type="cli",
             driver_session_id="driver-sess-123",
@@ -1023,12 +1047,12 @@ class TestDeleteSessionCleanup(TestBrainstormService):
         mock_repository.get_session.return_value = mock_session
 
         # Should not raise, should still delete the session
-        await service_with_cleanup.delete_session("sess-1")
+        await service_with_cleanup.delete_session(sess_id)
 
         # Verify cleanup was attempted
         mock_cleanup.assert_called_once_with("cli", "driver-sess-123")
         # Verify session was still deleted despite cleanup failure
-        mock_repository.delete_session.assert_called_once_with("sess-1")
+        mock_repository.delete_session.assert_called_once_with(sess_id)
 
 
 class TestUpdateSessionStatusCleanup(TestBrainstormService):
@@ -1044,8 +1068,9 @@ class TestUpdateSessionStatusCleanup(TestBrainstormService):
     ) -> None:
         """Should call driver cleanup when status becomes terminal."""
         now = datetime.now(UTC)
+        sess_id = uuid4()
         mock_session = BrainstormingSession(
-            id="sess-1",
+            id=sess_id,
             profile_id="work",
             driver_type="cli",
             driver_session_id="driver-sess-123",
@@ -1055,7 +1080,7 @@ class TestUpdateSessionStatusCleanup(TestBrainstormService):
         )
         mock_repository.get_session.return_value = mock_session
 
-        await service_with_cleanup.update_session_status("sess-1", terminal_status)
+        await service_with_cleanup.update_session_status(sess_id, terminal_status)
 
         mock_cleanup.assert_called_once_with("cli", "driver-sess-123")
 
@@ -1067,8 +1092,9 @@ class TestUpdateSessionStatusCleanup(TestBrainstormService):
     ) -> None:
         """Should not call cleanup when status is not terminal."""
         now = datetime.now(UTC)
+        sess_id = uuid4()
         mock_session = BrainstormingSession(
-            id="sess-1",
+            id=sess_id,
             profile_id="work",
             driver_session_id="driver-sess-123",
             status=SessionStatus.ACTIVE,
@@ -1077,7 +1103,7 @@ class TestUpdateSessionStatusCleanup(TestBrainstormService):
         )
         mock_repository.get_session.return_value = mock_session
 
-        await service_with_cleanup.update_session_status("sess-1", SessionStatus.ACTIVE)
+        await service_with_cleanup.update_session_status(sess_id, SessionStatus.ACTIVE)
 
         mock_cleanup.assert_not_called()
 
@@ -1101,8 +1127,9 @@ class TestGetSessionWithHistory(TestBrainstormService):
     ) -> None:
         """get_session_with_history should return all messages."""
         now = datetime.now(UTC)
+        sess_id = uuid4()
         mock_session = BrainstormingSession(
-            id="sess-1",
+            id=sess_id,
             profile_id="work",
             status=SessionStatus.ACTIVE,
             created_at=now,
@@ -1114,16 +1141,16 @@ class TestGetSessionWithHistory(TestBrainstormService):
 
         mock_repository.get_messages.return_value = [
             Message(
-                id="msg-1",
-                session_id="sess-1",
+                id=uuid4(),
+                session_id=sess_id,
                 sequence=1,
                 role=MessageRole.USER,
                 content="User's message",
                 created_at=now,
             ),
             Message(
-                id="msg-2",
-                session_id="sess-1",
+                id=uuid4(),
+                session_id=sess_id,
                 sequence=2,
                 role=MessageRole.ASSISTANT,
                 content="Assistant response",
@@ -1131,7 +1158,7 @@ class TestGetSessionWithHistory(TestBrainstormService):
             ),
         ]
 
-        result = await service.get_session_with_history("sess-1")
+        result = await service.get_session_with_history(sess_id)
 
         # Verify get_messages was called
         mock_repository.get_messages.assert_called_once()
@@ -1155,8 +1182,9 @@ class TestGetSessionWithHistoryNoFiltering(TestBrainstormService):
         The repository's get_messages method now returns all messages.
         """
         now = datetime.now(UTC)
+        sess_id = uuid4()
         mock_session = BrainstormingSession(
-            id="test-session",
+            id=sess_id,
             profile_id="work",
             status=SessionStatus.ACTIVE,
             created_at=now,
@@ -1167,11 +1195,11 @@ class TestGetSessionWithHistoryNoFiltering(TestBrainstormService):
         mock_repository.get_messages.return_value = []
         mock_repository.get_session_usage.return_value = None
 
-        await service.get_session_with_history("test-session")
+        await service.get_session_with_history(sess_id)
 
         # Verify get_messages was called with only the session_id
         # (no include_system parameter should be passed)
-        mock_repository.get_messages.assert_called_once_with("test-session")
+        mock_repository.get_messages.assert_called_once_with(sess_id)
 
 
 class TestSendMessageNewArchitecture:
@@ -1225,8 +1253,9 @@ class TestSendMessageNewArchitecture:
         from amelia.server.services.brainstorm import BRAINSTORMER_USER_PROMPT_TEMPLATE
 
         now = datetime.now(UTC)
+        sess_id = uuid4()
         mock_session = BrainstormingSession(
-            id="sess-1",
+            id=sess_id,
             profile_id="work",
             status=SessionStatus.ACTIVE,
             created_at=now,
@@ -1255,7 +1284,7 @@ class TestSendMessageNewArchitecture:
         mock_driver.get_usage = MagicMock(return_value=None)
 
         async for _ in service.send_message(
-            session_id="sess-1",
+            session_id=sess_id,
             content="a caching layer",
             driver=mock_driver,
             cwd="/tmp/project",
@@ -1275,8 +1304,9 @@ class TestSendMessageNewArchitecture:
     ) -> None:
         """Subsequent messages (max_seq > 0) should use content directly."""
         now = datetime.now(UTC)
+        sess_id = uuid4()
         mock_session = BrainstormingSession(
-            id="sess-1",
+            id=sess_id,
             profile_id="work",
             status=SessionStatus.ACTIVE,
             created_at=now,
@@ -1305,7 +1335,7 @@ class TestSendMessageNewArchitecture:
         mock_driver.get_usage = MagicMock(return_value=None)
 
         async for _ in service.send_message(
-            session_id="sess-1",
+            session_id=sess_id,
             content="Yes, use Redis",
             driver=mock_driver,
             cwd="/tmp/project",
@@ -1324,8 +1354,9 @@ class TestSendMessageNewArchitecture:
     ) -> None:
         """Instructions should contain BRAINSTORMER_SYSTEM_PROMPT content with resolved path."""
         now = datetime.now(UTC)
+        sess_id = uuid4()
         mock_session = BrainstormingSession(
-            id="sess-1",
+            id=sess_id,
             profile_id="work",
             status=SessionStatus.ACTIVE,
             created_at=now,
@@ -1354,7 +1385,7 @@ class TestSendMessageNewArchitecture:
         mock_driver.get_usage = MagicMock(return_value=None)
 
         async for _ in service.send_message(
-            session_id="sess-1",
+            session_id=sess_id,
             content="a caching layer",
             driver=mock_driver,
             cwd="/tmp/project",
@@ -1375,8 +1406,9 @@ class TestSendMessageNewArchitecture:
     ) -> None:
         """User message in DB should store original content, not formatted prompt."""
         now = datetime.now(UTC)
+        sess_id = uuid4()
         mock_session = BrainstormingSession(
-            id="sess-1",
+            id=sess_id,
             profile_id="work",
             status=SessionStatus.ACTIVE,
             created_at=now,
@@ -1401,7 +1433,7 @@ class TestSendMessageNewArchitecture:
         mock_driver.get_usage = MagicMock(return_value=None)
 
         async for _ in service.send_message(
-            session_id="sess-1",
+            session_id=sess_id,
             content="a caching layer",
             driver=mock_driver,
             cwd="/tmp/project",
@@ -1422,8 +1454,9 @@ class TestSendMessageNewArchitecture:
     ) -> None:
         """User message should not have is_system=True (field removed or False)."""
         now = datetime.now(UTC)
+        sess_id = uuid4()
         mock_session = BrainstormingSession(
-            id="sess-1",
+            id=sess_id,
             profile_id="work",
             status=SessionStatus.ACTIVE,
             created_at=now,
@@ -1448,7 +1481,7 @@ class TestSendMessageNewArchitecture:
         mock_driver.get_usage = MagicMock(return_value=None)
 
         async for _ in service.send_message(
-            session_id="sess-1",
+            session_id=sess_id,
             content="a caching layer",
             driver=mock_driver,
             cwd="/tmp/project",
@@ -1508,11 +1541,14 @@ class TestSendMessagePlanPath:
         """Factory for brainstorming sessions."""
 
         def _factory(
-            topic: str | None = None, session_id: str = "sess-1"
+            topic: str | None = None, session_id: str | None = None
         ) -> BrainstormingSession:
+            from uuid import UUID as _UUID
+
             now = datetime.now(UTC)
+            sid = _UUID(session_id) if session_id else uuid4()
             return BrainstormingSession(
-                id=session_id,
+                id=sid,
                 profile_id="work",
                 status=SessionStatus.ACTIVE,
                 topic=topic,
@@ -1561,7 +1597,7 @@ class TestSendMessagePlanPath:
         driver, captured = self._make_driver()
 
         async for _ in service.send_message(
-            session_id="sess-1",
+            session_id=session.id,
             content="a caching layer",
             driver=driver,
             cwd="/tmp/project",
@@ -1587,13 +1623,13 @@ class TestSendMessagePlanPath:
         service = BrainstormService(
             mock_repository, mock_event_bus, profile_repo=mock_profile_repo
         )
-        session = _make_session(topic=None, session_id="abcd1234-rest")  # type: ignore[operator]
+        session = _make_session(topic=None, session_id="abcd1234-0000-0000-0000-000000000000")  # type: ignore[operator]
         mock_repository.get_session.return_value = session
 
         driver, captured = self._make_driver()
 
         async for _ in service.send_message(
-            session_id="abcd1234-rest",
+            session_id=session.id,
             content="an idea",
             driver=driver,
             cwd="/tmp/project",
@@ -1619,7 +1655,7 @@ class TestSendMessagePlanPath:
         driver, captured = self._make_driver()
 
         async for _ in service.send_message(
-            session_id="sess-1",
+            session_id=session.id,
             content="auth system",
             driver=driver,
             cwd="/tmp/project",

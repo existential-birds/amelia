@@ -36,7 +36,7 @@ class TestOracleConsultationsState:
             problem="How to refactor?",
             advice="Use DI.",
             model="claude-sonnet-4-20250514",
-            session_id="sess-1",
+            session_id=uuid4(),
         )
         state = ImplementationState(
             workflow_id=uuid4(),

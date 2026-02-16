@@ -219,16 +219,18 @@ class TestBroadcastDomainRouting:
         await manager.connect(mock_websocket)
         await manager.subscribe_all(mock_websocket)
 
+        session_wf_id = uuid4()
+        message_id = str(uuid4())
         event = WorkflowEvent(
             id=uuid4(),
-            workflow_id=uuid4(),
+            workflow_id=session_wf_id,
             sequence=0,
             timestamp=datetime.now(UTC),
             agent="brainstormer",
             event_type=EventType.BRAINSTORM_TEXT,
             message="Streaming",
             domain=EventDomain.BRAINSTORM,
-            data={"session_id": "session-1", "message_id": "msg-1", "text": "Hello"},
+            data={"session_id": str(session_wf_id), "message_id": message_id, "text": "Hello"},
         )
 
         await manager.broadcast(event)
@@ -237,7 +239,7 @@ class TestBroadcastDomainRouting:
         payload = mock_websocket.send_json.call_args[0][0]
         assert payload["type"] == "brainstorm"
         assert payload["event_type"] == "text"  # brainstorm_ prefix stripped
-        assert payload["session_id"] == "session-1"
-        assert payload["message_id"] == "msg-1"
+        assert payload["session_id"] == str(session_wf_id)
+        assert payload["message_id"] == message_id
         assert payload["data"]["text"] == "Hello"
         assert "timestamp" in payload

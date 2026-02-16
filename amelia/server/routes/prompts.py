@@ -81,7 +81,7 @@ class VersionSummary(BaseModel):
         change_note: Optional note describing the change.
     """
 
-    id: str
+    id: uuid.UUID
     version_number: int
     created_at: str
     change_note: str | None
@@ -334,7 +334,7 @@ async def get_version(
         raise HTTPException(status_code=404, detail=f"Version not found: {version_id}")
 
     return VersionDetailResponse(
-        id=version.id,
+        id=str(version.id),
         prompt_id=version.prompt_id,
         version_number=version.version_number,
         content=version.content,
@@ -380,7 +380,7 @@ async def create_version(
         raise HTTPException(status_code=400, detail=str(e)) from e
 
     return VersionDetailResponse(
-        id=version.id,
+        id=str(version.id),
         prompt_id=version.prompt_id,
         version_number=version.version_number,
         content=version.content,

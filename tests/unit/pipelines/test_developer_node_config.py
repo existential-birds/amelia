@@ -133,10 +133,11 @@ async def test_call_developer_node_passes_workflow_id(
         goal="Implement test feature",
         plan_markdown="## Task 1\n\nDo something",
     )
+    thread_id = str(uuid4())
     config: dict[str, Any] = {
         "configurable": {
             "profile": profile,
-            "thread_id": str(uuid4()),
+            "thread_id": thread_id,
         }
     }
 
@@ -158,7 +159,7 @@ async def test_call_developer_node_passes_workflow_id(
         # Verify workflow_id was passed to developer.run()
         mock_developer.run.assert_called_once()
         call_kwargs = mock_developer.run.call_args
-        assert call_kwargs.kwargs["workflow_id"] == "wf-test-123"
+        assert call_kwargs.kwargs["workflow_id"] == thread_id
 
 
 @pytest.mark.asyncio

@@ -78,8 +78,8 @@ class TestStartBatchWorkflows:
             response = await orchestrator.start_batch_workflows(request)
 
         assert len(response.started) == 2
-        assert wf_id_1 in response.started
-        assert wf_id_2 in response.started
+        assert str(wf_id_1) in response.started
+        assert str(wf_id_2) in response.started
         assert response.errors == {}
         assert mock_start.call_count == 2
 
@@ -140,7 +140,7 @@ class TestStartBatchWorkflows:
             request = BatchStartRequest(worktree_path="/repo/a")
             response = await orchestrator.start_batch_workflows(request)
 
-        assert response.started == [wf_id_a]
+        assert response.started == [str(wf_id_a)]
         assert response.errors == {}
 
     @pytest.mark.asyncio
@@ -170,17 +170,17 @@ class TestStartBatchWorkflows:
 
         # wf_id_1 succeeds, wf_id_2 fails due to worktree conflict
         async def mock_start(wf_id: object) -> None:
-            if wf_id == wf_id_2:
+            if wf_id == str(wf_id_2):
                 raise WorkflowConflictError("/repo", str(wf_id_1))
 
         with patch.object(orchestrator, "start_pending_workflow", side_effect=mock_start):
             request = BatchStartRequest()
             response = await orchestrator.start_batch_workflows(request)
 
-        assert response.started == [wf_id_1]
-        assert wf_id_2 in response.errors
+        assert response.started == [str(wf_id_1)]
+        assert str(wf_id_2) in response.errors
         # Check for stable substrings from WorkflowConflictError
-        err = response.errors[wf_id_2]
+        err = response.errors[str(wf_id_2)]
         assert "/repo" in err
 
     @pytest.mark.asyncio

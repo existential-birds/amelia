@@ -167,15 +167,16 @@ class TestExtractConfigParams:
                 "reviewer": AgentConfig(driver="cli", model="sonnet"),
             },
         )
+        thread_id = str(uuid4())
         config: RunnableConfig = {
             "configurable": {
-                "thread_id": str(uuid4()),
+                "thread_id": thread_id,
                 "profile": profile,
             }
         }
         event_bus, workflow_id, extracted_profile = extract_config_params(config)
         assert extracted_profile == profile
-        assert workflow_id == "wf-123"
+        assert workflow_id == thread_id
         assert event_bus is None
 
     def test_extracts_event_bus_from_config(self) -> None:
@@ -192,16 +193,17 @@ class TestExtractConfigParams:
                 "reviewer": AgentConfig(driver="cli", model="sonnet"),
             },
         )
+        thread_id = str(uuid4())
         config: RunnableConfig = {
             "configurable": {
-                "thread_id": str(uuid4()),
+                "thread_id": thread_id,
                 "profile": profile,
                 "event_bus": mock_event_bus,
             }
         }
         event_bus, wf_id, prof = extract_config_params(config)
         assert event_bus is mock_event_bus
-        assert wf_id == "wf-123"
+        assert wf_id == thread_id
         assert prof == profile
 
     def test_raises_if_profile_missing(self) -> None:

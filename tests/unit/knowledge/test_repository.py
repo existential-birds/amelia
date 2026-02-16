@@ -33,7 +33,7 @@ class TestUpdateDocumentTags:
     ) -> None:
         """Should update document tags and return updated document."""
         # Arrange
-        document_id = "doc-123"
+        document_id = uuid4()
         new_tags = ["python", "testing", "pytest"]
 
         # Mock database row return (asyncpg.Record)
@@ -78,7 +78,7 @@ class TestUpdateDocumentTags:
     ) -> None:
         """Should raise ValueError when document not found."""
         # Arrange
-        document_id = "nonexistent-doc"
+        document_id = uuid4()
         new_tags = ["tag1", "tag2"]
         mock_db.fetch_one.return_value = None
 

@@ -157,8 +157,8 @@ class TestGetWorkflowTokenUsage:
         assert "breakdown" in token_usage
         assert len(token_usage["breakdown"]) == 2
 
-        # Verify repository was called correctly
-        mock_repository.get_token_summary.assert_awaited_once_with(wf_id)
+        # Verify repository was called correctly (route passes uuid.UUID from path param)
+        mock_repository.get_token_summary.assert_awaited_once_with(workflow.id)
 
     async def test_get_workflow_token_usage_is_none_when_no_data(
         self,

@@ -281,11 +281,12 @@ class TestSetWorkflowPlan:
         mock_repository.get.return_value = workflow
 
         # Simulate an active planning task
-        mock_orchestrator._planning_tasks["wf-001"] = MagicMock()
+        wf_id = uuid4()
+        mock_orchestrator._planning_tasks[wf_id] = MagicMock()
 
         with pytest.raises(WorkflowConflictError, match="Architect is currently running"):
             await mock_orchestrator.set_workflow_plan(
-                workflow_id=uuid4(),
+                workflow_id=wf_id,
                 plan_content="# Plan",
             )
 
