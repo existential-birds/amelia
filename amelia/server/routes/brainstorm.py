@@ -4,6 +4,7 @@ Provides endpoints for session lifecycle management and chat functionality.
 """
 
 import os
+import uuid
 from typing import TYPE_CHECKING, Annotated
 from uuid import uuid4
 
@@ -131,7 +132,7 @@ class SendMessageRequest(BaseModel):
 class SendMessageResponse(BaseModel):
     """Response after sending a message."""
 
-    message_id: str
+    message_id: uuid.UUID
 
 
 class HandoffRequest(BaseModel):
@@ -145,7 +146,7 @@ class HandoffRequest(BaseModel):
 class HandoffResponse(BaseModel):
     """Response from handoff request."""
 
-    workflow_id: str
+    workflow_id: uuid.UUID
     status: str
 
 
@@ -203,7 +204,7 @@ async def list_sessions(
 
 @router.get("/sessions/{session_id}", response_model=SessionWithHistoryResponse)
 async def get_session(
-    session_id: str,
+    session_id: uuid.UUID,
     service: BrainstormService = Depends(get_brainstorm_service),
     profile_repo: ProfileRepository = Depends(get_profile_repository),
 ) -> SessionWithHistoryResponse:
@@ -241,7 +242,7 @@ async def get_session(
 
 @router.delete("/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_session(
-    session_id: str,
+    session_id: uuid.UUID,
     service: BrainstormService = Depends(get_brainstorm_service),
 ) -> None:
     """Delete a brainstorming session.
@@ -260,7 +261,7 @@ async def delete_session(
     response_model=SendMessageResponse,
 )
 async def send_message(
-    session_id: str,
+    session_id: uuid.UUID,
     request: SendMessageRequest,
     background_tasks: BackgroundTasks,
     service: BrainstormService = Depends(get_brainstorm_service),
@@ -319,7 +320,7 @@ async def send_message(
     response_model=HandoffResponse,
 )
 async def handoff_to_implementation(
-    session_id: str,
+    session_id: uuid.UUID,
     request: HandoffRequest,
     service: BrainstormService = Depends(get_brainstorm_service),
     orchestrator: OrchestratorService = Depends(get_orchestrator),

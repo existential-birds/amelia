@@ -3,6 +3,7 @@
 
 Provides endpoints for listing, viewing, and editing agent prompts.
 """
+import uuid
 from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -312,7 +313,7 @@ async def get_versions(
 @router.get("/{prompt_id}/versions/{version_id}", response_model=VersionDetailResponse)
 async def get_version(
     prompt_id: str,
-    version_id: str,
+    version_id: uuid.UUID,
     repository: "PromptRepository" = Depends(get_prompt_repository),
 ) -> VersionDetailResponse:
     """Get a specific version with content.

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import shutil
+import uuid
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
@@ -131,7 +132,7 @@ async def list_documents(
 
 @router.get("/documents/{document_id}", response_model=Document)
 async def get_document(
-    document_id: str,
+    document_id: uuid.UUID,
     repository: KnowledgeRepository = Depends(get_knowledge_repository),
 ) -> Document:
     """Get document by ID.
@@ -157,7 +158,7 @@ async def get_document(
 
 @router.delete("/documents/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_document(
-    document_id: str,
+    document_id: uuid.UUID,
     repository: KnowledgeRepository = Depends(get_knowledge_repository),
 ) -> None:
     """Delete document and all associated chunks.
