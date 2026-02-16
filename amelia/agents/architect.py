@@ -126,8 +126,8 @@ Before planning, discover:
 
         cwd = profile.working_dir or "."
         plan_path = resolve_plan_path(profile.plan_path_pattern, state.issue.id)
-        tool_calls: list[ToolCall] = list(state.tool_calls)
-        tool_results: list[ToolResult] = list(state.tool_results)
+        tool_calls: list[ToolCall] = []
+        tool_results: list[ToolResult] = []
         raw_output = ""
         current_state = state
 

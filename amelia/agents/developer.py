@@ -91,8 +91,8 @@ class Developer:
         cwd = profile.working_dir or "."
         prompt = self._build_prompt(state)
 
-        tool_calls: list[ToolCall] = list(state.tool_calls)
-        tool_results: list[ToolResult] = list(state.tool_results)
+        tool_calls: list[ToolCall] = []
+        tool_results: list[ToolResult] = []
         current_state = state
         session_id = state.driver_session_id
 
