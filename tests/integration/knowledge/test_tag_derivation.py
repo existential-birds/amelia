@@ -16,6 +16,7 @@ from amelia.knowledge.models import DocumentStatus, TagExtractionOutput
 from amelia.knowledge.repository import KnowledgeRepository
 from amelia.server.database.connection import Database
 
+
 pytestmark = pytest.mark.integration
 
 
@@ -60,7 +61,7 @@ This guide covers deploying applications to Kubernetes clusters.
     pipeline = IngestionPipeline(
         repository=repo,
         embedding_client=mock_embedding,
-        tag_derivation_model="openai/gpt-oss-120b",
+        tag_derivation_model="minimax/minimax-m2.5",
         tag_derivation_driver="api",
     )
 
@@ -186,7 +187,7 @@ Learn React components.
     pipeline = IngestionPipeline(
         repository=repo,
         embedding_client=mock_embedding,
-        tag_derivation_model="openai/gpt-oss-120b",
+        tag_derivation_model="minimax/minimax-m2.5",
         tag_derivation_driver="api",
     )
 
@@ -251,7 +252,7 @@ Deploy serverless functions to AWS Lambda using Python.
     pipeline = IngestionPipeline(
         repository=repo,
         embedding_client=mock_embedding,
-        tag_derivation_model="openai/gpt-oss-120b",
+        tag_derivation_model="minimax/minimax-m2.5",
         tag_derivation_driver="api",
     )
 
