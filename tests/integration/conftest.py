@@ -569,6 +569,7 @@ async def test_db() -> AsyncGenerator[Database, None]:
         # Truncate all data tables to ensure test isolation
         await db.execute("""
             TRUNCATE TABLE
+                document_chunks, documents,
                 workflow_prompt_versions, prompt_versions, prompts,
                 brainstorm_artifacts, brainstorm_messages, brainstorm_sessions,
                 token_usage, workflow_log, workflows,
