@@ -66,12 +66,55 @@ def mock_chunker() -> MagicMock:
 @pytest.fixture
 def pipeline(mock_repo: AsyncMock, mock_embedding: AsyncMock) -> IngestionPipeline:
     """Provide an IngestionPipeline with mocked dependencies."""
-    return IngestionPipeline(repository=mock_repo, embedding_client=mock_embedding)
+    return IngestionPipeline(
+        repository=mock_repo,
+        embedding_client=mock_embedding,
+        concurrency_limit=2,
+        tag_derivation_model=None,
+        tag_derivation_driver="api",
+    )
 
 
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_pipeline_initialization_stores_tag_config(
+    mock_repo: AsyncMock,
+    mock_embedding: AsyncMock,
+) -> None:
+    """Should store tag derivation configuration parameters as instance variables."""
+    # Test with tag derivation enabled
+    pipeline_enabled = IngestionPipeline(
+        repository=mock_repo,
+        embedding_client=mock_embedding,
+        concurrency_limit=3,
+        tag_derivation_model="openai/gpt-4o-mini",
+        tag_derivation_driver="cli",
+    )
+    assert pipeline_enabled.tag_derivation_model == "openai/gpt-4o-mini"
+    assert pipeline_enabled.tag_derivation_driver == "cli"
+
+    # Test with tag derivation disabled (None model)
+    pipeline_disabled = IngestionPipeline(
+        repository=mock_repo,
+        embedding_client=mock_embedding,
+        concurrency_limit=2,
+        tag_derivation_model=None,
+        tag_derivation_driver="api",
+    )
+    assert pipeline_disabled.tag_derivation_model is None
+    assert pipeline_disabled.tag_derivation_driver == "api"
+
+    # Test with default parameters (backwards compatibility)
+    pipeline_defaults = IngestionPipeline(
+        repository=mock_repo,
+        embedding_client=mock_embedding,
+    )
+    assert pipeline_defaults.tag_derivation_model is None
+    assert pipeline_defaults.tag_derivation_driver == "api"
 
 
 @pytest.mark.asyncio

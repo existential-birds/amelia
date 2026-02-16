@@ -36,6 +36,8 @@ class IngestionPipeline:
         repository: Data layer for documents and chunks.
         embedding_client: OpenRouter embedding client.
         concurrency_limit: Max simultaneous document ingestions.
+        tag_derivation_model: LLM model for tag extraction (None = disabled).
+        tag_derivation_driver: Driver type for tag extraction ("api" or "cli").
     """
 
     def __init__(
@@ -43,10 +45,14 @@ class IngestionPipeline:
         repository: KnowledgeRepository,
         embedding_client: EmbeddingClient,
         concurrency_limit: int = 2,
+        tag_derivation_model: str | None = None,
+        tag_derivation_driver: str = "api",
     ) -> None:
         self.repository = repository
         self.embedding_client = embedding_client
         self._semaphore = asyncio.Semaphore(concurrency_limit)
+        self.tag_derivation_model = tag_derivation_model
+        self.tag_derivation_driver = tag_derivation_driver
 
     async def ingest_document(
         self,
