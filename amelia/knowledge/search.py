@@ -13,7 +13,7 @@ async def knowledge_search(
     repository: KnowledgeRepository,
     top_k: int = 5,
     tags: list[str] | None = None,
-    similarity_threshold: float = 0.7,
+    similarity_threshold: float = 0.5,  # Lowered from 0.7 for testing
 ) -> list[SearchResult]:
     """Search documentation chunks by semantic similarity.
 
@@ -39,11 +39,24 @@ async def knowledge_search(
         similarity_threshold=similarity_threshold,
     )
 
-    logger.info(
-        "Knowledge search completed",
-        query=query,
-        result_count=len(results),
-        tags=tags,
-    )
+    # Log similarity scores for debugging
+    if results:
+        similarities = [r.similarity for r in results]
+        logger.info(
+            "Knowledge search completed",
+            query=query,
+            result_count=len(results),
+            tags=tags,
+            min_similarity=min(similarities),
+            max_similarity=max(similarities),
+            avg_similarity=sum(similarities) / len(similarities),
+        )
+    else:
+        logger.info(
+            "Knowledge search completed",
+            query=query,
+            result_count=0,
+            tags=tags,
+        )
 
     return results
