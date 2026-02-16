@@ -32,7 +32,7 @@ Industrial framework deployed in JIRA with a three-agent architecture (Planner, 
 #### [SWE-agent: Agent-Computer Interfaces Enable Automated Software Engineering](https://arxiv.org/abs/2405.15793)
 *Yang et al., NeurIPS 2024*
 
-Introduces a custom agent-computer interface (ACI) designed for LLM agents to navigate repositories, create/edit code, and execute tests. The key insight is that LLM agents benefit from specialized interfaces tailored to their capabilities, not raw terminal access.
+Introduces a custom agent-computer interface (ACI) designed for LLM agents to navigate repositories, create/edit code, and execute tests. LLM agents benefit from specialized interfaces tailored to their capabilities, not raw terminal access.
 
 **Key influence:** Amelia's driver abstraction (`api` vs `cli`) reflects the same principle — the interface between agent and environment matters as much as agent capability. Profile-based tool configuration lets each agent get the interface it needs.
 
@@ -48,7 +48,7 @@ Demonstrates that sophisticated reasoning capabilities can emerge from reinforce
 #### [Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena](https://arxiv.org/abs/2306.05685)
 *Zheng, Chiang et al., NeurIPS 2023*
 
-Establishes the foundational framework for using LLMs as evaluators. Strong LLMs achieve over 80% agreement with human experts — on par with inter-expert agreement. Systematically examines position bias, verbosity bias, and self-enhancement bias, proposing mitigations for each.
+Establishes the framework for using LLMs as evaluators. Strong LLMs achieve over 80% agreement with human experts — on par with inter-expert agreement. Systematically examines position bias, verbosity bias, and self-enhancement bias, proposing mitigations for each.
 
 **Key influence:** Amelia's Reviewer agent implements LLM-as-a-Judge for automated code review. The paper's bias analysis informs how we structure review prompts — avoiding position-dependent evaluation and calibrating verbosity expectations.
 
@@ -108,7 +108,7 @@ Treats long prompts as external environment variables rather than direct inputs.
 #### [SWE-bench: Can Language Models Resolve Real-World GitHub Issues?](https://arxiv.org/abs/2310.06770)
 *Jimenez et al., ICLR 2024*
 
-The foundational benchmark for evaluating software engineering agents, with 2,294 real-world GitHub issues from 12 Python repositories. Models receive a codebase and issue description, then must edit code to resolve it. [SWE-bench Verified](https://openai.com/index/introducing-swe-bench-verified/) later refined this to a human-validated subset of 500 problems confirmed to be solvable, providing a more reliable evaluation target.
+The defining benchmark for evaluating software engineering agents, with 2,294 real-world GitHub issues from 12 Python repositories. Models receive a codebase and issue description, then must edit code to resolve it. [SWE-bench Verified](https://openai.com/index/introducing-swe-bench-verified/) later refined this to a human-validated subset of 500 problems confirmed to be solvable, providing a more reliable evaluation target.
 
 **Key influence:** SWE-bench frames the task that Amelia's pipeline is designed to solve — given an issue and a codebase, produce a working fix. The benchmark's emphasis on real repositories over synthetic tasks validates building for production codebases.
 
