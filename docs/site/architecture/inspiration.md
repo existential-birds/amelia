@@ -170,6 +170,20 @@ Introduces **Software 3.0**: prompts are programs, English is the programming la
 
 **Key influence:** Human-in-the-loop approval gates, treating prompts as source code (version controlled in profiles), building for LLM consumption.
 
+### [How to Build an Agent](https://ampcode.com/notes/how-to-build-an-agent)
+*by Thorsten Ball, Amp*
+
+Demonstrates that a functional code-editing AI agent requires under 400 lines of Go — an LLM, a loop, and enough tokens. The agent uses just three tools (`read_file`, `list_files`, `edit_file`) and lets the model autonomously decide when and how to use them. The fundamental intelligence comes from the models themselves; polished products add engineering around that core.
+
+**Key influence:** Reinforces Amelia's minimal-loop architecture — the orchestrator is a thin state machine around capable models. Agent complexity lives in prompt design and tool selection, not framework overhead.
+
+### [GPT-5 Oracle](https://ampcode.com/news/gpt-5-oracle)
+*Amp*
+
+Amp made GPT-5 its permanent "oracle" model for complex reasoning tasks like architecture review and bug analysis, while keeping a more proactive model (Sonnet) as the primary agent. Users can invoke the oracle at any point in a thread when they need deeper reasoning.
+
+**Key influence:** Validates Amelia's Oracle agent pattern — a dedicated high-capability model for planning and analysis, separate from the execution agents that do the hands-on coding work.
+
 ## Methodologies & Frameworks
 
 ### [12-Factor Agents](https://github.com/humanlayer/12-factor-agents) ([talk](https://www.youtube.com/watch?v=8kMaTybvDUw))
