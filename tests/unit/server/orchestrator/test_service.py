@@ -1627,3 +1627,38 @@ class TestExponentialBackoff:
         for i in range(4, 10):
             assert delays[i] == 300.0
 
+
+# =============================================================================
+# Resume Workflow Tests
+# =============================================================================
+
+
+async def test_resume_workflow_corrupted_checkpoint_raises_invalid_state(
+    orchestrator: OrchestratorService,
+    mock_repository: AsyncMock,
+) -> None:
+    """resume_workflow should raise InvalidStateError when graph.aget_state() throws a database error."""
+    workflow = ServerExecutionState(
+        id="test-wf",
+        issue_id="ISSUE-123",
+        created_at=datetime.now(UTC),
+        profile_id="test",
+        workflow_status=WorkflowStatus.FAILED,
+        worktree_path="/tmp/test-worktree",
+    )
+    mock_repository.get.return_value = workflow
+
+    # Mock graph whose aget_state raises a database error
+    mock_graph = MagicMock()
+    mock_graph.aget_state = AsyncMock(
+        side_effect=Exception("invalid memory alloc request size 1227985520")
+    )
+
+    with (
+        patch.object(orchestrator, "_create_server_graph", return_value=mock_graph),
+        pytest.raises(InvalidStateError) as exc_info,
+    ):
+        await orchestrator.resume_workflow("test-wf")
+
+    assert "corrupted" in str(exc_info.value).lower()
+

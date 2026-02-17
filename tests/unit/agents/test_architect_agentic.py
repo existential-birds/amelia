@@ -8,6 +8,7 @@ from uuid import uuid4
 import pytest
 
 from amelia.agents.architect import Architect
+from amelia.core.agentic_state import ToolCall, ToolResult
 from amelia.core.types import AgentConfig, Profile, SandboxConfig
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
 from amelia.pipelines.implementation.state import ImplementationState
@@ -333,3 +334,70 @@ class TestArchitectDesignDocumentInPrompt:
 
         assert captured_prompt is not None
         assert "## Design Document" not in captured_prompt
+
+
+class TestArchitectPlanNoDoubleCount:
+    """Tests that Architect.plan() returns only NEW tool calls/results, not accumulated ones from state."""
+
+    async def test_plan_returns_only_new_tool_data(
+        self,
+        mock_driver,
+        mock_issue_factory,
+        mock_profile_factory,
+    ) -> None:
+        """plan() should not copy pre-existing tool_calls/tool_results from state."""
+        issue = mock_issue_factory()
+        profile = mock_profile_factory()
+        state = ImplementationState(
+            workflow_id="test-workflow",
+            created_at=datetime.now(UTC),
+            status="running",
+            profile_id="test",
+            issue=issue,
+            tool_calls=[
+                ToolCall(id="old-1", tool_name="read_file", tool_input={"path": "x.py"}),
+            ],
+            tool_results=[
+                ToolResult(call_id="old-1", tool_name="read_file", output="content", success=True),
+            ],
+        )
+        config = AgentConfig(driver="cli", model="sonnet")
+
+        async def mock_stream(*args, **kwargs):
+            yield AgenticMessage(
+                type=AgenticMessageType.TOOL_CALL,
+                tool_name="list_dir",
+                tool_input={"path": "."},
+                tool_call_id="new-1",
+            )
+            yield AgenticMessage(
+                type=AgenticMessageType.TOOL_RESULT,
+                tool_name="list_dir",
+                tool_output="src/",
+                tool_call_id="new-1",
+            )
+            yield AgenticMessage(
+                type=AgenticMessageType.RESULT,
+                content="**Goal:** Test",
+            )
+
+        mock_driver.execute_agentic = mock_stream
+
+        with patch("amelia.agents.architect.get_driver", return_value=mock_driver):
+            architect = Architect(config)
+
+            final_state = None
+            async for new_state, _ in architect.plan(state, profile, workflow_id="wf-1"):
+                final_state = new_state
+
+        assert final_state is not None
+        assert len(final_state.tool_calls) == 1, (
+            f"Expected 1 new tool call, got {len(final_state.tool_calls)} "
+            "(pre-existing tool calls should not be copied)"
+        )
+        assert final_state.tool_calls[0].tool_name == "list_dir"
+        assert len(final_state.tool_results) == 1, (
+            f"Expected 1 new tool result, got {len(final_state.tool_results)} "
+            "(pre-existing tool results should not be copied)"
+        )
+        assert final_state.tool_results[0].tool_name == "list_dir"
