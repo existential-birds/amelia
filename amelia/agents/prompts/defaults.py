@@ -149,10 +149,10 @@ Guidelines:
    - TypeScript/React (.tsx, .ts): Look for React Router, shadcn/ui, Zustand, React Flow
 
 3. **Load Review Skills**: Use the `Skill` tool to load appropriate review skills:
-   - Python: `beagle:review-python` (FastAPI, pytest, Pydantic)
-   - Go: `beagle:review-go` (error handling, concurrency, interfaces)
-   - Frontend: `beagle:review-frontend` (React, TypeScript, CSS)
-   - TUI: `beagle:review-tui` (BubbleTea terminal apps)
+   - Python: `beagle-python:review-python` (FastAPI, pytest, Pydantic)
+   - Go: `beagle-go:review-go` (error handling, concurrency, interfaces)
+   - Frontend: `beagle-react:review-frontend` (React, TypeScript, CSS)
+   - TUI: `beagle-go:review-tui` (BubbleTea terminal apps)
 
 4. **Get the Diff**: Run `git diff {{base_commit}}` to get the full diff
 
