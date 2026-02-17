@@ -36,7 +36,7 @@ if TYPE_CHECKING:
 class Evaluator:
     """Evaluates review feedback against codebase.
 
-    Applies decision matrix from beagle:receive-feedback pattern:
+    Applies decision matrix from beagle-core:receive-feedback pattern:
     - Correct & In Scope -> implement
     - Technically Incorrect -> reject with evidence
     - Out of Scope -> defer

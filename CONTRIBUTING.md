@@ -202,9 +202,9 @@ For PRs with significant changes, create a manual test plan at `docs/testing/pr-
 If you're using [Claude Code](https://claude.ai/code), install the [beagle](https://github.com/anderskev/beagle) plugin for PR workflow commands:
 
 ```bash
-/beagle:create-pr        # Create PR with standardized description
-/beagle:commit-push      # Commit and push with proper format
-/beagle:review-backend   # Review Python/FastAPI code
-/beagle:review-frontend  # Review React/TypeScript code
+/beagle-core:create-pr        # Create PR with standardized description
+/beagle-core:commit-push      # Commit and push with proper format
+/beagle-python:review-python  # Review Python/FastAPI code
+/beagle-react:review-frontend # Review React/TypeScript code
 /amelia:gen-test-plan    # Generate manual test plan
 ```
