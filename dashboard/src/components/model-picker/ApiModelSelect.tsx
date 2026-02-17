@@ -1,7 +1,9 @@
+import { useEffect, useState } from 'react';
 import {
   Select,
   SelectContent,
   SelectItem,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
@@ -11,6 +13,8 @@ import { useRecentModels } from '@/hooks/useRecentModels';
 import { ModelPickerSheet } from './ModelPickerSheet';
 import { ProviderLogo } from './ProviderLogo';
 import type { ModelInfo } from './types';
+
+const BROWSE_SENTINEL = '__browse__';
 
 interface ApiModelSelectProps {
   agentKey: string;
@@ -23,7 +27,14 @@ interface ApiModelSelectProps {
  */
 export function ApiModelSelect({ agentKey, value, onChange }: ApiModelSelectProps) {
   const models = useModelsStore((state) => state.models);
+  const fetchModels = useModelsStore((state) => state.fetchModels);
   const { recentModelIds, addRecentModel } = useRecentModels();
+  const [sheetOpen, setSheetOpen] = useState(false);
+
+  // Eagerly fetch models on mount (idempotent — skips if already loaded)
+  useEffect(() => {
+    fetchModels();
+  }, [fetchModels]);
 
   // Get recent models that exist in the store
   const recentModels = recentModelIds
@@ -31,21 +42,38 @@ export function ApiModelSelect({ agentKey, value, onChange }: ApiModelSelectProp
     .filter((m): m is ModelInfo => m !== undefined)
     .slice(0, 5); // Show max 5 in dropdown
 
+  // Ensure current value is always represented in dropdown items
+  const currentInRecent = recentModels.some((m) => m.id === value);
+  const currentModel = !currentInRecent && value ? models.find((m) => m.id === value) : undefined;
+  const displayModels = currentModel ? [currentModel, ...recentModels] : recentModels;
+
+  // Whether we have a fallback item for a value not yet in the store (e.g. during loading)
+  const needsFallbackItem = value && !displayModels.some((m) => m.id === value);
+
   const handleSelect = (modelId: string) => {
+    if (modelId === BROWSE_SENTINEL) {
+      setSheetOpen(true);
+      return;
+    }
     addRecentModel(modelId);
     onChange(modelId);
   };
 
-  // Skip dropdown when no recent models - go straight to browse
-  if (recentModels.length === 0) {
+  const handleSheetSelect = (modelId: string) => {
+    addRecentModel(modelId);
+    onChange(modelId);
+  };
+
+  // Only show bare button fallback when there are truly zero items to display
+  if (displayModels.length === 0 && !value) {
     return (
       <ModelPickerSheet
         agentKey={agentKey}
         currentModel={value}
-        onSelect={handleSelect}
+        onSelect={handleSheetSelect}
         trigger={
           <Button variant="outline" size="sm" className="h-7 w-full sm:w-[180px] text-xs">
-            {value || 'Select model...'}
+            Select model...
           </Button>
         }
       />
@@ -53,13 +81,13 @@ export function ApiModelSelect({ agentKey, value, onChange }: ApiModelSelectProp
   }
 
   return (
-    <div className="space-y-1">
+    <>
       <Select value={value} onValueChange={handleSelect}>
         <SelectTrigger className="h-7 w-full sm:w-[180px] text-xs bg-background/50">
           <SelectValue placeholder="Select model..." />
         </SelectTrigger>
         <SelectContent>
-          {recentModels.map((model) => (
+          {displayModels.map((model) => (
             <SelectItem key={model.id} value={model.id}>
               <span className="flex items-center gap-2">
                 <ProviderLogo provider={model.provider} className="h-3.5 w-3.5 shrink-0" />
@@ -67,19 +95,25 @@ export function ApiModelSelect({ agentKey, value, onChange }: ApiModelSelectProp
               </span>
             </SelectItem>
           ))}
+          {needsFallbackItem && (
+            <SelectItem value={value}>
+              <span className="truncate text-muted-foreground">{value}</span>
+            </SelectItem>
+          )}
+          <SelectSeparator />
+          <SelectItem value={BROWSE_SENTINEL}>
+            <span className="text-muted-foreground">Browse all models...</span>
+          </SelectItem>
         </SelectContent>
       </Select>
 
       <ModelPickerSheet
         agentKey={agentKey}
         currentModel={value}
-        onSelect={handleSelect}
-        trigger={
-          <Button variant="link" size="sm" className="h-auto p-0 text-xs">
-            Browse all models...
-          </Button>
-        }
+        onSelect={handleSheetSelect}
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
       />
-    </div>
+    </>
   );
 }

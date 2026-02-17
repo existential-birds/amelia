@@ -21,7 +21,9 @@ interface ModelPickerSheetProps {
   agentKey: string;
   currentModel: string | null;
   onSelect: (modelId: string) => void;
-  trigger: ReactNode;
+  trigger?: ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 /**
@@ -84,8 +86,12 @@ export function ModelPickerSheet({
   currentModel,
   onSelect,
   trigger,
+  open: controlledOpen,
+  onOpenChange: controlledOnOpenChange,
 }: ModelPickerSheetProps) {
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = controlledOnOpenChange ?? setInternalOpen;
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCapabilities, setSelectedCapabilities] = useState<string[]>([]);
   const [selectedPriceTier, setSelectedPriceTier] = useState<string | null>(null);
@@ -142,7 +148,7 @@ export function ModelPickerSheet({
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
-      <SheetTrigger asChild>{trigger}</SheetTrigger>
+      {trigger && <SheetTrigger asChild>{trigger}</SheetTrigger>}
       <SheetContent
         side="right"
         className="w-full sm:max-w-[450px] flex flex-col p-0"
