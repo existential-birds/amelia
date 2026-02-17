@@ -883,7 +883,14 @@ class OrchestratorService:
         config: RunnableConfig = {
             "configurable": {"thread_id": workflow_id},
         }
-        checkpoint_state = await graph.aget_state(config)
+        try:
+            checkpoint_state = await graph.aget_state(config)
+        except Exception as exc:
+            raise InvalidStateError(
+                f"Cannot resume: checkpoint data is corrupted ({type(exc).__name__}: {exc})",
+                workflow_id=workflow_id,
+                current_status=workflow.workflow_status,
+            ) from exc
         if checkpoint_state is None or not checkpoint_state.values:
             raise InvalidStateError(
                 "Cannot resume: no checkpoint found for workflow",
