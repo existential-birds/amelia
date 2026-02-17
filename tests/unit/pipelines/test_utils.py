@@ -16,7 +16,7 @@ class TestExtractConfigParams:
         """Should extract event_bus, workflow_id, and profile from config."""
         mock_event_bus = MagicMock()
         mock_profile = MagicMock(spec=Profile)
-        thread_id = str(uuid4())
+        thread_id = uuid4()
 
         config = {
             "configurable": {
@@ -35,7 +35,7 @@ class TestExtractConfigParams:
     def test_event_bus_optional(self) -> None:
         """Event bus should be optional (returns None if missing)."""
         mock_profile = MagicMock(spec=Profile)
-        thread_id = str(uuid4())
+        thread_id = uuid4()
 
         config = {
             "configurable": {
@@ -58,7 +58,7 @@ class TestExtractConfigParams:
 
     def test_raises_on_missing_profile(self) -> None:
         """Should raise ValueError if profile is missing."""
-        config = {"configurable": {"thread_id": str(uuid4())}}
+        config = {"configurable": {"thread_id": uuid4()}}
 
         with pytest.raises(ValueError, match="profile"):
             extract_config_params(config)

@@ -23,14 +23,14 @@ async def seed_data(db_with_schema: Database, repository: WorkflowRepository) ->
     # Create two workflows
     wf1 = ServerExecutionState(
         id=wf1_id,
-        issue_id=uuid4(),
+        issue_id="ISSUE-1",
         worktree_path="/tmp/repo1",
         workflow_status="completed",
         started_at=datetime(2026, 1, 10, 10, 0, 0, tzinfo=UTC),
     )
     wf2 = ServerExecutionState(
         id=wf2_id,
-        issue_id=uuid4(),
+        issue_id="ISSUE-2",
         worktree_path="/tmp/repo2",
         workflow_status="completed",
         started_at=datetime(2026, 1, 15, 10, 0, 0, tzinfo=UTC),

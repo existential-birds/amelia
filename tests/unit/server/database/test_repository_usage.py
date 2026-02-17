@@ -39,21 +39,21 @@ class TestUsageTrend:
         wf3_id = uuid4()
         wf1 = ServerExecutionState(
             id=wf1_id,
-            issue_id=uuid4(),
+            issue_id="USAGE-1",
             worktree_path="/tmp/test-usage-1",
             workflow_status=WorkflowStatus.COMPLETED,
             started_at=datetime(2026, 1, 15, 10, 0, 0, tzinfo=UTC),
         )
         wf2 = ServerExecutionState(
             id=wf2_id,
-            issue_id=uuid4(),
+            issue_id="USAGE-2",
             worktree_path="/tmp/test-usage-2",
             workflow_status=WorkflowStatus.COMPLETED,
             started_at=datetime(2026, 1, 16, 10, 0, 0, tzinfo=UTC),
         )
         wf3 = ServerExecutionState(
             id=wf3_id,
-            issue_id=uuid4(),
+            issue_id="USAGE-3",
             worktree_path="/tmp/test-usage-3",
             workflow_status=WorkflowStatus.COMPLETED,
             started_at=datetime(2026, 1, 17, 10, 0, 0, tzinfo=UTC),
@@ -251,7 +251,7 @@ class TestUsageSummaryWithSuccessMetrics:
         wf_prev2_id = uuid4()
         wf_prev1 = ServerExecutionState(
             id=wf_prev1_id,
-            issue_id=uuid4(),
+            issue_id="USAGE-4",
             worktree_path="/tmp/test-prev-1",
             workflow_status=WorkflowStatus.COMPLETED,
             started_at=datetime(2026, 1, 10, 10, 0, 0, tzinfo=UTC),
@@ -259,7 +259,7 @@ class TestUsageSummaryWithSuccessMetrics:
         )
         wf_prev2 = ServerExecutionState(
             id=wf_prev2_id,
-            issue_id=uuid4(),
+            issue_id="USAGE-5",
             worktree_path="/tmp/test-prev-2",
             workflow_status=WorkflowStatus.COMPLETED,
             started_at=datetime(2026, 1, 12, 10, 0, 0, tzinfo=UTC),
@@ -303,7 +303,7 @@ class TestUsageSummaryWithSuccessMetrics:
         wf_curr4_id = uuid4()
         wf_curr1 = ServerExecutionState(
             id=wf_curr1_id,
-            issue_id=uuid4(),
+            issue_id="USAGE-6",
             worktree_path="/tmp/test-curr-1",
             workflow_status=WorkflowStatus.COMPLETED,
             started_at=datetime(2026, 1, 15, 10, 0, 0, tzinfo=UTC),
@@ -311,7 +311,7 @@ class TestUsageSummaryWithSuccessMetrics:
         )
         wf_curr2 = ServerExecutionState(
             id=wf_curr2_id,
-            issue_id=uuid4(),
+            issue_id="USAGE-7",
             worktree_path="/tmp/test-curr-2",
             workflow_status=WorkflowStatus.COMPLETED,
             started_at=datetime(2026, 1, 16, 10, 0, 0, tzinfo=UTC),
@@ -319,7 +319,7 @@ class TestUsageSummaryWithSuccessMetrics:
         )
         wf_curr3 = ServerExecutionState(
             id=wf_curr3_id,
-            issue_id=uuid4(),
+            issue_id="USAGE-8",
             worktree_path="/tmp/test-curr-3",
             workflow_status=WorkflowStatus.COMPLETED,
             started_at=datetime(2026, 1, 17, 10, 0, 0, tzinfo=UTC),
@@ -327,7 +327,7 @@ class TestUsageSummaryWithSuccessMetrics:
         )
         wf_curr4 = ServerExecutionState(
             id=wf_curr4_id,
-            issue_id=uuid4(),
+            issue_id="USAGE-9",
             worktree_path="/tmp/test-curr-4",
             workflow_status=WorkflowStatus.FAILED,
             started_at=datetime(2026, 1, 18, 10, 0, 0, tzinfo=UTC),
@@ -496,7 +496,7 @@ class TestUsageByModelWithTrendAndSuccess:
         wf4_id = uuid4()
         wf1 = ServerExecutionState(
             id=wf1_id,
-            issue_id=uuid4(),
+            issue_id="USAGE-10",
             worktree_path="/tmp/test-model-1",
             workflow_status=WorkflowStatus.COMPLETED,
             started_at=datetime(2026, 1, 15, 10, 0, 0, tzinfo=UTC),
@@ -504,7 +504,7 @@ class TestUsageByModelWithTrendAndSuccess:
         )
         wf2 = ServerExecutionState(
             id=wf2_id,
-            issue_id=uuid4(),
+            issue_id="USAGE-11",
             worktree_path="/tmp/test-model-2",
             workflow_status=WorkflowStatus.COMPLETED,
             started_at=datetime(2026, 1, 16, 10, 0, 0, tzinfo=UTC),
@@ -512,7 +512,7 @@ class TestUsageByModelWithTrendAndSuccess:
         )
         wf3 = ServerExecutionState(
             id=wf3_id,
-            issue_id=uuid4(),
+            issue_id="USAGE-12",
             worktree_path="/tmp/test-model-3",
             workflow_status=WorkflowStatus.COMPLETED,
             started_at=datetime(2026, 1, 17, 10, 0, 0, tzinfo=UTC),
@@ -520,7 +520,7 @@ class TestUsageByModelWithTrendAndSuccess:
         )
         wf4 = ServerExecutionState(
             id=wf4_id,
-            issue_id=uuid4(),
+            issue_id="USAGE-13",
             worktree_path="/tmp/test-model-4",
             workflow_status=WorkflowStatus.FAILED,
             started_at=datetime(2026, 1, 18, 10, 0, 0, tzinfo=UTC),

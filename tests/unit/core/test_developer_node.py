@@ -151,7 +151,7 @@ class TestDeveloperUnifiedExecution:
 
         # Collect all yielded results
         results = []
-        async for state_update, event in developer.run(state, profile, str(uuid4())):
+        async for state_update, event in developer.run(state, profile, uuid4()):
             results.append((state_update, event))
 
         # Should have yielded events for each AgenticMessage
@@ -195,7 +195,7 @@ class TestDeveloperUnifiedExecution:
         developer = create_developer_with_mock_driver(mock_driver)
 
         results = []
-        async for state_update, event in developer.run(state, profile, str(uuid4())):
+        async for state_update, event in developer.run(state, profile, uuid4()):
             results.append((state_update, event))
 
         # Find the thinking event
@@ -242,7 +242,7 @@ class TestDeveloperUnifiedExecution:
         developer = create_developer_with_mock_driver(mock_driver)
 
         results = []
-        async for state_update, event in developer.run(state, profile, str(uuid4())):
+        async for state_update, event in developer.run(state, profile, uuid4()):
             results.append((state_update, event))
 
         # Find the tool call event
@@ -289,7 +289,7 @@ class TestDeveloperUnifiedExecution:
         developer = create_developer_with_mock_driver(mock_driver)
 
         results = []
-        async for state_update, event in developer.run(state, profile, str(uuid4())):
+        async for state_update, event in developer.run(state, profile, uuid4()):
             results.append((state_update, event))
 
         # Find the tool result event
@@ -329,7 +329,7 @@ class TestDeveloperUnifiedExecution:
         developer = create_developer_with_mock_driver(mock_driver)
 
         results = []
-        async for state_update, event in developer.run(state, profile, str(uuid4())):
+        async for state_update, event in developer.run(state, profile, uuid4()):
             results.append((state_update, event))
 
         # Find the agent output event
@@ -375,7 +375,7 @@ class TestDeveloperUnifiedExecution:
         developer = create_developer_with_mock_driver(mock_driver)
 
         results = []
-        async for state_update, event in developer.run(state, profile, str(uuid4())):
+        async for state_update, event in developer.run(state, profile, uuid4()):
             results.append((state_update, event))
 
         # Check final state reflects error
@@ -426,7 +426,7 @@ class TestDeveloperUnifiedExecution:
         developer = create_developer_with_mock_driver(mock_driver)
 
         results = []
-        async for state_update, event in developer.run(state, profile, str(uuid4())):
+        async for state_update, event in developer.run(state, profile, uuid4()):
             results.append((state_update, event))
 
         # Check final state has tool calls
@@ -481,7 +481,7 @@ class TestDeveloperUnifiedExecution:
         developer = create_developer_with_mock_driver(mock_driver)
 
         results = []
-        async for state_update, event in developer.run(state, profile, str(uuid4())):
+        async for state_update, event in developer.run(state, profile, uuid4()):
             results.append((state_update, event))
 
         # Check final state has tool results
@@ -529,7 +529,7 @@ class TestDeveloperUnifiedExecution:
         developer = create_developer_with_mock_driver(mock_driver)
 
         results = []
-        async for state_update, event in developer.run(state, profile, str(uuid4())):
+        async for state_update, event in developer.run(state, profile, uuid4()):
             results.append((state_update, event))
 
         # All events should have agent and workflow_id set (from to_stream_event)
@@ -560,7 +560,7 @@ class TestDeveloperUnifiedExecution:
         developer = create_developer_with_mock_driver(mock_driver)
 
         with pytest.raises(ValueError, match="must have a goal"):
-            async for _ in developer.run(state, profile, str(uuid4())):
+            async for _ in developer.run(state, profile, uuid4()):
                 pass
 
 

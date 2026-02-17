@@ -195,7 +195,7 @@ class TestDeveloperSystemPrompt:
             plan_markdown="# Plan\n\nDo work",
         )
 
-        async for _state_update, _event in developer.run(state, profile, str(uuid4())):
+        async for _state_update, _event in developer.run(state, profile, uuid4()):
             pass
 
         assert len(captured_kwargs) == 1
@@ -236,7 +236,7 @@ class TestDeveloperSystemPrompt:
             plan_markdown="# Plan\n\nDo work",
         )
 
-        async for _state_update, _event in developer.run(state, profile, str(uuid4())):
+        async for _state_update, _event in developer.run(state, profile, uuid4()):
             pass
 
         assert len(captured_kwargs) == 1

@@ -507,7 +507,7 @@ class TestCancelCommand:
         mock_workflows = WorkflowListResponse(
             workflows=[
                 WorkflowSummary(
-                    id=str(uuid4()),
+                    id=str(workflow_uuid := uuid4()),
                     issue_id="TEST-CONFIRM",
                     status="running",
                     worktree_path="/tmp/test-worktree",
@@ -532,7 +532,7 @@ class TestCancelCommand:
         assert result.exit_code == 0
         assert "cancelled" in result.stdout.lower() or "wf-confirm" in result.stdout
         # Verify cancel_workflow was called after confirmation
-        mock_client.cancel_workflow.assert_called_once_with(workflow_id=uuid4())
+        mock_client.cancel_workflow.assert_called_once_with(workflow_id=workflow_uuid)
 
     def test_cancel_command_aborts_on_decline(
         self, tmp_path: Path, mock_worktree_context: MagicMock

@@ -226,7 +226,7 @@ class TestWorkflowRepository:
         wf_id = uuid4()
         state = ServerExecutionState(
             id=wf_id,
-            issue_id=uuid4(),
+            issue_id="TEST-100",
             worktree_path="/path/to/worktree",
             workflow_status="in_progress",
             started_at=datetime.now(UTC),
@@ -254,7 +254,7 @@ class TestWorkflowRepository:
         wf_id = uuid4()
         state = ServerExecutionState(
             id=wf_id,
-            issue_id=uuid4(),
+            issue_id="TEST-200",
             worktree_path="/path/to/worktree",
             workflow_status="in_progress",
             started_at=datetime.now(UTC),
@@ -286,7 +286,7 @@ class TestWorkflowRepository:
         wf_id = uuid4()
         state = ServerExecutionState(
             id=wf_id,
-            issue_id=uuid4(),
+            issue_id="TEST-300",
             worktree_path="/path/to/worktree",
             workflow_status="in_progress",
             started_at=datetime.now(UTC),
@@ -339,7 +339,7 @@ class TestWorkflowRepository:
         wf_id = uuid4()
         state = ServerExecutionState(
             id=wf_id,
-            issue_id=uuid4(),
+            issue_id="TEST-400",
             worktree_path="/path/to/worktree",
             workflow_status="in_progress",
             started_at=datetime.now(UTC),
@@ -376,7 +376,7 @@ class TestWorkflowRepository:
         wf_id = uuid4()
         state = ServerExecutionState(
             id=wf_id,
-            issue_id=uuid4(),
+            issue_id="TEST-500",
             worktree_path="/path/to/worktree",
             workflow_status="in_progress",
             started_at=datetime.now(UTC),
@@ -412,7 +412,7 @@ class TestWorkflowRepository:
         wf_id = uuid4()
         state = ServerExecutionState(
             id=wf_id,
-            issue_id=uuid4(),
+            issue_id="TEST-600",
             worktree_path="/path/to/worktree",
             workflow_status="in_progress",
             started_at=datetime.now(UTC),
@@ -447,7 +447,7 @@ class TestWorkflowRepository:
         wf_id = uuid4()
         state = ServerExecutionState(
             id=wf_id,
-            issue_id=uuid4(),
+            issue_id="TEST-700",
             worktree_path="/path/to/worktree",
             workflow_status="in_progress",
             started_at=datetime.now(UTC),
@@ -642,7 +642,7 @@ class TestWorkflowLogFiltering:
         workflow_id = uuid4()
         state = ServerExecutionState(
             id=workflow_id,
-            issue_id=uuid4(),
+            issue_id="TEST-800",
             worktree_path="/tmp/test",
             workflow_status="in_progress",
             started_at=datetime.now(UTC),

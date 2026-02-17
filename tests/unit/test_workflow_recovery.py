@@ -67,7 +67,12 @@ def _make_workflow(
     worktree_path: str = "/tmp/test-worktree",
 ) -> MagicMock:
     """Create a mock ServerExecutionState with the given status."""
-    wf_id = workflow_id if isinstance(workflow_id, uuid.UUID) else uuid4()
+    if workflow_id is None:
+        wf_id = uuid4()
+    elif isinstance(workflow_id, uuid.UUID):
+        wf_id = workflow_id
+    else:
+        wf_id = uuid.UUID(workflow_id)
     wf = MagicMock()
     wf.id = wf_id
     wf.issue_id = f"ISSUE-{wf_id}"
