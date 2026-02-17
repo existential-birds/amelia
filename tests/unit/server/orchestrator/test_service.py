@@ -2,6 +2,7 @@
 
 import asyncio
 import contextlib
+import uuid
 from collections.abc import AsyncIterator, Callable, Generator
 from datetime import UTC, datetime
 from pathlib import Path
@@ -115,7 +116,7 @@ def valid_worktree(tmp_path: Path) -> str:
 @pytest.fixture
 def capture_emit(
     orchestrator: OrchestratorService,
-) -> tuple[list[tuple[str, EventType, str, dict[str, object]]], Callable[[], None]]:
+) -> tuple[list[tuple[uuid.UUID, EventType, str, dict[str, object]]], Callable[[], None]]:
     """Capture events emitted by the orchestrator.
 
     Returns a tuple of (emitted_events list, install function).
@@ -126,10 +127,10 @@ def capture_emit(
         - emitted_events: List to collect (workflow_id, event_type, message, data) tuples
         - install_fn: Call this to install the capture function on the orchestrator
     """
-    emitted_events: list[tuple[Any, EventType, str, dict[str, object]]] = []
+    emitted_events: list[tuple[uuid.UUID, EventType, str, dict[str, object]]] = []
 
     async def _capture(
-        workflow_id: Any,
+        workflow_id: uuid.UUID,
         event_type: EventType,
         message: str,
         agent: str = "system",
@@ -407,7 +408,7 @@ async def test_workflow_operation_exceptions(
     mock_repository: AsyncMock,
     operation: str,
     method_name: str,
-    args: tuple[str, ...],
+    args: tuple[uuid.UUID, ...] | tuple[uuid.UUID, str],
     expected_exception: type[Exception],
     mock_state: ServerExecutionState | None,
 ) -> None:
@@ -730,7 +731,7 @@ async def test_emit_concurrent_lock_creation_race(
     # Slow down the lock acquisition to increase race window
     original_get_max = mock_repository.get_max_event_sequence
 
-    async def slow_get_max(workflow_id: str) -> int:
+    async def slow_get_max(workflow_id: uuid.UUID) -> int:
         await asyncio.sleep(0.01)  # Create race window
         result = await original_get_max(workflow_id)
         return cast(int, result)
@@ -1147,7 +1148,7 @@ class TestTaskProgressEvents:
         self,
         orchestrator: OrchestratorService,
         mock_repository: AsyncMock,
-        capture_emit: tuple[list[tuple[str, EventType, str, dict[str, object]]], Callable[[], None]],
+        capture_emit: tuple[list[tuple[uuid.UUID, EventType, str, dict[str, object]]], Callable[[], None]],
     ) -> None:
         """Should emit TASK_STARTED when developer_node starts with total_tasks set."""
         emitted_events, install = capture_emit
@@ -1184,7 +1185,7 @@ class TestTaskProgressEvents:
         self,
         orchestrator: OrchestratorService,
         mock_repository: AsyncMock,
-        capture_emit: tuple[list[tuple[str, EventType, str, dict[str, object]]], Callable[[], None]],
+        capture_emit: tuple[list[tuple[uuid.UUID, EventType, str, dict[str, object]]], Callable[[], None]],
     ) -> None:
         """Should emit TASK_COMPLETED when next_task_node finishes."""
         emitted_events, install = capture_emit

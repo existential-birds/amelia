@@ -172,12 +172,16 @@ class OrchestratorService:
         self._profile_repo = profile_repo
         self._max_concurrent = max_concurrent
         self._checkpointer = checkpointer
-        self._active_tasks: dict[str, tuple[uuid.UUID, asyncio.Task[None]]] = {}  # worktree_path -> (workflow_id, task)
-        self._planning_tasks: dict[uuid.UUID, asyncio.Task[None]] = {}  # workflow_id -> planning task
+        # worktree_path -> (workflow_id, task)
+        self._active_tasks: dict[str, tuple[uuid.UUID, asyncio.Task[None]]] = {}
+        # workflow_id -> planning task
+        self._planning_tasks: dict[uuid.UUID, asyncio.Task[None]] = {}
         self._approval_lock = asyncio.Lock()  # Prevents race conditions on approvals
         self._start_lock = asyncio.Lock()  # Prevents race conditions on workflow start
-        self._sequence_counters: dict[uuid.UUID, int] = {}  # workflow_id -> next sequence
-        self._sequence_locks: dict[uuid.UUID, asyncio.Lock] = {}  # workflow_id -> lock
+        # workflow_id -> next sequence
+        self._sequence_counters: dict[uuid.UUID, int] = {}
+        # workflow_id -> lock
+        self._sequence_locks: dict[uuid.UUID, asyncio.Lock] = {}
 
     def _create_server_graph(
         self,
