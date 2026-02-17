@@ -1638,8 +1638,9 @@ async def test_resume_workflow_corrupted_checkpoint_raises_invalid_state(
     mock_repository: AsyncMock,
 ) -> None:
     """resume_workflow should raise InvalidStateError when graph.aget_state() throws a database error."""
+    wf_id = uuid4()
     workflow = ServerExecutionState(
-        id="test-wf",
+        id=wf_id,
         issue_id="ISSUE-123",
         created_at=datetime.now(UTC),
         profile_id="test",
@@ -1658,7 +1659,7 @@ async def test_resume_workflow_corrupted_checkpoint_raises_invalid_state(
         patch.object(orchestrator, "_create_server_graph", return_value=mock_graph),
         pytest.raises(InvalidStateError) as exc_info,
     ):
-        await orchestrator.resume_workflow("test-wf")
+        await orchestrator.resume_workflow(str(wf_id))
 
     assert "corrupted" in str(exc_info.value).lower()
 

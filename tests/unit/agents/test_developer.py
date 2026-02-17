@@ -3,6 +3,7 @@ from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from typing import Any
 from unittest.mock import MagicMock, patch
+from uuid import uuid4
 
 import pytest
 
@@ -92,7 +93,7 @@ class TestDeveloperRunNoDoubleCount:
         issue = mock_issue_factory(title="Implement feature", description="Feature desc")
         profile = mock_profile_factory()
         state = ImplementationState(
-            workflow_id="test-workflow",
+            workflow_id=uuid4(),
             created_at=datetime.now(UTC),
             status="running",
             profile_id="test",
@@ -146,7 +147,7 @@ class TestDeveloperRunNoDoubleCount:
             developer = Developer(config)
 
             final_state = None
-            async for new_state, _event in developer.run(state, profile, workflow_id="wf-1"):
+            async for new_state, _event in developer.run(state, profile, workflow_id=uuid4()):
                 final_state = new_state
 
         assert final_state is not None

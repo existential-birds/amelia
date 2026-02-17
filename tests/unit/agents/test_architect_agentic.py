@@ -349,7 +349,7 @@ class TestArchitectPlanNoDoubleCount:
         issue = mock_issue_factory()
         profile = mock_profile_factory()
         state = ImplementationState(
-            workflow_id="test-workflow",
+            workflow_id=uuid4(),
             created_at=datetime.now(UTC),
             status="running",
             profile_id="test",
@@ -387,7 +387,7 @@ class TestArchitectPlanNoDoubleCount:
             architect = Architect(config)
 
             final_state = None
-            async for new_state, _ in architect.plan(state, profile, workflow_id="wf-1"):
+            async for new_state, _ in architect.plan(state, profile, workflow_id=uuid4()):
                 final_state = new_state
 
         assert final_state is not None
