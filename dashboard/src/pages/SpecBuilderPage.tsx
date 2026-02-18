@@ -101,6 +101,7 @@ function SpecBuilderPageContent() {
         if (mounted) {
           toast.error("Failed to load sessions");
         }
+        return; // Stop initialization on error
       }
       if (!mounted) return;
 

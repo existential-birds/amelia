@@ -34,8 +34,7 @@ export function ApiModelSelect({ agentKey, value, onChange }: ApiModelSelectProp
   // Eagerly fetch models on mount (idempotent — skips if already loaded)
   useEffect(() => {
     fetchModels();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [fetchModels]);
 
   // Get recent models that exist in the store
   const recentModels = recentModelIds

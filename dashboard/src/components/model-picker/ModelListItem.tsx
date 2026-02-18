@@ -63,6 +63,7 @@ function CapabilityIcon({
 
   return (
     <span
+      role="img"
       title={labels[capability]}
       aria-label={labels[capability]}
       className={cn(
