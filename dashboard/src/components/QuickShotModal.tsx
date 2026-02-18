@@ -184,11 +184,13 @@ export function QuickShotModal({ open, onOpenChange, defaults }: QuickShotModalP
 
     async function initializeForm() {
       // Fetch server config first
-      let serverDir: string = '';
+      let serverDir = '';
+      let activeProfile = '';
       try {
         const config = await api.getConfig();
         if (!mounted) return;
         serverDir = config.working_dir;
+        activeProfile = config.active_profile;
         setServerWorkingDir(serverDir);
       } catch (error) {
         if (!mounted) return;
@@ -206,7 +208,7 @@ export function QuickShotModal({ open, onOpenChange, defaults }: QuickShotModalP
             defaults?.worktree_path ||
             serverDir ||
             '',
-          profile: currentValues.profile || defaults?.profile || '',
+          profile: currentValues.profile || defaults?.profile || activeProfile || '',
         }),
         { keepDirty: true }
       );

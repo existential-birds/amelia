@@ -265,7 +265,7 @@ describe('QuickShotModal', () => {
         expect(api.createWorkflow).toHaveBeenCalledWith({
           issue_id: 'TASK-001',
           worktree_path: '/Users/me/repo',
-          profile: undefined,
+          profile: 'test',
           task_title: 'Test title',
           task_description: undefined,
           start: true,
@@ -464,6 +464,48 @@ describe('QuickShotModal', () => {
       await waitFor(() => {
         const worktreeInput = screen.getByLabelText(/worktree path/i);
         expect(worktreeInput).toHaveValue('/tmp/repo');
+      });
+    });
+
+    it('pre-fills profile from active_profile when no defaults provided', async () => {
+      const user = userEvent.setup();
+      vi.mocked(api.getConfig).mockResolvedValue({ working_dir: '/tmp/repo', max_concurrent: 5, active_profile: 'work', active_profile_info: null });
+      render(<QuickShotModal open={true} onOpenChange={vi.fn()} />);
+
+      await waitFor(() => {
+        expect(api.getConfig).toHaveBeenCalled();
+      });
+
+      await user.type(screen.getByLabelText(/task id/i), 'TASK-001');
+      await user.type(screen.getByLabelText(/worktree path/i), '/path/to/repo');
+      await user.type(screen.getByLabelText(/task title/i), 'Test title');
+      await user.click(screen.getByRole('button', { name: /^start$/i }));
+
+      await waitFor(() => {
+        expect(api.createWorkflow).toHaveBeenCalledWith(
+          expect.objectContaining({ profile: 'work' })
+        );
+      });
+    });
+
+    it('does not override profile with active_profile when defaults are provided', async () => {
+      const user = userEvent.setup();
+      vi.mocked(api.getConfig).mockResolvedValue({ working_dir: '/tmp/repo', max_concurrent: 5, active_profile: 'personal', active_profile_info: null });
+      render(<QuickShotModal open={true} onOpenChange={vi.fn()} defaults={{ profile: 'work' }} />);
+
+      await waitFor(() => {
+        expect(api.getConfig).toHaveBeenCalled();
+      });
+
+      await user.type(screen.getByLabelText(/task id/i), 'TASK-001');
+      await user.type(screen.getByLabelText(/worktree path/i), '/path/to/repo');
+      await user.type(screen.getByLabelText(/task title/i), 'Test title');
+      await user.click(screen.getByRole('button', { name: /^start$/i }));
+
+      await waitFor(() => {
+        expect(api.createWorkflow).toHaveBeenCalledWith(
+          expect.objectContaining({ profile: 'work' })
+        );
       });
     });
   });

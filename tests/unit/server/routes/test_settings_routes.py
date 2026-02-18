@@ -398,6 +398,42 @@ class TestProfileRoutes:
         detail = response.json()["detail"]
         assert any("Missing required agents" in str(e) for e in detail)
 
+    def test_create_profile_relative_working_dir_returns_422(
+        self, profile_client, mock_profile_repo
+    ):
+        """POST /api/profiles with relative working_dir returns 422."""
+        response = profile_client.post(
+            "/api/profiles",
+            json={
+                "id": "bad-profile",
+                "working_dir": "relative/path",
+                "agents": {
+                    "architect": {"driver": "cli", "model": "opus"},
+                    "developer": {"driver": "cli", "model": "opus"},
+                    "reviewer": {"driver": "cli", "model": "opus"},
+                    "task_reviewer": {"driver": "cli", "model": "opus"},
+                    "evaluator": {"driver": "cli", "model": "opus"},
+                    "brainstormer": {"driver": "cli", "model": "opus"},
+                    "plan_validator": {"driver": "cli", "model": "opus"},
+                },
+            },
+        )
+        assert response.status_code == 422
+        detail = response.json()["detail"]
+        assert any("working_dir must be an absolute path" in str(e) for e in detail)
+
+    def test_update_profile_relative_working_dir_returns_422(
+        self, profile_client, mock_profile_repo
+    ):
+        """PUT /api/profiles/{id} with relative working_dir returns 422."""
+        response = profile_client.put(
+            "/api/profiles/dev",
+            json={"working_dir": "./relative"},
+        )
+        assert response.status_code == 422
+        detail = response.json()["detail"]
+        assert any("working_dir must be an absolute path" in str(e) for e in detail)
+
     def test_create_profile_extra_agents_accepted(
         self, profile_client, mock_profile_repo
     ):
