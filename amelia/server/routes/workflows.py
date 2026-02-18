@@ -71,7 +71,12 @@ async def create_workflow(
         if request.plan_file is not None or request.plan_content is not None:
             # External plan + immediate start: queue (persists plan_cache) then start
             workflow_id = await orchestrator.queue_workflow(request)
-            await orchestrator.start_pending_workflow(workflow_id)
+            try:
+                await orchestrator.start_pending_workflow(workflow_id)
+            except (WorkflowConflictError, ConcurrencyLimitError, InvalidStateError):
+                # Cancel the queued workflow to prevent it being orphaned in the DB
+                await orchestrator.cancel_workflow(workflow_id)
+                raise
         else:
             # Immediate execution (existing behavior)
             workflow_id = await orchestrator.start_workflow(

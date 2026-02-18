@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 
 from amelia.server.dependencies import get_orchestrator, get_repository
 from amelia.server.exceptions import (
+    ConcurrencyLimitError,
     InvalidStateError,
     WorkflowConflictError,
     WorkflowNotFoundError,
@@ -41,6 +42,7 @@ def mock_orchestrator() -> MagicMock:
     orch.queue_workflow = AsyncMock(return_value=uuid4())
     orch.queue_and_plan_workflow = AsyncMock(return_value=uuid4())
     orch.start_pending_workflow = AsyncMock()
+    orch.cancel_workflow = AsyncMock()
     return orch
 
 
@@ -160,6 +162,52 @@ class TestCreateWorkflowQueue:
         mock_orchestrator.queue_workflow.assert_called_once()
         mock_orchestrator.start_pending_workflow.assert_called_once()
         mock_orchestrator.start_workflow.assert_not_called()
+
+    def test_start_pending_conflict_cancels_queued_workflow(
+        self, client: TestClient, mock_orchestrator: MagicMock
+    ) -> None:
+        """WorkflowConflictError from start_pending cancels the queued workflow."""
+        workflow_id = uuid4()
+        mock_orchestrator.queue_workflow = AsyncMock(return_value=workflow_id)
+        mock_orchestrator.start_pending_workflow = AsyncMock(
+            side_effect=WorkflowConflictError("/repo", uuid4())
+        )
+
+        response = client.post(
+            "/api/workflows",
+            json={
+                "issue_id": "ISSUE-123",
+                "worktree_path": "/repo",
+                "start": True,
+                "plan_content": "# My Plan",
+            },
+        )
+
+        assert response.status_code == 409
+        mock_orchestrator.cancel_workflow.assert_called_once_with(workflow_id)
+
+    def test_start_pending_concurrency_limit_cancels_queued_workflow(
+        self, client: TestClient, mock_orchestrator: MagicMock
+    ) -> None:
+        """ConcurrencyLimitError from start_pending cancels the queued workflow."""
+        workflow_id = uuid4()
+        mock_orchestrator.queue_workflow = AsyncMock(return_value=workflow_id)
+        mock_orchestrator.start_pending_workflow = AsyncMock(
+            side_effect=ConcurrencyLimitError(5)
+        )
+
+        response = client.post(
+            "/api/workflows",
+            json={
+                "issue_id": "ISSUE-123",
+                "worktree_path": "/repo",
+                "start": True,
+                "plan_content": "# My Plan",
+            },
+        )
+
+        assert response.status_code == 429
+        mock_orchestrator.cancel_workflow.assert_called_once_with(workflow_id)
 
     def test_plan_now_true_with_plan_content_is_rejected(
         self, client: TestClient, mock_orchestrator: MagicMock
