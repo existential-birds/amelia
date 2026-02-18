@@ -140,7 +140,9 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
         timeoutId: undefined,
       });
     } finally {
-      clearTimeout(timeoutId);
+      if (timeoutId !== undefined) {
+        clearTimeout(timeoutId);
+      }
     }
   },
 

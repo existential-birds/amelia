@@ -697,7 +697,7 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
       const agentConfig = formData.agents[key];
       agents[key] = {
         driver: agentConfig?.driver ?? 'cli',
-        // Use || to treat empty strings as missing (backend accepts empty strings but they cause runtime failures)
+        // Defensive: Use || to coerce empty strings to default. Backend bug allows empty strings but they cause runtime failures.
         model: agentConfig?.model || 'opus',
       };
     }

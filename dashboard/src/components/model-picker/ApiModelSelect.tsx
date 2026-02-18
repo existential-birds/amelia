@@ -49,7 +49,7 @@ export function ApiModelSelect({ agentKey, value, onChange }: ApiModelSelectProp
   const displayModels = currentModel ? [currentModel, ...recentModels] : recentModels;
 
   // Whether we have a fallback item for a value not yet in the store (e.g. during loading)
-  const valueNotYetInStore = value && value !== '' && !displayModels.some((m) => m.id === value);
+  const valueNotYetInStore = value && !displayModels.some((m) => m.id === value);
 
   const handleSelect = (modelId: string) => {
     if (!modelId) return;
