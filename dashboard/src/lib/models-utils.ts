@@ -9,9 +9,9 @@ interface OpenRouterModel {
   name: string;
   context_length: number | null;
   pricing: { prompt: string; completion: string };
-  architecture: { input_modalities: string[]; output_modalities: string[] };
+  architecture?: { input_modalities: string[]; output_modalities: string[] };
   top_provider: { context_length: number | null; max_completion_tokens: number | null };
-  supported_parameters: string[];
+  supported_parameters?: string[];
 }
 
 /**
@@ -51,8 +51,8 @@ export function flattenModelsData(data: OpenRouterModel[]): ModelInfo[] {
       provider,
       capabilities: {
         tool_call: true,
-        reasoning: model.supported_parameters.includes('reasoning'),
-        structured_output: model.supported_parameters.includes('response_format'),
+        reasoning: model.supported_parameters?.includes('reasoning') ?? false,
+        structured_output: model.supported_parameters?.includes('response_format') ?? false,
       },
       cost: {
         input: inputCost,
@@ -63,8 +63,8 @@ export function flattenModelsData(data: OpenRouterModel[]): ModelInfo[] {
         output: model.top_provider?.max_completion_tokens ?? null,
       },
       modalities: {
-        input: model.architecture.input_modalities,
-        output: model.architecture.output_modalities,
+        input: model.architecture?.input_modalities ?? [],
+        output: model.architecture?.output_modalities ?? [],
       },
     });
   }
