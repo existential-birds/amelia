@@ -63,6 +63,7 @@ function CapabilityIcon({
 
   return (
     <span
+      role="img"
       title={labels[capability]}
       aria-label={labels[capability]}
       className={cn(
@@ -78,7 +79,10 @@ function CapabilityIcon({
 /**
  * Format cost for display (e.g., 3 -> "$3.00 / 1M").
  */
-function formatCost(cost: number): string {
+function formatCost(cost: number | null): string {
+  if (cost === null) {
+    return 'Unknown';
+  }
   return `$${cost.toFixed(2)} / 1M`;
 }
 
@@ -108,6 +112,7 @@ export function ModelListItem({
         data-selected={isSelected}
         aria-label={isExpanded ? 'Collapse model details' : 'Expand model details'}
         aria-expanded={isExpanded}
+        aria-controls={`model-details-${model.id}`}
         className="flex w-full items-center gap-2 px-3 py-2.5 text-left hover:bg-accent/20 transition-colors min-h-[44px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
       >
         {/* Provider logo */}
@@ -120,7 +125,7 @@ export function ModelListItem({
         </div>
 
         {/* Capabilities */}
-        <div className="hidden sm:flex items-center gap-1">
+        <div className="hidden sm:flex items-center gap-1 shrink-0">
           <CapabilityIcon capability="tool_call" enabled={model.capabilities.tool_call} />
           <CapabilityIcon capability="reasoning" enabled={model.capabilities.reasoning} />
           <CapabilityIcon
@@ -130,12 +135,14 @@ export function ModelListItem({
         </div>
 
         {/* Context size */}
-        <span className="text-xs text-muted-foreground w-12 text-right">
+        <span className="text-xs text-muted-foreground w-12 text-right shrink-0">
           {formatContextSize(model.limit.context)}
         </span>
 
         {/* Price tier */}
-        <PriceTierBadge tier={priceTier} />
+        <div className="w-[70px] shrink-0 flex justify-end">
+          <PriceTierBadge tier={priceTier} />
+        </div>
 
         {/* Expand indicator */}
         <ChevronDown
@@ -148,7 +155,7 @@ export function ModelListItem({
 
       {/* Expanded details */}
       {isExpanded && (
-        <div className="px-3 pb-3 pt-1 bg-muted/20">
+        <div id={`model-details-${model.id}`} className="px-3 pb-3 pt-1 bg-muted/20">
           <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs mb-3">
             {/* Pricing */}
             <div>
@@ -169,11 +176,11 @@ export function ModelListItem({
             {/* Limits */}
             <div>
               <div className="text-muted-foreground">Context</div>
-              <div>{model.limit.context.toLocaleString()} tokens</div>
+              <div>{model.limit.context !== null ? `${model.limit.context.toLocaleString()} tokens` : 'Unknown'}</div>
             </div>
             <div>
               <div className="text-muted-foreground">Max output</div>
-              <div>{model.limit.output.toLocaleString()} tokens</div>
+              <div>{model.limit.output !== null ? `${model.limit.output.toLocaleString()} tokens` : 'Unknown'}</div>
             </div>
 
             {/* Modalities */}

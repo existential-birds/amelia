@@ -2,69 +2,71 @@ import type { ModelInfo, AgentRequirements, PriceTier } from '@/components/model
 import { PRICE_TIER_THRESHOLDS } from '@/components/model-picker/constants';
 
 /**
- * Raw model data from models.dev API.
+ * Model data from OpenRouter /api/v1/models endpoint.
  */
-interface RawModelData {
+interface OpenRouterModel {
   id: string;
   name: string;
-  tool_call: boolean;
-  reasoning: boolean;
-  structured_output: boolean;
-  cost: { input: number; output: number; reasoning?: number };
-  limit: { context: number; output: number };
-  modalities: { input: string[]; output: string[] };
-  release_date?: string;
-  knowledge?: string;
+  context_length: number | null;
+  pricing: { prompt: string; completion: string };
+  architecture?: { input_modalities: string[]; output_modalities: string[] };
+  top_provider: { context_length: number | null; max_completion_tokens: number | null };
+  supported_parameters?: string[];
 }
 
 /**
- * Provider data from models.dev API.
+ * Get the valid context length from a model, falling back to top_provider if needed.
  */
-interface ProviderData {
-  id: string;
-  name: string;
-  models: Record<string, RawModelData>;
+function getContextLength(model: OpenRouterModel): number | null {
+  if (model.context_length && model.context_length > 0) {
+    return model.context_length;
+  }
+  if (model.top_provider?.context_length && model.top_provider.context_length > 0) {
+    return model.top_provider.context_length;
+  }
+  return null;
 }
 
 /**
- * Flatten the nested models.dev API response into a flat array of ModelInfo.
- * Only includes OpenRouter models with tool_call capability (required for all agents).
+ * Flatten the OpenRouter API response into a flat array of ModelInfo.
+ * Assumes all models support tool calls — the upstream API is queried with
+ * `?supported_parameters=tools` so only tool-capable models are returned.
  */
-export function flattenModelsData(
-  data: Record<string, ProviderData>
-): ModelInfo[] {
+export function flattenModelsData(data: OpenRouterModel[]): ModelInfo[] {
   const models: ModelInfo[] = [];
 
-  // Only use OpenRouter models - other providers have different model IDs
-  // that aren't compatible with our API driver (which routes through OpenRouter)
-  const openrouter = data['openrouter'];
-  if (!openrouter?.models) return models;
+  for (const model of data) {
+    // Extract provider from model ID (e.g., "anthropic/claude-sonnet-4" -> "anthropic")
+    const slashIndex = model.id.indexOf('/');
+    const provider = slashIndex !== -1 ? model.id.substring(0, slashIndex) : 'unknown';
 
-  for (const rawModel of Object.values(openrouter.models)) {
-    // Skip models without tool_call - all agents require it
-    if (!rawModel.tool_call) continue;
-
-    // Skip models with missing required fields
-    if (!rawModel.cost || !rawModel.limit || !rawModel.modalities) continue;
-
-    // Extract provider from OpenRouter model ID (e.g., "minimax/minimax-m2.5" -> "minimax")
-    const slashIndex = rawModel.id.indexOf('/');
-    const provider = slashIndex !== -1 ? rawModel.id.substring(0, slashIndex) : 'unknown';
+    // Parse and validate cost values
+    const inputParsed = parseFloat(model.pricing.prompt);
+    const inputCost = isNaN(inputParsed) ? null : inputParsed * 1_000_000; // Convert per-token to per-1M tokens
+    const outputParsed = parseFloat(model.pricing.completion);
+    const outputCost = isNaN(outputParsed) ? null : outputParsed * 1_000_000; // Convert per-token to per-1M tokens
 
     models.push({
-      id: rawModel.id,
-      name: rawModel.name,
+      id: model.id,
+      name: model.name,
       provider,
       capabilities: {
-        tool_call: rawModel.tool_call,
-        reasoning: rawModel.reasoning,
-        structured_output: rawModel.structured_output,
+        tool_call: true,
+        reasoning: model.supported_parameters?.includes('reasoning') ?? false,
+        structured_output: model.supported_parameters?.includes('response_format') ?? false,
       },
-      cost: rawModel.cost,
-      limit: rawModel.limit,
-      modalities: rawModel.modalities,
-      release_date: rawModel.release_date,
-      knowledge: rawModel.knowledge,
+      cost: {
+        input: inputCost,
+        output: outputCost,
+      },
+      limit: {
+        context: getContextLength(model),
+        output: model.top_provider?.max_completion_tokens ?? null,
+      },
+      modalities: {
+        input: model.architecture?.input_modalities ?? [],
+        output: model.architecture?.output_modalities ?? [],
+      },
     });
   }
 
@@ -73,8 +75,12 @@ export function flattenModelsData(
 
 /**
  * Determine the price tier for a model based on output cost per 1M tokens.
+ * Returns 'premium' for models with unknown pricing (null).
  */
-export function getPriceTier(outputCost: number): PriceTier {
+export function getPriceTier(outputCost: number | null): PriceTier {
+  if (outputCost === null) {
+    return 'premium';
+  }
   if (outputCost < PRICE_TIER_THRESHOLDS.budget) {
     return 'budget';
   }
@@ -130,7 +136,7 @@ export function filterModelsByRequirements(
     }
 
     // Check minimum context size
-    if (model.limit.context < requirements.minContext) {
+    if (model.limit.context === null || model.limit.context < requirements.minContext) {
       return false;
     }
 
@@ -146,7 +152,13 @@ export function filterModelsByRequirements(
 /**
  * Format context size for display (e.g., 200000 -> "200K").
  */
-export function formatContextSize(contextSize: number): string {
+export function formatContextSize(contextSize: number | null): string {
+  if (contextSize === null) {
+    return 'Unknown';
+  }
+  if (contextSize === 0) {
+    return '0';
+  }
   if (contextSize >= 1_000_000) {
     return `${Math.round(contextSize / 1_000_000)}M`;
   }
