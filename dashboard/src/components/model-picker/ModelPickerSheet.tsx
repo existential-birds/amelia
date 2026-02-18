@@ -106,7 +106,6 @@ export function ModelPickerSheet({
     if (open) {
       refreshModels();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, refreshModels]);
 
   // Get agent-filtered models

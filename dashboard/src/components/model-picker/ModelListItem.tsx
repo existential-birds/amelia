@@ -108,6 +108,7 @@ export function ModelListItem({
         data-selected={isSelected}
         aria-label={isExpanded ? 'Collapse model details' : 'Expand model details'}
         aria-expanded={isExpanded}
+        aria-controls={`model-details-${model.id}`}
         className="flex w-full items-center gap-2 px-3 py-2.5 text-left hover:bg-accent/20 transition-colors min-h-[44px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
       >
         {/* Provider logo */}
@@ -150,7 +151,7 @@ export function ModelListItem({
 
       {/* Expanded details */}
       {isExpanded && (
-        <div className="px-3 pb-3 pt-1 bg-muted/20">
+        <div id={`model-details-${model.id}`} className="px-3 pb-3 pt-1 bg-muted/20">
           <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs mb-3">
             {/* Pricing */}
             <div>

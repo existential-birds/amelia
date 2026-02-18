@@ -121,7 +121,7 @@ export function ProviderLogo({ provider, className }: ProviderLogoProps) {
           src={`https://models.dev/logos/${provider}.svg`}
           alt={provider}
           loading="lazy"
-          className="h-full w-full rounded-sm dark:invert"
+          className="h-full w-full rounded-sm"
           onError={() => setImageError(true)}
         />
       )}

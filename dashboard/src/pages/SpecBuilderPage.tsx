@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Menu, Lightbulb, Bot, Cpu } from "lucide-react";
 import { api } from "@/api/client";
+import { getProfile } from "@/api/settings";
 import { formatDriver, formatModel } from "@/lib/utils";
 import {
   Conversation,
@@ -94,14 +95,33 @@ function SpecBuilderPageContent() {
     let mounted = true;
 
     const init = async () => {
-      await loadSessions();
+      try {
+        await loadSessions();
+      } catch (error) {
+        console.warn('Failed to load sessions:', error);
+      }
       if (!mounted) return;
 
       try {
         const config = await api.getConfig();
-        if (mounted) {
-          activeProfileRef.current = config.active_profile;
-          setConfigProfileInfo(config.active_profile_info);
+        if (!mounted) return;
+        activeProfileRef.current = config.active_profile;
+
+        // Fetch brainstormer agent's model/driver from the profile
+        // (config endpoint returns the developer agent's model which is wrong for spec builder)
+        if (config.active_profile) {
+          const profile = await getProfile(config.active_profile);
+          if (!mounted) return;
+          const brainstormerConfig = profile.agents?.brainstormer;
+          if (brainstormerConfig) {
+            setConfigProfileInfo({
+              name: profile.id,
+              driver: brainstormerConfig.driver,
+              model: brainstormerConfig.model,
+            });
+          } else {
+            setConfigProfileInfo(config.active_profile_info);
+          }
         }
       } catch (error) {
         if (mounted) {
