@@ -136,7 +136,7 @@ function SpecBuilderPageContent() {
         }
       } catch (error) {
         if (mounted) {
-          logger.warn('Failed to load config, using defaults', { error });
+          logger.warn('Failed to load config, profile info will remain null', { error });
         }
       }
     };

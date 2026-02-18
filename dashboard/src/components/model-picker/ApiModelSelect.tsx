@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Select,
   SelectContent,
@@ -31,10 +31,14 @@ export function ApiModelSelect({ agentKey, value, onChange }: ApiModelSelectProp
   const { recentModelIds, addRecentModel } = useRecentModels();
   const [sheetOpen, setSheetOpen] = useState(false);
 
+  // Use ref to maintain stable identity for fetchModels
+  const fetchModelsRef = useRef(fetchModels);
+  fetchModelsRef.current = fetchModels;
+
   // Eagerly fetch models on mount (idempotent — skips if already loaded)
   useEffect(() => {
-    fetchModels();
-  }, [fetchModels]);
+    fetchModelsRef.current();
+  }, []);
 
   // Get recent models that exist in the store
   const recentModels = recentModelIds

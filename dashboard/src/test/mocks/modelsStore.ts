@@ -32,6 +32,20 @@ import type { ModelInfo } from '@/components/model-picker/types';
 
 /**
  * Default mock models for testing.
+ *
+ * Use this export when you need to:
+ * - Reference sample model data in test assertions
+ * - Provide model options to components under test
+ * - Create custom store states with specific model configurations
+ *
+ * @example
+ * ```ts
+ * // Assert against expected model data
+ * expect(result).toContain(mockModels[0]);
+ *
+ * // Create custom store state with different models
+ * const customState = { ...defaultModelsStoreState, models: [mockModels[0]] };
+ * ```
  */
 export const mockModels: ModelInfo[] = [
   {
@@ -56,6 +70,26 @@ export const mockModels: ModelInfo[] = [
 
 /**
  * Default mock state for the models store.
+ *
+ * Use this export when you need to:
+ * - Create partial overrides with `createMockModelsStore({ ...overrides })`
+ * - Access default mock functions (fetchModels, refreshModels, etc.) for spying
+ * - Build custom store states while preserving base functionality
+ *
+ * Represents a fully populated models store with:
+ * - Pre-loaded models from `mockModels`
+ * - Mock functions for all store actions
+ * - Default loading/error states
+ *
+ * @example
+ * ```ts
+ * // Override specific state while keeping defaults
+ * const customStore = createMockModelsStore({ isLoading: true });
+ *
+ * // Spy on mock functions
+ * const { fetchModels } = defaultModelsStoreState;
+ * expect(fetchModels).toHaveBeenCalled();
+ * ```
  */
 export const defaultModelsStoreState = {
   models: mockModels,
