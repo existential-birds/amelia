@@ -2,69 +2,54 @@ import type { ModelInfo, AgentRequirements, PriceTier } from '@/components/model
 import { PRICE_TIER_THRESHOLDS } from '@/components/model-picker/constants';
 
 /**
- * Raw model data from models.dev API.
+ * Model data from OpenRouter /api/v1/models endpoint.
  */
-interface RawModelData {
+interface OpenRouterModel {
   id: string;
   name: string;
-  tool_call: boolean;
-  reasoning: boolean;
-  structured_output: boolean;
-  cost: { input: number; output: number; reasoning?: number };
-  limit: { context: number; output: number };
-  modalities: { input: string[]; output: string[] };
-  release_date?: string;
-  knowledge?: string;
+  context_length: number | null;
+  pricing: { prompt: string; completion: string };
+  architecture: { input_modalities: string[]; output_modalities: string[] };
+  top_provider: { context_length: number; max_completion_tokens: number };
+  supported_parameters: string[];
 }
 
 /**
- * Provider data from models.dev API.
+ * Flatten the OpenRouter API response into a flat array of ModelInfo.
+ * Only includes models with tool support (required for all agents).
  */
-interface ProviderData {
-  id: string;
-  name: string;
-  models: Record<string, RawModelData>;
-}
-
-/**
- * Flatten the nested models.dev API response into a flat array of ModelInfo.
- * Only includes OpenRouter models with tool_call capability (required for all agents).
- */
-export function flattenModelsData(
-  data: Record<string, ProviderData>
-): ModelInfo[] {
+export function flattenModelsData(data: OpenRouterModel[]): ModelInfo[] {
   const models: ModelInfo[] = [];
 
-  // Only use OpenRouter models - other providers have different model IDs
-  // that aren't compatible with our API driver (which routes through OpenRouter)
-  const openrouter = data['openrouter'];
-  if (!openrouter?.models) return models;
+  for (const model of data) {
+    // Skip models without tools support - all agents require it
+    if (!model.supported_parameters?.includes('tools')) continue;
 
-  for (const rawModel of Object.values(openrouter.models)) {
-    // Skip models without tool_call - all agents require it
-    if (!rawModel.tool_call) continue;
-
-    // Skip models with missing required fields
-    if (!rawModel.cost || !rawModel.limit || !rawModel.modalities) continue;
-
-    // Extract provider from OpenRouter model ID (e.g., "minimax/minimax-m2.5" -> "minimax")
-    const slashIndex = rawModel.id.indexOf('/');
-    const provider = slashIndex !== -1 ? rawModel.id.substring(0, slashIndex) : 'unknown';
+    // Extract provider from model ID (e.g., "anthropic/claude-sonnet-4" -> "anthropic")
+    const slashIndex = model.id.indexOf('/');
+    const provider = slashIndex !== -1 ? model.id.substring(0, slashIndex) : 'unknown';
 
     models.push({
-      id: rawModel.id,
-      name: rawModel.name,
+      id: model.id,
+      name: model.name,
       provider,
       capabilities: {
-        tool_call: rawModel.tool_call,
-        reasoning: rawModel.reasoning,
-        structured_output: rawModel.structured_output,
+        tool_call: true,
+        reasoning: model.supported_parameters.includes('reasoning'),
+        structured_output: model.supported_parameters.includes('response_format'),
       },
-      cost: rawModel.cost,
-      limit: rawModel.limit,
-      modalities: rawModel.modalities,
-      release_date: rawModel.release_date,
-      knowledge: rawModel.knowledge,
+      cost: {
+        input: parseFloat(model.pricing.prompt) * 1_000_000,
+        output: parseFloat(model.pricing.completion) * 1_000_000,
+      },
+      limit: {
+        context: model.context_length ?? model.top_provider.context_length,
+        output: model.top_provider.max_completion_tokens,
+      },
+      modalities: {
+        input: model.architecture.input_modalities,
+        output: model.architecture.output_modalities,
+      },
     });
   }
 

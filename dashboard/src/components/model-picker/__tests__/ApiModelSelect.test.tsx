@@ -60,7 +60,8 @@ describe('ApiModelSelect', () => {
       refreshModels: vi.fn(),
       getModelsForAgent: vi.fn().mockReturnValue(mockModels),
     };
-    // Support both selector pattern and direct call pattern
+    // Support both selector pattern (useModelsStore((s) => s.models)) and direct call pattern (useModelsStore())
+    // because Zustand stores can be called either way, and our component uses both patterns
     vi.mocked(useModelsStore).mockImplementation((selector?: unknown) =>
       typeof selector === 'function' ? selector(mockStore) : mockStore
     );

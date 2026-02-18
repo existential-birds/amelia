@@ -7,7 +7,7 @@ import { flattenModelsData, filterModelsByRequirements } from '@/lib/models-util
  * State for the models store.
  */
 interface ModelsState {
-  /** Flattened list of all models from models.dev */
+  /** Flattened list of all models from OpenRouter */
   models: ModelInfo[];
   /** Unique list of provider IDs */
   providers: string[];
@@ -27,7 +27,7 @@ interface ModelsState {
 }
 
 /**
- * Zustand store for models.dev data.
+ * Zustand store for OpenRouter model data.
  */
 export const useModelsStore = create<ModelsState>((set, get) => ({
   models: [],
@@ -61,7 +61,7 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
         throw new Error(`Invalid JSON response from models API: ${parseError}`);
       }
 
-      const models = flattenModelsData(data);
+      const models = flattenModelsData(data.data);
       const providers = [...new Set(models.map((m) => m.provider))];
 
       set({

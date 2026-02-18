@@ -23,6 +23,6 @@ export const RECENT_MODELS_KEY = 'amelia:recent-models';
 export const MAX_RECENT_MODELS = 10;
 
 /**
- * models.dev API endpoint.
+ * OpenRouter API endpoint for model listing.
  */
-export const MODELS_API_URL = 'https://models.dev/api.json';
+export const MODELS_API_URL = 'https://openrouter.ai/api/v1/models';

@@ -9,35 +9,27 @@ import type { ModelInfo, AgentRequirements } from '@/components/model-picker/typ
 
 describe('models-utils', () => {
   describe('flattenModelsData', () => {
-    it('should flatten openrouter models and extract provider from ID', () => {
-      const apiResponse = {
-        openrouter: {
-          id: 'openrouter',
-          name: 'OpenRouter',
-          models: {
-            'anthropic/claude-sonnet-4': {
-              id: 'anthropic/claude-sonnet-4',
-              name: 'Claude Sonnet 4',
-              tool_call: true,
-              reasoning: true,
-              structured_output: true,
-              cost: { input: 3, output: 15 },
-              limit: { context: 200000, output: 16000 },
-              modalities: { input: ['text', 'image'], output: ['text'] },
-            },
-            'openai/gpt-4o': {
-              id: 'openai/gpt-4o',
-              name: 'GPT-4o',
-              tool_call: true,
-              reasoning: false,
-              structured_output: true,
-              cost: { input: 2.5, output: 10 },
-              limit: { context: 128000, output: 16384 },
-              modalities: { input: ['text', 'image'], output: ['text'] },
-            },
-          },
+    it('should flatten OpenRouter models and extract provider from ID', () => {
+      const apiResponse = [
+        {
+          id: 'anthropic/claude-sonnet-4',
+          name: 'Claude Sonnet 4',
+          context_length: 200000,
+          pricing: { prompt: '0.000003', completion: '0.000015' },
+          architecture: { input_modalities: ['text', 'image'], output_modalities: ['text'] },
+          top_provider: { context_length: 200000, max_completion_tokens: 16000 },
+          supported_parameters: ['tools', 'reasoning', 'response_format'],
         },
-      };
+        {
+          id: 'openai/gpt-4o',
+          name: 'GPT-4o',
+          context_length: 128000,
+          pricing: { prompt: '0.0000025', completion: '0.00001' },
+          architecture: { input_modalities: ['text', 'image'], output_modalities: ['text'] },
+          top_provider: { context_length: 128000, max_completion_tokens: 16384 },
+          supported_parameters: ['tools', 'response_format'],
+        },
+      ];
 
       const result = flattenModelsData(apiResponse);
 
@@ -59,95 +51,61 @@ describe('models-utils', () => {
     });
 
     it('should handle empty data', () => {
-      const result = flattenModelsData({});
+      const result = flattenModelsData([]);
       expect(result).toEqual([]);
     });
 
-    it('should handle missing openrouter provider', () => {
-      const result = flattenModelsData({
-        'some-other-provider': {
-          id: 'other',
-          name: 'Other',
-          models: {
-            'model-1': {
-              id: 'model-1',
-              name: 'Model 1',
-              tool_call: true,
-              reasoning: false,
-              structured_output: false,
-              cost: { input: 1, output: 1 },
-              limit: { context: 4096, output: 4096 },
-              modalities: { input: ['text'], output: ['text'] },
-            },
-          },
+    it('should use top_provider.context_length when context_length is null', () => {
+      const apiResponse = [
+        {
+          id: 'provider/model-a',
+          name: 'Model A',
+          context_length: null,
+          pricing: { prompt: '0.000001', completion: '0.000005' },
+          architecture: { input_modalities: ['text'], output_modalities: ['text'] },
+          top_provider: { context_length: 64000, max_completion_tokens: 8000 },
+          supported_parameters: ['tools'],
         },
-      });
-      expect(result).toEqual([]);
-    });
-
-    it('should ignore non-openrouter providers', () => {
-      const apiResponse = {
-        'nano-gpt': {
-          id: 'nano-gpt',
-          name: 'NanoGPT',
-          models: {
-            'minimax/minimax-m2.5-official': {
-              id: 'minimax/minimax-m2.5-official',
-              name: 'MiniMax M2.5',
-              tool_call: true,
-              reasoning: false,
-              structured_output: false,
-              cost: { input: 1, output: 5 },
-              limit: { context: 128000, output: 8000 },
-              modalities: { input: ['text'], output: ['text'] },
-            },
-          },
-        },
-        openrouter: {
-          id: 'openrouter',
-          name: 'OpenRouter',
-          models: {
-            'minimax/minimax-m2.5': {
-              id: 'minimax/minimax-m2.5',
-              name: 'MiniMax M2.5',
-              tool_call: true,
-              reasoning: false,
-              structured_output: false,
-              cost: { input: 1, output: 5 },
-              limit: { context: 128000, output: 8000 },
-              modalities: { input: ['text'], output: ['text'] },
-            },
-          },
-        },
-      };
+      ];
 
       const result = flattenModelsData(apiResponse);
       expect(result).toHaveLength(1);
-      expect(result[0]?.id).toBe('minimax/minimax-m2.5');
+      expect(result[0]?.limit.context).toBe(64000);
     });
 
-    it('should skip models without tool_call capability', () => {
-      const apiResponse = {
-        openrouter: {
-          id: 'openrouter',
-          name: 'OpenRouter',
-          models: {
-            'provider/no-tools': {
-              id: 'provider/no-tools',
-              name: 'No Tools Model',
-              tool_call: false,
-              reasoning: false,
-              structured_output: false,
-              cost: { input: 1, output: 1 },
-              limit: { context: 4096, output: 4096 },
-              modalities: { input: ['text'], output: ['text'] },
-            },
-          },
+    it('should skip models without tools in supported_parameters', () => {
+      const apiResponse = [
+        {
+          id: 'provider/no-tools',
+          name: 'No Tools Model',
+          context_length: 4096,
+          pricing: { prompt: '0.000001', completion: '0.000001' },
+          architecture: { input_modalities: ['text'], output_modalities: ['text'] },
+          top_provider: { context_length: 4096, max_completion_tokens: 4096 },
+          supported_parameters: ['temperature'],
         },
-      };
+      ];
 
       const result = flattenModelsData(apiResponse);
       expect(result).toEqual([]);
+    });
+
+    it('should convert per-token pricing strings to per-1M numbers', () => {
+      const apiResponse = [
+        {
+          id: 'test/model',
+          name: 'Test Model',
+          context_length: 100000,
+          pricing: { prompt: '0.000003', completion: '0.000015' },
+          architecture: { input_modalities: ['text'], output_modalities: ['text'] },
+          top_provider: { context_length: 100000, max_completion_tokens: 8000 },
+          supported_parameters: ['tools'],
+        },
+      ];
+
+      const result = flattenModelsData(apiResponse);
+      expect(result[0]?.cost.input).toBe(3);
+      expect(result[0]?.cost.output).toBe(15);
     });
   });
 

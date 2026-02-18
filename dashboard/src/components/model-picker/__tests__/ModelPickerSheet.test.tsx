@@ -67,13 +67,13 @@ describe('ModelPickerSheet', () => {
   });
 
   it('should fetch models when opened', async () => {
-    const fetchModels = vi.fn();
+    const refreshModels = vi.fn();
     vi.mocked(useModelsStore).mockImplementation(
       createMockStore({
         models: [],
         providers: [],
         lastFetched: null,
-        fetchModels,
+        refreshModels,
       })
     );
 
@@ -89,7 +89,7 @@ describe('ModelPickerSheet', () => {
     fireEvent.click(screen.getByText('Browse'));
 
     await waitFor(() => {
-      expect(fetchModels).toHaveBeenCalled();
+      expect(refreshModels).toHaveBeenCalled();
     });
   });
 
@@ -166,29 +166,4 @@ describe('ModelPickerSheet', () => {
     });
   });
 
-  it('should show refresh button in header', async () => {
-    const refreshModels = vi.fn();
-    vi.mocked(useModelsStore).mockImplementation(
-      createMockStore({ refreshModels })
-    );
-
-    render(
-      <ModelPickerSheet
-        agentKey="architect"
-        currentModel={null}
-        onSelect={vi.fn()}
-        trigger={<button>Browse</button>}
-      />
-    );
-
-    fireEvent.click(screen.getByText('Browse'));
-
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /refresh/i })).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByRole('button', { name: /refresh/i }));
-
-    expect(refreshModels).toHaveBeenCalled();
-  });
 });

@@ -25,22 +25,17 @@ describe('useModelsStore', () => {
 
   describe('fetchModels', () => {
     const mockApiResponse = {
-      openrouter: {
-        id: 'openrouter',
-        name: 'OpenRouter',
-        models: {
-          'anthropic/claude-sonnet-4': {
-            id: 'anthropic/claude-sonnet-4',
-            name: 'Claude Sonnet 4',
-            tool_call: true,
-            reasoning: true,
-            structured_output: true,
-            cost: { input: 3, output: 15 },
-            limit: { context: 200000, output: 16000 },
-            modalities: { input: ['text', 'image'], output: ['text'] },
-          },
+      data: [
+        {
+          id: 'anthropic/claude-sonnet-4',
+          name: 'Claude Sonnet 4',
+          context_length: 200000,
+          pricing: { prompt: '0.000003', completion: '0.000015' },
+          architecture: { input_modalities: ['text', 'image'], output_modalities: ['text'] },
+          top_provider: { context_length: 200000, max_completion_tokens: 16000 },
+          supported_parameters: ['tools', 'reasoning', 'response_format'],
         },
-      },
+      ],
     };
 
     it('should fetch and store models', async () => {
@@ -107,22 +102,17 @@ describe('useModelsStore', () => {
   describe('refreshModels', () => {
     it('should force refetch even if already loaded', async () => {
       const mockApiResponse = {
-        openrouter: {
-          id: 'openrouter',
-          name: 'OpenRouter',
-          models: {
-            'test/new-model': {
-              id: 'test/new-model',
-              name: 'New Model',
-              tool_call: true,
-              reasoning: true,
-              structured_output: true,
-              cost: { input: 1, output: 1 },
-              limit: { context: 100000, output: 8000 },
-              modalities: { input: ['text'], output: ['text'] },
-            },
+        data: [
+          {
+            id: 'test/new-model',
+            name: 'New Model',
+            context_length: 100000,
+            pricing: { prompt: '0.000001', completion: '0.000001' },
+            architecture: { input_modalities: ['text'], output_modalities: ['text'] },
+            top_provider: { context_length: 100000, max_completion_tokens: 8000 },
+            supported_parameters: ['tools', 'reasoning', 'response_format'],
           },
-        },
+        ],
       };
 
       useModelsStore.setState({
