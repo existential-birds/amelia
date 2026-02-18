@@ -99,7 +99,14 @@ class ProfileCreate(BaseModel):
     @field_validator("working_dir", mode="after")
     @classmethod
     def validate_working_dir_absolute(cls, v: str) -> str:
-        """Validate that working_dir is an absolute path."""
+        """Validate that working_dir is an absolute path.
+
+        Args:
+            v: Working directory path.
+
+        Returns:
+            The validated absolute path.
+        """
         if not Path(v).is_absolute():
             raise ValueError("working_dir must be an absolute path")
         return v
@@ -129,7 +136,14 @@ class ProfileUpdate(BaseModel):
     @field_validator("working_dir", mode="after")
     @classmethod
     def validate_working_dir_absolute(cls, v: str | None) -> str | None:
-        """Validate that working_dir is an absolute path when provided."""
+        """Validate that working_dir is an absolute path when provided.
+
+        Args:
+            v: Working directory path or None.
+
+        Returns:
+            The validated absolute path or None.
+        """
         if v is not None and not Path(v).is_absolute():
             raise ValueError("working_dir must be an absolute path")
         return v
