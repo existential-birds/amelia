@@ -365,6 +365,7 @@ describe("SpecBuilderPage", () => {
       max_concurrent: 5,
       active_profile: "test",
       active_profile_info: {
+        name: "test",
         driver: "api",
         model: "opus",
       },
