@@ -40,7 +40,7 @@ def client(app: FastAPI) -> TestClient:
 class TestSettingsRoutes:
     """Tests for /api/settings endpoints."""
 
-    def test_get_server_settings(self, client, mock_repo) -> None:
+    def test_get_server_settings(self, client: TestClient, mock_repo: MagicMock) -> None:
         """GET /api/settings returns current settings."""
         mock_settings = ServerSettings(
             log_retention_days=30,
@@ -59,7 +59,7 @@ class TestSettingsRoutes:
         assert data["log_retention_days"] == 30
         assert data["max_concurrent"] == 5
 
-    def test_update_server_settings(self, client, mock_repo) -> None:
+    def test_update_server_settings(self, client: TestClient, mock_repo: MagicMock) -> None:
         """PUT /api/settings updates settings."""
         # Return updated settings
         mock_repo.update_server_settings.return_value = ServerSettings(
@@ -156,7 +156,7 @@ class TestProfileRoutes:
     instead of flat driver/model fields.
     """
 
-    def test_list_profiles(self, profile_client, mock_profile_repo) -> None:
+    def test_list_profiles(self, profile_client: TestClient, mock_profile_repo: MagicMock) -> None:
         """GET /api/profiles returns all profiles with correct is_active."""
         dev_profile = make_test_profile(name="dev")
         prod_profile = make_test_profile(name="prod", driver=DriverType.API)
@@ -175,7 +175,7 @@ class TestProfileRoutes:
         # With agents dict, check agent configuration
         assert data[1]["agents"]["developer"]["driver"] == "api"
 
-    def test_list_profiles_empty(self, profile_client, mock_profile_repo) -> None:
+    def test_list_profiles_empty(self, profile_client: TestClient, mock_profile_repo: MagicMock) -> None:
         """GET /api/profiles returns empty list when no profiles."""
         mock_profile_repo.list_profiles.return_value = []
 
@@ -183,7 +183,7 @@ class TestProfileRoutes:
         assert response.status_code == 200
         assert response.json() == []
 
-    def test_create_profile(self, profile_client, mock_profile_repo) -> None:
+    def test_create_profile(self, profile_client: TestClient, mock_profile_repo: MagicMock) -> None:
         """POST /api/profiles creates new profile."""
         mock_profile_repo.create_profile.return_value = make_test_profile(
             name="new-profile"
@@ -210,7 +210,7 @@ class TestProfileRoutes:
         assert data["id"] == "new-profile"
         assert "agents" in data
 
-    def test_create_profile_with_all_fields(self, profile_client, mock_profile_repo) -> None:
+    def test_create_profile_with_all_fields(self, profile_client: TestClient, mock_profile_repo: MagicMock) -> None:
         """POST /api/profiles creates profile with all optional fields."""
         tracker: TrackerType = TrackerType.JIRA
         driver: DriverType = DriverType.API
@@ -249,7 +249,7 @@ class TestProfileRoutes:
         assert data["tracker"] == "jira"
         assert data["plan_output_dir"] == "custom/plans"
 
-    def test_get_profile(self, profile_client, mock_profile_repo) -> None:
+    def test_get_profile(self, profile_client: TestClient, mock_profile_repo: MagicMock) -> None:
         """GET /api/profiles/{id} returns profile."""
         mock_profile_repo.get_profile.return_value = make_test_profile(name="dev")
 
@@ -259,7 +259,7 @@ class TestProfileRoutes:
         assert data["id"] == "dev"
         assert "agents" in data
 
-    def test_get_profile_not_found(self, profile_client, mock_profile_repo) -> None:
+    def test_get_profile_not_found(self, profile_client: TestClient, mock_profile_repo: MagicMock) -> None:
         """GET /api/profiles/{id} returns 404 for missing profile."""
         mock_profile_repo.get_profile.return_value = None
 
@@ -267,7 +267,7 @@ class TestProfileRoutes:
         assert response.status_code == 404
         assert response.json()["detail"] == "Profile not found"
 
-    def test_update_profile(self, profile_client, mock_profile_repo) -> None:
+    def test_update_profile(self, profile_client: TestClient, mock_profile_repo: MagicMock) -> None:
         """PUT /api/profiles/{id} updates profile."""
         mock_profile_repo.update_profile.return_value = make_test_profile(
             name="dev", tracker=TrackerType.GITHUB
@@ -281,7 +281,7 @@ class TestProfileRoutes:
         data = response.json()
         assert data["tracker"] == "github"
 
-    def test_update_profile_with_agents(self, profile_client, mock_profile_repo) -> None:
+    def test_update_profile_with_agents(self, profile_client: TestClient, mock_profile_repo: MagicMock) -> None:
         """PUT /api/profiles/{id} updates agents configuration."""
         tracker: TrackerType = TrackerType.NOOP
         driver: DriverType = DriverType.API
@@ -313,7 +313,7 @@ class TestProfileRoutes:
         data = response.json()
         assert data["agents"]["developer"]["driver"] == "api"
 
-    def test_update_profile_not_found(self, profile_client, mock_profile_repo) -> None:
+    def test_update_profile_not_found(self, profile_client: TestClient, mock_profile_repo: MagicMock) -> None:
         """PUT /api/profiles/{id} returns 404 for missing profile."""
         mock_profile_repo.update_profile.side_effect = ValueError(
             "Profile nonexistent not found"
@@ -326,14 +326,14 @@ class TestProfileRoutes:
         assert response.status_code == 404
         assert "not found" in response.json()["detail"].lower()
 
-    def test_delete_profile(self, profile_client, mock_profile_repo) -> None:
+    def test_delete_profile(self, profile_client: TestClient, mock_profile_repo: MagicMock) -> None:
         """DELETE /api/profiles/{id} deletes profile."""
         mock_profile_repo.delete_profile.return_value = True
 
         response = profile_client.delete("/api/profiles/dev")
         assert response.status_code == 204
 
-    def test_delete_profile_not_found(self, profile_client, mock_profile_repo) -> None:
+    def test_delete_profile_not_found(self, profile_client: TestClient, mock_profile_repo: MagicMock) -> None:
         """DELETE /api/profiles/{id} returns 404 for missing profile."""
         mock_profile_repo.delete_profile.return_value = False
 
@@ -341,7 +341,7 @@ class TestProfileRoutes:
         assert response.status_code == 404
         assert response.json()["detail"] == "Profile not found"
 
-    def test_activate_profile(self, profile_client, mock_profile_repo) -> None:
+    def test_activate_profile(self, profile_client: TestClient, mock_profile_repo: MagicMock) -> None:
         """POST /api/profiles/{id}/activate sets profile as active."""
         mock_profile_repo.get_profile.return_value = make_test_profile(name="dev")
 
@@ -352,7 +352,7 @@ class TestProfileRoutes:
         assert data["is_active"] is True  # Verify is_active is True after activation
         mock_profile_repo.set_active.assert_called_once_with("dev")
 
-    def test_activate_profile_not_found(self, profile_client, mock_profile_repo) -> None:
+    def test_activate_profile_not_found(self, profile_client: TestClient, mock_profile_repo: MagicMock) -> None:
         """POST /api/profiles/{id}/activate returns 404 for missing profile."""
         mock_profile_repo.set_active.side_effect = ValueError(
             "Profile nonexistent not found"
@@ -363,7 +363,7 @@ class TestProfileRoutes:
         assert "not found" in response.json()["detail"].lower()
 
     def test_create_profile_missing_agents_returns_422(
-        self, profile_client, mock_profile_repo
+        self, profile_client: TestClient, mock_profile_repo: MagicMock
     ) -> None:
         """POST /api/profiles with missing agents returns 422."""
         response = profile_client.post(
@@ -383,7 +383,7 @@ class TestProfileRoutes:
         assert any("Missing required agents" in str(e) for e in detail)
 
     def test_update_profile_missing_agents_returns_422(
-        self, profile_client, mock_profile_repo
+        self, profile_client: TestClient, mock_profile_repo: MagicMock
     ) -> None:
         """PUT /api/profiles/{id} with partial agents returns 422."""
         response = profile_client.put(
@@ -399,7 +399,7 @@ class TestProfileRoutes:
         assert any("Missing required agents" in str(e) for e in detail)
 
     def test_create_profile_relative_working_dir_returns_422(
-        self, profile_client, mock_profile_repo
+        self, profile_client: TestClient, mock_profile_repo: MagicMock
     ) -> None:
         """POST /api/profiles with relative working_dir returns 422."""
         response = profile_client.post(
@@ -423,7 +423,7 @@ class TestProfileRoutes:
         assert any("working_dir must be an absolute path" in str(e) for e in detail)
 
     def test_update_profile_relative_working_dir_returns_422(
-        self, profile_client, mock_profile_repo
+        self, profile_client: TestClient, mock_profile_repo: MagicMock
     ) -> None:
         """PUT /api/profiles/{id} with relative working_dir returns 422."""
         response = profile_client.put(
@@ -435,7 +435,7 @@ class TestProfileRoutes:
         assert any("working_dir must be an absolute path" in str(e) for e in detail)
 
     def test_create_profile_extra_agents_accepted(
-        self, profile_client, mock_profile_repo
+        self, profile_client: TestClient, mock_profile_repo: MagicMock
     ) -> None:
         """POST /api/profiles with extra agents is accepted."""
         mock_profile_repo.create_profile.return_value = make_test_profile(
