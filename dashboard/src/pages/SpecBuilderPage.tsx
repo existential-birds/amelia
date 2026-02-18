@@ -97,7 +97,7 @@ function SpecBuilderPageContent() {
     const init = async () => {
       try {
         await loadSessions();
-      } catch (error) {
+      } catch (_error) {
         if (mounted) {
           toast.error("Failed to load sessions");
         }
