@@ -32,9 +32,10 @@ export function ApiModelSelect({ agentKey, value, onChange }: ApiModelSelectProp
   const [sheetOpen, setSheetOpen] = useState(false);
 
   // Eagerly fetch models on mount (idempotent — skips if already loaded)
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- Zustand selectors return stable references
   useEffect(() => {
     fetchModels();
-  }, [fetchModels]);
+  }, []);
 
   // Get recent models that exist in the store
   const recentModels = recentModelIds

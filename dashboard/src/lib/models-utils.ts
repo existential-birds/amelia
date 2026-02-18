@@ -40,8 +40,8 @@ export function flattenModelsData(data: OpenRouterModel[]): ModelInfo[] {
         output: parseFloat(model.pricing.completion) * 1_000_000,
       },
       limit: {
-        context: model.context_length ?? model.top_provider.context_length ?? 0,
-        output: model.top_provider.max_completion_tokens ?? 0,
+        context: model.context_length ?? model.top_provider?.context_length ?? 0,
+        output: model.top_provider?.max_completion_tokens ?? 0,
       },
       modalities: {
         input: model.architecture.input_modalities,

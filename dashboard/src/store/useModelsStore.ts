@@ -18,7 +18,7 @@ interface ModelsState {
   /** Timestamp of last successful fetch */
   lastFetched: number | null;
 
-  /** Fetch models from models.dev (skips if already loaded) */
+  /** Fetch models from OpenRouter API (skips if already loaded) */
   fetchModels: () => Promise<void>;
   /** Force refresh models even if already loaded */
   refreshModels: () => Promise<void>;
