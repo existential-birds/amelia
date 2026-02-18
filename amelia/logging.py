@@ -340,8 +340,8 @@ def log_todos(todos: list[dict[str, object]]) -> None:
     if not sys.stderr.isatty():
         return
 
-    from rich.console import Console
-    from rich.table import Table
+    from rich.console import Console  # noqa: PLC0415
+    from rich.table import Table  # noqa: PLC0415
 
     console = Console(stderr=True)
     table = Table(show_header=True, header_style="bold", box=None, padding=(0, 1))

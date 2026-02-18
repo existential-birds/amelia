@@ -27,7 +27,6 @@ from pydantic import BaseModel
 
 from amelia.core.constants import normalize_tool_name
 from amelia.core.exceptions import ModelProviderError
-from amelia.logging import log_todos
 from amelia.drivers.base import (
     AgenticMessage,
     AgenticMessageType,
@@ -35,6 +34,7 @@ from amelia.drivers.base import (
     DriverUsage,
     GenerateResult,
 )
+from amelia.logging import log_todos
 
 
 # Maximum output size before truncation (100KB)
