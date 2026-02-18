@@ -94,9 +94,9 @@ function SpecBuilderPageContent() {
   // Extract profile info from config, preferring brainstormer agent config
   const fetchProfileInfo = async (
     activeProfile: string | null,
-    fallbackInfo: ConfigProfileInfo,
+    fallbackInfo: ConfigProfileInfo | null,
     mounted: boolean
-  ): Promise<ConfigProfileInfo> => {
+  ): Promise<ConfigProfileInfo | null> => {
     if (!activeProfile) return fallbackInfo;
 
     try {
