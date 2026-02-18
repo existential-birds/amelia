@@ -91,6 +91,33 @@ function SpecBuilderPageContent() {
   const activeProfileRef = useRef<string>("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // Extract profile info from config, preferring brainstormer agent config
+  const fetchProfileInfo = async (
+    activeProfile: string | null,
+    fallbackInfo: ConfigProfileInfo,
+    mounted: boolean
+  ): Promise<ConfigProfileInfo> => {
+    if (!activeProfile) return fallbackInfo;
+
+    try {
+      const profile = await getProfile(activeProfile);
+      if (!mounted) return fallbackInfo;
+
+      const brainstormerConfig = profile.agents?.brainstormer;
+      if (brainstormerConfig) {
+        return {
+          name: profile.id,
+          driver: brainstormerConfig.driver,
+          model: brainstormerConfig.model,
+        };
+      }
+      return fallbackInfo;
+    } catch (error) {
+      logger.warn('Failed to load profile, using config defaults', { error });
+      return fallbackInfo;
+    }
+  };
+
   // Load sessions and config on mount
   useEffect(() => {
     let mounted = true;
@@ -114,23 +141,11 @@ function SpecBuilderPageContent() {
 
         // Fetch brainstormer agent's model/driver from the profile
         // (config endpoint returns the developer agent's model which is wrong for spec builder)
-        let profileInfo = config.active_profile_info;
-        if (config.active_profile) {
-          try {
-            const profile = await getProfile(config.active_profile);
-            if (!mounted) return;
-            const brainstormerConfig = profile.agents?.brainstormer;
-            if (brainstormerConfig) {
-              profileInfo = {
-                name: profile.id,
-                driver: brainstormerConfig.driver,
-                model: brainstormerConfig.model,
-              };
-            }
-          } catch (error) {
-            logger.warn('Failed to load profile, using config defaults', { error });
-          }
-        }
+        const profileInfo = await fetchProfileInfo(
+          config.active_profile,
+          config.active_profile_info,
+          mounted
+        );
         if (mounted) {
           setConfigProfileInfo(profileInfo);
         }

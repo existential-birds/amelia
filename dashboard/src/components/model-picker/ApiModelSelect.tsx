@@ -14,7 +14,7 @@ import { ModelPickerSheet } from './ModelPickerSheet';
 import { ProviderLogo } from './ProviderLogo';
 import type { ModelInfo } from './types';
 
-const BROWSE_SENTINEL = Symbol('browse').toString();
+const BROWSE_SENTINEL = '__BROWSE_ALL_MODELS__';
 
 interface ApiModelSelectProps {
   agentKey: string;
@@ -35,8 +35,8 @@ export function ApiModelSelect({ agentKey, value, onChange }: ApiModelSelectProp
   const fetchModelsRef = useRef(fetchModels);
   fetchModelsRef.current = fetchModels;
 
-  // Eagerly fetch models on mount (idempotent — skips if already loaded)
-  // Note: Zustand store actions handle their own state updates, safe to call without cleanup tracking
+  // Eagerly fetch models on mount (idempotent — fetchModels checks models.length and lastFetched, skips if already loaded)
+  // Note: Zustand store actions are stable references and handle their own state updates, safe to call without cleanup tracking
   useEffect(() => {
     fetchModelsRef.current();
   }, []);
@@ -101,8 +101,8 @@ export function ApiModelSelect({ agentKey, value, onChange }: ApiModelSelectProp
               </span>
             </SelectItem>
           ))}
-          {value && (
-            <SelectItem value={value} className={valueNotYetInStore ? '' : 'hidden'}>
+          {valueNotYetInStore && (
+            <SelectItem value={value}>
               <span className="truncate text-muted-foreground">{value}</span>
             </SelectItem>
           )}

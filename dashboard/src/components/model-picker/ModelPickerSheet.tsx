@@ -108,11 +108,7 @@ export function ModelPickerSheet({
   // Fetch fresh models when sheet opens
   useEffect(() => {
     if (open) {
-      const abortController = new AbortController();
       refreshModelsRef.current();
-      return () => {
-        abortController.abort();
-      };
     }
   }, [open]);
 

@@ -61,7 +61,11 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
     set({ isLoading: true, error: null, abortController });
 
     // Set timeout to abort request after 30 seconds
-    const timeoutId = setTimeout(() => abortController.abort(), 30000);
+    let timedOut = false;
+    const timeoutId = setTimeout(() => {
+      timedOut = true;
+      abortController.abort();
+    }, 30000);
 
     try {
       const response = await fetch(MODELS_API_URL, { signal: abortController.signal });
@@ -96,6 +100,13 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
       clearTimeout(timeoutId);
       // Don't update state if the request was aborted (a newer request is in progress)
       if (err instanceof Error && err.name === 'AbortError') {
+        if (timedOut) {
+          set({
+            error: 'Request timed out after 30 seconds. Check your connection.',
+            isLoading: false,
+            abortController: null,
+          });
+        }
         return;
       }
 

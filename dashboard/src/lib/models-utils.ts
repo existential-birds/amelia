@@ -26,6 +26,12 @@ export function flattenModelsData(data: OpenRouterModel[]): ModelInfo[] {
     const slashIndex = model.id.indexOf('/');
     const provider = slashIndex !== -1 ? model.id.substring(0, slashIndex) : 'unknown';
 
+    // Parse and validate cost values
+    const inputParsed = parseFloat(model.pricing.prompt);
+    const inputCost = isNaN(inputParsed) ? 0 : inputParsed * 1_000_000; // Convert per-token to per-1M tokens
+    const outputParsed = parseFloat(model.pricing.completion);
+    const outputCost = isNaN(outputParsed) ? 0 : outputParsed * 1_000_000; // Convert per-token to per-1M tokens
+
     models.push({
       id: model.id,
       name: model.name,
@@ -36,14 +42,8 @@ export function flattenModelsData(data: OpenRouterModel[]): ModelInfo[] {
         structured_output: model.supported_parameters.includes('response_format'),
       },
       cost: {
-        input: (() => {
-          const parsed = parseFloat(model.pricing.prompt);
-          return isNaN(parsed) ? 0 : parsed * 1_000_000;
-        })(), // Convert per-token to per-1M tokens
-        output: (() => {
-          const parsed = parseFloat(model.pricing.completion);
-          return isNaN(parsed) ? 0 : parsed * 1_000_000;
-        })(), // Convert per-token to per-1M tokens
+        input: inputCost,
+        output: outputCost,
       },
       limit: {
         context: model.context_length ?? model.top_provider?.context_length ?? null,
