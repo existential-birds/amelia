@@ -9,12 +9,12 @@ from fastapi.testclient import TestClient
 
 from amelia.core.types import AgentConfig, DriverType, Profile, TrackerType
 from amelia.server.database import ServerSettings
-from amelia.server.dependencies import get_profile_repository
-from amelia.server.routes.settings import get_settings_repository, router
+from amelia.server.dependencies import get_profile_repository, get_settings_repository
+from amelia.server.routes.settings import router
 
 
 @pytest.fixture
-def mock_repo():
+def mock_repo() -> MagicMock:
     """Create mock settings repository."""
     repo = MagicMock()
     repo.get_server_settings = AsyncMock()
@@ -23,7 +23,7 @@ def mock_repo():
 
 
 @pytest.fixture
-def app(mock_repo):
+def app(mock_repo: MagicMock) -> FastAPI:
     """Create test FastAPI app with settings router."""
     app = FastAPI()
     app.include_router(router)
@@ -32,7 +32,7 @@ def app(mock_repo):
 
 
 @pytest.fixture
-def client(app):
+def client(app: FastAPI) -> TestClient:
     """Create test client."""
     return TestClient(app)
 
@@ -40,7 +40,7 @@ def client(app):
 class TestSettingsRoutes:
     """Tests for /api/settings endpoints."""
 
-    def test_get_server_settings(self, client, mock_repo):
+    def test_get_server_settings(self, client, mock_repo) -> None:
         """GET /api/settings returns current settings."""
         mock_settings = ServerSettings(
             log_retention_days=30,
@@ -59,7 +59,7 @@ class TestSettingsRoutes:
         assert data["log_retention_days"] == 30
         assert data["max_concurrent"] == 5
 
-    def test_update_server_settings(self, client, mock_repo):
+    def test_update_server_settings(self, client, mock_repo) -> None:
         """PUT /api/settings updates settings."""
         # Return updated settings
         mock_repo.update_server_settings.return_value = ServerSettings(
@@ -83,7 +83,7 @@ class TestSettingsRoutes:
 
 
 @pytest.fixture
-def mock_profile_repo():
+def mock_profile_repo() -> MagicMock:
     """Create mock profile repository."""
     repo = MagicMock()
     repo.list_profiles = AsyncMock()
@@ -97,7 +97,7 @@ def mock_profile_repo():
 
 
 @pytest.fixture
-def profile_app(mock_repo, mock_profile_repo):
+def profile_app(mock_repo: MagicMock, mock_profile_repo: MagicMock) -> FastAPI:
     """Create test FastAPI app with both settings and profile dependencies."""
     app = FastAPI()
     app.include_router(router)
@@ -107,16 +107,16 @@ def profile_app(mock_repo, mock_profile_repo):
 
 
 @pytest.fixture
-def profile_client(profile_app):
+def profile_client(profile_app: FastAPI) -> TestClient:
     """Create test client for profile endpoints."""
     return TestClient(profile_app)
 
 
 def make_test_profile(
     name: str = "test-profile",
-    tracker: TrackerType = "noop",
+    tracker: TrackerType = TrackerType.NOOP,
     working_dir: str = "/path/to/repo",
-    driver: DriverType = "cli",
+    driver: DriverType = DriverType.CLI,
     model: str = "opus",
 ) -> Profile:
     """Create a Profile for testing with agents dict.
@@ -156,10 +156,10 @@ class TestProfileRoutes:
     instead of flat driver/model fields.
     """
 
-    def test_list_profiles(self, profile_client, mock_profile_repo):
+    def test_list_profiles(self, profile_client, mock_profile_repo) -> None:
         """GET /api/profiles returns all profiles with correct is_active."""
         dev_profile = make_test_profile(name="dev")
-        prod_profile = make_test_profile(name="prod", driver="api")
+        prod_profile = make_test_profile(name="prod", driver=DriverType.API)
         mock_profile_repo.list_profiles.return_value = [dev_profile, prod_profile]
         mock_profile_repo.get_active_profile.return_value = dev_profile
 
@@ -175,7 +175,7 @@ class TestProfileRoutes:
         # With agents dict, check agent configuration
         assert data[1]["agents"]["developer"]["driver"] == "api"
 
-    def test_list_profiles_empty(self, profile_client, mock_profile_repo):
+    def test_list_profiles_empty(self, profile_client, mock_profile_repo) -> None:
         """GET /api/profiles returns empty list when no profiles."""
         mock_profile_repo.list_profiles.return_value = []
 
@@ -183,7 +183,7 @@ class TestProfileRoutes:
         assert response.status_code == 200
         assert response.json() == []
 
-    def test_create_profile(self, profile_client, mock_profile_repo):
+    def test_create_profile(self, profile_client, mock_profile_repo) -> None:
         """POST /api/profiles creates new profile."""
         mock_profile_repo.create_profile.return_value = make_test_profile(
             name="new-profile"
@@ -210,10 +210,10 @@ class TestProfileRoutes:
         assert data["id"] == "new-profile"
         assert "agents" in data
 
-    def test_create_profile_with_all_fields(self, profile_client, mock_profile_repo):
+    def test_create_profile_with_all_fields(self, profile_client, mock_profile_repo) -> None:
         """POST /api/profiles creates profile with all optional fields."""
-        tracker: TrackerType = "jira"
-        driver: DriverType = "api"
+        tracker: TrackerType = TrackerType.JIRA
+        driver: DriverType = DriverType.API
         mock_profile_repo.create_profile.return_value = Profile(
             name="full-profile",
             tracker=tracker,
@@ -249,7 +249,7 @@ class TestProfileRoutes:
         assert data["tracker"] == "jira"
         assert data["plan_output_dir"] == "custom/plans"
 
-    def test_get_profile(self, profile_client, mock_profile_repo):
+    def test_get_profile(self, profile_client, mock_profile_repo) -> None:
         """GET /api/profiles/{id} returns profile."""
         mock_profile_repo.get_profile.return_value = make_test_profile(name="dev")
 
@@ -259,7 +259,7 @@ class TestProfileRoutes:
         assert data["id"] == "dev"
         assert "agents" in data
 
-    def test_get_profile_not_found(self, profile_client, mock_profile_repo):
+    def test_get_profile_not_found(self, profile_client, mock_profile_repo) -> None:
         """GET /api/profiles/{id} returns 404 for missing profile."""
         mock_profile_repo.get_profile.return_value = None
 
@@ -267,10 +267,10 @@ class TestProfileRoutes:
         assert response.status_code == 404
         assert response.json()["detail"] == "Profile not found"
 
-    def test_update_profile(self, profile_client, mock_profile_repo):
+    def test_update_profile(self, profile_client, mock_profile_repo) -> None:
         """PUT /api/profiles/{id} updates profile."""
         mock_profile_repo.update_profile.return_value = make_test_profile(
-            name="dev", tracker="github"
+            name="dev", tracker=TrackerType.GITHUB
         )
 
         response = profile_client.put(
@@ -281,10 +281,10 @@ class TestProfileRoutes:
         data = response.json()
         assert data["tracker"] == "github"
 
-    def test_update_profile_with_agents(self, profile_client, mock_profile_repo):
+    def test_update_profile_with_agents(self, profile_client, mock_profile_repo) -> None:
         """PUT /api/profiles/{id} updates agents configuration."""
-        tracker: TrackerType = "noop"
-        driver: DriverType = "api"
+        tracker: TrackerType = TrackerType.NOOP
+        driver: DriverType = DriverType.API
         mock_profile_repo.update_profile.return_value = Profile(
             name="dev",
             tracker=tracker,
@@ -313,7 +313,7 @@ class TestProfileRoutes:
         data = response.json()
         assert data["agents"]["developer"]["driver"] == "api"
 
-    def test_update_profile_not_found(self, profile_client, mock_profile_repo):
+    def test_update_profile_not_found(self, profile_client, mock_profile_repo) -> None:
         """PUT /api/profiles/{id} returns 404 for missing profile."""
         mock_profile_repo.update_profile.side_effect = ValueError(
             "Profile nonexistent not found"
@@ -326,14 +326,14 @@ class TestProfileRoutes:
         assert response.status_code == 404
         assert "not found" in response.json()["detail"].lower()
 
-    def test_delete_profile(self, profile_client, mock_profile_repo):
+    def test_delete_profile(self, profile_client, mock_profile_repo) -> None:
         """DELETE /api/profiles/{id} deletes profile."""
         mock_profile_repo.delete_profile.return_value = True
 
         response = profile_client.delete("/api/profiles/dev")
         assert response.status_code == 204
 
-    def test_delete_profile_not_found(self, profile_client, mock_profile_repo):
+    def test_delete_profile_not_found(self, profile_client, mock_profile_repo) -> None:
         """DELETE /api/profiles/{id} returns 404 for missing profile."""
         mock_profile_repo.delete_profile.return_value = False
 
@@ -341,7 +341,7 @@ class TestProfileRoutes:
         assert response.status_code == 404
         assert response.json()["detail"] == "Profile not found"
 
-    def test_activate_profile(self, profile_client, mock_profile_repo):
+    def test_activate_profile(self, profile_client, mock_profile_repo) -> None:
         """POST /api/profiles/{id}/activate sets profile as active."""
         mock_profile_repo.get_profile.return_value = make_test_profile(name="dev")
 
@@ -352,7 +352,7 @@ class TestProfileRoutes:
         assert data["is_active"] is True  # Verify is_active is True after activation
         mock_profile_repo.set_active.assert_called_once_with("dev")
 
-    def test_activate_profile_not_found(self, profile_client, mock_profile_repo):
+    def test_activate_profile_not_found(self, profile_client, mock_profile_repo) -> None:
         """POST /api/profiles/{id}/activate returns 404 for missing profile."""
         mock_profile_repo.set_active.side_effect = ValueError(
             "Profile nonexistent not found"
@@ -364,7 +364,7 @@ class TestProfileRoutes:
 
     def test_create_profile_missing_agents_returns_422(
         self, profile_client, mock_profile_repo
-    ):
+    ) -> None:
         """POST /api/profiles with missing agents returns 422."""
         response = profile_client.post(
             "/api/profiles",
@@ -384,7 +384,7 @@ class TestProfileRoutes:
 
     def test_update_profile_missing_agents_returns_422(
         self, profile_client, mock_profile_repo
-    ):
+    ) -> None:
         """PUT /api/profiles/{id} with partial agents returns 422."""
         response = profile_client.put(
             "/api/profiles/dev",
@@ -400,7 +400,7 @@ class TestProfileRoutes:
 
     def test_create_profile_relative_working_dir_returns_422(
         self, profile_client, mock_profile_repo
-    ):
+    ) -> None:
         """POST /api/profiles with relative working_dir returns 422."""
         response = profile_client.post(
             "/api/profiles",
@@ -424,7 +424,7 @@ class TestProfileRoutes:
 
     def test_update_profile_relative_working_dir_returns_422(
         self, profile_client, mock_profile_repo
-    ):
+    ) -> None:
         """PUT /api/profiles/{id} with relative working_dir returns 422."""
         response = profile_client.put(
             "/api/profiles/dev",
@@ -436,7 +436,7 @@ class TestProfileRoutes:
 
     def test_create_profile_extra_agents_accepted(
         self, profile_client, mock_profile_repo
-    ):
+    ) -> None:
         """POST /api/profiles with extra agents is accepted."""
         mock_profile_repo.create_profile.return_value = make_test_profile(
             name="extra-profile"
