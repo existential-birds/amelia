@@ -1,5 +1,6 @@
 # tests/unit/server/events/test_connection_manager.py
 """Tests for WebSocket connection manager."""
+import json
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 from uuid import uuid4
@@ -27,7 +28,7 @@ def mock_websocket():
     """Create mock WebSocket."""
     ws = AsyncMock()
     ws.accept = AsyncMock()
-    ws.send_json = AsyncMock()
+    ws.send_text = AsyncMock()
     ws.close = AsyncMock()
     return ws
 
@@ -92,14 +93,14 @@ class TestConnectionManager:
         await manager.broadcast(event)
 
         if should_send:
-            mock_websocket.send_json.assert_awaited_once()
+            mock_websocket.send_text.assert_awaited_once()
         else:
-            mock_websocket.send_json.assert_not_awaited()
+            mock_websocket.send_text.assert_not_awaited()
 
     async def test_broadcast_handles_disconnected_socket(self, manager, mock_websocket, event_factory) -> None:
         """broadcast() removes disconnected sockets gracefully."""
         await manager.connect(mock_websocket)
-        mock_websocket.send_json.side_effect = WebSocketDisconnect()
+        mock_websocket.send_text.side_effect = WebSocketDisconnect()
 
         event = event_factory(
             id=uuid4(),
@@ -153,7 +154,7 @@ class TestConnectionManagerTraceEvents:
         # Create a second mock websocket for this test
         mock_ws2 = AsyncMock()
         mock_ws2.accept = AsyncMock()
-        mock_ws2.send_json = AsyncMock()
+        mock_ws2.send_text = AsyncMock()
 
         await manager.connect(mock_websocket)
         await manager.connect(mock_ws2)
@@ -176,8 +177,8 @@ class TestConnectionManagerTraceEvents:
         await manager.broadcast(trace_event)
 
         # Both clients receive trace events (no workflow filtering)
-        assert mock_websocket.send_json.called
-        assert mock_ws2.send_json.called
+        assert mock_websocket.send_text.called
+        assert mock_ws2.send_text.called
 
 
 class TestBroadcastDomainRouting:
@@ -204,8 +205,8 @@ class TestBroadcastDomainRouting:
 
         await manager.broadcast(event)
 
-        mock_websocket.send_json.assert_called_once()
-        payload = mock_websocket.send_json.call_args[0][0]
+        mock_websocket.send_text.assert_called_once()
+        payload = json.loads(mock_websocket.send_text.call_args[0][0])
         assert payload["type"] == "event"
         assert "payload" in payload
         assert payload["payload"]["id"] == str(event.id)
@@ -234,8 +235,8 @@ class TestBroadcastDomainRouting:
 
         await manager.broadcast(event)
 
-        mock_websocket.send_json.assert_called_once()
-        payload = mock_websocket.send_json.call_args[0][0]
+        mock_websocket.send_text.assert_called_once()
+        payload = json.loads(mock_websocket.send_text.call_args[0][0])
         assert payload["type"] == "brainstorm"
         assert payload["event_type"] == "text"  # brainstorm_ prefix stripped
         assert payload["session_id"] == str(session_wf_id)

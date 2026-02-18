@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from contextlib import suppress
 from typing import TYPE_CHECKING, Any
 
@@ -124,7 +125,8 @@ class ConnectionManager:
             False on disconnect/timeout errors.
         """
         try:
-            await asyncio.wait_for(ws.send_json(payload), timeout=timeout)
+            text = json.dumps(payload, default=str)
+            await asyncio.wait_for(ws.send_text(text), timeout=timeout)
             return (ws, True)
         except (WebSocketDisconnect, TimeoutError, ConnectionResetError, ConnectionError):
             return (ws, False)
