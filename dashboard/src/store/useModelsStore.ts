@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { ModelInfo } from '@/components/model-picker/types';
 import { AGENT_MODEL_REQUIREMENTS, MODELS_API_URL } from '@/components/model-picker/constants';
 import { flattenModelsData, filterModelsByRequirements } from '@/lib/models-utils';
+import { logger } from '@/lib/logger';
 
 /**
  * State for the models store.
@@ -92,7 +93,7 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
         return;
       }
 
-      console.error('Failed to fetch models:', err);
+      logger.error('Failed to fetch models', err);
       set({
         error: 'Failed to load models. Check your connection.',
         isLoading: false,

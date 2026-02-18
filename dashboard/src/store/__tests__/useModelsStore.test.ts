@@ -131,6 +131,41 @@ describe('useModelsStore', () => {
       expect(state.models).toHaveLength(1);
       expect(state.models[0]?.id).toBe('test/new-model');
     });
+
+    it('should abort pending request when new refresh is triggered', async () => {
+      const abortSpy = vi.fn();
+      const mockAbortController = {
+        abort: abortSpy,
+        signal: new AbortController().signal,
+      };
+
+      useModelsStore.setState({
+        abortController: mockAbortController as unknown as AbortController,
+      });
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ data: [] }),
+      });
+
+      await useModelsStore.getState().refreshModels();
+
+      expect(abortSpy).toHaveBeenCalledOnce();
+    });
+
+    it('should not update state when request is aborted', async () => {
+      const abortError = new Error('Aborted');
+      abortError.name = 'AbortError';
+
+      mockFetch.mockRejectedValueOnce(abortError);
+
+      const initialState = useModelsStore.getState();
+      await useModelsStore.getState().refreshModels();
+
+      const finalState = useModelsStore.getState();
+      expect(finalState.error).toBeNull();
+      expect(finalState.models).toEqual(initialState.models);
+    });
   });
 
   describe('getModelsForAgent', () => {
