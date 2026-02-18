@@ -3,8 +3,6 @@
 from typing import Any
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from amelia.logging import _plain_log_format
 
 
