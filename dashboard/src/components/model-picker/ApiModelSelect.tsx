@@ -48,7 +48,7 @@ export function ApiModelSelect({ agentKey, value, onChange }: ApiModelSelectProp
   const displayModels = currentModel ? [currentModel, ...recentModels] : recentModels;
 
   // Whether we have a fallback item for a value not yet in the store (e.g. during loading)
-  const needsFallbackItem = value && !displayModels.some((m) => m.id === value);
+  const valueNotYetInStore = value && !displayModels.some((m) => m.id === value);
 
   const handleSelect = (modelId: string) => {
     if (modelId === BROWSE_SENTINEL) {
@@ -64,7 +64,7 @@ export function ApiModelSelect({ agentKey, value, onChange }: ApiModelSelectProp
     onChange(modelId);
   };
 
-  // Only show bare button fallback when there are truly zero items to display
+  // Show bare button fallback when no models loaded AND no current selection
   if (displayModels.length === 0 && !value) {
     return (
       <ModelPickerSheet
@@ -95,7 +95,7 @@ export function ApiModelSelect({ agentKey, value, onChange }: ApiModelSelectProp
               </span>
             </SelectItem>
           ))}
-          {needsFallbackItem && (
+          {valueNotYetInStore && (
             <SelectItem value={value}>
               <span className="truncate text-muted-foreground">{value}</span>
             </SelectItem>
