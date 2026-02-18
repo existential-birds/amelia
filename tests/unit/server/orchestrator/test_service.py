@@ -1450,6 +1450,58 @@ async def test_model_provider_error_friendly_failure_reason(
     assert "attempts" in failure_reason
 
 
+async def test_httpx_connect_error_retried(
+    orchestrator: OrchestratorService,
+    mock_repository: AsyncMock,
+) -> None:
+    """Verify that httpx.ConnectError triggers retry logic like ModelProviderError."""
+    import httpx
+
+    mock_workflow = ServerExecutionState(
+        id=uuid4(),
+        issue_id="ISSUE-TEST",
+        worktree_path="/tmp",
+        workflow_status=WorkflowStatus.BLOCKED,
+        profile_id="prof-1",
+        started_at=datetime.now(UTC),
+    )
+    mock_repository.get.return_value = mock_workflow
+
+    agent_config = AgentConfig(driver=DriverType.CLI, model="sonnet")
+    mock_profile = Profile(
+        name="test",
+        tracker=TrackerType.NOOP,
+        working_dir="/tmp",
+        retry=RetryConfig(max_retries=2, base_delay=0.1, max_delay=1.0),
+        agents={
+            "architect": agent_config,
+            "developer": agent_config,
+            "reviewer": agent_config,
+        },
+    )
+
+    mock_graph = MagicMock()
+    mock_graph.aupdate_state = AsyncMock()
+    mock_graph.aget_state = AsyncMock()
+    mock_graph.astream = MagicMock(side_effect=httpx.ConnectError("Connection refused"))
+
+    with (
+        patch.object(orchestrator, "_get_profile_or_fail", return_value=mock_profile),
+        patch.object(orchestrator, "_create_server_graph", return_value=mock_graph),
+        patch.object(orchestrator, "_resolve_prompts", return_value={}),
+        patch.object(orchestrator, "_emit", new=AsyncMock()),
+        patch(
+            "amelia.server.orchestrator.service.asyncio.sleep", new_callable=AsyncMock
+        ) as mock_sleep,
+        pytest.raises(httpx.ConnectError),
+    ):
+        await orchestrator.approve_workflow(uuid4())
+
+    # max_retries=2 means attempts 0, 1, 2 → astream called 3 times
+    assert mock_graph.astream.call_count == 3
+    assert mock_sleep.call_count == 2
+
+
 # =============================================================================
 # Exponential Backoff Tests
 # =============================================================================
