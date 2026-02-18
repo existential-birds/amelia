@@ -6,6 +6,7 @@ import { Menu, Lightbulb, Bot, Cpu } from "lucide-react";
 import { api } from "@/api/client";
 import { getProfile } from "@/api/settings";
 import { formatDriver, formatModel } from "@/lib/utils";
+import { logger } from "@/lib/logger";
 import {
   Conversation,
   ConversationContent,
@@ -128,14 +129,14 @@ function SpecBuilderPageContent() {
             }
           } catch (error) {
             if (mounted) {
-              console.warn('Failed to load profile, using defaults:', error);
+              logger.warn('Failed to load profile, using defaults', { error });
               setConfigProfileInfo(config.active_profile_info);
             }
           }
         }
       } catch (error) {
         if (mounted) {
-          console.warn('Failed to load config, using defaults:', error);
+          logger.warn('Failed to load config, using defaults', { error });
         }
       }
     };

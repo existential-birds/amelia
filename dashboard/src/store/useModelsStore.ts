@@ -17,6 +17,8 @@ interface ModelsState {
   error: string | null;
   /** Timestamp of last successful fetch */
   lastFetched: number | null;
+  /** AbortController for the current fetch */
+  abortController: AbortController | null;
 
   /** Fetch models from OpenRouter API (skips if already loaded) */
   fetchModels: () => Promise<void>;
@@ -35,6 +37,7 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
   isLoading: false,
   error: null,
   lastFetched: null,
+  abortController: null,
 
   fetchModels: async () => {
     // Skip if already fetched this session
@@ -46,10 +49,18 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
   },
 
   refreshModels: async () => {
-    set({ isLoading: true, error: null });
+    // Cancel any pending request
+    const currentController = get().abortController;
+    if (currentController) {
+      currentController.abort();
+    }
+
+    // Create new AbortController for this request
+    const abortController = new AbortController();
+    set({ isLoading: true, error: null, abortController });
 
     try {
-      const response = await fetch(MODELS_API_URL);
+      const response = await fetch(MODELS_API_URL, { signal: abortController.signal });
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }
@@ -73,12 +84,19 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
         providers,
         isLoading: false,
         lastFetched: Date.now(),
+        abortController: null,
       });
     } catch (err) {
+      // Don't update state if the request was aborted (a newer request is in progress)
+      if (err instanceof Error && err.name === 'AbortError') {
+        return;
+      }
+
       console.error('Failed to fetch models:', err);
       set({
         error: 'Failed to load models. Check your connection.',
         isLoading: false,
+        abortController: null,
       });
     }
   },
