@@ -14,7 +14,7 @@ import { ModelPickerSheet } from './ModelPickerSheet';
 import { ProviderLogo } from './ProviderLogo';
 import type { ModelInfo } from './types';
 
-const BROWSE_SENTINEL = '__BROWSE_ALL_MODELS__';
+const BROWSE_SENTINEL = Symbol('browse').toString();
 
 interface ApiModelSelectProps {
   agentKey: string;

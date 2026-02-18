@@ -638,7 +638,8 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
         const updatedAgent = nextAgents[agentKey]!;
         if (value === 'api') {
           // API models are selected dynamically via the model picker
-          updatedAgent.model = ''; // Default until user selects from picker
+          // Leave model undefined until user selects from picker
+          delete updatedAgent.model;
         } else {
           // CLI driver: reset to first available CLI model if current model is invalid
           const availableModels = getModelsForDriver(value);
