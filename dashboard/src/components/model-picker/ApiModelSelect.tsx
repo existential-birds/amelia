@@ -32,10 +32,9 @@ export function ApiModelSelect({ agentKey, value, onChange }: ApiModelSelectProp
   const [sheetOpen, setSheetOpen] = useState(false);
 
   // Eagerly fetch models on mount (idempotent — skips if already loaded)
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally run once on mount
   useEffect(() => {
     fetchModels();
-  }, []);
+  }, [fetchModels]);
 
   // Get recent models that exist in the store
   const recentModels = recentModelIds
@@ -49,7 +48,7 @@ export function ApiModelSelect({ agentKey, value, onChange }: ApiModelSelectProp
   const displayModels = currentModel ? [currentModel, ...recentModels] : recentModels;
 
   // Whether we have a fallback item for a value not yet in the store (e.g. during loading)
-  const valueNotYetInStore = value !== '' && !displayModels.some((m) => m.id === value);
+  const valueNotYetInStore = value && value !== '' && !displayModels.some((m) => m.id === value);
 
   const handleSelect = (modelId: string) => {
     if (!modelId || modelId === BROWSE_SENTINEL) {

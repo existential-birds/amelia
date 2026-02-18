@@ -36,8 +36,8 @@ export function flattenModelsData(data: OpenRouterModel[]): ModelInfo[] {
         structured_output: model.supported_parameters.includes('response_format'),
       },
       cost: {
-        input: parseFloat(model.pricing.prompt) * 1_000_000,
-        output: parseFloat(model.pricing.completion) * 1_000_000,
+        input: (parseFloat(model.pricing.prompt) || 0) * 1_000_000,
+        output: (parseFloat(model.pricing.completion) || 0) * 1_000_000,
       },
       limit: {
         context: model.context_length ?? model.top_provider?.context_length ?? 0,

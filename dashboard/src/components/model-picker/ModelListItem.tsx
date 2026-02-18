@@ -176,7 +176,7 @@ export function ModelListItem({
             </div>
             <div>
               <div className="text-muted-foreground">Max output</div>
-              <div>{model.limit.output ? `${model.limit.output.toLocaleString()} tokens` : 'Unknown'}</div>
+              <div>{model.limit.output != null ? `${model.limit.output.toLocaleString()} tokens` : 'Unknown'}</div>
             </div>
 
             {/* Modalities */}

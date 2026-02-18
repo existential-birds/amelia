@@ -61,6 +61,10 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
         throw new Error(`Invalid JSON response from models API: ${parseError}`);
       }
 
+      if (!data || !data.data) {
+        throw new Error('Invalid response shape from models API');
+      }
+
       const models = flattenModelsData(data.data);
       const providers = [...new Set(models.map((m) => m.provider))];
 
