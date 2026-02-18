@@ -267,9 +267,10 @@ interface AgentCardProps {
   agent: AgentDefinition;
   config: AgentFormData;
   onChange: (field: 'driver' | 'model', value: string) => void;
+  error?: boolean;
 }
 
-function AgentCard({ agent, config, onChange }: AgentCardProps) {
+function AgentCard({ agent, config, onChange, error }: AgentCardProps) {
   const Icon = agent.icon;
   const availableModels = getModelsForDriver(config.driver);
   const colors = AGENT_COLORS[agent.key] ?? { line: 'bg-muted-foreground/40', icon: 'text-muted-foreground' };
@@ -311,6 +312,7 @@ function AgentCard({ agent, config, onChange }: AgentCardProps) {
           agentKey={agent.key}
           value={config.model}
           onChange={(v) => onChange('model', v)}
+          error={error}
         />
       ) : (
         <Select
@@ -633,12 +635,19 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
       const currentAgent = nextAgents[agentKey] ?? { driver: 'cli', model: 'opus' };
       nextAgents[agentKey] = { ...currentAgent, [field]: value };
 
-      // When driver changes, reset model if not supported
+      // When driver changes, reset model to appropriate default
       if (field === 'driver') {
-        const availableModels = getModelsForDriver(value);
         const updatedAgent = nextAgents[agentKey]!;
-        if (!availableModels.includes(updatedAgent.model)) {
-          updatedAgent.model = availableModels[0] ?? 'opus';
+        if (value === 'api') {
+          // API models are selected dynamically via the model picker
+          // Set to empty string until user selects from picker
+          updatedAgent.model = '';
+        } else {
+          // CLI driver: reset to first available CLI model if current model is invalid
+          const availableModels = getModelsForDriver(value);
+          if (!availableModels.includes(updatedAgent.model)) {
+            updatedAgent.model = availableModels[0] ?? '';
+          }
         }
       }
 
@@ -680,6 +689,13 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
     const workingDirError = validateField('working_dir', formData.working_dir);
     if (workingDirError) newErrors.working_dir = workingDirError;
 
+    for (const agent of AGENT_DEFINITIONS) {
+      const agentConfig = formData.agents[agent.key];
+      if (agentConfig?.driver === 'api' && agentConfig.model === '') {
+        newErrors[`agent_model_${agent.key}`] = 'Model required';
+      }
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -690,7 +706,7 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
       const agentConfig = formData.agents[key];
       agents[key] = {
         driver: agentConfig?.driver ?? 'cli',
-        model: agentConfig?.model ?? 'opus',
+        model: agentConfig?.model ?? '',
       };
     }
     return agents;
@@ -895,6 +911,7 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
                         agent={agent}
                         config={config}
                         onChange={(field, value) => handleAgentChange(agent.key, field, value)}
+                        error={!!errors[`agent_model_${agent.key}`]}
                       />
                     );
                   })}
@@ -927,6 +944,7 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
                           agent={agent}
                           config={config}
                           onChange={(field, value) => handleAgentChange(agent.key, field, value)}
+                          error={!!errors[`agent_model_${agent.key}`]}
                         />
                       );
                     })}

@@ -25,22 +25,17 @@ describe('useModelsStore', () => {
 
   describe('fetchModels', () => {
     const mockApiResponse = {
-      openrouter: {
-        id: 'openrouter',
-        name: 'OpenRouter',
-        models: {
-          'anthropic/claude-sonnet-4': {
-            id: 'anthropic/claude-sonnet-4',
-            name: 'Claude Sonnet 4',
-            tool_call: true,
-            reasoning: true,
-            structured_output: true,
-            cost: { input: 3, output: 15 },
-            limit: { context: 200000, output: 16000 },
-            modalities: { input: ['text', 'image'], output: ['text'] },
-          },
+      data: [
+        {
+          id: 'anthropic/claude-sonnet-4',
+          name: 'Claude Sonnet 4',
+          context_length: 200000,
+          pricing: { prompt: '0.000003', completion: '0.000015' },
+          architecture: { input_modalities: ['text', 'image'], output_modalities: ['text'] },
+          top_provider: { context_length: 200000, max_completion_tokens: 16000 },
+          supported_parameters: ['tools', 'reasoning', 'response_format'],
         },
-      },
+      ],
     };
 
     it('should fetch and store models', async () => {
@@ -107,22 +102,17 @@ describe('useModelsStore', () => {
   describe('refreshModels', () => {
     it('should force refetch even if already loaded', async () => {
       const mockApiResponse = {
-        openrouter: {
-          id: 'openrouter',
-          name: 'OpenRouter',
-          models: {
-            'test/new-model': {
-              id: 'test/new-model',
-              name: 'New Model',
-              tool_call: true,
-              reasoning: true,
-              structured_output: true,
-              cost: { input: 1, output: 1 },
-              limit: { context: 100000, output: 8000 },
-              modalities: { input: ['text'], output: ['text'] },
-            },
+        data: [
+          {
+            id: 'test/new-model',
+            name: 'New Model',
+            context_length: 100000,
+            pricing: { prompt: '0.000001', completion: '0.000001' },
+            architecture: { input_modalities: ['text'], output_modalities: ['text'] },
+            top_provider: { context_length: 100000, max_completion_tokens: 8000 },
+            supported_parameters: ['tools', 'reasoning', 'response_format'],
           },
-        },
+        ],
       };
 
       useModelsStore.setState({
@@ -140,6 +130,75 @@ describe('useModelsStore', () => {
       const state = useModelsStore.getState();
       expect(state.models).toHaveLength(1);
       expect(state.models[0]?.id).toBe('test/new-model');
+    });
+
+    it('should abort pending request when new refresh is triggered', async () => {
+      const abortSpy = vi.fn();
+      const mockAbortController = {
+        abort: abortSpy,
+        signal: new AbortController().signal,
+      };
+
+      useModelsStore.setState({
+        abortController: mockAbortController as unknown as AbortController,
+      });
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ data: [] }),
+      });
+
+      await useModelsStore.getState().refreshModels();
+
+      expect(abortSpy).toHaveBeenCalledOnce();
+    });
+
+    it('should not update state when request is aborted', async () => {
+      const abortError = new Error('Aborted');
+      abortError.name = 'AbortError';
+
+      mockFetch.mockRejectedValueOnce(abortError);
+
+      const initialState = useModelsStore.getState();
+      await useModelsStore.getState().refreshModels();
+
+      const finalState = useModelsStore.getState();
+      expect(finalState.error).toBeNull();
+      expect(finalState.models).toEqual(initialState.models);
+    });
+
+    it('should not clobber state when a stale aborted request resolves after a newer request starts', async () => {
+      // Simulate: call 1 is aborted by call 2, but call 1's catch block runs after call 2 has set its own controller
+      let rejectFirstFetch!: (err: unknown) => void;
+      const firstFetchPromise = new Promise<never>((_, reject) => {
+        rejectFirstFetch = reject;
+      });
+
+      const secondFetchResponse = {
+        ok: true,
+        json: () => Promise.resolve({ data: [] }),
+      };
+
+      mockFetch.mockReturnValueOnce(firstFetchPromise).mockResolvedValueOnce(secondFetchResponse);
+
+      // Start first fetch (doesn't await - it's pending)
+      const firstCall = useModelsStore.getState().refreshModels();
+
+      // Start second fetch (aborts first, sets new abortController in state)
+      const secondCall = useModelsStore.getState().refreshModels();
+
+      // Reject first fetch with AbortError (simulating the abort)
+      const abortError = new Error('Aborted');
+      abortError.name = 'AbortError';
+      rejectFirstFetch(abortError);
+
+      await Promise.all([firstCall, secondCall]);
+
+      // Second request should have completed cleanly; state must not be corrupted
+      const state = useModelsStore.getState();
+      expect(state.isLoading).toBe(false);
+      expect(state.abortController).toBeNull();
+      expect(state.error).toBeNull();
     });
   });
 

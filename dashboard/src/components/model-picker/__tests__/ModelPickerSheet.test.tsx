@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ModelPickerSheet } from '../ModelPickerSheet';
 import { useModelsStore } from '@/store/useModelsStore';
+import { makeMockModelsStore, mockModels } from '@/test/mocks/modelsStore';
 import type { ModelInfo } from '../types';
 
 // Mock the store with selector support
@@ -17,36 +18,9 @@ vi.mock('@/hooks/useRecentModels', () => ({
 }));
 
 describe('ModelPickerSheet', () => {
-  const mockModels: ModelInfo[] = [
-    {
-      id: 'claude-sonnet-4',
-      name: 'Claude Sonnet 4',
-      provider: 'anthropic',
-      capabilities: { tool_call: true, reasoning: true, structured_output: true },
-      cost: { input: 3, output: 15 },
-      limit: { context: 200000, output: 16000 },
-      modalities: { input: ['text'], output: ['text'] },
-    },
-  ];
-
-  const createMockStore = (overrides: Partial<ReturnType<typeof useModelsStore>> = {}) => {
-    const state = {
-      models: mockModels,
-      providers: ['anthropic'],
-      isLoading: false,
-      error: null,
-      lastFetched: Date.now(),
-      fetchModels: vi.fn(),
-      refreshModels: vi.fn(),
-      getModelsForAgent: vi.fn().mockReturnValue(mockModels),
-      ...overrides,
-    };
-    return (selector: (s: typeof state) => unknown) => selector(state);
-  };
-
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(useModelsStore).mockImplementation(createMockStore());
+    vi.mocked(useModelsStore).mockImplementation(makeMockModelsStore());
   });
 
   it('should render trigger and open sheet on click', async () => {
@@ -67,13 +41,13 @@ describe('ModelPickerSheet', () => {
   });
 
   it('should fetch models when opened', async () => {
-    const fetchModels = vi.fn();
+    const refreshModels = vi.fn();
     vi.mocked(useModelsStore).mockImplementation(
-      createMockStore({
+      makeMockModelsStore({
         models: [],
         providers: [],
         lastFetched: null,
-        fetchModels,
+        refreshModels,
       })
     );
 
@@ -89,7 +63,7 @@ describe('ModelPickerSheet', () => {
     fireEvent.click(screen.getByText('Browse'));
 
     await waitFor(() => {
-      expect(fetchModels).toHaveBeenCalled();
+      expect(refreshModels).toHaveBeenCalled();
     });
   });
 
@@ -135,7 +109,7 @@ describe('ModelPickerSheet', () => {
     ];
 
     vi.mocked(useModelsStore).mockImplementation(
-      createMockStore({
+      makeMockModelsStore({
         models: moreModels,
         providers: ['anthropic', 'openai'],
       })
@@ -166,29 +140,4 @@ describe('ModelPickerSheet', () => {
     });
   });
 
-  it('should show refresh button in header', async () => {
-    const refreshModels = vi.fn();
-    vi.mocked(useModelsStore).mockImplementation(
-      createMockStore({ refreshModels })
-    );
-
-    render(
-      <ModelPickerSheet
-        agentKey="architect"
-        currentModel={null}
-        onSelect={vi.fn()}
-        trigger={<button>Browse</button>}
-      />
-    );
-
-    fireEvent.click(screen.getByText('Browse'));
-
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /refresh/i })).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByRole('button', { name: /refresh/i }));
-
-    expect(refreshModels).toHaveBeenCalled();
-  });
 });

@@ -1,5 +1,4 @@
 import { useState, useEffect, useMemo, type ReactNode } from 'react';
-import { RefreshCw } from 'lucide-react';
 import {
   Sheet,
   SheetContent,
@@ -8,7 +7,6 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '@/components/ui/sheet';
-import { Button } from '@/components/ui/button';
 import { useModelsStore } from '@/store/useModelsStore';
 import { useRecentModels } from '@/hooks/useRecentModels';
 import { ModelSearchFilters } from './ModelSearchFilters';
@@ -21,7 +19,18 @@ interface ModelPickerSheetProps {
   agentKey: string;
   currentModel: string | null;
   onSelect: (modelId: string) => void;
-  trigger: ReactNode;
+  /**
+   * Optional trigger element. If not provided, control the sheet via `open` and `onOpenChange`.
+   */
+  trigger?: ReactNode;
+  /**
+   * Controlled open state. Required when `trigger` is not provided.
+   */
+  open?: boolean;
+  /**
+   * Controlled open state handler. Required when `trigger` is not provided.
+   */
+  onOpenChange?: (open: boolean) => void;
 }
 
 /**
@@ -68,7 +77,7 @@ function filterModels(
     }
 
     // User-selected context size filter
-    if (minContext && model.limit.context < minContext) {
+    if (minContext && (model.limit.context === null || model.limit.context < minContext)) {
       return false;
     }
 
@@ -84,8 +93,12 @@ export function ModelPickerSheet({
   currentModel,
   onSelect,
   trigger,
+  open: controlledOpen,
+  onOpenChange: controlledOnOpenChange,
 }: ModelPickerSheetProps) {
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = controlledOnOpenChange ?? setInternalOpen;
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCapabilities, setSelectedCapabilities] = useState<string[]>([]);
   const [selectedPriceTier, setSelectedPriceTier] = useState<string | null>(null);
@@ -95,15 +108,14 @@ export function ModelPickerSheet({
   const models = useModelsStore((state) => state.models);
   const isLoading = useModelsStore((state) => state.isLoading);
   const error = useModelsStore((state) => state.error);
-  const fetchModels = useModelsStore((state) => state.fetchModels);
   const refreshModels = useModelsStore((state) => state.refreshModels);
 
-  // Fetch models when sheet opens
+  // Fetch fresh models when sheet opens
   useEffect(() => {
     if (open) {
-      fetchModels();
+      refreshModels();
     }
-  }, [open, fetchModels]);
+  }, [open, refreshModels]);
 
   // Get agent-filtered models
   const agentModels = useMemo(() => {
@@ -142,29 +154,19 @@ export function ModelPickerSheet({
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
-      <SheetTrigger asChild>{trigger}</SheetTrigger>
+      {trigger && <SheetTrigger asChild>{trigger}</SheetTrigger>}
       <SheetContent
         side="right"
         className="w-full sm:max-w-[450px] flex flex-col p-0"
       >
         {/* Header */}
-        <SheetHeader className="px-4 py-3 border-b border-border/30 flex-row items-center justify-between">
+        <SheetHeader className="px-4 py-3 border-b border-border/30">
           <SheetTitle className="text-base">
             Select Model for {formatAgentName(agentKey)}
           </SheetTitle>
           <SheetDescription className="sr-only">
             Browse and select a model for the {formatAgentName(agentKey)} agent
           </SheetDescription>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={refreshModels}
-            disabled={isLoading}
-            aria-label="Refresh models"
-            className="h-8 w-8"
-          >
-            <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-          </Button>
         </SheetHeader>
 
         {/* Filters */}

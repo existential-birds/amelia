@@ -18,6 +18,17 @@ vi.mock("@/api/client", () => ({
     getConfig: vi.fn().mockResolvedValue({ working_dir: "", max_concurrent: 5, active_profile: "test" }),
   },
 }));
+vi.mock("@/api/settings", () => ({
+  getProfile: vi.fn().mockResolvedValue({
+    id: "test",
+    tracker: "none",
+    working_dir: "",
+    plan_output_dir: "",
+    plan_path_pattern: "",
+    agents: { brainstormer: { driver: "cli", model: "sonnet" } },
+    is_active: true,
+  }),
+}));
 
 function renderPage() {
   return render(
@@ -342,5 +353,30 @@ describe("SpecBuilderPage", () => {
     expect(
       screen.getByPlaceholderText(/what would you like to design/i)
     ).toBeInTheDocument();
+  });
+
+  it("falls back to config.active_profile_info when getProfile fails", async () => {
+    const { getProfile } = await import("@/api/settings");
+    const { api } = await import("@/api/client");
+
+    vi.mocked(getProfile).mockRejectedValueOnce(new Error("Profile not found"));
+    vi.mocked(api.getConfig).mockResolvedValueOnce({
+      working_dir: "",
+      max_concurrent: 5,
+      active_profile: "test",
+      active_profile_info: {
+        name: "test",
+        driver: "api",
+        model: "opus",
+      },
+    });
+
+    await renderPageAndWaitForInit();
+
+    // Should show the fallback profile info (formatModel returns "Opus", formatDriver returns "API")
+    await waitFor(() => {
+      expect(screen.getByText("Opus")).toBeInTheDocument();
+      expect(screen.getByText("API")).toBeInTheDocument();
+    });
   });
 });

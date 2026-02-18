@@ -2,12 +2,23 @@ import { create } from 'zustand';
 import type { ModelInfo } from '@/components/model-picker/types';
 import { AGENT_MODEL_REQUIREMENTS, MODELS_API_URL } from '@/components/model-picker/constants';
 import { flattenModelsData, filterModelsByRequirements } from '@/lib/models-utils';
+import { logger } from '@/lib/logger';
+
+/**
+ * Custom error class for fetch timeout events.
+ */
+class TimeoutError extends Error {
+  constructor(message: string = 'timeout') {
+    super(message);
+    this.name = 'TimeoutError';
+  }
+}
 
 /**
  * State for the models store.
  */
 interface ModelsState {
-  /** Flattened list of all models from models.dev */
+  /** Flattened list of all models from OpenRouter */
   models: ModelInfo[];
   /** Unique list of provider IDs */
   providers: string[];
@@ -17,8 +28,12 @@ interface ModelsState {
   error: string | null;
   /** Timestamp of last successful fetch */
   lastFetched: number | null;
+  /** AbortController for the current fetch */
+  abortController: AbortController | null;
+  /** Timeout ID for the current fetch timeout */
+  timeoutId?: ReturnType<typeof setTimeout>;
 
-  /** Fetch models from models.dev (skips if already loaded) */
+  /** Fetch models from OpenRouter API (skips if already loaded) */
   fetchModels: () => Promise<void>;
   /** Force refresh models even if already loaded */
   refreshModels: () => Promise<void>;
@@ -27,7 +42,12 @@ interface ModelsState {
 }
 
 /**
- * Zustand store for models.dev data.
+ * Zustand store for OpenRouter model data.
+ *
+ * Note: This store does not implement subscribe cleanup for pending requests/timeouts
+ * because Zustand stores persist for the app lifetime. Cleanup is handled within
+ * refreshModels() when a new request starts (lines 66-74) and in success/error paths.
+ * If the store is ever scoped to component lifetime, add cleanup via store.destroy().
  */
 export const useModelsStore = create<ModelsState>((set, get) => ({
   models: [],
@@ -35,6 +55,8 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
   isLoading: false,
   error: null,
   lastFetched: null,
+  abortController: null,
+  timeoutId: undefined,
 
   fetchModels: async () => {
     // Skip if already fetched this session
@@ -46,10 +68,28 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
   },
 
   refreshModels: async () => {
-    set({ isLoading: true, error: null });
+    // Cancel any pending request
+    const currentController = get().abortController;
+    const currentTimeoutId = get().timeoutId;
+    if (currentController) {
+      currentController.abort();
+    }
+    if (currentTimeoutId !== undefined) {
+      clearTimeout(currentTimeoutId);
+    }
+
+    // Create new AbortController for this request
+    const abortController = new AbortController();
+
+    // Set timeout to abort request after 30 seconds
+    const timeoutId = setTimeout(() => {
+      abortController.abort(new TimeoutError());
+    }, 30000);
+
+    set({ isLoading: true, error: null, abortController, timeoutId });
 
     try {
-      const response = await fetch(MODELS_API_URL);
+      const response = await fetch(MODELS_API_URL, { signal: abortController.signal });
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }
@@ -61,7 +101,11 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
         throw new Error(`Invalid JSON response from models API: ${parseError}`);
       }
 
-      const models = flattenModelsData(data);
+      if (!data || !data.data || !Array.isArray(data.data)) {
+        throw new Error('Invalid response shape from models API');
+      }
+
+      const models = flattenModelsData(data.data);
       const providers = [...new Set(models.map((m) => m.provider))];
 
       set({
@@ -69,13 +113,42 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
         providers,
         isLoading: false,
         lastFetched: Date.now(),
+        abortController: null,
+        timeoutId: undefined,
       });
     } catch (err) {
-      console.error('Failed to fetch models:', err);
+      // Don't update state if a newer request has already started
+      if (get().abortController !== abortController) {
+        return;
+      }
+
+      const timedOut =
+        err instanceof TimeoutError || abortController.signal.reason instanceof TimeoutError;
+
+      if (timedOut || (err instanceof Error && err.name === 'AbortError')) {
+        set({
+          error: timedOut ? 'Request timed out after 30 seconds. Check your connection.' : null,
+          isLoading: false,
+          abortController: null,
+          timeoutId: undefined,
+        });
+        return;
+      }
+
+      logger.error('Failed to fetch models', err, {
+        url: MODELS_API_URL,
+        timestamp: Date.now(),
+      });
       set({
         error: 'Failed to load models. Check your connection.',
         isLoading: false,
+        abortController: null,
+        timeoutId: undefined,
       });
+    } finally {
+      if (timeoutId !== undefined) {
+        clearTimeout(timeoutId);
+      }
     }
   },
 

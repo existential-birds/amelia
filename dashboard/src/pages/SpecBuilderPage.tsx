@@ -4,7 +4,9 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Menu, Lightbulb, Bot, Cpu } from "lucide-react";
 import { api } from "@/api/client";
+import { getProfile } from "@/api/settings";
 import { formatDriver, formatModel } from "@/lib/utils";
+import { logger } from "@/lib/logger";
 import {
   Conversation,
   ConversationContent,
@@ -48,6 +50,33 @@ import {
 } from "@/components/brainstorm";
 import type { BrainstormArtifact } from "@/types/api";
 import type { ConfigProfileInfo } from "@/types";
+
+// Extract profile info from config, preferring brainstormer agent config
+async function fetchProfileInfo(
+  activeProfile: string | null,
+  fallbackInfo: ConfigProfileInfo | null,
+  mounted: boolean
+): Promise<ConfigProfileInfo | null> {
+  if (!activeProfile) return fallbackInfo;
+
+  try {
+    const profile = await getProfile(activeProfile);
+    if (!mounted) return fallbackInfo;
+
+    const brainstormerConfig = profile.agents?.brainstormer;
+    if (brainstormerConfig) {
+      return {
+        name: profile.id,
+        driver: brainstormerConfig.driver,
+        model: brainstormerConfig.model,
+      };
+    }
+    return fallbackInfo;
+  } catch (error) {
+    logger.warn('Failed to load profile, using config defaults', { error });
+    return fallbackInfo;
+  }
+}
 
 function SpecBuilderPageContent() {
   const navigate = useNavigate();
@@ -94,18 +123,35 @@ function SpecBuilderPageContent() {
     let mounted = true;
 
     const init = async () => {
-      await loadSessions();
+      try {
+        await loadSessions();
+      } catch (error) {
+        if (mounted) {
+          logger.warn('Failed to load sessions on mount, continuing initialization', { error });
+          toast.error("Failed to load sessions. If the issue persists, check that the Amelia server is running.");
+        }
+        // Continue initialization even if sessions fail to load
+      }
       if (!mounted) return;
 
       try {
         const config = await api.getConfig();
+        if (!mounted) return;
+        activeProfileRef.current = config.active_profile;
+
+        // Fetch brainstormer agent's model/driver from the profile
+        // (config endpoint returns the developer agent's model which is wrong for spec builder)
+        const profileInfo = await fetchProfileInfo(
+          config.active_profile,
+          config.active_profile_info,
+          mounted
+        );
         if (mounted) {
-          activeProfileRef.current = config.active_profile;
-          setConfigProfileInfo(config.active_profile_info);
+          setConfigProfileInfo(profileInfo);
         }
       } catch (error) {
         if (mounted) {
-          console.warn('Failed to load config, using defaults:', error);
+          logger.warn('Failed to load config, profile info will remain null', { error });
         }
       }
     };
@@ -115,7 +161,7 @@ function SpecBuilderPageContent() {
     return () => {
       mounted = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only: loadSessions is stable but changes identity on each render
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only init: loadSessions is stable from useBrainstormSession
   }, []);
 
   const handleSubmit = useCallback(
