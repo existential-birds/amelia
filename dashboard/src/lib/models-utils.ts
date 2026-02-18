@@ -135,8 +135,11 @@ export function filterModelsByRequirements(
  * Format context size for display (e.g., 200000 -> "200K").
  */
 export function formatContextSize(contextSize: number | null): string {
-  if (contextSize === null || contextSize === 0) {
+  if (contextSize === null) {
     return 'Unknown';
+  }
+  if (contextSize === 0) {
+    return '0';
   }
   if (contextSize >= 1_000_000) {
     return `${Math.round(contextSize / 1_000_000)}M`;

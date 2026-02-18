@@ -20,6 +20,8 @@ interface ModelsState {
   lastFetched: number | null;
   /** AbortController for the current fetch */
   abortController: AbortController | null;
+  /** Timeout ID for the current fetch timeout */
+  timeoutId?: ReturnType<typeof setTimeout>;
 
   /** Fetch models from OpenRouter API (skips if already loaded) */
   fetchModels: () => Promise<void>;
@@ -39,6 +41,7 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
   error: null,
   lastFetched: null,
   abortController: null,
+  timeoutId: undefined,
 
   fetchModels: async () => {
     // Skip if already fetched this session
@@ -52,13 +55,16 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
   refreshModels: async () => {
     // Cancel any pending request
     const currentController = get().abortController;
+    const currentTimeoutId = get().timeoutId;
     if (currentController) {
       currentController.abort();
+    }
+    if (currentTimeoutId !== undefined) {
+      clearTimeout(currentTimeoutId);
     }
 
     // Create new AbortController for this request
     const abortController = new AbortController();
-    set({ isLoading: true, error: null, abortController });
 
     // Set timeout to abort request after 30 seconds
     let timedOut = false;
@@ -66,6 +72,8 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
       timedOut = true;
       abortController.abort();
     }, 30000);
+
+    set({ isLoading: true, error: null, abortController, timeoutId });
 
     try {
       const response = await fetch(MODELS_API_URL, { signal: abortController.signal });
@@ -95,18 +103,18 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
         lastFetched: Date.now(),
         // Safe to clear: if aborted before this point, we return early in the catch block
         abortController: null,
+        timeoutId: undefined,
       });
     } catch (err) {
       clearTimeout(timeoutId);
       // Don't update state if the request was aborted (a newer request is in progress)
       if (err instanceof Error && err.name === 'AbortError') {
-        if (timedOut) {
-          set({
-            error: 'Request timed out after 30 seconds. Check your connection.',
-            isLoading: false,
-            abortController: null,
-          });
-        }
+        set({
+          error: timedOut ? 'Request timed out after 30 seconds. Check your connection.' : null,
+          isLoading: false,
+          abortController: null,
+          timeoutId: undefined,
+        });
         return;
       }
 
@@ -118,6 +126,7 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
         error: 'Failed to load models. Check your connection.',
         isLoading: false,
         abortController: null,
+        timeoutId: undefined,
       });
     }
   },

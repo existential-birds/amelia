@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Select,
   SelectContent,
@@ -31,15 +31,11 @@ export function ApiModelSelect({ agentKey, value, onChange }: ApiModelSelectProp
   const { recentModelIds, addRecentModel } = useRecentModels();
   const [sheetOpen, setSheetOpen] = useState(false);
 
-  // Use ref to maintain stable identity for fetchModels
-  const fetchModelsRef = useRef(fetchModels);
-  fetchModelsRef.current = fetchModels;
-
   // Eagerly fetch models on mount (idempotent — fetchModels checks models.length and lastFetched, skips if already loaded)
   // Note: Zustand store actions are stable references and handle their own state updates, safe to call without cleanup tracking
   useEffect(() => {
-    fetchModelsRef.current();
-  }, []);
+    fetchModels();
+  }, [fetchModels]);
 
   // Get recent models that exist in the store
   const recentModels = recentModelIds

@@ -51,6 +51,33 @@ import {
 import type { BrainstormArtifact } from "@/types/api";
 import type { ConfigProfileInfo } from "@/types";
 
+// Extract profile info from config, preferring brainstormer agent config
+async function fetchProfileInfo(
+  activeProfile: string | null,
+  fallbackInfo: ConfigProfileInfo | null,
+  mounted: boolean
+): Promise<ConfigProfileInfo | null> {
+  if (!activeProfile) return fallbackInfo;
+
+  try {
+    const profile = await getProfile(activeProfile);
+    if (!mounted) return fallbackInfo;
+
+    const brainstormerConfig = profile.agents?.brainstormer;
+    if (brainstormerConfig) {
+      return {
+        name: profile.id,
+        driver: brainstormerConfig.driver,
+        model: brainstormerConfig.model,
+      };
+    }
+    return fallbackInfo;
+  } catch (error) {
+    logger.warn('Failed to load profile, using config defaults', { error });
+    return fallbackInfo;
+  }
+}
+
 function SpecBuilderPageContent() {
   const navigate = useNavigate();
   const {
@@ -90,33 +117,6 @@ function SpecBuilderPageContent() {
   const [configProfileInfo, setConfigProfileInfo] = useState<ConfigProfileInfo | null>(null);
   const activeProfileRef = useRef<string>("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  // Extract profile info from config, preferring brainstormer agent config
-  const fetchProfileInfo = async (
-    activeProfile: string | null,
-    fallbackInfo: ConfigProfileInfo | null,
-    mounted: boolean
-  ): Promise<ConfigProfileInfo | null> => {
-    if (!activeProfile) return fallbackInfo;
-
-    try {
-      const profile = await getProfile(activeProfile);
-      if (!mounted) return fallbackInfo;
-
-      const brainstormerConfig = profile.agents?.brainstormer;
-      if (brainstormerConfig) {
-        return {
-          name: profile.id,
-          driver: brainstormerConfig.driver,
-          model: brainstormerConfig.model,
-        };
-      }
-      return fallbackInfo;
-    } catch (error) {
-      logger.warn('Failed to load profile, using config defaults', { error });
-      return fallbackInfo;
-    }
-  };
 
   // Load sessions and config on mount
   useEffect(() => {
