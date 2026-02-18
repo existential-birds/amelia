@@ -8,6 +8,9 @@ from typer.testing import CliRunner
 from amelia.main import app
 
 
+MOCK_WORKFLOW_ID = "b2c3d4e5-f6a7-8901-bcde-f12345678901"
+
+
 class TestCliTaskOptionIntegration:
     """Integration tests for --title/--description CLI flow."""
 
@@ -65,7 +68,7 @@ profiles:
             mock_ctx.return_value = (str(noop_worktree), "noop-repo")
             mock_client = mock_client_class.return_value
             mock_client.create_workflow = AsyncMock(return_value=MagicMock(
-                id="wf-123", status="pending"
+                id=MOCK_WORKFLOW_ID, status="pending"
             ))
 
             result = runner.invoke(
@@ -79,7 +82,7 @@ profiles:
             )
 
             assert result.exit_code == 0
-            assert "wf-123" in result.stdout
+            assert MOCK_WORKFLOW_ID in result.stdout
 
             # Verify task fields were passed
             call_kwargs = mock_client.create_workflow.call_args.kwargs

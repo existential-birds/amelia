@@ -4,6 +4,8 @@
 Provides the PromptResolver that returns current prompt content,
 falling back to defaults when no custom version exists.
 """
+import uuid
+
 from loguru import logger
 
 from amelia.agents.prompts.defaults import PROMPT_DEFAULTS
@@ -84,7 +86,7 @@ class PromptResolver:
             result[prompt_id] = await self.get_prompt(prompt_id)
         return result
 
-    async def record_for_workflow(self, workflow_id: str) -> None:
+    async def record_for_workflow(self, workflow_id: uuid.UUID) -> None:
         """Record which prompt versions a workflow uses.
 
         Only records custom versions (not defaults) since defaults

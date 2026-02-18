@@ -1,6 +1,7 @@
 # tests/unit/server/routes/test_prompts.py
 """Tests for prompts API routes."""
 from unittest.mock import AsyncMock, MagicMock
+from uuid import uuid4
 
 import pytest
 from fastapi import FastAPI
@@ -74,7 +75,7 @@ class TestGetPrompt:
             id="test.prompt", agent="test", name="Test"
         )
         mock_repo.get_versions.return_value = [
-            PromptVersion(id="v1", prompt_id="test.prompt", version_number=1, content="Content"),
+            PromptVersion(id=uuid4(), prompt_id="test.prompt", version_number=1, content="Content"),
         ]
         response = client.get("/api/prompts/test.prompt")
         assert response.status_code == 200
@@ -98,8 +99,8 @@ class TestGetVersions:
             id="test", agent="test", name="Test"
         )
         mock_repo.get_versions.return_value = [
-            PromptVersion(id="v2", prompt_id="test", version_number=2, content="V2"),
-            PromptVersion(id="v1", prompt_id="test", version_number=1, content="V1"),
+            PromptVersion(id=uuid4(), prompt_id="test", version_number=2, content="V2"),
+            PromptVersion(id=uuid4(), prompt_id="test", version_number=1, content="V1"),
         ]
         response = client.get("/api/prompts/test/versions")
         assert response.status_code == 200
@@ -116,8 +117,9 @@ class TestCreateVersion:
         mock_repo.get_prompt.return_value = Prompt(
             id="test.prompt", agent="test", name="Test"
         )
+        new_version_id = uuid4()
         mock_repo.create_version.return_value = PromptVersion(
-            id="v-new", prompt_id="test.prompt", version_number=1, content="New content"
+            id=new_version_id, prompt_id="test.prompt", version_number=1, content="New content"
         )
         response = client.post(
             "/api/prompts/test.prompt/versions",
@@ -125,7 +127,7 @@ class TestCreateVersion:
         )
         assert response.status_code == 201
         data = response.json()
-        assert data["id"] == "v-new"
+        assert data["id"] == str(new_version_id)
 
     def test_create_version_empty_content(self, client, mock_repo):
         """Should reject empty content."""

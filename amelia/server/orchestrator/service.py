@@ -2,6 +2,7 @@
 
 import asyncio
 import contextlib
+import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
@@ -171,12 +172,16 @@ class OrchestratorService:
         self._profile_repo = profile_repo
         self._max_concurrent = max_concurrent
         self._checkpointer = checkpointer
-        self._active_tasks: dict[str, tuple[str, asyncio.Task[None]]] = {}  # worktree_path -> (workflow_id, task)
-        self._planning_tasks: dict[str, asyncio.Task[None]] = {}  # workflow_id -> planning task
+        # worktree_path -> (workflow_id, task)
+        self._active_tasks: dict[str, tuple[uuid.UUID, asyncio.Task[None]]] = {}
+        # workflow_id -> planning task
+        self._planning_tasks: dict[uuid.UUID, asyncio.Task[None]] = {}
         self._approval_lock = asyncio.Lock()  # Prevents race conditions on approvals
         self._start_lock = asyncio.Lock()  # Prevents race conditions on workflow start
-        self._sequence_counters: dict[str, int] = {}  # workflow_id -> next sequence
-        self._sequence_locks: dict[str, asyncio.Lock] = {}  # workflow_id -> lock
+        # workflow_id -> next sequence
+        self._sequence_counters: dict[uuid.UUID, int] = {}
+        # workflow_id -> lock
+        self._sequence_locks: dict[uuid.UUID, asyncio.Lock] = {}
 
     def _create_server_graph(
         self,
@@ -197,7 +202,7 @@ class OrchestratorService:
             ],
         )
 
-    async def _resolve_prompts(self, workflow_id: str) -> dict[str, str]:
+    async def _resolve_prompts(self, workflow_id: uuid.UUID) -> dict[str, str]:
         """Resolve all prompts for a workflow.
 
         Uses PromptResolver to get current active prompts, falling back to
@@ -234,7 +239,7 @@ class OrchestratorService:
 
     async def _get_profile_or_fail(
         self,
-        workflow_id: str,
+        workflow_id: uuid.UUID,
         profile_id: str,
         worktree_path: str,
     ) -> Profile | None:
@@ -320,7 +325,7 @@ class OrchestratorService:
 
     async def _prepare_workflow_state(
         self,
-        workflow_id: str,
+        workflow_id: uuid.UUID,
         worktree_path: str,
         issue_id: str,
         profile_name: str | None = None,
@@ -487,7 +492,7 @@ class OrchestratorService:
         driver: str | None = None,
         task_title: str | None = None,
         task_description: str | None = None,
-    ) -> str:
+    ) -> uuid.UUID:
         """Start a new workflow.
 
         Args:
@@ -523,7 +528,7 @@ class OrchestratorService:
             if current_count >= self._max_concurrent:
                 raise ConcurrencyLimitError(self._max_concurrent, current_count)
 
-            workflow_id = str(uuid4())
+            workflow_id = uuid4()
 
             # Prepare issue and execution state using the helper
             # This also loads the profile from the database
@@ -586,7 +591,7 @@ class OrchestratorService:
 
         return workflow_id
 
-    async def queue_workflow(self, request: CreateWorkflowRequest) -> str:
+    async def queue_workflow(self, request: CreateWorkflowRequest) -> uuid.UUID:
         """Queue a workflow without starting it.
 
         Creates a workflow in pending state with execution_state populated
@@ -608,7 +613,7 @@ class OrchestratorService:
         resolved_path = str(worktree)
 
         # Generate workflow ID before preparing state (required by ImplementationState)
-        workflow_id = str(uuid4())
+        workflow_id = uuid4()
 
         # Prepare common workflow state (settings, profile, issue, execution_state)
         resolved_path, profile, execution_state = await self._prepare_workflow_state(
@@ -687,7 +692,7 @@ class OrchestratorService:
         diff_content: str,
         worktree_path: str,
         profile: str | None = None,
-    ) -> str:
+    ) -> uuid.UUID:
         """Start a review-fix workflow.
 
         Args:
@@ -721,7 +726,7 @@ class OrchestratorService:
             if len(self._active_tasks) >= self._max_concurrent:
                 raise ConcurrencyLimitError(self._max_concurrent, len(self._active_tasks))
 
-            workflow_id = str(uuid4())
+            workflow_id = uuid4()
 
             # Get profile from database
             if self._profile_repo is None:
@@ -805,7 +810,7 @@ class OrchestratorService:
 
     async def cancel_workflow(
         self,
-        workflow_id: str,
+        workflow_id: uuid.UUID,
         reason: str | None = None,
     ) -> None:
         """Cancel a running workflow.
@@ -848,7 +853,7 @@ class OrchestratorService:
             reason=reason,
         )
 
-    async def resume_workflow(self, workflow_id: str) -> ServerExecutionState:
+    async def resume_workflow(self, workflow_id: uuid.UUID) -> ServerExecutionState:
         """Resume a failed workflow from its last checkpoint.
 
         Validates the workflow is in FAILED status, has a valid checkpoint,
@@ -881,7 +886,7 @@ class OrchestratorService:
         # Validate checkpoint exists (read-only, safe outside lock)
         graph = self._create_server_graph(self._checkpointer)
         config: RunnableConfig = {
-            "configurable": {"thread_id": workflow_id},
+            "configurable": {"thread_id": str(workflow_id)},
         }
         try:
             checkpoint_state = await graph.aget_state(config)
@@ -1065,7 +1070,7 @@ class OrchestratorService:
 
     async def _run_workflow(
         self,
-        workflow_id: str,
+        workflow_id: uuid.UUID,
         state: ServerExecutionState,
     ) -> None:
         """Execute workflow via LangGraph with interrupt support.
@@ -1107,7 +1112,7 @@ class OrchestratorService:
         config: RunnableConfig = {
             "recursion_limit": 100,
             "configurable": {
-                "thread_id": workflow_id,
+                "thread_id": str(workflow_id),
                 "execution_mode": "server",
                 "event_bus": self._event_bus,
                 "profile": profile,
@@ -1213,7 +1218,7 @@ class OrchestratorService:
 
     async def _run_workflow_with_retry(
         self,
-        workflow_id: str,
+        workflow_id: uuid.UUID,
         state: ServerExecutionState,
     ) -> None:
         """Execute workflow with automatic retry for transient failures.
@@ -1292,7 +1297,7 @@ class OrchestratorService:
 
     async def _run_review_workflow(
         self,
-        workflow_id: str,
+        workflow_id: uuid.UUID,
         state: ServerExecutionState,
         execution_state: ImplementationState,
     ) -> None:
@@ -1333,7 +1338,7 @@ class OrchestratorService:
         config: RunnableConfig = {
             "recursion_limit": 100,
             "configurable": {
-                "thread_id": workflow_id,
+                "thread_id": str(workflow_id),
                 "execution_mode": "server",
                 "event_bus": self._event_bus,
                 "profile": profile,
@@ -1396,12 +1401,12 @@ class OrchestratorService:
 
     async def _emit(
         self,
-        workflow_id: str,
+        workflow_id: uuid.UUID,
         event_type: EventType,
         message: str,
         agent: str = "system",
         data: dict[str, object] | None = None,
-        correlation_id: str | None = None,
+        correlation_id: uuid.UUID | None = None,
     ) -> WorkflowEvent:
         """Emit a workflow event.
 
@@ -1433,7 +1438,7 @@ class OrchestratorService:
             self._sequence_counters[workflow_id] += 1
 
         event = WorkflowEvent(
-            id=str(uuid4()),
+            id=uuid4(),
             workflow_id=workflow_id,
             sequence=sequence,
             timestamp=datetime.now(UTC),
@@ -1457,7 +1462,7 @@ class OrchestratorService:
 
         return event
 
-    async def _delete_checkpoint(self, workflow_id: str) -> None:
+    async def _delete_checkpoint(self, workflow_id: uuid.UUID) -> None:
         """Delete LangGraph checkpoint data for a workflow.
 
         Removes all checkpoint records (checkpoints, writes, blobs) for
@@ -1468,10 +1473,10 @@ class OrchestratorService:
         """
         if self._checkpointer is None:
             return
-        await self._checkpointer.adelete_thread(workflow_id)
+        await self._checkpointer.adelete_thread(str(workflow_id))
         logger.info("Deleted checkpoint", workflow_id=workflow_id)
 
-    async def approve_workflow(self, workflow_id: str) -> None:
+    async def approve_workflow(self, workflow_id: uuid.UUID) -> None:
         """Approve a blocked workflow and resume LangGraph execution.
 
         Args:
@@ -1525,7 +1530,7 @@ class OrchestratorService:
         config: RunnableConfig = {
             "recursion_limit": 100,
             "configurable": {
-                "thread_id": workflow_id,
+                "thread_id": str(workflow_id),
                 "execution_mode": "server",
                 "event_bus": self._event_bus,
                 "profile": profile,
@@ -1634,7 +1639,7 @@ class OrchestratorService:
 
     async def reject_workflow(
         self,
-        workflow_id: str,
+        workflow_id: uuid.UUID,
         feedback: str,
     ) -> None:
         """Reject a blocked workflow.
@@ -1698,7 +1703,7 @@ class OrchestratorService:
         config: RunnableConfig = {
             "recursion_limit": 100,
             "configurable": {
-                "thread_id": workflow_id,
+                "thread_id": str(workflow_id),
                 "execution_mode": "server",
                 "profile": profile,
                 "repository": self._repository,
@@ -1709,7 +1714,7 @@ class OrchestratorService:
 
     async def _handle_graph_event(
         self,
-        workflow_id: str,
+        workflow_id: uuid.UUID,
         event: dict[str, object],
     ) -> None:
         """Translate LangGraph events to WorkflowEvents and emit.
@@ -1763,7 +1768,7 @@ class OrchestratorService:
 
     async def _handle_stream_chunk(
         self,
-        workflow_id: str,
+        workflow_id: uuid.UUID,
         chunk: dict[str, Any],
     ) -> None:
         """Handle an updates chunk from astream(stream_mode=['updates', 'tasks']).
@@ -1830,7 +1835,7 @@ class OrchestratorService:
 
     async def _handle_tasks_event(
         self,
-        workflow_id: str,
+        workflow_id: uuid.UUID,
         task_data: dict[str, Any],
     ) -> None:
         """Handle a task event from stream_mode='tasks'.
@@ -1885,7 +1890,7 @@ class OrchestratorService:
 
     async def _handle_combined_stream_chunk(
         self,
-        workflow_id: str,
+        workflow_id: uuid.UUID,
         chunk: tuple[str, Any],
     ) -> None:
         """Handle a chunk from stream_mode=['updates', 'tasks'].
@@ -1925,7 +1930,7 @@ class OrchestratorService:
         # Single mode (dict)
         return "__interrupt__" in chunk
 
-    async def _emit_task_failed_if_applicable(self, workflow_id: str) -> None:
+    async def _emit_task_failed_if_applicable(self, workflow_id: uuid.UUID) -> None:
         """Emit TASK_FAILED if workflow ended due to unapproved task.
 
         Called when workflow completes to check if the final task was not approved
@@ -1960,7 +1965,7 @@ class OrchestratorService:
 
     async def _emit_agent_messages(
         self,
-        workflow_id: str,
+        workflow_id: uuid.UUID,
         node_name: str,
         output: dict[str, Any],
     ) -> None:
@@ -1984,7 +1989,7 @@ class OrchestratorService:
 
     async def _emit_architect_messages(
         self,
-        workflow_id: str,
+        workflow_id: uuid.UUID,
         output: dict[str, Any],
     ) -> None:
         """Emit messages for architect node output.
@@ -2008,7 +2013,7 @@ class OrchestratorService:
 
     async def _emit_validator_messages(
         self,
-        workflow_id: str,
+        workflow_id: uuid.UUID,
         output: dict[str, Any],
     ) -> None:
         """Emit messages for plan validator node output.
@@ -2031,7 +2036,7 @@ class OrchestratorService:
 
     async def _emit_developer_messages(
         self,
-        workflow_id: str,
+        workflow_id: uuid.UUID,
         output: dict[str, Any],
     ) -> None:
         """Emit messages for developer node output.
@@ -2065,7 +2070,7 @@ class OrchestratorService:
 
     async def _emit_reviewer_messages(
         self,
-        workflow_id: str,
+        workflow_id: uuid.UUID,
         output: dict[str, Any],
     ) -> None:
         """Emit messages for reviewer node output.
@@ -2098,7 +2103,7 @@ class OrchestratorService:
 
     async def _emit_evaluator_messages(
         self,
-        workflow_id: str,
+        workflow_id: uuid.UUID,
         output: dict[str, Any],
     ) -> None:
         """Emit messages for evaluator node output.
@@ -2144,7 +2149,7 @@ class OrchestratorService:
 
     async def _sync_plan_from_checkpoint(
         self,
-        workflow_id: str,
+        workflow_id: uuid.UUID,
         graph: CompiledStateGraph[Any],
         config: RunnableConfig,
     ) -> None:
@@ -2261,7 +2266,7 @@ class OrchestratorService:
 
     async def _run_planning_task(
         self,
-        workflow_id: str,
+        workflow_id: uuid.UUID,
         state: ServerExecutionState,
         execution_state: ImplementationState,
         profile: Profile,
@@ -2290,7 +2295,7 @@ class OrchestratorService:
         config: RunnableConfig = {
             "recursion_limit": 100,
             "configurable": {
-                "thread_id": workflow_id,
+                "thread_id": str(workflow_id),
                 "execution_mode": "server",
                 "event_bus": self._event_bus,
                 "profile": profile,
@@ -2405,7 +2410,7 @@ class OrchestratorService:
     async def queue_and_plan_workflow(
         self,
         request: CreateWorkflowRequest,
-    ) -> str:
+    ) -> uuid.UUID:
         """Queue a workflow and run Architect to generate plan.
 
         Creates workflow, runs Architect to generate plan, stores plan,
@@ -2426,7 +2431,7 @@ class OrchestratorService:
         resolved_path = str(worktree)
 
         # Generate workflow ID before preparing state (required by ImplementationState)
-        workflow_id = str(uuid4())
+        workflow_id = uuid4()
 
         # Prepare common workflow state (settings, profile, issue, execution_state)
         resolved_path, profile, execution_state = await self._prepare_workflow_state(
@@ -2483,7 +2488,7 @@ class OrchestratorService:
 
         return workflow_id
 
-    async def start_pending_workflow(self, workflow_id: str) -> None:
+    async def start_pending_workflow(self, workflow_id: uuid.UUID) -> None:
         """Start a pending workflow.
 
         Transitions a workflow from pending to in_progress state and
@@ -2603,12 +2608,12 @@ class OrchestratorService:
                     if w.worktree_path == request.worktree_path
                 ]
 
-            workflow_ids = [w.id for w in pending_workflows]
+            workflow_ids = [str(w.id) for w in pending_workflows]
 
         # Attempt to start each workflow
         for workflow_id in workflow_ids:
             try:
-                await self.start_pending_workflow(workflow_id)
+                await self.start_pending_workflow(uuid.UUID(workflow_id))
                 started.append(workflow_id)
             except asyncio.CancelledError:
                 # Don't swallow cancellation (e.g., during shutdown)
@@ -2631,7 +2636,7 @@ class OrchestratorService:
 
     async def set_workflow_plan(
         self,
-        workflow_id: str,
+        workflow_id: uuid.UUID,
         plan_file: str | None = None,
         plan_content: str | None = None,
         force: bool = False,
@@ -2788,7 +2793,7 @@ class OrchestratorService:
 
     async def _extract_plan_metadata(
         self,
-        workflow_id: str,
+        workflow_id: uuid.UUID,
         content: str,
         profile: Profile,
         target_path: Path,
@@ -2870,7 +2875,7 @@ class OrchestratorService:
                 data={"error": str(e)},
             )
 
-    async def replan_workflow(self, workflow_id: str) -> None:
+    async def replan_workflow(self, workflow_id: uuid.UUID) -> None:
         """Regenerate the plan for a blocked workflow.
 
         Deletes the stale LangGraph checkpoint, clears plan-related fields,

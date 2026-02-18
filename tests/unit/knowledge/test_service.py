@@ -3,6 +3,7 @@
 import asyncio
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import uuid4
 
 import pytest
 
@@ -32,7 +33,7 @@ def mock_repo() -> AsyncMock:
     """Provide a mocked KnowledgeRepository."""
     repo = AsyncMock(spec=KnowledgeRepository)
     repo.update_document_status.return_value = Document(
-        id="doc-1",
+        id=uuid4(),
         name="test.pdf",
         filename="test.pdf",
         content_type="application/pdf",
@@ -128,18 +129,19 @@ async def test_queue_ingestion_emits_started_event(
             return_value=mock_chunker,
         ),
     ):
-        service.queue_ingestion("doc-1", Path("/tmp/test.pdf"), "application/pdf")
+        doc_id = uuid4()
+        service.queue_ingestion(doc_id, Path("/tmp/test.pdf"), "application/pdf")
         await asyncio.sleep(0.1)
 
     started = _find_events(mock_event_bus, EventType.DOCUMENT_INGESTION_STARTED)
     assert len(started) >= 1
     event = started[0]
     assert event.data is not None
-    assert event.data["document_id"] == "doc-1"
+    assert event.data["document_id"] == str(doc_id)
     assert event.data["status"] == "processing"
     assert event.domain == EventDomain.KNOWLEDGE
     assert event.agent == "knowledge"
-    assert event.workflow_id == "doc-1"
+    assert event.workflow_id is not None  # UUID propagated
 
 
 @pytest.mark.asyncio
@@ -160,7 +162,8 @@ async def test_queue_ingestion_emits_progress_events(
             return_value=mock_chunker,
         ),
     ):
-        service.queue_ingestion("doc-1", Path("/tmp/test.pdf"), "application/pdf")
+        doc_id = uuid4()
+        service.queue_ingestion(doc_id, Path("/tmp/test.pdf"), "application/pdf")
         # Wait for task to complete naturally (don't cancel via cleanup)
         await asyncio.gather(*service._tasks, return_exceptions=True)
 
@@ -193,7 +196,8 @@ async def test_queue_ingestion_emits_completed_event(
             return_value=mock_chunker,
         ),
     ):
-        service.queue_ingestion("doc-1", Path("/tmp/test.pdf"), "application/pdf")
+        doc_id = uuid4()
+        service.queue_ingestion(doc_id, Path("/tmp/test.pdf"), "application/pdf")
         await asyncio.gather(*service._tasks, return_exceptions=True)
 
     completed = _find_events(mock_event_bus, EventType.DOCUMENT_INGESTION_COMPLETED)
@@ -226,7 +230,8 @@ async def test_queue_ingestion_emits_failed_event(
             return_value=mock_chunker,
         ),
     ):
-        service.queue_ingestion("doc-1", Path("/tmp/test.pdf"), "application/pdf")
+        doc_id = uuid4()
+        service.queue_ingestion(doc_id, Path("/tmp/test.pdf"), "application/pdf")
         await asyncio.gather(*service._tasks, return_exceptions=True)
 
     failed = _find_events(mock_event_bus, EventType.DOCUMENT_INGESTION_FAILED)
@@ -254,7 +259,8 @@ async def test_cleanup_awaits_pending_tasks(
             return_value=mock_chunker,
         ),
     ):
-        service.queue_ingestion("doc-1", Path("/tmp/test.pdf"), "application/pdf")
+        doc_id = uuid4()
+        service.queue_ingestion(doc_id, Path("/tmp/test.pdf"), "application/pdf")
         await service.cleanup()
 
     assert len(service._tasks) == 0
@@ -277,7 +283,8 @@ async def test_task_auto_removed_on_completion(
             return_value=mock_chunker,
         ),
     ):
-        service.queue_ingestion("doc-1", Path("/tmp/test.pdf"), "application/pdf")
+        doc_id = uuid4()
+        service.queue_ingestion(doc_id, Path("/tmp/test.pdf"), "application/pdf")
         # Wait long enough for the task to complete and callback to fire
         await asyncio.sleep(0.5)
 

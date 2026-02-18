@@ -4,6 +4,7 @@ This module provides the ReviewPipeline class that implements the Pipeline
 protocol for code review workflows.
 """
 
+import uuid
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
@@ -67,7 +68,7 @@ class ReviewPipeline(Pipeline[ImplementationState]):
             ImplementationState configured for a review workflow.
         """
         return ImplementationState(
-            workflow_id=str(kwargs["workflow_id"]),
+            workflow_id=uuid.UUID(str(kwargs["workflow_id"])),
             profile_id=str(kwargs["profile_id"]),
             created_at=datetime.now(UTC),
             status="pending",

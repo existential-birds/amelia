@@ -1,6 +1,7 @@
 """Tests for CLI start command."""
 
 from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import uuid4
 
 import pytest
 from typer.testing import CliRunner
@@ -39,7 +40,7 @@ class TestStartCommandTaskFlags:
             mock_ctx.return_value = (str(worktree), "repo")
             mock_client = mock_client_class.return_value
             mock_client.create_workflow = AsyncMock(return_value=MagicMock(
-                id="wf-123", status="pending"
+                id=str(uuid4()), status="pending"
             ))
 
             result = runner.invoke(
@@ -66,7 +67,7 @@ class TestStartCommandTaskFlags:
             mock_ctx.return_value = (str(worktree), "repo")
             mock_client = mock_client_class.return_value
             mock_client.create_workflow = AsyncMock(return_value=MagicMock(
-                id="wf-123", status="pending"
+                id=str(uuid4()), status="pending"
             ))
 
             runner.invoke(

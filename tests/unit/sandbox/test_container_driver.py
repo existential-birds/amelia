@@ -2,6 +2,7 @@
 from collections.abc import AsyncIterator
 from typing import Any
 from unittest.mock import AsyncMock
+from uuid import uuid4
 
 import pytest
 from pydantic import BaseModel
@@ -318,15 +319,16 @@ class TestWorkflowId:
         provider.exec_stream = tracking_exec_stream
         driver = ContainerDriver(model="test", provider=provider)
 
+        wf_id = uuid4()
         async for _ in driver.execute_agentic(
-            prompt="test", cwd="/work", workflow_id="wf-abc",
+            prompt="test", cwd="/work", workflow_id=wf_id,
         ):
             pass
 
         # calls[0] is the tee command for _write_prompt
         tee_cmd = calls[0][0]
         assert tee_cmd[0] == "tee"
-        assert tee_cmd[1] == "/tmp/prompt-wf-abc.txt"
+        assert tee_cmd[1] == f"/tmp/prompt-{wf_id}.txt"
 
     async def test_generate_uses_workflow_id(self) -> None:
         from amelia.sandbox.driver import ContainerDriver
@@ -355,12 +357,13 @@ class TestWorkflowId:
         provider.exec_stream = tracking_exec_stream
         driver = ContainerDriver(model="test", provider=provider)
 
-        await driver.generate(prompt="test", workflow_id="wf-xyz")
+        wf_id = uuid4()
+        await driver.generate(prompt="test", workflow_id=wf_id)
 
         # calls[0] is the tee command for _write_prompt
         tee_cmd = calls[0][0]
         assert tee_cmd[0] == "tee"
-        assert tee_cmd[1] == "/tmp/prompt-wf-xyz.txt"
+        assert tee_cmd[1] == f"/tmp/prompt-{wf_id}.txt"
 
     async def test_falls_back_to_random_when_no_workflow_id(self) -> None:
         from amelia.sandbox.driver import ContainerDriver

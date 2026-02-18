@@ -1,6 +1,7 @@
 """Unit tests for pipeline routing functions."""
 
 from datetime import UTC, datetime
+from uuid import uuid4
 
 import pytest
 
@@ -15,7 +16,7 @@ class TestRouteAfterStart:
     def test_routes_to_architect_when_not_external_plan(self) -> None:
         """Should route to architect when external_plan is False."""
         state = ImplementationState(
-            workflow_id="wf-001",
+            workflow_id=uuid4(),
             profile_id="test",
             created_at=datetime.now(UTC),
             status="pending",
@@ -26,7 +27,7 @@ class TestRouteAfterStart:
     def test_routes_to_plan_validator_when_external_plan(self) -> None:
         """Should route to plan_validator when external_plan is True."""
         state = ImplementationState(
-            workflow_id="wf-001",
+            workflow_id=uuid4(),
             profile_id="test",
             created_at=datetime.now(UTC),
             status="pending",
@@ -54,7 +55,7 @@ class TestRouteAfterTaskReview:
     def test_approved_non_final_task_routes_to_next_task(self, profile: Profile) -> None:
         """Approved + more tasks remaining -> next_task_node."""
         state = ImplementationState(
-            workflow_id="wf-001",
+            workflow_id=uuid4(),
             profile_id="test",
             created_at=datetime.now(UTC),
             status="running",
@@ -69,7 +70,7 @@ class TestRouteAfterTaskReview:
     def test_approved_final_task_routes_to_end(self, profile: Profile) -> None:
         """Approved + last task -> __end__."""
         state = ImplementationState(
-            workflow_id="wf-001",
+            workflow_id=uuid4(),
             profile_id="test",
             created_at=datetime.now(UTC),
             status="running",
@@ -84,7 +85,7 @@ class TestRouteAfterTaskReview:
     def test_not_approved_within_iterations_routes_to_developer(self, profile: Profile) -> None:
         """Not approved + iterations remaining -> developer."""
         state = ImplementationState(
-            workflow_id="wf-001",
+            workflow_id=uuid4(),
             profile_id="test",
             created_at=datetime.now(UTC),
             status="running",
@@ -100,7 +101,7 @@ class TestRouteAfterTaskReview:
     def test_max_iterations_non_final_task_advances_to_next(self, profile: Profile) -> None:
         """Max iterations on non-final task -> next_task_node (NOT __end__)."""
         state = ImplementationState(
-            workflow_id="wf-001",
+            workflow_id=uuid4(),
             profile_id="test",
             created_at=datetime.now(UTC),
             status="running",
@@ -116,7 +117,7 @@ class TestRouteAfterTaskReview:
     def test_max_iterations_final_task_routes_to_end(self, profile: Profile) -> None:
         """Max iterations on final task -> __end__."""
         state = ImplementationState(
-            workflow_id="wf-001",
+            workflow_id=uuid4(),
             profile_id="test",
             created_at=datetime.now(UTC),
             status="running",

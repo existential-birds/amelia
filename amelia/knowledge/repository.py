@@ -1,5 +1,6 @@
 """PostgreSQL repository for Knowledge Library."""
 
+import uuid
 from typing import NotRequired, TypedDict
 from uuid import uuid4
 
@@ -49,7 +50,7 @@ class KnowledgeRepository:
         Returns:
             Created document with generated ID.
         """
-        doc_id = str(uuid4())
+        doc_id = uuid4()
         tags = tags or []
 
         row = await self.db.fetch_one(
@@ -69,7 +70,7 @@ class KnowledgeRepository:
         logger.info("Created document", document_id=doc_id, name=name)
         return self._row_to_document(row)
 
-    async def get_document(self, document_id: str) -> Document | None:
+    async def get_document(self, document_id: uuid.UUID) -> Document | None:
         """Retrieve document by ID.
 
         Args:
@@ -102,7 +103,7 @@ class KnowledgeRepository:
 
     async def update_document_status(
         self,
-        document_id: str,
+        document_id: uuid.UUID,
         status: DocumentStatus,
         error: str | None = None,
         chunk_count: int | None = None,
@@ -158,7 +159,7 @@ class KnowledgeRepository:
 
     async def update_document_tags(
         self,
-        document_id: str,
+        document_id: uuid.UUID,
         tags: list[str],
     ) -> Document:
         """Update document tags.
@@ -195,7 +196,7 @@ class KnowledgeRepository:
         )
         return self._row_to_document(row)
 
-    async def delete_document(self, document_id: str) -> None:
+    async def delete_document(self, document_id: uuid.UUID) -> None:
         """Delete document and all associated chunks.
 
         Args:
@@ -210,7 +211,7 @@ class KnowledgeRepository:
 
     async def insert_chunks(
         self,
-        document_id: str,
+        document_id: uuid.UUID,
         chunks: list[ChunkData],
     ) -> None:
         """Insert document chunks in batch.
@@ -238,7 +239,7 @@ class KnowledgeRepository:
                 """,
                 [
                     (
-                        str(uuid4()),
+                        uuid4(),
                         document_id,
                         chunk["chunk_index"],
                         chunk["content"],
@@ -335,8 +336,8 @@ class KnowledgeRepository:
 
         results = [
             SearchResult(
-                chunk_id=str(row["chunk_id"]),
-                document_id=str(row["document_id"]),
+                chunk_id=row["chunk_id"],
+                document_id=row["document_id"],
                 document_name=row["document_name"],
                 tags=row["tags"],
                 content=row["content"],
@@ -358,7 +359,7 @@ class KnowledgeRepository:
     def _row_to_document(self, row: asyncpg.Record) -> Document:
         """Convert database row to Document model."""
         return Document(
-            id=str(row["id"]),
+            id=row["id"],
             name=row["name"],
             filename=row["filename"],
             content_type=row["content_type"],

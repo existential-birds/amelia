@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import uuid
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -56,7 +57,7 @@ class IngestionPipeline:
 
     async def ingest_document(
         self,
-        document_id: str,
+        document_id: uuid.UUID,
         file_path: Path,
         content_type: str,
         progress_callback: Callable[[str, float, int, int], None] | None = None,
@@ -248,7 +249,7 @@ class IngestionPipeline:
         chunks = await asyncio.to_thread(chunker.chunk, docling_doc)  # type: ignore[arg-type]
         return list(chunks)
 
-    async def _fail_document(self, document_id: str, error_message: str) -> None:
+    async def _fail_document(self, document_id: uuid.UUID, error_message: str) -> None:
         """Set document status to FAILED."""
         try:
             await self.repository.update_document_status(

@@ -3,6 +3,7 @@
 
 Provides data models for prompts, versions, and resolution results.
 """
+import uuid
 from datetime import UTC, datetime
 from typing import Protocol
 
@@ -25,7 +26,7 @@ class Prompt(BaseModel):
     agent: str
     name: str
     description: str | None = None
-    current_version_id: str | None = None
+    current_version_id: uuid.UUID | None = None
 
 
 class PromptVersion(BaseModel):
@@ -41,7 +42,7 @@ class PromptVersion(BaseModel):
 
     """
 
-    id: str
+    id: uuid.UUID
     prompt_id: str
     version_number: int
     content: str
@@ -70,7 +71,7 @@ class ResolvedPrompt(BaseModel):
 
     prompt_id: str
     content: str
-    version_id: str | None = None
+    version_id: uuid.UUID | None = None
     version_number: int | None = None
     is_default: bool = True
 
@@ -85,9 +86,9 @@ class WorkflowPromptVersion(BaseModel):
 
     """
 
-    workflow_id: str
+    workflow_id: uuid.UUID
     prompt_id: str
-    version_id: str
+    version_id: uuid.UUID
 
 
 class PromptRepositoryProtocol(Protocol):
@@ -100,13 +101,13 @@ class PromptRepositoryProtocol(Protocol):
     async def get_prompt(self, prompt_id: str) -> Prompt | None:
         ...
 
-    async def get_version(self, version_id: str) -> PromptVersion | None:
+    async def get_version(self, version_id: uuid.UUID) -> PromptVersion | None:
         ...
 
     async def record_workflow_prompt(
         self,
-        workflow_id: str,
+        workflow_id: uuid.UUID,
         prompt_id: str,
-        version_id: str,
+        version_id: uuid.UUID,
     ) -> None:
         ...

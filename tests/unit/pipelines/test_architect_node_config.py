@@ -27,7 +27,7 @@ def profile_with_agents() -> Profile:
 @pytest.fixture
 def mock_state() -> ImplementationState:
     return ImplementationState(
-        workflow_id=str(uuid4()),
+        workflow_id=uuid4(),
         profile_id="test",
         created_at=datetime.now(UTC),
         status="pending",
@@ -43,7 +43,7 @@ async def test_call_architect_node_uses_agent_config(
     config: dict[str, Any] = {
         "configurable": {
             "profile": profile_with_agents,
-            "thread_id": "wf-1",  # Note: thread_id is used, not workflow_id
+            "thread_id": str(uuid4()),  # Note: thread_id is used, not workflow_id
         }
     }
 

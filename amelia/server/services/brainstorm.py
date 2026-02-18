@@ -5,6 +5,7 @@ between the repository, event bus, and Claude driver.
 """
 
 import asyncio
+import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
@@ -302,11 +303,11 @@ class BrainstormService:
         """
         self._repository = repository
         self._event_bus = event_bus
-        self._session_locks: dict[str, asyncio.Lock] = {}
+        self._session_locks: dict[uuid.UUID, asyncio.Lock] = {}
         self._driver_cleanup = driver_cleanup
         self._profile_repo = profile_repo
 
-    def _get_session_lock(self, session_id: str) -> asyncio.Lock:
+    def _get_session_lock(self, session_id: uuid.UUID) -> asyncio.Lock:
         """Get or create a lock for a session.
 
         Args:
@@ -342,7 +343,7 @@ class BrainstormService:
 
         now = datetime.now(UTC)
         session = BrainstormingSession(
-            id=str(uuid4()),
+            id=uuid4(),
             profile_id=profile_id,
             driver_type=driver_type,
             status=SessionStatus.ACTIVE,
@@ -355,7 +356,7 @@ class BrainstormService:
 
         # Emit session created event
         event = WorkflowEvent(
-            id=str(uuid4()),
+            id=uuid4(),
             workflow_id=session.id,  # Use session_id as workflow_id for events
             sequence=0,
             timestamp=now,
@@ -368,7 +369,7 @@ class BrainstormService:
 
         return session
 
-    async def get_session(self, session_id: str) -> BrainstormingSession | None:
+    async def get_session(self, session_id: uuid.UUID) -> BrainstormingSession | None:
         """Get a session by ID.
 
         Args:
@@ -380,7 +381,7 @@ class BrainstormService:
         return await self._repository.get_session(session_id)
 
     async def get_session_with_history(
-        self, session_id: str
+        self, session_id: uuid.UUID
     ) -> dict[str, Any] | None:
         """Get session with messages, artifacts, and usage summary.
 
@@ -428,7 +429,7 @@ class BrainstormService:
             profile_id=profile_id, status=status, limit=limit
         )
 
-    async def delete_session(self, session_id: str) -> None:
+    async def delete_session(self, session_id: uuid.UUID) -> None:
         """Delete a session.
 
         Args:
@@ -459,7 +460,7 @@ class BrainstormService:
         self._session_locks.pop(session_id, None)
 
     async def update_session_status(
-        self, session_id: str, status: SessionStatus
+        self, session_id: uuid.UUID, status: SessionStatus
     ) -> BrainstormingSession:
         """Update session status.
 
@@ -500,7 +501,7 @@ class BrainstormService:
         return session
 
     async def update_driver_session_id(
-        self, session_id: str, driver_session_id: str
+        self, session_id: uuid.UUID, driver_session_id: str
     ) -> None:
         """Update the Claude driver session ID.
 
@@ -521,7 +522,7 @@ class BrainstormService:
 
     async def send_message(
         self,
-        session_id: str,
+        session_id: uuid.UUID,
         content: str,
         driver: DriverInterface,
         cwd: str,
@@ -576,7 +577,7 @@ class BrainstormService:
 
             now = datetime.now(UTC)
             user_message = Message(
-                id=str(uuid4()),
+                id=uuid4(),
                 session_id=session_id,
                 sequence=user_sequence,
                 role=MessageRole.USER,
@@ -586,7 +587,13 @@ class BrainstormService:
             await self._repository.save_message(user_message)
 
             # Generate assistant message ID before streaming so events can reference it
-            resolved_message_id = assistant_message_id or str(uuid4())
+            if assistant_message_id:
+                try:
+                    resolved_message_id = uuid.UUID(assistant_message_id)
+                except (ValueError, AttributeError) as e:
+                    raise ValueError(f"Invalid assistant_message_id: {assistant_message_id!r}") from e
+            else:
+                resolved_message_id = uuid4()
 
             # Invoke driver and stream events
             assistant_content_parts: list[str] = []
@@ -602,7 +609,7 @@ class BrainstormService:
 
             topic_slug = slugify(session.topic) if session.topic else ""
             if not topic_slug:
-                topic_slug = f"brainstorm-{session_id[:8]}"
+                topic_slug = f"brainstorm-{str(session_id)[:8]}"
             plan_path = resolve_plan_path(plan_path_pattern, topic_slug)
             instructions = _build_brainstormer_instructions(plan_path)
 
@@ -768,7 +775,7 @@ class BrainstormService:
 
         # Emit message complete event
         complete_event = WorkflowEvent(
-            id=str(uuid4()),
+            id=uuid4(),
             workflow_id=session_id,
             sequence=0,
             timestamp=datetime.now(UTC),
@@ -784,8 +791,8 @@ class BrainstormService:
     def _agentic_message_to_event(
         self,
         agentic_msg: AgenticMessage,
-        session_id: str,
-        message_id: str,
+        session_id: uuid.UUID,
+        message_id: uuid.UUID,
     ) -> WorkflowEvent:
         """Convert an AgenticMessage to a WorkflowEvent.
 
@@ -815,7 +822,7 @@ class BrainstormService:
             message = agentic_msg.tool_output or f"Result from {agentic_msg.tool_name}"
 
         return WorkflowEvent(
-            id=str(uuid4()),
+            id=uuid4(),
             workflow_id=session_id,
             sequence=0,
             timestamp=datetime.now(UTC),
@@ -840,7 +847,7 @@ class BrainstormService:
         )
 
     async def _create_artifact_from_path(
-        self, session_id: str, path: str
+        self, session_id: uuid.UUID, path: str
     ) -> WorkflowEvent:
         """Create an artifact record from a file path.
 
@@ -855,7 +862,7 @@ class BrainstormService:
         now = datetime.now(UTC)
 
         artifact = Artifact(
-            id=str(uuid4()),
+            id=uuid4(),
             session_id=session_id,
             type=artifact_type,
             path=path,
@@ -865,7 +872,7 @@ class BrainstormService:
 
         # Emit artifact created event with flat fields matching BrainstormArtifact type
         event = WorkflowEvent(
-            id=str(uuid4()),
+            id=uuid4(),
             workflow_id=session_id,
             sequence=0,
             timestamp=now,
@@ -922,13 +929,13 @@ class BrainstormService:
 
     async def handoff_to_implementation(
         self,
-        session_id: str,
+        session_id: uuid.UUID,
         artifact_path: str,
         issue_title: str | None = None,
         issue_description: str | None = None,
         orchestrator: "OrchestratorService | None" = None,
         worktree_path: str | None = None,
-    ) -> dict[str, str]:
+    ) -> dict[str, Any]:
         """Hand off brainstorming session to implementation pipeline.
 
         Args:
@@ -961,7 +968,8 @@ class BrainstormService:
             # Generate short, readable issue ID
             base_title = issue_title or session.topic or ""
             slug = slugify(base_title, max_length=15) if base_title else ""
-            issue_id = f"{slug}-{session_id[:8]}" if slug else f"brainstorm-{session_id[:8]}"
+            sid_prefix = str(session_id)[:8]
+            issue_id = f"{slug}-{sid_prefix}" if slug else f"brainstorm-{sid_prefix}"
 
             # Queue workflow with orchestrator
             request = CreateWorkflowRequest(
@@ -975,7 +983,7 @@ class BrainstormService:
             workflow_id = await orchestrator.queue_workflow(request)
         else:
             # Fallback for backwards compatibility (e.g., tests without orchestrator)
-            workflow_id = str(uuid4())
+            workflow_id = uuid4()
 
         # Update session status to completed
         session.status = SessionStatus.COMPLETED
@@ -984,7 +992,7 @@ class BrainstormService:
 
         # Emit session completed event
         event = WorkflowEvent(
-            id=str(uuid4()),
+            id=uuid4(),
             workflow_id=session_id,
             sequence=0,
             timestamp=datetime.now(UTC),

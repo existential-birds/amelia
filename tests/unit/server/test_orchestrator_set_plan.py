@@ -2,6 +2,7 @@
 
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import uuid4
 
 import pytest
 
@@ -111,7 +112,7 @@ class TestSetWorkflowPlan:
             mock_update_profile.return_value = mock_profile
 
             result = await mock_orchestrator.set_workflow_plan(
-                workflow_id="wf-001",
+                workflow_id=uuid4(),
                 plan_content=plan_content,
             )
 
@@ -165,7 +166,7 @@ class TestSetWorkflowPlan:
             mock_update_profile.return_value = mock_profile
 
             await mock_orchestrator.set_workflow_plan(
-                workflow_id="wf-001",
+                workflow_id=uuid4(),
                 plan_content=plan_content,
             )
 
@@ -184,7 +185,7 @@ class TestSetWorkflowPlan:
 
         with pytest.raises(InvalidStateError, match="pending"):
             await mock_orchestrator.set_workflow_plan(
-                workflow_id="wf-001",
+                workflow_id=uuid4(),
                 plan_content="# Plan",
             )
 
@@ -199,7 +200,7 @@ class TestSetWorkflowPlan:
 
         with pytest.raises(WorkflowConflictError, match="Plan already exists"):
             await mock_orchestrator.set_workflow_plan(
-                workflow_id="wf-001",
+                workflow_id=uuid4(),
                 plan_content="# New plan",
                 force=False,
             )
@@ -249,7 +250,7 @@ class TestSetWorkflowPlan:
             mock_update_profile.return_value = mock_profile
 
             result = await mock_orchestrator.set_workflow_plan(
-                workflow_id="wf-001",
+                workflow_id=uuid4(),
                 plan_content=plan_content,
                 force=True,
             )
@@ -266,7 +267,7 @@ class TestSetWorkflowPlan:
 
         with pytest.raises(WorkflowNotFoundError):
             await mock_orchestrator.set_workflow_plan(
-                workflow_id="wf-nonexistent",
+                workflow_id=uuid4(),
                 plan_content="# Plan",
             )
 
@@ -280,11 +281,12 @@ class TestSetWorkflowPlan:
         mock_repository.get.return_value = workflow
 
         # Simulate an active planning task
-        mock_orchestrator._planning_tasks["wf-001"] = MagicMock()
+        wf_id = uuid4()
+        mock_orchestrator._planning_tasks[wf_id] = MagicMock()
 
         with pytest.raises(WorkflowConflictError, match="Architect is currently running"):
             await mock_orchestrator.set_workflow_plan(
-                workflow_id="wf-001",
+                workflow_id=wf_id,
                 plan_content="# Plan",
             )
 
@@ -297,6 +299,6 @@ class TestSetWorkflowPlan:
 
         with pytest.raises(InvalidStateError, match="pending"):
             await mock_orchestrator.set_workflow_plan(
-                workflow_id="wf-001",
+                workflow_id=uuid4(),
                 plan_content="# Plan",
             )

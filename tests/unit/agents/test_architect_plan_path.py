@@ -3,6 +3,7 @@
 from datetime import UTC, date, datetime
 from typing import Any
 from unittest.mock import MagicMock, patch
+from uuid import uuid4
 
 import pytest
 
@@ -34,7 +35,7 @@ class TestArchitectPlanPath:
             },
         )
         state = ImplementationState(
-            workflow_id="test-workflow",
+            workflow_id=uuid4(),
             created_at=datetime.now(UTC),
             status="running",
             profile_id="test",
@@ -92,7 +93,7 @@ class TestArchitectPlanPath:
             plan_path_pattern=".amelia/plans/{issue_key}.md",
         )
         state = ImplementationState(
-            workflow_id="test-workflow",
+            workflow_id=uuid4(),
             created_at=datetime.now(UTC),
             status="running",
             profile_id="test",
@@ -132,7 +133,7 @@ class TestArchitectPlanPath:
 
         with patch("amelia.agents.architect.get_driver", return_value=mock_driver_local):
             architect = Architect(config)
-            async for _ in architect.plan(state, profile, workflow_id="wf-1"):
+            async for _ in architect.plan(state, profile, workflow_id=uuid4()):
                 pass
 
         assert len(captured_prompts) == 1
@@ -176,7 +177,7 @@ class TestArchitectPlanPath:
         with patch("amelia.agents.architect.get_driver", return_value=mock_driver_local):
             architect = Architect(config)
             final_state = state
-            async for new_state, _event in architect.plan(state, profile, workflow_id="wf-1"):
+            async for new_state, _event in architect.plan(state, profile, workflow_id=uuid4()):
                 final_state = new_state
 
         # plan_path should be extracted from the Write tool call

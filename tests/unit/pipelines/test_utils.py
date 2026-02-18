@@ -1,6 +1,7 @@
 """Unit tests for pipeline utilities."""
 
 from unittest.mock import MagicMock
+from uuid import uuid4
 
 import pytest
 
@@ -15,11 +16,12 @@ class TestExtractConfigParams:
         """Should extract event_bus, workflow_id, and profile from config."""
         mock_event_bus = MagicMock()
         mock_profile = MagicMock(spec=Profile)
+        thread_id = uuid4()
 
         config = {
             "configurable": {
                 "event_bus": mock_event_bus,
-                "thread_id": "wf-123",
+                "thread_id": thread_id,
                 "profile": mock_profile,
             }
         }
@@ -27,16 +29,17 @@ class TestExtractConfigParams:
         event_bus, workflow_id, profile = extract_config_params(config)
 
         assert event_bus is mock_event_bus
-        assert workflow_id == "wf-123"
+        assert workflow_id == thread_id
         assert profile is mock_profile
 
     def test_event_bus_optional(self) -> None:
         """Event bus should be optional (returns None if missing)."""
         mock_profile = MagicMock(spec=Profile)
+        thread_id = uuid4()
 
         config = {
             "configurable": {
-                "thread_id": "wf-456",
+                "thread_id": thread_id,
                 "profile": mock_profile,
             }
         }
@@ -44,7 +47,7 @@ class TestExtractConfigParams:
         event_bus, workflow_id, profile = extract_config_params(config)
 
         assert event_bus is None
-        assert workflow_id == "wf-456"
+        assert workflow_id == thread_id
 
     def test_raises_on_missing_workflow_id(self) -> None:
         """Should raise ValueError if workflow_id (thread_id) is missing."""
@@ -55,7 +58,7 @@ class TestExtractConfigParams:
 
     def test_raises_on_missing_profile(self) -> None:
         """Should raise ValueError if profile is missing."""
-        config = {"configurable": {"thread_id": "wf-1"}}
+        config = {"configurable": {"thread_id": uuid4()}}
 
         with pytest.raises(ValueError, match="profile"):
             extract_config_params(config)

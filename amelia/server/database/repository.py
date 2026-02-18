@@ -1,5 +1,6 @@
 """Repository for workflow persistence operations."""
 
+import uuid
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
@@ -59,7 +60,7 @@ class WorkflowRepository:
         issue_cache = row["issue_cache"]
 
         return ServerExecutionState(
-            id=str(row["id"]),
+            id=row["id"],
             issue_id=row["issue_id"],
             worktree_path=row["worktree_path"],
             workflow_type=WorkflowType(row["workflow_type"]) if row["workflow_type"] else WorkflowType.FULL,
@@ -104,7 +105,7 @@ class WorkflowRepository:
             state.issue_cache,  # dict|None - asyncpg handles JSONB encoding
         )
 
-    async def get(self, workflow_id: str) -> ServerExecutionState | None:
+    async def get(self, workflow_id: uuid.UUID) -> ServerExecutionState | None:
         """Get workflow by ID.
 
         Args:
@@ -199,7 +200,7 @@ class WorkflowRepository:
 
     async def set_status(
         self,
-        workflow_id: str,
+        workflow_id: uuid.UUID,
         new_status: WorkflowStatus,
         failure_reason: str | None = None,
     ) -> None:
@@ -241,7 +242,7 @@ class WorkflowRepository:
 
     async def update_plan_cache(
         self,
-        workflow_id: str,
+        workflow_id: uuid.UUID,
         plan_cache: PlanCache,
     ) -> None:
         """Update plan_cache column directly without loading full state.
@@ -479,7 +480,7 @@ class WorkflowRepository:
             event.is_error,
         )
 
-    async def get_max_event_sequence(self, workflow_id: str) -> int:
+    async def get_max_event_sequence(self, workflow_id: uuid.UUID) -> int:
         """Get maximum event sequence number for a workflow.
 
         Args:
@@ -494,7 +495,7 @@ class WorkflowRepository:
         )
         return result if isinstance(result, int) else 0
 
-    async def event_exists(self, event_id: str) -> bool:
+    async def event_exists(self, event_id: uuid.UUID) -> bool:
         """Check if an event exists by ID.
 
         Args:
@@ -519,16 +520,13 @@ class WorkflowRepository:
             Validated WorkflowEvent model instance.
         """
         event_data = dict(row)
-        # asyncpg returns UUID objects for UUID columns; Pydantic expects str
-        event_data["id"] = str(event_data["id"])
-        event_data["workflow_id"] = str(event_data["workflow_id"])
         if not event_data.get("data"):
             event_data.pop("data", None)
 
         return WorkflowEvent(**event_data)
 
     async def get_events_after(
-        self, since_event_id: str, limit: int = 1000
+        self, since_event_id: uuid.UUID, limit: int = 1000
     ) -> list[WorkflowEvent]:
         """Get events after a specific event (for backfill on reconnect).
 
@@ -567,7 +565,7 @@ class WorkflowRepository:
         return [self._row_to_event(row) for row in rows]
 
     async def get_recent_events(
-        self, workflow_id: str, limit: int = 50
+        self, workflow_id: uuid.UUID, limit: int = 50
     ) -> list[WorkflowEvent]:
         """Get the most recent events for a workflow.
 
@@ -629,7 +627,7 @@ class WorkflowRepository:
             usage.timestamp,
         )
 
-    async def get_token_usage(self, workflow_id: str) -> list[TokenUsage]:
+    async def get_token_usage(self, workflow_id: uuid.UUID) -> list[TokenUsage]:
         """Get all token usage records for a workflow.
 
         Args:
@@ -652,7 +650,7 @@ class WorkflowRepository:
 
         return [self._row_to_token_usage(row) for row in rows]
 
-    async def get_token_summary(self, workflow_id: str) -> TokenSummary | None:
+    async def get_token_summary(self, workflow_id: uuid.UUID) -> TokenSummary | None:
         """Get aggregated token usage summary for a workflow.
 
         Args:
@@ -677,8 +675,8 @@ class WorkflowRepository:
         )
 
     async def get_token_summaries_batch(
-        self, workflow_ids: list[str]
-    ) -> dict[str, TokenSummary | None]:
+        self, workflow_ids: list[uuid.UUID]
+    ) -> dict[uuid.UUID, TokenSummary | None]:
         """Get aggregated token usage summaries for multiple workflows.
 
         Fetches all token usage records for the given workflow IDs in a single
@@ -710,7 +708,7 @@ class WorkflowRepository:
         )
 
         # Group usages by workflow_id
-        usages_by_workflow: dict[str, list[TokenUsage]] = {
+        usages_by_workflow: dict[uuid.UUID, list[TokenUsage]] = {
             wid: [] for wid in workflow_ids
         }
         for row in rows:
@@ -718,7 +716,7 @@ class WorkflowRepository:
             usages_by_workflow[usage.workflow_id].append(usage)
 
         # Build summaries for each workflow
-        result: dict[str, TokenSummary | None] = {}
+        result: dict[uuid.UUID, TokenSummary | None] = {}
         for wid in workflow_ids:
             usages = usages_by_workflow[wid]
             if not usages:
@@ -746,8 +744,8 @@ class WorkflowRepository:
             Validated TokenUsage model instance.
         """
         return TokenUsage(
-            id=str(row["id"]),
-            workflow_id=str(row["workflow_id"]),
+            id=row["id"],
+            workflow_id=row["workflow_id"],
             agent=row["agent"],
             model=row["model"],
             input_tokens=row["input_tokens"],

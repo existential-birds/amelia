@@ -4,6 +4,7 @@ This module provides the Evaluator agent that evaluates review feedback
 against the actual codebase, applying a decision matrix to determine
 which items to implement, reject, defer, or clarify.
 """
+import uuid
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 from uuid import uuid4
@@ -166,7 +167,7 @@ Return your evaluation as an EvaluationOutput with all items and a summary.""")
         state: "ImplementationState",
         profile: Profile,
         *,
-        workflow_id: str,
+        workflow_id: uuid.UUID,
     ) -> tuple[EvaluationResult, str | None]:
         """Evaluate review feedback items.
 
@@ -197,7 +198,7 @@ Return your evaluation as an EvaluationOutput with all items and a summary.""")
             )
             if self._event_bus is not None:
                 event = WorkflowEvent(
-                    id=str(uuid4()),
+                    id=uuid4(),
                     workflow_id=workflow_id,
                     sequence=EPHEMERAL_SEQUENCE,
                     timestamp=datetime.now(UTC),
@@ -275,7 +276,7 @@ Return your evaluation as an EvaluationOutput with all items and a summary.""")
             message = f"Evaluation complete: {', '.join(summary_parts)}" if summary_parts else "Evaluation complete: no items"
 
             event = WorkflowEvent(
-                id=str(uuid4()),
+                id=uuid4(),
                 workflow_id=workflow_id,
                 sequence=EPHEMERAL_SEQUENCE,
                 timestamp=datetime.now(UTC),

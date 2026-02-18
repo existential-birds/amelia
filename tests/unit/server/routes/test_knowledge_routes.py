@@ -1,6 +1,7 @@
 """Unit tests for knowledge API routes."""
 
 from unittest.mock import AsyncMock
+from uuid import uuid4
 
 import pytest
 from fastapi import FastAPI
@@ -53,7 +54,7 @@ def test_get_document_not_found(client):
 
     mock_repo.get_document = AsyncMock(return_value=None)
 
-    response = test_client.get("/api/knowledge/documents/nonexistent")
+    response = test_client.get(f"/api/knowledge/documents/{uuid4()}")
 
     assert response.status_code == 404
 
@@ -64,6 +65,6 @@ def test_delete_document_not_found(client):
 
     mock_repo.get_document = AsyncMock(return_value=None)
 
-    response = test_client.delete("/api/knowledge/documents/nonexistent")
+    response = test_client.delete(f"/api/knowledge/documents/{uuid4()}")
 
     assert response.status_code == 404

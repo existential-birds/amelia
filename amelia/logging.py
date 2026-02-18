@@ -9,6 +9,7 @@ import sys
 from typing import TYPE_CHECKING
 
 from loguru import logger
+from rich.console import Console
 
 
 if TYPE_CHECKING:
@@ -112,6 +113,7 @@ def _plain_log_format(record: "Record") -> str:
     extra = record["extra"]
     if extra:
         extra_str = " ".join(f"{k}={v!r}" for k, v in extra.items())
+        extra_str = extra_str.replace("{", "{{").replace("}", "}}")
         fmt += f" │ {extra_str}"
 
     fmt += "\n"
@@ -325,3 +327,36 @@ def log_claude_result(
     if lines:
         sys.stderr.write("\n".join(lines) + "\n")
         sys.stderr.flush()
+
+
+def log_todos(todos: list[dict[str, object]]) -> None:
+    """Display agent todos with rich Table formatting (TTY only).
+
+    Renders a formatted table of todo items to stderr when running in a
+    terminal. No-op when stderr is piped (e.g., under `amelia dev`).
+
+    Args:
+        todos: List of todo dicts with 'content' and 'status' keys.
+    """
+    if not sys.stderr.isatty():
+        return
+
+    from rich.table import Table  # noqa: PLC0415
+
+    console = Console(stderr=True)
+    table = Table(show_header=True, header_style="bold", box=None, padding=(0, 1))
+    table.add_column("Status", style="dim", width=12)
+    table.add_column("Task")
+
+    status_styles = {
+        "completed": ("\u2713", "green"),
+        "in_progress": ("\u25cc", "yellow"),
+        "pending": ("\u25cb", "dim"),
+    }
+    for todo in todos:
+        status = str(todo.get("status", ""))
+        content = str(todo.get("content", ""))
+        icon, style = status_styles.get(status, ("?", ""))
+        table.add_row(f"[{style}]{icon} {status}[/{style}]", content)
+
+    console.print(table)

@@ -8,6 +8,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import MagicMock, patch
+from uuid import uuid4
 
 import pytest
 
@@ -116,7 +117,7 @@ class TestReviewerPromptParserChain:
         )
 
         state = ImplementationState(
-            workflow_id="wf-int-001",
+            workflow_id=uuid4(),
             profile_id="test",
             created_at=datetime.now(UTC),
             status="running",
@@ -125,7 +126,7 @@ class TestReviewerPromptParserChain:
         )
 
         result, session_id = await reviewer.agentic_review(
-            state, base_commit="abc123", profile=profile, workflow_id="wf-int-001"
+            state, base_commit="abc123", profile=profile, workflow_id=uuid4()
         )
 
         assert result.approved is True
@@ -154,7 +155,7 @@ class TestReviewerPromptParserChain:
         )
 
         state = ImplementationState(
-            workflow_id="wf-int-002",
+            workflow_id=uuid4(),
             profile_id="test",
             created_at=datetime.now(UTC),
             status="running",
@@ -163,14 +164,14 @@ class TestReviewerPromptParserChain:
         )
 
         result, _ = await reviewer.agentic_review(
-            state, base_commit="abc123", profile=profile, workflow_id="wf-int-002"
+            state, base_commit="abc123", profile=profile, workflow_id=uuid4()
         )
 
         assert result.approved is True
 
         # Simulate routing with the approved result
         state_after = ImplementationState(
-            workflow_id="wf-int-002",
+            workflow_id=uuid4(),
             profile_id="test",
             created_at=datetime.now(UTC),
             status="running",

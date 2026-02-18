@@ -1,6 +1,7 @@
 from collections.abc import Callable
 from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import uuid4
 
 import pytest
 from langchain_core.runnables.config import RunnableConfig
@@ -36,7 +37,7 @@ async def test_call_developer_node_uses_agent_config(
     config: dict[str, Any] = {
         "configurable": {
             "profile": profile,
-            "thread_id": "wf-1",
+            "thread_id": str(uuid4()),
         }
     }
 
@@ -45,7 +46,7 @@ async def test_call_developer_node_uses_agent_config(
         event = AgenticMessage(
             type=AgenticMessageType.RESULT,
             content="Done",
-        ).to_workflow_event(workflow_id="wf-1", agent="developer")
+        ).to_workflow_event(workflow_id=uuid4(), agent="developer")
         # Use AsyncIteratorMock for async generator return
         mock_developer.run = MagicMock(return_value=AsyncIteratorMock([
             (state.model_copy(update={"agentic_status": "completed"}), event)
@@ -91,7 +92,7 @@ async def test_call_developer_node_passes_prompts_to_developer(
     config: dict[str, Any] = {
         "configurable": {
             "profile": profile,
-            "thread_id": "wf-1",
+            "thread_id": str(uuid4()),
             "prompts": prompts,
         }
     }
@@ -101,7 +102,7 @@ async def test_call_developer_node_passes_prompts_to_developer(
         event = AgenticMessage(
             type=AgenticMessageType.RESULT,
             content="Done",
-        ).to_workflow_event(workflow_id="wf-1", agent="developer")
+        ).to_workflow_event(workflow_id=uuid4(), agent="developer")
         mock_developer.run = MagicMock(return_value=AsyncIteratorMock([
             (state.model_copy(update={"agentic_status": "completed"}), event)
         ]))
@@ -132,10 +133,11 @@ async def test_call_developer_node_passes_workflow_id(
         goal="Implement test feature",
         plan_markdown="## Task 1\n\nDo something",
     )
+    thread_id = str(uuid4())
     config: dict[str, Any] = {
         "configurable": {
             "profile": profile,
-            "thread_id": "wf-test-123",
+            "thread_id": thread_id,
         }
     }
 
@@ -144,7 +146,7 @@ async def test_call_developer_node_passes_workflow_id(
         event = AgenticMessage(
             type=AgenticMessageType.RESULT,
             content="Done",
-        ).to_workflow_event(workflow_id="wf-test-123", agent="developer")
+        ).to_workflow_event(workflow_id=uuid4(), agent="developer")
         mock_developer.run = MagicMock(return_value=AsyncIteratorMock([
             (state.model_copy(update={"agentic_status": "completed"}), event)
         ]))
@@ -157,7 +159,7 @@ async def test_call_developer_node_passes_workflow_id(
         # Verify workflow_id was passed to developer.run()
         mock_developer.run.assert_called_once()
         call_kwargs = mock_developer.run.call_args
-        assert call_kwargs.kwargs["workflow_id"] == "wf-test-123"
+        assert call_kwargs.kwargs["workflow_id"] == thread_id
 
 
 @pytest.mark.asyncio
@@ -191,7 +193,7 @@ async def test_call_developer_node_updates_base_commit(
     config: dict[str, Any] = {
         "configurable": {
             "profile": profile,
-            "thread_id": "wf-1",
+            "thread_id": str(uuid4()),
         }
     }
 
@@ -202,7 +204,7 @@ async def test_call_developer_node_updates_base_commit(
         event = AgenticMessage(
             type=AgenticMessageType.RESULT,
             content="Done",
-        ).to_workflow_event(workflow_id="wf-1", agent="developer")
+        ).to_workflow_event(workflow_id=uuid4(), agent="developer")
         mock_developer.run = MagicMock(return_value=AsyncIteratorMock([
             (state.model_copy(update={"agentic_status": "completed"}), event)
         ]))
@@ -246,7 +248,7 @@ async def test_call_developer_node_keeps_base_commit_on_git_failure(
     config: dict[str, Any] = {
         "configurable": {
             "profile": profile,
-            "thread_id": "wf-1",
+            "thread_id": str(uuid4()),
         }
     }
 
@@ -255,7 +257,7 @@ async def test_call_developer_node_keeps_base_commit_on_git_failure(
         event = AgenticMessage(
             type=AgenticMessageType.RESULT,
             content="Done",
-        ).to_workflow_event(workflow_id="wf-1", agent="developer")
+        ).to_workflow_event(workflow_id=uuid4(), agent="developer")
         mock_developer.run = MagicMock(return_value=AsyncIteratorMock([
             (state.model_copy(update={"agentic_status": "completed"}), event)
         ]))

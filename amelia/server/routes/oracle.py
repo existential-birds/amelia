@@ -5,6 +5,7 @@ Events stream via WebSocket in real-time using the same EventBus
 pattern as brainstorm sessions.
 """
 
+import uuid
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -41,7 +42,7 @@ class OracleConsultRequest(BaseModel):
     files: list[str] | None = None
     model: str | None = None
     profile_id: str | None = None
-    workflow_id: str | None = None
+    workflow_id: uuid.UUID | None = None
 
 
 class OracleConsultResponse(BaseModel):

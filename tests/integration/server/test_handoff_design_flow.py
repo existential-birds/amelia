@@ -2,6 +2,7 @@
 
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import uuid4
 
 import pytest
 
@@ -54,7 +55,7 @@ class TestHandoffDesignFlow:
             return_value="abc123",
         ):
             _, _, state = await orchestrator._prepare_workflow_state(
-                workflow_id="wf-123",
+                workflow_id=uuid4(),
                 worktree_path=str(tmp_path),
                 issue_id="issue-1",
                 task_title="Implement design",
@@ -82,7 +83,7 @@ class TestHandoffDesignFlow:
             return_value="abc123",
         ):
             _, _, state = await orchestrator._prepare_workflow_state(
-                workflow_id="wf-123",
+                workflow_id=uuid4(),
                 worktree_path=str(tmp_path),
                 issue_id="issue-1",
                 task_title="Implement feature",
@@ -109,7 +110,7 @@ class TestHandoffDesignFlow:
             pytest.raises(FileNotFoundError),
         ):
             await orchestrator._prepare_workflow_state(
-                workflow_id="wf-123",
+                workflow_id=uuid4(),
                 worktree_path=str(tmp_path),
                 issue_id="issue-1",
                 task_title="Implement design",
@@ -142,7 +143,7 @@ class TestHandoffDesignFlow:
         ):
             # Pass artifact_path with leading slash (worktree-relative)
             _, _, state = await orchestrator._prepare_workflow_state(
-                workflow_id="wf-123",
+                workflow_id=uuid4(),
                 worktree_path=str(tmp_path),
                 issue_id="issue-1",
                 task_title="Implement design",
@@ -215,7 +216,7 @@ class TestHandoffDesignFlow:
             pytest.raises(ValueError, match="resolves outside worktree"),
         ):
             await orchestrator._prepare_workflow_state(
-                workflow_id="wf-123",
+                workflow_id=uuid4(),
                 worktree_path=str(tmp_path),
                 issue_id="issue-1",
                 task_title="Implement design",
@@ -247,7 +248,7 @@ class TestHandoffDesignFlow:
             pytest.raises(FileNotFoundError),
         ):
             await orchestrator._prepare_workflow_state(
-                workflow_id="wf-123",
+                workflow_id=uuid4(),
                 worktree_path=str(tmp_path),
                 issue_id="issue-1",
                 task_title="Implement design",
@@ -283,7 +284,7 @@ class TestHandoffDesignFlow:
             # This is what the LLM actually returns from write_design_doc
             absolute_artifact_path = str(design_file)  # e.g., /tmp/pytest-xxx/docs/plans/design.md
             _, _, state = await orchestrator._prepare_workflow_state(
-                workflow_id="wf-123",
+                workflow_id=uuid4(),
                 worktree_path=str(tmp_path),
                 issue_id="issue-1",
                 task_title="Implement design",
@@ -317,7 +318,7 @@ class TestHandoffDesignFlow:
             pytest.raises(ValueError, match="resolves outside worktree"),
         ):
             await orchestrator._prepare_workflow_state(
-                workflow_id="wf-123",
+                workflow_id=uuid4(),
                 worktree_path=str(tmp_path),
                 issue_id="issue-1",
                 task_title="Implement design",

@@ -1,6 +1,7 @@
 """Tests for brainstorming Pydantic models."""
 
 from datetime import UTC, datetime
+from uuid import uuid4
 
 import pytest
 from pydantic import ValidationError
@@ -19,7 +20,7 @@ class TestSessionStatus:
     def test_valid_statuses(self) -> None:
         """SessionStatus should accept valid status values."""
         session = BrainstormingSession(
-            id="test-id",
+            id=uuid4(),
             profile_id="test-profile",
             status="active",
             created_at=datetime.now(UTC),
@@ -37,14 +38,15 @@ class TestBrainstormingSession:
     def test_minimal_session(self) -> None:
         """Session should be created with minimal required fields."""
         now = datetime.now(UTC)
+        sid = uuid4()
         session = BrainstormingSession(
-            id="session-123",
+            id=sid,
             profile_id="work",
             status="active",
             created_at=now,
             updated_at=now,
         )
-        assert session.id == "session-123"
+        assert session.id == sid
         assert session.profile_id == "work"
         assert session.status == "active"
         assert session.driver_session_id is None
@@ -54,7 +56,7 @@ class TestBrainstormingSession:
         """Session should be created with all fields."""
         now = datetime.now(UTC)
         session = BrainstormingSession(
-            id="session-123",
+            id=uuid4(),
             profile_id="work",
             driver_session_id="claude-sess-456",
             status="ready_for_handoff",
@@ -70,7 +72,7 @@ class TestBrainstormingSession:
         now = datetime.now(UTC)
         with pytest.raises(ValidationError):
             BrainstormingSession(
-                id="session-123",
+                id=uuid4(),
                 profile_id="work",
                 status="invalid_status",  # type: ignore[arg-type]  # Intentional: testing ValidationError on invalid Literal value
                 created_at=now,
@@ -124,8 +126,8 @@ class TestMessage:
     def test_user_message(self) -> None:
         """User message should be created correctly."""
         msg = Message(
-            id="msg-123",
-            session_id="session-456",
+            id=uuid4(),
+            session_id=uuid4(),
             sequence=1,
             role="user",
             content="Design a caching layer",
@@ -138,8 +140,8 @@ class TestMessage:
     def test_assistant_message_with_parts(self) -> None:
         """Assistant message should support parts."""
         msg = Message(
-            id="msg-124",
-            session_id="session-456",
+            id=uuid4(),
+            session_id=uuid4(),
             sequence=2,
             role="assistant",
             content="Here's my analysis...",
@@ -169,14 +171,14 @@ class TestArtifact:
     def test_artifact_creation(self) -> None:
         """Artifact should be created with all fields."""
         artifact = Artifact(
-            id="art-123",
-            session_id="session-456",
+            id=uuid4(),
+            session_id=uuid4(),
             type="design",
             path="docs/plans/2026-01-18-caching-design.md",
             title="Caching Layer Design",
             created_at=datetime.now(UTC),
         )
-        assert artifact.id == "art-123"
+        assert artifact.id is not None
         assert artifact.type == "design"
         assert artifact.path == "docs/plans/2026-01-18-caching-design.md"
         assert artifact.title == "Caching Layer Design"
@@ -184,8 +186,8 @@ class TestArtifact:
     def test_artifact_without_title(self) -> None:
         """Artifact title should be optional."""
         artifact = Artifact(
-            id="art-123",
-            session_id="session-456",
+            id=uuid4(),
+            session_id=uuid4(),
             type="spec",
             path="docs/specs/feature.md",
             created_at=datetime.now(UTC),

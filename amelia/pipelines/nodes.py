@@ -5,6 +5,7 @@ that can be used across multiple pipelines. These nodes handle common agentic
 operations like developer execution and code review.
 """
 
+import uuid
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
@@ -25,7 +26,7 @@ if TYPE_CHECKING:
 
 async def _save_token_usage(
     driver: Any,
-    workflow_id: str,
+    workflow_id: uuid.UUID,
     agent: str,
     repository: "WorkflowRepository | None",
 ) -> None:
@@ -150,10 +151,8 @@ async def call_developer_node(
         "Agent action completed",
         agent="developer",
         action="agentic_execution",
-        details={
-            "tool_calls_count": len(final_state.tool_calls),
-            "agentic_status": final_state.agentic_status,
-        },
+        tool_calls_count=len(final_state.tool_calls),
+        agentic_status=str(final_state.agentic_status),
     )
 
     return {
@@ -242,12 +241,10 @@ async def call_reviewer_node(
         "Agent action completed",
         agent=agent_name,
         action="review_completed",
-        details={
-            "severity": review_result.severity,
-            "approved": review_result.approved,
-            "issue_count": len(review_result.comments),
-            "review_iteration": next_iteration,
-        },
+        severity=str(review_result.severity),
+        approved=review_result.approved,
+        issue_count=len(review_result.comments),
+        review_iteration=next_iteration,
     )
 
     # Build return dict

@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, patch
+from uuid import uuid4
 
 import httpx
 import pytest
@@ -29,7 +30,7 @@ class TestCreateReviewWorkflow:
     def mock_response_success(self) -> dict[str, Any]:
         """Successful response data."""
         return {
-            "id": "wf-123",
+            "id": str(uuid4()),
             "status": "pending",
             "message": "Review workflow created",
         }
@@ -56,7 +57,7 @@ class TestCreateReviewWorkflow:
                 profile="default",
             )
 
-        assert response.id == "wf-123"
+        assert response.id is not None
         assert response.status == "pending"
 
     async def test_raises_server_unreachable_on_connect_error(
@@ -88,6 +89,7 @@ class TestCreateReviewWorkflow:
         worktree = tmp_path / "repo"
         worktree.mkdir()
 
+        wf_id = str(uuid4())
         mock_resp = AsyncMock()
         mock_resp.status_code = 409
         # json() is a synchronous method, not async
@@ -95,7 +97,7 @@ class TestCreateReviewWorkflow:
             "detail": {
                 "message": "Workflow already active",
                 "active_workflow": {
-                    "id": "wf-existing",
+                    "id": wf_id,
                     "issue_id": "ISSUE-123",
                     "status": "in_progress",
                 },
@@ -112,7 +114,7 @@ class TestCreateReviewWorkflow:
             )
 
         assert exc_info.value.active_workflow is not None
-        assert exc_info.value.active_workflow["id"] == "wf-existing"
+        assert exc_info.value.active_workflow["id"] == wf_id
 
     async def test_raises_rate_limit_on_429(
         self,

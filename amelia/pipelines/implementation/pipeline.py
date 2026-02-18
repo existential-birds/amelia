@@ -1,5 +1,6 @@
 """Implementation pipeline for building features from issues."""
 
+import uuid
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
@@ -39,7 +40,7 @@ class ImplementationPipeline(Pipeline[ImplementationState]):
     def get_initial_state(self, **kwargs: object) -> ImplementationState:
         """Create initial state for a new workflow."""
         return ImplementationState(
-            workflow_id=str(kwargs["workflow_id"]),
+            workflow_id=uuid.UUID(str(kwargs["workflow_id"])),
             profile_id=str(kwargs["profile_id"]),
             created_at=datetime.now(UTC),
             status="pending",

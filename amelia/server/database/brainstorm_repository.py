@@ -4,6 +4,8 @@ Handles persistence and retrieval of brainstorming sessions,
 messages, and artifacts.
 """
 
+import uuid
+
 import asyncpg
 
 from amelia.server.database.connection import Database
@@ -63,7 +65,7 @@ class BrainstormRepository:
             session.updated_at,
         )
 
-    async def get_session(self, session_id: str) -> BrainstormingSession | None:
+    async def get_session(self, session_id: uuid.UUID) -> BrainstormingSession | None:
         """Get session by ID.
 
         Args:
@@ -108,7 +110,7 @@ class BrainstormRepository:
             session.id,
         )
 
-    async def delete_session(self, session_id: str) -> None:
+    async def delete_session(self, session_id: uuid.UUID) -> None:
         """Delete session.
 
         Args:
@@ -224,7 +226,7 @@ class BrainstormRepository:
         )
 
     async def get_messages(
-        self, session_id: str, limit: int = 100
+        self, session_id: uuid.UUID, limit: int = 100
     ) -> list[Message]:
         """Get messages for a session.
 
@@ -249,7 +251,7 @@ class BrainstormRepository:
         )
         return [self._row_to_message(row) for row in rows]
 
-    async def get_max_sequence(self, session_id: str) -> int:
+    async def get_max_sequence(self, session_id: uuid.UUID) -> int:
         """Get maximum message sequence for a session.
 
         Args:
@@ -317,7 +319,7 @@ class BrainstormRepository:
             artifact.id, artifact.session_id, artifact.type, artifact.path, artifact.title, artifact.created_at,
         )
 
-    async def get_artifacts(self, session_id: str) -> list[Artifact]:
+    async def get_artifacts(self, session_id: uuid.UUID) -> list[Artifact]:
         """Get artifacts for a session.
 
         Args:
@@ -359,7 +361,7 @@ class BrainstormRepository:
     # Usage Aggregation
     # =========================================================================
 
-    async def get_session_usage(self, session_id: str) -> SessionUsageSummary | None:
+    async def get_session_usage(self, session_id: uuid.UUID) -> SessionUsageSummary | None:
         """Aggregate token usage for all messages in a brainstorm session.
 
         Args:

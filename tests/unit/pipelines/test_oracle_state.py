@@ -1,6 +1,7 @@
 """Tests for Oracle consultation state integration."""
 
 from datetime import UTC, datetime
+from uuid import uuid4
 
 from amelia.core.types import OracleConsultation
 from amelia.pipelines.implementation.state import (
@@ -19,7 +20,7 @@ class TestOracleConsultationsState:
     def test_default_empty(self):
         """oracle_consultations should default to empty list."""
         state = ImplementationState(
-            workflow_id="wf-1",
+            workflow_id=uuid4(),
             pipeline_type="implementation",
             profile_id="prof-1",
             created_at=datetime.now(tz=UTC),
@@ -34,10 +35,10 @@ class TestOracleConsultationsState:
             problem="How to refactor?",
             advice="Use DI.",
             model="claude-sonnet-4-20250514",
-            session_id="sess-1",
+            session_id=uuid4(),
         )
         state = ImplementationState(
-            workflow_id="wf-1",
+            workflow_id=uuid4(),
             pipeline_type="implementation",
             profile_id="prof-1",
             created_at=datetime.now(tz=UTC),

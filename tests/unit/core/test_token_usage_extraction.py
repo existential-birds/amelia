@@ -14,6 +14,7 @@ from collections.abc import AsyncGenerator, Callable
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import uuid4
 
 import pytest
 from langchain_core.runnables.config import RunnableConfig
@@ -26,6 +27,8 @@ from amelia.server.models.tokens import TokenUsage
 
 class TestTokenUsageExtraction:
     """Tests for token usage extraction from agent nodes."""
+
+    _wf_id = uuid4()
 
     @pytest.fixture
     def mock_driver_usage_full(self) -> DriverUsage:
@@ -55,7 +58,7 @@ class TestTokenUsageExtraction:
         profile = mock_profile_factory()
         return {
             "configurable": {
-                "thread_id": "wf-test-123",
+                "thread_id": str(self._wf_id),
                 "profile": profile,
             }
         }
@@ -91,7 +94,7 @@ class TestDeveloperNodeTokenUsage(TestTokenUsageExtraction):
 
         from datetime import UTC, datetime as dt  # noqa: PLC0415
         state = ImplementationState(
-            workflow_id="wf-test-123",
+            workflow_id=self._wf_id,
             created_at=dt.now(UTC),
             status="running",
             profile_id=profile.name,
@@ -128,7 +131,7 @@ class TestDeveloperNodeTokenUsage(TestTokenUsageExtraction):
             saved_usage = mock_repository.save_token_usage.call_args[0][0]
 
             assert isinstance(saved_usage, TokenUsage)
-            assert saved_usage.workflow_id == "wf-test-123"
+            assert saved_usage.workflow_id == self._wf_id
             assert saved_usage.agent == "developer"
             assert saved_usage.model == "claude-sonnet-4-20250514"
             assert saved_usage.input_tokens == 1500
@@ -155,7 +158,7 @@ class TestDeveloperNodeTokenUsage(TestTokenUsageExtraction):
 
         from datetime import UTC, datetime as dt  # noqa: PLC0415
         state = ImplementationState(
-            workflow_id="wf-test-123",
+            workflow_id=self._wf_id,
             created_at=dt.now(UTC),
             status="running",
             profile_id=profile.name,
@@ -201,7 +204,7 @@ class TestDeveloperNodeTokenUsage(TestTokenUsageExtraction):
 
         from datetime import UTC, datetime as dt  # noqa: PLC0415
         state = ImplementationState(
-            workflow_id="wf-test-123",
+            workflow_id=self._wf_id,
             created_at=dt.now(UTC),
             status="running",
             profile_id=profile.name,
@@ -250,7 +253,7 @@ class TestReviewerNodeTokenUsage(TestTokenUsageExtraction):
 
         from datetime import UTC, datetime as dt  # noqa: PLC0415
         state = ImplementationState(
-            workflow_id="wf-test-123",
+            workflow_id=self._wf_id,
             created_at=dt.now(UTC),
             status="running",
             profile_id=profile.name,
@@ -309,7 +312,7 @@ class TestArchitectNodeTokenUsage(TestTokenUsageExtraction):
 
         from datetime import datetime as dt  # noqa: PLC0415
         state = ImplementationState(
-            workflow_id="wf-test-123",
+            workflow_id=self._wf_id,
             created_at=dt.now(UTC),
             status="running",
             profile_id=profile.name,
@@ -324,8 +327,8 @@ class TestArchitectNodeTokenUsage(TestTokenUsageExtraction):
             "tool_results": [],
         })
         mock_event = WorkflowEvent(
-            id="evt-test-1",
-            workflow_id="wf-test-123",
+            id=uuid4(),
+            workflow_id=self._wf_id,
             sequence=0,
             event_type=EventType.AGENT_OUTPUT,
             message="Plan generated",
@@ -354,7 +357,7 @@ class TestArchitectNodeTokenUsage(TestTokenUsageExtraction):
             saved_usage = mock_repository.save_token_usage.call_args[0][0]
 
             assert saved_usage.agent == "architect"
-            assert saved_usage.workflow_id == "wf-test-123"
+            assert saved_usage.workflow_id == self._wf_id
 
 
 class TestTokenUsageEdgeCases(TestTokenUsageExtraction):
@@ -375,7 +378,7 @@ class TestTokenUsageEdgeCases(TestTokenUsageExtraction):
 
         from datetime import UTC, datetime as dt  # noqa: PLC0415
         state = ImplementationState(
-            workflow_id="wf-test-123",
+            workflow_id=self._wf_id,
             created_at=dt.now(UTC),
             status="running",
             profile_id=profile.name,
@@ -434,7 +437,7 @@ class TestTokenUsageEdgeCases(TestTokenUsageExtraction):
 
         from datetime import UTC, datetime as dt  # noqa: PLC0415
         state = ImplementationState(
-            workflow_id="wf-test-123",
+            workflow_id=self._wf_id,
             created_at=dt.now(UTC),
             status="running",
             profile_id=profile.name,
@@ -490,7 +493,7 @@ class TestTokenUsageEdgeCases(TestTokenUsageExtraction):
 
         from datetime import UTC, datetime as dt  # noqa: PLC0415
         state = ImplementationState(
-            workflow_id="wf-test-123",
+            workflow_id=self._wf_id,
             created_at=dt.now(UTC),
             status="running",
             profile_id=profile.name,
@@ -536,7 +539,7 @@ class TestTokenUsageEdgeCases(TestTokenUsageExtraction):
 
         from datetime import UTC, datetime as dt  # noqa: PLC0415
         state = ImplementationState(
-            workflow_id="wf-test-123",
+            workflow_id=self._wf_id,
             created_at=dt.now(UTC),
             status="running",
             profile_id=profile.name,

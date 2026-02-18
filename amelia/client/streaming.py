@@ -1,6 +1,7 @@
 """WebSocket streaming helpers for CLI."""
 
 import json
+import uuid
 from collections.abc import Callable
 from typing import Any
 
@@ -94,7 +95,7 @@ _CUSTOM_FORMATTERS: dict[str, EventFormatter] = {
 
 
 async def stream_workflow_events(
-    workflow_id: str,
+    workflow_id: str | uuid.UUID,
     base_url: str = "http://localhost:8420",
 ) -> None:
     """Stream workflow events via WebSocket and display in terminal.
@@ -116,7 +117,7 @@ async def stream_workflow_events(
     ws_url = base_url.replace("http://", "ws://").replace("https://", "wss://") + "/ws/events"
 
     async with websockets.connect(ws_url) as ws:
-        await ws.send(json.dumps({"type": "subscribe", "workflow_id": workflow_id}))
+        await ws.send(json.dumps({"type": "subscribe", "workflow_id": str(workflow_id)}))
 
         async for message in ws:
             data = json.loads(message)

@@ -4,6 +4,7 @@ Accepts a problem statement and codebase context, reasons about it using
 an agentic LLM session with tool access, and returns structured advice.
 """
 
+import uuid
 from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
@@ -73,16 +74,16 @@ class Oracle:
     def _make_event(
         self,
         event_type: EventType,
-        session_id: str,
+        session_id: uuid.UUID,
         message: str,
         *,
-        workflow_id: str | None = None,
+        workflow_id: uuid.UUID | None = None,
         **kwargs: Any,
     ) -> WorkflowEvent:
         """Create a WorkflowEvent for Oracle consultations."""
         self._seq += 1
         return WorkflowEvent(
-            id=str(uuid4()),
+            id=uuid4(),
             domain=EventDomain.ORACLE,
             workflow_id=workflow_id or session_id,
             session_id=session_id,
@@ -99,7 +100,7 @@ class Oracle:
         problem: str,
         working_dir: str,
         files: list[str] | None = None,
-        workflow_id: str | None = None,
+        workflow_id: uuid.UUID | None = None,
     ) -> OracleConsultResult:
         """Run an Oracle consultation.
 
@@ -116,7 +117,7 @@ class Oracle:
         Returns:
             OracleConsultResult with advice and consultation record.
         """
-        session_id = str(uuid4())
+        session_id = uuid4()
         timestamp = datetime.now(tz=UTC)
 
         logger.info(

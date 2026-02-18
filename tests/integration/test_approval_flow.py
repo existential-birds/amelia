@@ -10,6 +10,7 @@ These tests verify the interrupt/resume cycle works end-to-end:
 
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, patch
+from uuid import uuid4
 
 import pytest
 
@@ -50,7 +51,7 @@ class TestMissingRequiredFields:
 
         # Create state without profile_id
         server_state = ServerExecutionState(
-            id="wf-error-test",
+            id=uuid4(),
             issue_id="TEST-ERR",
             worktree_path="/tmp/test-error",
             started_at=datetime.now(UTC),
@@ -58,10 +59,10 @@ class TestMissingRequiredFields:
         )
 
         await mock_repository.create(server_state)
-        await service._run_workflow("wf-error-test", server_state)
+        await service._run_workflow(server_state.id, server_state)
 
         # Verify status is "failed"
-        persisted = await mock_repository.get("wf-error-test")
+        persisted = await mock_repository.get(server_state.id)
         assert persisted is not None
         assert persisted.workflow_status == "failed"
         assert persisted.failure_reason is not None
@@ -93,7 +94,7 @@ class TestLifecycleEvents:
         )
 
         server_state = ServerExecutionState(
-            id="wf-lifecycle-test",
+            id=uuid4(),
             issue_id="TEST-123",
             worktree_path="/tmp/test-lifecycle",
             started_at=datetime.now(UTC),
@@ -101,7 +102,7 @@ class TestLifecycleEvents:
         )
 
         await mock_repository.create(server_state)
-        await service._run_workflow("wf-lifecycle-test", server_state)
+        await service._run_workflow(server_state.id, server_state)
 
         # Check WORKFLOW_STARTED was emitted
         started_events = event_tracker.get_by_type(EventType.WORKFLOW_STARTED)
@@ -138,7 +139,7 @@ class TestGraphInterruptHandling:
         )
 
         server_state = ServerExecutionState(
-            id="wf-interrupt-test",
+            id=uuid4(),
             issue_id="TEST-456",
             worktree_path="/tmp/test-interrupt",
             started_at=datetime.now(UTC),
@@ -146,10 +147,10 @@ class TestGraphInterruptHandling:
         )
 
         await mock_repository.create(server_state)
-        await service._run_workflow("wf-interrupt-test", server_state)
+        await service._run_workflow(server_state.id, server_state)
 
         # Verify status is blocked
-        persisted = await mock_repository.get("wf-interrupt-test")
+        persisted = await mock_repository.get(server_state.id)
         assert persisted is not None
         assert persisted.workflow_status == "blocked"
 

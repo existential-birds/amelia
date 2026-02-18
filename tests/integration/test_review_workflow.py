@@ -4,17 +4,21 @@ from __future__ import annotations
 
 from pathlib import Path
 from unittest.mock import AsyncMock
+from uuid import UUID
 
 import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
 
 
+REVIEW_WORKFLOW_ID = UUID("a1b2c3d4-e5f6-7890-abcd-ef1234567890")
+
+
 @pytest.fixture
 def mock_orchestrator() -> AsyncMock:
     """Create mock orchestrator service."""
     mock = AsyncMock()
-    mock.start_review_workflow = AsyncMock(return_value="wf-review-123")
+    mock.start_review_workflow = AsyncMock(return_value=REVIEW_WORKFLOW_ID)
     return mock
 
 
@@ -58,7 +62,7 @@ class TestCreateReviewWorkflowEndpoint:
 
         assert response.status_code == status.HTTP_201_CREATED
         data = response.json()
-        assert data["id"] == "wf-review-123"
+        assert data["id"] == str(REVIEW_WORKFLOW_ID)
         assert data["status"] == "pending"
 
     def test_rejects_empty_diff_content(

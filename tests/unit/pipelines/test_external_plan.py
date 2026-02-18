@@ -2,6 +2,7 @@
 
 from pathlib import Path
 from unittest.mock import patch
+from uuid import uuid4
 
 import pytest
 
@@ -67,7 +68,7 @@ Create the auth module.
                 plan_content=None,
                 target_path=target_path,
                 profile=mock_profile,
-                workflow_id="wf-001",
+                workflow_id=uuid4(),
             )
 
         assert result.goal == "Add user authentication"
@@ -111,7 +112,7 @@ Fix it.
                 plan_content=plan_content,
                 target_path=target_path,
                 profile=mock_profile,
-                workflow_id="wf-001",
+                workflow_id=uuid4(),
             )
 
         assert result.goal == "Fix bug"
@@ -137,7 +138,7 @@ Fix it.
                 plan_content=None,
                 target_path=target_path,
                 profile=mock_profile,
-                workflow_id="wf-001",
+                workflow_id=uuid4(),
             )
 
     async def test_import_empty_content_raises(
@@ -159,7 +160,7 @@ Fix it.
                 plan_content="   ",
                 target_path=target_path,
                 profile=mock_profile,
-                workflow_id="wf-001",
+                workflow_id=uuid4(),
             )
 
     async def test_import_relative_path_resolved_to_worktree(
@@ -201,7 +202,7 @@ Fix it.
                 plan_content=None,
                 target_path=target_path,
                 profile=profile,
-                workflow_id="wf-001",
+                workflow_id=uuid4(),
             )
 
         assert result.goal == "Do thing"
@@ -240,7 +241,7 @@ Content here.
                 plan_content=plan_content,
                 target_path=target_path,
                 profile=mock_profile,
-                workflow_id="wf-001",
+                workflow_id=uuid4(),
             )
 
         # Fallback should extract goal from **Goal:** pattern
@@ -270,7 +271,7 @@ Content here.
                 plan_content=None,
                 target_path=target_path,
                 profile=mock_profile,
-                workflow_id="wf-001",
+                workflow_id=uuid4(),
             )
 
     async def test_import_target_path_traversal_blocked(
@@ -292,7 +293,7 @@ Content here.
                 plan_content="# Plan\n\n### Task 1: Do thing",
                 target_path=target_path,
                 profile=mock_profile,
-                workflow_id="wf-001",
+                workflow_id=uuid4(),
             )
 
     async def test_import_absolute_plan_file_outside_worktree_blocked(
@@ -321,7 +322,7 @@ Content here.
                 plan_content=None,
                 target_path=target_path,
                 profile=mock_profile,
-                workflow_id="wf-001",
+                workflow_id=uuid4(),
             )
 
     async def test_import_skips_write_when_file_at_target(
@@ -362,7 +363,7 @@ Content here.
                 plan_content=None,
                 target_path=target_path,
                 profile=mock_profile,
-                workflow_id="wf-001",
+                workflow_id=uuid4(),
             )
 
         # Verify file was NOT rewritten
@@ -398,7 +399,7 @@ Content here.
                 plan_content=None,
                 target_path=target_path,
                 profile=mock_profile,
-                workflow_id="wf-001",
+                workflow_id=uuid4(),
             )
 
         # plan_markdown should always be returned (no special handling required by consumers)

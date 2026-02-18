@@ -1,5 +1,7 @@
 """Test Knowledge Library Pydantic models."""
 
+from uuid import uuid4
+
 import pytest
 from pydantic import ValidationError
 
@@ -14,14 +16,15 @@ from amelia.knowledge.models import (
 
 def test_document_model_defaults() -> None:
     """Document model should have correct defaults."""
+    doc_id = uuid4()
     doc = Document(
-        id="doc-123",
+        id=doc_id,
         name="React Docs",
         filename="react-docs.pdf",
         content_type="application/pdf",
     )
 
-    assert doc.id == "doc-123"
+    assert doc.id == doc_id
     assert doc.name == "React Docs"
     assert doc.status == DocumentStatus.PENDING
     assert doc.tags == []
@@ -33,9 +36,10 @@ def test_document_model_defaults() -> None:
 
 def test_document_chunk_model() -> None:
     """DocumentChunk model should validate correctly."""
+    chunk_id = uuid4()
     chunk = DocumentChunk(
-        id="chunk-123",
-        document_id="doc-123",
+        id=chunk_id,
+        document_id=uuid4(),
         chunk_index=0,
         content="# Introduction\n\nTest content here.",
         heading_path=["Introduction"],
@@ -43,7 +47,7 @@ def test_document_chunk_model() -> None:
         embedding=[0.1] * 1536,
     )
 
-    assert chunk.id == "chunk-123"
+    assert chunk.id == chunk_id
     assert chunk.chunk_index == 0
     assert len(chunk.embedding) == 1536
     assert chunk.heading_path == ["Introduction"]
@@ -51,9 +55,10 @@ def test_document_chunk_model() -> None:
 
 def test_search_result_model() -> None:
     """SearchResult model should include all required fields."""
+    chunk_id = uuid4()
     result = SearchResult(
-        chunk_id="chunk-123",
-        document_id="doc-123",
+        chunk_id=chunk_id,
+        document_id=uuid4(),
         document_name="React Docs",
         tags=["react", "frontend"],
         content="React is a library for building UIs",
@@ -64,7 +69,7 @@ def test_search_result_model() -> None:
 
     assert result.similarity == 0.85
     assert result.tags == ["react", "frontend"]
-    assert result.chunk_id == "chunk-123"
+    assert result.chunk_id == chunk_id
 
 
 def test_tag_extraction_output_valid() -> None:

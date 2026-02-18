@@ -34,6 +34,7 @@ from amelia.drivers.base import (
     DriverUsage,
     GenerateResult,
 )
+from amelia.logging import log_todos
 
 
 # Maximum output size before truncation (100KB)
@@ -667,10 +668,12 @@ class ApiDriver(DriverInterface):
                             # Track write_todos calls to detect incomplete tasks
                             if tool_raw_name == "write_todos":
                                 last_write_todos_input = tool_args
+                                todos = tool_args.get("todos", [])
                                 logger.info(
                                     "Agent called write_todos",
-                                    todos=tool_args.get("todos", []),
+                                    todo_count=len(todos),
                                 )
+                                log_todos(todos)
 
                             logger.debug(
                                 "Tool call",
@@ -731,7 +734,7 @@ class ApiDriver(DriverInterface):
                             reason=continuation_reason,
                             required_file_path=required_file_path,
                             attempts=continuation_count,
-                            tool_sequence=all_tool_names,
+                            tool_sequence=", ".join(all_tool_names),
                         )
                         break
 
@@ -791,7 +794,7 @@ class ApiDriver(DriverInterface):
                 "API driver execution complete",
                 total_tool_calls=tool_call_count,
                 num_turns=num_turns,
-                all_tool_names=all_tool_names,
+                tool_names=", ".join(all_tool_names[-10:]),
                 has_last_message=last_message is not None,
                 incomplete_tasks_count=len(incomplete_tasks),
             )
@@ -800,8 +803,8 @@ class ApiDriver(DriverInterface):
             if incomplete_tasks:
                 logger.warning(
                     "Agent terminated with in_progress tasks - possible premature termination",
-                    incomplete_tasks=incomplete_tasks,
-                    tool_sequence=all_tool_names[-10:] if len(all_tool_names) > 10 else all_tool_names,
+                    incomplete_tasks=", ".join(incomplete_tasks),
+                    tool_sequence=", ".join(all_tool_names[-10:]),
                     model=self.model,
                 )
 
@@ -809,7 +812,7 @@ class ApiDriver(DriverInterface):
             if "write_file" not in all_tool_names:
                 logger.warning(
                     "Agent completed without calling write_file - plan may not have been saved",
-                    tool_sequence=all_tool_names,
+                    tool_sequence=", ".join(all_tool_names),
                     model=self.model,
                 )
 
