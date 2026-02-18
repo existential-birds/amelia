@@ -14,7 +14,8 @@ import { ModelPickerSheet } from './ModelPickerSheet';
 import { ProviderLogo } from './ProviderLogo';
 import type { ModelInfo } from './types';
 
-const BROWSE_SENTINEL = '__browse__' as const;
+const BROWSE_SENTINEL = Symbol('browse');
+const BROWSE_SENTINEL_VALUE = BROWSE_SENTINEL.description!;
 
 interface ApiModelSelectProps {
   agentKey: string;
@@ -34,13 +35,6 @@ export function ApiModelSelect({ agentKey, value, onChange }: ApiModelSelectProp
   // Eagerly fetch models on mount (idempotent — fetchModels checks models.length and lastFetched, skips if already loaded)
   useEffect(() => {
     fetchModels();
-    // Cleanup: abort fetch if component unmounts before completion
-    return () => {
-      const state = useModelsStore.getState();
-      if (state.abortController) {
-        state.abortController.abort();
-      }
-    };
   }, [fetchModels]);
 
   // Get recent models that exist in the store
@@ -59,7 +53,7 @@ export function ApiModelSelect({ agentKey, value, onChange }: ApiModelSelectProp
 
   const handleSelect = (modelId: string) => {
     if (!modelId) return;
-    if (modelId === BROWSE_SENTINEL) {
+    if (modelId === BROWSE_SENTINEL_VALUE) {
       setSheetOpen(true);
       return;
     }
@@ -109,7 +103,7 @@ export function ApiModelSelect({ agentKey, value, onChange }: ApiModelSelectProp
             </SelectItem>
           )}
           <SelectSeparator />
-          <SelectItem value={BROWSE_SENTINEL}>
+          <SelectItem value={BROWSE_SENTINEL_VALUE}>
             <span className="text-muted-foreground">Browse all models...</span>
           </SelectItem>
         </SelectContent>

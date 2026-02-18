@@ -15,6 +15,19 @@ interface OpenRouterModel {
 }
 
 /**
+ * Get the valid context length from a model, falling back to top_provider if needed.
+ */
+function getContextLength(model: OpenRouterModel): number | null {
+  if (model.context_length && model.context_length > 0) {
+    return model.context_length;
+  }
+  if (model.top_provider?.context_length && model.top_provider.context_length > 0) {
+    return model.top_provider.context_length;
+  }
+  return null;
+}
+
+/**
  * Flatten the OpenRouter API response into a flat array of ModelInfo.
  * Only includes models with tool support (required for all agents).
  */
@@ -46,9 +59,7 @@ export function flattenModelsData(data: OpenRouterModel[]): ModelInfo[] {
         output: outputCost,
       },
       limit: {
-        context: (model.context_length && model.context_length > 0) ? model.context_length
-          : (model.top_provider?.context_length && model.top_provider.context_length > 0) ? model.top_provider.context_length
-          : null,
+        context: getContextLength(model),
         output: model.top_provider?.max_completion_tokens ?? null,
       },
       modalities: {

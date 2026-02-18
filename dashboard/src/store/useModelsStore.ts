@@ -5,6 +5,16 @@ import { flattenModelsData, filterModelsByRequirements } from '@/lib/models-util
 import { logger } from '@/lib/logger';
 
 /**
+ * Custom error class for fetch timeout events.
+ */
+class TimeoutError extends Error {
+  constructor(message: string = 'timeout') {
+    super(message);
+    this.name = 'TimeoutError';
+  }
+}
+
+/**
  * State for the models store.
  */
 interface ModelsState {
@@ -68,15 +78,15 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
 
     // Set timeout to abort request after 30 seconds
     const timeoutId = setTimeout(() => {
-      abortController.abort(new Error('timeout'));
+      abortController.abort(new TimeoutError());
     }, 30000);
 
     set({ isLoading: true, error: null, abortController, timeoutId });
 
     try {
       const response = await fetch(MODELS_API_URL, { signal: abortController.signal });
-      clearTimeout(timeoutId);
       if (!response.ok) {
+        clearTimeout(timeoutId);
         throw new Error(`HTTP ${response.status}`);
       }
 
@@ -84,22 +94,24 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
       try {
         data = await response.json();
       } catch (parseError) {
+        clearTimeout(timeoutId);
         throw new Error(`Invalid JSON response from models API: ${parseError}`);
       }
 
       if (!data || !data.data || !Array.isArray(data.data)) {
+        clearTimeout(timeoutId);
         throw new Error('Invalid response shape from models API');
       }
 
       const models = flattenModelsData(data.data);
       const providers = [...new Set(models.map((m) => m.provider))];
 
+      clearTimeout(timeoutId);
       set({
         models,
         providers,
         isLoading: false,
         lastFetched: Date.now(),
-        // Safe to clear: if aborted before this point, we return early in the catch block
         abortController: null,
         timeoutId: undefined,
       });
@@ -107,8 +119,7 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
       clearTimeout(timeoutId);
       // Don't update state if the request was aborted (a newer request is in progress)
       if (err instanceof Error && err.name === 'AbortError') {
-        const timedOut = abortController.signal.reason instanceof Error &&
-                        abortController.signal.reason.message === 'timeout';
+        const timedOut = abortController.signal.reason instanceof TimeoutError;
         set({
           error: timedOut ? 'Request timed out after 30 seconds. Check your connection.' : null,
           isLoading: false,
@@ -143,16 +154,3 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
     return filterModelsByRequirements(models, requirements);
   },
 }));
-
-// Cleanup on store destroy (e.g., when all components unmount)
-useModelsStore.subscribe((state) => {
-  // Cleanup function runs when store is destroyed
-  return () => {
-    if (state.abortController) {
-      state.abortController.abort();
-    }
-    if (state.timeoutId !== undefined) {
-      clearTimeout(state.timeoutId);
-    }
-  };
-});
