@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { ModelPickerSheet } from '../ModelPickerSheet';
 import { useModelsStore } from '@/store/useModelsStore';
 import { createMockModelsStore, mockModels } from '@/test/mocks/modelsStore';
+import type { ModelInfo } from '../types';
 
 // Mock the store with selector support
 vi.mock('@/store/useModelsStore');

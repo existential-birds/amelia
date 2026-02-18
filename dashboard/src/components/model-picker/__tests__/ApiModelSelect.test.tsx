@@ -3,7 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ApiModelSelect } from '../ApiModelSelect';
 import { useModelsStore } from '@/store/useModelsStore';
 import { useRecentModels } from '@/hooks/useRecentModels';
-import { createMockModelsStore, mockModels } from '@/test/mocks/modelsStore';
+import { createMockModelsStore } from '@/test/mocks/modelsStore';
 
 // Mock the store
 vi.mock('@/store/useModelsStore');

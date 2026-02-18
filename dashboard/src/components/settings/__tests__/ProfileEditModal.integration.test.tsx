@@ -5,7 +5,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ProfileEditModal } from '../ProfileEditModal';
 import { useModelsStore } from '@/store/useModelsStore';
-import { createMockModelsStore, mockModels } from '@/test/mocks/modelsStore';
+import { createMockModelsStore } from '@/test/mocks/modelsStore';
 
 // Mock the models store
 vi.mock('@/store/useModelsStore');
