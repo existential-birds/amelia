@@ -1,11 +1,10 @@
 # amelia/server/routes/settings.py
 """API routes for server settings and profiles."""
+from pathlib import Path
 from typing import Any
 
 from asyncpg import UniqueViolationError
 from fastapi import APIRouter, Depends, HTTPException
-from pathlib import Path
-
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from amelia.core.types import (
