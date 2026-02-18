@@ -1,11 +1,12 @@
 """Unit tests for OrchestratorService external plan handling."""
 
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
 
 from amelia.server.models.requests import CreateWorkflowRequest
+from amelia.server.models.state import PlanCache
 from amelia.server.orchestrator.service import OrchestratorService
 
 
@@ -190,3 +191,119 @@ class TestQueueWorkflowWithExternalPlan:
             mock_import.assert_not_called()
             # model_copy should NOT be called (state unchanged)
             mock_state.model_copy.assert_not_called()
+
+    async def test_queue_workflow_with_plan_content_persists_plan_cache(
+        self, mock_orchestrator: OrchestratorService, tmp_path: Path
+    ) -> None:
+        """queue_workflow should persist plan_cache to ServerExecutionState when plan provided."""
+        worktree = tmp_path / "worktree"
+        worktree.mkdir()
+        (worktree / ".git").mkdir()
+
+        request = CreateWorkflowRequest(
+            issue_id="TEST-004",
+            worktree_path=str(worktree),
+            plan_content="# Test Plan\n\n### Task 1: Do thing",
+            start=False,
+            task_title="Test task",
+        )
+
+        captured_state_kwargs: dict = {}
+
+        def capture_server_state(**kwargs: object) -> MagicMock:
+            captured_state_kwargs.update(kwargs)
+            return MagicMock()
+
+        with (
+            patch.object(
+                mock_orchestrator, "_validate_worktree_path", return_value=worktree
+            ),
+            patch.object(
+                mock_orchestrator,
+                "_prepare_workflow_state",
+            ) as mock_prepare,
+            patch(
+                "amelia.server.orchestrator.service.import_external_plan"
+            ) as mock_import,
+            patch(
+                "amelia.server.orchestrator.service.ServerExecutionState",
+                side_effect=capture_server_state,
+            ),
+        ):
+            mock_state = MagicMock()
+            mock_state.issue = MagicMock()
+            mock_state.issue.model_dump = MagicMock(return_value={})
+            mock_updated_state = MagicMock()
+            mock_updated_state.issue = mock_state.issue
+            mock_state.model_copy = MagicMock(return_value=mock_updated_state)
+            mock_profile = MagicMock()
+            mock_profile.plan_path_pattern = "docs/plans/{issue_key}.md"
+            mock_profile.working_dir = str(worktree)
+            mock_prepare.return_value = (str(worktree), mock_profile, mock_state)
+
+            plan_path = tmp_path / "plan.md"
+            mock_plan_result = MagicMock()
+            mock_plan_result.goal = "Do the thing"
+            mock_plan_result.plan_markdown = "# Test Plan"
+            mock_plan_result.plan_path = plan_path
+            mock_plan_result.key_files = []
+            mock_plan_result.total_tasks = 3
+            mock_import.return_value = mock_plan_result
+
+            await mock_orchestrator.queue_workflow(request)
+
+        plan_cache = captured_state_kwargs.get("plan_cache")
+        assert plan_cache is not None
+        assert isinstance(plan_cache, PlanCache)
+        assert plan_cache.goal == "Do the thing"
+        assert plan_cache.plan_path == str(plan_path)
+        assert plan_cache.total_tasks == 3
+
+    async def test_queue_workflow_without_plan_has_no_plan_cache(
+        self, mock_orchestrator: OrchestratorService, tmp_path: Path
+    ) -> None:
+        """queue_workflow should pass plan_cache=None to ServerExecutionState when no plan."""
+        worktree = tmp_path / "worktree"
+        worktree.mkdir()
+        (worktree / ".git").mkdir()
+
+        request = CreateWorkflowRequest(
+            issue_id="TEST-005",
+            worktree_path=str(worktree),
+            start=False,
+            task_title="Test task",
+        )
+
+        captured_state_kwargs: dict = {}
+
+        def capture_server_state(**kwargs: object) -> MagicMock:
+            captured_state_kwargs.update(kwargs)
+            return MagicMock()
+
+        with (
+            patch.object(
+                mock_orchestrator, "_validate_worktree_path", return_value=worktree
+            ),
+            patch.object(
+                mock_orchestrator,
+                "_prepare_workflow_state",
+            ) as mock_prepare,
+            patch(
+                "amelia.server.orchestrator.service.import_external_plan"
+            ),
+            patch(
+                "amelia.server.orchestrator.service.ServerExecutionState",
+                side_effect=capture_server_state,
+            ),
+        ):
+            mock_state = MagicMock()
+            mock_state.issue = MagicMock()
+            mock_state.issue.model_dump = MagicMock(return_value={})
+            mock_profile = MagicMock()
+            mock_profile.plan_path_pattern = "docs/plans/{issue_key}.md"
+            mock_profile.working_dir = str(worktree)
+            mock_prepare.return_value = (str(worktree), mock_profile, mock_state)
+
+            await mock_orchestrator.queue_workflow(request)
+
+        assert captured_state_kwargs.get("plan_cache") is None

@@ -152,15 +152,13 @@ class CreateWorkflowRequest(BaseModel):
 
         Ensures:
         - plan_file and plan_content are mutually exclusive
-        - plan_file/plan_content require start=False and plan_now=False
+        - plan_file/plan_content are incompatible with plan_now=True
         """
         if self.plan_file is not None and self.plan_content is not None:
             raise ValueError("plan_file and plan_content are mutually exclusive")
-        if (self.plan_file is not None or self.plan_content is not None) and (
-            self.start or self.plan_now
-        ):
+        if (self.plan_file is not None or self.plan_content is not None) and self.plan_now:
             raise ValueError(
-                "plan_file/plan_content require start=False and plan_now=False"
+                "plan_file/plan_content are incompatible with plan_now=True"
             )
         return self
 

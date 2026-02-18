@@ -40,6 +40,7 @@ def mock_orchestrator() -> MagicMock:
     orch.start_workflow = AsyncMock(return_value=uuid4())
     orch.queue_workflow = AsyncMock(return_value=uuid4())
     orch.queue_and_plan_workflow = AsyncMock(return_value=uuid4())
+    orch.start_pending_workflow = AsyncMock()
     return orch
 
 
@@ -119,6 +120,63 @@ class TestCreateWorkflowQueue:
         assert response.status_code == 201
         mock_orchestrator.start_workflow.assert_called_once()
         mock_orchestrator.queue_and_plan_workflow.assert_not_called()
+
+    def test_start_true_with_plan_content_uses_queue_then_start(
+        self, client: TestClient, mock_orchestrator: MagicMock
+    ) -> None:
+        """start=True + plan_content routes through queue_workflow then start_pending_workflow."""
+        response = client.post(
+            "/api/workflows",
+            json={
+                "issue_id": "ISSUE-123",
+                "worktree_path": "/repo",
+                "start": True,
+                "plan_content": "# My Plan\n\n### Task 1: Do thing",
+            },
+        )
+
+        assert response.status_code == 201
+        mock_orchestrator.queue_workflow.assert_called_once()
+        mock_orchestrator.start_pending_workflow.assert_called_once_with(
+            mock_orchestrator.queue_workflow.return_value
+        )
+        mock_orchestrator.start_workflow.assert_not_called()
+
+    def test_start_true_with_plan_file_uses_queue_then_start(
+        self, client: TestClient, mock_orchestrator: MagicMock
+    ) -> None:
+        """start=True + plan_file routes through queue_workflow then start_pending_workflow."""
+        response = client.post(
+            "/api/workflows",
+            json={
+                "issue_id": "ISSUE-123",
+                "worktree_path": "/repo",
+                "start": True,
+                "plan_file": "docs/plan.md",
+            },
+        )
+
+        assert response.status_code == 201
+        mock_orchestrator.queue_workflow.assert_called_once()
+        mock_orchestrator.start_pending_workflow.assert_called_once()
+        mock_orchestrator.start_workflow.assert_not_called()
+
+    def test_plan_now_true_with_plan_content_is_rejected(
+        self, client: TestClient, mock_orchestrator: MagicMock
+    ) -> None:
+        """plan_now=True + plan_content is still rejected (422)."""
+        response = client.post(
+            "/api/workflows",
+            json={
+                "issue_id": "ISSUE-123",
+                "worktree_path": "/repo",
+                "start": False,
+                "plan_now": True,
+                "plan_content": "# My Plan",
+            },
+        )
+
+        assert response.status_code == 422
 
 
 class TestStartWorkflowEndpoint:
