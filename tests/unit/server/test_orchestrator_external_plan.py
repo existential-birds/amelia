@@ -1,6 +1,7 @@
 """Unit tests for OrchestratorService external plan handling."""
 
 from pathlib import Path
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -208,7 +209,7 @@ class TestQueueWorkflowWithExternalPlan:
             task_title="Test task",
         )
 
-        captured_state_kwargs: dict = {}
+        captured_state_kwargs: dict[str, Any] = {}
 
         def capture_server_state(**kwargs: object) -> MagicMock:
             captured_state_kwargs.update(kwargs)
@@ -274,7 +275,7 @@ class TestQueueWorkflowWithExternalPlan:
             task_title="Test task",
         )
 
-        captured_state_kwargs: dict = {}
+        captured_state_kwargs: dict[str, Any] = {}
 
         def capture_server_state(**kwargs: object) -> MagicMock:
             captured_state_kwargs.update(kwargs)
