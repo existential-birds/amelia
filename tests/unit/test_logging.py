@@ -8,10 +8,12 @@ from amelia.logging import _plain_log_format
 
 def _make_record(**extra: Any) -> MagicMock:
     """Create a minimal loguru Record-like dict for testing format functions."""
+    level_mock = MagicMock()
+    level_mock.name = "INFO"
     record = MagicMock()
     record.__getitem__ = lambda self, key: {
         "extra": extra,
-        "level": MagicMock(name="INFO"),
+        "level": level_mock,
         "exception": None,
     }[key]
     return record
