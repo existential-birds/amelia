@@ -446,13 +446,7 @@ class ApiDriver(DriverInterface):
                     original_message=raw_msg,
                 ) from e
             raise
-        except (
-            httpx.ConnectError,
-            httpx.ReadError,
-            httpx.WriteError,
-            httpx.PoolTimeout,
-            httpx.TimeoutException,
-        ) as e:
+        except httpx.TransportError as e:
             raise ModelProviderError(
                 f"Transient connection error: {e}",
                 provider_name="openai-compatible",
@@ -872,13 +866,7 @@ class ApiDriver(DriverInterface):
                     original_message=raw_msg,
                 ) from e
             raise
-        except (
-            httpx.ConnectError,
-            httpx.ReadError,
-            httpx.WriteError,
-            httpx.PoolTimeout,
-            httpx.TimeoutException,
-        ) as e:
+        except httpx.TransportError as e:
             raise ModelProviderError(
                 f"Transient connection error: {e}",
                 provider_name="openai-compatible",

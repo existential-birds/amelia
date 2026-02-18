@@ -66,7 +66,7 @@ TRANSIENT_EXCEPTIONS: tuple[type[Exception], ...] = (
     TimeoutException,
     ConnectionError,
     ModelProviderError,
-    httpx.ConnectError,
+    httpx.TransportError,
 )
 
 

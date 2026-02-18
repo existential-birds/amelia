@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, patch
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from langchain_core.runnables.config import RunnableConfig
@@ -135,7 +135,7 @@ def capture_emit(
         message: str,
         agent: str = "system",
         data: dict[str, object] | None = None,
-        correlation_id: str | None = None,
+        correlation_id: uuid.UUID | None = None,
     ) -> WorkflowEvent:
         emitted_events.append((workflow_id, event_type, message, data or {}))
         return WorkflowEvent(
@@ -243,7 +243,7 @@ async def test_start_workflow_conflict(
     """Should raise WorkflowConflictError when worktree already active."""
     # Create a fake task to simulate active workflow
     orchestrator._active_tasks[valid_worktree] = (
-        "existing-wf",
+        uuid4(),
         asyncio.create_task(asyncio.sleep(1)),
     )
 
@@ -272,7 +272,7 @@ async def test_start_workflow_concurrency_limit(
     tasks = []
     for i in range(5):
         task = asyncio.create_task(asyncio.sleep(1))
-        orchestrator._active_tasks[f"/fake/worktree{i}"] = (f"wf-{i}", task)
+        orchestrator._active_tasks[f"/fake/worktree{i}"] = (uuid4(), task)
         tasks.append(task)
 
     # Now try to start a workflow with a valid worktree path
@@ -432,8 +432,8 @@ async def test_workflow_operation_exceptions(
 
 def test_get_active_workflows(orchestrator: OrchestratorService) -> None:
     """Should return list of active worktree paths."""
-    orchestrator._active_tasks["/path/1"] = ("wf-1", MagicMock())
-    orchestrator._active_tasks["/path/2"] = ("wf-2", MagicMock())
+    orchestrator._active_tasks["/path/1"] = (uuid4(), MagicMock())
+    orchestrator._active_tasks["/path/2"] = (uuid4(), MagicMock())
 
     active = orchestrator.get_active_workflows()
     assert set(active) == {"/path/1", "/path/2"}
@@ -839,16 +839,17 @@ class TestSyncPlanFromCheckpoint:
         )
 
         config: RunnableConfig = {"configurable": {"thread_id": str(uuid4())}}
+        workflow_id = uuid4()
 
         # Call _sync_plan_from_checkpoint
-        await orchestrator._sync_plan_from_checkpoint("wf-sync", mock_graph, config)
+        await orchestrator._sync_plan_from_checkpoint(workflow_id, mock_graph, config)
 
         # Verify repository.update_plan_cache was called
         mock_repository.update_plan_cache.assert_called_once()
 
         # Verify the PlanCache has the goal and plan_markdown
         call_args = mock_repository.update_plan_cache.call_args
-        assert call_args[0][0] == "wf-sync"
+        assert call_args[0][0] == workflow_id
         plan_cache = call_args[0][1]
         assert plan_cache.goal == "Test goal"
         assert plan_cache.plan_markdown == "# Test Plan"
@@ -863,9 +864,10 @@ class TestSyncPlanFromCheckpoint:
         mock_graph.aget_state = AsyncMock(return_value=None)
 
         config: RunnableConfig = {"configurable": {"thread_id": str(uuid4())}}
+        workflow_id = uuid4()
 
         # Should not raise, just return early
-        await orchestrator._sync_plan_from_checkpoint("wf-no-state", mock_graph, config)
+        await orchestrator._sync_plan_from_checkpoint(workflow_id, mock_graph, config)
 
         # Repository should not be called
         mock_repository.get.assert_not_called()
@@ -883,9 +885,10 @@ class TestSyncPlanFromCheckpoint:
         )
 
         config: RunnableConfig = {"configurable": {"thread_id": str(uuid4())}}
+        workflow_id = uuid4()
 
         # Should not raise, just return early
-        await orchestrator._sync_plan_from_checkpoint("wf-no-plan", mock_graph, config)
+        await orchestrator._sync_plan_from_checkpoint(workflow_id, mock_graph, config)
 
         # Repository.get should not be called since we exit before that
         mock_repository.get.assert_not_called()
@@ -904,9 +907,10 @@ class TestSyncPlanFromCheckpoint:
         mock_repository.get.return_value = None  # Workflow not found
 
         config: RunnableConfig = {"configurable": {"thread_id": str(uuid4())}}
+        workflow_id = uuid4()
 
         # Should not raise, just log warning and return
-        await orchestrator._sync_plan_from_checkpoint("wf-missing", mock_graph, config)
+        await orchestrator._sync_plan_from_checkpoint(workflow_id, mock_graph, config)
 
         # Repository.update should not be called
         mock_repository.update.assert_not_called()
@@ -994,7 +998,7 @@ class TestRunWorkflowCheckpointResume:
             patch.object(orchestrator, "_get_profile_or_fail", return_value=mock_profile),
             patch.object(orchestrator, "_emit", new=AsyncMock()),
         ):
-            await orchestrator._run_workflow("wf-retry-test", mock_state)
+            await orchestrator._run_workflow(UUID("00000000-0000-0000-0000-000000000001"), mock_state)
 
         # Verify: astream was called with None (resume from checkpoint)
         mock_graph.astream.assert_called_once()
@@ -1046,7 +1050,7 @@ class TestRunWorkflowCheckpointResume:
             patch.object(orchestrator, "_get_profile_or_fail", return_value=mock_profile),
             patch.object(orchestrator, "_emit", new=AsyncMock()),
         ):
-            await orchestrator._run_workflow("wf-retry-test", mock_state)
+            await orchestrator._run_workflow(UUID("00000000-0000-0000-0000-000000000002"), mock_state)
 
         # Verify: astream was called with initial_state (start fresh)
         mock_graph.astream.assert_called_once()
@@ -1085,7 +1089,7 @@ class TestTaskProgressEvents:
         )
         mock_repository.get.return_value = mock_state
 
-        await orchestrator._emit_task_failed_if_applicable("wf-no-cache")
+        await orchestrator._emit_task_failed_if_applicable(mock_state.id)
 
         # No event should be emitted without plan_cache
         mock_repository.save_event.assert_not_called()
@@ -1110,7 +1114,7 @@ class TestTaskProgressEvents:
         )
         mock_repository.get.return_value = mock_state
 
-        await orchestrator._emit_task_failed_if_applicable("wf-non-task")
+        await orchestrator._emit_task_failed_if_applicable(mock_state.id)
 
         # No event should be emitted when not in task mode
         mock_repository.save_event.assert_not_called()
@@ -1137,7 +1141,7 @@ class TestTaskProgressEvents:
         )
         mock_repository.get.return_value = mock_state
 
-        await orchestrator._emit_task_failed_if_applicable("wf-task")
+        await orchestrator._emit_task_failed_if_applicable(mock_state.id)
 
         # Currently returns early since last_review is only in checkpoint
         # TASK_FAILED events are emitted by graph nodes directly
@@ -1583,7 +1587,7 @@ class TestExponentialBackoff:
         # Make _run_workflow fail max_retries times, then succeed
         call_count = 0
 
-        async def failing_run_workflow(workflow_id: str, state: ServerExecutionState) -> None:
+        async def failing_run_workflow(workflow_id: uuid.UUID, state: ServerExecutionState) -> None:
             nonlocal call_count
             call_count += 1
             if call_count <= max_retries:
@@ -1650,7 +1654,7 @@ class TestExponentialBackoff:
         # Fail exactly 10 times
         call_count = 0
 
-        async def failing_run_workflow(workflow_id: str, state: ServerExecutionState) -> None:
+        async def failing_run_workflow(workflow_id: uuid.UUID, state: ServerExecutionState) -> None:
             nonlocal call_count
             call_count += 1
             if call_count <= 10:
@@ -1712,7 +1716,7 @@ async def test_resume_workflow_corrupted_checkpoint_raises_invalid_state(
         patch.object(orchestrator, "_create_server_graph", return_value=mock_graph),
         pytest.raises(InvalidStateError) as exc_info,
     ):
-        await orchestrator.resume_workflow(str(wf_id))
+        await orchestrator.resume_workflow(wf_id)
 
     assert "corrupted" in str(exc_info.value).lower()
 
