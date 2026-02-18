@@ -11,6 +11,7 @@ from uuid import uuid4
 from weakref import WeakKeyDictionary
 
 import httpx
+import openai
 from deepagents import create_deep_agent
 from deepagents.backends import FilesystemBackend
 from deepagents.backends.protocol import (
@@ -446,7 +447,7 @@ class ApiDriver(DriverInterface):
                     original_message=raw_msg,
                 ) from e
             raise
-        except httpx.TransportError as e:
+        except (httpx.TransportError, openai.APIConnectionError) as e:
             raise ModelProviderError(
                 f"Transient connection error: {e}",
                 provider_name="openai-compatible",
@@ -866,7 +867,7 @@ class ApiDriver(DriverInterface):
                     original_message=raw_msg,
                 ) from e
             raise
-        except httpx.TransportError as e:
+        except (httpx.TransportError, openai.APIConnectionError) as e:
             raise ModelProviderError(
                 f"Transient connection error: {e}",
                 provider_name="openai-compatible",

@@ -6,6 +6,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
+import openai
 import pytest
 
 from amelia.core.exceptions import ModelProviderError
@@ -23,12 +24,22 @@ def mock_deepagents() -> Generator[MagicMock, None, None]:
         yield mock_create
 
 
+_DUMMY_REQUEST = httpx.Request("POST", "https://api.example.com")
+
 TRANSIENT_ERRORS: list[tuple[str, Exception]] = [
     ("ConnectError", httpx.ConnectError("Connection refused")),
     ("ReadError", httpx.ReadError("Connection reset by peer")),
     ("WriteError", httpx.WriteError("Broken pipe")),
     ("PoolTimeout", httpx.PoolTimeout("Timed out waiting for connection")),
     ("TimeoutException", httpx.TimeoutException("Request timed out")),
+    (
+        "APIConnectionError",
+        openai.APIConnectionError(message="Connection failed", request=_DUMMY_REQUEST),
+    ),
+    (
+        "APITimeoutError",
+        openai.APITimeoutError(request=_DUMMY_REQUEST),
+    ),
 ]
 
 
