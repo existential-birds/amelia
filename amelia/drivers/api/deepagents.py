@@ -10,6 +10,7 @@ from typing import Any, ClassVar
 from uuid import uuid4
 from weakref import WeakKeyDictionary
 
+import httpx
 from deepagents import create_deep_agent
 from deepagents.backends import FilesystemBackend
 from deepagents.backends.protocol import (
@@ -445,6 +446,12 @@ class ApiDriver(DriverInterface):
                     original_message=raw_msg,
                 ) from e
             raise
+        except httpx.TransportError as e:
+            raise ModelProviderError(
+                f"Transient connection error: {e}",
+                provider_name="openai-compatible",
+                original_message=str(e),
+            ) from e
         except Exception as e:
             raise RuntimeError(f"ApiDriver generation failed: {e}") from e
 
@@ -859,6 +866,12 @@ class ApiDriver(DriverInterface):
                     original_message=raw_msg,
                 ) from e
             raise
+        except httpx.TransportError as e:
+            raise ModelProviderError(
+                f"Transient connection error: {e}",
+                provider_name="openai-compatible",
+                original_message=str(e),
+            ) from e
         except Exception as e:
             raise RuntimeError(f"Agentic execution failed: {e}") from e
 

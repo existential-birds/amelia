@@ -200,7 +200,7 @@ class ServerExecutionState(BaseModel):
         "json_schema_extra": {
             "examples": [
                 {
-                    "id": "wf-123",
+                    "id": "00000000-0000-0000-0000-000000000123",
                     "issue_id": "ISSUE-456",
                     "worktree_path": "/home/user/project",
                     "workflow_status": "in_progress",
