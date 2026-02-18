@@ -18,6 +18,17 @@ vi.mock("@/api/client", () => ({
     getConfig: vi.fn().mockResolvedValue({ working_dir: "", max_concurrent: 5, active_profile: "test" }),
   },
 }));
+vi.mock("@/api/settings", () => ({
+  getProfile: vi.fn().mockResolvedValue({
+    id: "test",
+    tracker: "none",
+    working_dir: "",
+    plan_output_dir: "",
+    plan_path_pattern: "",
+    agents: { brainstormer: { driver: "cli", model: "sonnet" } },
+    is_active: true,
+  }),
+}));
 
 function renderPage() {
   return render(

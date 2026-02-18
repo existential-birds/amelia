@@ -110,17 +110,24 @@ function SpecBuilderPageContent() {
         // Fetch brainstormer agent's model/driver from the profile
         // (config endpoint returns the developer agent's model which is wrong for spec builder)
         if (config.active_profile) {
-          const profile = await getProfile(config.active_profile);
-          if (!mounted) return;
-          const brainstormerConfig = profile.agents?.brainstormer;
-          if (brainstormerConfig) {
-            setConfigProfileInfo({
-              name: profile.id,
-              driver: brainstormerConfig.driver,
-              model: brainstormerConfig.model,
-            });
-          } else {
-            setConfigProfileInfo(config.active_profile_info);
+          try {
+            const profile = await getProfile(config.active_profile);
+            if (!mounted) return;
+            const brainstormerConfig = profile.agents?.brainstormer;
+            if (brainstormerConfig) {
+              setConfigProfileInfo({
+                name: profile.id,
+                driver: brainstormerConfig.driver,
+                model: brainstormerConfig.model,
+              });
+            } else {
+              setConfigProfileInfo(config.active_profile_info);
+            }
+          } catch (error) {
+            if (mounted) {
+              console.warn('Failed to load profile, using defaults:', error);
+              setConfigProfileInfo(config.active_profile_info);
+            }
           }
         }
       } catch (error) {
