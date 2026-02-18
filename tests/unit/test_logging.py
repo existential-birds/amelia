@@ -7,7 +7,14 @@ from amelia.logging import _plain_log_format
 
 
 def _make_record(**extra: Any) -> MagicMock:
-    """Create a minimal loguru Record-like dict for testing format functions."""
+    """Create a minimal Loguru Record-like dict for testing format functions.
+
+    Args:
+        **extra: Extra fields to include in the mock record.
+
+    Returns:
+        MagicMock instance that mimics a Loguru Record.
+    """
     level_mock = MagicMock()
     level_mock.name = "INFO"
     record = MagicMock()
