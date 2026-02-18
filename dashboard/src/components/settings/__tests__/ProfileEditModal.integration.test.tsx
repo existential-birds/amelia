@@ -5,7 +5,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ProfileEditModal } from '../ProfileEditModal';
 import { useModelsStore } from '@/store/useModelsStore';
-import type { ModelInfo } from '@/components/model-picker/types';
+import { createMockModelsStore, mockModels } from '@/test/mocks/modelsStore';
 
 // Mock the models store
 vi.mock('@/store/useModelsStore');
@@ -19,52 +19,9 @@ vi.mock('@/hooks/useRecentModels', () => ({
 }));
 
 describe('ProfileEditModal model selection', () => {
-  const mockModels: ModelInfo[] = [
-    {
-      id: 'claude-sonnet-4',
-      name: 'Claude Sonnet 4',
-      provider: 'anthropic',
-      capabilities: { tool_call: true, reasoning: true, structured_output: true },
-      cost: { input: 3, output: 15 },
-      limit: { context: 200000, output: 16000 },
-      modalities: { input: ['text'], output: ['text'] },
-    },
-  ];
-
-  // Create a mock store that supports selector functions
-  const createMockStore = (
-    overrides: Partial<{
-      models: ModelInfo[];
-      providers: string[];
-      isLoading: boolean;
-      error: string | null;
-      lastFetched: number | null;
-      fetchModels: () => Promise<void>;
-      refreshModels: () => Promise<void>;
-      getModelsForAgent: (agentKey: string) => ModelInfo[];
-    }> = {}
-  ) => {
-    const state = {
-      models: mockModels,
-      providers: ['anthropic'],
-      isLoading: false,
-      error: null,
-      lastFetched: Date.now(),
-      fetchModels: vi.fn().mockResolvedValue(undefined),
-      refreshModels: vi.fn().mockResolvedValue(undefined),
-      getModelsForAgent: vi.fn().mockReturnValue(mockModels),
-      ...overrides,
-    };
-    // Return a function that handles both selector calls and no-selector calls
-    // useModelsStore(selector) returns selector(state)
-    // useModelsStore() returns the full state object
-    return (selector?: (s: typeof state) => unknown) =>
-      selector ? selector(state) : state;
-  };
-
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(useModelsStore).mockImplementation(createMockStore());
+    vi.mocked(useModelsStore).mockImplementation(createMockModelsStore());
   });
 
   it('should show simple select with CLI model options when driver is cli (default)', async () => {

@@ -3,7 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ModelPickerSheet } from '../ModelPickerSheet';
 import { useModelsStore } from '@/store/useModelsStore';
-import type { ModelInfo } from '../types';
+import { createMockModelsStore, mockModels } from '@/test/mocks/modelsStore';
 
 // Mock the store with selector support
 vi.mock('@/store/useModelsStore');
@@ -17,36 +17,9 @@ vi.mock('@/hooks/useRecentModels', () => ({
 }));
 
 describe('ModelPickerSheet', () => {
-  const mockModels: ModelInfo[] = [
-    {
-      id: 'claude-sonnet-4',
-      name: 'Claude Sonnet 4',
-      provider: 'anthropic',
-      capabilities: { tool_call: true, reasoning: true, structured_output: true },
-      cost: { input: 3, output: 15 },
-      limit: { context: 200000, output: 16000 },
-      modalities: { input: ['text'], output: ['text'] },
-    },
-  ];
-
-  const createMockStore = (overrides: Partial<ReturnType<typeof useModelsStore>> = {}) => {
-    const state = {
-      models: mockModels,
-      providers: ['anthropic'],
-      isLoading: false,
-      error: null,
-      lastFetched: Date.now(),
-      fetchModels: vi.fn(),
-      refreshModels: vi.fn(),
-      getModelsForAgent: vi.fn().mockReturnValue(mockModels),
-      ...overrides,
-    };
-    return (selector: (s: typeof state) => unknown) => selector(state);
-  };
-
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(useModelsStore).mockImplementation(createMockStore());
+    vi.mocked(useModelsStore).mockImplementation(createMockModelsStore());
   });
 
   it('should render trigger and open sheet on click', async () => {
@@ -69,7 +42,7 @@ describe('ModelPickerSheet', () => {
   it('should fetch models when opened', async () => {
     const refreshModels = vi.fn();
     vi.mocked(useModelsStore).mockImplementation(
-      createMockStore({
+      createMockModelsStore({
         models: [],
         providers: [],
         lastFetched: null,
@@ -135,7 +108,7 @@ describe('ModelPickerSheet', () => {
     ];
 
     vi.mocked(useModelsStore).mockImplementation(
-      createMockStore({
+      createMockModelsStore({
         models: moreModels,
         providers: ['anthropic', 'openai'],
       })

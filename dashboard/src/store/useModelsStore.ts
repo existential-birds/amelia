@@ -77,8 +77,6 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
     } catch (err) {
       console.error('Failed to fetch models:', err);
       set({
-        models: [],
-        providers: [],
         error: 'Failed to load models. Check your connection.',
         isLoading: false,
       });

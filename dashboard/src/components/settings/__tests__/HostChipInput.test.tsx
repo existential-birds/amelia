@@ -3,6 +3,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ProfileEditModal } from '../ProfileEditModal';
 import { useModelsStore } from '@/store/useModelsStore';
+import { createMockModelsStore } from '@/test/mocks/modelsStore';
 
 vi.mock('@/store/useModelsStore');
 vi.mock('@/hooks/useRecentModels', () => ({
@@ -15,18 +16,14 @@ vi.mock('@/hooks/useRecentModels', () => ({
 describe('HostChipInput via Sandbox tab', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    const state = {
-      models: [],
-      providers: [],
-      isLoading: false,
-      error: null,
-      lastFetched: Date.now(),
-      fetchModels: vi.fn().mockResolvedValue(undefined),
-      refreshModels: vi.fn().mockResolvedValue(undefined),
-      getModelsForAgent: vi.fn().mockReturnValue([]),
-    };
     vi.mocked(useModelsStore).mockImplementation(
-      (selector?: (s: typeof state) => unknown) => selector ? selector(state) : state
+      createMockModelsStore({
+        models: [],
+        providers: [],
+        fetchModels: vi.fn().mockResolvedValue(undefined),
+        refreshModels: vi.fn().mockResolvedValue(undefined),
+        getModelsForAgent: vi.fn().mockReturnValue([]),
+      })
     );
   });
 

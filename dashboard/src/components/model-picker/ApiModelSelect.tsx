@@ -27,13 +27,14 @@ interface ApiModelSelectProps {
  */
 export function ApiModelSelect({ agentKey, value, onChange }: ApiModelSelectProps) {
   const models = useModelsStore((state) => state.models);
+  const fetchModels = useModelsStore((state) => state.fetchModels);
   const { recentModelIds, addRecentModel } = useRecentModels();
   const [sheetOpen, setSheetOpen] = useState(false);
 
   // Eagerly fetch models on mount (idempotent — skips if already loaded)
   useEffect(() => {
-    useModelsStore.getState().fetchModels();
-  }, []);
+    fetchModels();
+  }, [fetchModels]);
 
   // Get recent models that exist in the store
   const recentModels = recentModelIds
@@ -50,10 +51,9 @@ export function ApiModelSelect({ agentKey, value, onChange }: ApiModelSelectProp
   const valueNotYetInStore = value && value !== '' && !displayModels.some((m) => m.id === value);
 
   const handleSelect = (modelId: string) => {
-    if (!modelId || modelId === BROWSE_SENTINEL) {
-      if (modelId === BROWSE_SENTINEL) {
-        setSheetOpen(true);
-      }
+    if (!modelId) return;
+    if (modelId === BROWSE_SENTINEL) {
+      setSheetOpen(true);
       return;
     }
     addRecentModel(modelId);

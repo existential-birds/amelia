@@ -3,7 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ApiModelSelect } from '../ApiModelSelect';
 import { useModelsStore } from '@/store/useModelsStore';
 import { useRecentModels } from '@/hooks/useRecentModels';
-import type { ModelInfo } from '../types';
+import { createMockModelsStore, mockModels } from '@/test/mocks/modelsStore';
 
 // Mock the store
 vi.mock('@/store/useModelsStore');
@@ -16,27 +16,6 @@ vi.mock('@/hooks/useRecentModels', () => ({
 const mockUseRecentModels = vi.mocked(useRecentModels);
 
 describe('ApiModelSelect', () => {
-  const mockModels: ModelInfo[] = [
-    {
-      id: 'claude-sonnet-4',
-      name: 'Claude Sonnet 4',
-      provider: 'anthropic',
-      capabilities: { tool_call: true, reasoning: true, structured_output: true },
-      cost: { input: 3, output: 15 },
-      limit: { context: 200000, output: 16000 },
-      modalities: { input: ['text'], output: ['text'] },
-    },
-    {
-      id: 'gpt-4o',
-      name: 'GPT-4o',
-      provider: 'openai',
-      capabilities: { tool_call: true, reasoning: false, structured_output: true },
-      cost: { input: 2.5, output: 10 },
-      limit: { context: 128000, output: 16384 },
-      modalities: { input: ['text'], output: ['text'] },
-    },
-  ];
-
   let mockFetchModels: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
@@ -50,20 +29,8 @@ describe('ApiModelSelect', () => {
     });
 
     mockFetchModels = vi.fn();
-    const mockStore = {
-      models: mockModels,
-      providers: ['anthropic', 'openai'],
-      isLoading: false,
-      error: null,
-      lastFetched: Date.now(),
-      fetchModels: mockFetchModels,
-      refreshModels: vi.fn(),
-      getModelsForAgent: vi.fn().mockReturnValue(mockModels),
-    };
-    // Support both selector pattern (useModelsStore((s) => s.models)) and direct call pattern (useModelsStore())
-    // because Zustand stores can be called either way, and our component uses both patterns
-    vi.mocked(useModelsStore).mockImplementation((selector?: unknown) =>
-      typeof selector === 'function' ? selector(mockStore) : mockStore
+    vi.mocked(useModelsStore).mockImplementation(
+      createMockModelsStore({ fetchModels: mockFetchModels })
     );
   });
 
