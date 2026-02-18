@@ -151,10 +151,8 @@ async def call_developer_node(
         "Agent action completed",
         agent="developer",
         action="agentic_execution",
-        details={
-            "tool_calls_count": len(final_state.tool_calls),
-            "agentic_status": final_state.agentic_status,
-        },
+        tool_calls_count=len(final_state.tool_calls),
+        agentic_status=str(final_state.agentic_status),
     )
 
     return {
@@ -243,12 +241,10 @@ async def call_reviewer_node(
         "Agent action completed",
         agent=agent_name,
         action="review_completed",
-        details={
-            "severity": review_result.severity,
-            "approved": review_result.approved,
-            "issue_count": len(review_result.comments),
-            "review_iteration": next_iteration,
-        },
+        severity=str(review_result.severity),
+        approved=review_result.approved,
+        issue_count=len(review_result.comments),
+        review_iteration=next_iteration,
     )
 
     # Build return dict
