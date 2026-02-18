@@ -12,6 +12,7 @@ import { useModelsStore } from '@/store/useModelsStore';
 import { useRecentModels } from '@/hooks/useRecentModels';
 import { ModelPickerSheet } from './ModelPickerSheet';
 import { ProviderLogo } from './ProviderLogo';
+import { cn } from '@/lib/utils';
 import type { ModelInfo } from './types';
 
 const BROWSE_SENTINEL = Symbol('browse');
@@ -21,12 +22,13 @@ interface ApiModelSelectProps {
   agentKey: string;
   value: string;
   onChange: (modelId: string) => void;
+  error?: boolean;
 }
 
 /**
  * Dropdown with recent models + browse link for API driver model selection.
  */
-export function ApiModelSelect({ agentKey, value, onChange }: ApiModelSelectProps) {
+export function ApiModelSelect({ agentKey, value, onChange, error }: ApiModelSelectProps) {
   const models = useModelsStore((state) => state.models);
   const fetchModels = useModelsStore((state) => state.fetchModels);
   const { recentModelIds, addRecentModel } = useRecentModels();
@@ -74,7 +76,7 @@ export function ApiModelSelect({ agentKey, value, onChange }: ApiModelSelectProp
         currentModel={value}
         onSelect={handleSheetSelect}
         trigger={
-          <Button variant="outline" size="sm" className="h-7 w-full sm:w-[180px] text-xs">
+          <Button variant="outline" size="sm" className={cn('h-7 w-full sm:w-[180px] text-xs', error && !value && 'border-destructive')}>
             Select model...
           </Button>
         }
@@ -85,7 +87,7 @@ export function ApiModelSelect({ agentKey, value, onChange }: ApiModelSelectProp
   return (
     <>
       <Select value={value} onValueChange={handleSelect}>
-        <SelectTrigger className="h-7 w-full sm:w-[180px] text-xs bg-background/50">
+        <SelectTrigger className={cn('h-7 w-full sm:w-[180px] text-xs bg-background/50', error && !value && 'border-destructive')}>
           <SelectValue placeholder="Select model..." />
         </SelectTrigger>
         <SelectContent>
