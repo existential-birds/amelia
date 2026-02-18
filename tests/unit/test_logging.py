@@ -70,7 +70,7 @@ class TestLogTodos:
 
         with patch("sys.stderr") as mock_stderr:
             mock_stderr.isatty.return_value = True
-            with patch("amelia.logging.Console") as mock_console_cls:
+            with patch("rich.console.Console") as mock_console_cls:
                 mock_console = MagicMock()
                 mock_console_cls.return_value = mock_console
                 log_todos([{"content": "Fix bug", "status": "completed"}])
@@ -82,7 +82,7 @@ class TestLogTodos:
 
         with patch("sys.stderr") as mock_stderr:
             mock_stderr.isatty.return_value = True
-            with patch("amelia.logging.Console") as mock_console_cls:
+            with patch("rich.console.Console") as mock_console_cls:
                 mock_console = MagicMock()
                 mock_console_cls.return_value = mock_console
                 log_todos([])
