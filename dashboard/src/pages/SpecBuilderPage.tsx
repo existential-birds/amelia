@@ -98,8 +98,9 @@ function SpecBuilderPageContent() {
     const init = async () => {
       try {
         await loadSessions();
-      } catch (_error) {
+      } catch (error) {
         if (mounted) {
+          logger.warn('Failed to load sessions on mount, continuing initialization', { error });
           toast.error("Failed to load sessions");
         }
         // Continue initialization even if sessions fail to load
@@ -113,26 +114,25 @@ function SpecBuilderPageContent() {
 
         // Fetch brainstormer agent's model/driver from the profile
         // (config endpoint returns the developer agent's model which is wrong for spec builder)
+        let profileInfo = config.active_profile_info;
         if (config.active_profile) {
           try {
             const profile = await getProfile(config.active_profile);
             if (!mounted) return;
             const brainstormerConfig = profile.agents?.brainstormer;
             if (brainstormerConfig) {
-              setConfigProfileInfo({
+              profileInfo = {
                 name: profile.id,
                 driver: brainstormerConfig.driver,
                 model: brainstormerConfig.model,
-              });
-            } else {
-              setConfigProfileInfo(config.active_profile_info);
+              };
             }
           } catch (error) {
-            if (mounted) {
-              logger.warn('Failed to load profile, using defaults', { error });
-              setConfigProfileInfo(config.active_profile_info);
-            }
+            logger.warn('Failed to load profile, using config defaults', { error });
           }
+        }
+        if (mounted) {
+          setConfigProfileInfo(profileInfo);
         }
       } catch (error) {
         if (mounted) {
@@ -146,7 +146,7 @@ function SpecBuilderPageContent() {
     return () => {
       mounted = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only effect
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only init: loadSessions is stable from useBrainstormSession
   }, []);
 
   const handleSubmit = useCallback(

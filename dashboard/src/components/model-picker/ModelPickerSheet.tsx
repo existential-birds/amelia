@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, type ReactNode } from 'react';
+import { useState, useEffect, useMemo, useRef, type ReactNode } from 'react';
 import {
   Sheet,
   SheetContent,
@@ -101,12 +101,20 @@ export function ModelPickerSheet({
   const error = useModelsStore((state) => state.error);
   const refreshModels = useModelsStore((state) => state.refreshModels);
 
+  // Use ref to maintain stable identity for refreshModels
+  const refreshModelsRef = useRef(refreshModels);
+  refreshModelsRef.current = refreshModels;
+
   // Fetch fresh models when sheet opens
   useEffect(() => {
     if (open) {
-      refreshModels();
+      const abortController = new AbortController();
+      refreshModelsRef.current();
+      return () => {
+        abortController.abort();
+      };
     }
-  }, [open, refreshModels]);
+  }, [open]);
 
   // Get agent-filtered models
   const agentModels = useMemo(() => {

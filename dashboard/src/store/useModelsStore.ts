@@ -60,8 +60,12 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
     const abortController = new AbortController();
     set({ isLoading: true, error: null, abortController });
 
+    // Set timeout to abort request after 30 seconds
+    const timeoutId = setTimeout(() => abortController.abort(), 30000);
+
     try {
       const response = await fetch(MODELS_API_URL, { signal: abortController.signal });
+      clearTimeout(timeoutId);
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }
@@ -73,7 +77,7 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
         throw new Error(`Invalid JSON response from models API: ${parseError}`);
       }
 
-      if (!data || !data.data) {
+      if (!data || !data.data || !Array.isArray(data.data)) {
         throw new Error('Invalid response shape from models API');
       }
 
@@ -89,6 +93,7 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
         abortController: null,
       });
     } catch (err) {
+      clearTimeout(timeoutId);
       // Don't update state if the request was aborted (a newer request is in progress)
       if (err instanceof Error && err.name === 'AbortError') {
         return;

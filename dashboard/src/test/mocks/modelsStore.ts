@@ -73,22 +73,19 @@ export const mockModels: ModelInfo[] = [
  *
  * Use this export when you need to:
  * - Create partial overrides with `createMockModelsStore({ ...overrides })`
- * - Access default mock functions (fetchModels, refreshModels, etc.) for spying
- * - Build custom store states while preserving base functionality
+ * - Build custom store states while preserving base data
  *
  * Represents a fully populated models store with:
  * - Pre-loaded models from `mockModels`
- * - Mock functions for all store actions
  * - Default loading/error states
+ *
+ * Note: Mock functions (fetchModels, refreshModels, etc.) are created fresh
+ * in createMockModelsStore() for test isolation.
  *
  * @example
  * ```ts
  * // Override specific state while keeping defaults
  * const customStore = createMockModelsStore({ isLoading: true });
- *
- * // Spy on mock functions
- * const { fetchModels } = defaultModelsStoreState;
- * expect(fetchModels).toHaveBeenCalled();
  * ```
  */
 export const defaultModelsStoreState = {
@@ -97,9 +94,6 @@ export const defaultModelsStoreState = {
   isLoading: false,
   error: null,
   lastFetched: Date.now(),
-  fetchModels: vi.fn(),
-  refreshModels: vi.fn(),
-  getModelsForAgent: vi.fn().mockReturnValue(mockModels),
 };
 
 /**
@@ -116,6 +110,9 @@ export function createMockModelsStore(
 ) {
   const state = {
     ...defaultModelsStoreState,
+    fetchModels: vi.fn(),
+    refreshModels: vi.fn(),
+    getModelsForAgent: vi.fn().mockReturnValue(mockModels),
     ...overrides,
   };
 
