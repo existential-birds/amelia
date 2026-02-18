@@ -117,9 +117,15 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
         timeoutId: undefined,
       });
     } catch (err) {
-      // Don't update state if the request was aborted (a newer request is in progress)
-      if (err instanceof Error && err.name === 'AbortError') {
-        const timedOut = abortController.signal.reason instanceof TimeoutError;
+      // Don't update state if a newer request has already started
+      if (get().abortController !== abortController) {
+        return;
+      }
+
+      const timedOut =
+        err instanceof TimeoutError || abortController.signal.reason instanceof TimeoutError;
+
+      if (timedOut || (err instanceof Error && err.name === 'AbortError')) {
         set({
           error: timedOut ? 'Request timed out after 30 seconds. Check your connection.' : null,
           isLoading: false,

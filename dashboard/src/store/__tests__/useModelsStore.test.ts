@@ -166,6 +166,40 @@ describe('useModelsStore', () => {
       expect(finalState.error).toBeNull();
       expect(finalState.models).toEqual(initialState.models);
     });
+
+    it('should not clobber state when a stale aborted request resolves after a newer request starts', async () => {
+      // Simulate: call 1 is aborted by call 2, but call 1's catch block runs after call 2 has set its own controller
+      let rejectFirstFetch!: (err: unknown) => void;
+      const firstFetchPromise = new Promise<never>((_, reject) => {
+        rejectFirstFetch = reject;
+      });
+
+      const secondFetchResponse = {
+        ok: true,
+        json: () => Promise.resolve({ data: [] }),
+      };
+
+      mockFetch.mockReturnValueOnce(firstFetchPromise).mockResolvedValueOnce(secondFetchResponse);
+
+      // Start first fetch (doesn't await - it's pending)
+      const firstCall = useModelsStore.getState().refreshModels();
+
+      // Start second fetch (aborts first, sets new abortController in state)
+      const secondCall = useModelsStore.getState().refreshModels();
+
+      // Reject first fetch with AbortError (simulating the abort)
+      const abortError = new Error('Aborted');
+      abortError.name = 'AbortError';
+      rejectFirstFetch(abortError);
+
+      await Promise.all([firstCall, secondCall]);
+
+      // Second request should have completed cleanly; state must not be corrupted
+      const state = useModelsStore.getState();
+      expect(state.isLoading).toBe(false);
+      expect(state.abortController).toBeNull();
+      expect(state.error).toBeNull();
+    });
   });
 
   describe('getModelsForAgent', () => {
