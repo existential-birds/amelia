@@ -11,8 +11,8 @@ export interface ModelInfo {
     structured_output: boolean;
   };
   limit: {
-    context: number;
-    output: number;
+    context: number | null;
+    output: number | null;
   };
   cost: {
     input: number;

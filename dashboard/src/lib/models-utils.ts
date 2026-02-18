@@ -40,8 +40,8 @@ export function flattenModelsData(data: OpenRouterModel[]): ModelInfo[] {
         output: (parseFloat(model.pricing.completion) || 0) * 1_000_000,
       },
       limit: {
-        context: model.context_length ?? model.top_provider?.context_length ?? 0,
-        output: model.top_provider?.max_completion_tokens ?? 0,
+        context: model.context_length ?? model.top_provider?.context_length ?? null,
+        output: model.top_provider?.max_completion_tokens ?? null,
       },
       modalities: {
         input: model.architecture.input_modalities,
@@ -112,7 +112,7 @@ export function filterModelsByRequirements(
     }
 
     // Check minimum context size
-    if (model.limit.context < requirements.minContext) {
+    if (model.limit.context === null || model.limit.context < requirements.minContext) {
       return false;
     }
 
@@ -128,7 +128,10 @@ export function filterModelsByRequirements(
 /**
  * Format context size for display (e.g., 200000 -> "200K").
  */
-export function formatContextSize(contextSize: number): string {
+export function formatContextSize(contextSize: number | null): string {
+  if (contextSize === null) {
+    return 'Unknown';
+  }
   if (contextSize >= 1_000_000) {
     return `${Math.round(contextSize / 1_000_000)}M`;
   }

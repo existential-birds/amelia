@@ -98,7 +98,9 @@ function SpecBuilderPageContent() {
       try {
         await loadSessions();
       } catch (error) {
-        console.warn('Failed to load sessions:', error);
+        if (mounted) {
+          toast.error("Failed to load sessions");
+        }
       }
       if (!mounted) return;
 

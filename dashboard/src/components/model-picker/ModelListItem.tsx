@@ -172,7 +172,7 @@ export function ModelListItem({
             {/* Limits */}
             <div>
               <div className="text-muted-foreground">Context</div>
-              <div>{model.limit.context.toLocaleString()} tokens</div>
+              <div>{model.limit.context != null ? `${model.limit.context.toLocaleString()} tokens` : 'Unknown'}</div>
             </div>
             <div>
               <div className="text-muted-foreground">Max output</div>

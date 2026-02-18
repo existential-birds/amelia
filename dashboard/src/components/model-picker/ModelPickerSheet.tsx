@@ -68,7 +68,7 @@ function filterModels(
     }
 
     // User-selected context size filter
-    if (minContext && model.limit.context < minContext) {
+    if (minContext && (model.limit.context === null || model.limit.context < minContext)) {
       return false;
     }
 

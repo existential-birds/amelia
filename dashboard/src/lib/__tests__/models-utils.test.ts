@@ -73,6 +73,25 @@ describe('models-utils', () => {
       expect(result[0]?.limit.context).toBe(64000);
     });
 
+    it('should preserve null when both context_length and top_provider.context_length are null', () => {
+      const apiResponse = [
+        {
+          id: 'provider/model-unknown',
+          name: 'Model with Unknown Context',
+          context_length: null,
+          pricing: { prompt: '0.000001', completion: '0.000005' },
+          architecture: { input_modalities: ['text'], output_modalities: ['text'] },
+          top_provider: { context_length: null, max_completion_tokens: null },
+          supported_parameters: ['tools'],
+        },
+      ];
+
+      const result = flattenModelsData(apiResponse);
+      expect(result).toHaveLength(1);
+      expect(result[0]?.limit.context).toBeNull();
+      expect(result[0]?.limit.output).toBeNull();
+    });
+
     it('should convert per-token pricing strings to per-1M numbers', () => {
       const apiResponse = [
         {
@@ -156,6 +175,31 @@ describe('models-utils', () => {
       expect(result[0]?.id).toBe('model-a');
     });
 
+    it('should exclude models with null context when filtering by minContext', () => {
+      const modelsWithNull: ModelInfo[] = [
+        ...models,
+        {
+          id: 'model-c',
+          name: 'Model C',
+          provider: 'test',
+          capabilities: { tool_call: true, reasoning: false, structured_output: false },
+          cost: { input: 1, output: 5 },
+          limit: { context: null, output: null },
+          modalities: { input: ['text'], output: ['text'] },
+        },
+      ];
+
+      const requirements: AgentRequirements = {
+        capabilities: ['tool_call'],
+        minContext: 1000, // Even a low threshold should exclude null
+        priceTier: 'any',
+      };
+
+      const result = filterModelsByRequirements(modelsWithNull, requirements);
+      expect(result).toHaveLength(2);
+      expect(result.find((m) => m.id === 'model-c')).toBeUndefined();
+    });
+
     it('should filter by price tier', () => {
       const requirements: AgentRequirements = {
         capabilities: ['tool_call'],
@@ -190,6 +234,10 @@ describe('models-utils', () => {
     it('should handle context sizes over 1M', () => {
       expect(formatContextSize(1000000)).toBe('1M');
       expect(formatContextSize(2000000)).toBe('2M');
+    });
+
+    it('should return "Unknown" for null context size', () => {
+      expect(formatContextSize(null)).toBe('Unknown');
     });
   });
 });
