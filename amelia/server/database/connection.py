@@ -110,6 +110,7 @@ class Database:
             decoder=json.loads,
             schema="pg_catalog",
         )
+        await conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
         await register_vector(conn)
 
     async def close(self) -> None:
