@@ -128,7 +128,7 @@ function SpecBuilderPageContent() {
       } catch (error) {
         if (mounted) {
           logger.warn('Failed to load sessions on mount, continuing initialization', { error });
-          toast.error("Failed to load sessions. Check your connection and try refreshing the page.");
+          toast.error("Failed to load sessions. If the issue persists, check that the Amelia server is running.");
         }
         // Continue initialization even if sessions fail to load
       }
