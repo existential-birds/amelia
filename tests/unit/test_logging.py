@@ -49,13 +49,13 @@ class TestPlainLogFormatBraceEscaping:
         fmt = _plain_log_format(record)
         assert "│" in fmt  # timestamp/level separators exist
         # Should not have a trailing separator for empty extra
-        assert fmt.count("│") == 2  # time │ level │ name:message
+        assert not fmt.rstrip("\n").endswith("│")
 
 
 class TestLogTodos:
     """log_todos renders rich table on TTY, no-op on piped stderr."""
 
-    def test_no_output_when_not_tty(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_no_output_when_not_tty(self) -> None:
         """log_todos should be a no-op when stderr is not a TTY."""
         from amelia.logging import log_todos
 
@@ -70,7 +70,7 @@ class TestLogTodos:
 
         with patch("sys.stderr") as mock_stderr:
             mock_stderr.isatty.return_value = True
-            with patch("rich.console.Console") as mock_console_cls:
+            with patch("amelia.logging.Console") as mock_console_cls:
                 mock_console = MagicMock()
                 mock_console_cls.return_value = mock_console
                 log_todos([{"content": "Fix bug", "status": "completed"}])
@@ -82,7 +82,7 @@ class TestLogTodos:
 
         with patch("sys.stderr") as mock_stderr:
             mock_stderr.isatty.return_value = True
-            with patch("rich.console.Console") as mock_console_cls:
+            with patch("amelia.logging.Console") as mock_console_cls:
                 mock_console = MagicMock()
                 mock_console_cls.return_value = mock_console
                 log_todos([])

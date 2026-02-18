@@ -9,6 +9,7 @@ import sys
 from typing import TYPE_CHECKING
 
 from loguru import logger
+from rich.console import Console
 
 
 if TYPE_CHECKING:
@@ -340,7 +341,6 @@ def log_todos(todos: list[dict[str, object]]) -> None:
     if not sys.stderr.isatty():
         return
 
-    from rich.console import Console  # noqa: PLC0415
     from rich.table import Table  # noqa: PLC0415
 
     console = Console(stderr=True)
