@@ -886,7 +886,7 @@ class OrchestratorService:
         # Validate checkpoint exists (read-only, safe outside lock)
         graph = self._create_server_graph(self._checkpointer)
         config: RunnableConfig = {
-            "configurable": {"thread_id": workflow_id},
+            "configurable": {"thread_id": str(workflow_id)},
         }
         try:
             checkpoint_state = await graph.aget_state(config)
@@ -1112,7 +1112,7 @@ class OrchestratorService:
         config: RunnableConfig = {
             "recursion_limit": 100,
             "configurable": {
-                "thread_id": workflow_id,
+                "thread_id": str(workflow_id),
                 "execution_mode": "server",
                 "event_bus": self._event_bus,
                 "profile": profile,
@@ -1338,7 +1338,7 @@ class OrchestratorService:
         config: RunnableConfig = {
             "recursion_limit": 100,
             "configurable": {
-                "thread_id": workflow_id,
+                "thread_id": str(workflow_id),
                 "execution_mode": "server",
                 "event_bus": self._event_bus,
                 "profile": profile,
@@ -1530,7 +1530,7 @@ class OrchestratorService:
         config: RunnableConfig = {
             "recursion_limit": 100,
             "configurable": {
-                "thread_id": workflow_id,
+                "thread_id": str(workflow_id),
                 "execution_mode": "server",
                 "event_bus": self._event_bus,
                 "profile": profile,
@@ -1703,7 +1703,7 @@ class OrchestratorService:
         config: RunnableConfig = {
             "recursion_limit": 100,
             "configurable": {
-                "thread_id": workflow_id,
+                "thread_id": str(workflow_id),
                 "execution_mode": "server",
                 "profile": profile,
                 "repository": self._repository,
@@ -2295,7 +2295,7 @@ class OrchestratorService:
         config: RunnableConfig = {
             "recursion_limit": 100,
             "configurable": {
-                "thread_id": workflow_id,
+                "thread_id": str(workflow_id),
                 "execution_mode": "server",
                 "event_bus": self._event_bus,
                 "profile": profile,
