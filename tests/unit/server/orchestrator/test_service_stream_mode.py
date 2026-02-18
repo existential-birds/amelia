@@ -2,6 +2,7 @@
 """Tests for LangGraph combined stream mode handling."""
 
 from unittest.mock import AsyncMock, MagicMock
+from uuid import uuid4
 
 import pytest
 
@@ -50,7 +51,7 @@ class TestStreamModeTaskEvents:
         }
 
         # Call the handler
-        await service._handle_tasks_event("workflow-123", task_event)
+        await service._handle_tasks_event(uuid4(), task_event)
 
         # Verify STAGE_STARTED was emitted
         mock_event_bus.emit.assert_called()
@@ -81,7 +82,7 @@ class TestStreamModeTaskEvents:
         }
 
         # Call the handler
-        await service._handle_tasks_event("workflow-123", task_result)
+        await service._handle_tasks_event(uuid4(), task_result)
 
         # Verify no event was emitted
         mock_event_bus.emit.assert_not_called()
@@ -107,7 +108,7 @@ class TestStreamModeTaskEvents:
 
         # Process each chunk
         for chunk in chunks:
-            await service._handle_combined_stream_chunk("workflow-123", chunk)
+            await service._handle_combined_stream_chunk(uuid4(), chunk)
 
         # Verify both handlers were called: tasks mode emits STAGE_STARTED,
         # updates mode emits STAGE_COMPLETED
@@ -181,7 +182,7 @@ class TestTaskStartedEvents:
 
         # Create a real Pydantic state object (what LangGraph actually passes)
         input_state = ImplementationState(
-            workflow_id="test-workflow",
+            workflow_id=uuid4(),
             profile_id="test-profile",
             created_at=datetime.now(UTC),
             status="running",
@@ -197,7 +198,7 @@ class TestTaskStartedEvents:
             "triggers": ["approve_plan_node"],
         }
 
-        await service._handle_tasks_event("workflow-123", task_event)
+        await service._handle_tasks_event(uuid4(), task_event)
 
         # Verify TASK_STARTED was emitted (in addition to STAGE_STARTED)
         assert mock_event_bus.emit.call_count == 2

@@ -26,6 +26,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import uuid4
 
 import pytest
 from fastapi import status
@@ -259,7 +260,7 @@ class TestStartPendingWorkflow:
             # Create pending workflow
             await create_pending_workflow(
                 test_repository,
-                workflow_id="wf-pending-start",
+                workflow_id=uuid4(),
                 issue_id="TEST-START",
                 worktree_path=resolved_path,
             )
@@ -302,13 +303,13 @@ class TestStartPendingWorkflow:
         """Starting a workflow that's not pending returns 409."""
         # Create workflow in in_progress state
         execution_state = ImplementationState(
-            workflow_id="wf-running",
+            workflow_id=uuid4(),
             profile_id="test",
             created_at=datetime.now(UTC),
             status="pending",
         )
         workflow = ServerExecutionState(
-            id="wf-running",
+            id=uuid4(),
             issue_id="TEST-RUNNING",
             worktree_path="/tmp/running",
             workflow_status="in_progress",
@@ -342,13 +343,13 @@ class TestBatchStartWorkflows:
 
             await create_pending_workflow(
                 test_repository,
-                workflow_id="wf-batch-1",
+                workflow_id=uuid4(),
                 issue_id="TEST-BATCH-1",
                 worktree_path=path1,
             )
             await create_pending_workflow(
                 test_repository,
-                workflow_id="wf-batch-2",
+                workflow_id=uuid4(),
                 issue_id="TEST-BATCH-2",
                 worktree_path=path2,
             )
@@ -399,19 +400,19 @@ class TestBatchStartWorkflows:
 
             await create_pending_workflow(
                 test_repository,
-                workflow_id="wf-selected-1",
+                workflow_id=uuid4(),
                 issue_id="TEST-SEL-1",
                 worktree_path=path1,
             )
             await create_pending_workflow(
                 test_repository,
-                workflow_id="wf-selected-2",
+                workflow_id=uuid4(),
                 issue_id="TEST-SEL-2",
                 worktree_path=path2,
             )
             await create_pending_workflow(
                 test_repository,
-                workflow_id="wf-not-selected",
+                workflow_id=uuid4(),
                 issue_id="TEST-NOT-SEL",
                 worktree_path=path3,
             )

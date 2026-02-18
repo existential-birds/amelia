@@ -2,6 +2,7 @@
 """Tests for start_pending_workflow orchestrator method."""
 
 from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import uuid4
 
 import pytest
 
@@ -42,7 +43,7 @@ def mock_repository() -> MagicMock:
 def pending_workflow() -> ServerExecutionState:
     """Create a pending workflow state."""
     return ServerExecutionState(
-        id="wf-pending123",
+        id=uuid4(),
         issue_id="ISSUE-123",
         worktree_path="/path/to/repo",
         workflow_status="pending",
@@ -107,7 +108,7 @@ class TestStartPendingWorkflow:
     ) -> None:
         """Raise error when workflow not in pending state."""
         in_progress = ServerExecutionState(
-            id="wf-running",
+            id=uuid4(),
             issue_id="ISSUE-123",
             worktree_path="/path/to/repo",
             workflow_status="in_progress",
@@ -129,7 +130,7 @@ class TestStartPendingWorkflow:
 
         # Another workflow is active on same worktree
         active_workflow = ServerExecutionState(
-            id="wf-active",
+            id=uuid4(),
             issue_id="ISSUE-999",
             worktree_path="/path/to/repo",
             workflow_status="in_progress",

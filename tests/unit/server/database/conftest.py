@@ -80,7 +80,7 @@ async def workflow(repository: WorkflowRepository) -> ServerExecutionState:
         ServerExecutionState: Created workflow.
     """
     wf = ServerExecutionState(
-        id=str(uuid4()),
+        id=uuid4(),
         issue_id="ISSUE-1",
         worktree_path="/tmp/test",
         workflow_status="pending",

@@ -3,6 +3,7 @@
 from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import uuid4
 
 import pytest
 from fastapi import FastAPI
@@ -63,7 +64,7 @@ class TestOracleConsultRoute:
             problem="How to refactor auth?",
             advice="Use DI.",
             model="sonnet",
-            session_id="abc",
+            session_id=uuid4(),
             tokens={},
             files_consulted=[],
             outcome="success",

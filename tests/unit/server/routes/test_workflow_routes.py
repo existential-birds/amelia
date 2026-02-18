@@ -6,6 +6,7 @@ in isolation. Integration tests with real database are in tests/integration/.
 
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
+from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
@@ -59,19 +60,20 @@ def test_client(
 
 
 def make_workflow(
-    workflow_id: str,
+    workflow_id: str | None = None,
     issue_id: str = "TEST-001",
     status: str = "in_progress",
     worktree_path: str | None = None,
 ) -> ServerExecutionState:
     """Create a test workflow with sensible defaults."""
+    wf_uuid = uuid4()
     return ServerExecutionState(
-        id=workflow_id,
+        id=wf_uuid,
         issue_id=issue_id,
-        worktree_path=worktree_path or f"/tmp/{workflow_id}",
+        worktree_path=worktree_path or f"/tmp/{wf_uuid}",
         workflow_status=status,
         started_at=datetime.now(UTC),
-        execution_state=ImplementationState(workflow_id=workflow_id, created_at=datetime.now(UTC), status="running", profile_id="test"),
+        execution_state=ImplementationState(workflow_id=wf_uuid, created_at=datetime.now(UTC), status="running", profile_id="test"),
     )
 
 
@@ -113,13 +115,14 @@ class TestGetWorkflowTokenUsage:
         mock_repository: MagicMock,
     ) -> None:
         """GET /workflows/{id} should include token_usage when data exists."""
-        workflow = make_workflow("wf-with-tokens")
+        workflow = make_workflow()
+        wf_id = str(workflow.id)
         mock_repository.get.return_value = workflow
 
         # Create token summary
         token_usages = [
-            make_token_usage("wf-with-tokens", "architect", 500, 200, 0.005, 3000),
-            make_token_usage("wf-with-tokens", "developer", 2000, 1000, 0.025, 10000),
+            make_token_usage(wf_id, "architect", 500, 200, 0.005, 3000),
+            make_token_usage(wf_id, "developer", 2000, 1000, 0.025, 10000),
         ]
         token_summary = TokenSummary(
             total_input_tokens=2500,
@@ -132,7 +135,7 @@ class TestGetWorkflowTokenUsage:
         )
         mock_repository.get_token_summary.return_value = token_summary
 
-        response = test_client.get("/api/workflows/wf-with-tokens")
+        response = test_client.get(f"/api/workflows/{wf_id}")
 
         assert response.status_code == 200
         data = response.json()
@@ -154,8 +157,8 @@ class TestGetWorkflowTokenUsage:
         assert "breakdown" in token_usage
         assert len(token_usage["breakdown"]) == 2
 
-        # Verify repository was called correctly
-        mock_repository.get_token_summary.assert_awaited_once_with("wf-with-tokens")
+        # Verify repository was called correctly (route passes uuid.UUID from path param)
+        mock_repository.get_token_summary.assert_awaited_once_with(workflow.id)
 
     async def test_get_workflow_token_usage_is_none_when_no_data(
         self,
@@ -163,11 +166,12 @@ class TestGetWorkflowTokenUsage:
         mock_repository: MagicMock,
     ) -> None:
         """GET /workflows/{id} should return null token_usage when no data exists."""
-        workflow = make_workflow("wf-no-tokens")
+        workflow = make_workflow()
+        wf_id = str(workflow.id)
         mock_repository.get.return_value = workflow
         mock_repository.get_token_summary.return_value = None
 
-        response = test_client.get("/api/workflows/wf-no-tokens")
+        response = test_client.get(f"/api/workflows/{wf_id}")
 
         assert response.status_code == 200
         data = response.json()
@@ -184,7 +188,7 @@ class TestGetWorkflowTokenUsage:
         """GET /workflows/{id} should return 404 when workflow not found."""
         mock_repository.get.return_value = None
 
-        response = test_client.get("/api/workflows/wf-nonexistent")
+        response = test_client.get(f"/api/workflows/{uuid4()}")
 
         assert response.status_code == 404
         data = response.json()
@@ -201,16 +205,18 @@ class TestListWorkflowsTokenData:
     ) -> None:
         """GET /workflows should include token data in workflow summaries."""
         # Setup workflows
-        workflows = [
-            make_workflow("wf-001", "TEST-001", "completed"),
-            make_workflow("wf-002", "TEST-002", "completed"),
-        ]
+        wf1 = make_workflow(issue_id="TEST-001", status="completed")
+        wf2 = make_workflow(issue_id="TEST-002", status="completed")
+        workflows = [wf1, wf2]
         mock_repository.list_workflows.return_value = workflows
         mock_repository.count_workflows.return_value = 2
 
+        wf1_id = wf1.id
+        wf2_id = wf2.id
+
         # Setup batch token summaries
         mock_repository.get_token_summaries_batch.return_value = {
-            "wf-001": TokenSummary(
+            wf1_id: TokenSummary(
                 total_input_tokens=1000,
                 total_output_tokens=500,
                 total_cache_read_tokens=200,
@@ -219,7 +225,7 @@ class TestListWorkflowsTokenData:
                 total_turns=3,
                 breakdown=[],
             ),
-            "wf-002": TokenSummary(
+            wf2_id: TokenSummary(
                 total_input_tokens=2000,
                 total_output_tokens=800,
                 total_cache_read_tokens=300,
@@ -238,19 +244,19 @@ class TestListWorkflowsTokenData:
         # Verify workflows have token data
         assert len(data["workflows"]) == 2
 
-        wf1 = data["workflows"][0]
-        assert wf1["total_cost_usd"] == pytest.approx(0.015, rel=1e-6)
-        assert wf1["total_tokens"] == 1500  # input + output
-        assert wf1["total_duration_ms"] == 5000
+        wf1_data = data["workflows"][0]
+        assert wf1_data["total_cost_usd"] == pytest.approx(0.015, rel=1e-6)
+        assert wf1_data["total_tokens"] == 1500  # input + output
+        assert wf1_data["total_duration_ms"] == 5000
 
-        wf2 = data["workflows"][1]
-        assert wf2["total_cost_usd"] == pytest.approx(0.028, rel=1e-6)
-        assert wf2["total_tokens"] == 2800  # input + output
-        assert wf2["total_duration_ms"] == 8000
+        wf2_data = data["workflows"][1]
+        assert wf2_data["total_cost_usd"] == pytest.approx(0.028, rel=1e-6)
+        assert wf2_data["total_tokens"] == 2800  # input + output
+        assert wf2_data["total_duration_ms"] == 8000
 
         # Verify batch method was called with correct workflow IDs
         mock_repository.get_token_summaries_batch.assert_awaited_once_with(
-            ["wf-001", "wf-002"]
+            [wf1_id, wf2_id]
         )
 
     async def test_list_workflows_handles_missing_token_data(
@@ -259,16 +265,18 @@ class TestListWorkflowsTokenData:
         mock_repository: MagicMock,
     ) -> None:
         """GET /workflows should handle workflows without token data."""
-        workflows = [
-            make_workflow("wf-with-data", status="completed"),
-            make_workflow("wf-no-data", status="completed"),
-        ]
+        wf_with = make_workflow(status="completed")
+        wf_without = make_workflow(status="completed")
+        workflows = [wf_with, wf_without]
         mock_repository.list_workflows.return_value = workflows
         mock_repository.count_workflows.return_value = 2
 
+        wf_with_id = wf_with.id
+        wf_without_id = wf_without.id
+
         # Setup batch token summaries - one with data, one without
         mock_repository.get_token_summaries_batch.return_value = {
-            "wf-with-data": TokenSummary(
+            wf_with_id: TokenSummary(
                 total_input_tokens=1000,
                 total_output_tokens=500,
                 total_cache_read_tokens=200,
@@ -277,7 +285,7 @@ class TestListWorkflowsTokenData:
                 total_turns=3,
                 breakdown=[],
             ),
-            "wf-no-data": None,  # No token data for this workflow
+            wf_without_id: None,  # No token data for this workflow
         }
 
         response = test_client.get("/api/workflows")
@@ -286,13 +294,13 @@ class TestListWorkflowsTokenData:
         data = response.json()
 
         # Workflow with data should have values
-        wf_with_data = next(wf for wf in data["workflows"] if wf["id"] == "wf-with-data")
+        wf_with_data = next(wf for wf in data["workflows"] if wf["id"] == str(wf_with_id))
         assert wf_with_data["total_cost_usd"] == pytest.approx(0.015, rel=1e-6)
         assert wf_with_data["total_tokens"] == 1500
         assert wf_with_data["total_duration_ms"] == 5000
 
         # Workflow without data should have null values
-        wf_no_data = next(wf for wf in data["workflows"] if wf["id"] == "wf-no-data")
+        wf_no_data = next(wf for wf in data["workflows"] if wf["id"] == str(wf_without_id))
         assert wf_no_data["total_cost_usd"] is None
         assert wf_no_data["total_tokens"] is None
         assert wf_no_data["total_duration_ms"] is None
@@ -324,14 +332,14 @@ class TestListActiveWorkflowsTokenData:
         mock_repository: MagicMock,
     ) -> None:
         """GET /workflows/active should include token data in summaries."""
-        workflows = [
-            make_workflow("wf-active-001", status="in_progress"),
-        ]
+        active_wf = make_workflow(status="in_progress")
+        active_wf_id = active_wf.id
+        workflows = [active_wf]
         mock_repository.list_active.return_value = workflows
 
         # Setup batch token summaries
         mock_repository.get_token_summaries_batch.return_value = {
-            "wf-active-001": TokenSummary(
+            active_wf_id: TokenSummary(
                 total_input_tokens=1500,
                 total_output_tokens=700,
                 total_cache_read_tokens=300,
@@ -355,5 +363,5 @@ class TestListActiveWorkflowsTokenData:
 
         # Verify batch method was called with correct workflow IDs
         mock_repository.get_token_summaries_batch.assert_awaited_once_with(
-            ["wf-active-001"]
+            [active_wf_id]
         )

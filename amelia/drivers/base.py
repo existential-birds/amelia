@@ -1,3 +1,4 @@
+import uuid
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -85,7 +86,7 @@ class AgenticMessage(BaseModel):
 
     def to_workflow_event(
         self,
-        workflow_id: str,
+        workflow_id: uuid.UUID,
         agent: str,
         sequence: int = 0,
     ) -> "WorkflowEvent":
@@ -116,7 +117,7 @@ class AgenticMessage(BaseModel):
         message = self._build_message()
 
         return WorkflowEvent(
-            id=str(uuid4()),
+            id=uuid4(),
             workflow_id=workflow_id,
             sequence=sequence,
             timestamp=datetime.now(UTC),

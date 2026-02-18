@@ -1,7 +1,9 @@
 # tests/unit/server/orchestrator/test_start_batch.py
 """Tests for start_batch_workflows orchestrator method."""
 
+import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import uuid4
 
 import pytest
 
@@ -52,15 +54,17 @@ class TestStartBatchWorkflows:
         mock_repository: MagicMock,
     ) -> None:
         """Start all pending workflows when no filter specified."""
+        wf_id_1 = uuid4()
+        wf_id_2 = uuid4()
         pending = [
             ServerExecutionState(
-                id="wf-1",
+                id=wf_id_1,
                 issue_id="ISSUE-1",
                 worktree_path="/repo1",
                 workflow_status="pending",
             ),
             ServerExecutionState(
-                id="wf-2",
+                id=wf_id_2,
                 issue_id="ISSUE-2",
                 worktree_path="/repo2",
                 workflow_status="pending",
@@ -75,8 +79,8 @@ class TestStartBatchWorkflows:
             response = await orchestrator.start_batch_workflows(request)
 
         assert len(response.started) == 2
-        assert "wf-1" in response.started
-        assert "wf-2" in response.started
+        assert str(wf_id_1) in response.started
+        assert str(wf_id_2) in response.started
         assert response.errors == {}
         assert mock_start.call_count == 2
 
@@ -88,7 +92,10 @@ class TestStartBatchWorkflows:
     ) -> None:
         """Start only specified workflow IDs."""
 
-        def mock_get(workflow_id: str) -> ServerExecutionState:
+        wf_id_1 = uuid4()
+        wf_id_2 = uuid4()
+
+        def mock_get(workflow_id: uuid.UUID) -> ServerExecutionState:
             return ServerExecutionState(
                 id=workflow_id,
                 issue_id=f"ISSUE-{workflow_id}",
@@ -101,10 +108,10 @@ class TestStartBatchWorkflows:
         with patch.object(
             orchestrator, "start_pending_workflow", new_callable=AsyncMock
         ):
-            request = BatchStartRequest(workflow_ids=["wf-1", "wf-2"])
+            request = BatchStartRequest(workflow_ids=[str(wf_id_1), str(wf_id_2)])
             response = await orchestrator.start_batch_workflows(request)
 
-        assert set(response.started) == {"wf-1", "wf-2"}
+        assert set(response.started) == {str(wf_id_1), str(wf_id_2)}
         assert response.errors == {}
 
     @pytest.mark.asyncio
@@ -114,15 +121,16 @@ class TestStartBatchWorkflows:
         mock_repository: MagicMock,
     ) -> None:
         """Filter pending workflows by worktree path."""
+        wf_id_a = uuid4()
         pending = [
             ServerExecutionState(
-                id="wf-1",
+                id=wf_id_a,
                 issue_id="ISSUE-1",
                 worktree_path="/repo/a",
                 workflow_status="pending",
             ),
             ServerExecutionState(
-                id="wf-2",
+                id=uuid4(),
                 issue_id="ISSUE-2",
                 worktree_path="/repo/b",
                 workflow_status="pending",
@@ -136,7 +144,7 @@ class TestStartBatchWorkflows:
             request = BatchStartRequest(worktree_path="/repo/a")
             response = await orchestrator.start_batch_workflows(request)
 
-        assert response.started == ["wf-1"]
+        assert response.started == [str(wf_id_a)]
         assert response.errors == {}
 
     @pytest.mark.asyncio
@@ -146,15 +154,17 @@ class TestStartBatchWorkflows:
         mock_repository: MagicMock,
     ) -> None:
         """Handle partial failures gracefully."""
+        wf_id_1 = uuid4()
+        wf_id_2 = uuid4()
         pending = [
             ServerExecutionState(
-                id="wf-1",
+                id=wf_id_1,
                 issue_id="ISSUE-1",
                 worktree_path="/repo",
                 workflow_status="pending",
             ),
             ServerExecutionState(
-                id="wf-2",
+                id=wf_id_2,
                 issue_id="ISSUE-2",
                 worktree_path="/repo",
                 workflow_status="pending",
@@ -162,21 +172,20 @@ class TestStartBatchWorkflows:
         ]
         mock_repository.find_by_status.return_value = pending
 
-        # wf-1 succeeds, wf-2 fails due to worktree conflict
-        async def mock_start(wf_id: str) -> None:
-            if wf_id == "wf-2":
-                raise WorkflowConflictError("/repo", "wf-1")
+        # wf_id_1 succeeds, wf_id_2 fails due to worktree conflict
+        async def mock_start(wf_id: object) -> None:
+            if wf_id == wf_id_2:
+                raise WorkflowConflictError("/repo", wf_id_1)
 
         with patch.object(orchestrator, "start_pending_workflow", side_effect=mock_start):
             request = BatchStartRequest()
             response = await orchestrator.start_batch_workflows(request)
 
-        assert response.started == ["wf-1"]
-        assert "wf-2" in response.errors
-        # Check for stable substrings from WorkflowConflictError("/repo", "wf-1")
-        err = response.errors["wf-2"]
+        assert response.started == [str(wf_id_1)]
+        assert str(wf_id_2) in response.errors
+        # Check for stable substrings from WorkflowConflictError
+        err = response.errors[str(wf_id_2)]
         assert "/repo" in err
-        assert "wf-1" in err
 
     @pytest.mark.asyncio
     async def test_start_batch_empty_result(

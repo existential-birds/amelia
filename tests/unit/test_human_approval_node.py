@@ -2,6 +2,7 @@
 
 from datetime import UTC, datetime
 from unittest.mock import patch
+from uuid import uuid4
 
 import pytest
 
@@ -24,7 +25,7 @@ def base_state():
         },
     )
     return ImplementationState(
-        workflow_id="wf-test-123",
+        workflow_id=uuid4(),
         created_at=datetime.now(UTC),
         status="running",
         profile_id=profile.name,

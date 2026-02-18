@@ -1,5 +1,6 @@
 """Event models for workflow activity tracking."""
 
+import uuid
 from datetime import datetime
 from enum import StrEnum
 from typing import Any
@@ -270,12 +271,12 @@ class WorkflowEvent(BaseModel):
         parent_id: Parent event ID for causal chain (e.g., tool_call -> tool_result).
     """
 
-    id: str = Field(..., description="Unique event identifier")
+    id: uuid.UUID = Field(..., description="Unique event identifier")
     domain: EventDomain = Field(
         default=EventDomain.WORKFLOW,
         description="Event domain (workflow or brainstorm)",
     )
-    workflow_id: str = Field(..., description="Workflow this event belongs to")
+    workflow_id: uuid.UUID = Field(..., description="Workflow this event belongs to")
     sequence: int = Field(..., ge=0, description="Monotonic sequence number (0 for trace-only events)")
     timestamp: datetime = Field(..., description="When event occurred")
     agent: str = Field(..., description="Event source agent")
@@ -286,11 +287,11 @@ class WorkflowEvent(BaseModel):
         default=None,
         description="Optional structured payload",
     )
-    session_id: str | None = Field(
+    session_id: uuid.UUID | None = Field(
         default=None,
         description="Per-consultation session ID (independent from workflow_id)",
     )
-    correlation_id: str | None = Field(
+    correlation_id: uuid.UUID | None = Field(
         default=None,
         description="Links related events for tracing",
     )
@@ -312,11 +313,11 @@ class WorkflowEvent(BaseModel):
         description="LLM model name for trace events",
     )
     # Distributed tracing fields (OTel-compatible)
-    trace_id: str | None = Field(
+    trace_id: uuid.UUID | None = Field(
         default=None,
         description="Distributed trace ID (flows through all events in a workflow execution)",
     )
-    parent_id: str | None = Field(
+    parent_id: uuid.UUID | None = Field(
         default=None,
         description="Parent event ID for causal chain (e.g., tool_call -> tool_result)",
     )

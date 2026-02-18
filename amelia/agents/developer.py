@@ -3,6 +3,7 @@
 This module provides the Developer agent that executes code changes using
 autonomous tool-calling LLM execution rather than structured step-by-step plans.
 """
+import uuid
 from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING
 
@@ -62,7 +63,7 @@ class Developer:
         self,
         state: "ImplementationState",
         profile: Profile,
-        workflow_id: str = "developer",
+        workflow_id: uuid.UUID,
     ) -> AsyncIterator[tuple["ImplementationState", WorkflowEvent]]:
         """Execute development task agentically.
 

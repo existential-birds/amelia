@@ -1,5 +1,12 @@
 # amelia/server/models/websocket.py
-"""WebSocket protocol message models."""
+"""WebSocket protocol message models.
+
+Note on UUID fields:
+    UUID fields (like workflow_id) are sent as strings in the WebSocket JSON protocol
+    and automatically converted to uuid.UUID by Pydantic validation. This allows the
+    protocol to remain string-based while maintaining type safety in Python code.
+"""
+import uuid
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -14,14 +21,14 @@ class SubscribeMessage(BaseModel):
     """Subscribe to specific workflow events."""
 
     type: Literal["subscribe"] = "subscribe"
-    workflow_id: str = Field(..., description="Workflow to subscribe to")
+    workflow_id: uuid.UUID = Field(..., description="Workflow to subscribe to")
 
 
 class UnsubscribeMessage(BaseModel):
     """Unsubscribe from specific workflow events."""
 
     type: Literal["unsubscribe"] = "unsubscribe"
-    workflow_id: str = Field(..., description="Workflow to unsubscribe from")
+    workflow_id: uuid.UUID = Field(..., description="Workflow to unsubscribe from")
 
 
 class SubscribeAllMessage(BaseModel):

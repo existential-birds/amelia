@@ -3,6 +3,7 @@
 from datetime import UTC, date, datetime
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import uuid4
 
 import pytest
 from langchain_core.runnables.config import RunnableConfig
@@ -70,7 +71,7 @@ def mock_issue() -> Issue:
 def mock_state(mock_issue: Issue) -> ImplementationState:
     """Create a test execution state."""
     return ImplementationState(
-        workflow_id="test-workflow-123",
+        workflow_id=uuid4(),
         created_at=datetime.now(UTC),
         status="running",
         profile_id="test",
@@ -358,7 +359,7 @@ Do second thing.
         plan_path.write_text(plan_content)
 
         state = ImplementationState(
-            workflow_id="test-workflow-123",
+            workflow_id=uuid4(),
             created_at=datetime.now(UTC),
             status="running",
             profile_id="test",
@@ -434,7 +435,7 @@ Do implementation.
         plan_path.write_text(plan_content)
 
         state = ImplementationState(
-            workflow_id="test-workflow-456",
+            workflow_id=uuid4(),
             created_at=datetime.now(UTC),
             status="running",
             profile_id="test",

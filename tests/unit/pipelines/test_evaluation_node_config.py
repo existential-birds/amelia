@@ -7,6 +7,7 @@ see: tests/integration/test_evaluation_node.py
 
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import uuid4
 
 import pytest
 
@@ -31,7 +32,7 @@ def profile_with_agents() -> Profile:
 @pytest.fixture
 def mock_state() -> ImplementationState:
     return ImplementationState(
-        workflow_id="wf-1",
+        workflow_id=uuid4(),
         profile_id="test",
         created_at=datetime.now(UTC),
         status="running",
@@ -45,7 +46,7 @@ async def test_call_evaluation_node_uses_agent_config(profile_with_agents, mock_
     config = {
         "configurable": {
             "profile": profile_with_agents,
-            "thread_id": "wf-1",
+            "thread_id": str(uuid4()),
         }
     }
 

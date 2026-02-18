@@ -15,6 +15,7 @@ from collections.abc import Generator
 from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import uuid4
 
 import pytest
 from typer.testing import CliRunner
@@ -219,7 +220,7 @@ class TestStartCommand:
     ) -> None:
         """amelia start should create workflow via API."""
         mock_response = CreateWorkflowResponse(
-            id="wf-123",
+            id=str(uuid4()),
             status="running",
             message="Workflow created successfully",
         )
@@ -267,7 +268,7 @@ class TestApproveCommand:
         mock_workflows = WorkflowListResponse(
             workflows=[
                 WorkflowSummary(
-                    id="wf-789",
+                    id=str(uuid4()),
                     issue_id="TEST-789",
                     status="awaiting_approval",
                     worktree_path="/tmp/test-worktree",
@@ -325,7 +326,7 @@ class TestRejectCommand:
         mock_workflows = WorkflowListResponse(
             workflows=[
                 WorkflowSummary(
-                    id="wf-reject",
+                    id=str(uuid4()),
                     issue_id="TEST-REJECT",
                     status="awaiting_approval",
                     worktree_path="/tmp/test-worktree",
@@ -364,7 +365,7 @@ class TestStatusCommand:
         mock_workflows = WorkflowListResponse(
             workflows=[
                 WorkflowSummary(
-                    id="wf-status",
+                    id=str(uuid4()),
                     issue_id="TEST-STATUS",
                     status="running",
                     worktree_path="/tmp/test-worktree",
@@ -392,14 +393,14 @@ class TestStatusCommand:
         mock_workflows = WorkflowListResponse(
             workflows=[
                 WorkflowSummary(
-                    id="wf-1",
+                    id=str(uuid4()),
                     issue_id="TEST-1",
                     status="running",
                     worktree_path="/tmp/worktree-1",
                     started_at=datetime.now(UTC),
                 ),
                 WorkflowSummary(
-                    id="wf-2",
+                    id=str(uuid4()),
                     issue_id="TEST-2",
                     status="awaiting_approval",
                     worktree_path="/tmp/worktree-2",
@@ -456,7 +457,7 @@ class TestCancelCommand:
         mock_workflows = WorkflowListResponse(
             workflows=[
                 WorkflowSummary(
-                    id="wf-cancel",
+                    id=str(uuid4()),
                     issue_id="TEST-CANCEL",
                     status="running",
                     worktree_path="/tmp/test-worktree",
@@ -506,7 +507,7 @@ class TestCancelCommand:
         mock_workflows = WorkflowListResponse(
             workflows=[
                 WorkflowSummary(
-                    id="wf-confirm",
+                    id=str(workflow_uuid := uuid4()),
                     issue_id="TEST-CONFIRM",
                     status="running",
                     worktree_path="/tmp/test-worktree",
@@ -531,7 +532,7 @@ class TestCancelCommand:
         assert result.exit_code == 0
         assert "cancelled" in result.stdout.lower() or "wf-confirm" in result.stdout
         # Verify cancel_workflow was called after confirmation
-        mock_client.cancel_workflow.assert_called_once_with(workflow_id="wf-confirm")
+        mock_client.cancel_workflow.assert_called_once_with(workflow_id=workflow_uuid)
 
     def test_cancel_command_aborts_on_decline(
         self, tmp_path: Path, mock_worktree_context: MagicMock
@@ -540,7 +541,7 @@ class TestCancelCommand:
         mock_workflows = WorkflowListResponse(
             workflows=[
                 WorkflowSummary(
-                    id="wf-decline",
+                    id=str(uuid4()),
                     issue_id="TEST-DECLINE",
                     status="running",
                     worktree_path="/tmp/test-worktree",

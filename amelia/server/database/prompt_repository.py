@@ -112,7 +112,7 @@ class PromptRepository:
             for row in rows
         ]
 
-    async def get_version(self, version_id: str) -> PromptVersion | None:
+    async def get_version(self, version_id: uuid.UUID) -> PromptVersion | None:
         """Get a specific version by ID.
 
         Args:
@@ -159,7 +159,7 @@ class PromptRepository:
         next_version = (row["max_version"] or 0) + 1 if row else 1
 
         # Create version
-        version_id = str(uuid.uuid4())
+        version_id = uuid.uuid4()
         now = datetime.now(UTC)
         await self._db.execute(
             """INSERT INTO prompt_versions (id, prompt_id, version_number, content, created_at, change_note)
@@ -182,7 +182,7 @@ class PromptRepository:
             change_note=change_note,
         )
 
-    async def set_active_version(self, prompt_id: str, version_id: str) -> None:
+    async def set_active_version(self, prompt_id: str, version_id: uuid.UUID) -> None:
         """Set the active version for a prompt.
 
         Args:
@@ -209,9 +209,9 @@ class PromptRepository:
 
     async def record_workflow_prompt(
         self,
-        workflow_id: str,
+        workflow_id: uuid.UUID,
         prompt_id: str,
-        version_id: str,
+        version_id: uuid.UUID,
     ) -> None:
         """Record which prompt version a workflow used.
 
@@ -227,7 +227,7 @@ class PromptRepository:
             workflow_id, prompt_id, version_id,
         )
 
-    async def get_workflow_prompts(self, workflow_id: str) -> list[WorkflowPromptVersion]:
+    async def get_workflow_prompts(self, workflow_id: uuid.UUID) -> list[WorkflowPromptVersion]:
         """Get all prompt versions used by a workflow.
 
         Args:
@@ -242,7 +242,7 @@ class PromptRepository:
         )
         return [
             WorkflowPromptVersion(
-                workflow_id=str(row["workflow_id"]),
+                workflow_id=row["workflow_id"],
                 prompt_id=row["prompt_id"],
                 version_id=row["version_id"],
             )

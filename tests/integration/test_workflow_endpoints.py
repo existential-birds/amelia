@@ -23,6 +23,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import uuid4
 
 import pytest
 from fastapi import status
@@ -165,7 +166,7 @@ class TestApproveWorkflowEndpoint:
         # Create workflow in "blocked" state (awaiting approval)
         await create_test_workflow(
             test_repository,
-            workflow_id="wf-approve-ok",
+            workflow_id=uuid4(),
             workflow_status="blocked",
         )
 
@@ -210,7 +211,7 @@ class TestApproveWorkflowEndpoint:
         # Create workflow in "in_progress" state (not awaiting approval)
         await create_test_workflow(
             test_repository,
-            workflow_id="wf-running",
+            workflow_id=uuid4(),
             workflow_status="in_progress",
         )
 
@@ -241,7 +242,7 @@ class TestRejectWorkflowEndpoint:
         # Create workflow in "blocked" state
         await create_test_workflow(
             test_repository,
-            workflow_id="wf-reject-ok",
+            workflow_id=uuid4(),
             workflow_status="blocked",
         )
 
@@ -298,7 +299,7 @@ class TestRejectWorkflowEndpoint:
         # Create workflow in "completed" state
         await create_test_workflow(
             test_repository,
-            workflow_id="wf-completed",
+            workflow_id=uuid4(),
             workflow_status="completed",
         )
 
@@ -319,7 +320,7 @@ class TestRejectWorkflowEndpoint:
         """Rejection without feedback returns 422 validation error."""
         await create_test_workflow(
             test_repository,
-            workflow_id="wf-needs-feedback",
+            workflow_id=uuid4(),
             workflow_status="blocked",
         )
 
@@ -347,7 +348,7 @@ class TestCancelWorkflowEndpoint:
         # Create workflow in "in_progress" state (cancellable)
         await create_test_workflow(
             test_repository,
-            workflow_id="wf-cancel-ok",
+            workflow_id=uuid4(),
             workflow_status="in_progress",
         )
 

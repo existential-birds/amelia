@@ -3,6 +3,7 @@
 
 Provides endpoints for listing, viewing, and editing agent prompts.
 """
+import uuid
 from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -56,7 +57,7 @@ class PromptSummary(BaseModel):
     agent: str
     name: str
     description: str | None
-    current_version_id: str | None
+    current_version_id: uuid.UUID | None
     current_version_number: int | None
 
 
@@ -80,7 +81,7 @@ class VersionSummary(BaseModel):
         change_note: Optional note describing the change.
     """
 
-    id: str
+    id: uuid.UUID
     version_number: int
     created_at: str
     change_note: str | None
@@ -102,7 +103,7 @@ class PromptDetailResponse(BaseModel):
     agent: str
     name: str
     description: str | None
-    current_version_id: str | None
+    current_version_id: uuid.UUID | None
     versions: list[VersionSummary]
 
 
@@ -312,7 +313,7 @@ async def get_versions(
 @router.get("/{prompt_id}/versions/{version_id}", response_model=VersionDetailResponse)
 async def get_version(
     prompt_id: str,
-    version_id: str,
+    version_id: uuid.UUID,
     repository: "PromptRepository" = Depends(get_prompt_repository),
 ) -> VersionDetailResponse:
     """Get a specific version with content.
@@ -333,7 +334,7 @@ async def get_version(
         raise HTTPException(status_code=404, detail=f"Version not found: {version_id}")
 
     return VersionDetailResponse(
-        id=version.id,
+        id=str(version.id),
         prompt_id=version.prompt_id,
         version_number=version.version_number,
         content=version.content,
@@ -379,7 +380,7 @@ async def create_version(
         raise HTTPException(status_code=400, detail=str(e)) from e
 
     return VersionDetailResponse(
-        id=version.id,
+        id=str(version.id),
         prompt_id=version.prompt_id,
         version_number=version.version_number,
         content=version.content,

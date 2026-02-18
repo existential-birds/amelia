@@ -3,6 +3,7 @@ from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import uuid4
 
 import pytest
 
@@ -54,7 +55,7 @@ class TestArchitectPlanAsyncGenerator:
         issue = mock_issue_factory(title="Add feature", description="Add feature X")
         profile = mock_profile_factory()
         state = ImplementationState(
-            workflow_id="test-workflow",
+            workflow_id=uuid4(),
             created_at=datetime.now(UTC),
             status="running",
             profile_id="test",
@@ -83,7 +84,7 @@ class TestArchitectPlanAsyncGenerator:
         with patch("amelia.agents.architect.get_driver", return_value=mock_agentic_driver):
             architect = Architect(config)
 
-            result = architect.plan(state, profile, workflow_id="wf-1")
+            result = architect.plan(state, profile, workflow_id=uuid4())
 
             # Should be an async iterator, not a coroutine
             assert hasattr(result, "__aiter__")
@@ -122,7 +123,7 @@ class TestArchitectPlanAsyncGenerator:
             architect = Architect(config)
 
             results = []
-            async for new_state, event in architect.plan(state, profile, workflow_id="wf-1"):
+            async for new_state, event in architect.plan(state, profile, workflow_id=uuid4()):
                 results.append((new_state, event))
 
             assert [event.event_type for _, event in results] == [
@@ -151,7 +152,7 @@ class TestArchitectCwdPassing:
         expected_cwd = str(tmp_path)
         profile = mock_profile_factory(working_dir=expected_cwd)
         state = ImplementationState(
-            workflow_id="test-workflow",
+            workflow_id=uuid4(),
             created_at=datetime.now(UTC),
             status="running",
             profile_id="test",
@@ -175,7 +176,7 @@ class TestArchitectCwdPassing:
         with patch("amelia.agents.architect.get_driver", return_value=mock_driver):
             architect = Architect(config)
 
-            async for _ in architect.plan(state, profile, workflow_id="wf-1"):
+            async for _ in architect.plan(state, profile, workflow_id=uuid4()):
                 pass
 
         assert captured_cwd == expected_cwd, (
@@ -198,7 +199,7 @@ class TestArchitectToolCallAccumulation:
         issue = mock_issue_factory()
         profile = mock_profile_factory()
         state = ImplementationState(
-            workflow_id="test-workflow",
+            workflow_id=uuid4(),
             created_at=datetime.now(UTC),
             status="running",
             profile_id="test",
@@ -236,7 +237,7 @@ class TestArchitectToolCallAccumulation:
             architect = Architect(config)
 
             final_state = None
-            async for new_state, _ in architect.plan(state, profile, workflow_id="wf-1"):
+            async for new_state, _ in architect.plan(state, profile, workflow_id=uuid4()):
                 final_state = new_state
 
         assert final_state is not None
@@ -262,7 +263,7 @@ class TestArchitectDesignDocumentInPrompt:
         profile = mock_profile_factory()
         design_content = "# Feature Design\n\nThis is the brainstorming output."
         state = ImplementationState(
-            workflow_id="test-workflow",
+            workflow_id=uuid4(),
             created_at=datetime.now(UTC),
             status="running",
             profile_id="test",
@@ -287,7 +288,7 @@ class TestArchitectDesignDocumentInPrompt:
         with patch("amelia.agents.architect.get_driver", return_value=mock_driver):
             architect = Architect(config)
 
-            async for _ in architect.plan(state, profile, workflow_id="wf-1"):
+            async for _ in architect.plan(state, profile, workflow_id=uuid4()):
                 pass
 
         assert captured_prompt is not None
@@ -304,7 +305,7 @@ class TestArchitectDesignDocumentInPrompt:
         issue = mock_issue_factory(title="Implement feature", description="Feature desc")
         profile = mock_profile_factory()
         state = ImplementationState(
-            workflow_id="test-workflow",
+            workflow_id=uuid4(),
             created_at=datetime.now(UTC),
             status="running",
             profile_id="test",
@@ -328,7 +329,7 @@ class TestArchitectDesignDocumentInPrompt:
         with patch("amelia.agents.architect.get_driver", return_value=mock_driver):
             architect = Architect(config)
 
-            async for _ in architect.plan(state, profile, workflow_id="wf-1"):
+            async for _ in architect.plan(state, profile, workflow_id=uuid4()):
                 pass
 
         assert captured_prompt is not None
@@ -348,7 +349,7 @@ class TestArchitectPlanNoDoubleCount:
         issue = mock_issue_factory()
         profile = mock_profile_factory()
         state = ImplementationState(
-            workflow_id="test-workflow",
+            workflow_id=uuid4(),
             created_at=datetime.now(UTC),
             status="running",
             profile_id="test",
@@ -386,7 +387,7 @@ class TestArchitectPlanNoDoubleCount:
             architect = Architect(config)
 
             final_state = None
-            async for new_state, _ in architect.plan(state, profile, workflow_id="wf-1"):
+            async for new_state, _ in architect.plan(state, profile, workflow_id=uuid4()):
                 final_state = new_state
 
         assert final_state is not None

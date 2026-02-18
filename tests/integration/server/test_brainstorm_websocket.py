@@ -529,8 +529,8 @@ class TestBrainstormWireFormat:
 
         # Create a brainstorm event
         event = WorkflowEvent(
-            id=str(uuid4()),
-            workflow_id="session-123",
+            id=uuid4(),
+            workflow_id=uuid4(),
             sequence=0,
             timestamp=datetime.now(UTC),
             agent="brainstormer",
@@ -568,8 +568,8 @@ class TestBrainstormWireFormat:
         await connection_manager.subscribe_all(mock_websocket)
 
         event = WorkflowEvent(
-            id=str(uuid4()),
-            workflow_id="wf-1",
+            id=uuid4(),
+            workflow_id=uuid4(),
             sequence=1,
             timestamp=datetime.now(UTC),
             agent="system",
@@ -597,8 +597,8 @@ class TestBrainstormWireFormat:
         await connection_manager.subscribe_all(mock_websocket)
 
         event = WorkflowEvent(
-            id=str(uuid4()),
-            workflow_id="session-123",
+            id=uuid4(),
+            workflow_id=uuid4(),
             sequence=0,
             timestamp=datetime.now(UTC),
             agent="brainstormer",

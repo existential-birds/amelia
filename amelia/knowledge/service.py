@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
@@ -33,7 +34,7 @@ class KnowledgeService:
 
     def queue_ingestion(
         self,
-        document_id: str,
+        document_id: uuid.UUID,
         file_path: Path,
         content_type: str,
     ) -> None:
@@ -63,7 +64,7 @@ class KnowledgeService:
 
     async def _ingest_with_events(
         self,
-        document_id: str,
+        document_id: uuid.UUID,
         file_path: Path,
         content_type: str,
     ) -> None:
@@ -78,7 +79,7 @@ class KnowledgeService:
             document_id=document_id,
             event_type=EventType.DOCUMENT_INGESTION_STARTED,
             message=f"Ingestion started for document {document_id}",
-            data={"document_id": document_id, "status": "processing"},
+            data={"document_id": str(document_id), "status": "processing"},
         )
 
         def progress_callback(
@@ -89,7 +90,7 @@ class KnowledgeService:
                 event_type=EventType.DOCUMENT_INGESTION_PROGRESS,
                 message=f"Ingestion progress: {stage} ({progress:.0%})",
                 data={
-                    "document_id": document_id,
+                    "document_id": str(document_id),
                     "stage": stage,
                     "progress": progress,
                     "chunks_processed": chunks_processed,
@@ -109,7 +110,7 @@ class KnowledgeService:
                 event_type=EventType.DOCUMENT_INGESTION_COMPLETED,
                 message=f"Ingestion completed for document {document_id}",
                 data={
-                    "document_id": document_id,
+                    "document_id": str(document_id),
                     "status": "ready",
                     "chunk_count": doc.chunk_count,
                     "token_count": doc.token_count,
@@ -121,7 +122,7 @@ class KnowledgeService:
                 event_type=EventType.DOCUMENT_INGESTION_FAILED,
                 message=f"Ingestion failed for document {document_id}: {exc.user_message}",
                 data={
-                    "document_id": document_id,
+                    "document_id": str(document_id),
                     "status": "failed",
                     "error": exc.user_message,
                 },
@@ -136,7 +137,7 @@ class KnowledgeService:
                 event_type=EventType.DOCUMENT_INGESTION_FAILED,
                 message=f"Ingestion failed for document {document_id}",
                 data={
-                    "document_id": document_id,
+                    "document_id": str(document_id),
                     "status": "failed",
                     "error": str(exc),
                 },
@@ -146,7 +147,7 @@ class KnowledgeService:
 
     def _emit_event(
         self,
-        document_id: str,
+        document_id: uuid.UUID,
         event_type: EventType,
         message: str,
         data: dict[str, object],
@@ -161,7 +162,7 @@ class KnowledgeService:
         """
         self._event_bus.emit(
             WorkflowEvent(
-                id=str(uuid4()),
+                id=uuid4(),
                 domain=EventDomain.KNOWLEDGE,
                 workflow_id=document_id,
                 sequence=0,

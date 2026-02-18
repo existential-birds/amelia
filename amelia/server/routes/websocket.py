@@ -49,7 +49,8 @@ async def websocket_endpoint(
             if repository:
                 try:
                     # Replay missed events from database (limit to prevent memory exhaustion)
-                    events = await repository.get_events_after(since, limit=1000)
+                    import uuid as _uuid  # noqa: PLC0415
+                    events = await repository.get_events_after(_uuid.UUID(since), limit=1000)
 
                     for event in events:
                         await websocket.send_json({

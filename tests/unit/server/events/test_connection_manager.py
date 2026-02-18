@@ -1,7 +1,9 @@
 # tests/unit/server/events/test_connection_manager.py
 """Tests for WebSocket connection manager."""
+import json
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock
+from uuid import uuid4
 
 import pytest
 from fastapi import WebSocketDisconnect
@@ -26,7 +28,7 @@ def mock_websocket():
     """Create mock WebSocket."""
     ws = AsyncMock()
     ws.accept = AsyncMock()
-    ws.send_json = AsyncMock()
+    ws.send_text = AsyncMock()
     ws.close = AsyncMock()
     return ws
 
@@ -61,9 +63,9 @@ class TestConnectionManager:
     @pytest.mark.parametrize(
         "subscription_workflow,event_workflow,should_send",
         [
-            (None, "wf-456", True),  # subscribed to all
-            ("wf-456", "wf-456", True),  # specific match
-            ("wf-999", "wf-456", False),  # no match
+            (None, uuid4(), True),  # subscribed to all
+            ("SAME", "SAME", True),  # specific match (sentinel replaced below)
+            (uuid4(), uuid4(), False),  # no match
         ],
         ids=["subscribe_all", "specific_match", "no_match"],
     )
@@ -71,12 +73,18 @@ class TestConnectionManager:
         self, manager, mock_websocket, subscription_workflow, event_workflow, should_send, event_factory
     ) -> None:
         """broadcast() respects subscription filters."""
+        # Handle the "same workflow" sentinel
+        if subscription_workflow == "SAME" and event_workflow == "SAME":
+            shared_wf_id = uuid4()
+            subscription_workflow = shared_wf_id
+            event_workflow = shared_wf_id
+
         await manager.connect(mock_websocket)
         if subscription_workflow:
             await manager.subscribe(mock_websocket, subscription_workflow)
 
         event = event_factory(
-            id="evt-123",
+            id=uuid4(),
             workflow_id=event_workflow,
             timestamp=datetime.now(UTC),
             message="Started",
@@ -85,18 +93,18 @@ class TestConnectionManager:
         await manager.broadcast(event)
 
         if should_send:
-            mock_websocket.send_json.assert_awaited_once()
+            mock_websocket.send_text.assert_awaited_once()
         else:
-            mock_websocket.send_json.assert_not_awaited()
+            mock_websocket.send_text.assert_not_awaited()
 
     async def test_broadcast_handles_disconnected_socket(self, manager, mock_websocket, event_factory) -> None:
         """broadcast() removes disconnected sockets gracefully."""
         await manager.connect(mock_websocket)
-        mock_websocket.send_json.side_effect = WebSocketDisconnect()
+        mock_websocket.send_text.side_effect = WebSocketDisconnect()
 
         event = event_factory(
-            id="evt-123",
-            workflow_id="wf-456",
+            id=uuid4(),
+            workflow_id=uuid4(),
             timestamp=datetime.now(UTC),
             message="Started",
         )
@@ -146,7 +154,7 @@ class TestConnectionManagerTraceEvents:
         # Create a second mock websocket for this test
         mock_ws2 = AsyncMock()
         mock_ws2.accept = AsyncMock()
-        mock_ws2.send_json = AsyncMock()
+        mock_ws2.send_text = AsyncMock()
 
         await manager.connect(mock_websocket)
         await manager.connect(mock_ws2)
@@ -156,8 +164,8 @@ class TestConnectionManagerTraceEvents:
         await manager.subscribe(mock_ws2, "wf-2")
 
         trace_event = WorkflowEvent(
-            id="evt-1",
-            workflow_id="wf-1",
+            id=uuid4(),
+            workflow_id=uuid4(),
             sequence=1,
             timestamp=datetime.now(UTC),
             agent="developer",
@@ -169,8 +177,8 @@ class TestConnectionManagerTraceEvents:
         await manager.broadcast(trace_event)
 
         # Both clients receive trace events (no workflow filtering)
-        assert mock_websocket.send_json.called
-        assert mock_ws2.send_json.called
+        assert mock_websocket.send_text.called
+        assert mock_ws2.send_text.called
 
 
 class TestBroadcastDomainRouting:
@@ -185,8 +193,8 @@ class TestBroadcastDomainRouting:
         await manager.subscribe_all(mock_websocket)
 
         event = WorkflowEvent(
-            id="evt-1",
-            workflow_id="wf-1",
+            id=uuid4(),
+            workflow_id=uuid4(),
             sequence=1,
             timestamp=datetime.now(UTC),
             agent="system",
@@ -197,11 +205,11 @@ class TestBroadcastDomainRouting:
 
         await manager.broadcast(event)
 
-        mock_websocket.send_json.assert_called_once()
-        payload = mock_websocket.send_json.call_args[0][0]
+        mock_websocket.send_text.assert_called_once()
+        payload = json.loads(mock_websocket.send_text.call_args[0][0])
         assert payload["type"] == "event"
         assert "payload" in payload
-        assert payload["payload"]["id"] == "evt-1"
+        assert payload["payload"]["id"] == str(event.id)
 
     @pytest.mark.asyncio
     async def test_broadcast_brainstorm_event_uses_brainstorm_wrapper(
@@ -211,25 +219,27 @@ class TestBroadcastDomainRouting:
         await manager.connect(mock_websocket)
         await manager.subscribe_all(mock_websocket)
 
+        session_wf_id = uuid4()
+        message_id = str(uuid4())
         event = WorkflowEvent(
-            id="evt-2",
-            workflow_id="session-1",
+            id=uuid4(),
+            workflow_id=session_wf_id,
             sequence=0,
             timestamp=datetime.now(UTC),
             agent="brainstormer",
             event_type=EventType.BRAINSTORM_TEXT,
             message="Streaming",
             domain=EventDomain.BRAINSTORM,
-            data={"session_id": "session-1", "message_id": "msg-1", "text": "Hello"},
+            data={"session_id": str(session_wf_id), "message_id": message_id, "text": "Hello"},
         )
 
         await manager.broadcast(event)
 
-        mock_websocket.send_json.assert_called_once()
-        payload = mock_websocket.send_json.call_args[0][0]
+        mock_websocket.send_text.assert_called_once()
+        payload = json.loads(mock_websocket.send_text.call_args[0][0])
         assert payload["type"] == "brainstorm"
         assert payload["event_type"] == "text"  # brainstorm_ prefix stripped
-        assert payload["session_id"] == "session-1"
-        assert payload["message_id"] == "msg-1"
+        assert payload["session_id"] == str(session_wf_id)
+        assert payload["message_id"] == message_id
         assert payload["data"]["text"] == "Hello"
         assert "timestamp" in payload

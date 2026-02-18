@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import uuid
 from datetime import datetime
 from pathlib import Path
 
@@ -300,7 +301,7 @@ async def start_batch(
 
 @router.get("/{workflow_id}", response_model=WorkflowDetailResponse)
 async def get_workflow(
-    workflow_id: str,
+    workflow_id: uuid.UUID,
     repository: WorkflowRepository = Depends(get_repository),
 ) -> WorkflowDetailResponse:
     """Get workflow by ID.
@@ -368,7 +369,7 @@ async def get_workflow(
 
 @router.post("/{workflow_id}/cancel", response_model=ActionResponse)
 async def cancel_workflow(
-    workflow_id: str,
+    workflow_id: uuid.UUID,
     orchestrator: OrchestratorService = Depends(get_orchestrator),
 ) -> ActionResponse:
     """Cancel an active workflow.
@@ -391,7 +392,7 @@ async def cancel_workflow(
 
 @router.post("/{workflow_id}/resume", response_model=ActionResponse)
 async def resume_workflow(
-    workflow_id: str,
+    workflow_id: uuid.UUID,
     orchestrator: OrchestratorService = Depends(get_orchestrator),
 ) -> ActionResponse:
     """Resume a failed workflow from its last checkpoint.
@@ -414,7 +415,7 @@ async def resume_workflow(
 
 @router.post("/{workflow_id}/approve", response_model=ActionResponse)
 async def approve_workflow(
-    workflow_id: str,
+    workflow_id: uuid.UUID,
     orchestrator: OrchestratorService = Depends(get_orchestrator),
 ) -> ActionResponse:
     """Approve a blocked workflow's plan.
@@ -437,7 +438,7 @@ async def approve_workflow(
 
 @router.post("/{workflow_id}/reject", response_model=ActionResponse)
 async def reject_workflow(
-    workflow_id: str,
+    workflow_id: uuid.UUID,
     request: RejectRequest,
     orchestrator: OrchestratorService = Depends(get_orchestrator),
 ) -> ActionResponse:
@@ -466,7 +467,7 @@ async def reject_workflow(
     response_model=ActionResponse,
 )
 async def start_workflow(
-    workflow_id: str,
+    workflow_id: uuid.UUID,
     orchestrator: OrchestratorService = Depends(get_orchestrator),
 ) -> ActionResponse:
     """Start a pending workflow.
@@ -498,7 +499,7 @@ async def start_workflow(
 
 @router.post("/{workflow_id}/plan", response_model=SetPlanResponse)
 async def set_workflow_plan(
-    workflow_id: str,
+    workflow_id: uuid.UUID,
     request: SetPlanRequest,
     orchestrator: OrchestratorService = Depends(get_orchestrator),
 ) -> SetPlanResponse:
@@ -529,7 +530,7 @@ async def set_workflow_plan(
 
 @router.post("/{workflow_id}/replan", response_model=ActionResponse)
 async def replan_workflow(
-    workflow_id: str,
+    workflow_id: uuid.UUID,
     orchestrator: OrchestratorService = Depends(get_orchestrator),
 ) -> ActionResponse:
     """Replan a blocked workflow by regenerating the Architect plan.
@@ -582,7 +583,7 @@ def configure_exception_handlers(app: FastAPI) -> None:
             code="WORKFLOW_CONFLICT",
             error=str(exc),
             details={
-                "workflow_id": exc.workflow_id,
+                "workflow_id": str(exc.workflow_id) if exc.workflow_id else None,
                 "worktree_path": exc.worktree_path,
             },
         )
@@ -632,12 +633,12 @@ def configure_exception_handlers(app: FastAPI) -> None:
         Returns:
             JSONResponse with 422 status code.
         """
-        logger.warning("Invalid state for workflow", workflow_id=exc.workflow_id, current_status=exc.current_status)
+        logger.warning("Invalid state for workflow", workflow_id=str(exc.workflow_id), current_status=exc.current_status)
         error = ErrorResponse(
             code="INVALID_STATE",
             error=str(exc),
             details={
-                "workflow_id": exc.workflow_id,
+                "workflow_id": str(exc.workflow_id),
                 "current_status": exc.current_status,
             },
         )
@@ -663,7 +664,7 @@ def configure_exception_handlers(app: FastAPI) -> None:
         error = ErrorResponse(
             code="NOT_FOUND",
             error=str(exc),
-            details={"workflow_id": exc.workflow_id},
+            details={"workflow_id": str(exc.workflow_id)},
         )
         return JSONResponse(
             status_code=404,

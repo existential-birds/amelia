@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from contextlib import suppress
 from typing import TYPE_CHECKING, Any
 
@@ -124,7 +125,8 @@ class ConnectionManager:
             False on disconnect/timeout errors.
         """
         try:
-            await asyncio.wait_for(ws.send_json(payload), timeout=timeout)
+            text = json.dumps(payload, default=str)
+            await asyncio.wait_for(ws.send_text(text), timeout=timeout)
             return (ws, True)
         except (WebSocketDisconnect, TimeoutError, ConnectionResetError, ConnectionError):
             return (ws, False)
@@ -176,7 +178,7 @@ class ConnectionManager:
             payload = {
                 "type": "brainstorm",
                 "event_type": event_type_str,
-                "session_id": event.workflow_id,  # Brainstorm events use workflow_id as session_id
+                "session_id": str(event.workflow_id),  # Brainstorm events use workflow_id as session_id
                 "message_id": event.data.get("message_id") if event.data else None,
                 "data": event.data or {},
                 "timestamp": event.timestamp.isoformat(),

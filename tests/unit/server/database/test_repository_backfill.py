@@ -18,7 +18,7 @@ class TestEventBackfill:
         self, repository, workflow, event_factory
     ) -> None:
         """event_exists() returns True when event exists."""
-        event_id = str(uuid4())
+        event_id = uuid4()
         event = event_factory(
             id=event_id,
             workflow_id=workflow.id,
@@ -33,14 +33,14 @@ class TestEventBackfill:
         self, repository, workflow
     ) -> None:
         """event_exists() returns False when event does not exist."""
-        assert await repository.event_exists(str(uuid4())) is False
+        assert await repository.event_exists(uuid4()) is False
 
     async def test_get_events_after_returns_newer_events(self, repository, workflow, event_factory) -> None:
         """get_events_after() returns events with sequence > since_event sequence."""
         # Create sequence of events
         event_ids = []
         for i in range(1, 6):
-            evt_id = str(uuid4())
+            evt_id = uuid4()
             event_ids.append(evt_id)
             event = event_factory(
                 id=evt_id,
@@ -64,14 +64,14 @@ class TestEventBackfill:
         """get_events_after() only returns events from same workflow."""
         # Create two workflows
         wf1 = ServerExecutionState(
-            id=str(uuid4()),
+            id=uuid4(),
             issue_id="ISSUE-1",
             worktree_path="/tmp/wf1",
             workflow_status="pending",
             started_at=datetime.now(UTC),
         )
         wf2 = ServerExecutionState(
-            id=str(uuid4()),
+            id=uuid4(),
             issue_id="ISSUE-2",
             worktree_path="/tmp/wf2",
             workflow_status="pending",
@@ -82,8 +82,8 @@ class TestEventBackfill:
         await repository.create(wf2)
 
         # Create events for both workflows
-        wf1_evt1_id = str(uuid4())
-        wf1_evt2_id = str(uuid4())
+        wf1_evt1_id = uuid4()
+        wf1_evt2_id = uuid4()
         await repository.save_event(
             event_factory(
                 id=wf1_evt1_id,
@@ -106,7 +106,7 @@ class TestEventBackfill:
         )
         await repository.save_event(
             event_factory(
-                id=str(uuid4()),
+                id=uuid4(),
                 workflow_id=wf2.id,
                 sequence=1,
                 timestamp=datetime.now(UTC),
@@ -125,4 +125,4 @@ class TestEventBackfill:
     async def test_get_events_after_raises_when_event_not_found(self, repository) -> None:
         """get_events_after() raises ValueError when event doesn't exist."""
         with pytest.raises(ValueError, match="Event .* not found"):
-            await repository.get_events_after(str(uuid4()))
+            await repository.get_events_after(uuid4())

@@ -1,5 +1,6 @@
 """Token usage tracking and cost calculation."""
 
+import uuid
 from datetime import datetime
 from uuid import uuid4
 
@@ -213,11 +214,11 @@ class TokenUsage(BaseModel):
         timestamp: When tokens were consumed.
     """
 
-    id: str = Field(
-        default_factory=lambda: str(uuid4()),
+    id: uuid.UUID = Field(
+        default_factory=uuid4,
         description="Unique identifier",
     )
-    workflow_id: str = Field(..., description="Workflow ID")
+    workflow_id: uuid.UUID = Field(..., description="Workflow ID")
     agent: str = Field(..., description="Agent that consumed tokens")
     model: str = Field(
         default="claude-sonnet-4-5-20251101",
