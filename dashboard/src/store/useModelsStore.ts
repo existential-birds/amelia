@@ -85,6 +85,7 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
         providers,
         isLoading: false,
         lastFetched: Date.now(),
+        // Safe to clear: if aborted before this line, we return early at line 93
         abortController: null,
       });
     } catch (err) {
@@ -93,7 +94,7 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
         return;
       }
 
-      logger.error('Failed to fetch models', err);
+      logger.error('Failed to fetch models', { url: MODELS_API_URL, timestamp: Date.now(), error: err });
       set({
         error: 'Failed to load models. Check your connection.',
         isLoading: false,
