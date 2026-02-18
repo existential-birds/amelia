@@ -112,6 +112,7 @@ def _plain_log_format(record: "Record") -> str:
     extra = record["extra"]
     if extra:
         extra_str = " ".join(f"{k}={v!r}" for k, v in extra.items())
+        extra_str = extra_str.replace("{", "{{").replace("}", "}}")
         fmt += f" │ {extra_str}"
 
     fmt += "\n"
