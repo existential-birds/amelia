@@ -629,6 +629,7 @@ class OrchestratorService:
         )
 
         # Handle external plan if provided
+        plan_cache: PlanCache | None = None
         if request.plan_file is not None or request.plan_content is not None:
             # Resolve target plan path
             plan_rel_path = resolve_plan_path(profile.plan_path_pattern, request.issue_id)
@@ -656,6 +657,14 @@ class OrchestratorService:
                 }
             )
 
+            # Persist plan data so _reconstruct_initial_state can restore external_plan=True
+            plan_cache = PlanCache(
+                goal=plan_result.goal,
+                plan_markdown=plan_result.plan_markdown,
+                plan_path=str(plan_result.plan_path),
+                total_tasks=plan_result.total_tasks,
+            )
+
         # Create ServerExecutionState in pending status (not started)
         # execution_state.issue is always set by _prepare_workflow_state
         assert execution_state.issue is not None
@@ -665,6 +674,7 @@ class OrchestratorService:
             worktree_path=resolved_path,
             profile_id=profile.name,
             issue_cache=execution_state.issue.model_dump(mode="json"),
+            plan_cache=plan_cache,
             workflow_status=WorkflowStatus.PENDING,
             # No started_at - workflow hasn't started
         )

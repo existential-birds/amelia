@@ -68,15 +68,25 @@ async def create_workflow(
     # Let orchestrator handle everything - it will raise appropriate exceptions
     # Choose method based on start/plan_now flags
     if request.start:
-        # Immediate execution (existing behavior)
-        workflow_id = await orchestrator.start_workflow(
-            issue_id=request.issue_id,
-            worktree_path=request.worktree_path,
-            profile=request.profile,
-            driver=request.driver,
-            task_title=request.task_title,
-            task_description=request.task_description,
-        )
+        if request.plan_file is not None or request.plan_content is not None:
+            # External plan + immediate start: queue (persists plan_cache) then start
+            workflow_id = await orchestrator.queue_workflow(request)
+            try:
+                await orchestrator.start_pending_workflow(workflow_id)
+            except (WorkflowConflictError, ConcurrencyLimitError, InvalidStateError):
+                # Cancel the queued workflow to prevent it being orphaned in the DB
+                await orchestrator.cancel_workflow(workflow_id)
+                raise
+        else:
+            # Immediate execution (existing behavior)
+            workflow_id = await orchestrator.start_workflow(
+                issue_id=request.issue_id,
+                worktree_path=request.worktree_path,
+                profile=request.profile,
+                driver=request.driver,
+                task_title=request.task_title,
+                task_description=request.task_description,
+            )
     elif request.plan_now:
         # Queue with planning (run Architect, then queue)
         workflow_id = await orchestrator.queue_and_plan_workflow(request)
