@@ -94,9 +94,7 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
         return;
       }
 
-      logger.error('Failed to fetch models', {
-        error: err instanceof Error ? err.message : String(err),
-        stack: err instanceof Error ? err.stack : undefined,
+      logger.error('Failed to fetch models', err, {
         url: MODELS_API_URL,
         timestamp: Date.now(),
       });
