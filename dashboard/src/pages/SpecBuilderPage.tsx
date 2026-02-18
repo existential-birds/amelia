@@ -128,7 +128,7 @@ function SpecBuilderPageContent() {
       } catch (error) {
         if (mounted) {
           logger.warn('Failed to load sessions on mount, continuing initialization', { error });
-          toast.error("Failed to load sessions");
+          toast.error("Failed to load sessions. Check your connection and try refreshing the page.");
         }
         // Continue initialization even if sessions fail to load
       }

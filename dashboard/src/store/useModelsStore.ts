@@ -43,6 +43,11 @@ interface ModelsState {
 
 /**
  * Zustand store for OpenRouter model data.
+ *
+ * Note: This store does not implement subscribe cleanup for pending requests/timeouts
+ * because Zustand stores persist for the app lifetime. Cleanup is handled within
+ * refreshModels() when a new request starts (lines 66-74) and in success/error paths.
+ * If the store is ever scoped to component lifetime, add cleanup via store.destroy().
  */
 export const useModelsStore = create<ModelsState>((set, get) => ({
   models: [],
@@ -86,7 +91,6 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
     try {
       const response = await fetch(MODELS_API_URL, { signal: abortController.signal });
       if (!response.ok) {
-        clearTimeout(timeoutId);
         throw new Error(`HTTP ${response.status}`);
       }
 
@@ -94,19 +98,16 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
       try {
         data = await response.json();
       } catch (parseError) {
-        clearTimeout(timeoutId);
         throw new Error(`Invalid JSON response from models API: ${parseError}`);
       }
 
       if (!data || !data.data || !Array.isArray(data.data)) {
-        clearTimeout(timeoutId);
         throw new Error('Invalid response shape from models API');
       }
 
       const models = flattenModelsData(data.data);
       const providers = [...new Set(models.map((m) => m.provider))];
 
-      clearTimeout(timeoutId);
       set({
         models,
         providers,
@@ -116,7 +117,6 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
         timeoutId: undefined,
       });
     } catch (err) {
-      clearTimeout(timeoutId);
       // Don't update state if the request was aborted (a newer request is in progress)
       if (err instanceof Error && err.name === 'AbortError') {
         const timedOut = abortController.signal.reason instanceof TimeoutError;
@@ -139,6 +139,8 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
         abortController: null,
         timeoutId: undefined,
       });
+    } finally {
+      clearTimeout(timeoutId);
     }
   },
 

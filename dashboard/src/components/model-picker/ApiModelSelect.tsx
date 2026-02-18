@@ -15,7 +15,7 @@ import { ProviderLogo } from './ProviderLogo';
 import type { ModelInfo } from './types';
 
 const BROWSE_SENTINEL = Symbol('browse');
-const BROWSE_SENTINEL_VALUE = BROWSE_SENTINEL.description!;
+const BROWSE_SENTINEL_VALUE = BROWSE_SENTINEL.description ?? '__browse__';
 
 interface ApiModelSelectProps {
   agentKey: string;
@@ -35,6 +35,11 @@ export function ApiModelSelect({ agentKey, value, onChange }: ApiModelSelectProp
   // Eagerly fetch models on mount (idempotent — fetchModels checks models.length and lastFetched, skips if already loaded)
   useEffect(() => {
     fetchModels();
+    // Cleanup: abort in-flight request if component unmounts
+    return () => {
+      const controller = useModelsStore.getState().abortController;
+      controller?.abort();
+    };
   }, [fetchModels]);
 
   // Get recent models that exist in the store

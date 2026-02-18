@@ -21,9 +21,11 @@ function getContextLength(model: OpenRouterModel): number | null {
   if (model.context_length && model.context_length > 0) {
     return model.context_length;
   }
+
   if (model.top_provider?.context_length && model.top_provider.context_length > 0) {
     return model.top_provider.context_length;
   }
+
   return null;
 }
 
