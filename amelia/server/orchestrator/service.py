@@ -9,6 +9,7 @@ from typing import Any, cast
 from uuid import uuid4
 
 import httpx
+import openai
 from httpx import TimeoutException
 from langchain_core.runnables.config import RunnableConfig
 from langgraph.checkpoint.base import BaseCheckpointSaver
@@ -67,6 +68,7 @@ TRANSIENT_EXCEPTIONS: tuple[type[Exception], ...] = (
     ConnectionError,
     ModelProviderError,
     httpx.TransportError,
+    openai.APIConnectionError,
 )
 
 

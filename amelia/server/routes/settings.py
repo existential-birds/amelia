@@ -1,10 +1,11 @@
 # amelia/server/routes/settings.py
 """API routes for server settings and profiles."""
+from pathlib import Path
 from typing import Any
 
 from asyncpg import UniqueViolationError
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from amelia.core.types import (
     REQUIRED_AGENTS,
@@ -95,6 +96,21 @@ class ProfileCreate(BaseModel):
     agents: dict[str, AgentConfigCreate]
     sandbox: SandboxConfig = Field(default_factory=SandboxConfig)
 
+    @field_validator("working_dir", mode="after")
+    @classmethod
+    def validate_working_dir_absolute(cls, v: str) -> str:
+        """Validate that working_dir is an absolute path.
+
+        Args:
+            v: Working directory path.
+
+        Returns:
+            The validated absolute path.
+        """
+        if not Path(v).is_absolute():
+            raise ValueError("working_dir must be an absolute path")
+        return v
+
     @model_validator(mode="after")
     def validate_required_agents(self) -> "ProfileCreate":
         """Validate that all required agents are present."""
@@ -116,6 +132,21 @@ class ProfileUpdate(BaseModel):
     plan_path_pattern: str | None = None
     agents: dict[str, AgentConfigCreate] | None = None
     sandbox: SandboxConfig | None = None
+
+    @field_validator("working_dir", mode="after")
+    @classmethod
+    def validate_working_dir_absolute(cls, v: str | None) -> str | None:
+        """Validate that working_dir is an absolute path when provided.
+
+        Args:
+            v: Working directory path or None.
+
+        Returns:
+            The validated absolute path or None.
+        """
+        if v is not None and not Path(v).is_absolute():
+            raise ValueError("working_dir must be an absolute path")
+        return v
 
     @model_validator(mode="after")
     def validate_required_agents(self) -> "ProfileUpdate":
