@@ -3,7 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ApiModelSelect } from '../ApiModelSelect';
 import { useModelsStore } from '@/store/useModelsStore';
 import { useRecentModels } from '@/hooks/useRecentModels';
-import { createMockModelsStore } from '@/test/mocks/modelsStore';
+import { makeMockModelsStore } from '@/test/mocks/modelsStore';
 
 // Mock the store
 vi.mock('@/store/useModelsStore');
@@ -30,7 +30,7 @@ describe('ApiModelSelect', () => {
 
     mockFetchModels = vi.fn();
     vi.mocked(useModelsStore).mockImplementation(
-      createMockModelsStore({ fetchModels: mockFetchModels })
+      makeMockModelsStore({ fetchModels: mockFetchModels })
     );
   });
 

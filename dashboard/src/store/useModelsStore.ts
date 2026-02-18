@@ -67,10 +67,8 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
     const abortController = new AbortController();
 
     // Set timeout to abort request after 30 seconds
-    let timedOut = false;
     const timeoutId = setTimeout(() => {
-      timedOut = true;
-      abortController.abort();
+      abortController.abort(new Error('timeout'));
     }, 30000);
 
     set({ isLoading: true, error: null, abortController, timeoutId });
@@ -109,6 +107,8 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
       clearTimeout(timeoutId);
       // Don't update state if the request was aborted (a newer request is in progress)
       if (err instanceof Error && err.name === 'AbortError') {
+        const timedOut = abortController.signal.reason instanceof Error &&
+                        abortController.signal.reason.message === 'timeout';
         set({
           error: timedOut ? 'Request timed out after 30 seconds. Check your connection.' : null,
           isLoading: false,
@@ -143,3 +143,16 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
     return filterModelsByRequirements(models, requirements);
   },
 }));
+
+// Cleanup on store destroy (e.g., when all components unmount)
+useModelsStore.subscribe((state) => {
+  // Cleanup function runs when store is destroyed
+  return () => {
+    if (state.abortController) {
+      state.abortController.abort();
+    }
+    if (state.timeoutId !== undefined) {
+      clearTimeout(state.timeoutId);
+    }
+  };
+});

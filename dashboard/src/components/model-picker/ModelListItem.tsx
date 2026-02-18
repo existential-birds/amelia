@@ -79,7 +79,10 @@ function CapabilityIcon({
 /**
  * Format cost for display (e.g., 3 -> "$3.00 / 1M").
  */
-function formatCost(cost: number): string {
+function formatCost(cost: number | null): string {
+  if (cost === null) {
+    return 'Unknown';
+  }
   return `$${cost.toFixed(2)} / 1M`;
 }
 

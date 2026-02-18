@@ -14,7 +14,7 @@ import { ModelPickerSheet } from './ModelPickerSheet';
 import { ProviderLogo } from './ProviderLogo';
 import type { ModelInfo } from './types';
 
-const BROWSE_SENTINEL = Symbol('browse').toString();
+const BROWSE_SENTINEL = '__browse__' as const;
 
 interface ApiModelSelectProps {
   agentKey: string;
@@ -32,9 +32,15 @@ export function ApiModelSelect({ agentKey, value, onChange }: ApiModelSelectProp
   const [sheetOpen, setSheetOpen] = useState(false);
 
   // Eagerly fetch models on mount (idempotent — fetchModels checks models.length and lastFetched, skips if already loaded)
-  // Note: Zustand store actions are stable references and handle their own state updates, safe to call without cleanup tracking
   useEffect(() => {
     fetchModels();
+    // Cleanup: abort fetch if component unmounts before completion
+    return () => {
+      const state = useModelsStore.getState();
+      if (state.abortController) {
+        state.abortController.abort();
+      }
+    };
   }, [fetchModels]);
 
   // Get recent models that exist in the store

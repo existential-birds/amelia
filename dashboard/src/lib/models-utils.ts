@@ -28,9 +28,9 @@ export function flattenModelsData(data: OpenRouterModel[]): ModelInfo[] {
 
     // Parse and validate cost values
     const inputParsed = parseFloat(model.pricing.prompt);
-    const inputCost = isNaN(inputParsed) ? 0 : inputParsed * 1_000_000; // Convert per-token to per-1M tokens
+    const inputCost = isNaN(inputParsed) ? null : inputParsed * 1_000_000; // Convert per-token to per-1M tokens
     const outputParsed = parseFloat(model.pricing.completion);
-    const outputCost = isNaN(outputParsed) ? 0 : outputParsed * 1_000_000; // Convert per-token to per-1M tokens
+    const outputCost = isNaN(outputParsed) ? null : outputParsed * 1_000_000; // Convert per-token to per-1M tokens
 
     models.push({
       id: model.id,
@@ -46,7 +46,9 @@ export function flattenModelsData(data: OpenRouterModel[]): ModelInfo[] {
         output: outputCost,
       },
       limit: {
-        context: model.context_length ?? model.top_provider?.context_length ?? null,
+        context: (model.context_length && model.context_length > 0) ? model.context_length
+          : (model.top_provider?.context_length && model.top_provider.context_length > 0) ? model.top_provider.context_length
+          : null,
         output: model.top_provider?.max_completion_tokens ?? null,
       },
       modalities: {
@@ -61,8 +63,12 @@ export function flattenModelsData(data: OpenRouterModel[]): ModelInfo[] {
 
 /**
  * Determine the price tier for a model based on output cost per 1M tokens.
+ * Returns 'premium' for models with unknown pricing (null).
  */
-export function getPriceTier(outputCost: number): PriceTier {
+export function getPriceTier(outputCost: number | null): PriceTier {
+  if (outputCost === null) {
+    return 'premium';
+  }
   if (outputCost < PRICE_TIER_THRESHOLDS.budget) {
     return 'budget';
   }

@@ -6,19 +6,19 @@
  * ```ts
  * import { vi } from 'vitest';
  * import { useModelsStore } from '@/store/useModelsStore';
- * import { createMockModelsStore, defaultModelStoreState } from '@/test/mocks/modelsStore';
+ * import { makeMockModelsStore, defaultModelStoreState } from '@/test/mocks/modelsStore';
  *
  * vi.mock('@/store/useModelsStore');
  *
  * beforeEach(() => {
- *   vi.mocked(useModelsStore).mockImplementation(createMockModelsStore());
+ *   vi.mocked(useModelsStore).mockImplementation(makeMockModelsStore());
  * });
  * ```
  *
  * @example With custom state
  * ```ts
  * vi.mocked(useModelsStore).mockImplementation(
- *   createMockModelsStore({
+ *   makeMockModelsStore({
  *     isLoading: true,
  *     models: [],
  *   })
@@ -72,7 +72,7 @@ export const mockModels: ModelInfo[] = [
  * Default mock state for the models store.
  *
  * Use this export when you need to:
- * - Create partial overrides with `createMockModelsStore({ ...overrides })`
+ * - Create partial overrides with `makeMockModelsStore({ ...overrides })`
  * - Build custom store states while preserving base data
  *
  * Represents a fully populated models store with:
@@ -80,12 +80,12 @@ export const mockModels: ModelInfo[] = [
  * - Default loading/error states
  *
  * Note: Mock functions (fetchModels, refreshModels, etc.) are created fresh
- * in createMockModelsStore() for test isolation.
+ * in makeMockModelsStore() for test isolation.
  *
  * @example
  * ```ts
  * // Override specific state while keeping defaults
- * const customStore = createMockModelsStore({ isLoading: true });
+ * const customStore = makeMockModelsStore({ isLoading: true });
  * ```
  */
 export const defaultModelsStoreState = {
@@ -105,7 +105,7 @@ export const defaultModelsStoreState = {
  * @param overrides - Partial state to override defaults
  * @returns Mock implementation function for vi.mocked(useModelsStore)
  */
-export function createMockModelsStore(
+export function makeMockModelsStore(
   overrides: Partial<ReturnType<typeof useModelsStore>> = {}
 ) {
   const state = {

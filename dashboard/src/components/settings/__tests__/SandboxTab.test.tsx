@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ProfileEditModal } from '../ProfileEditModal';
 import { useModelsStore } from '@/store/useModelsStore';
-import { createMockModelsStore } from '@/test/mocks/modelsStore';
+import { makeMockModelsStore } from '@/test/mocks/modelsStore';
 
 vi.mock('@/store/useModelsStore');
 vi.mock('@/hooks/useRecentModels', () => ({
@@ -17,7 +17,7 @@ describe('Sandbox tab', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(useModelsStore).mockImplementation(
-      createMockModelsStore({
+      makeMockModelsStore({
         models: [],
         providers: [],
         fetchModels: vi.fn().mockResolvedValue(undefined),

@@ -697,7 +697,7 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
       const agentConfig = formData.agents[key];
       agents[key] = {
         driver: agentConfig?.driver ?? 'cli',
-        model: agentConfig?.model ?? 'opus',
+        model: agentConfig?.model || 'opus', // Use || instead of ?? to catch empty strings
       };
     }
     return agents;

@@ -109,6 +109,24 @@ describe('models-utils', () => {
       expect(result[0]?.cost.input).toBe(3);
       expect(result[0]?.cost.output).toBe(15);
     });
+
+    it('should use null for invalid pricing instead of 0', () => {
+      const apiResponse = [
+        {
+          id: 'test/model-no-pricing',
+          name: 'Model with Invalid Pricing',
+          context_length: 100000,
+          pricing: { prompt: 'invalid', completion: 'also-invalid' },
+          architecture: { input_modalities: ['text'], output_modalities: ['text'] },
+          top_provider: { context_length: 100000, max_completion_tokens: 8000 },
+          supported_parameters: ['tools'],
+        },
+      ];
+
+      const result = flattenModelsData(apiResponse);
+      expect(result[0]?.cost.input).toBeNull();
+      expect(result[0]?.cost.output).toBeNull();
+    });
   });
 
   describe('getPriceTier', () => {
@@ -126,6 +144,10 @@ describe('models-utils', () => {
     it('should return premium for output cost > $10', () => {
       expect(getPriceTier(10.01)).toBe('premium');
       expect(getPriceTier(75)).toBe('premium');
+    });
+
+    it('should return premium for null pricing (unknown cost)', () => {
+      expect(getPriceTier(null)).toBe('premium');
     });
   });
 

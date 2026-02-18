@@ -19,8 +19,17 @@ interface ModelPickerSheetProps {
   agentKey: string;
   currentModel: string | null;
   onSelect: (modelId: string) => void;
+  /**
+   * Optional trigger element. If not provided, control the sheet via `open` and `onOpenChange`.
+   */
   trigger?: ReactNode;
+  /**
+   * Controlled open state. Required when `trigger` is not provided.
+   */
   open?: boolean;
+  /**
+   * Controlled open state handler. Required when `trigger` is not provided.
+   */
   onOpenChange?: (open: boolean) => void;
 }
 

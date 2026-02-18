@@ -3,7 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ModelPickerSheet } from '../ModelPickerSheet';
 import { useModelsStore } from '@/store/useModelsStore';
-import { createMockModelsStore, mockModels } from '@/test/mocks/modelsStore';
+import { makeMockModelsStore, mockModels } from '@/test/mocks/modelsStore';
 import type { ModelInfo } from '../types';
 
 // Mock the store with selector support
@@ -20,7 +20,7 @@ vi.mock('@/hooks/useRecentModels', () => ({
 describe('ModelPickerSheet', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(useModelsStore).mockImplementation(createMockModelsStore());
+    vi.mocked(useModelsStore).mockImplementation(makeMockModelsStore());
   });
 
   it('should render trigger and open sheet on click', async () => {
@@ -43,7 +43,7 @@ describe('ModelPickerSheet', () => {
   it('should fetch models when opened', async () => {
     const refreshModels = vi.fn();
     vi.mocked(useModelsStore).mockImplementation(
-      createMockModelsStore({
+      makeMockModelsStore({
         models: [],
         providers: [],
         lastFetched: null,
@@ -109,7 +109,7 @@ describe('ModelPickerSheet', () => {
     ];
 
     vi.mocked(useModelsStore).mockImplementation(
-      createMockModelsStore({
+      makeMockModelsStore({
         models: moreModels,
         providers: ['anthropic', 'openai'],
       })

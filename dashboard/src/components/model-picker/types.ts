@@ -15,9 +15,9 @@ export interface ModelInfo {
     output: number | null;
   };
   cost: {
-    input: number;
-    output: number;
-    reasoning?: number;
+    input: number | null;
+    output: number | null;
+    reasoning?: number | null;
   };
   modalities: {
     input: string[];

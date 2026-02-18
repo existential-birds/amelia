@@ -5,7 +5,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ProfileEditModal } from '../ProfileEditModal';
 import { useModelsStore } from '@/store/useModelsStore';
-import { createMockModelsStore } from '@/test/mocks/modelsStore';
+import { makeMockModelsStore } from '@/test/mocks/modelsStore';
 
 // Mock the models store
 vi.mock('@/store/useModelsStore');
@@ -21,7 +21,7 @@ vi.mock('@/hooks/useRecentModels', () => ({
 describe('ProfileEditModal model selection', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(useModelsStore).mockImplementation(createMockModelsStore());
+    vi.mocked(useModelsStore).mockImplementation(makeMockModelsStore());
   });
 
   it('should show simple select with CLI model options when driver is cli (default)', async () => {
