@@ -25,4 +25,4 @@ export const MAX_RECENT_MODELS = 10;
 /**
  * OpenRouter API endpoint for model listing.
  */
-export const MODELS_API_URL = 'https://openrouter.ai/api/v1/models';
+export const MODELS_API_URL = 'https://openrouter.ai/api/v1/models?supported_parameters=tools';

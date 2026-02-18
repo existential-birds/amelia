@@ -10,7 +10,7 @@ interface OpenRouterModel {
   context_length: number | null;
   pricing: { prompt: string; completion: string };
   architecture: { input_modalities: string[]; output_modalities: string[] };
-  top_provider: { context_length: number; max_completion_tokens: number };
+  top_provider: { context_length: number | null; max_completion_tokens: number | null };
   supported_parameters: string[];
 }
 
@@ -22,9 +22,6 @@ export function flattenModelsData(data: OpenRouterModel[]): ModelInfo[] {
   const models: ModelInfo[] = [];
 
   for (const model of data) {
-    // Skip models without tools support - all agents require it
-    if (!model.supported_parameters?.includes('tools')) continue;
-
     // Extract provider from model ID (e.g., "anthropic/claude-sonnet-4" -> "anthropic")
     const slashIndex = model.id.indexOf('/');
     const provider = slashIndex !== -1 ? model.id.substring(0, slashIndex) : 'unknown';
@@ -43,8 +40,8 @@ export function flattenModelsData(data: OpenRouterModel[]): ModelInfo[] {
         output: parseFloat(model.pricing.completion) * 1_000_000,
       },
       limit: {
-        context: model.context_length ?? model.top_provider.context_length,
-        output: model.top_provider.max_completion_tokens,
+        context: model.context_length ?? model.top_provider.context_length ?? 0,
+        output: model.top_provider.max_completion_tokens ?? 0,
       },
       modalities: {
         input: model.architecture.input_modalities,

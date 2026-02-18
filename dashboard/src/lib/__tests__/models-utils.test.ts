@@ -73,23 +73,6 @@ describe('models-utils', () => {
       expect(result[0]?.limit.context).toBe(64000);
     });
 
-    it('should skip models without tools in supported_parameters', () => {
-      const apiResponse = [
-        {
-          id: 'provider/no-tools',
-          name: 'No Tools Model',
-          context_length: 4096,
-          pricing: { prompt: '0.000001', completion: '0.000001' },
-          architecture: { input_modalities: ['text'], output_modalities: ['text'] },
-          top_provider: { context_length: 4096, max_completion_tokens: 4096 },
-          supported_parameters: ['temperature'],
-        },
-      ];
-
-      const result = flattenModelsData(apiResponse);
-      expect(result).toEqual([]);
-    });
-
     it('should convert per-token pricing strings to per-1M numbers', () => {
       const apiResponse = [
         {

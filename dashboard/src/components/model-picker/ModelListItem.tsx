@@ -120,7 +120,7 @@ export function ModelListItem({
         </div>
 
         {/* Capabilities */}
-        <div className="hidden sm:flex items-center gap-1">
+        <div className="hidden sm:flex items-center gap-1 shrink-0">
           <CapabilityIcon capability="tool_call" enabled={model.capabilities.tool_call} />
           <CapabilityIcon capability="reasoning" enabled={model.capabilities.reasoning} />
           <CapabilityIcon
@@ -130,12 +130,14 @@ export function ModelListItem({
         </div>
 
         {/* Context size */}
-        <span className="text-xs text-muted-foreground w-12 text-right">
+        <span className="text-xs text-muted-foreground w-12 text-right shrink-0">
           {formatContextSize(model.limit.context)}
         </span>
 
         {/* Price tier */}
-        <PriceTierBadge tier={priceTier} />
+        <div className="w-[70px] shrink-0 flex justify-end">
+          <PriceTierBadge tier={priceTier} />
+        </div>
 
         {/* Expand indicator */}
         <ChevronDown
@@ -173,7 +175,7 @@ export function ModelListItem({
             </div>
             <div>
               <div className="text-muted-foreground">Max output</div>
-              <div>{model.limit.output.toLocaleString()} tokens</div>
+              <div>{model.limit.output ? `${model.limit.output.toLocaleString()} tokens` : 'Unknown'}</div>
             </div>
 
             {/* Modalities */}

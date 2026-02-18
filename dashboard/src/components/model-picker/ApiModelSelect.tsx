@@ -51,8 +51,10 @@ export function ApiModelSelect({ agentKey, value, onChange }: ApiModelSelectProp
   const valueNotYetInStore = value !== '' && !displayModels.some((m) => m.id === value);
 
   const handleSelect = (modelId: string) => {
-    if (modelId === BROWSE_SENTINEL) {
-      setSheetOpen(true);
+    if (!modelId || modelId === BROWSE_SENTINEL) {
+      if (modelId === BROWSE_SENTINEL) {
+        setSheetOpen(true);
+      }
       return;
     }
     addRecentModel(modelId);

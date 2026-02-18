@@ -633,12 +633,17 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
       const currentAgent = nextAgents[agentKey] ?? { driver: 'cli', model: 'opus' };
       nextAgents[agentKey] = { ...currentAgent, [field]: value };
 
-      // When driver changes, reset model if not supported
+      // When driver changes, reset model to appropriate default
       if (field === 'driver') {
-        const availableModels = getModelsForDriver(value);
         const updatedAgent = nextAgents[agentKey]!;
-        if (!availableModels.includes(updatedAgent.model)) {
-          updatedAgent.model = availableModels[0] ?? 'opus';
+        if (value === 'api') {
+          // API models are selected dynamically via the model picker
+          updatedAgent.model = '';
+        } else {
+          const availableModels = getModelsForDriver(value);
+          if (!availableModels.includes(updatedAgent.model)) {
+            updatedAgent.model = availableModels[0] ?? 'opus';
+          }
         }
       }
 
