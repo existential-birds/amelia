@@ -29,7 +29,8 @@ function getContextLength(model: OpenRouterModel): number | null {
 
 /**
  * Flatten the OpenRouter API response into a flat array of ModelInfo.
- * Only includes models with tool support (required for all agents).
+ * Assumes all models support tool calls — the upstream API is queried with
+ * `?supported_parameters=tools` so only tool-capable models are returned.
  */
 export function flattenModelsData(data: OpenRouterModel[]): ModelInfo[] {
   const models: ModelInfo[] = [];
