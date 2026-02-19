@@ -31,7 +31,7 @@ class TestArchitectPlanPath:
             tracker="noop",
             working_dir="/tmp/test",
             agents={
-                "architect": AgentConfig(driver="cli", model="sonnet"),
+                "architect": AgentConfig(driver="claude", model="sonnet"),
             },
         )
         state = ImplementationState(
@@ -50,7 +50,7 @@ class TestArchitectPlanPath:
     ) -> None:
         """Prompt should include the resolved plan path with Write instruction."""
         state, profile = state_and_profile
-        config = AgentConfig(driver="cli", model="sonnet")
+        config = AgentConfig(driver="claude", model="sonnet")
 
         with patch("amelia.agents.architect.get_driver", return_value=mock_driver_local):
             architect = Architect(config)
@@ -71,7 +71,7 @@ class TestArchitectPlanPath:
     ) -> None:
         """Prompt should include today's date in the plan path."""
         state, profile = state_and_profile
-        config = AgentConfig(driver="cli", model="sonnet")
+        config = AgentConfig(driver="claude", model="sonnet")
 
         with patch("amelia.agents.architect.get_driver", return_value=mock_driver_local):
             architect = Architect(config)
@@ -99,7 +99,7 @@ class TestArchitectPlanPath:
             profile_id="test",
             issue=issue,
         )
-        config = AgentConfig(driver="cli", model="sonnet")
+        config = AgentConfig(driver="claude", model="sonnet")
 
         with patch("amelia.agents.architect.get_driver", return_value=mock_driver_local):
             architect = Architect(config)
@@ -115,7 +115,7 @@ class TestArchitectPlanPath:
     ) -> None:
         """Plan method should pass profile to _build_agentic_prompt."""
         state, profile = state_and_profile
-        config = AgentConfig(driver="cli", model="sonnet")
+        config = AgentConfig(driver="claude", model="sonnet")
 
         # Capture the prompt passed to execute_agentic
         captured_prompts: list[str] = []
@@ -149,7 +149,7 @@ class TestArchitectPlanPath:
         from pathlib import Path
 
         state, profile = state_and_profile
-        config = AgentConfig(driver="cli", model="sonnet")
+        config = AgentConfig(driver="claude", model="sonnet")
 
         async def mock_execute_agentic(*args: Any, **kwargs: Any) -> Any:
             # Simulate Write tool call followed by result
@@ -182,3 +182,4 @@ class TestArchitectPlanPath:
 
         # plan_path should be extracted from the Write tool call
         assert final_state.plan_path == Path("/repo/docs/plans/2026-01-07-test-123.md")
+st-123.md")

@@ -256,9 +256,9 @@ def mock_profile_factory(tmp_path_factory: TempPathFactory) -> Callable[..., Pro
         if agents is None:
             if preset == "cli_single":
                 agents = {
-                    "architect": AgentConfig(driver="cli", model="sonnet"),
-                    "developer": AgentConfig(driver="cli", model="sonnet"),
-                    "reviewer": AgentConfig(driver="cli", model="sonnet"),
+                    "architect": AgentConfig(driver="claude", model="sonnet"),
+                    "developer": AgentConfig(driver="claude", model="sonnet"),
+                    "reviewer": AgentConfig(driver="claude", model="sonnet"),
                 }
                 return Profile(name="test_cli", tracker="noop", agents=agents, **kwargs)
             elif preset == "api_single":
@@ -269,11 +269,11 @@ def mock_profile_factory(tmp_path_factory: TempPathFactory) -> Callable[..., Pro
                 }
                 return Profile(name="test_api", tracker="noop", agents=agents, **kwargs)
             else:
-                # Default: all agents use cli
+                # Default: all agents use claude
                 agents = {
-                    "architect": AgentConfig(driver="cli", model="sonnet"),
-                    "developer": AgentConfig(driver="cli", model="sonnet"),
-                    "reviewer": AgentConfig(driver="cli", model="sonnet"),
+                    "architect": AgentConfig(driver="claude", model="sonnet"),
+                    "developer": AgentConfig(driver="claude", model="sonnet"),
+                    "reviewer": AgentConfig(driver="claude", model="sonnet"),
                 }
         return Profile(name=name, tracker=tracker, agents=agents, **kwargs)
     return _create

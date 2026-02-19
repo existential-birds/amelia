@@ -13,7 +13,7 @@ pytestmark = pytest.mark.integration
 
 
 def _make_agents_json(
-    driver: str = "cli",
+    driver: str = "claude",
     model: str = "opus",
     validator_model: str = "haiku",
 ) -> str:
@@ -26,7 +26,7 @@ def _make_agents_json(
 
 
 def _make_agents(
-    driver: str = "cli",
+    driver: str = "claude",
     model: str = "opus",
     validator_model: str = "haiku",
 ) -> dict[str, AgentConfig]:
@@ -96,7 +96,7 @@ async def test_create_profile_stores_agents_json(db_with_schema):
         tracker="noop",
         working_dir="/tmp/test",
         agents={
-            "architect": AgentConfig(driver="cli", model="opus"),
+            "architect": AgentConfig(driver="claude", model="opus"),
             "developer": AgentConfig(driver="api", model="anthropic/claude-sonnet-4"),
         },
     )
@@ -130,12 +130,12 @@ class TestProfileRepository:
                 name="dev",
                 tracker="noop",
                 working_dir="/path/to/repo",
-                agents=_make_agents(driver="cli", model="opus"),
+                agents=_make_agents(driver="claude", model="opus"),
             )
         )
         # Repository returns Profile (converted from DB)
         assert profile.name == "dev"
-        assert profile.agents["architect"].driver == "cli"
+        assert profile.agents["architect"].driver == "claude"
 
     async def test_get_profile(self, repo: ProfileRepository):
         """Verify profile retrieval."""
@@ -163,7 +163,7 @@ class TestProfileRepository:
                 name="dev",
                 tracker="noop",
                 working_dir="/repo1",
-                agents=_make_agents(driver="cli", model="opus"),
+                agents=_make_agents(driver="claude", model="opus"),
             )
         )
         await repo.create_profile(
@@ -244,7 +244,7 @@ class TestProfileRepository:
                 name="dev",
                 tracker="noop",
                 working_dir="/repo1",
-                agents=_make_agents(driver="cli", model="opus"),
+                agents=_make_agents(driver="claude", model="opus"),
             )
         )
         await repo.create_profile(

@@ -76,9 +76,9 @@ class TestProfileList:
                 tracker="noop",
                 working_dir="/tmp/test",
                 agents={
-                    "architect": AgentConfig(driver="cli", model="sonnet"),
-                    "developer": AgentConfig(driver="cli", model="sonnet"),
-                    "reviewer": AgentConfig(driver="cli", model="sonnet"),
+                    "architect": AgentConfig(driver="claude", model="sonnet"),
+                    "developer": AgentConfig(driver="claude", model="sonnet"),
+                    "reviewer": AgentConfig(driver="claude", model="sonnet"),
                 },
             ),
             Profile(
@@ -147,10 +147,10 @@ class TestProfileShow:
             working_dir="/home/user/code",
             plan_output_dir="docs/plans",
             agents={
-                "architect": AgentConfig(driver="cli", model="sonnet"),
-                "developer": AgentConfig(driver="cli", model="sonnet"),
-                "reviewer": AgentConfig(driver="cli", model="sonnet"),
-                "plan_validator": AgentConfig(driver="cli", model="opus"),
+                "architect": AgentConfig(driver="claude", model="sonnet"),
+                "developer": AgentConfig(driver="claude", model="sonnet"),
+                "reviewer": AgentConfig(driver="claude", model="sonnet"),
+                "plan_validator": AgentConfig(driver="claude", model="opus"),
             },
         )
 
@@ -194,10 +194,10 @@ class TestProfileCreate:
             tracker="noop",
             working_dir="/tmp",
             agents={
-                "architect": AgentConfig(driver="cli", model="sonnet"),
-                "developer": AgentConfig(driver="cli", model="sonnet"),
-                "reviewer": AgentConfig(driver="cli", model="sonnet"),
-                "plan_validator": AgentConfig(driver="cli", model="sonnet"),
+                "architect": AgentConfig(driver="claude", model="sonnet"),
+                "developer": AgentConfig(driver="claude", model="sonnet"),
+                "reviewer": AgentConfig(driver="claude", model="sonnet"),
+                "plan_validator": AgentConfig(driver="claude", model="sonnet"),
             },
         )
 
@@ -229,9 +229,9 @@ class TestProfileCreate:
             tracker="noop",
             working_dir="/tmp",
             agents={
-                "architect": AgentConfig(driver="cli", model="sonnet"),
-                "developer": AgentConfig(driver="cli", model="sonnet"),
-                "reviewer": AgentConfig(driver="cli", model="sonnet"),
+                "architect": AgentConfig(driver="claude", model="sonnet"),
+                "developer": AgentConfig(driver="claude", model="sonnet"),
+                "reviewer": AgentConfig(driver="claude", model="sonnet"),
             },
         )
 

@@ -93,7 +93,7 @@ async def test_pipeline_initialization_stores_tag_config(
         embedding_client=mock_embedding,
         concurrency_limit=3,
         tag_derivation_model="openai/gpt-4o-mini",
-        tag_derivation_driver="cli",
+        tag_derivation_driver="claude",
     )
     assert pipeline_enabled.tag_derivation_model == "openai/gpt-4o-mini"
     assert pipeline_enabled.tag_derivation_driver == "cli"

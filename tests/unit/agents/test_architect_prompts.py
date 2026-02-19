@@ -37,7 +37,7 @@ class TestArchitectPromptInjection:
         """
         custom_plan_prompt = "Custom plan format..."
         prompts = {"architect.plan": custom_plan_prompt}
-        config = AgentConfig(driver="cli", model="sonnet")
+        config = AgentConfig(driver="claude", model="sonnet")
 
         state, profile = mock_execution_state_factory()
 
@@ -76,7 +76,7 @@ class TestArchitectPromptInjection:
 
         The architect.plan() now uses execute_agentic which takes instructions parameter.
         """
-        config = AgentConfig(driver="cli", model="sonnet")
+        config = AgentConfig(driver="claude", model="sonnet")
         state, profile = mock_execution_state_factory()
 
         # Mock execute_agentic as async generator
@@ -113,7 +113,7 @@ class TestArchitectPromptInjection:
     ) -> None:
         """Test plan_prompt property returns correct value."""
         custom_prompt = "Custom plan prompt"
-        config = AgentConfig(driver="cli", model="sonnet")
+        config = AgentConfig(driver="claude", model="sonnet")
 
         with patch("amelia.agents.architect.get_driver", return_value=mock_driver):
             # With custom prompt

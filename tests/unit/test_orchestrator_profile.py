@@ -14,7 +14,7 @@ def _make_test_profile(
     working_dir: str = "/repo",
 ) -> Profile:
     """Create a test Profile with default agents configuration."""
-    agent_config = AgentConfig(driver="cli", model="opus")
+    agent_config = AgentConfig(driver="claude", model="opus")
     return Profile(
         name=name,
         tracker=tracker,

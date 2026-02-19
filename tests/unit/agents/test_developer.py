@@ -38,7 +38,7 @@ def test_developer_init_with_agent_config() -> None:
 def test_developer_init_with_options() -> None:
     """Developer should pass through options from AgentConfig."""
     config = AgentConfig(
-        driver="cli",
+        driver="claude",
         model="claude-sonnet-4-20250514",
         options={"max_iterations": 10},
     )
@@ -120,7 +120,7 @@ class TestDeveloperRunNoDoubleCount:
         returning pre-existing entries would cause them to be duplicated.
         """
         state, profile = state_with_existing_tool_data
-        config = AgentConfig(driver="cli", model="sonnet")
+        config = AgentConfig(driver="claude", model="sonnet")
 
         async def mock_stream(*args: Any, **kwargs: Any) -> AsyncIterator[AgenticMessage]:
             yield AgenticMessage(

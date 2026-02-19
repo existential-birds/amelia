@@ -16,8 +16,8 @@ def profile_with_agents():
         tracker="noop",
         working_dir="/tmp/test",
         agents={
-            "reviewer": AgentConfig(driver="cli", model="opus", options={"max_iterations": 3}),
-            "task_reviewer": AgentConfig(driver="cli", model="sonnet", options={"max_iterations": 5}),
+            "reviewer": AgentConfig(driver="claude", model="opus", options={"max_iterations": 3}),
+            "task_reviewer": AgentConfig(driver="claude", model="sonnet", options={"max_iterations": 5}),
         },
     )
 

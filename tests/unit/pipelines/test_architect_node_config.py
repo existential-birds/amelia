@@ -19,7 +19,7 @@ def profile_with_agents() -> Profile:
         tracker="noop",
         working_dir="/tmp/test",
         agents={
-            "architect": AgentConfig(driver="cli", model="opus"),
+            "architect": AgentConfig(driver="claude", model="opus"),
         },
     )
 

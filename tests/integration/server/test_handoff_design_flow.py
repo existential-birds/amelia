@@ -15,7 +15,7 @@ from amelia.server.orchestrator.service import OrchestratorService
 def mock_profile_repo() -> AsyncMock:
     """Create mock ProfileRepository that returns test profile."""
     repo = AsyncMock()
-    agent_config = AgentConfig(driver="cli", model="sonnet")
+    agent_config = AgentConfig(driver="claude", model="sonnet")
     profile = Profile(
         name="test",
         tracker="noop",

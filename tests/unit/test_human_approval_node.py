@@ -19,9 +19,9 @@ def base_state():
         tracker="noop",
         working_dir="/tmp/test",
         agents={
-            "architect": AgentConfig(driver="cli", model="sonnet"),
-            "developer": AgentConfig(driver="cli", model="sonnet"),
-            "reviewer": AgentConfig(driver="cli", model="sonnet"),
+            "architect": AgentConfig(driver="claude", model="sonnet"),
+            "developer": AgentConfig(driver="claude", model="sonnet"),
+            "reviewer": AgentConfig(driver="claude", model="sonnet"),
         },
     )
     return ImplementationState(

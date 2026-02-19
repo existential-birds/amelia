@@ -16,7 +16,7 @@ class TestOracleInit:
 
     def test_init_creates_driver(self):
         """Oracle should create a driver from AgentConfig."""
-        config = AgentConfig(driver="cli", model="sonnet")
+        config = AgentConfig(driver="claude", model="sonnet")
 
         with patch("amelia.agents.oracle.get_driver") as mock_get_driver:
             mock_driver = MagicMock()
@@ -29,7 +29,7 @@ class TestOracleInit:
 
     def test_init_accepts_event_bus(self):
         """Oracle should accept an optional EventBus."""
-        config = AgentConfig(driver="cli", model="sonnet")
+        config = AgentConfig(driver="claude", model="sonnet")
         event_bus = EventBus()
 
         with patch("amelia.agents.oracle.get_driver"):
@@ -42,7 +42,7 @@ class TestOracleConsult:
 
     async def test_consult_returns_result(self, tmp_path):
         """consult() should return OracleConsultResult with advice."""
-        config = AgentConfig(driver="cli", model="sonnet")
+        config = AgentConfig(driver="claude", model="sonnet")
 
         with patch("amelia.agents.oracle.get_driver") as mock_get_driver:
             mock_driver = MagicMock()
@@ -66,7 +66,7 @@ class TestOracleConsult:
 
     async def test_consult_skips_bundling_without_files(self, tmp_path):
         """consult() should not call bundle_files when files is None."""
-        config = AgentConfig(driver="cli", model="sonnet")
+        config = AgentConfig(driver="claude", model="sonnet")
 
         with patch("amelia.agents.oracle.get_driver") as mock_get_driver:
             mock_driver = MagicMock()
@@ -89,7 +89,7 @@ class TestOracleConsult:
 
     async def test_consult_passes_files_to_bundler(self, tmp_path):
         """consult() should pass file patterns to bundle_files."""
-        config = AgentConfig(driver="cli", model="sonnet")
+        config = AgentConfig(driver="claude", model="sonnet")
 
         with patch("amelia.agents.oracle.get_driver") as mock_get_driver:
             mock_driver = MagicMock()
@@ -119,7 +119,7 @@ class TestOracleConsult:
 
     async def test_consult_emits_events(self, tmp_path):
         """consult() should emit start, thinking, and complete events."""
-        config = AgentConfig(driver="cli", model="sonnet")
+        config = AgentConfig(driver="claude", model="sonnet")
         event_bus = EventBus()
         emitted: list[Any] = []
         event_bus.subscribe(lambda e: emitted.append(e))
@@ -144,7 +144,7 @@ class TestOracleConsult:
 
     async def test_consult_events_carry_session_id(self, tmp_path):
         """Emitted events should carry session_id independent from workflow_id."""
-        config = AgentConfig(driver="cli", model="sonnet")
+        config = AgentConfig(driver="claude", model="sonnet")
         event_bus = EventBus()
         emitted: list[Any] = []
         event_bus.subscribe(lambda e: emitted.append(e))
@@ -175,7 +175,7 @@ class TestOracleConsult:
 
     async def test_consult_emits_tool_call_events(self, tmp_path):
         """consult() should emit tool call and tool result events."""
-        config = AgentConfig(driver="cli", model="sonnet")
+        config = AgentConfig(driver="claude", model="sonnet")
         event_bus = EventBus()
         emitted: list[Any] = []
         event_bus.subscribe(lambda e: emitted.append(e))
@@ -229,7 +229,7 @@ class TestOracleConsult:
 
     async def test_consult_handles_driver_error(self, tmp_path):
         """consult() should return error outcome on driver failure."""
-        config = AgentConfig(driver="cli", model="sonnet")
+        config = AgentConfig(driver="claude", model="sonnet")
 
         with patch("amelia.agents.oracle.get_driver") as mock_get_driver:
             mock_driver = MagicMock()
@@ -254,7 +254,7 @@ class TestOracleConsult:
 
     async def test_consult_handles_bundling_error(self, tmp_path):
         """consult() should return error outcome on file bundling failure."""
-        config = AgentConfig(driver="cli", model="sonnet")
+        config = AgentConfig(driver="claude", model="sonnet")
 
         with (
             patch("amelia.agents.oracle.get_driver") as mock_get_driver,
@@ -279,7 +279,7 @@ class TestOracleConsult:
 
     async def test_consult_emits_failed_event_on_bundling_error(self, tmp_path):
         """consult() should emit STARTED and FAILED events on bundling failure."""
-        config = AgentConfig(driver="cli", model="sonnet")
+        config = AgentConfig(driver="claude", model="sonnet")
         event_bus = EventBus()
         emitted: list[Any] = []
         event_bus.subscribe(lambda e: emitted.append(e))

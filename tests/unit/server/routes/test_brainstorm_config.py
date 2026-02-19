@@ -23,7 +23,7 @@ class TestBrainstormDriverConfig:
             tracker="noop",
             working_dir="/tmp/test",
             agents={
-                "brainstormer": AgentConfig(driver="cli", model="sonnet"),
+                "brainstormer": AgentConfig(driver="claude", model="sonnet"),
             },
         )
 
