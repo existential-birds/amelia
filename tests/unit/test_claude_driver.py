@@ -400,6 +400,45 @@ class TestClaudeCliDriverGenerate:
             call_kwargs = mock_q.call_args[1]
             assert call_kwargs["options"].cwd == "/path/to/project"
 
+    async def test_generate_skips_unknown_message_type(self, driver: ClaudeCliDriver) -> None:
+        """MessageParseError (e.g. rate_limit_event) is skipped; generation continues."""
+        from claude_agent_sdk._errors import MessageParseError
+
+        class _InjectErrorIterator:
+            """Async iterator that injects a MessageParseError between real messages."""
+
+            def __init__(self) -> None:
+                self._items: list[Any] = [
+                    MockAssistantMessage([MockTextBlock("Hello")]),
+                    MessageParseError("Unknown message type: rate_limit_event"),
+                    MockResultMessage(result="Hello", session_id="sess_rate"),
+                ]
+                self._index = 0
+
+            def __aiter__(self) -> "_InjectErrorIterator":
+                return self
+
+            async def __anext__(self) -> Any:
+                if self._index >= len(self._items):
+                    raise StopAsyncIteration
+                item = self._items[self._index]
+                self._index += 1
+                if isinstance(item, Exception):
+                    raise item
+                return item
+
+        def mock_query_with_rate_limit(*args: Any, **kwargs: Any) -> _InjectErrorIterator:
+            return _InjectErrorIterator()
+
+        with (
+            _patch_sdk_types(),
+            patch("amelia.drivers.cli.claude.query", side_effect=mock_query_with_rate_limit),
+        ):
+            result, session_id = await driver.generate("Say hello")
+
+            assert result == "Hello"
+            assert session_id == "sess_rate"
+
 
 class TestClaudeCliDriverConfiguration:
     """Tests for ClaudeCliDriver configuration options."""

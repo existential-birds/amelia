@@ -9,6 +9,7 @@ from collections.abc import AsyncIterator
 from typing import Any, Literal
 
 from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient, ProcessError, query
+from claude_agent_sdk._errors import MessageParseError
 from claude_agent_sdk.types import (
     AssistantMessage,
     Message,
@@ -345,7 +346,15 @@ class ClaudeCliDriver:
             result_message: ResultMessage | None = None
             assistant_content: list[str] = []
 
-            async for message in query(prompt=prompt, options=options):
+            _query = query(prompt=prompt, options=options).__aiter__()
+            while True:
+                try:
+                    message = await _query.__anext__()
+                except StopAsyncIteration:
+                    break
+                except MessageParseError as e:
+                    logger.debug("Ignoring unknown SDK message type", error=str(e))
+                    continue
                 _log_sdk_message(message)
 
                 if isinstance(message, AssistantMessage):

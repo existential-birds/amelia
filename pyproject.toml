@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "langgraph>=1.0.8",
-    "claude-agent-sdk>=0.1.0",
+    "claude-agent-sdk>=0.1.38",
     "deepagents>=0.4.1",
     "langchain-openai>=1.1.9",
     "pydantic>=2.12.4",
