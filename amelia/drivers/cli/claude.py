@@ -511,7 +511,11 @@ class ClaudeCliDriver:
                     except StopAsyncIteration:
                         break
                     except MessageParseError as e:
-                        logger.debug("Ignoring unknown SDK message type in agentic execution", error=str(e))
+                        logger.warning(
+                            "Skipping unparseable SDK message in agentic execution",
+                            error=str(e),
+                            error_detail=repr(e),
+                        )
                         continue
                     _log_sdk_message(message)
 
@@ -578,6 +582,14 @@ class ClaudeCliDriver:
                     elif isinstance(message, ResultMessage):
                         # Store ResultMessage for token usage extraction
                         self.last_result_message = message
+                        if not message.result:
+                            logger.debug(
+                                "Claude CLI ResultMessage has empty content",
+                                session_id=message.session_id,
+                                is_error=message.is_error,
+                                stderr_lines_count=len(stderr_lines),
+                                stderr_tail=stderr_lines[-5:] if stderr_lines else [],
+                            )
                         yield AgenticMessage(
                             type=AgenticMessageType.RESULT,
                             content=message.result,
