@@ -4,6 +4,7 @@ from amelia.core.types import SandboxConfig
 from amelia.drivers.api import ApiDriver
 from amelia.drivers.base import DriverInterface
 from amelia.drivers.cli.claude import ClaudeCliDriver
+from amelia.drivers.cli.codex import CodexCliDriver
 
 
 def get_driver(
@@ -32,7 +33,7 @@ def get_driver(
         ValueError: If driver_key is not recognized or incompatible with sandbox.
     """
     if sandbox_config and sandbox_config.mode == "container":
-        if driver_key.startswith("cli"):
+        if driver_key in {"claude", "codex"}:
             raise ValueError(
                 "Container sandbox requires API driver. "
                 "CLI driver containerization is not yet supported."
@@ -50,15 +51,17 @@ def get_driver(
         )
         return ContainerDriver(model=model, provider=provider)
 
-    if driver_key == "cli":
+    if driver_key == "claude":
         return ClaudeCliDriver(model=model, cwd=cwd)
+    elif driver_key == "codex":
+        return CodexCliDriver(model=model, cwd=cwd)
     elif driver_key == "api":
         return ApiDriver(provider="openrouter", model=model)
     else:
         raise ValueError(
             f"Unknown driver key: {driver_key!r}. "
-            f"Valid options: 'cli' or 'api'. "
-            f"(Legacy forms 'cli:claude' and 'api:openrouter' are no longer supported.)"
+            "Valid options: 'claude', 'codex', 'api'. "
+            "(Legacy forms 'cli', 'cli:claude', and 'api:openrouter' are no longer supported.)"
         )
 
 
@@ -78,8 +81,8 @@ async def cleanup_driver_session(driver_key: str, session_id: str) -> bool:
     Raises:
         ValueError: If driver_key is not recognized.
     """
-    if driver_key == "cli":
-        return False  # ClaudeCliDriver has no session state to clean
+    if driver_key in {"claude", "codex"}:
+        return False  # CLI drivers have no session state to clean
     elif driver_key == "api":
         async with ApiDriver._sessions_lock_for_loop():
             return ApiDriver._sessions.pop(session_id, None) is not None

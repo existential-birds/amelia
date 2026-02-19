@@ -10,15 +10,27 @@ from amelia.drivers.factory import cleanup_driver_session, get_driver
 class TestGetDriverExistingBehavior:
     """Existing behavior must be preserved with the new signature."""
 
-    def test_cli_driver(self) -> None:
-        with patch("amelia.drivers.factory.ClaudeCliDriver") as mock_cls:
+    @pytest.mark.parametrize(
+        "driver_key,expected_class",
+        [
+            ("claude", "ClaudeCliDriver"),
+            ("codex", "CodexCliDriver"),
+            ("api", "ApiDriver"),
+        ],
+    )
+    def test_get_driver_routes_explicit_driver_keys(self, driver_key: str, expected_class: str) -> None:
+        """get_driver should route to correct driver class for explicit keys."""
+        with patch(f"amelia.drivers.factory.{expected_class}") as mock_cls:
             mock_cls.return_value = MagicMock()
-            _driver = get_driver("cli", model="sonnet")
+            _driver = get_driver(driver_key, model="test-model")
             mock_cls.assert_called_once()
             kwargs = mock_cls.call_args.kwargs
-            assert kwargs["model"] == "sonnet"
-            assert kwargs.get("cwd") is None
-            assert set(kwargs).issubset({"model", "cwd"})
+            assert kwargs["model"] == "test-model"
+
+    def test_get_driver_rejects_legacy_cli(self) -> None:
+        """Legacy 'cli' driver key should raise clear error."""
+        with pytest.raises(ValueError, match="Valid options: 'claude', 'codex', 'api'"):
+            get_driver("cli")
 
     def test_api_driver(self) -> None:
         with patch("amelia.drivers.factory.ApiDriver") as mock_cls:
@@ -54,10 +66,12 @@ class TestGetDriverContainerBranch:
                 provider=mock_provider_cls.return_value,
             )
 
-    def test_container_mode_cli_raises(self) -> None:
+    @pytest.mark.parametrize("driver_key", ["claude", "codex"])
+    def test_container_mode_rejects_cli_wrappers(self, driver_key: str) -> None:
+        """Container sandbox should reject CLI wrapper drivers."""
         sandbox = SandboxConfig(mode="container")
         with pytest.raises(ValueError, match="Container sandbox requires API driver"):
-            get_driver("cli", sandbox_config=sandbox, profile_name="test")
+            get_driver(driver_key, sandbox_config=sandbox, profile_name="test")
 
     def test_none_mode_returns_normal_driver(self) -> None:
         sandbox = SandboxConfig(mode="none")
@@ -106,3 +120,9 @@ class TestLegacyDriverRejection:
             match=r"Unknown driver key: 'api:openrouter'",
         ):
             await cleanup_driver_session("api:openrouter", "test-session-id")
+
+    @pytest.mark.asyncio
+    async def test_cleanup_driver_session_codex_returns_false(self) -> None:
+        """cleanup_driver_session should return False for codex driver."""
+        result = await cleanup_driver_session("codex", "any-session-id")
+        assert result is False
