@@ -109,7 +109,7 @@ def _format_agent_output(console: Console, event: dict[str, Any]) -> None:
     agent = event.get("agent", "")
     console.print(f"\n[bold green]✓ \\[{escape(agent)}] Result[/bold green]")
     if message:
-        console.print(message[:500])
+        console.print(escape(message[:500]))
 
 
 _CUSTOM_FORMATTERS: dict[str, EventFormatter] = {
