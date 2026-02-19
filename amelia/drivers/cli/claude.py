@@ -9,7 +9,7 @@ from collections.abc import AsyncIterator
 from typing import Any, Literal
 
 from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient, ProcessError, query
-from claude_agent_sdk._errors import MessageParseError
+from claude_agent_sdk._errors import MessageParseError  # private API, pinned to >=0.1.38
 from claude_agent_sdk.types import (
     AssistantMessage,
     Message,
@@ -346,27 +346,34 @@ class ClaudeCliDriver:
             result_message: ResultMessage | None = None
             assistant_content: list[str] = []
 
+            # Manual iteration to catch MessageParseError from unknown SDK
+            # message types without aborting the stream.
             _query = query(prompt=prompt, options=options).__aiter__()
-            while True:
-                try:
-                    message = await _query.__anext__()
-                except StopAsyncIteration:
-                    break
-                except MessageParseError as e:
-                    logger.debug("Ignoring unknown SDK message type", error=str(e))
-                    continue
-                _log_sdk_message(message)
+            try:
+                while True:
+                    try:
+                        message = await _query.__anext__()
+                    except StopAsyncIteration:
+                        break
+                    except MessageParseError as e:
+                        logger.debug("Ignoring unknown SDK message type", error=str(e))
+                        continue
+                    _log_sdk_message(message)
 
-                if isinstance(message, AssistantMessage):
-                    for block in message.content:
-                        if isinstance(block, TextBlock):
-                            assistant_content.append(block.text)
+                    if isinstance(message, AssistantMessage):
+                        for block in message.content:
+                            if isinstance(block, TextBlock):
+                                assistant_content.append(block.text)
 
-                elif isinstance(message, ResultMessage):
-                    result_message = message
-                    session_id_result = message.session_id
-                    # Store for token usage extraction
-                    self.last_result_message = message
+                    elif isinstance(message, ResultMessage):
+                        result_message = message
+                        session_id_result = message.session_id
+                        # Store for token usage extraction
+                        self.last_result_message = message
+            finally:
+                aclose = getattr(_query, "aclose", None)
+                if aclose is not None:
+                    await aclose()
 
             if result_message is None:
                 raise RuntimeError("Claude SDK did not return a result message")
