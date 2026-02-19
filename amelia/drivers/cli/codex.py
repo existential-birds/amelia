@@ -57,6 +57,7 @@ class CodexCliDriver(DriverInterface):
     ) -> AsyncIterator[AgenticMessage]:
         """Execute agentic workflow (not yet implemented)."""
         raise NotImplementedError("CodexCliDriver.execute_agentic() not yet implemented")
+        yield  # pragma: no cover
 
     async def cleanup_session(self, session_id: str) -> bool:
         """Clean up a driver session.
