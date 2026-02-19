@@ -3,8 +3,10 @@
 This driver wraps the OpenAI Codex CLI, providing both single-turn generation
 and agentic execution capabilities.
 """
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterator
 from typing import Any
+
+from pydantic import BaseModel
 
 from amelia.drivers.base import AgenticMessage, DriverUsage, DriverInterface, GenerateResult
 
@@ -25,24 +27,33 @@ class CodexCliDriver(DriverInterface):
         self.model = model
         self.cwd = cwd
 
+    async def _run_codex(self, prompt: str, **kwargs: Any) -> str:
+        """Run codex CLI command and return output (not yet implemented)."""
+        raise NotImplementedError("CodexCliDriver._run_codex() not yet implemented")
+
+    def _run_codex_stream(self, prompt: str, **kwargs: Any) -> Iterator[dict[str, Any]]:
+        """Run codex CLI command and stream events (not yet implemented)."""
+        raise NotImplementedError("CodexCliDriver._run_codex_stream() not yet implemented")
+
     async def generate(
         self,
         prompt: str,
-        *,
-        tools: list[Any] | None = None,
-        system: str | None = None,
+        system_prompt: str | None = None,
+        schema: type[BaseModel] | None = None,
+        **kwargs: Any,
     ) -> GenerateResult:
         """Generate a single-turn response (not yet implemented)."""
         raise NotImplementedError("CodexCliDriver.generate() not yet implemented")
 
     async def execute_agentic(
         self,
-        user_prompt: str,
-        *,
-        system: str | None = None,
-        tools: list[Any] | None = None,
-        max_iterations: int = 50,
-        max_tool_calls: int | None = None,
+        prompt: str,
+        cwd: str,
+        session_id: str | None = None,
+        instructions: str | None = None,
+        schema: type[BaseModel] | None = None,
+        allowed_tools: list[str] | None = None,
+        **kwargs: Any,
     ) -> AsyncIterator[AgenticMessage]:
         """Execute agentic workflow (not yet implemented)."""
         raise NotImplementedError("CodexCliDriver.execute_agentic() not yet implemented")
@@ -60,6 +71,6 @@ class CodexCliDriver(DriverInterface):
         """
         return False
 
-    def get_usage(self) -> DriverUsage:
+    def get_usage(self) -> DriverUsage | None:
         """Get usage statistics (not yet implemented)."""
         raise NotImplementedError("CodexCliDriver.get_usage() not yet implemented")
