@@ -5,12 +5,42 @@ from pathlib import Path
 from amelia.core.types import Design
 
 
+def test_agent_config_accepts_claude_driver() -> None:
+    from amelia.core.types import AgentConfig
+
+    config = AgentConfig(driver="claude", model="sonnet")
+    assert config.driver == "claude"
+
+
+def test_agent_config_accepts_codex_driver() -> None:
+    from amelia.core.types import AgentConfig
+
+    config = AgentConfig(driver="codex", model="gpt-5-codex")
+    assert config.driver == "codex"
+
+
+def test_agent_config_accepts_api_driver() -> None:
+    from amelia.core.types import AgentConfig
+
+    config = AgentConfig(driver="api", model="anthropic/claude-sonnet-4")
+    assert config.driver == "api"
+
+
+def test_agent_config_rejects_legacy_cli_driver() -> None:
+    import pytest
+
+    from amelia.core.types import AgentConfig
+
+    with pytest.raises(ValueError, match="Input should be 'claude', 'codex' or 'api'"):
+        AgentConfig(driver="cli", model="sonnet")
+
+
 def test_agent_config_creation():
     """AgentConfig should store driver, model, and optional options."""
     from amelia.core.types import AgentConfig
 
-    config = AgentConfig(driver="cli", model="sonnet")
-    assert config.driver == "cli"
+    config = AgentConfig(driver="claude", model="sonnet")
+    assert config.driver == "claude"
     assert config.model == "sonnet"
     assert config.options == {}
 
@@ -20,7 +50,7 @@ def test_agent_config_with_options():
     from amelia.core.types import AgentConfig
 
     config = AgentConfig(
-        driver="api",
+        driver="claude",
         model="anthropic/claude-sonnet-4",
         options={"max_iterations": 5, "temperature": 0.7},
     )
@@ -37,8 +67,8 @@ def test_profile_with_agents_dict():
         tracker="noop",
         working_dir="/tmp/test",
         agents={
-            "architect": AgentConfig(driver="cli", model="opus"),
-            "developer": AgentConfig(driver="cli", model="sonnet"),
+            "architect": AgentConfig(driver="claude", model="opus"),
+            "developer": AgentConfig(driver="claude", model="sonnet"),
         },
     )
     assert profile.agents["architect"].model == "opus"
@@ -54,7 +84,7 @@ def test_profile_get_agent_config():
         tracker="noop",
         working_dir="/tmp/test",
         agents={
-            "architect": AgentConfig(driver="cli", model="opus"),
+            "architect": AgentConfig(driver="claude", model="opus"),
         },
     )
 
@@ -102,7 +132,7 @@ def test_agent_config_sandbox_default():
     """AgentConfig should default sandbox to SandboxConfig() with mode='none'."""
     from amelia.core.types import AgentConfig, SandboxConfig
 
-    config = AgentConfig(driver="cli", model="sonnet")
+    config = AgentConfig(driver="claude", model="sonnet")
     assert config.sandbox == SandboxConfig()
     assert config.sandbox.mode == "none"
 
@@ -111,7 +141,7 @@ def test_agent_config_profile_name_default():
     """AgentConfig should default profile_name to 'default'."""
     from amelia.core.types import AgentConfig
 
-    config = AgentConfig(driver="cli", model="sonnet")
+    config = AgentConfig(driver="claude", model="sonnet")
     assert config.profile_name == "default"
 
 
@@ -156,7 +186,7 @@ def test_get_agent_config_injects_profile_name():
         name="personal",
         tracker="noop",
         working_dir="/tmp/test",
-        agents={"developer": AgentConfig(driver="cli", model="sonnet")},
+        agents={"developer": AgentConfig(driver="claude", model="sonnet")},
     )
 
     config = profile.get_agent_config("developer")
