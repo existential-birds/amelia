@@ -502,7 +502,17 @@ class ClaudeCliDriver:
         try:
             async with ClaudeSDKClient(options=options) as client:
                 await client.query(prompt)
-                async for message in client.receive_response():
+                # Manual iteration to catch MessageParseError from unknown SDK
+                # message types (e.g. rate_limit_event) without aborting the stream.
+                _response_iter = client.receive_response().__aiter__()
+                while True:
+                    try:
+                        message = await _response_iter.__anext__()
+                    except StopAsyncIteration:
+                        break
+                    except MessageParseError as e:
+                        logger.debug("Ignoring unknown SDK message type in agentic execution", error=str(e))
+                        continue
                     _log_sdk_message(message)
 
                     # Skip SDK StreamEvent objects - they are progress updates

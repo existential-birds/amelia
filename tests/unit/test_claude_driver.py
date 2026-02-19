@@ -592,6 +592,55 @@ class TestClaudeCliDriverAgentic:
         driver.clear_tool_history()
         assert driver.tool_call_history == []
 
+    async def test_execute_agentic_skips_unknown_message_type(self, driver: ClaudeCliDriver) -> None:
+        """MessageParseError (e.g. rate_limit_event) is skipped; agentic execution continues."""
+        from claude_agent_sdk._errors import MessageParseError
+
+        class _InjectErrorIterator:
+            """Async iterator that injects a MessageParseError between real messages."""
+
+            def __init__(self) -> None:
+                self._items: list[Any] = [
+                    MockAssistantMessage([MockTextBlock("Working")]),
+                    MessageParseError("Unknown message type: rate_limit_event"),
+                    MockResultMessage(result="Done", session_id="sess_rate_agentic"),
+                ]
+                self._index = 0
+
+            def __aiter__(self) -> "_InjectErrorIterator":
+                return self
+
+            async def __anext__(self) -> Any:
+                if self._index >= len(self._items):
+                    raise StopAsyncIteration
+                item = self._items[self._index]
+                self._index += 1
+                if isinstance(item, Exception):
+                    raise item
+                return item
+
+        mock_client = MagicMock()
+        mock_client.query = AsyncMock()
+        mock_client.receive_response = lambda: _InjectErrorIterator()
+
+        mock_sdk_class = MagicMock()
+        mock_sdk_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_sdk_class.return_value.__aexit__ = AsyncMock(return_value=None)
+
+        with (
+            _patch_sdk_types(),
+            patch("amelia.drivers.cli.claude.ClaudeSDKClient", mock_sdk_class),
+        ):
+            collected = [msg async for msg in driver.execute_agentic("Do something", "/workspace")]
+
+            # Should get THINKING + RESULT, skipping the MessageParseError
+            assert len(collected) == 2
+            assert collected[0].type == AgenticMessageType.THINKING
+            assert collected[0].content == "Working"
+            assert collected[1].type == AgenticMessageType.RESULT
+            assert collected[1].content == "Done"
+            assert collected[1].session_id == "sess_rate_agentic"
+
 
 class TestToolNameNormalization:
     """Tests for tool name normalization in execute_agentic."""
