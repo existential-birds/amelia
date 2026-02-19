@@ -8,6 +8,7 @@ from typing import Any
 import websockets
 from pydantic import BaseModel, ConfigDict
 from rich.console import Console
+from rich.markup import escape
 
 
 class EventFormat(BaseModel):
@@ -86,11 +87,39 @@ def _format_agent_message(console: Console, event: dict[str, Any]) -> None:
     console.print(f"[cyan][{agent}][/cyan] {message}")
 
 
+def _format_claude_thinking(console: Console, event: dict[str, Any]) -> None:
+    """Format claude thinking event with dim styling."""
+    message = event.get("message", "")
+    agent = event.get("agent", "")
+    preview = escape(message[:200]) if message else ""
+    console.print(f"[dim]◆ \\[{escape(agent)}] thinking: {preview}[/dim]")
+
+
+def _format_claude_tool_call(console: Console, event: dict[str, Any]) -> None:
+    """Format claude tool call event with tool name."""
+    data = event.get("data", {}) or {}
+    tool_name = data.get("tool_name", "unknown")
+    agent = event.get("agent", "")
+    console.print(f"[yellow]⚡ \\[{escape(agent)}] Tool: {escape(tool_name)}[/yellow]")
+
+
+def _format_agent_output(console: Console, event: dict[str, Any]) -> None:
+    """Format agent output/result event."""
+    message = event.get("message", "")
+    agent = event.get("agent", "")
+    console.print(f"\n[bold green]✓ \\[{escape(agent)}] Result[/bold green]")
+    if message:
+        console.print(escape(message[:500]))
+
+
 _CUSTOM_FORMATTERS: dict[str, EventFormatter] = {
     "stage_started": _format_stage_started,
     "stage_completed": _format_stage_completed,
     "review_completed": _format_review_completed,
     "agent_message": _format_agent_message,
+    "claude_thinking": _format_claude_thinking,
+    "claude_tool_call": _format_claude_tool_call,
+    "agent_output": _format_agent_output,
 }
 
 
