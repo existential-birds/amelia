@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-02-18
+
+### Added
+
+- **cli:** Add `--stream` flag to `start`, `approve`, and `reject` commands for real-time trace output when using the API driver ([#472](https://github.com/existential-birds/amelia/pull/472))
+
+### Fixed
+
+- **db:** Add migration to convert TEXT columns to UUID type, fixing data integrity issues after the uuid.UUID refactor ([#464](https://github.com/existential-birds/amelia/pull/464))
+- **drivers:** Catch transient httpx errors and retry with exponential backoff to improve resilience against network blips ([#466](https://github.com/existential-birds/amelia/pull/466))
+- **drivers:** Handle `openai.APIConnectionError` as a transient error so workflows retry instead of failing permanently ([#471](https://github.com/existential-birds/amelia/pull/471))
+- **agents:** Prevent checkpoint bloat caused by tool_calls/tool_results being double-counted in state ([#456](https://github.com/existential-birds/amelia/pull/456))
+- **agents:** Fix incorrect skill name references in reviewer prompts that caused review steps to fail ([#460](https://github.com/existential-birds/amelia/pull/460))
+- **settings:** Reject relative `working_dir` values in the profile API and use the active profile in the Quick Shot modal ([#470](https://github.com/existential-birds/amelia/pull/470))
+- **quick-shot:** Fix external plan bugs in queue and start paths that prevented plan handoff from completing ([#468](https://github.com/existential-birds/amelia/pull/468))
+- **dashboard:** Fix API model selector not populating correctly in the profile editor ([#467](https://github.com/existential-birds/amelia/pull/467))
+- **logging:** Prevent `KeyError` crash in loguru formatter when log record extras contain nested dicts ([#465](https://github.com/existential-birds/amelia/pull/465))
+
 ## [0.15.0] - 2026-02-16
 
 ### Added
@@ -393,7 +411,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - FastAPI server with WebSocket support
 - React dashboard for workflow visualization
 
-[Unreleased]: https://github.com/existential-birds/amelia/compare/v0.15.0...HEAD
+[Unreleased]: https://github.com/existential-birds/amelia/compare/v0.16.0...HEAD
+[0.16.0]: https://github.com/existential-birds/amelia/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/existential-birds/amelia/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/existential-birds/amelia/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/existential-birds/amelia/compare/v0.12.0...v0.13.0
