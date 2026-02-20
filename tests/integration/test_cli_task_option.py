@@ -30,7 +30,7 @@ active_profile: noop
 profiles:
   noop:
     name: noop
-    driver: cli
+    driver: claude
     model: sonnet
     validator_model: sonnet
     tracker: noop
@@ -49,7 +49,7 @@ active_profile: github
 profiles:
   github:
     name: github
-    driver: cli
+    driver: claude
     model: sonnet
     validator_model: sonnet
     tracker: github
