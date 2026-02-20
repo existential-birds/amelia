@@ -1,5 +1,4 @@
 import json
-import subprocess
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -120,6 +119,7 @@ def test_run_codex_stream_raises_on_nonzero_exit() -> None:
     mock_process.returncode = 1
     mock_process.wait.return_value = 1
 
-    with patch("subprocess.Popen", return_value=mock_process):
-        with pytest.raises(ModelProviderError, match="Codex CLI streaming failed"):
-            list(driver._run_codex_stream("do something", cwd="/tmp"))
+    with patch("subprocess.Popen", return_value=mock_process), pytest.raises(
+        ModelProviderError, match="Codex CLI streaming failed"
+    ):
+        list(driver._run_codex_stream("do something", cwd="/tmp"))

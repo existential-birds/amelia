@@ -9,6 +9,7 @@ by actually verifying the driver abstraction works at runtime.
 from pathlib import Path
 from typing import Any, cast
 from unittest.mock import patch
+from uuid import uuid4
 
 import pytest
 from langchain_core.runnables.config import RunnableConfig
@@ -75,8 +76,9 @@ class TestDeveloperMultiDriver:
         state = make_execution_state(
             profile=profile,
             goal="Create a hello.txt file with 'Hello World'",
+            plan_markdown="# Test Plan\n\n1. Create hello.txt with 'Hello World'",
         )
-        config = make_config(thread_id=f"test-{driver_key}", profile=profile)
+        config = make_config(thread_id=str(uuid4()), profile=profile)
 
         mock_messages = make_agentic_messages(
             final_text="I created hello.txt with the content 'Hello World'"
@@ -120,8 +122,9 @@ class TestDeveloperMultiDriver:
         state = make_execution_state(
             profile=profile,
             goal="Read a non-existent file",
+            plan_markdown="# Test Plan\n\n1. Read non-existent file",
         )
-        config = make_config(thread_id=f"test-error-{driver_key}", profile=profile)
+        config = make_config(thread_id=str(uuid4()), profile=profile)
 
         error_messages = [
             AgenticMessage(
@@ -189,7 +192,7 @@ class TestReviewerMultiDriver:
             goal="Add logging to the application",
             code_changes_for_review="diff --git a/app.py b/app.py\n+import logging",
         )
-        config = make_config(thread_id=f"test-review-{driver_key}", profile=profile)
+        config = make_config(thread_id=str(uuid4()), profile=profile)
 
         mock_messages = make_reviewer_agentic_messages(approved=True)
 
@@ -229,7 +232,7 @@ class TestReviewerMultiDriver:
             goal="Implement authentication",
             code_changes_for_review="diff --git a/auth.py\n+password = 'hardcoded'",
         )
-        config = make_config(thread_id=f"test-reject-{driver_key}", profile=profile)
+        config = make_config(thread_id=str(uuid4()), profile=profile)
 
         mock_messages = make_reviewer_agentic_messages(
             approved=False,
