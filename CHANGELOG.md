@@ -7,15 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-
-- **drivers:** Add Codex CLI driver (`codex`) with both generate and execute_agentic streaming support
-
 ### Changed
 
-- **Breaking:** Remove legacy `cli` driver key. Use `claude` for Claude CLI driver.
+- **Breaking:** Replace legacy `cli` driver with explicit `claude` and `codex` drivers ([#473](https://github.com/existential-birds/amelia/issues/473))
 
-  **Migration:** If you have profiles using `--driver cli`, update to `--driver claude`.
+  The generic `driver: "cli"` value has been split into explicit driver keys:
+  - `claude` — wraps the Claude CLI binary
+  - `codex` — wraps the OpenAI Codex CLI binary
+  - `api` — unchanged (direct OpenRouter API calls)
+
+  **Migration:** Update all profiles that use `driver: "cli"` to `driver: "claude"`. Legacy `cli` values are now rejected at startup. Recreate profiles with `amelia config profile create <name> --driver claude`.
+
+### Added
+
+- **drivers:** Add `CodexCliDriver` for OpenAI Codex CLI integration with subprocess-based NDJSON streaming
 
 ## [0.15.0] - 2026-02-16
 
