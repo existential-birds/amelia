@@ -251,6 +251,60 @@ class TestProfileCreate:
         assert result.exit_code == 1
         assert "already exists" in result.stdout
 
+    def test_profile_create_accepts_codex_driver(
+        self, runner: CliRunner, mock_db: MagicMock
+    ) -> None:
+        """'amelia config profile create' accepts codex driver."""
+        created_profile = Profile(
+            name="codex-profile",
+            tracker="noop",
+            working_dir="/tmp",
+            agents={
+                "architect": AgentConfig(driver="codex", model="gpt-5-codex"),
+                "developer": AgentConfig(driver="codex", model="gpt-5-codex"),
+                "reviewer": AgentConfig(driver="codex", model="gpt-5-codex"),
+                "plan_validator": AgentConfig(driver="codex", model="gpt-5-codex"),
+            },
+        )
+
+        mock_repo = MagicMock()
+        mock_repo.get_profile = AsyncMock(return_value=None)
+        mock_repo.create_profile = AsyncMock(return_value=created_profile)
+
+        with patch("amelia.cli.config.get_database", return_value=mock_db), \
+             patch("amelia.cli.config.ProfileRepository", return_value=mock_repo):
+            result = runner.invoke(app, [
+                "config", "profile", "create", "codex-profile",
+                "--driver", "codex",
+                "--model", "gpt-5-codex",
+                "--tracker", "noop",
+                "--working-dir", "/tmp",
+            ])
+
+        assert result.exit_code == 0
+        assert "created successfully" in result.stdout
+        mock_repo.create_profile.assert_called_once()
+
+    def test_profile_create_rejects_legacy_cli_driver(
+        self, runner: CliRunner, mock_db: MagicMock
+    ) -> None:
+        """'amelia config profile create' rejects legacy 'cli' driver."""
+        mock_repo = MagicMock()
+        mock_repo.get_profile = AsyncMock(return_value=None)
+
+        with patch("amelia.cli.config.get_database", return_value=mock_db), \
+             patch("amelia.cli.config.ProfileRepository", return_value=mock_repo):
+            result = runner.invoke(app, [
+                "config", "profile", "create", "bad-profile",
+                "--driver", "cli",
+                "--model", "sonnet",
+                "--tracker", "noop",
+                "--working-dir", "/tmp",
+            ])
+
+        assert result.exit_code == 2
+        assert "Invalid driver" in result.stderr
+
 
 class TestProfileDelete:
     """Tests for 'amelia config profile delete' command."""
