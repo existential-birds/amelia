@@ -31,6 +31,7 @@ def test_agent_config_rejects_legacy_cli_driver() -> None:
 
     from amelia.core.types import AgentConfig
 
+    # Legacy "cli" driver should be rejected
     with pytest.raises(ValueError, match="Input should be 'claude', 'codex' or 'api'"):
         AgentConfig(driver="cli", model="sonnet")
 

@@ -41,8 +41,8 @@ def _make_agents(
 def test_profile_record_with_agents_json():
     """ProfileRecord should store agents as JSON."""
     agents = {
-        "architect": {"driver": "cli", "model": "opus", "options": {}},
-        "developer": {"driver": "cli", "model": "sonnet", "options": {}},
+        "architect": {"driver": "claude", "model": "opus", "options": {}},
+        "developer": {"driver": "claude", "model": "sonnet", "options": {}},
     }
 
     record = ProfileRecord(
@@ -61,8 +61,8 @@ def test_row_to_profile_parses_agents_json():
     """_row_to_profile should parse agents JSONB into AgentConfig dict."""
     # JSONB codec returns dicts directly from asyncpg
     agents_data = {
-        "architect": {"driver": "cli", "model": "opus", "options": {}},
-        "developer": {"driver": "cli", "model": "sonnet", "options": {}},
+        "architect": {"driver": "claude", "model": "opus", "options": {}},
+        "developer": {"driver": "claude", "model": "sonnet", "options": {}},
     }
 
     mock_row = {
@@ -191,9 +191,9 @@ class TestProfileRepository:
         )
         # update_profile accepts dict for agents (JSONB codec handles encoding)
         new_agents = {
-            "architect": {"driver": "cli", "model": "sonnet", "options": {}},
-            "developer": {"driver": "cli", "model": "sonnet", "options": {}},
-            "reviewer": {"driver": "cli", "model": "haiku", "options": {}},
+            "architect": {"driver": "claude", "model": "sonnet", "options": {}},
+            "developer": {"driver": "claude", "model": "sonnet", "options": {}},
+            "reviewer": {"driver": "claude", "model": "haiku", "options": {}},
         }
         updated = await repo.update_profile("dev", {"agents": new_agents})
         assert updated.agents["architect"].model == "sonnet"

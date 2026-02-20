@@ -182,4 +182,3 @@ class TestArchitectPlanPath:
 
         # plan_path should be extracted from the Write tool call
         assert final_state.plan_path == Path("/repo/docs/plans/2026-01-07-test-123.md")
-st-123.md")

@@ -64,7 +64,7 @@ def mock_repository() -> AsyncMock:
 def mock_profile_repo() -> AsyncMock:
     """Create mock profile repository."""
     repo = AsyncMock()
-    agent_config = AgentConfig(driver=DriverType.CLI, model="sonnet")
+    agent_config = AgentConfig(driver=DriverType.CLAUDE, model="sonnet")
     default_profile = Profile(
         name="test",
         tracker=TrackerType.NOOP,
@@ -986,9 +986,9 @@ class TestRunWorkflowCheckpointResume:
             tracker=TrackerType.NOOP,
             working_dir="/tmp/test",
             agents={
-                "architect": AgentConfig(driver=DriverType.CLI, model="sonnet"),
-                "developer": AgentConfig(driver=DriverType.CLI, model="sonnet"),
-                "reviewer": AgentConfig(driver=DriverType.CLI, model="sonnet"),
+                "architect": AgentConfig(driver=DriverType.CLAUDE, model="sonnet"),
+                "developer": AgentConfig(driver=DriverType.CLAUDE, model="sonnet"),
+                "reviewer": AgentConfig(driver=DriverType.CLAUDE, model="sonnet"),
             },
         )
 
@@ -1039,9 +1039,9 @@ class TestRunWorkflowCheckpointResume:
             tracker=TrackerType.NOOP,
             working_dir="/tmp/test",
             agents={
-                "architect": AgentConfig(driver=DriverType.CLI, model="sonnet"),
-                "developer": AgentConfig(driver=DriverType.CLI, model="sonnet"),
-                "reviewer": AgentConfig(driver=DriverType.CLI, model="sonnet"),
+                "architect": AgentConfig(driver=DriverType.CLAUDE, model="sonnet"),
+                "developer": AgentConfig(driver=DriverType.CLAUDE, model="sonnet"),
+                "reviewer": AgentConfig(driver=DriverType.CLAUDE, model="sonnet"),
             },
         )
 
@@ -1282,7 +1282,7 @@ class TestStartWorkflowWithTaskFields:
         (worktree / ".git").touch()
 
         # Override the mock profile to use github tracker
-        agent_config = AgentConfig(driver=DriverType.CLI, model="sonnet")
+        agent_config = AgentConfig(driver=DriverType.CLAUDE, model="sonnet")
         mock_profile_repo.get_profile.return_value = Profile(
             name="github",
             tracker=TrackerType.GITHUB,
@@ -1365,7 +1365,7 @@ def model_provider_error_setup(mock_repository: AsyncMock) -> ModelProviderError
     mock_repository.get.return_value = mock_workflow
 
     # Profile with fast retry config
-    agent_config = AgentConfig(driver=DriverType.CLI, model="sonnet")
+    agent_config = AgentConfig(driver=DriverType.CLAUDE, model="sonnet")
     mock_profile = Profile(
         name="test",
         tracker=TrackerType.NOOP,
@@ -1471,7 +1471,7 @@ async def test_httpx_connect_error_retried(
     )
     mock_repository.get.return_value = mock_workflow
 
-    agent_config = AgentConfig(driver=DriverType.CLI, model="sonnet")
+    agent_config = AgentConfig(driver=DriverType.CLAUDE, model="sonnet")
     mock_profile = Profile(
         name="test",
         tracker=TrackerType.NOOP,
@@ -1543,7 +1543,7 @@ class TestExponentialBackoff:
             profile_id="test",
         )
 
-        agent_config = AgentConfig(driver=DriverType.CLI, model="sonnet")
+        agent_config = AgentConfig(driver=DriverType.CLAUDE, model="sonnet")
         mock_profile = Profile(
             name="test",
             tracker=TrackerType.NOOP,

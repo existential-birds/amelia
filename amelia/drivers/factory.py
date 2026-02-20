@@ -19,7 +19,7 @@ def get_driver(
     """Get a concrete driver implementation.
 
     Args:
-        driver_key: Driver identifier ("cli" or "api").
+        driver_key: Driver identifier ("claude", "codex", or "api").
         model: LLM model identifier.
         cwd: Working directory (used by CLI driver).
         sandbox_config: Sandbox configuration for containerized execution.
@@ -72,7 +72,7 @@ async def cleanup_driver_session(driver_key: str, session_id: str) -> bool:
     This allows cleaning up sessions without needing a configured driver instance.
 
     Args:
-        driver_key: Driver identifier ("cli" or "api").
+        driver_key: Driver identifier ("claude", "codex", or "api").
         session_id: The driver session ID to clean up.
 
     Returns:
@@ -89,6 +89,6 @@ async def cleanup_driver_session(driver_key: str, session_id: str) -> bool:
     else:
         raise ValueError(
             f"Unknown driver key: {driver_key!r}. "
-            f"Valid options: 'cli' or 'api'. "
-            f"(Legacy forms 'cli:claude' and 'api:openrouter' are no longer supported.)"
+            f"Valid options: 'claude', 'codex', 'api'. "
+            f"(Legacy forms 'cli', 'cli:claude' and 'api:openrouter' are no longer supported.)"
         )

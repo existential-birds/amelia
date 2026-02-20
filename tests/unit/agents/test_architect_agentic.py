@@ -29,7 +29,7 @@ class TestArchitectInitWithAgentConfig:
             architect = Architect(config)
 
             mock_get_driver.assert_called_once_with(
-                "cli",
+                "claude",
                 model="sonnet",
                 sandbox_config=SandboxConfig(),
                 profile_name="default",

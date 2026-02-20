@@ -103,7 +103,7 @@ class TestProfileList:
         assert result.exit_code == 0
         assert "test-profile" in result.stdout
         assert "prod-profile" in result.stdout
-        assert "cli" in result.stdout
+        assert "claude" in result.stdout
         assert "api" in result.stdout
 
 
@@ -163,7 +163,7 @@ class TestProfileShow:
 
         assert result.exit_code == 0
         assert "my-profile" in result.stdout
-        assert "cli" in result.stdout
+        assert "claude" in result.stdout
         assert "sonnet" in result.stdout
 
 
@@ -209,7 +209,7 @@ class TestProfileCreate:
              patch("amelia.cli.config.ProfileRepository", return_value=mock_repo):
             result = runner.invoke(app, [
                 "config", "profile", "create", "new-profile",
-                "--driver", "cli",
+                "--driver", "claude",
                 "--model", "sonnet",
                 "--tracker", "noop",
                 "--working-dir", "/tmp",
@@ -242,7 +242,7 @@ class TestProfileCreate:
              patch("amelia.cli.config.ProfileRepository", return_value=mock_repo):
             result = runner.invoke(app, [
                 "config", "profile", "create", "existing",
-                "--driver", "cli",
+                "--driver", "claude",
                 "--model", "sonnet",
                 "--tracker", "none",
                 "--working-dir", "/tmp",

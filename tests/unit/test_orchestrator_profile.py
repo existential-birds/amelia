@@ -40,7 +40,7 @@ class TestOrchestratorProfileLoading:
         profile = await mock_profile_repo.get_profile("dev")
         assert profile is not None
         assert profile.name == "dev"
-        assert profile.agents["developer"].driver == "cli"
+        assert profile.agents["developer"].driver == "claude"
 
     async def test_get_profile_or_fail_returns_profile(self):
         """Verify _get_profile_or_fail returns Profile from database."""

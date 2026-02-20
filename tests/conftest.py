@@ -168,7 +168,7 @@ def mock_issue_factory() -> Callable[..., Issue]:
 
 
 def make_agents_json(
-    driver: DriverType = "cli",
+    driver: DriverType = "claude",
     model: str = "sonnet",
     validator_model: str | None = None,
 ) -> str:
@@ -209,7 +209,7 @@ def mock_profile_record_factory() -> Callable[..., ProfileRecord]:
         id: str = "test",
         tracker: str = "noop",
         working_dir: str = "/tmp/test",
-        driver: DriverType = "cli",
+        driver: DriverType = "claude",
         model: str = "sonnet",
         validator_model: str | None = None,
         agents: str | None = None,

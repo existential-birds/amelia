@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **drivers:** Add Codex CLI driver (`codex`) with both generate and execute_agentic streaming support
+
+### Changed
+
+- **Breaking:** Remove legacy `cli` driver key. Use `claude` for Claude CLI driver.
+
+  **Migration:** If you have profiles using `--driver cli`, update to `--driver claude`.
+
 ## [0.15.0] - 2026-02-16
 
 ### Added

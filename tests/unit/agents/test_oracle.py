@@ -24,7 +24,7 @@ class TestOracleInit:
 
             oracle = Oracle(config)
 
-            mock_get_driver.assert_called_once_with("cli", model="sonnet")
+            mock_get_driver.assert_called_once_with("claude", model="sonnet")
             assert oracle._driver is mock_driver
 
     def test_init_accepts_event_bus(self):

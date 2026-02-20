@@ -22,9 +22,9 @@ class TestFirstRunDetection:
             tracker=TrackerType.NOOP,
             working_dir="/tmp",
             agents={
-                "architect": AgentConfig(driver=DriverType.CLI, model="sonnet"),
-                "developer": AgentConfig(driver=DriverType.CLI, model="sonnet"),
-                "reviewer": AgentConfig(driver=DriverType.CLI, model="sonnet"),
+                "architect": AgentConfig(driver=DriverType.CLAUDE, model="sonnet"),
+                "developer": AgentConfig(driver=DriverType.CLAUDE, model="sonnet"),
+                "reviewer": AgentConfig(driver=DriverType.CLAUDE, model="sonnet"),
             },
         )
 
@@ -50,9 +50,9 @@ class TestFirstRunDetection:
             tracker=TrackerType.NOOP,
             working_dir="/tmp",
             agents={
-                "architect": AgentConfig(driver=DriverType.CLI, model="opus"),
-                "developer": AgentConfig(driver=DriverType.CLI, model="opus"),
-                "reviewer": AgentConfig(driver=DriverType.CLI, model="opus"),
+                "architect": AgentConfig(driver=DriverType.CLAUDE, model="opus"),
+                "developer": AgentConfig(driver=DriverType.CLAUDE, model="opus"),
+                "reviewer": AgentConfig(driver=DriverType.CLAUDE, model="opus"),
             },
         )
 
@@ -67,7 +67,7 @@ class TestFirstRunDetection:
             # Simulate user input for prompts
             mock_prompt.side_effect = [
                 "local_opus",  # Profile name
-                "cli",  # Driver
+                "claude",  # Driver
                 "opus",  # Model
                 "noop",  # Tracker
                 "/tmp",  # Working directory
@@ -137,9 +137,9 @@ class TestFirstRunProfileCreation:
             tracker=TrackerType.NOOP,
             working_dir="/tmp",
             agents={
-                "architect": AgentConfig(driver=DriverType.CLI, model="opus"),
-                "developer": AgentConfig(driver=DriverType.CLI, model="opus"),
-                "reviewer": AgentConfig(driver=DriverType.CLI, model="opus"),
+                "architect": AgentConfig(driver=DriverType.CLAUDE, model="opus"),
+                "developer": AgentConfig(driver=DriverType.CLAUDE, model="opus"),
+                "reviewer": AgentConfig(driver=DriverType.CLAUDE, model="opus"),
             },
         )
 
@@ -153,7 +153,7 @@ class TestFirstRunProfileCreation:
              patch("typer.prompt") as mock_prompt:
             mock_prompt.side_effect = [
                 "testprofile",
-                "cli",
+                "claude",
                 "opus",
                 "noop",
                 "/tmp",
@@ -170,9 +170,9 @@ class TestFirstRunProfileCreation:
             tracker=TrackerType.NOOP,
             working_dir="/tmp",
             agents={
-                "architect": AgentConfig(driver=DriverType.CLI, model="opus"),
-                "developer": AgentConfig(driver=DriverType.CLI, model="opus"),
-                "reviewer": AgentConfig(driver=DriverType.CLI, model="opus"),
+                "architect": AgentConfig(driver=DriverType.CLAUDE, model="opus"),
+                "developer": AgentConfig(driver=DriverType.CLAUDE, model="opus"),
+                "reviewer": AgentConfig(driver=DriverType.CLAUDE, model="opus"),
             },
         )
 
@@ -184,7 +184,7 @@ class TestFirstRunProfileCreation:
         with patch("amelia.cli.config.get_database", return_value=mock_db), \
              patch("amelia.cli.config.ProfileRepository", return_value=mock_repo), \
              patch("typer.prompt") as mock_prompt:
-            mock_prompt.side_effect = ["local_opus", "cli", "opus", "noop", "/tmp"]
+            mock_prompt.side_effect = ["local_opus", "claude", "opus", "noop", "/tmp"]
 
             await check_and_run_first_time_setup()
 
@@ -199,9 +199,9 @@ class TestFirstRunProfileCreation:
             tracker=TrackerType.NOOP,
             working_dir="/tmp",
             agents={
-                "architect": AgentConfig(driver=DriverType.CLI, model="sonnet"),
-                "developer": AgentConfig(driver=DriverType.CLI, model="sonnet"),
-                "reviewer": AgentConfig(driver=DriverType.CLI, model="sonnet"),
+                "architect": AgentConfig(driver=DriverType.CLAUDE, model="sonnet"),
+                "developer": AgentConfig(driver=DriverType.CLAUDE, model="sonnet"),
+                "reviewer": AgentConfig(driver=DriverType.CLAUDE, model="sonnet"),
             },
         )
 

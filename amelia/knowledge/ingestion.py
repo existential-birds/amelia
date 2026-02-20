@@ -38,7 +38,7 @@ class IngestionPipeline:
         embedding_client: OpenRouter embedding client.
         concurrency_limit: Max simultaneous document ingestions.
         tag_derivation_model: LLM model for tag extraction (None = disabled).
-        tag_derivation_driver: Driver type for tag extraction ("api" or "cli").
+        tag_derivation_driver: Driver type for tag extraction ("api", "claude", or "codex").
     """
 
     def __init__(
@@ -378,7 +378,7 @@ Return 5-10 tags that best describe this document's content and purpose."""
             raw_text: Full document text.
             chunk_data: List of chunks with heading paths.
             model: LLM model identifier for extraction.
-            driver_type: Driver type ("api" or "cli").
+            driver_type: Driver type ("api", "claude", or "codex").
 
         Returns:
             List of validated tags (empty list if extraction fails).

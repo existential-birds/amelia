@@ -96,7 +96,7 @@ async def test_pipeline_initialization_stores_tag_config(
         tag_derivation_driver="claude",
     )
     assert pipeline_enabled.tag_derivation_model == "openai/gpt-4o-mini"
-    assert pipeline_enabled.tag_derivation_driver == "cli"
+    assert pipeline_enabled.tag_derivation_driver == "claude"
 
     # Test with tag derivation disabled (None model)
     pipeline_disabled = IngestionPipeline(

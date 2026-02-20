@@ -122,9 +122,9 @@ class TestCleanupDriverSession:
         finally:
             ApiDriver._sessions.pop(test_session_id, None)
 
-    async def test_cleanup_cli_driver_session_returns_false(self) -> None:
-        """Should return False for CLI driver (no state)."""
-        result = await cleanup_driver_session("cli", "any-session")
+    async def test_cleanup_claude_driver_session_returns_false(self) -> None:
+        """Should return False for claude driver (no state)."""
+        result = await cleanup_driver_session("claude", "any-session")
         assert result is False
 
     async def test_cleanup_unknown_driver_raises(self) -> None:

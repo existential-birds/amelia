@@ -16,9 +16,9 @@ amelia config profile create dev \
   --tracker github \
   --activate
 
-# Or create a CLI-based profile for enterprise compliance
+# Or create a CLI-based profile (claude or codex)
 amelia config profile create work \
-  --driver cli \
+  --driver claude \
   --tracker jira \
   --activate
 ```

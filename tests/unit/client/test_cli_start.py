@@ -122,9 +122,9 @@ class TestPlanCommandTaskFlags:
             "plan_path_pattern": "docs/plans/{date}-{issue_key}.md",
             "is_active": True,
             "agents": {
-                "architect": {"driver": "cli", "model": "sonnet", "options": {}},
-                "developer": {"driver": "cli", "model": "sonnet", "options": {}},
-                "reviewer": {"driver": "cli", "model": "sonnet", "options": {}},
+                "architect": {"driver": "claude", "model": "sonnet", "options": {}},
+                "developer": {"driver": "claude", "model": "sonnet", "options": {}},
+                "reviewer": {"driver": "claude", "model": "sonnet", "options": {}},
             },
         }
 

@@ -155,11 +155,11 @@ class TestRouteAfterTaskReview:
             tracker=TrackerType.NOOP,
             working_dir="/tmp/test",
             agents={
-                "architect": AgentConfig(driver=DriverType.CLI, model="sonnet"),
-                "developer": AgentConfig(driver=DriverType.CLI, model="sonnet"),
-                "reviewer": AgentConfig(driver=DriverType.CLI, model="sonnet"),
+                "architect": AgentConfig(driver=DriverType.CLAUDE, model="sonnet"),
+                "developer": AgentConfig(driver=DriverType.CLAUDE, model="sonnet"),
+                "reviewer": AgentConfig(driver=DriverType.CLAUDE, model="sonnet"),
                 "task_reviewer": AgentConfig(
-                    driver=DriverType.CLI, model="sonnet", options={"max_iterations": 3}
+                    driver=DriverType.CLAUDE, model="sonnet", options={"max_iterations": 3}
                 ),
             },
         )
@@ -277,11 +277,11 @@ class TestRouteAfterTaskReview:
             tracker=TrackerType.NOOP,
             working_dir="/tmp/test",
             agents={
-                "architect": AgentConfig(driver=DriverType.CLI, model="sonnet"),
-                "developer": AgentConfig(driver=DriverType.CLI, model="sonnet"),
-                "reviewer": AgentConfig(driver=DriverType.CLI, model="sonnet"),
+                "architect": AgentConfig(driver=DriverType.CLAUDE, model="sonnet"),
+                "developer": AgentConfig(driver=DriverType.CLAUDE, model="sonnet"),
+                "reviewer": AgentConfig(driver=DriverType.CLAUDE, model="sonnet"),
                 "task_reviewer": AgentConfig(
-                    driver=DriverType.CLI, model="sonnet", options={"max_iterations": 10}
+                    driver=DriverType.CLAUDE, model="sonnet", options={"max_iterations": 10}
                 ),
             },
         )
@@ -421,10 +421,10 @@ class TestReviewerNodeTaskIteration:
             tracker=TrackerType.NOOP,
             working_dir="/tmp/test",
             agents={
-                "architect": AgentConfig(driver=DriverType.CLI, model="sonnet"),
-                "developer": AgentConfig(driver=DriverType.CLI, model="sonnet"),
-                "reviewer": AgentConfig(driver=DriverType.CLI, model="sonnet"),
-                "task_reviewer": AgentConfig(driver=DriverType.CLI, model="sonnet"),
+                "architect": AgentConfig(driver=DriverType.CLAUDE, model="sonnet"),
+                "developer": AgentConfig(driver=DriverType.CLAUDE, model="sonnet"),
+                "reviewer": AgentConfig(driver=DriverType.CLAUDE, model="sonnet"),
+                "task_reviewer": AgentConfig(driver=DriverType.CLAUDE, model="sonnet"),
             },
         )
         config: RunnableConfig = {"configurable": {"profile": profile, "thread_id": "test-wf"}}

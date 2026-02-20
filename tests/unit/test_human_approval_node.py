@@ -67,7 +67,7 @@ class TestHumanApprovalNodeCLIMode:
         """In CLI mode, node prompts user for approval."""
         mock_confirm.return_value = True
         mock_prompt.return_value = ""
-        config = {"configurable": {"execution_mode": "cli"}}
+        config = {"configurable": {"execution_mode": "claude"}}
 
         result = await human_approval_node(base_state, config)
 

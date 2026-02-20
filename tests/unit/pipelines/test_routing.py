@@ -47,7 +47,7 @@ class TestRouteAfterTaskReview:
             working_dir="/tmp/test",
             agents={
                 "task_reviewer": AgentConfig(
-                    driver=DriverType.CLI, model="sonnet", options={"max_iterations": 2}
+                    driver=DriverType.CLAUDE, model="sonnet", options={"max_iterations": 2}
                 ),
             },
         )

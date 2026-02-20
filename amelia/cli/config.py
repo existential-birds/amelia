@@ -91,7 +91,8 @@ async def _get_settings_repository() -> tuple[Database, SettingsRepository]:
 
 
 VALID_DRIVERS: set[DriverType] = {
-    DriverType.CLI,
+    DriverType.CLAUDE,
+    DriverType.CODEX,
     DriverType.API,
 }
 VALID_TRACKERS: set[TrackerType] = {
@@ -257,7 +258,7 @@ def profile_create(
     name: Annotated[str, typer.Argument(help="Profile name")],
     driver: Annotated[
         str | None,
-        typer.Option("--driver", "-d", help="Driver (cli or api)"),
+        typer.Option("--driver", "-d", help="Driver (claude, codex, or api)"),
     ] = None,
     model: Annotated[
         str | None,
@@ -285,7 +286,7 @@ def profile_create(
     if driver is None:
         driver = typer.prompt(
             "Driver",
-            default="cli",
+            default="claude",
             show_default=True,
         )
     if model is None:
@@ -418,7 +419,7 @@ async def check_and_run_first_time_setup() -> bool:
         )
 
         name = typer.prompt("Profile name", default="local_opus")
-        driver_input = typer.prompt("Driver (cli or api)", default="cli")
+        driver_input = typer.prompt("Driver (claude, codex, or api)", default="claude")
         model = typer.prompt("Model", default="opus")
         tracker = typer.prompt("Tracker (noop, github, jira)", default="noop")
         working_dir = typer.prompt("Working directory", default=str(Path.cwd()))

@@ -21,7 +21,7 @@ See the [**Roadmap**](https://existential-birds.github.io/amelia/reference/roadm
 - **Beagle plugin** - Claude Code plugin with Amelia skills ([install guide](https://github.com/existential-birds/beagle?tab=readme-ov-file#installation))
 - **LLM access** - Either:
   - OpenRouter API key (for `api` driver)
-  - Claude CLI installed (for `cli` driver)
+  - Claude CLI installed (for `claude` driver)
 
 > [!NOTE]
 > **Model selection matters.** The API driver requires models with reliable tool-calling capabilities. Models that don't consistently follow tool-calling instructions may fail to complete tasks. See [Troubleshooting](https://existential-birds.github.io/amelia/guide/troubleshooting#api-driver-agent-fails-to-create-plan-file) for details.

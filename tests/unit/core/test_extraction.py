@@ -79,13 +79,13 @@ class TestExtractStructured:
                 prompt="Test prompt",
                 schema=SampleSchema,
                 model="claude-3",
-                driver_type="cli",
+                driver_type="claude",
             )
 
             assert result.goal == "CLI Test"
             assert result.priority == 3
             mock_get_driver.assert_called_once_with(
-                driver_key="cli",
+                driver_key="claude",
                 model="claude-3",
                 cwd=".",
             )

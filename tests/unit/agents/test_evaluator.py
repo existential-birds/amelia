@@ -60,7 +60,7 @@ class TestEvaluator:
 
             evaluator = Evaluator(config)
 
-            mock_get_driver.assert_called_once_with("cli", model="sonnet")
+            mock_get_driver.assert_called_once_with("claude", model="sonnet")
             assert evaluator.driver is mock_driver
 
     def test_evaluator_init_stores_options(self) -> None:

@@ -250,13 +250,13 @@ class CreateWorkflowRequest(BaseModel):
             raise ValueError(msg)
 
         # Accept simple driver types
-        if v in ("api", "cli"):
+        if v in ("api", "claude", "codex"):
             return v
 
         # For extended format, validate type:name pattern
         parts = v.split(":")
         if len(parts) != 2:
-            msg = "driver must be 'api', 'cli', or in type:name format (e.g., sdk:claude)"
+            msg = "driver must be 'api', 'claude', 'codex', or in type:name format (e.g., sdk:claude)"
             raise ValueError(msg)
 
         driver_type, driver_name = parts
