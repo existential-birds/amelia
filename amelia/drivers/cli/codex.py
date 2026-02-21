@@ -178,7 +178,7 @@ class CodexCliDriver(DriverInterface):
                 f"Failed to parse Codex CLI output as JSON: {e}",
                 provider_name=self.PROVIDER_NAME,
                 original_message=raw_output[:500],
-            ) from None
+            ) from e
 
     async def generate(
         self,

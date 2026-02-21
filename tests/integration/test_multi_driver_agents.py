@@ -1,7 +1,7 @@
 """Integration tests verifying agents work correctly with multiple drivers.
 
 This module tests that agents (Developer, Reviewer) produce consistent behavior
-regardless of which driver implementation is used (cli, api).
+regardless of which driver implementation is used (claude, codex, api).
 These tests replace the low-value static import tests in test_agent_imports.py
 by actually verifying the driver abstraction works at runtime.
 """
@@ -64,7 +64,7 @@ class TestDeveloperMultiDriver:
     ) -> None:
         """Developer should collect tool calls regardless of driver type.
 
-        Both cli and api drivers yield AgenticMessage objects.
+        All drivers (claude, codex, api) yield AgenticMessage objects.
         The Developer agent processes these uniformly - this test verifies that
         the abstraction works correctly for both driver implementations.
         """
