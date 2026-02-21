@@ -51,20 +51,20 @@ export function formatTime(isoString: string | null | undefined): string {
 /**
  * Formats driver string for display.
  *
- * Extracts the driver type (API or CLI) from the full driver string.
+ * Extracts the driver type (API or Claude) from the full driver string.
  *
- * @param driver - Driver string (e.g., "api:openrouter", "cli:claude")
- * @returns Formatted driver type (e.g., "API", "CLI")
+ * @param driver - Driver string (e.g., "api:openrouter", "claude:opus")
+ * @returns Formatted driver type (e.g., "API", "Claude")
  *
  * @example
  * ```ts
  * formatDriver('api:openrouter') // => 'API'
- * formatDriver('cli:claude') // => 'CLI'
+ * formatDriver('claude:opus') // => 'Claude'
  * ```
  */
 export function formatDriver(driver: string): string {
   if (driver.startsWith('api:')) return 'API';
-  if (driver.startsWith('cli:')) return 'CLI';
+  if (driver.startsWith('claude:')) return 'Claude';
   return driver.toUpperCase();
 }
 

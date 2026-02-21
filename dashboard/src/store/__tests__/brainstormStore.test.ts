@@ -55,7 +55,7 @@ describe("useBrainstormStore", () => {
     it("sets active profile", () => {
       const profile = {
         name: "test-profile",
-        driver: "cli",
+        driver: "claude",
         model: "sonnet",
       };
       useBrainstormStore.getState().setActiveProfile(profile);

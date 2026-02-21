@@ -5,8 +5,7 @@ and agentic execution capabilities.
 """
 import asyncio
 import json
-import subprocess
-from collections.abc import AsyncIterator, Iterator
+from collections.abc import AsyncIterator
 from typing import Any
 
 from pydantic import BaseModel, ValidationError
@@ -84,12 +83,12 @@ class CodexCliDriver(DriverInterface):
 
         return stdout.decode()
 
-    def _run_codex_stream(
+    async def _run_codex_stream(
         self, prompt: str, cwd: str | None = None, **kwargs: Any
-    ) -> Iterator[dict[str, Any]]:
+    ) -> AsyncIterator[dict[str, Any]]:
         """Run codex CLI command and stream NDJSON events.
 
-        Spawns a synchronous subprocess with ``codex exec --stream --json``
+        Spawns an async subprocess with ``codex exec --stream --json``
         and yields one parsed dict per newline-delimited JSON line.
 
         Args:
@@ -110,15 +109,18 @@ class CodexCliDriver(DriverInterface):
 
         cmd.extend(["--", prompt])
 
-        proc = subprocess.Popen(
-            cmd,
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
             cwd=cwd or self.cwd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
         )
 
         try:
-            for raw_line in proc.stdout:  # type: ignore[union-attr]
+            while True:
+                raw_line = await proc.stdout.readline()  # type: ignore[union-attr]
+                if not raw_line:
+                    break
                 line = raw_line.decode("utf-8", errors="replace").strip()
                 if not line:
                     continue
@@ -128,12 +130,17 @@ class CodexCliDriver(DriverInterface):
                         yield event
                 except json.JSONDecodeError:
                     continue  # skip malformed lines
+        except asyncio.CancelledError:
+            proc.kill()
+            await proc.wait()
+            raise
         finally:
-            proc.wait()
+            await proc.wait()
             if proc.returncode and proc.returncode != 0:
                 stderr_text = ""
                 if proc.stderr:
-                    stderr_text = proc.stderr.read().decode("utf-8", errors="replace").strip()[:1000]
+                    stderr_bytes = await proc.stderr.read()
+                    stderr_text = stderr_bytes.decode("utf-8", errors="replace").strip()[:1000]
                 raise ModelProviderError(
                     f"Codex CLI streaming failed with exit code {proc.returncode}: {stderr_text}",
                     provider_name=self.PROVIDER_NAME,
@@ -273,27 +280,12 @@ class CodexCliDriver(DriverInterface):
         if instructions:
             full_prompt = f"{instructions}\n\n{prompt}"
 
-        # Build command args
-        cmd_args: dict[str, Any] = {"cwd": cwd}
-        if session_id:
-            cmd_args["session_id"] = session_id
-        if allowed_tools:
-            cmd_args["allowed_tools"] = allowed_tools
+        # Note: session_id and allowed_tools are accepted for interface compatibility
+        # but not currently used by codex CLI (sessions use `resume` subcommand,
+        # permissions use sandbox modes)
 
-        try:
-            # Use streaming mode
-            stream_events = self._run_codex_stream(full_prompt, **cmd_args)
-        except ModelProviderError:
-            raise
-        except Exception as e:
-            raise ModelProviderError(
-                f"Codex CLI agentic error: {e}",
-                provider_name=self.PROVIDER_NAME,
-                original_message=str(e),
-            ) from e
-
-        # Iterate over streaming events
-        for parsed in stream_events:
+        # Use streaming mode - iterate asynchronously
+        async for parsed in self._run_codex_stream(full_prompt, cwd=cwd):
             # parsed is already a dict from _run_codex_stream yielding dicts
 
             # Map to AgenticMessage types

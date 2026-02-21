@@ -60,7 +60,7 @@ const MODEL_COLORS = {
 
 /** Get driver icon component */
 const getDriverIcon = (driver: string) => {
-  return driver.startsWith('cli:') ? Terminal : Cloud;
+  return driver.startsWith('claude:') ? Terminal : Cloud;
 };
 
 /** Get model display color */
@@ -89,7 +89,7 @@ export const ProfileCard = forwardRef<HTMLDivElement, ProfileCardProps>(
   const primaryAgents = ['architect', 'developer', 'reviewer'] as const;
   const agentConfigs = primaryAgents.map(key => ({
     key,
-    driver: profile.agents?.[key]?.driver ?? 'cli',
+    driver: profile.agents?.[key]?.driver ?? 'claude',
     model: profile.agents?.[key]?.model ?? 'unknown',
   }));
 
@@ -193,7 +193,7 @@ export const ProfileCard = forwardRef<HTMLDivElement, ProfileCardProps>(
               variant="outline"
               className={cn(
                 'text-xs',
-                primaryDriver.startsWith('cli:')
+                primaryDriver.startsWith('claude:')
                   ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/30'
                   : 'bg-blue-500/10 text-blue-500 border-blue-500/30'
               )}

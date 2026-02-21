@@ -5,7 +5,7 @@ import type { ProfileInfo, SessionUsageSummary } from "@/types/api";
 
 const mockProfile: ProfileInfo = {
   name: "test-profile",
-  driver: "cli",
+  driver: "claude",
   model: "claude-sonnet-4.5",
 };
 
@@ -79,8 +79,8 @@ describe("SessionInfoBar", () => {
     // "claude-sonnet-4.5" -> "Claude Sonnet 4.5"
     expect(screen.getByText("Claude Sonnet 4.5")).toBeInTheDocument();
 
-    // Should render formatted driver (formatDriver returns "CLI" for "cli:" prefix)
-    expect(screen.getByText("CLI")).toBeInTheDocument();
+    // Should render formatted driver (formatDriver returns "CLAUDE" for non-prefixed strings)
+    expect(screen.getByText("CLAUDE")).toBeInTheDocument();
   });
 
   it("renders message count", () => {
@@ -158,7 +158,7 @@ describe("SessionInfoBar", () => {
 
     // Should not render model or driver
     expect(screen.queryByText("Claude Sonnet 4.5")).not.toBeInTheDocument();
-    // Note: "CLI" might appear elsewhere, so we check for the model specifically
+    // Note: "Claude" might appear elsewhere, so we check for the model specifically
   });
 
   it("formats cost with two decimal places", () => {

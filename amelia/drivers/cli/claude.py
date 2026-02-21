@@ -25,7 +25,7 @@ from pydantic import BaseModel, ValidationError
 
 from amelia.core.constants import CANONICAL_TO_CLI, normalize_tool_name
 from amelia.core.exceptions import ModelProviderError
-from amelia.drivers.base import AgenticMessage, AgenticMessageType, DriverUsage, GenerateResult
+from amelia.drivers.base import AgenticMessage, AgenticMessageType, DriverInterface, DriverUsage, GenerateResult
 from amelia.logging import log_claude_result
 
 
@@ -189,7 +189,7 @@ def _log_sdk_message(message: Message | SDKStreamEvent) -> None:
         )
 
 
-class ClaudeCliDriver:
+class ClaudeCliDriver(DriverInterface):
     """Claude CLI Driver using the claude-agent-sdk.
 
     This driver wraps the Claude CLI via the official SDK, providing both

@@ -8,12 +8,12 @@ interface DriverStyle {
 }
 
 const DRIVER_STYLES = {
-  cli: { bg: 'bg-yellow-500/10', text: 'text-yellow-500', icon: Terminal },
+  claude: { bg: 'bg-yellow-500/10', text: 'text-yellow-500', icon: Terminal },
   api: { bg: 'bg-blue-500/10', text: 'text-blue-500', icon: Cloud },
 } as const satisfies Record<string, DriverStyle>;
 
 export function getDriverStyle(driver: string): DriverStyle {
-  const prefix = driver.startsWith('cli:') ? 'cli' : 'api';
+  const prefix = driver.startsWith('claude:') ? 'claude' : 'api';
   return DRIVER_STYLES[prefix];
 }
 

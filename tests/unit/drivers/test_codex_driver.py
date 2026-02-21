@@ -1,4 +1,7 @@
+import asyncio
 import json
+from collections.abc import AsyncIterator
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -35,16 +38,20 @@ async def test_generate_parses_schema() -> None:
 @pytest.mark.asyncio
 async def test_execute_agentic_maps_stream_events() -> None:
     driver = CodexCliDriver(model="gpt-5-codex", cwd="/tmp")
-    with patch.object(
-        driver,
-        "_run_codex_stream",
-        return_value=iter([
+
+    async def mock_run_codex_stream(
+        prompt: str, **kwargs: Any
+    ) -> AsyncIterator[dict[str, Any]]:
+        events: list[dict[str, Any]] = [
             {"type": "reasoning", "content": "thinking"},
             {"type": "tool_call", "name": "read_file", "input": {"path": "a.py"}, "id": "1"},
             {"type": "tool_result", "name": "read_file", "output": "ok", "id": "1"},
             {"type": "final", "content": "done"},
-        ]),
-    ):
+        ]
+        for event in events:
+            yield event
+
+    with patch.object(driver, "_run_codex_stream", mock_run_codex_stream):
         msgs = [m async for m in driver.execute_agentic("task", cwd="/tmp")]
 
     assert [m.type for m in msgs] == [
@@ -61,24 +68,62 @@ async def test_cleanup_session_is_false() -> None:
     assert await driver.cleanup_session("any") is False
 
 
-def test_run_codex_stream_yields_parsed_ndjson_events() -> None:
-    """_run_codex_stream should spawn codex subprocess and yield parsed NDJSON lines."""
+def _create_mock_process(
+    stdout_lines: list[bytes], returncode: int = 0, stderr_bytes: bytes = b""
+) -> MagicMock:
+    """Create a mock async subprocess with given stdout lines."""
+    mock_process = MagicMock()
+    mock_process.returncode = returncode
+
+    # Create an async readline that returns lines one by one, then empty
+    line_index = 0
+
+    async def mock_readline() -> bytes:
+        nonlocal line_index
+        if line_index < len(stdout_lines):
+            line = stdout_lines[line_index]
+            line_index += 1
+            return line
+        return b""
+
+    mock_stdout = MagicMock()
+    mock_stdout.readline = mock_readline
+    mock_process.stdout = mock_stdout
+
+    async def mock_read() -> bytes:
+        return stderr_bytes
+
+    mock_stderr = MagicMock()
+    mock_stderr.read = mock_read
+    mock_process.stderr = mock_stderr
+
+    async def mock_wait() -> int:
+        return returncode
+
+    mock_process.wait = mock_wait
+
+    return mock_process
+
+
+@pytest.mark.asyncio
+async def test_run_codex_stream_yields_parsed_ndjson_events() -> None:
+    """_run_codex_stream should spawn async subprocess and yield parsed NDJSON lines."""
     driver = CodexCliDriver(model="gpt-5-codex", cwd="/tmp")
 
-    ndjson_output = (
-        '{"type": "reasoning", "content": "thinking hard"}\n'
-        '{"type": "tool_call", "name": "read_file", "input": {"path": "a.py"}, "id": "t1"}\n'
-        '{"type": "tool_result", "name": "read_file", "output": "content", "id": "t1"}\n'
-        '{"type": "final", "content": "done"}\n'
-    )
+    stdout_lines = [
+        b'{"type": "reasoning", "content": "thinking hard"}\n',
+        b'{"type": "tool_call", "name": "read_file", "input": {"path": "a.py"}, "id": "t1"}\n',
+        b'{"type": "tool_result", "name": "read_file", "output": "content", "id": "t1"}\n',
+        b'{"type": "final", "content": "done"}\n',
+    ]
 
-    mock_process = MagicMock()
-    mock_process.stdout = [line + b"\n" for line in ndjson_output.encode().split(b"\n") if line]
-    mock_process.returncode = 0
-    mock_process.wait.return_value = 0
+    mock_process = _create_mock_process(stdout_lines)
 
-    with patch("subprocess.Popen", return_value=mock_process):
-        events = list(driver._run_codex_stream("do something", cwd="/tmp"))
+    async def mock_create_subprocess(*args: Any, **kwargs: Any) -> MagicMock:
+        return mock_process
+
+    with patch.object(asyncio, "create_subprocess_exec", mock_create_subprocess):
+        events = [e async for e in driver._run_codex_stream("do something", cwd="/tmp")]
 
     assert len(events) == 4
     assert events[0] == {"type": "reasoning", "content": "thinking hard"}
@@ -87,39 +132,40 @@ def test_run_codex_stream_yields_parsed_ndjson_events() -> None:
     assert events[3] == {"type": "final", "content": "done"}
 
 
-def test_run_codex_stream_skips_malformed_json_lines() -> None:
+@pytest.mark.asyncio
+async def test_run_codex_stream_skips_malformed_json_lines() -> None:
     """_run_codex_stream should skip lines that are not valid JSON."""
     driver = CodexCliDriver(model="gpt-5-codex", cwd="/tmp")
 
-    ndjson_output = (
-        'not valid json\n'
-        '{"type": "final", "content": "ok"}\n'
-    )
+    stdout_lines = [
+        b"not valid json\n",
+        b'{"type": "final", "content": "ok"}\n',
+    ]
 
-    mock_process = MagicMock()
-    mock_process.stdout = [line + b"\n" for line in ndjson_output.encode().split(b"\n") if line]
-    mock_process.returncode = 0
-    mock_process.wait.return_value = 0
+    mock_process = _create_mock_process(stdout_lines)
 
-    with patch("subprocess.Popen", return_value=mock_process):
-        events = list(driver._run_codex_stream("do something", cwd="/tmp"))
+    async def mock_create_subprocess(*args: Any, **kwargs: Any) -> MagicMock:
+        return mock_process
+
+    with patch.object(asyncio, "create_subprocess_exec", mock_create_subprocess):
+        events = [e async for e in driver._run_codex_stream("do something", cwd="/tmp")]
 
     assert len(events) == 1
     assert events[0] == {"type": "final", "content": "ok"}
 
 
-def test_run_codex_stream_raises_on_nonzero_exit() -> None:
+@pytest.mark.asyncio
+async def test_run_codex_stream_raises_on_nonzero_exit() -> None:
     """_run_codex_stream should raise ModelProviderError on non-zero exit code."""
     driver = CodexCliDriver(model="gpt-5-codex", cwd="/tmp")
 
-    mock_process = MagicMock()
-    mock_process.stdout = []
-    mock_process.stderr = MagicMock()
-    mock_process.stderr.read.return_value = b"codex crashed"
-    mock_process.returncode = 1
-    mock_process.wait.return_value = 1
+    mock_process = _create_mock_process([], returncode=1, stderr_bytes=b"codex crashed")
 
-    with patch("subprocess.Popen", return_value=mock_process), pytest.raises(
-        ModelProviderError, match="Codex CLI streaming failed"
+    async def mock_create_subprocess(*args: Any, **kwargs: Any) -> MagicMock:
+        return mock_process
+
+    with (
+        patch.object(asyncio, "create_subprocess_exec", mock_create_subprocess),
+        pytest.raises(ModelProviderError, match="Codex CLI streaming failed"),
     ):
-        list(driver._run_codex_stream("do something", cwd="/tmp"))
+        _ = [e async for e in driver._run_codex_stream("do something", cwd="/tmp")]

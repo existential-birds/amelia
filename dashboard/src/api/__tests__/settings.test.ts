@@ -143,17 +143,17 @@ describe("settings API", () => {
           plan_path_pattern: "{issue_id}.md",
           agents: {
             architect: {
-              driver: "cli",
+              driver: "claude",
               model: "claude-sonnet-4-20250514",
               options: {},
             },
             developer: {
-              driver: "cli",
+              driver: "claude",
               model: "claude-sonnet-4-20250514",
               options: {},
             },
             reviewer: {
-              driver: "cli",
+              driver: "claude",
               model: "claude-sonnet-4-20250514",
               options: {},
             },

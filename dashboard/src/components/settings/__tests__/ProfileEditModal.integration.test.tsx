@@ -24,7 +24,7 @@ describe('ProfileEditModal model selection', () => {
     vi.mocked(useModelsStore).mockImplementation(makeMockModelsStore());
   });
 
-  it('should show simple select with CLI model options when driver is cli (default)', async () => {
+  it('should show simple select with Claude model options when driver is claude (default)', async () => {
     const user = userEvent.setup();
     render(
       <ProfileEditModal
@@ -38,10 +38,10 @@ describe('ProfileEditModal model selection', () => {
     // Switch to Agents tab to see agent configuration
     await user.click(screen.getByRole('tab', { name: /agents/i }));
 
-    // Default is CLI driver - should NOT show "Browse all models" link
+    // Default is Claude driver - should NOT show "Browse all models" link
     expect(screen.queryByText(/Browse all models/i)).not.toBeInTheDocument();
     // Should see opus/sonnet/haiku options in the simple select
-    // These are the CLI model options
+    // These are the Claude model options
     expect(screen.getAllByText('sonnet').length).toBeGreaterThan(0);
   });
 
@@ -56,12 +56,12 @@ describe('ProfileEditModal model selection', () => {
       is_active: false,
       agents: {
         architect: { driver: 'api', model: 'claude-sonnet-4', options: {} },
-        developer: { driver: 'cli', model: 'opus', options: {} },
-        reviewer: { driver: 'cli', model: 'sonnet', options: {} },
-        plan_validator: { driver: 'cli', model: 'haiku', options: {} },
-        task_reviewer: { driver: 'cli', model: 'haiku', options: {} },
-        evaluator: { driver: 'cli', model: 'haiku', options: {} },
-        brainstormer: { driver: 'cli', model: 'haiku', options: {} },
+        developer: { driver: 'claude', model: 'opus', options: {} },
+        reviewer: { driver: 'claude', model: 'sonnet', options: {} },
+        plan_validator: { driver: 'claude', model: 'haiku', options: {} },
+        task_reviewer: { driver: 'claude', model: 'haiku', options: {} },
+        evaluator: { driver: 'claude', model: 'haiku', options: {} },
+        brainstormer: { driver: 'claude', model: 'haiku', options: {} },
       },
     };
 
@@ -96,10 +96,10 @@ describe('ProfileEditModal model selection', () => {
         architect: { driver: 'api', model: 'claude-sonnet-4', options: {} },
         developer: { driver: 'api', model: 'claude-sonnet-4', options: {} },
         reviewer: { driver: 'api', model: 'claude-sonnet-4', options: {} },
-        plan_validator: { driver: 'cli', model: 'haiku', options: {} },
-        task_reviewer: { driver: 'cli', model: 'haiku', options: {} },
-        evaluator: { driver: 'cli', model: 'haiku', options: {} },
-        brainstormer: { driver: 'cli', model: 'haiku', options: {} },
+        plan_validator: { driver: 'claude', model: 'haiku', options: {} },
+        task_reviewer: { driver: 'claude', model: 'haiku', options: {} },
+        evaluator: { driver: 'claude', model: 'haiku', options: {} },
+        brainstormer: { driver: 'claude', model: 'haiku', options: {} },
       },
     };
 
