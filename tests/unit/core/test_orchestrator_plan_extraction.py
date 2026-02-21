@@ -29,8 +29,8 @@ async def test_call_architect_node_creates_plan_directory_if_missing(
     # Verify directory doesn't exist yet
     assert not plan_dir.exists()
 
-    # Create profile with our tmp_path as working_dir
-    profile = mock_profile_factory(working_dir=str(tmp_path))
+    # Create profile with our tmp_path as repo_root
+    profile = mock_profile_factory(repo_root=str(tmp_path))
 
     # Create state with the issue ID
     issue = mock_issue_factory(id="TEST-1", title="Test", description="Test issue")

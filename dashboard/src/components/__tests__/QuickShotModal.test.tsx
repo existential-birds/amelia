@@ -12,7 +12,7 @@ import { toast } from 'sonner';
 vi.mock('@/api/client', () => ({
   api: {
     createWorkflow: vi.fn(),
-    getConfig: vi.fn().mockResolvedValue({ working_dir: '', max_concurrent: 5, active_profile: 'test' }),
+    getConfig: vi.fn().mockResolvedValue({ repo_root: '', max_concurrent: 5, active_profile: 'test' }),
     readFile: vi.fn().mockResolvedValue({
       content: '# Test Design\n\n## Problem\n\nTest problem.',
       filename: 'test-design.md',
@@ -49,8 +49,8 @@ vi.mock('sonner', () => ({
 // Mock settings API for ProfileSelect
 vi.mock('@/api/settings', () => ({
   getProfiles: vi.fn().mockResolvedValue([
-    { id: 'work', tracker: 'github', working_dir: '/work', is_active: true },
-    { id: 'personal', tracker: 'jira', working_dir: '/personal', is_active: false },
+    { id: 'work', tracker: 'github', repo_root: '/work', is_active: true },
+    { id: 'personal', tracker: 'jira', repo_root: '/personal', is_active: false },
   ]),
 }));
 
@@ -388,7 +388,7 @@ describe('QuickShotModal', () => {
 
   describe('Import Zone', () => {
     beforeEach(() => {
-      vi.mocked(api.getConfig).mockResolvedValue({ working_dir: '/tmp/repo', max_concurrent: 5, active_profile: 'test', active_profile_info: null });
+      vi.mocked(api.getConfig).mockResolvedValue({ repo_root: '/tmp/repo', max_concurrent: 5, active_profile: 'test', active_profile_info: null });
       vi.mocked(api.readFile).mockResolvedValue({
         content: '# Test Design\n\n## Problem\n\nTest problem.',
         filename: 'test-design.md',
@@ -458,7 +458,7 @@ describe('QuickShotModal', () => {
 
   describe('Config Integration', () => {
     it('pre-fills worktree path from server config', async () => {
-      vi.mocked(api.getConfig).mockResolvedValue({ working_dir: '/tmp/repo', max_concurrent: 5, active_profile: 'test', active_profile_info: null });
+      vi.mocked(api.getConfig).mockResolvedValue({ repo_root: '/tmp/repo', max_concurrent: 5, active_profile: 'test', active_profile_info: null });
       render(<QuickShotModal {...defaultProps} />);
 
       await waitFor(() => {
@@ -469,7 +469,7 @@ describe('QuickShotModal', () => {
 
     it('pre-fills profile from active_profile when no defaults provided', async () => {
       const user = userEvent.setup();
-      vi.mocked(api.getConfig).mockResolvedValue({ working_dir: '/tmp/repo', max_concurrent: 5, active_profile: 'work', active_profile_info: null });
+      vi.mocked(api.getConfig).mockResolvedValue({ repo_root: '/tmp/repo', max_concurrent: 5, active_profile: 'work', active_profile_info: null });
       render(<QuickShotModal open={true} onOpenChange={vi.fn()} />);
 
       await waitFor(() => {
@@ -490,7 +490,7 @@ describe('QuickShotModal', () => {
 
     it('does not override profile with active_profile when defaults are provided', async () => {
       const user = userEvent.setup();
-      vi.mocked(api.getConfig).mockResolvedValue({ working_dir: '/tmp/repo', max_concurrent: 5, active_profile: 'personal', active_profile_info: null });
+      vi.mocked(api.getConfig).mockResolvedValue({ repo_root: '/tmp/repo', max_concurrent: 5, active_profile: 'personal', active_profile_info: null });
       render(<QuickShotModal open={true} onOpenChange={vi.fn()} defaults={{ profile: 'work' }} />);
 
       await waitFor(() => {

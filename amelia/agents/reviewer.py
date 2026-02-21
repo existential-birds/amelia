@@ -273,13 +273,13 @@ The changes are in git - diff against commit: {base_commit}"""
         # Build system prompt with base_commit
         system_prompt = self.agentic_prompt.format(base_commit=base_commit)
 
-        if profile.working_dir is None:
+        if profile.repo_root is None:
             logger.warning(
-                "profile.working_dir is None, falling back to current directory",
+                "profile.repo_root is None, falling back to current directory",
                 agent=self._agent_name,
                 workflow_id=workflow_id,
             )
-        cwd = profile.working_dir or "."
+        cwd = profile.repo_root or "."
         # Always start a fresh session — the reviewer must not resume the
         # developer's session (different agent, different system prompt).
         session_id = None

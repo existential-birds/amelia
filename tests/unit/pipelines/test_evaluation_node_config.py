@@ -22,7 +22,7 @@ def profile_with_agents() -> Profile:
     return Profile(
         name="test",
         tracker="noop",
-        working_dir="/tmp/test",
+        repo_root="/tmp/test",
         agents={
             "evaluator": AgentConfig(driver="cli", model="sonnet"),
         },

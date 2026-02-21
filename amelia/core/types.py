@@ -116,7 +116,7 @@ class Profile(BaseModel):
     Attributes:
         name: Profile name (e.g., 'work', 'personal').
         tracker: Issue tracker type (jira, github, noop).
-        working_dir: Working directory for agentic execution.
+        repo_root: Root directory of the repository this profile targets.
         plan_output_dir: Directory for saving implementation plans.
         plan_path_pattern: Path pattern for plan files with {date} and {issue_key} placeholders.
         retry: Retry configuration for transient failures.
@@ -128,7 +128,7 @@ class Profile(BaseModel):
 
     name: str
     tracker: TrackerType = TrackerType.NOOP
-    working_dir: str
+    repo_root: str
     plan_output_dir: str = "docs/plans"
     plan_path_pattern: str = "docs/plans/{date}-{issue_key}.md"
     retry: RetryConfig = Field(default_factory=RetryConfig)

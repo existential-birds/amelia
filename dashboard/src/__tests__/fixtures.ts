@@ -169,7 +169,7 @@ export function createMockProfile(overrides?: Partial<Profile>): Profile {
   return {
     id: 'work',
     tracker: 'github',
-    working_dir: '/work',
+    repo_root: '/work',
     plan_output_dir: '',
     plan_path_pattern: '',
     agents: {},
@@ -196,7 +196,7 @@ export function createMockSandboxConfig(overrides?: Partial<SandboxConfig>): San
  * Standard mock profiles array for testing profile selection components.
  */
 export const mockProfiles: Profile[] = [
-  createMockProfile({ id: 'work', tracker: 'github', working_dir: '/work', is_active: true }),
-  createMockProfile({ id: 'personal', tracker: 'jira', working_dir: '/personal', is_active: false }),
+  createMockProfile({ id: 'work', tracker: 'github', repo_root: '/work', is_active: true }),
+  createMockProfile({ id: 'personal', tracker: 'jira', repo_root: '/personal', is_active: false }),
 ];
 

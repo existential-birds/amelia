@@ -39,18 +39,18 @@ class TestSandboxConfig:
 
 class TestProfileSandboxConfig:
     def test_profile_sandbox_defaults_to_none_mode(self):
-        profile = Profile(name="test", working_dir="/tmp")
+        profile = Profile(name="test", repo_root="/tmp")
         assert profile.sandbox.mode == "none"
 
     def test_profile_with_container_sandbox(self):
         sandbox = SandboxConfig(mode="container")
-        profile = Profile(name="test", working_dir="/tmp", sandbox=sandbox)
+        profile = Profile(name="test", repo_root="/tmp", sandbox=sandbox)
         assert profile.sandbox.mode == "container"
 
     def test_profile_sandbox_is_frozen(self):
         import pytest
         from pydantic import ValidationError
 
-        profile = Profile(name="test", working_dir="/tmp")
+        profile = Profile(name="test", repo_root="/tmp")
         with pytest.raises(ValidationError):
             profile.sandbox = SandboxConfig(mode="container")

@@ -513,7 +513,7 @@ async def _get_profile_from_server(profile_name: str | None) -> Profile:
             return Profile(
                 name=data["id"],
                 tracker=data["tracker"],
-                working_dir=data["working_dir"],
+                repo_root=data["repo_root"],
                 plan_output_dir=data["plan_output_dir"],
                 plan_path_pattern=data["plan_path_pattern"],
                 agents=agents,
@@ -563,7 +563,7 @@ def plan_command(
         profile = await _get_profile_from_server(profile_name)
 
         # Update profile with worktree path
-        profile = profile.model_copy(update={"working_dir": worktree_path})
+        profile = profile.model_copy(update={"repo_root": worktree_path})
 
         # Get issue: construct directly if title provided with noop tracker, else use tracker
         if title is not None and profile.tracker == "noop":

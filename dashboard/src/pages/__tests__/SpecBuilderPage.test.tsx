@@ -15,14 +15,14 @@ vi.mock("sonner", () => ({
 }));
 vi.mock("@/api/client", () => ({
   api: {
-    getConfig: vi.fn().mockResolvedValue({ working_dir: "", max_concurrent: 5, active_profile: "test" }),
+    getConfig: vi.fn().mockResolvedValue({ repo_root: "", max_concurrent: 5, active_profile: "test" }),
   },
 }));
 vi.mock("@/api/settings", () => ({
   getProfile: vi.fn().mockResolvedValue({
     id: "test",
     tracker: "none",
-    working_dir: "",
+    repo_root: "",
     plan_output_dir: "",
     plan_path_pattern: "",
     agents: { brainstormer: { driver: "cli", model: "sonnet" } },
@@ -361,7 +361,7 @@ describe("SpecBuilderPage", () => {
 
     vi.mocked(getProfile).mockRejectedValueOnce(new Error("Profile not found"));
     vi.mocked(api.getConfig).mockResolvedValueOnce({
-      working_dir: "",
+      repo_root: "",
       max_concurrent: 5,
       active_profile: "test",
       active_profile_info: {

@@ -255,7 +255,7 @@ class OrchestratorService:
         Args:
             workflow_id: Workflow ID for logging and status updates.
             profile_id: Profile ID to look up in database.
-            worktree_path: Worktree path for agent execution (overrides profile's working_dir).
+            worktree_path: Worktree path for agent execution (overrides profile's repo_root).
 
         Returns:
             Profile if found, None if not found (after setting workflow to failed).
@@ -278,19 +278,19 @@ class OrchestratorService:
             )
             return None
 
-        return self._update_profile_working_dir(record, worktree_path)
+        return self._update_profile_repo_root(record, worktree_path)
 
-    def _update_profile_working_dir(self, profile: Profile, worktree_path: str) -> Profile:
-        """Update profile's working_dir for workflow execution.
+    def _update_profile_repo_root(self, profile: Profile, worktree_path: str) -> Profile:
+        """Update profile's repo_root for workflow execution.
 
         Args:
             profile: Profile from database.
-            worktree_path: Worktree path to use as working_dir (overrides profile).
+            worktree_path: Worktree path to use as repo_root (overrides profile).
 
         Returns:
-            Profile instance with updated working_dir.
+            Profile instance with updated repo_root.
         """
-        return profile.model_copy(update={"working_dir": worktree_path})
+        return profile.model_copy(update={"repo_root": worktree_path})
 
     def _resolve_safe_worktree_path(self, worktree_path: str) -> Path | None:
         """Resolve and validate a worktree path to prevent path traversal attacks.
@@ -377,8 +377,8 @@ class OrchestratorService:
                     "No active profile set. Use --profile to specify one or set an active profile."
                 )
 
-        # Convert to Profile with worktree_path as working_dir
-        profile = self._update_profile_working_dir(record, worktree_path)
+        # Convert to Profile with worktree_path as repo_root
+        profile = self._update_profile_repo_root(record, worktree_path)
 
         # Fetch issue from tracker (or construct from task_title)
         if task_title is not None:
@@ -635,7 +635,7 @@ class OrchestratorService:
         if request.plan_file is not None or request.plan_content is not None:
             # Resolve target plan path
             plan_rel_path = resolve_plan_path(profile.plan_path_pattern, request.issue_id)
-            working_dir = Path(profile.working_dir) if profile.working_dir else Path(".")
+            working_dir = Path(profile.repo_root) if profile.repo_root else Path(".")
             target_path = working_dir / plan_rel_path
 
             # Import and validate external plan
@@ -757,8 +757,8 @@ class OrchestratorService:
                         "No active profile set. Use --profile to specify one or set an active profile."
                     )
 
-            # Convert to Profile with resolved_path as working_dir
-            loaded_profile = self._update_profile_working_dir(record, resolved_path)
+            # Convert to Profile with resolved_path as repo_root
+            loaded_profile = self._update_profile_repo_root(record, resolved_path)
 
             # Create dummy issue for review context
             dummy_issue = Issue(
@@ -2733,11 +2733,11 @@ class OrchestratorService:
         if profile is None:
             raise ValueError("Profile not found for workflow")
 
-        profile = self._update_profile_working_dir(profile, workflow.worktree_path)
+        profile = self._update_profile_repo_root(profile, workflow.worktree_path)
 
         # Resolve target plan path
         plan_rel_path = resolve_plan_path(profile.plan_path_pattern, workflow.issue_id)
-        working_dir = Path(profile.working_dir) if profile.working_dir else Path(".")
+        working_dir = Path(profile.repo_root) if profile.repo_root else Path(".")
         target_path = working_dir / plan_rel_path
 
         # Fast path: read content, write to target, count tasks (no LLM)
@@ -2941,7 +2941,7 @@ class OrchestratorService:
                 raise ValueError(
                     f"Profile '{workflow.profile_id}' not found for workflow {workflow_id}"
                 )
-            profile = self._update_profile_working_dir(record, workflow.worktree_path)
+            profile = self._update_profile_repo_root(record, workflow.worktree_path)
 
             # Delete stale checkpoint (best-effort: the checkpoint will be
             # regenerated, so a failure here should not block replanning)

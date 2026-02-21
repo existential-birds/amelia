@@ -149,7 +149,7 @@ interface AgentFormData {
 interface FormData {
   id: string;
   tracker: string;
-  working_dir: string;
+  repo_root: string;
   plan_output_dir: string;
   plan_path_pattern: string;
   agents: Record<string, AgentFormData>;
@@ -206,7 +206,7 @@ const buildDefaultAgents = (): Record<string, AgentFormData> => {
 const DEFAULT_FORM_DATA: FormData = {
   id: '',
   tracker: 'noop',
-  working_dir: '',
+  repo_root: '',
   plan_output_dir: 'docs/plans',
   plan_path_pattern: 'docs/plans/{date}-{issue_key}.md',
   agents: buildDefaultAgents(),
@@ -226,7 +226,7 @@ const validateField = (field: string, value: string): string | null => {
         return 'Profile name can only contain letters, numbers, underscores, and hyphens';
       }
       return null;
-    case 'working_dir':
+    case 'repo_root':
       if (!value.trim()) return 'Working directory is required';
       return null;
     default:
@@ -248,7 +248,7 @@ const profileToFormData = (profile: Profile): FormData => {
   return {
     id: profile.id,
     tracker: profile.tracker,
-    working_dir: profile.working_dir,
+    repo_root: profile.repo_root,
     plan_output_dir: profile.plan_output_dir,
     plan_path_pattern: profile.plan_path_pattern,
     agents,
@@ -575,7 +575,7 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
     if (
       formData.id !== original.id ||
       formData.tracker !== original.tracker ||
-      formData.working_dir !== original.working_dir ||
+      formData.repo_root !== original.repo_root ||
       formData.plan_output_dir !== original.plan_output_dir ||
       formData.plan_path_pattern !== original.plan_path_pattern
     ) {
@@ -686,8 +686,8 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
       if (idError) newErrors.id = idError;
     }
 
-    const workingDirError = validateField('working_dir', formData.working_dir);
-    if (workingDirError) newErrors.working_dir = workingDirError;
+    const workingDirError = validateField('repo_root', formData.repo_root);
+    if (workingDirError) newErrors.repo_root = workingDirError;
 
     for (const agent of AGENT_DEFINITIONS) {
       const agentConfig = formData.agents[agent.key];
@@ -730,7 +730,7 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
       if (isEditMode) {
         const updates: ProfileUpdate = {
           tracker: formData.tracker,
-          working_dir: formData.working_dir,
+          repo_root: formData.repo_root,
           plan_output_dir: formData.plan_output_dir,
           plan_path_pattern: formData.plan_path_pattern,
           agents: formAgentsToApi(),
@@ -742,7 +742,7 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
         const newProfile: ProfileCreate = {
           id: formData.id,
           tracker: formData.tracker,
-          working_dir: formData.working_dir,
+          repo_root: formData.repo_root,
           plan_output_dir: formData.plan_output_dir,
           plan_path_pattern: formData.plan_path_pattern,
           agents: formAgentsToApi(),
@@ -836,25 +836,25 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
                 </div>
               </div>
 
-              {/* Working Directory */}
+              {/* Repository Root */}
               <div className="space-y-2">
-                <Label htmlFor="working_dir" className="text-xs uppercase tracking-wider text-muted-foreground">
-                  Working Directory
+                <Label htmlFor="repo_root" className="text-xs uppercase tracking-wider text-muted-foreground">
+                  Repository Root
                 </Label>
                 <Input
-                  id="working_dir"
-                  value={formData.working_dir}
-                  onChange={(e) => handleChange('working_dir', e.target.value)}
-                  onBlur={(e) => handleBlur('working_dir', e.target.value)}
+                  id="repo_root"
+                  value={formData.repo_root}
+                  onChange={(e) => handleChange('repo_root', e.target.value)}
+                  onBlur={(e) => handleBlur('repo_root', e.target.value)}
                   placeholder="/path/to/repo"
-                  aria-invalid={!!errors.working_dir}
+                  aria-invalid={!!errors.repo_root}
                   className={cn(
                     'bg-background/50 hover:border-muted-foreground/30 transition-colors font-mono text-sm',
-                    errors.working_dir && 'border-destructive focus-visible:ring-destructive'
+                    errors.repo_root && 'border-destructive focus-visible:ring-destructive'
                   )}
                 />
-                {errors.working_dir && (
-                  <p className="text-xs text-destructive">{errors.working_dir}</p>
+                {errors.repo_root && (
+                  <p className="text-xs text-destructive">{errors.repo_root}</p>
                 )}
               </div>
 

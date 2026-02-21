@@ -117,7 +117,7 @@ class TestPlanCommandTaskFlags:
         mock_profile_response = {
             "id": "noop",
             "tracker": "noop",
-            "working_dir": str(worktree),
+            "repo_root": str(worktree),
             "plan_output_dir": "docs/plans",
             "plan_path_pattern": "docs/plans/{date}-{issue_key}.md",
             "is_active": True,

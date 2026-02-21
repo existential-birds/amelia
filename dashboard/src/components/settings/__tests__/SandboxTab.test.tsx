@@ -60,7 +60,7 @@ describe('Sandbox tab', () => {
     const profile = {
       id: 'test',
       tracker: 'noop',
-      working_dir: '/test',
+      repo_root: '/test',
       plan_output_dir: 'docs/plans',
       plan_path_pattern: 'docs/plans/{date}-{issue_key}.md',
       is_active: false,
@@ -81,7 +81,7 @@ describe('Sandbox tab', () => {
     const profile = {
       id: 'test',
       tracker: 'noop',
-      working_dir: '/test',
+      repo_root: '/test',
       plan_output_dir: 'docs/plans',
       plan_path_pattern: 'docs/plans/{date}-{issue_key}.md',
       is_active: false,

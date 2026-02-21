@@ -113,7 +113,7 @@ describe("settings API", () => {
         {
           id: "work",
           tracker: "noop",
-          working_dir: "/Users/me/projects",
+          repo_root: "/Users/me/projects",
           plan_output_dir: "plans",
           plan_path_pattern: "{issue_id}.md",
           agents: {
@@ -138,7 +138,7 @@ describe("settings API", () => {
         {
           id: "personal",
           tracker: "github",
-          working_dir: "/Users/me/personal",
+          repo_root: "/Users/me/personal",
           plan_output_dir: "plans",
           plan_path_pattern: "{issue_id}.md",
           agents: {
@@ -199,7 +199,7 @@ describe("settings API", () => {
       const mockProfile: Profile = {
         id: "work",
         tracker: "noop",
-        working_dir: "/Users/me/projects",
+        repo_root: "/Users/me/projects",
         plan_output_dir: "plans",
         plan_path_pattern: "{issue_id}.md",
         agents: {
@@ -269,7 +269,7 @@ describe("settings API", () => {
       const mockProfile: Profile = {
         id: "new-profile",
         tracker: "noop",
-        working_dir: "/Users/me/projects",
+        repo_root: "/Users/me/projects",
         plan_output_dir: "plans",
         plan_path_pattern: "{issue_id}.md",
         agents: {
@@ -299,7 +299,7 @@ describe("settings API", () => {
 
       const createPayload = {
         id: "new-profile",
-        working_dir: "/Users/me/projects",
+        repo_root: "/Users/me/projects",
         agents: {
           architect: {
             driver: "api",
@@ -335,7 +335,7 @@ describe("settings API", () => {
       const mockProfile: Profile = {
         id: "work",
         tracker: "noop",
-        working_dir: "/Users/me/projects",
+        repo_root: "/Users/me/projects",
         plan_output_dir: "plans",
         plan_path_pattern: "{issue_id}.md",
         agents: {
@@ -410,7 +410,7 @@ describe("settings API", () => {
       const mockProfile: Profile = {
         id: "work",
         tracker: "noop",
-        working_dir: "/Users/me/projects",
+        repo_root: "/Users/me/projects",
         plan_output_dir: "plans",
         plan_path_pattern: "{issue_id}.md",
         agents: {

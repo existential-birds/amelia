@@ -68,7 +68,7 @@ def mock_profile_repo() -> AsyncMock:
     default_profile = Profile(
         name="test",
         tracker=TrackerType.NOOP,
-        working_dir="/default/repo",
+        repo_root="/default/repo",
         agents={
             "architect": agent_config,
             "developer": agent_config,
@@ -984,7 +984,7 @@ class TestRunWorkflowCheckpointResume:
         mock_profile = Profile(
             name="test",
             tracker=TrackerType.NOOP,
-            working_dir="/tmp/test",
+            repo_root="/tmp/test",
             agents={
                 "architect": AgentConfig(driver=DriverType.CLI, model="sonnet"),
                 "developer": AgentConfig(driver=DriverType.CLI, model="sonnet"),
@@ -1037,7 +1037,7 @@ class TestRunWorkflowCheckpointResume:
         mock_profile = Profile(
             name="test",
             tracker=TrackerType.NOOP,
-            working_dir="/tmp/test",
+            repo_root="/tmp/test",
             agents={
                 "architect": AgentConfig(driver=DriverType.CLI, model="sonnet"),
                 "developer": AgentConfig(driver=DriverType.CLI, model="sonnet"),
@@ -1286,7 +1286,7 @@ class TestStartWorkflowWithTaskFields:
         mock_profile_repo.get_profile.return_value = Profile(
             name="github",
             tracker=TrackerType.GITHUB,
-            working_dir="/default/repo",
+            repo_root="/default/repo",
             agents={
                 "architect": agent_config,
                 "developer": agent_config,
@@ -1369,7 +1369,7 @@ def model_provider_error_setup(mock_repository: AsyncMock) -> ModelProviderError
     mock_profile = Profile(
         name="test",
         tracker=TrackerType.NOOP,
-        working_dir="/tmp",
+        repo_root="/tmp",
         retry=RetryConfig(max_retries=2, base_delay=0.1, max_delay=1.0),
         agents={
             "architect": agent_config,
@@ -1475,7 +1475,7 @@ async def test_httpx_connect_error_retried(
     mock_profile = Profile(
         name="test",
         tracker=TrackerType.NOOP,
-        working_dir="/tmp",
+        repo_root="/tmp",
         retry=RetryConfig(max_retries=2, base_delay=0.1, max_delay=1.0),
         agents={
             "architect": agent_config,
@@ -1547,7 +1547,7 @@ class TestExponentialBackoff:
         mock_profile = Profile(
             name="test",
             tracker=TrackerType.NOOP,
-            working_dir=valid_worktree,
+            repo_root=valid_worktree,
             retry=RetryConfig(max_retries=max_retries, base_delay=base_delay, max_delay=max_delay),
             agents={
                 "architect": agent_config,

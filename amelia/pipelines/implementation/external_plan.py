@@ -253,7 +253,7 @@ async def import_external_plan(
     """
     # Establish working directory as security boundary
     working_dir = (
-        Path(profile.working_dir) if profile.working_dir else Path(".")
+        Path(profile.repo_root) if profile.repo_root else Path(".")
     ).expanduser().resolve()
 
     # Read content

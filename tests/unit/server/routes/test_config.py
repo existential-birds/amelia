@@ -50,20 +50,20 @@ class TestGetConfig:
         app.dependency_overrides[get_settings_repository] = lambda: mock_settings_repo
         return TestClient(app)
 
-    def test_returns_empty_working_dir_when_no_active_profile(
+    def test_returns_empty_repo_root_when_no_active_profile(
         self,
         mock_profile_repo: MagicMock,
         mock_settings_repo: MagicMock,
         client: TestClient,
     ) -> None:
-        """Should return empty working_dir when no active profile is set."""
+        """Should return empty repo_root when no active profile is set."""
         mock_profile_repo.get_active_profile = AsyncMock(return_value=None)
 
         response = client.get("/api/config")
 
         assert response.status_code == 200
         data = response.json()
-        assert data["working_dir"] == ""
+        assert data["repo_root"] == ""
         assert data["max_concurrent"] == 5
         assert data["active_profile"] == ""
         assert data["active_profile_info"] is None
@@ -82,7 +82,7 @@ class TestGetConfig:
             return_value=Profile(
                 name="test",
                 tracker="github",
-                working_dir="/tmp/test-repo",
+                repo_root="/tmp/test-repo",
                 agents={
                     "developer": AgentConfig(
                         driver="api",
@@ -96,7 +96,7 @@ class TestGetConfig:
 
         assert response.status_code == 200
         data = response.json()
-        assert data["working_dir"] == "/tmp/test-repo"
+        assert data["repo_root"] == "/tmp/test-repo"
         assert data["max_concurrent"] == 5
         assert data["active_profile"] == "test"
         assert data["active_profile_info"] == {

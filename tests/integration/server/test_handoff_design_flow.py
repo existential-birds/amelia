@@ -19,7 +19,7 @@ def mock_profile_repo() -> AsyncMock:
     profile = Profile(
         name="test",
         tracker="noop",
-        working_dir="/tmp/test",
+        repo_root="/tmp/test",
         agents={
             "architect": agent_config,
             "developer": agent_config,

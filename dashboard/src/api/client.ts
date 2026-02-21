@@ -469,7 +469,7 @@ export const api = {
    * @param directory - Relative directory path within the base directory.
    * @param globPattern - Glob pattern to filter files (default: '*.md').
    * @param worktreePath - Optional worktree path to use as base directory.
-   *                      If not provided, uses active profile's working_dir.
+   *                      If not provided, uses active profile's repo_root.
    * @returns Response with matching file entries and directory path.
    * @throws {ApiError} When directory not found or API request fails.
    *
@@ -718,13 +718,13 @@ export const api = {
   /**
    * Retrieves server configuration for dashboard.
    *
-   * @returns Server configuration including working_dir and max_concurrent.
+   * @returns Server configuration including repo_root and max_concurrent.
    * @throws {ApiError} When the API request fails.
    *
    * @example
    * ```typescript
    * const config = await api.getConfig();
-   * console.log(`Working dir: ${config.working_dir}`);
+   * console.log(`Working dir: ${config.repo_root}`);
    * ```
    */
   async getConfig(): Promise<ConfigResponse> {
@@ -740,7 +740,7 @@ export const api = {
    * Reads file content for design document import.
    *
    * @param path - Absolute path to the file to read.
-   * @param worktreePath - Optional worktree path to use as base directory. If not provided, uses active profile's working_dir.
+   * @param worktreePath - Optional worktree path to use as base directory. If not provided, uses active profile's repo_root.
    * @returns File content and filename.
    * @throws {ApiError} When file not found, path invalid, or API request fails.
    *

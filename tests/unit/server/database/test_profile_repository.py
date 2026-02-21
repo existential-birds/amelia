@@ -48,7 +48,7 @@ def test_profile_record_with_agents_json():
     record = ProfileRecord(
         id="test",
         tracker="noop",
-        working_dir="/tmp/test",
+        repo_root="/tmp/test",
         agents=json.dumps(agents),
     )
 
@@ -68,7 +68,7 @@ def test_row_to_profile_parses_agents_json():
     mock_row = {
         "id": "test",
         "tracker": "noop",
-        "working_dir": "/tmp/test",
+        "repo_root": "/tmp/test",
         "plan_output_dir": "docs/plans",
         "plan_path_pattern": "docs/plans/{date}-{issue_key}.md",
         "agents": agents_data,
@@ -94,7 +94,7 @@ async def test_create_profile_stores_agents_json(db_with_schema):
     profile = Profile(
         name="test_agents",
         tracker="noop",
-        working_dir="/tmp/test",
+        repo_root="/tmp/test",
         agents={
             "architect": AgentConfig(driver="cli", model="opus"),
             "developer": AgentConfig(driver="api", model="anthropic/claude-sonnet-4"),
@@ -129,7 +129,7 @@ class TestProfileRepository:
             Profile(
                 name="dev",
                 tracker="noop",
-                working_dir="/path/to/repo",
+                repo_root="/path/to/repo",
                 agents=_make_agents(driver="cli", model="opus"),
             )
         )
@@ -143,7 +143,7 @@ class TestProfileRepository:
             Profile(
                 name="dev",
                 tracker="noop",
-                working_dir="/path/to/repo",
+                repo_root="/path/to/repo",
                 agents=_make_agents(model="opus"),
             )
         )
@@ -162,7 +162,7 @@ class TestProfileRepository:
             Profile(
                 name="dev",
                 tracker="noop",
-                working_dir="/repo1",
+                repo_root="/repo1",
                 agents=_make_agents(driver="cli", model="opus"),
             )
         )
@@ -170,7 +170,7 @@ class TestProfileRepository:
             Profile(
                 name="prod",
                 tracker="jira",
-                working_dir="/repo2",
+                repo_root="/repo2",
                 agents=_make_agents(driver="api", model="gpt-4"),
             )
         )
@@ -185,7 +185,7 @@ class TestProfileRepository:
             Profile(
                 name="dev",
                 tracker="noop",
-                working_dir="/repo",
+                repo_root="/repo",
                 agents=_make_agents(model="opus"),
             )
         )
@@ -208,7 +208,7 @@ class TestProfileRepository:
             Profile(
                 name="dev",
                 tracker="noop",
-                working_dir="/repo",
+                repo_root="/repo",
                 agents=_make_agents(),
             )
         )
@@ -227,7 +227,7 @@ class TestProfileRepository:
             Profile(
                 name="dev",
                 tracker="noop",
-                working_dir="/repo",
+                repo_root="/repo",
                 agents=_make_agents(),
             )
         )
@@ -243,7 +243,7 @@ class TestProfileRepository:
             Profile(
                 name="dev",
                 tracker="noop",
-                working_dir="/repo1",
+                repo_root="/repo1",
                 agents=_make_agents(driver="cli", model="opus"),
             )
         )
@@ -251,7 +251,7 @@ class TestProfileRepository:
             Profile(
                 name="prod",
                 tracker="jira",
-                working_dir="/repo2",
+                repo_root="/repo2",
                 agents=_make_agents(driver="api", model="gpt-4"),
             )
         )
@@ -269,7 +269,7 @@ class TestProfileRepository:
             Profile(
                 name="dev",
                 tracker="noop",
-                working_dir="/repo",
+                repo_root="/repo",
                 agents=_make_agents(),
             )
         )

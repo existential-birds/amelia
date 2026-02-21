@@ -266,8 +266,8 @@ export const ProfileCard = forwardRef<HTMLDivElement, ProfileCardProps>(
           {/* Working directory */}
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground truncate">
             <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70" />
-            <span className="truncate" title={profile.working_dir}>
-              {profile.working_dir}
+            <span className="truncate" title={profile.repo_root}>
+              {profile.repo_root}
             </span>
           </div>
         </CardContent>

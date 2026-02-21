@@ -65,15 +65,15 @@ def get_event_bus() -> EventBus:
     raise NotImplementedError("Must be overridden via dependency_overrides")
 
 
-def _validate_working_dir(requested: str, profile_root: str) -> None:
-    """Validate that requested working_dir is within profile root.
+def _validate_repo_root(requested: str, profile_root: str) -> None:
+    """Validate that requested working_dir is within profile repo root.
 
     Args:
         requested: The requested working directory.
-        profile_root: The profile's configured working directory.
+        profile_root: The profile's configured repository root.
 
     Raises:
-        HTTPException: If requested path is outside profile root or doesn't exist.
+        HTTPException: If requested path is outside profile repo root or doesn't exist.
     """
     requested_path = Path(requested).resolve()
     if not requested_path.is_dir():
@@ -139,7 +139,7 @@ async def create_consultation(
             )
 
     # Validate working_dir
-    _validate_working_dir(request.working_dir, profile.working_dir)
+    _validate_repo_root(request.working_dir, profile.repo_root)
 
     # Get oracle agent config
     try:
