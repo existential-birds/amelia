@@ -152,6 +152,34 @@ class CodexCliDriver(DriverInterface):
                     original_message=stderr_text,
                 )
 
+    def _validate_schema(
+        self, data: Any, schema: type[BaseModel], source_content: str
+    ) -> str:
+        """Validate data against a Pydantic schema and return serialized JSON.
+
+        Args:
+            data: The data to validate (dict or JSON string).
+            schema: Pydantic model class to validate against.
+            source_content: Original content for error messages (truncated to 500 chars).
+
+        Returns:
+            JSON string of the validated model.
+
+        Raises:
+            ModelProviderError: If validation fails.
+        """
+        try:
+            if isinstance(data, str):
+                data = json.loads(data)
+            validated = schema.model_validate(data)
+            return validated.model_dump_json()
+        except (ValidationError, json.JSONDecodeError) as e:
+            raise ModelProviderError(
+                f"Schema validation failed: {e}",
+                provider_name=self.PROVIDER_NAME,
+                original_message=str(source_content)[:500],
+            ) from e
+
     def _parse_json_response(self, raw_output: str) -> Any:
         """Parse JSON from codex CLI output, handling common issues.
 
@@ -320,18 +348,8 @@ class CodexCliDriver(DriverInterface):
                 )
             elif msg_type == "final":
                 content = parsed.get("content", "")
-                # Validate against schema if provided
                 if schema and content:
-                    try:
-                        data = json.loads(content) if isinstance(content, str) else content
-                        validated = schema.model_validate(data)
-                        content = validated.model_dump_json()
-                    except (ValidationError, json.JSONDecodeError) as e:
-                        raise ModelProviderError(
-                            f"Schema validation failed: {e}",
-                            provider_name=self.PROVIDER_NAME,
-                            original_message=str(content)[:500],
-                        ) from e
+                    content = self._validate_schema(content, schema, content)
                 yield AgenticMessage(
                     type=AgenticMessageType.RESULT,
                     content=content,
@@ -339,17 +357,8 @@ class CodexCliDriver(DriverInterface):
             else:
                 # Default to result
                 content = json.dumps(parsed)
-                # Validate against schema if provided
                 if schema:
-                    try:
-                        validated = schema.model_validate(parsed)
-                        content = validated.model_dump_json()
-                    except ValidationError as e:
-                        raise ModelProviderError(
-                            f"Schema validation failed: {e}",
-                            provider_name=self.PROVIDER_NAME,
-                            original_message=str(parsed)[:500],
-                        ) from e
+                    content = self._validate_schema(parsed, schema, content)
                 yield AgenticMessage(
                     type=AgenticMessageType.RESULT,
                     content=content,
