@@ -13,7 +13,7 @@ class FilesystemState(TypedDict, total=False):
     files: dict[str, Any]
 
 
-def _validate_path(file_path: str) -> str:
+def validate_path(file_path: str) -> str:
     """Validate and normalize a file path.
 
     Args:
