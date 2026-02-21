@@ -356,7 +356,7 @@ class ClaudeCliDriver:
                     except StopAsyncIteration:
                         break
                     except MessageParseError as e:
-                        logger.debug("Ignoring unknown SDK message type", error=str(e))
+                        logger.debug("Ignoring unknown SDK message type", error_type=type(e).__name__)
                         continue
                     _log_sdk_message(message)
 
@@ -514,8 +514,7 @@ class ClaudeCliDriver:
                         except MessageParseError as e:
                             logger.warning(
                                 "Skipping unparseable SDK message in agentic execution",
-                                error=str(e),
-                                error_detail=repr(e),
+                                error_type=type(e).__name__,
                             )
                             continue
                         _log_sdk_message(message)
