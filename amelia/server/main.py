@@ -234,7 +234,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             logger.warning(
                 "Invalid AMELIA_KNOWLEDGE_TAG_DRIVER value, using default 'api'",
                 provided=tag_driver_raw,
-                valid_values=["api", "claude", "codex"],
+                valid_values=[e.value for e in DriverType],
             )
             tag_driver = DriverType.API
 

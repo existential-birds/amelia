@@ -219,33 +219,37 @@ class CodexCliDriver(DriverInterface):
 
         parsed = self._parse_json_response(raw_output)
 
-        # Extract text from response
+        # Extract data from response - keep as dict when possible to avoid
+        # unnecessary JSON serialization/deserialization
         if isinstance(parsed, dict):
             if "result" in parsed:
-                text = parsed["result"]
+                data = parsed["result"]
             elif "text" in parsed:
-                text = parsed["text"]
+                data = parsed["text"]
             elif "content" in parsed:
-                text = parsed["content"]
+                data = parsed["content"]
             else:
-                text = json.dumps(parsed)
+                data = parsed
         else:
-            text = json.dumps(parsed)
+            data = parsed
 
         # Validate against schema if provided
         if schema:
             try:
-                # Parse the text as JSON and validate against schema
-                data = json.loads(text) if isinstance(text, str) else text
+                # If data is a string, parse it as JSON first
+                if isinstance(data, str):
+                    data = json.loads(data)
                 result = schema.model_validate(data)
                 return (result, None)
             except (ValidationError, json.JSONDecodeError) as e:
                 raise ModelProviderError(
                     f"Schema validation failed: {e}",
                     provider_name=self.PROVIDER_NAME,
-                    original_message=text[:500] if isinstance(text, str) else str(text)[:500],
+                    original_message=str(data)[:500],
                 ) from e
 
+        # For non-schema case, convert to string if needed
+        text = json.dumps(data) if not isinstance(data, str) else data
         return (text, None)
 
     async def execute_agentic(
@@ -279,16 +283,18 @@ class CodexCliDriver(DriverInterface):
         if instructions:
             full_prompt = f"{instructions}\n\n{prompt}"
 
-        # Note: session_id and allowed_tools are accepted for interface compatibility
-        # but not currently used by codex CLI (sessions use `resume` subcommand,
-        # permissions use sandbox modes)
+        # Intentionally unused: session_id and allowed_tools are required by the Driver
+        # interface but Codex CLI handles these differently - sessions require the
+        # `codex resume` subcommand, and permissions are managed via sandbox modes
+        # (--full-auto, --auto-edit). These parameters are permanently unused here.
+        _ = session_id, allowed_tools  # Silence linters
 
         # Use streaming mode - iterate asynchronously
         async for parsed in self._run_codex_stream(full_prompt, cwd=cwd):
             # Map to AgenticMessage types
             msg_type = parsed.get("type", "result")
 
-            if msg_type == "reasoning" or msg_type == "thinking":
+            if msg_type in ("reasoning", "thinking"):
                 yield AgenticMessage(
                     type=AgenticMessageType.THINKING,
                     content=parsed.get("content", ""),
@@ -313,15 +319,40 @@ class CodexCliDriver(DriverInterface):
                     tool_call_id=parsed.get("tool_call_id") or parsed.get("id"),
                 )
             elif msg_type == "final":
+                content = parsed.get("content", "")
+                # Validate against schema if provided
+                if schema and content:
+                    try:
+                        data = json.loads(content) if isinstance(content, str) else content
+                        validated = schema.model_validate(data)
+                        content = validated.model_dump_json()
+                    except (ValidationError, json.JSONDecodeError) as e:
+                        raise ModelProviderError(
+                            f"Schema validation failed: {e}",
+                            provider_name=self.PROVIDER_NAME,
+                            original_message=str(content)[:500],
+                        ) from e
                 yield AgenticMessage(
                     type=AgenticMessageType.RESULT,
-                    content=parsed.get("content", ""),
+                    content=content,
                 )
             else:
                 # Default to result
+                content = json.dumps(parsed)
+                # Validate against schema if provided
+                if schema:
+                    try:
+                        validated = schema.model_validate(parsed)
+                        content = validated.model_dump_json()
+                    except ValidationError as e:
+                        raise ModelProviderError(
+                            f"Schema validation failed: {e}",
+                            provider_name=self.PROVIDER_NAME,
+                            original_message=str(parsed)[:500],
+                        ) from e
                 yield AgenticMessage(
                     type=AgenticMessageType.RESULT,
-                    content=json.dumps(parsed),
+                    content=content,
                 )
 
     async def cleanup_session(self, session_id: str) -> bool:
