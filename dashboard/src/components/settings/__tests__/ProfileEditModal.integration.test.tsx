@@ -83,6 +83,44 @@ describe('ProfileEditModal model selection', () => {
     });
   });
 
+  it('should show codex model options when driver is codex', async () => {
+    const user = userEvent.setup();
+    const profileWithCodexDriver = {
+      id: 'codex-profile',
+      tracker: 'noop',
+      working_dir: '/test',
+      plan_output_dir: 'docs/plans',
+      plan_path_pattern: 'docs/plans/{date}-{issue_key}.md',
+      is_active: false,
+      agents: {
+        architect: { driver: 'codex', model: 'gpt-5.3-codex', options: {} },
+        developer: { driver: 'codex', model: 'gpt-5.3-codex', options: {} },
+        reviewer: { driver: 'codex', model: 'gpt-5.3-codex', options: {} },
+        plan_validator: { driver: 'codex', model: 'gpt-5.3-codex', options: {} },
+        task_reviewer: { driver: 'codex', model: 'gpt-5.3-codex', options: {} },
+        evaluator: { driver: 'codex', model: 'gpt-5.3-codex', options: {} },
+        brainstormer: { driver: 'codex', model: 'gpt-5.3-codex', options: {} },
+      },
+    };
+
+    render(
+      <ProfileEditModal
+        open={true}
+        onOpenChange={vi.fn()}
+        profile={profileWithCodexDriver}
+        onSaved={vi.fn()}
+      />
+    );
+
+    // Switch to Agents tab to see agent configuration
+    await user.click(screen.getByRole('tab', { name: /agents/i }));
+
+    // Should NOT show "Browse all models" link (not api driver)
+    expect(screen.queryByText(/Browse all models/i)).not.toBeInTheDocument();
+    // Should see codex model options in the simple select
+    expect(screen.getAllByText('gpt-5.3-codex').length).toBeGreaterThan(0);
+  });
+
   it('should show multiple ApiModelSelect components when multiple agents use api driver', async () => {
     const user = userEvent.setup();
     const profileWithMultipleApiDrivers = {

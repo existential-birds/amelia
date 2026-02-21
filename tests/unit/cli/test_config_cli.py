@@ -306,6 +306,89 @@ class TestProfileCreate:
         assert "Invalid driver" in result.stderr
 
 
+class TestProfileCreateDriverAwareDefaults:
+    """Tests for driver-aware model defaults in profile creation."""
+
+    @pytest.fixture
+    def runner(self) -> CliRunner:
+        """Typer CLI test runner."""
+        return CliRunner()
+
+    @pytest.fixture
+    def mock_db(self) -> MagicMock:
+        """Create a mock Database."""
+        mock = MagicMock()
+        mock.connect = AsyncMock()
+        mock.close = AsyncMock()
+        mock.ensure_schema = AsyncMock()
+        return mock
+
+    def test_profile_create_interactive_claude_default_model(
+        self, runner: CliRunner, mock_db: MagicMock
+    ) -> None:
+        """Interactive profile create defaults model to 'sonnet' for claude driver."""
+        created_profile = Profile(
+            name="interactive-claude",
+            tracker="noop",
+            working_dir="/tmp",
+            agents={
+                "architect": AgentConfig(driver="claude", model="sonnet"),
+            },
+        )
+
+        mock_repo = MagicMock()
+        mock_repo.get_profile = AsyncMock(return_value=None)
+        mock_repo.create_profile = AsyncMock(return_value=created_profile)
+
+        with patch("amelia.cli.config.get_database", return_value=mock_db), \
+             patch("amelia.cli.config.ProfileRepository", return_value=mock_repo):
+            # Provide driver=claude, then accept model default, tracker default, working dir
+            result = runner.invoke(
+                app,
+                ["config", "profile", "create", "interactive-claude"],
+                input="claude\n\nnoop\n/tmp\n",
+            )
+
+        assert result.exit_code == 0
+        assert "created successfully" in result.stdout
+        # The model prompt should have shown "sonnet" as default
+        call_args = mock_repo.create_profile.call_args[0][0]
+        first_agent = next(iter(call_args.agents.values()))
+        assert first_agent.model == "sonnet"
+
+    def test_profile_create_interactive_codex_default_model(
+        self, runner: CliRunner, mock_db: MagicMock
+    ) -> None:
+        """Interactive profile create defaults model to 'gpt-5.3-codex' for codex driver."""
+        created_profile = Profile(
+            name="interactive-codex",
+            tracker="noop",
+            working_dir="/tmp",
+            agents={
+                "architect": AgentConfig(driver="codex", model="gpt-5.3-codex"),
+            },
+        )
+
+        mock_repo = MagicMock()
+        mock_repo.get_profile = AsyncMock(return_value=None)
+        mock_repo.create_profile = AsyncMock(return_value=created_profile)
+
+        with patch("amelia.cli.config.get_database", return_value=mock_db), \
+             patch("amelia.cli.config.ProfileRepository", return_value=mock_repo):
+            # Provide driver=codex, then accept model default, tracker default, working dir
+            result = runner.invoke(
+                app,
+                ["config", "profile", "create", "interactive-codex"],
+                input="codex\n\nnoop\n/tmp\n",
+            )
+
+        assert result.exit_code == 0
+        assert "created successfully" in result.stdout
+        call_args = mock_repo.create_profile.call_args[0][0]
+        first_agent = next(iter(call_args.agents.values()))
+        assert first_agent.model == "gpt-5.3-codex"
+
+
 class TestProfileDelete:
     """Tests for 'amelia config profile delete' command."""
 

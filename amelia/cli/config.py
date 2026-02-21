@@ -95,6 +95,13 @@ VALID_DRIVERS: set[DriverType] = {
     DriverType.CODEX,
     DriverType.API,
 }
+
+DEFAULT_MODELS: dict[str, str] = {
+    "claude": "sonnet",
+    "codex": "gpt-5.3-codex",
+    "api": "",
+}
+
 VALID_TRACKERS: set[TrackerType] = {
     TrackerType.JIRA,
     TrackerType.GITHUB,
@@ -292,7 +299,7 @@ def profile_create(
     if model is None:
         model = typer.prompt(
             "Model",
-            default="sonnet",
+            default=DEFAULT_MODELS.get(driver, "sonnet"),
             show_default=True,
         )
     if tracker is None:
@@ -418,9 +425,11 @@ async def check_and_run_first_time_setup() -> bool:
             "[yellow]No profiles configured. Let's create your first profile.[/yellow]\n"
         )
 
-        name = typer.prompt("Profile name", default="local_opus")
+        name = typer.prompt("Profile name", default="default")
         driver_input = typer.prompt("Driver (claude, codex, or api)", default="claude")
-        model = typer.prompt("Model", default="opus")
+        model = typer.prompt(
+            "Model", default=DEFAULT_MODELS.get(driver_input, "sonnet")
+        )
         tracker = typer.prompt("Tracker (noop, github, jira)", default="noop")
         working_dir = typer.prompt("Working directory", default=str(Path.cwd()))
 
