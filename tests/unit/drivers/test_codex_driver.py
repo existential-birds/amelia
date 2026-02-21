@@ -36,6 +36,21 @@ async def test_generate_parses_schema() -> None:
 
 
 @pytest.mark.asyncio
+async def test_generate_parses_jsonl_output() -> None:
+    driver = CodexCliDriver(model="gpt-5-codex", cwd="/tmp")
+    payload = '\n'.join(
+        [
+            '{"type":"reasoning","content":"thinking"}',
+            '{"type":"final","content":"ok"}',
+        ]
+    )
+    with patch.object(driver, "_run_codex", new=AsyncMock(return_value=payload)):
+        text, session_id = await driver.generate("ping")
+    assert text == "ok"
+    assert session_id is None
+
+
+@pytest.mark.asyncio
 async def test_execute_agentic_maps_stream_events() -> None:
     driver = CodexCliDriver(model="gpt-5-codex", cwd="/tmp")
 
@@ -60,6 +75,7 @@ async def test_execute_agentic_maps_stream_events() -> None:
         AgenticMessageType.TOOL_RESULT,
         AgenticMessageType.RESULT,
     ]
+    assert msgs[2].tool_output == "ok"
 
 
 @pytest.mark.asyncio

@@ -102,7 +102,7 @@ class CodexCliDriver(DriverInterface):
         Raises:
             ModelProviderError: If codex CLI exits with non-zero status.
         """
-        cmd = ["codex", "exec", "--stream", "--json"]
+        cmd = ["codex", "exec", "--json"]
 
         if self.model:
             cmd.extend(["--model", self.model])
@@ -169,6 +169,12 @@ class CodexCliDriver(DriverInterface):
         try:
             return json.loads(text)
         except json.JSONDecodeError as e:
+            lines = [line for line in text.splitlines() if line.strip()]
+            if len(lines) > 1:
+                try:
+                    return json.loads(lines[-1])
+                except json.JSONDecodeError:
+                    pass
             raise ModelProviderError(
                 f"Failed to parse Codex CLI output as JSON: {e}",
                 provider_name=self.PROVIDER_NAME,
@@ -301,9 +307,13 @@ class CodexCliDriver(DriverInterface):
                 elif msg_type == "tool_result":
                     yield AgenticMessage(
                         type=AgenticMessageType.TOOL_RESULT,
-                        content=parsed.get("output", ""),
-                        tool_name=parsed.get("name", ""),
-                        tool_call_id=parsed.get("id"),
+                        tool_output=(
+                            parsed.get("tool_output")
+                            or parsed.get("output")
+                            or parsed.get("content", "")
+                        ),
+                        tool_name=parsed.get("tool_name") or parsed.get("name", ""),
+                        tool_call_id=parsed.get("tool_call_id") or parsed.get("id"),
                     )
                 elif msg_type == "final":
                     yield AgenticMessage(
