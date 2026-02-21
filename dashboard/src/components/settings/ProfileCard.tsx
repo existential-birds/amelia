@@ -58,9 +58,15 @@ const MODEL_COLORS = {
   haiku: 'text-muted-foreground',
 } as const;
 
+const isCliDriver = (driver: string) =>
+  driver === 'claude' ||
+  driver === 'codex' ||
+  driver.startsWith('claude:') ||
+  driver.startsWith('codex:');
+
 /** Get driver icon component */
 const getDriverIcon = (driver: string) => {
-  return driver.startsWith('claude:') ? Terminal : Cloud;
+  return isCliDriver(driver) ? Terminal : Cloud;
 };
 
 /** Get model display color */
@@ -193,7 +199,7 @@ export const ProfileCard = forwardRef<HTMLDivElement, ProfileCardProps>(
               variant="outline"
               className={cn(
                 'text-xs',
-                primaryDriver.startsWith('claude:')
+                isCliDriver(primaryDriver)
                   ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/30'
                   : 'bg-blue-500/10 text-blue-500 border-blue-500/30'
               )}

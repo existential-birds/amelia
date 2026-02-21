@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from amelia.core.exceptions import ModelProviderError
 from amelia.drivers.base import AgenticMessageType
-from amelia.drivers.cli.codex import CodexCliDriver
+from amelia.drivers.cli.codex import CodexCliDriver, CodexStreamEvent
 
 
 class _Schema(BaseModel):
@@ -56,12 +56,12 @@ async def test_execute_agentic_maps_stream_events() -> None:
 
     async def mock_run_codex_stream(
         prompt: str, **kwargs: Any
-    ) -> AsyncIterator[dict[str, Any]]:
-        events: list[dict[str, Any]] = [
-            {"type": "reasoning", "content": "thinking"},
-            {"type": "tool_call", "name": "read_file", "input": {"path": "a.py"}, "id": "1"},
-            {"type": "tool_result", "name": "read_file", "output": "ok", "id": "1"},
-            {"type": "final", "content": "done"},
+    ) -> AsyncIterator[CodexStreamEvent]:
+        events: list[CodexStreamEvent] = [
+            CodexStreamEvent(type="reasoning", content="thinking"),
+            CodexStreamEvent(type="tool_call", name="read_file", input={"path": "a.py"}, id="1"),
+            CodexStreamEvent(type="tool_result", name="read_file", output="ok", id="1"),
+            CodexStreamEvent(type="final", content="done"),
         ]
         for event in events:
             yield event
@@ -142,10 +142,12 @@ async def test_run_codex_stream_yields_parsed_ndjson_events() -> None:
         events = [e async for e in driver._run_codex_stream("do something", cwd="/tmp")]
 
     assert len(events) == 4
-    assert events[0] == {"type": "reasoning", "content": "thinking hard"}
-    assert events[1]["type"] == "tool_call"
-    assert events[1]["name"] == "read_file"
-    assert events[3] == {"type": "final", "content": "done"}
+    assert events[0].type == "reasoning"
+    assert events[0].content == "thinking hard"
+    assert events[1].type == "tool_call"
+    assert events[1].name == "read_file"
+    assert events[3].type == "final"
+    assert events[3].content == "done"
 
 
 @pytest.mark.asyncio
@@ -167,7 +169,8 @@ async def test_run_codex_stream_skips_malformed_json_lines() -> None:
         events = [e async for e in driver._run_codex_stream("do something", cwd="/tmp")]
 
     assert len(events) == 1
-    assert events[0] == {"type": "final", "content": "ok"}
+    assert events[0].type == "final"
+    assert events[0].content == "ok"
 
 
 @pytest.mark.asyncio

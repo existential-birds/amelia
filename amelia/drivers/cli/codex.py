@@ -22,6 +22,20 @@ from amelia.drivers.base import (
 from amelia.drivers.cli.utils import strip_markdown_fences
 
 
+class CodexStreamEvent(BaseModel):
+    """A single event from the Codex CLI NDJSON stream."""
+
+    type: str
+    content: str | None = None
+    name: str | None = None
+    input: dict[str, Any] | None = None
+    id: str | None = None
+    output: str | None = None
+    tool_output: str | None = None
+    tool_name: str | None = None
+    tool_call_id: str | None = None
+
+
 class CodexCliDriver(DriverInterface):
     """CLI driver wrapping OpenAI's Codex CLI tool.
 
@@ -86,18 +100,18 @@ class CodexCliDriver(DriverInterface):
 
     async def _run_codex_stream(
         self, prompt: str, cwd: str | None = None
-    ) -> AsyncIterator[dict[str, Any]]:
+    ) -> AsyncIterator[CodexStreamEvent]:
         """Run codex CLI command and stream NDJSON events.
 
         Spawns an async subprocess with ``codex exec --json``
-        and yields one parsed dict per newline-delimited JSON line.
+        and yields one typed event per newline-delimited JSON line.
 
         Args:
             prompt: The prompt to send to codex.
             cwd: Working directory override (falls back to self.cwd).
 
         Yields:
-            Event dictionaries parsed from codex CLI NDJSON output.
+            CodexStreamEvent instances parsed from codex CLI NDJSON output.
 
         Raises:
             ModelProviderError: If codex CLI exits with non-zero status.
@@ -116,6 +130,7 @@ class CodexCliDriver(DriverInterface):
             stderr=asyncio.subprocess.PIPE,
         )
 
+        _cancelled = False
         try:
             while True:
                 raw_line = await proc.stdout.readline()  # type: ignore[union-attr]
@@ -125,9 +140,9 @@ class CodexCliDriver(DriverInterface):
                 if not line:
                     continue
                 try:
-                    event = json.loads(line)
-                    if isinstance(event, dict):
-                        yield event
+                    raw = json.loads(line)
+                    if isinstance(raw, dict):
+                        yield CodexStreamEvent.model_validate(raw)
                 except json.JSONDecodeError as e:
                     logger.debug(
                         "Skipping malformed NDJSON line from codex CLI",
@@ -135,13 +150,20 @@ class CodexCliDriver(DriverInterface):
                         error=str(e),
                     )
                     continue  # skip malformed lines
+                except ValidationError as e:
+                    logger.debug(
+                        "Skipping invalid codex stream event",
+                        line=line,
+                        error=str(e),
+                    )
+                    continue
         except asyncio.CancelledError:
+            _cancelled = True
             proc.kill()
-            await proc.wait()
             raise
         finally:
             await proc.wait()
-            if proc.returncode and proc.returncode != 0:
+            if not _cancelled and proc.returncode and proc.returncode != 0:
                 stderr_text = ""
                 if proc.stderr:
                     stderr_bytes = await proc.stderr.read()
@@ -311,43 +333,45 @@ class CodexCliDriver(DriverInterface):
         if instructions:
             full_prompt = f"{instructions}\n\n{prompt}"
 
-        # Intentionally unused: session_id and allowed_tools are required by the Driver
-        # interface but Codex CLI handles these differently - sessions require the
-        # `codex resume` subcommand, and permissions are managed via sandbox modes
-        # (--full-auto, --auto-edit). These parameters are permanently unused here.
-        _ = session_id, allowed_tools  # Silence linters
+        # session_id and allowed_tools are required by the DriverInterface but
+        # Codex CLI handles these differently: sessions require `codex resume`, and
+        # permissions are managed via sandbox modes (--full-auto, --auto-edit).
+        if session_id is not None:
+            logger.warning(
+                "CodexCliDriver does not support session_id; parameter ignored. "
+                "Use `codex resume` subcommand for session continuity.",
+                session_id=session_id,
+            )
+        if allowed_tools is not None:
+            logger.warning(
+                "CodexCliDriver does not support allowed_tools; parameter ignored. "
+                "Use sandbox flags (--full-auto, --auto-edit) for tool restrictions.",
+            )
 
         # Use streaming mode - iterate asynchronously
-        async for parsed in self._run_codex_stream(full_prompt, cwd=cwd):
-            # Map to AgenticMessage types
-            msg_type = parsed.get("type", "result")
-
-            if msg_type in ("reasoning", "thinking"):
+        async for event in self._run_codex_stream(full_prompt, cwd=cwd):
+            if event.type in ("reasoning", "thinking"):
                 yield AgenticMessage(
                     type=AgenticMessageType.THINKING,
-                    content=parsed.get("content", ""),
+                    content=event.content or "",
                 )
-            elif msg_type == "tool_call":
+            elif event.type == "tool_call":
                 yield AgenticMessage(
                     type=AgenticMessageType.TOOL_CALL,
                     content="",
-                    tool_name=parsed.get("name", ""),
-                    tool_input=parsed.get("input", {}),
-                    tool_call_id=parsed.get("id"),
+                    tool_name=event.name or "",
+                    tool_input=event.input or {},
+                    tool_call_id=event.id,
                 )
-            elif msg_type == "tool_result":
+            elif event.type == "tool_result":
                 yield AgenticMessage(
                     type=AgenticMessageType.TOOL_RESULT,
-                    tool_output=(
-                        parsed.get("tool_output")
-                        or parsed.get("output")
-                        or parsed.get("content", "")
-                    ),
-                    tool_name=parsed.get("tool_name") or parsed.get("name", ""),
-                    tool_call_id=parsed.get("tool_call_id") or parsed.get("id"),
+                    tool_output=(event.tool_output or event.output or event.content or ""),
+                    tool_name=event.tool_name or event.name or "",
+                    tool_call_id=event.tool_call_id or event.id,
                 )
-            elif msg_type == "final":
-                content = parsed.get("content", "")
+            elif event.type == "final":
+                content = event.content or ""
                 if schema and content:
                     content = self._validate_schema(content, schema, content)
                 yield AgenticMessage(
@@ -356,9 +380,10 @@ class CodexCliDriver(DriverInterface):
                 )
             else:
                 # Default to result
-                content = json.dumps(parsed)
+                raw_dict = event.model_dump(exclude_none=True)
+                content = json.dumps(raw_dict)
                 if schema:
-                    content = self._validate_schema(parsed, schema, content)
+                    content = self._validate_schema(raw_dict, schema, content)
                 yield AgenticMessage(
                     type=AgenticMessageType.RESULT,
                     content=content,
