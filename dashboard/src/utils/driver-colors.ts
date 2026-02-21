@@ -4,13 +4,14 @@ import type { LucideIcon } from 'lucide-react';
 interface DriverStyle {
   bg: string;
   text: string;
+  border: string;
   icon: LucideIcon;
 }
 
 const DRIVER_STYLES = {
-  claude: { bg: 'bg-yellow-500/10', text: 'text-yellow-500', icon: Terminal },
-  codex: { bg: 'bg-purple-500/10', text: 'text-purple-500', icon: Code2 },
-  api: { bg: 'bg-blue-500/10', text: 'text-blue-500', icon: Cloud },
+  claude: { bg: 'bg-yellow-500/10', text: 'text-yellow-500', border: 'border-yellow-500/30', icon: Terminal },
+  codex: { bg: 'bg-purple-500/10', text: 'text-purple-500', border: 'border-purple-500/30', icon: Code2 },
+  api: { bg: 'bg-blue-500/10', text: 'text-blue-500', border: 'border-blue-500/30', icon: Cloud },
 } as const satisfies Record<string, DriverStyle>;
 
 export function getDriverStyle(driver: string): DriverStyle {
