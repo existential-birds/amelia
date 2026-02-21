@@ -89,7 +89,7 @@ class CodexCliDriver(DriverInterface):
     ) -> AsyncIterator[dict[str, Any]]:
         """Run codex CLI command and stream NDJSON events.
 
-        Spawns an async subprocess with ``codex exec --stream --json``
+        Spawns an async subprocess with ``codex exec --json``
         and yields one parsed dict per newline-delimited JSON line.
 
         Args:
