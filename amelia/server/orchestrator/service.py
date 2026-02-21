@@ -635,7 +635,7 @@ class OrchestratorService:
         if request.plan_file is not None or request.plan_content is not None:
             # Resolve target plan path
             plan_rel_path = resolve_plan_path(profile.plan_path_pattern, request.issue_id)
-            working_dir = Path(profile.repo_root) if profile.repo_root else Path(".")
+            working_dir = Path(profile.repo_root)
             target_path = working_dir / plan_rel_path
 
             # Import and validate external plan
@@ -2737,7 +2737,7 @@ class OrchestratorService:
 
         # Resolve target plan path
         plan_rel_path = resolve_plan_path(profile.plan_path_pattern, workflow.issue_id)
-        working_dir = Path(profile.repo_root) if profile.repo_root else Path(".")
+        working_dir = Path(profile.repo_root)
         target_path = working_dir / plan_rel_path
 
         # Fast path: read content, write to target, count tasks (no LLM)

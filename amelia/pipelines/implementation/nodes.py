@@ -58,7 +58,7 @@ async def plan_validator_node(
 
     # Resolve plan path - use working_dir to match call_architect_node
     plan_rel_path = resolve_plan_path(profile.plan_path_pattern, state.issue.id)
-    working_dir = Path(profile.repo_root) if profile.repo_root else Path(".")
+    working_dir = Path(profile.repo_root)
     plan_path = working_dir / plan_rel_path
 
     logger.info(
@@ -163,7 +163,7 @@ async def call_architect_node(
 
     # Ensure the plan directory exists before the architect runs
     plan_rel_path = resolve_plan_path(profile.plan_path_pattern, state.issue.id)
-    working_dir = Path(profile.repo_root) if profile.repo_root else Path(".")
+    working_dir = Path(profile.repo_root)
     plan_path = working_dir / plan_rel_path
     await asyncio.to_thread(plan_path.parent.mkdir, parents=True, exist_ok=True)
     logger.debug("Ensured plan directory exists", plan_dir=str(plan_path.parent))
