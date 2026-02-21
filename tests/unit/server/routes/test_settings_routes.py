@@ -124,7 +124,7 @@ def make_test_profile(
     Args:
         name: Profile name.
         tracker: Tracker type.
-        repo_root: Working directory.
+        repo_root: Repository root directory.
         driver: Default driver for all agents.
         model: Default model for all agents.
 

@@ -66,7 +66,7 @@ def get_event_bus() -> EventBus:
 
 
 def _validate_repo_root(requested: str, profile_root: str) -> None:
-    """Validate that requested working_dir is within profile repo root.
+    """Validate that requested working directory is within profile repo root.
 
     Args:
         requested: The requested working directory.

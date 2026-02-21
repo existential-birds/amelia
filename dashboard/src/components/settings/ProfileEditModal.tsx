@@ -227,7 +227,7 @@ const validateField = (field: string, value: string): string | null => {
       }
       return null;
     case 'repo_root':
-      if (!value.trim()) return 'Working directory is required';
+      if (!value.trim()) return 'Repository root is required';
       return null;
     default:
       return null;
