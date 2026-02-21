@@ -230,7 +230,7 @@ class CodexCliDriver(DriverInterface):
             else:
                 text = json.dumps(parsed)
         else:
-            text = str(parsed)
+            text = json.dumps(parsed)
 
         # Validate against schema if provided
         if schema:
@@ -285,47 +285,44 @@ class CodexCliDriver(DriverInterface):
 
         # Use streaming mode - iterate asynchronously
         async for parsed in self._run_codex_stream(full_prompt, cwd=cwd):
-            # parsed is already a dict from _run_codex_stream yielding dicts
-
             # Map to AgenticMessage types
-            if isinstance(parsed, dict):
-                msg_type = parsed.get("type", "result")
+            msg_type = parsed.get("type", "result")
 
-                if msg_type == "reasoning" or msg_type == "thinking":
-                    yield AgenticMessage(
-                        type=AgenticMessageType.THINKING,
-                        content=parsed.get("content", ""),
-                    )
-                elif msg_type == "tool_call":
-                    yield AgenticMessage(
-                        type=AgenticMessageType.TOOL_CALL,
-                        content="",
-                        tool_name=parsed.get("name", ""),
-                        tool_input=parsed.get("input", {}),
-                        tool_call_id=parsed.get("id"),
-                    )
-                elif msg_type == "tool_result":
-                    yield AgenticMessage(
-                        type=AgenticMessageType.TOOL_RESULT,
-                        tool_output=(
-                            parsed.get("tool_output")
-                            or parsed.get("output")
-                            or parsed.get("content", "")
-                        ),
-                        tool_name=parsed.get("tool_name") or parsed.get("name", ""),
-                        tool_call_id=parsed.get("tool_call_id") or parsed.get("id"),
-                    )
-                elif msg_type == "final":
-                    yield AgenticMessage(
-                        type=AgenticMessageType.RESULT,
-                        content=parsed.get("content", ""),
-                    )
-                else:
-                    # Default to result
-                    yield AgenticMessage(
-                        type=AgenticMessageType.RESULT,
-                        content=json.dumps(parsed),
-                    )
+            if msg_type == "reasoning" or msg_type == "thinking":
+                yield AgenticMessage(
+                    type=AgenticMessageType.THINKING,
+                    content=parsed.get("content", ""),
+                )
+            elif msg_type == "tool_call":
+                yield AgenticMessage(
+                    type=AgenticMessageType.TOOL_CALL,
+                    content="",
+                    tool_name=parsed.get("name", ""),
+                    tool_input=parsed.get("input", {}),
+                    tool_call_id=parsed.get("id"),
+                )
+            elif msg_type == "tool_result":
+                yield AgenticMessage(
+                    type=AgenticMessageType.TOOL_RESULT,
+                    tool_output=(
+                        parsed.get("tool_output")
+                        or parsed.get("output")
+                        or parsed.get("content", "")
+                    ),
+                    tool_name=parsed.get("tool_name") or parsed.get("name", ""),
+                    tool_call_id=parsed.get("tool_call_id") or parsed.get("id"),
+                )
+            elif msg_type == "final":
+                yield AgenticMessage(
+                    type=AgenticMessageType.RESULT,
+                    content=parsed.get("content", ""),
+                )
+            else:
+                # Default to result
+                yield AgenticMessage(
+                    type=AgenticMessageType.RESULT,
+                    content=json.dumps(parsed),
+                )
 
     async def cleanup_session(self, session_id: str) -> bool:
         """Clean up a driver session.
