@@ -8,6 +8,7 @@ import json
 from collections.abc import AsyncIterator
 from typing import Any
 
+from loguru import logger
 from pydantic import BaseModel, ValidationError
 
 from amelia.core.exceptions import ModelProviderError
@@ -18,6 +19,7 @@ from amelia.drivers.base import (
     DriverUsage,
     GenerateResult,
 )
+from amelia.drivers.cli.utils import strip_markdown_fences
 
 
 class CodexCliDriver(DriverInterface):
@@ -126,7 +128,12 @@ class CodexCliDriver(DriverInterface):
                     event = json.loads(line)
                     if isinstance(event, dict):
                         yield event
-                except json.JSONDecodeError:
+                except json.JSONDecodeError as e:
+                    logger.debug(
+                        "Skipping malformed NDJSON line from codex CLI",
+                        line=line,
+                        error=str(e),
+                    )
                     continue  # skip malformed lines
         except asyncio.CancelledError:
             proc.kill()
@@ -157,19 +164,7 @@ class CodexCliDriver(DriverInterface):
         Raises:
             ModelProviderError: If JSON parsing fails.
         """
-        text = raw_output.strip()
-
-        # Handle markdown code fences
-        if text.startswith("```"):
-            lines = text.split("\n")
-            # Find the closing fence
-            end_idx = -1
-            for i in range(len(lines) - 1, 0, -1):
-                if lines[i].strip() == "```":
-                    end_idx = i
-                    break
-            if end_idx > 0:
-                text = "\n".join(lines[1:end_idx])
+        text = strip_markdown_fences(raw_output)
 
         try:
             return json.loads(text)

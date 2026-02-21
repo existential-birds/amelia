@@ -39,7 +39,7 @@ def get_driver(
                 "CLI driver containerization is not yet supported."
             )
         if driver_key != "api":
-            raise ValueError(f"Unknown driver key: {driver_key}")
+            raise ValueError(f"Unknown driver key: {driver_key!r}")
         from amelia.sandbox.docker import DockerSandboxProvider  # noqa: PLC0415
         from amelia.sandbox.driver import ContainerDriver  # noqa: PLC0415
 
