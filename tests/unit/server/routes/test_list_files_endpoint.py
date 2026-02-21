@@ -13,15 +13,15 @@ from amelia.server.routes.files import router
 from amelia.server.routes.workflows import configure_exception_handlers
 
 
-def _create_mock_profile_repo(working_dir: Path) -> MagicMock:
-    """Create a mock profile repository with an active profile pointing to working_dir."""
+def _create_mock_profile_repo(repo_root: Path) -> MagicMock:
+    """Create a mock profile repository with an active profile pointing to repo_root."""
     repo = MagicMock()
     agent_config = AgentConfig(driver="cli", model="claude-3-5-sonnet")
     repo.get_active_profile = AsyncMock(
         return_value=Profile(
             name="test",
             tracker="noop",
-            working_dir=str(working_dir),
+            repo_root=str(repo_root),
             agents={
                 "architect": agent_config,
                 "developer": agent_config,
@@ -36,7 +36,7 @@ class TestListFiles:
     """Tests for GET /api/files/list endpoint."""
 
     @pytest.fixture
-    def working_dir(self, tmp_path: Path) -> Path:
+    def repo_root(self, tmp_path: Path) -> Path:
         """Create a working directory with test files."""
         docs_dir = tmp_path / "docs" / "plans"
         docs_dir.mkdir(parents=True)
@@ -54,9 +54,9 @@ class TestListFiles:
         return tmp_path
 
     @pytest.fixture
-    def mock_profile_repo(self, working_dir: Path) -> MagicMock:
-        """Create a mock profile repo with working_dir set to the test directory."""
-        return _create_mock_profile_repo(working_dir)
+    def mock_profile_repo(self, repo_root: Path) -> MagicMock:
+        """Create a mock profile repo with repo_root set to the test directory."""
+        return _create_mock_profile_repo(repo_root)
 
     @pytest.fixture
     def app(self, mock_profile_repo: MagicMock) -> FastAPI:
@@ -73,7 +73,7 @@ class TestListFiles:
         return TestClient(app)
 
     def test_returns_md_files_by_default(
-        self, client: TestClient, working_dir: Path
+        self, client: TestClient, repo_root: Path
     ) -> None:
         """Should return .md files when using default glob pattern."""
         response = client.get("/api/files/list", params={"directory": "docs/plans"})
@@ -88,7 +88,7 @@ class TestListFiles:
         assert "notes.txt" not in file_names
 
     def test_custom_glob_pattern(
-        self, client: TestClient, working_dir: Path
+        self, client: TestClient, repo_root: Path
     ) -> None:
         """Should respect custom glob pattern."""
         response = client.get(
@@ -103,7 +103,7 @@ class TestListFiles:
         assert "plan-a.md" not in file_names
 
     def test_file_entry_shape(
-        self, client: TestClient, working_dir: Path
+        self, client: TestClient, repo_root: Path
     ) -> None:
         """Should return file entries with correct fields."""
         response = client.get("/api/files/list", params={"directory": "docs/plans"})
@@ -121,9 +121,9 @@ class TestListFiles:
         assert entry["size_bytes"] > 0
 
     def test_relative_path_in_entries(
-        self, client: TestClient, working_dir: Path
+        self, client: TestClient, repo_root: Path
     ) -> None:
-        """Should return paths relative to working_dir."""
+        """Should return paths relative to repo_root."""
         response = client.get("/api/files/list", params={"directory": "docs/plans"})
 
         assert response.status_code == 200
@@ -153,7 +153,7 @@ class TestListFiles:
         assert response.status_code == 400
 
     def test_rejects_absolute_path_traversal(self, client: TestClient) -> None:
-        """Should return 400 for absolute path that escapes working_dir."""
+        """Should return 400 for absolute path that escapes repo_root."""
         response = client.get(
             "/api/files/list", params={"directory": "/etc"}
         )
@@ -179,10 +179,10 @@ class TestListFiles:
         assert "no active profile" in response.json()["error"].lower()
 
     def test_sorted_by_modified_time_newest_first(
-        self, client: TestClient, working_dir: Path
+        self, client: TestClient, repo_root: Path
     ) -> None:
         """Should return files sorted by modification time, newest first."""
-        docs_dir = working_dir / "docs" / "plans"
+        docs_dir = repo_root / "docs" / "plans"
 
         # Touch plan-a.md to make it newer
         import time
@@ -200,7 +200,7 @@ class TestListFiles:
         assert md_files[0]["name"] == "plan-a.md"
 
     def test_does_not_include_subdirectories(
-        self, client: TestClient, working_dir: Path
+        self, client: TestClient, repo_root: Path
     ) -> None:
         """Should not include subdirectory entries, only files."""
         response = client.get(
@@ -214,10 +214,10 @@ class TestListFiles:
         # "archive" is a subdirectory, should not appear
         assert "archive" not in file_names
 
-    def test_worktree_path_overrides_working_dir(
+    def test_worktree_path_overrides_repo_root(
         self, client: TestClient, tmp_path: Path
     ) -> None:
-        """Should use worktree_path as base directory instead of active profile's working_dir."""
+        """Should use worktree_path as base directory instead of active profile's repo_root."""
         # Create a separate worktree with different files
         worktree = tmp_path / "worktree"
         worktree_docs = worktree / "docs" / "plans"
@@ -236,7 +236,7 @@ class TestListFiles:
         data = response.json()
         file_names = [f["name"] for f in data["files"]]
         assert "worktree-plan.md" in file_names
-        # Files from the active profile's working_dir should NOT appear
+        # Files from the active profile's repo_root should NOT appear
         assert "plan-a.md" not in file_names
         assert "plan-b.md" not in file_names
 
@@ -291,15 +291,15 @@ class TestListFiles:
         assert "not accessible" in response.json()["error"].lower()
 
     def test_backward_compatibility_without_worktree_path(
-        self, client: TestClient, working_dir: Path
+        self, client: TestClient, repo_root: Path
     ) -> None:
-        """Should still use active profile's working_dir when worktree_path is not provided."""
+        """Should still use active profile's repo_root when worktree_path is not provided."""
         # This is essentially a duplicate of existing tests, but explicitly verifies backward compat
         response = client.get("/api/files/list", params={"directory": "docs/plans"})
 
         assert response.status_code == 200
         data = response.json()
         file_names = [f["name"] for f in data["files"]]
-        # Should still see files from active profile's working_dir
+        # Should still see files from active profile's repo_root
         assert "plan-a.md" in file_names
         assert "plan-b.md" in file_names

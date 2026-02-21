@@ -40,7 +40,7 @@ class TestEvaluationNodeIntegration:
         Real components: get_driver, ApiDriver, Evaluator
         Mock boundary: ApiDriver.generate (LLM call)
         """
-        profile = make_profile(working_dir=str(tmp_path))
+        profile = make_profile(repo_root=str(tmp_path))
 
         # State with review feedback to evaluate
         review_result = ReviewResult(
@@ -128,7 +128,7 @@ class TestEvaluationNodeIntegration:
         Real components: get_driver, ApiDriver, Evaluator
         Mock boundary: None (no LLM call made for empty comments)
         """
-        profile = make_profile(working_dir=str(tmp_path))
+        profile = make_profile(repo_root=str(tmp_path))
 
         # State with empty review comments
         review_result = ReviewResult(
@@ -166,7 +166,7 @@ class TestEvaluationNodeIntegration:
 
         # Profile with explicit evaluator config
         profile = make_profile(
-            working_dir=str(tmp_path),
+            repo_root=str(tmp_path),
             agents={
                 "architect": AgentConfig(driver=DriverType.API, model="sonnet"),
                 "developer": AgentConfig(driver=DriverType.API, model="sonnet"),

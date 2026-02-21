@@ -68,7 +68,7 @@ export interface SandboxConfig {
 export interface Profile {
   id: string;
   tracker: string;
-  working_dir: string;
+  repo_root: string;
   plan_output_dir: string;
   plan_path_pattern: string;
   agents: Record<string, AgentConfig>;
@@ -91,7 +91,7 @@ export interface AgentConfigInput {
 export interface ProfileCreate {
   id: string;
   tracker?: string;
-  working_dir: string;
+  repo_root: string;
   plan_output_dir?: string;
   plan_path_pattern?: string;
   agents: Record<string, AgentConfigInput>;
@@ -103,7 +103,7 @@ export interface ProfileCreate {
  */
 export interface ProfileUpdate {
   tracker?: string;
-  working_dir?: string;
+  repo_root?: string;
   plan_output_dir?: string;
   plan_path_pattern?: string;
   agents?: Record<string, AgentConfigInput>;
@@ -227,7 +227,7 @@ export async function getProfile(id: string): Promise<Profile> {
  *   driver: 'api',
  *   model: 'anthropic/claude-3.5-sonnet',
  *   validator_model: 'anthropic/claude-3.5-sonnet',
- *   working_dir: '/Users/me/projects',
+ *   repo_root: '/Users/me/projects',
  * });
  * ```
  */

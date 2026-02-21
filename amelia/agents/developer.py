@@ -89,7 +89,7 @@ class Developer:
         if not state.goal:
             raise ValueError("ImplementationState must have a goal set")
 
-        cwd = profile.working_dir or "."
+        cwd = profile.repo_root or "."
         prompt = self._build_prompt(state)
 
         tool_calls: list[ToolCall] = []

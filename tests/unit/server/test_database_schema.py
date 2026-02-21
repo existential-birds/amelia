@@ -58,7 +58,7 @@ class TestProfilesSchema:
             "reviewer": {"driver": "cli", "model": "haiku", "options": {}},
         })
         await db.execute(
-            """INSERT INTO profiles (id, tracker, working_dir, agents, is_active)
+            """INSERT INTO profiles (id, tracker, repo_root, agents, is_active)
                VALUES ($1, $2, $3, $4::jsonb, $5)""",
             "dev", "none", "/path/to/repo", agents_json, True,
         )

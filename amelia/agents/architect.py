@@ -125,7 +125,7 @@ Before planning, discover:
         # Build user prompt from state (simplified - no codebase scan)
         user_prompt = self._build_agentic_prompt(state, profile)
 
-        cwd = profile.working_dir or "."
+        cwd = profile.repo_root or "."
         plan_path = resolve_plan_path(profile.plan_path_pattern, state.issue.id)
         tool_calls: list[ToolCall] = []
         tool_results: list[ToolResult] = []

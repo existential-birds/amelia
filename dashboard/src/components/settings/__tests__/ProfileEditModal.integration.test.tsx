@@ -50,7 +50,7 @@ describe('ProfileEditModal model selection', () => {
     const profileWithApiDriver = {
       id: 'test-profile',
       tracker: 'noop',
-      working_dir: '/test',
+      repo_root: '/test',
       plan_output_dir: 'docs/plans',
       plan_path_pattern: 'docs/plans/{date}-{issue_key}.md',
       is_active: false,
@@ -88,7 +88,7 @@ describe('ProfileEditModal model selection', () => {
     const profileWithMultipleApiDrivers = {
       id: 'multi-api-profile',
       tracker: 'noop',
-      working_dir: '/test',
+      repo_root: '/test',
       plan_output_dir: 'docs/plans',
       plan_path_pattern: 'docs/plans/{date}-{issue_key}.md',
       is_active: false,

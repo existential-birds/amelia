@@ -222,7 +222,7 @@ def profile_show(
             table.add_column("Value", style="white")
 
             table.add_row("Tracker", profile.tracker)
-            table.add_row("Working Dir", profile.working_dir)
+            table.add_row("Repo Root", profile.repo_root)
             table.add_row("Plan Output Dir", profile.plan_output_dir)
             table.add_row("Plan Path Pattern", profile.plan_path_pattern)
 
@@ -267,9 +267,9 @@ def profile_create(
         str | None,
         typer.Option("--tracker", "-t", help="Issue tracker (noop, github, jira)"),
     ] = None,
-    working_dir: Annotated[
+    repo_root: Annotated[
         str | None,
-        typer.Option("--working-dir", "-w", help="Working directory path"),
+        typer.Option("--repo-root", "-w", help="Repository root path"),
     ] = None,
     activate: Annotated[
         bool,
@@ -300,9 +300,9 @@ def profile_create(
             default="noop",
             show_default=True,
         )
-    if working_dir is None:
-        working_dir = typer.prompt(
-            "Working directory",
+    if repo_root is None:
+        repo_root = typer.prompt(
+            "Repository root",
             default=os.getcwd(),
             show_default=True,
         )
@@ -317,7 +317,7 @@ def profile_create(
                 raise typer.Exit(code=1)
 
             # At this point, all optional values have been filled via prompts
-            if driver is None or model is None or tracker is None or working_dir is None:
+            if driver is None or model is None or tracker is None or repo_root is None:
                 raise ValueError("All profile options must be provided")
 
             # Validate and cast to proper types
@@ -330,7 +330,7 @@ def profile_create(
             profile = Profile(
                 name=name,
                 tracker=validated_tracker,
-                working_dir=working_dir,
+                repo_root=repo_root,
                 agents=agents,
             )
 
@@ -421,7 +421,7 @@ async def check_and_run_first_time_setup() -> bool:
         driver_input = typer.prompt("Driver (cli or api)", default="cli")
         model = typer.prompt("Model", default="opus")
         tracker = typer.prompt("Tracker (noop, github, jira)", default="noop")
-        working_dir = typer.prompt("Working directory", default=str(Path.cwd()))
+        repo_root = typer.prompt("Repository root", default=str(Path.cwd()))
 
         # Validate driver and tracker
         validated_driver = _validate_driver(driver_input)
@@ -433,7 +433,7 @@ async def check_and_run_first_time_setup() -> bool:
         profile = Profile(
             name=name,
             tracker=validated_tracker,
-            working_dir=working_dir,
+            repo_root=repo_root,
             agents=agents,
         )
 

@@ -232,7 +232,7 @@ Return your evaluation as an EvaluationOutput with all items and a summary.""")
             prompt=prompt,
             system_prompt=self.system_prompt,
             schema=EvaluationOutput,
-            cwd=profile.working_dir,
+            cwd=profile.repo_root,
             session_id=None,  # Fresh session to avoid bias from prior agent context
         )
 

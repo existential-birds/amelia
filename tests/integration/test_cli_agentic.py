@@ -53,7 +53,7 @@ def mock_profile(tmp_path: Path) -> Profile:
     return Profile(
         name="test",
         tracker="noop",
-        working_dir=str(tmp_path),
+        repo_root=str(tmp_path),
         plan_output_dir=str(tmp_path / "plans"),
         agents={
             "architect": AgentConfig(driver="api", model="openrouter:anthropic/claude-sonnet-4"),
@@ -146,7 +146,7 @@ class TestPlanCommand:
         work_profile = Profile(
             name="work",
             tracker="jira",
-            working_dir=str(tmp_path),
+            repo_root=str(tmp_path),
             plan_output_dir=str(plans_dir),
             agents={
                 "architect": AgentConfig(driver="api", model="openrouter:anthropic/claude-sonnet-4"),

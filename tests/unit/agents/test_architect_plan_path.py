@@ -29,7 +29,7 @@ class TestArchitectPlanPath:
         profile = Profile(
             name="test",
             tracker="noop",
-            working_dir="/tmp/test",
+            repo_root="/tmp/test",
             agents={
                 "architect": AgentConfig(driver="cli", model="sonnet"),
             },
@@ -89,7 +89,7 @@ class TestArchitectPlanPath:
         issue = Issue(id="JIRA-456", title="Test", description="Desc")
         profile = Profile(
             name="test",
-            working_dir="/tmp/test",
+            repo_root="/tmp/test",
             plan_path_pattern=".amelia/plans/{issue_key}.md",
         )
         state = ImplementationState(

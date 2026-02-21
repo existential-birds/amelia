@@ -1529,7 +1529,7 @@ class TestSendMessagePlanPath:
 
         profile = Profile(
             name="work",
-            working_dir="/tmp/project",
+            repo_root="/tmp/project",
             plan_path_pattern="plans/{date}-{issue_key}-design.md",
         )
         repo = MagicMock()

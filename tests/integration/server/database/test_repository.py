@@ -298,7 +298,7 @@ class TestWorkflowRepository:
         profile = Profile(
             name="test",
             tracker="noop",
-            working_dir="/tmp/test",
+            repo_root="/tmp/test",
             agents={
                 "architect": AgentConfig(driver="cli", model="sonnet"),
                 "developer": AgentConfig(driver="cli", model="sonnet"),

@@ -35,7 +35,7 @@ def test_profile_with_agents_dict():
     profile = Profile(
         name="test",
         tracker="noop",
-        working_dir="/tmp/test",
+        repo_root="/tmp/test",
         agents={
             "architect": AgentConfig(driver="cli", model="opus"),
             "developer": AgentConfig(driver="cli", model="sonnet"),
@@ -52,7 +52,7 @@ def test_profile_get_agent_config():
     profile = Profile(
         name="test",
         tracker="noop",
-        working_dir="/tmp/test",
+        repo_root="/tmp/test",
         agents={
             "architect": AgentConfig(driver="cli", model="opus"),
         },
@@ -137,7 +137,7 @@ def test_get_agent_config_injects_sandbox():
     profile = Profile(
         name="work",
         tracker="noop",
-        working_dir="/tmp/test",
+        repo_root="/tmp/test",
         sandbox=sandbox,
         agents={"architect": AgentConfig(driver="api", model="opus")},
     )
@@ -155,7 +155,7 @@ def test_get_agent_config_injects_profile_name():
     profile = Profile(
         name="personal",
         tracker="noop",
-        working_dir="/tmp/test",
+        repo_root="/tmp/test",
         agents={"developer": AgentConfig(driver="cli", model="sonnet")},
     )
 
@@ -172,7 +172,7 @@ def test_get_agent_config_preserves_original():
     profile = Profile(
         name="work",
         tracker="noop",
-        working_dir="/tmp/test",
+        repo_root="/tmp/test",
         sandbox=sandbox,
         agents={"architect": original},
     )

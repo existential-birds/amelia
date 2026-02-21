@@ -153,7 +153,7 @@ class TestRouteAfterTaskReview:
         return Profile(
             name="test",
             tracker=TrackerType.NOOP,
-            working_dir="/tmp/test",
+            repo_root="/tmp/test",
             agents={
                 "architect": AgentConfig(driver=DriverType.CLI, model="sonnet"),
                 "developer": AgentConfig(driver=DriverType.CLI, model="sonnet"),
@@ -275,7 +275,7 @@ class TestRouteAfterTaskReview:
         profile = Profile(
             name="test",
             tracker=TrackerType.NOOP,
-            working_dir="/tmp/test",
+            repo_root="/tmp/test",
             agents={
                 "architect": AgentConfig(driver=DriverType.CLI, model="sonnet"),
                 "developer": AgentConfig(driver=DriverType.CLI, model="sonnet"),
@@ -419,7 +419,7 @@ class TestReviewerNodeTaskIteration:
         profile = Profile(
             name="test",
             tracker=TrackerType.NOOP,
-            working_dir="/tmp/test",
+            repo_root="/tmp/test",
             agents={
                 "architect": AgentConfig(driver=DriverType.CLI, model="sonnet"),
                 "developer": AgentConfig(driver=DriverType.CLI, model="sonnet"),

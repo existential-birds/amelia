@@ -36,7 +36,7 @@ class TestProfileSandboxSerialization:
 
         profile = Profile(
             name="test",
-            working_dir="/tmp",
+            repo_root="/tmp",
             sandbox=SandboxConfig(mode="container"),
             agents={
                 "developer": AgentConfig(

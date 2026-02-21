@@ -449,9 +449,9 @@ describe('API Client', () => {
   // ==========================================================================
 
   describe('getConfig', () => {
-    it('returns config with working_dir', async () => {
+    it('returns config with repo_root', async () => {
       const mockResponse = {
-        working_dir: '/tmp/test-repo',
+        repo_root: '/tmp/test-repo',
         max_concurrent: 5,
       };
 

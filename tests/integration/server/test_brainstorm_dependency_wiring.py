@@ -159,8 +159,8 @@ class TestBrainstormDependencyResolution:
 
         # Create settings file with driver in profile
         settings_path = tmp_path / "settings.amelia.yaml"
-        working_dir = tmp_path / "working"
-        working_dir.mkdir()
+        repo_root = tmp_path / "working"
+        repo_root.mkdir()
         settings_data = {
             "active_profile": "test",
             "profiles": {
@@ -169,7 +169,7 @@ class TestBrainstormDependencyResolution:
                     "driver": "cli",
                     "model": "sonnet",
                     "tracker": "noop",
-                    "working_dir": str(working_dir),
+                    "repo_root": str(repo_root),
                     "validator_model": "sonnet",
                 }
             },
@@ -227,10 +227,10 @@ class TestBrainstormDependencyResolution:
         """get_cwd should resolve from active profile in database.
 
         This test verifies that the dependency wiring in main.py correctly
-        reads working_dir from the active profile via ProfileRepository.
+        reads repo_root from the active profile via ProfileRepository.
         """
-        working_dir = tmp_path / "my_working_dir"
-        working_dir.mkdir()
+        repo_root = tmp_path / "my_repo_root"
+        repo_root.mkdir()
 
         app = create_app()
 
@@ -245,10 +245,10 @@ class TestBrainstormDependencyResolution:
             lambda: test_brainstorm_service
         )
 
-        # Mock get_profile_repository to return a profile with working_dir
+        # Mock get_profile_repository to return a profile with repo_root
         mock_profile_repo = AsyncMock(spec=ProfileRepository)
         mock_profile = AsyncMock()
-        mock_profile.working_dir = str(working_dir)
+        mock_profile.repo_root = str(repo_root)
         mock_profile_repo.get_active_profile.return_value = mock_profile
 
         with patch(
@@ -258,7 +258,7 @@ class TestBrainstormDependencyResolution:
             # Get the actual override function and await it (it's async)
             cwd_override = app.dependency_overrides[get_cwd]
             result = await cwd_override()
-            assert result == str(working_dir)
+            assert result == str(repo_root)
 
     async def test_get_cwd_falls_back_to_getcwd(
         self,
@@ -268,7 +268,7 @@ class TestBrainstormDependencyResolution:
         """get_cwd should fall back to os.getcwd() when no active profile found.
 
         This test verifies the fallback behavior when no active profile exists
-        or working_dir is not set.
+        or repo_root is not set.
         """
         import os
 
@@ -326,10 +326,10 @@ class TestBrainstormDependencyResolution:
         )
         from tests.conftest import create_mock_execute_agentic
 
-        # Create settings file with working_dir in profile
+        # Create settings file with repo_root in profile
         settings_path = tmp_path / "settings.amelia.yaml"
-        working_dir = tmp_path / "working"
-        working_dir.mkdir()
+        repo_root = tmp_path / "working"
+        repo_root.mkdir()
         settings_data = {
             "active_profile": "test",
             "profiles": {
@@ -338,7 +338,7 @@ class TestBrainstormDependencyResolution:
                     "driver": "cli",
                     "model": "sonnet",
                     "tracker": "noop",
-                    "working_dir": str(working_dir),
+                    "repo_root": str(repo_root),
                     "validator_model": "sonnet",
                 }
             },

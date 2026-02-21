@@ -115,7 +115,7 @@ async def call_developer_node(
     event_bus, workflow_id, profile = extract_config_params(config or {})
 
     # Capture current HEAD so the next reviewer only diffs against this point
-    pre_dev_commit = await get_current_commit(cwd=profile.working_dir)
+    pre_dev_commit = await get_current_commit(cwd=profile.repo_root)
 
     # Task-based execution: clear session and inject task-scoped context
     task_number = state.current_task_index + 1  # 1-indexed for display
@@ -207,7 +207,7 @@ async def call_reviewer_node(
     # Compute base_commit if not in state
     base_commit = state.base_commit
     if not base_commit:
-        computed_commit = await get_current_commit(cwd=profile.working_dir)
+        computed_commit = await get_current_commit(cwd=profile.repo_root)
         if computed_commit:
             base_commit = computed_commit
             logger.info(

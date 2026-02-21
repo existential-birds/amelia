@@ -74,7 +74,7 @@ class TestProfileList:
             Profile(
                 name="test-profile",
                 tracker="noop",
-                working_dir="/tmp/test",
+                repo_root="/tmp/test",
                 agents={
                     "architect": AgentConfig(driver="cli", model="sonnet"),
                     "developer": AgentConfig(driver="cli", model="sonnet"),
@@ -84,7 +84,7 @@ class TestProfileList:
             Profile(
                 name="prod-profile",
                 tracker="github",
-                working_dir="/home/user/project",
+                repo_root="/home/user/project",
                 agents={
                     "architect": AgentConfig(driver="api", model="anthropic/claude-sonnet-4-20250514"),
                     "developer": AgentConfig(driver="api", model="anthropic/claude-sonnet-4-20250514"),
@@ -144,7 +144,7 @@ class TestProfileShow:
         mock_profile = Profile(
             name="my-profile",
             tracker="github",
-            working_dir="/home/user/code",
+            repo_root="/home/user/code",
             plan_output_dir="docs/plans",
             agents={
                 "architect": AgentConfig(driver="cli", model="sonnet"),
@@ -192,7 +192,7 @@ class TestProfileCreate:
         created_profile = Profile(
             name="new-profile",
             tracker="noop",
-            working_dir="/tmp",
+            repo_root="/tmp",
             agents={
                 "architect": AgentConfig(driver="cli", model="sonnet"),
                 "developer": AgentConfig(driver="cli", model="sonnet"),
@@ -212,7 +212,7 @@ class TestProfileCreate:
                 "--driver", "cli",
                 "--model", "sonnet",
                 "--tracker", "noop",
-                "--working-dir", "/tmp",
+                "--repo-root", "/tmp",
             ])
 
         assert result.exit_code == 0
@@ -227,7 +227,7 @@ class TestProfileCreate:
         existing_profile = Profile(
             name="existing",
             tracker="noop",
-            working_dir="/tmp",
+            repo_root="/tmp",
             agents={
                 "architect": AgentConfig(driver="cli", model="sonnet"),
                 "developer": AgentConfig(driver="cli", model="sonnet"),
@@ -245,7 +245,7 @@ class TestProfileCreate:
                 "--driver", "cli",
                 "--model", "sonnet",
                 "--tracker", "none",
-                "--working-dir", "/tmp",
+                "--repo-root", "/tmp",
             ])
 
         assert result.exit_code == 1

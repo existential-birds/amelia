@@ -208,7 +208,7 @@ def mock_profile_record_factory() -> Callable[..., ProfileRecord]:
     def _create(
         id: str = "test",
         tracker: str = "noop",
-        working_dir: str = "/tmp/test",
+        repo_root: str = "/tmp/test",
         driver: DriverType = "cli",
         model: str = "sonnet",
         validator_model: str | None = None,
@@ -221,7 +221,7 @@ def mock_profile_record_factory() -> Callable[..., ProfileRecord]:
         return ProfileRecord(
             id=id,
             tracker=tracker,
-            working_dir=working_dir,
+            repo_root=repo_root,
             agents=agents,
             is_active=is_active,
             **kwargs
@@ -233,7 +233,7 @@ def mock_profile_record_factory() -> Callable[..., ProfileRecord]:
 def mock_profile_factory(tmp_path_factory: TempPathFactory) -> Callable[..., Profile]:
     """Factory fixture for creating test Profile instances with presets.
 
-    Uses tmp_path_factory to create a unique temp directory for working_dir,
+    Uses tmp_path_factory to create a unique temp directory for repo_root,
     preventing tests from writing artifacts to the main codebase.
 
     Profiles now use agents dict for per-agent driver/model configuration.
@@ -248,9 +248,9 @@ def mock_profile_factory(tmp_path_factory: TempPathFactory) -> Callable[..., Pro
         agents: dict[str, AgentConfig] | None = None,
         **kwargs: Any
     ) -> Profile:
-        # Use temp directory for working_dir unless explicitly overridden
-        if "working_dir" not in kwargs:
-            kwargs["working_dir"] = str(base_tmp)
+        # Use temp directory for repo_root unless explicitly overridden
+        if "repo_root" not in kwargs:
+            kwargs["repo_root"] = str(base_tmp)
 
         # Default agents configuration if not provided
         if agents is None:

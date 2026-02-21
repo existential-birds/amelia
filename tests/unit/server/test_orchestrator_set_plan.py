@@ -81,7 +81,7 @@ class TestSetWorkflowPlan:
         # Mock profile with required plan_path_pattern
         mock_profile = MagicMock()
         mock_profile.plan_path_pattern = "docs/{issue_key}/plan.md"
-        mock_profile.working_dir = str(tmp_path)
+        mock_profile.repo_root = str(tmp_path)
 
         plan_content = "# Plan\n\n### Task 1: Do A\n\n### Task 2: Do B"
 
@@ -102,7 +102,7 @@ class TestSetWorkflowPlan:
                 mock_orchestrator, "_get_profile_or_fail", new_callable=AsyncMock
             ) as mock_get_profile,
             patch.object(
-                mock_orchestrator, "_update_profile_working_dir"
+                mock_orchestrator, "_update_profile_repo_root"
             ) as mock_update_profile,
             patch.object(mock_orchestrator, "_emit", new_callable=AsyncMock),
             patch("asyncio.create_task") as mock_create_task,
@@ -135,7 +135,7 @@ class TestSetWorkflowPlan:
 
         mock_profile = MagicMock()
         mock_profile.plan_path_pattern = "docs/{issue_key}/plan.md"
-        mock_profile.working_dir = str(tmp_path)
+        mock_profile.repo_root = str(tmp_path)
 
         plan_content = "# Plan\n\n### Task 1: Do A"
 
@@ -156,7 +156,7 @@ class TestSetWorkflowPlan:
                 mock_orchestrator, "_get_profile_or_fail", new_callable=AsyncMock
             ) as mock_get_profile,
             patch.object(
-                mock_orchestrator, "_update_profile_working_dir"
+                mock_orchestrator, "_update_profile_repo_root"
             ) as mock_update_profile,
             patch.object(mock_orchestrator, "_emit", new_callable=AsyncMock),
             patch("asyncio.create_task"),
@@ -219,7 +219,7 @@ class TestSetWorkflowPlan:
 
         mock_profile = MagicMock()
         mock_profile.plan_path_pattern = "docs/{issue_key}/plan.md"
-        mock_profile.working_dir = str(tmp_path)
+        mock_profile.repo_root = str(tmp_path)
 
         plan_content = "# New plan\n\n### Task 1: A\n\n### Task 2: B\n\n### Task 3: C"
 
@@ -240,7 +240,7 @@ class TestSetWorkflowPlan:
                 mock_orchestrator, "_get_profile_or_fail", new_callable=AsyncMock
             ) as mock_get_profile,
             patch.object(
-                mock_orchestrator, "_update_profile_working_dir"
+                mock_orchestrator, "_update_profile_repo_root"
             ) as mock_update_profile,
             patch.object(mock_orchestrator, "_emit", new_callable=AsyncMock),
             patch("asyncio.create_task"),

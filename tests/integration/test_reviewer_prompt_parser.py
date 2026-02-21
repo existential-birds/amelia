@@ -62,7 +62,7 @@ def profile(tmp_path: Path) -> Profile:
     """Profile with task_reviewer configured."""
     return Profile(
         name="test",
-        working_dir=str(tmp_path),
+        repo_root=str(tmp_path),
         agents={
             "task_reviewer": AgentConfig(
                 driver=DriverType.CLI, model="sonnet", options={"max_iterations": 2}

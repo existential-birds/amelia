@@ -66,7 +66,7 @@ class ProfileResponse(BaseModel):
 
     id: str
     tracker: str
-    working_dir: str
+    repo_root: str
     plan_output_dir: str
     plan_path_pattern: str
     agents: dict[str, AgentConfigResponse]
@@ -90,25 +90,25 @@ class ProfileCreate(BaseModel):
 
     id: str
     tracker: TrackerType = TrackerType.NOOP
-    working_dir: str
+    repo_root: str
     plan_output_dir: str = "docs/plans"
     plan_path_pattern: str = "docs/plans/{date}-{issue_key}.md"
     agents: dict[str, AgentConfigCreate]
     sandbox: SandboxConfig = Field(default_factory=SandboxConfig)
 
-    @field_validator("working_dir", mode="after")
+    @field_validator("repo_root", mode="after")
     @classmethod
-    def validate_working_dir_absolute(cls, v: str) -> str:
-        """Validate that working_dir is an absolute path.
+    def validate_repo_root_absolute(cls, v: str) -> str:
+        """Validate that repo_root is an absolute path.
 
         Args:
-            v: Working directory path.
+            v: Repository root path.
 
         Returns:
             The validated absolute path.
         """
         if not Path(v).is_absolute():
-            raise ValueError("working_dir must be an absolute path")
+            raise ValueError("repo_root must be an absolute path")
         return v
 
     @model_validator(mode="after")
@@ -127,25 +127,25 @@ class ProfileUpdate(BaseModel):
     """
 
     tracker: TrackerType | None = None
-    working_dir: str | None = None
+    repo_root: str | None = None
     plan_output_dir: str | None = None
     plan_path_pattern: str | None = None
     agents: dict[str, AgentConfigCreate] | None = None
     sandbox: SandboxConfig | None = None
 
-    @field_validator("working_dir", mode="after")
+    @field_validator("repo_root", mode="after")
     @classmethod
-    def validate_working_dir_absolute(cls, v: str | None) -> str | None:
-        """Validate that working_dir is an absolute path when provided.
+    def validate_repo_root_absolute(cls, v: str | None) -> str | None:
+        """Validate that repo_root is an absolute path when provided.
 
         Args:
-            v: Working directory path or None.
+            v: Repository root path or None.
 
         Returns:
             The validated absolute path or None.
         """
         if v is not None and not Path(v).is_absolute():
-            raise ValueError("working_dir must be an absolute path")
+            raise ValueError("repo_root must be an absolute path")
         return v
 
     @model_validator(mode="after")
@@ -224,7 +224,7 @@ async def create_profile(
     profile = Profile(
         name=profile_req.id,
         tracker=profile_req.tracker,
-        working_dir=profile_req.working_dir,
+        repo_root=profile_req.repo_root,
         plan_output_dir=profile_req.plan_output_dir,
         plan_path_pattern=profile_req.plan_path_pattern,
         agents=agents,
@@ -262,7 +262,7 @@ async def update_profile(
     update_dict: dict[str, Any] = {}
 
     # Handle simple fields
-    for field in ["tracker", "working_dir", "plan_output_dir", "plan_path_pattern"]:
+    for field in ["tracker", "repo_root", "plan_output_dir", "plan_path_pattern"]:
         value = getattr(updates, field)
         if value is not None:
             update_dict[field] = value
@@ -331,7 +331,7 @@ def _profile_to_response(profile: Profile, is_active: bool = False) -> ProfileRe
     return ProfileResponse(
         id=profile.name,
         tracker=profile.tracker,
-        working_dir=profile.working_dir,
+        repo_root=profile.repo_root,
         plan_output_dir=profile.plan_output_dir,
         plan_path_pattern=profile.plan_path_pattern,
         agents={
