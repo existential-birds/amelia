@@ -39,12 +39,11 @@ class CodexCliDriver(DriverInterface):
         self.model = model
         self.cwd = cwd
 
-    async def _run_codex(self, prompt: str, **kwargs: Any) -> str:
+    async def _run_codex(self, prompt: str) -> str:
         """Run codex CLI command and return output.
 
         Args:
             prompt: The prompt to send to codex.
-            **kwargs: Additional arguments to pass to codex exec.
 
         Returns:
             The raw output from codex CLI.
@@ -84,7 +83,7 @@ class CodexCliDriver(DriverInterface):
         return stdout.decode()
 
     async def _run_codex_stream(
-        self, prompt: str, cwd: str | None = None, **kwargs: Any
+        self, prompt: str, cwd: str | None = None
     ) -> AsyncIterator[dict[str, Any]]:
         """Run codex CLI command and stream NDJSON events.
 
@@ -94,7 +93,6 @@ class CodexCliDriver(DriverInterface):
         Args:
             prompt: The prompt to send to codex.
             cwd: Working directory override (falls back to self.cwd).
-            **kwargs: Additional arguments (currently unused).
 
         Yields:
             Event dictionaries parsed from codex CLI NDJSON output.
@@ -208,7 +206,7 @@ class CodexCliDriver(DriverInterface):
             full_prompt = f"{system_prompt}\n\n{prompt}"
 
         try:
-            raw_output = await self._run_codex(full_prompt, **kwargs)
+            raw_output = await self._run_codex(full_prompt)
         except ModelProviderError:
             raise
         except Exception as e:

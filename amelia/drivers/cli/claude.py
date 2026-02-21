@@ -25,7 +25,13 @@ from pydantic import BaseModel, ValidationError
 
 from amelia.core.constants import CANONICAL_TO_CLI, normalize_tool_name
 from amelia.core.exceptions import ModelProviderError
-from amelia.drivers.base import AgenticMessage, AgenticMessageType, DriverInterface, DriverUsage, GenerateResult
+from amelia.drivers.base import (
+    AgenticMessage,
+    AgenticMessageType,
+    DriverInterface,
+    DriverUsage,
+    GenerateResult,
+)
 from amelia.logging import log_claude_result
 
 
