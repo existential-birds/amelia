@@ -38,10 +38,10 @@ export function AskUserQuestionCard({
       }
       return { ...prev, [question]: label };
     });
-  }, [isSubmitting, answered]);
+  }, [isDisabled]);
 
   const handleOtherChange = useCallback((question: string, text: string) => {
-    if (isDisabled) return;
+    if (isSubmitting || answered) return;
     setOtherTexts((prev) => ({ ...prev, [question]: text }));
   }, [isSubmitting, answered]);
 

@@ -3,7 +3,6 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AskUserQuestionCard } from "../AskUserQuestionCard";
 import type { AskUserQuestionPayload } from "@/types/api";
-import type { Selections } from "../AskUserQuestionCard";
 
 const singleSelectPayload: AskUserQuestionPayload = {
   questions: [
