@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { useWorkflowStore } from '../store/workflowStore';
 import { useBrainstormStore } from '../store/brainstormStore';
 import type { WebSocketMessage, WorkflowEvent, BrainstormMessage } from '../types';
-import type { AskUserQuestionItem, AskUserOption, BrainstormArtifact, ToolCall, MessageUsage, SessionUsageSummary } from '../types/api';
+import type { AskUserQuestionItem, BrainstormArtifact, ToolCall, MessageUsage, SessionUsageSummary } from '../types/api';
 
 /**
  * Zod schemas intentionally duplicate TypeScript types for runtime validation.
@@ -62,18 +62,6 @@ const toolCallSchema = z.object({
   tool_name: z.string(),
   input: z.unknown().optional(),
 });
-
-/**
- * Validates that a value conforms to AskUserQuestionItem[] structure using Zod.
- * Returns the validated array or undefined if validation fails.
- */
-function validateQuestions(data: unknown): AskUserQuestionItem[] | undefined {
-  const result = askUserQuestionsSchema.safeParse(data);
-  if (!result.success) {
-    console.warn('Question validation failed:', result.error.format(), { data });
-  }
-  return result.success ? result.data : undefined;
-}
 
 /**
  * Validates that a value is a string, returning undefined if invalid.
@@ -282,11 +270,13 @@ export function handleBrainstormMessage(msg: BrainstormMessage): void {
         const result = askUserQuestionsSchema.safeParse(msg.data.questions);
         const questions = result.success ? result.data : undefined;
         const text = validateText(msg.data.text);
+        if (!questions && msg.data.questions) {
+          console.warn('AskUserQuestions validation failed:', result.error.format(), { data: msg.data.questions });
+        }
         state.updateMessage(msg.message_id, (m) => ({
           ...m,
           content: m.content + (text ?? ''),
           ...(questions ? { askUserQuestions: { questions } } : {}),
-          ...(msg.data.questions && !questions ? { status: 'error', errorMessage: `Question validation failed: ${result.error?.issues[0]?.message || 'invalid format'}` } : {}),
         }));
       }
       break;
