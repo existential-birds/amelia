@@ -105,7 +105,8 @@ class TestLogTodos:
                 ])
                 printed_arg = mock_console.print.call_args[0][0]
                 assert isinstance(printed_arg, Panel)
-                title_text = printed_arg.title.plain  # type: ignore[union-attr]
+                assert printed_arg.title is not None
+                title_text = printed_arg.title.plain
                 assert "1/3" in title_text
 
     def test_handles_empty_list(self) -> None:
@@ -123,5 +124,6 @@ class TestLogTodos:
                 mock_console.print.assert_called_once()
                 printed_arg = mock_console.print.call_args[0][0]
                 assert isinstance(printed_arg, Panel)
-                title_text = printed_arg.title.plain  # type: ignore[union-attr]
+                assert printed_arg.title is not None
+                title_text = printed_arg.title.plain
                 assert "0/0" in title_text  # Still prints panel (empty)
