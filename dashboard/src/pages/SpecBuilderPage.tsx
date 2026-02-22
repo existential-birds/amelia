@@ -214,8 +214,9 @@ function SpecBuilderPageContent() {
       try {
         // Send formatted answer as a chat message
         await sendMessage(content);
-      } catch {
+      } catch (err) {
         // Revert state on failure
+        logger.error("Failed to send question answer", err, { messageId });
         updateMessage(messageId, (m) => ({ ...m, questionAnswered: false }));
         toast.error("Failed to send answer");
       } finally {

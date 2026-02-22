@@ -22,6 +22,9 @@ const askUserQuestionItemSchema = z.object({
 /** Zod schema for validating an array of AskUserQuestionItem. */
 const askUserQuestionsSchema = z.array(askUserQuestionItemSchema);
 
+/** Zod schema for validating optional text field with empty string fallback. */
+const optionalTextSchema = z.string().optional().default('');
+
 /**
  * Validates that a value conforms to AskUserQuestionItem[] structure using Zod.
  * Returns the validated array or undefined if validation fails.
@@ -29,6 +32,14 @@ const askUserQuestionsSchema = z.array(askUserQuestionItemSchema);
 function validateQuestions(data: unknown): AskUserQuestionItem[] | undefined {
   const result = askUserQuestionsSchema.safeParse(data);
   return result.success ? result.data : undefined;
+}
+
+/**
+ * Validates that a value is a string, returning empty string if invalid.
+ */
+function validateText(data: unknown): string {
+  const result = optionalTextSchema.safeParse(data);
+  return result.success ? result.data : '';
 }
 
 /**
@@ -178,7 +189,7 @@ export function handleBrainstormMessage(msg: BrainstormMessage): void {
     case 'ask_user': {
       if (msg.message_id) {
         const questions = validateQuestions(msg.data.questions);
-        const text = (msg.data.text as string) ?? '';
+        const text = validateText(msg.data.text);
         state.updateMessage(msg.message_id, (m) => ({
           ...m,
           content: m.content + text,

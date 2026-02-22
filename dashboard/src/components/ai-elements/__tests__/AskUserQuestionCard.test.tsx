@@ -135,4 +135,24 @@ describe("AskUserQuestionCard", () => {
     );
     expect(screen.getByRole("button", { name: /submit/i })).toBeDisabled();
   });
+
+  it("in single-select mode, Other text takes precedence over selected option", async () => {
+    const user = userEvent.setup();
+    const onAnswer = vi.fn();
+    render(
+      <AskUserQuestionCard payload={singleSelectPayload} onAnswer={onAnswer} />
+    );
+
+    // Select an option first
+    await user.click(screen.getByText("Option A"));
+    // Then also type in Other
+    const otherInput = screen.getByPlaceholderText("Other...");
+    await user.type(otherInput, "Custom answer");
+    await user.click(screen.getByRole("button", { name: /submit/i }));
+
+    // Other text should take precedence, ignoring the selected option
+    expect(onAnswer).toHaveBeenCalledWith({
+      "Which approach do you prefer?": "Custom answer",
+    });
+  });
 });
