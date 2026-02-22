@@ -38,12 +38,12 @@ export function AskUserQuestionCard({
       }
       return { ...prev, [question]: label };
     });
-  }, [isSubmitting, answered]);
+  }, [isDisabled]);
 
   const handleOtherChange = useCallback((question: string, text: string) => {
     if (isDisabled) return;
     setOtherTexts((prev) => ({ ...prev, [question]: text }));
-  }, [isSubmitting, answered]);
+  }, [isDisabled]);
 
   // Merge selections and "Other" text input into final answers
   // Precedence rule: If "Other" text exists, it takes priority:
@@ -73,7 +73,6 @@ export function AskUserQuestionCard({
 
   const handleSubmit = () => {
     if (isDisabled) return;
-    if (Object.keys(answers).length === 0) return;
     onAnswer(answers);
   };
 

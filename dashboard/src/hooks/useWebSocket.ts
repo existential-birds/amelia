@@ -31,6 +31,38 @@ const askUserQuestionsSchema = z.array(askUserQuestionItemSchema);
 /** Zod schema for validating optional text field with empty string fallback. */
 const optionalTextSchema = z.string().optional().default('');
 
+/** Zod schema for MessageUsage validation (mirrors MessageUsage type). */
+const messageUsageSchema = z.object({
+  input_tokens: z.number(),
+  output_tokens: z.number(),
+  cost_usd: z.number(),
+}) satisfies z.ZodType<MessageUsage>;
+
+/** Zod schema for SessionUsageSummary validation (mirrors SessionUsageSummary type). */
+const sessionUsageSummarySchema = z.object({
+  total_input_tokens: z.number(),
+  total_output_tokens: z.number(),
+  total_cost_usd: z.number(),
+  message_count: z.number(),
+}) satisfies z.ZodType<SessionUsageSummary>;
+
+/** Zod schema for BrainstormArtifact validation (mirrors BrainstormArtifact type). */
+const brainstormArtifactSchema = z.object({
+  id: z.string(),
+  session_id: z.string(),
+  type: z.string(),
+  path: z.string(),
+  title: z.string().nullable(),
+  created_at: z.string(),
+}) satisfies z.ZodType<BrainstormArtifact>;
+
+/** Zod schema for ToolCall validation (mirrors ToolCall type). */
+const toolCallSchema = z.object({
+  tool_call_id: z.string(),
+  tool_name: z.string(),
+  input: z.unknown(),
+});
+
 /**
  * Validates that a value conforms to AskUserQuestionItem[] structure using Zod.
  * Returns the validated array or undefined if validation fails.
@@ -52,6 +84,50 @@ function validateText(data: unknown): string {
     console.warn('Text validation failed:', result.error.format(), { data });
   }
   return result.success ? result.data : '';
+}
+
+/**
+ * Validates that a value is a MessageUsage object, returning undefined if invalid.
+ */
+function validateMessageUsage(data: unknown): MessageUsage | undefined {
+  const result = messageUsageSchema.safeParse(data);
+  if (!result.success) {
+    console.warn('MessageUsage validation failed:', result.error.format(), { data });
+  }
+  return result.success ? result.data : undefined;
+}
+
+/**
+ * Validates that a value is a SessionUsageSummary object, returning undefined if invalid.
+ */
+function validateSessionUsageSummary(data: unknown): SessionUsageSummary | undefined {
+  const result = sessionUsageSummarySchema.safeParse(data);
+  if (!result.success) {
+    console.warn('SessionUsageSummary validation failed:', result.error.format(), { data });
+  }
+  return result.success ? result.data : undefined;
+}
+
+/**
+ * Validates that a value is a BrainstormArtifact object, returning undefined if invalid.
+ */
+function validateBrainstormArtifact(data: unknown): BrainstormArtifact | undefined {
+  const result = brainstormArtifactSchema.safeParse(data);
+  if (!result.success) {
+    console.warn('BrainstormArtifact validation failed:', result.error.format(), { data });
+  }
+  return result.success ? result.data : undefined;
+}
+
+/**
+ * Validates that a value is a ToolCall object with required fields, returning undefined if invalid.
+ */
+function validateToolCall(data: unknown): Pick<ToolCall, 'tool_call_id' | 'tool_name' | 'input'> | undefined {
+  const result = toolCallSchema.safeParse(data);
+  if (!result.success) {
+    console.warn('ToolCall validation failed:', result.error.format(), { data });
+  }
+  return result.success ? result.data : undefined;
 }
 
 /**
@@ -103,31 +179,33 @@ export function handleBrainstormMessage(msg: BrainstormMessage): void {
   switch (msg.event_type) {
     case 'text':
       if (msg.message_id) {
+        const text = validateText(msg.data.text);
         state.updateMessage(msg.message_id, (m) => ({
           ...m,
-          content: m.content + ((msg.data.text as string) ?? ''),
+          content: m.content + text,
         }));
       }
       break;
 
     case 'reasoning':
       if (msg.message_id) {
+        const text = validateText(msg.data.text);
         state.updateMessage(msg.message_id, (m) => ({
           ...m,
-          reasoning: (m.reasoning ?? '') + ((msg.data.text as string) ?? ''),
+          reasoning: (m.reasoning ?? '') + text,
         }));
       }
       break;
 
     case 'message_complete': {
-      const error = msg.data.error as string | undefined;
-      const usage = msg.data.usage as MessageUsage | undefined;
-      const sessionUsage = msg.data.session_usage as SessionUsageSummary | undefined;
+      const error = validateText(msg.data.error);
+      const usage = validateMessageUsage(msg.data.usage);
+      const sessionUsage = validateSessionUsageSummary(msg.data.session_usage);
       if (msg.message_id) {
         state.updateMessage(msg.message_id, (m) => ({
           ...m,
           status: error ? 'error' : undefined,
-          errorMessage: error,
+          errorMessage: error || undefined,
           usage,
           // Mark all running tool calls as completed since the SDK doesn't
           // stream explicit tool results - it handles execution internally
@@ -147,53 +225,51 @@ export function handleBrainstormMessage(msg: BrainstormMessage): void {
     }
 
     case 'artifact_created': {
-      const artifact: BrainstormArtifact = {
-        id: msg.data.id as string,
-        session_id: msg.data.session_id as string,
-        type: msg.data.type as string,
-        path: msg.data.path as string,
-        title: (msg.data.title as string | null) ?? null,
-        created_at: msg.data.created_at as string,
-      };
-      state.addArtifact(artifact);
-      state.updateSession(msg.session_id, { status: 'ready_for_handoff' });
+      const artifact = validateBrainstormArtifact(msg.data);
+      if (artifact) {
+        state.addArtifact(artifact);
+        state.updateSession(msg.session_id, { status: 'ready_for_handoff' });
+      }
       break;
     }
 
     case 'tool_call': {
       if (msg.message_id) {
-        const toolCall: ToolCall = {
-          tool_call_id: msg.data.tool_call_id as string,
-          tool_name: msg.data.tool_name as string,
-          input: msg.data.input,
-          state: 'input-available',
-        };
-        state.updateMessage(msg.message_id, (m) => ({
-          ...m,
-          toolCalls: [...(m.toolCalls ?? []), toolCall],
-        }));
+        const toolCallData = validateToolCall(msg.data);
+        if (toolCallData) {
+          const toolCall: ToolCall = {
+            ...toolCallData,
+            state: 'input-available',
+          };
+          state.updateMessage(msg.message_id, (m) => ({
+            ...m,
+            toolCalls: [...(m.toolCalls ?? []), toolCall],
+          }));
+        }
       }
       break;
     }
 
     case 'tool_result': {
       if (msg.message_id) {
-        const toolCallId = msg.data.tool_call_id as string;
+        const toolCallId = validateText(msg.data.tool_call_id);
         const output = msg.data.output;
-        const errorText = msg.data.error as string | undefined;
-        state.updateMessage(msg.message_id, (m) => ({
-          ...m,
-          toolCalls: m.toolCalls?.map((tc) =>
-            tc.tool_call_id === toolCallId
-              ? {
-                  ...tc,
-                  output,
-                  errorText,
-                  state: errorText ? 'output-error' : 'output-available',
-                }
-              : tc
-          ),
-        }));
+        const errorText = validateText(msg.data.error);
+        if (toolCallId) {
+          state.updateMessage(msg.message_id, (m) => ({
+            ...m,
+            toolCalls: m.toolCalls?.map((tc) =>
+              tc.tool_call_id === toolCallId
+                ? {
+                    ...tc,
+                    output,
+                    errorText: errorText || undefined,
+                    state: errorText ? 'output-error' : 'output-available',
+                  }
+                : tc
+            ),
+          }));
+        }
       }
       break;
     }

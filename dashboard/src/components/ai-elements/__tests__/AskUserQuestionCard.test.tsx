@@ -84,7 +84,7 @@ describe("AskUserQuestionCard", () => {
     await user.click(screen.getByRole("button", { name: /submit/i }));
 
     expect(onAnswer).toHaveBeenCalled();
-    const call = onAnswer.mock.calls[0]![0] as Selections;
+    const [call] = onAnswer.mock.calls[0]!;
     expect(call["Which features do you want?"]).toEqual(
       expect.arrayContaining(["Auth", "Caching"])
     );
@@ -175,7 +175,7 @@ describe("AskUserQuestionCard", () => {
     await user.click(screen.getByRole("button", { name: /submit/i }));
 
     expect(onAnswer).toHaveBeenCalled();
-    const call = onAnswer.mock.calls[0]![0] as Selections;
+    const [call] = onAnswer.mock.calls[0]!;
     expect(call["Which features do you want?"]).toEqual(
       expect.arrayContaining(["Auth", "Caching", "Custom feature"])
     );
