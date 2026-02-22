@@ -3,6 +3,9 @@
 from typing import Any
 from unittest.mock import MagicMock, patch
 
+from rich.panel import Panel
+from rich.text import Text
+
 from amelia.logging import _plain_log_format
 
 
@@ -73,8 +76,6 @@ class TestLogTodos:
 
     def test_renders_panel_on_tty(self) -> None:
         """log_todos should print a Rich Panel to stderr when it is a TTY."""
-        from rich.panel import Panel
-
         from amelia.logging import log_todos
 
         with patch("sys.stderr") as mock_stderr:
@@ -89,9 +90,6 @@ class TestLogTodos:
 
     def test_panel_title_contains_counter(self) -> None:
         """Panel title should show completed/total count."""
-        from rich.panel import Panel
-        from rich.text import Text
-
         from amelia.logging import log_todos
 
         with patch("sys.stderr") as mock_stderr:
@@ -112,9 +110,6 @@ class TestLogTodos:
 
     def test_handles_empty_list(self) -> None:
         """log_todos should handle empty todo list gracefully."""
-        from rich.panel import Panel
-        from rich.text import Text
-
         from amelia.logging import log_todos
 
         with patch("sys.stderr") as mock_stderr:
