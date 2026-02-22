@@ -4,6 +4,7 @@ import { useWorkflowStore } from '../store/workflowStore';
 import { useBrainstormStore } from '../store/brainstormStore';
 import type { WebSocketMessage, WorkflowEvent, BrainstormMessage } from '../types';
 import type { AskUserQuestionItem, BrainstormArtifact, ToolCall, MessageUsage, SessionUsageSummary } from '../types/api';
+import * as Toast from '../components/Toast';
 
 /**
  * Zod schemas intentionally duplicate TypeScript types for runtime validation.
@@ -272,11 +273,7 @@ export function handleBrainstormMessage(msg: BrainstormMessage): void {
         const text = validateText(msg.data.text);
         if (!result.success && msg.data.questions !== undefined) {
           console.error('AskUserQuestions validation failed:', result.error.format(), { data: msg.data.questions });
-          state.updateMessage(msg.message_id, (m) => ({
-            ...m,
-            status: 'error',
-            errorMessage: 'Invalid question format received from server',
-          }));
+          Toast.error('Invalid question format received from server');
           break;
         }
         state.updateMessage(msg.message_id, (m) => ({
