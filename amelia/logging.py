@@ -360,7 +360,11 @@ def log_todos(todos: list[dict[str, object]]) -> None:
     for i, todo in enumerate(todos):
         status = str(todo.get("status", ""))
         content = str(todo.get("content", ""))
-        icon, icon_style, text_style = status_styles.get(status, ("?", "", ""))
+        if status in status_styles:
+            icon, icon_style, text_style = status_styles[status]
+        else:
+            icon, icon_style, text_style = ("?", "red", "")
+            logger.warning("Unknown todo status", status=status, content=content)
         lines.append(f" {icon} ", style=icon_style)
         lines.append(content, style=text_style)
         if i < len(todos) - 1:

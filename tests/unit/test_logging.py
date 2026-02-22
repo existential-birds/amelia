@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 from rich.panel import Panel
 from rich.text import Text
 
-from amelia.logging import _plain_log_format
+from amelia.logging import _plain_log_format, log_todos
 
 
 def _make_record(**extra: Any) -> MagicMock:
@@ -67,8 +67,6 @@ class TestLogTodos:
 
     def test_no_output_when_not_tty(self) -> None:
         """log_todos should be a no-op when stderr is not a TTY."""
-        from amelia.logging import log_todos
-
         with patch("sys.stderr") as mock_stderr:
             mock_stderr.isatty.return_value = False
             log_todos([{"content": "Fix bug", "status": "completed"}])
@@ -76,8 +74,6 @@ class TestLogTodos:
 
     def test_renders_panel_on_tty(self) -> None:
         """log_todos should print a Rich Panel to stderr when it is a TTY."""
-        from amelia.logging import log_todos
-
         with patch("sys.stderr") as mock_stderr:
             mock_stderr.isatty.return_value = True
             with patch("amelia.logging.Console") as mock_console_cls:
@@ -90,8 +86,6 @@ class TestLogTodos:
 
     def test_panel_title_contains_counter(self) -> None:
         """Panel title should show completed/total count."""
-        from amelia.logging import log_todos
-
         with patch("sys.stderr") as mock_stderr:
             mock_stderr.isatty.return_value = True
             with patch("amelia.logging.Console") as mock_console_cls:
@@ -110,8 +104,6 @@ class TestLogTodos:
 
     def test_handles_empty_list(self) -> None:
         """log_todos should handle empty todo list gracefully."""
-        from amelia.logging import log_todos
-
         with patch("sys.stderr") as mock_stderr:
             mock_stderr.isatty.return_value = True
             with patch("amelia.logging.Console") as mock_console_cls:
