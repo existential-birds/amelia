@@ -270,8 +270,8 @@ export function handleBrainstormMessage(msg: BrainstormMessage): void {
         const result = askUserQuestionsSchema.safeParse(msg.data.questions);
         const questions = result.success ? result.data : undefined;
         const text = validateText(msg.data.text);
-        if (!questions && msg.data.questions) {
-          console.warn('AskUserQuestions validation failed:', !result.success ? result.error.format() : 'unknown error', { data: msg.data.questions });
+        if (!result.success && msg.data.questions !== undefined) {
+          console.warn('AskUserQuestions validation failed:', result.error.format(), { data: msg.data.questions });
         }
         state.updateMessage(msg.message_id, (m) => ({
           ...m,

@@ -252,6 +252,6 @@ describe("AskUserQuestionCard", () => {
     expect(screen.getByText("First")).toBeInTheDocument();
     expect(screen.getByText("Second")).toBeInTheDocument();
     // Ensure no description elements are rendered
-    expect(screen.queryByText(/approach/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/description/i)).not.toBeInTheDocument();
   });
 });

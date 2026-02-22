@@ -81,7 +81,7 @@ export function AskUserQuestionCard({
   };
 
   return (
-    <div className={cn("flex flex-col gap-4 rounded-lg border p-4", answered && "border-border/60 bg-card/60")}>
+    <div className={cn("flex flex-col gap-4 rounded-lg border p-4", answered && "bg-card/60")}>
 
       {payload.questions.map((q) => (
         <fieldset key={q.question} className="flex flex-col gap-2" disabled={isDisabled}>
