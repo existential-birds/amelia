@@ -901,6 +901,7 @@ class BrainstormService:
                 logger.warning(
                     "Malformed ask_user_question payload, falling back to text",
                     session_id=session_id,
+                    tool_input=agentic_msg.tool_input,
                 )
 
         # Build message from content

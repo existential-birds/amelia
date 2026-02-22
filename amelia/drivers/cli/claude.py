@@ -245,14 +245,14 @@ def _get_raw_message_stream(
     # for this, so we access the internal _query attribute.
     # Tracked for SDK improvement: ideally receive_messages() would have an
     # option to yield raw dicts, or handle parse errors gracefully.
-    query = getattr(client, "_query", None)
-    if query is None:
+    client_query = getattr(client, "_query", None)
+    if client_query is None:
         raise RuntimeError(
             "Claude SDK internal API changed: ClaudeSDKClient no longer has _query attribute. "
             "Update amelia to use the new SDK API, or pin claude-agent-sdk to a compatible version."
         )
 
-    receive_fn = getattr(query, "receive_messages", None)
+    receive_fn = getattr(client_query, "receive_messages", None)
     if receive_fn is None:
         raise RuntimeError(
             "Claude SDK internal API changed: _query.receive_messages() no longer exists. "
