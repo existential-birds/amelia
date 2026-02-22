@@ -401,10 +401,10 @@ def mock_profile_repo() -> AsyncMock:
         tracker="noop",
         repo_root="/tmp/test",
         agents={
-            "architect": AgentConfig(driver="cli", model="sonnet"),
-            "developer": AgentConfig(driver="cli", model="sonnet"),
-            "reviewer": AgentConfig(driver="cli", model="sonnet"),
-            "plan_validator": AgentConfig(driver="cli", model="haiku"),
+            "architect": AgentConfig(driver="claude", model="sonnet"),
+            "developer": AgentConfig(driver="claude", model="sonnet"),
+            "reviewer": AgentConfig(driver="claude", model="sonnet"),
+            "plan_validator": AgentConfig(driver="claude", model="haiku"),
         },
     )
     repo.get_profile.return_value = profile
@@ -630,7 +630,7 @@ active_profile: test
 profiles:
   test:
     name: test
-    driver: cli
+    driver: claude
     model: sonnet
     validator_model: sonnet
     tracker: noop
@@ -646,7 +646,7 @@ async def active_test_profile(
     valid_worktree: str,
 ) -> Profile:
     """Create and activate a test profile in the database."""
-    agent_config = AgentConfig(driver="cli", model="sonnet")
+    agent_config = AgentConfig(driver="claude", model="sonnet")
     profile = Profile(
         name="test",
         tracker="noop",

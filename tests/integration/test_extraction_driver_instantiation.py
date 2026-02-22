@@ -45,7 +45,7 @@ class TestExtractStructuredWithRealDriver:
         """extract_structured should work with cli driver without TypeError.
 
         This tests the full chain:
-        - extract_structured() calls get_driver(driver_key="cli", cwd=".")
+        - extract_structured() calls get_driver(driver_key="claude", cwd=".")
         - get_driver() passes cwd to ClaudeCliDriver(**kwargs)
         - ClaudeCliDriver.__init__() must accept the cwd parameter
 
@@ -81,7 +81,7 @@ class TestExtractStructuredWithRealDriver:
                 prompt="Extract from this text",
                 schema=SampleExtractionSchema,
                 model="sonnet",
-                driver_type="cli",
+                driver_type="claude",
             )
 
         # Verify the extraction worked
@@ -167,7 +167,7 @@ class TestExtractStructuredWithRealDriver:
                 prompt="Test cwd passing",
                 schema=SampleExtractionSchema,
                 model="sonnet",
-                driver_type="cli",
+                driver_type="claude",
             )
 
         # Verify the driver was instantiated with cwd="."

@@ -375,7 +375,7 @@ class TestLocalSandbox:
     def test_virtual_mode_resolves_virtual_paths_under_cwd(self, tmp_path: Path) -> None:
         """virtual_mode=True should resolve /path/to/file as {cwd}/path/to/file.
 
-        This is critical for deepagents integration: _validate_path() adds a leading /
+        This is critical for deepagents integration: validate_path() adds a leading /
         to all paths (e.g., "docs/plans/plan.md" becomes "/docs/plans/plan.md").
         Without virtual_mode, this would be treated as an absolute filesystem path.
         With virtual_mode=True, the leading / is stripped and the path is joined with cwd.

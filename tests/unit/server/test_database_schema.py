@@ -54,8 +54,8 @@ class TestProfilesSchema:
     async def test_profile_insert(self, db: Database) -> None:
         """Verify profile can be inserted."""
         agents_json = json.dumps({
-            "developer": {"driver": "cli", "model": "opus", "options": {}},
-            "reviewer": {"driver": "cli", "model": "haiku", "options": {}},
+            "developer": {"driver": "claude", "model": "opus", "options": {}},
+            "reviewer": {"driver": "claude", "model": "haiku", "options": {}},
         })
         await db.execute(
             """INSERT INTO profiles (id, tracker, repo_root, agents, is_active)
@@ -65,5 +65,5 @@ class TestProfilesSchema:
         row = await db.fetch_one("SELECT * FROM profiles WHERE id = $1", "dev")
         assert row is not None
         agents = json.loads(row["agents"]) if isinstance(row["agents"], str) else row["agents"]
-        assert agents["developer"]["driver"] == "cli"
+        assert agents["developer"]["driver"] == "claude"
         assert row["is_active"] is True

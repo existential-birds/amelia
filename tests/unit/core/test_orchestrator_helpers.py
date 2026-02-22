@@ -162,9 +162,9 @@ class TestExtractConfigParams:
             tracker="noop",
             repo_root="/tmp/test",
             agents={
-                "architect": AgentConfig(driver="cli", model="sonnet"),
-                "developer": AgentConfig(driver="cli", model="sonnet"),
-                "reviewer": AgentConfig(driver="cli", model="sonnet"),
+                "architect": AgentConfig(driver="claude", model="sonnet"),
+                "developer": AgentConfig(driver="claude", model="sonnet"),
+                "reviewer": AgentConfig(driver="claude", model="sonnet"),
             },
         )
         thread_id = str(uuid4())
@@ -188,9 +188,9 @@ class TestExtractConfigParams:
             tracker="noop",
             repo_root="/tmp/test",
             agents={
-                "architect": AgentConfig(driver="cli", model="sonnet"),
-                "developer": AgentConfig(driver="cli", model="sonnet"),
-                "reviewer": AgentConfig(driver="cli", model="sonnet"),
+                "architect": AgentConfig(driver="claude", model="sonnet"),
+                "developer": AgentConfig(driver="claude", model="sonnet"),
+                "reviewer": AgentConfig(driver="claude", model="sonnet"),
             },
         )
         thread_id = str(uuid4())

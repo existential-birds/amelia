@@ -26,7 +26,7 @@ class TestImportExternalPlan:
             tracker="noop",
             repo_root=str(tmp_path / "worktree"),
             agents={
-                "plan_validator": AgentConfig(driver="cli", model="sonnet"),
+                "plan_validator": AgentConfig(driver="claude", model="sonnet"),
             },
         )
 
@@ -181,7 +181,7 @@ Fix it.
             tracker="noop",
             repo_root=str(worktree),
             agents={
-                "plan_validator": AgentConfig(driver="cli", model="sonnet"),
+                "plan_validator": AgentConfig(driver="claude", model="sonnet"),
             },
         )
 

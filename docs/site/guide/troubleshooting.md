@@ -308,7 +308,7 @@ Plan file not found after architect completed
 
 2. Or switch to the CLI driver (recommended for reliability):
    ```bash
-   amelia config profile create dev-cli --driver cli
+   amelia config profile create dev-cli --driver claude
    amelia config profile activate dev-cli
    ```
 
@@ -333,7 +333,7 @@ Agent completed but required tool was never called
 
 **Solution:**
 
-The API driver includes retry logic (up to 3 attempts) and fallback extraction, but some models consistently fail. Use a different model or switch to `cli`.
+The API driver includes retry logic (up to 3 attempts) and fallback extraction, but some models consistently fail. Use a different model or switch to `claude`.
 
 ---
 
@@ -382,7 +382,7 @@ Error: Profile 'production' not found in settings.
 
 2. Create the missing profile:
    ```bash
-   amelia config profile create production --driver cli --tracker github
+   amelia config profile create production --driver claude --tracker github
    ```
 
 3. Or use an existing profile:
@@ -404,7 +404,7 @@ Error: No profiles configured. Run 'amelia config profile create' to add one.
 1. Create a profile with CLI commands:
    ```bash
    # Create a profile with CLI driver (recommended for getting started)
-   amelia config profile create dev --driver cli --tracker none
+   amelia config profile create dev --driver claude --tracker none
 
    # Or with API driver
    amelia config profile create dev --driver api --model "anthropic/claude-sonnet-4" --tracker github
@@ -433,7 +433,7 @@ Error: OPENROUTER_API_KEY environment variable not set
 
 **Driver → Required Credentials:**
 - `api` → `OPENROUTER_API_KEY`
-- `cli` → Claude CLI authenticated (`claude auth login`)
+- `claude` → Claude CLI authenticated (`claude auth login`)
 
 1. Set API key:
    ```bash
@@ -442,7 +442,7 @@ Error: OPENROUTER_API_KEY environment variable not set
 
 2. Or create a CLI-based profile (no API key needed):
    ```bash
-   amelia config profile create dev-cli --driver cli
+   amelia config profile create dev-cli --driver claude
    amelia config profile activate dev-cli
    ```
 
@@ -477,7 +477,7 @@ gh auth login
 
 **For testing without real tracker:**
 ```bash
-amelia config profile create test --driver cli --tracker none
+amelia config profile create test --driver claude --tracker none
 amelia config profile activate test
 ```
 
@@ -501,7 +501,7 @@ Error: Issue 'PROJ-999' not found
 
 3. For testing, use `none` tracker:
    ```bash
-   amelia config profile create test --driver cli --tracker none
+   amelia config profile create test --driver claude --tracker none
    amelia config profile activate test
    ```
 
@@ -522,7 +522,7 @@ ShellInjectionError: Blocked shell metacharacter detected: ';'
 
 **Cause:** An agent tried to run a command containing shell metacharacters (`;`, `|`, `&`, `$`, `` ` ``, `(`, `)`, `<`, `>`, `{`, `}`). Amelia blocks these to prevent shell injection attacks.
 
-**What to do:** This is expected behavior — Amelia's agents execute commands individually, not as chained shell expressions. If you see this error repeatedly, the LLM may be generating unsafe commands. Try switching to a stronger model or using the `cli` driver.
+**What to do:** This is expected behavior — Amelia's agents execute commands individually, not as chained shell expressions. If you see this error repeatedly, the LLM may be generating unsafe commands. Try switching to a stronger model or using the `claude` driver.
 
 ### BlockedCommandError
 
@@ -567,9 +567,9 @@ PathTraversalError: Path '../../../etc/passwd' resolves to '/etc/passwd' which i
 
 **Checklist:**
 1. Dependencies installed: `uv sync`
-2. Profile created: `amelia config profile create dev --driver cli --activate`
+2. Profile created: `amelia config profile create dev --driver claude --activate`
 3. Tracker configured (or use `--tracker none`)
-4. Driver credentials set (or use `cli`)
+4. Driver credentials set (or use `claude`)
 5. Server started: `amelia dev`
 
 ### Can't start workflow

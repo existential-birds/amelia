@@ -88,6 +88,7 @@ class BrainstormingSession(BaseModel):
     driver_type: str | None = None
     status: SessionStatus
     topic: str | None = None
+    output_artifact_path: str | None = None
     created_at: datetime
     updated_at: datetime
     usage_summary: SessionUsageSummary | None = None

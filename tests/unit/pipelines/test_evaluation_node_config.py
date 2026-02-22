@@ -24,7 +24,7 @@ def profile_with_agents() -> Profile:
         tracker="noop",
         repo_root="/tmp/test",
         agents={
-            "evaluator": AgentConfig(driver="cli", model="sonnet"),
+            "evaluator": AgentConfig(driver="claude", model="sonnet"),
         },
     )
 

@@ -26,7 +26,14 @@ from pydantic import BaseModel, ValidationError
 
 from amelia.core.constants import CANONICAL_TO_CLI, normalize_tool_name
 from amelia.core.exceptions import ModelProviderError
-from amelia.drivers.base import AgenticMessage, AgenticMessageType, DriverUsage, GenerateResult
+from amelia.drivers.base import (
+    AgenticMessage,
+    AgenticMessageType,
+    DriverInterface,
+    DriverUsage,
+    GenerateResult,
+)
+from amelia.drivers.cli.utils import strip_markdown_fences
 from amelia.logging import log_claude_result
 
 
@@ -50,40 +57,6 @@ def _sanitize_stderr(stderr: str, max_len: int = 1000) -> str:
     return snippet
 
 
-def _strip_markdown_fences(text: str) -> str:
-    """Strip markdown code fences from text if present.
-
-    Handles common patterns like:
-    - ```json\n{...}\n```
-    - ```\n{...}\n```
-
-    Args:
-        text: Text that may contain markdown code fences.
-
-    Returns:
-        Text with code fences stripped, or original text if no fences found.
-    """
-    stripped = text.strip()
-
-    # Check for fenced code block pattern
-    if stripped.startswith("```"):
-        lines = stripped.split("\n")
-
-        # Find the opening fence (first line starting with ```)
-        if lines and lines[0].startswith("```"):
-            # Find the closing fence
-            end_idx = -1
-            for i in range(len(lines) - 1, 0, -1):
-                if lines[i].strip() == "```":
-                    end_idx = i
-                    break
-
-            if end_idx > 0:
-                # Extract content between fences
-                content_lines = lines[1:end_idx]
-                return "\n".join(content_lines).strip()
-
-    return text
 
 
 # Phrases that indicate Claude is asking for clarification rather than producing output
@@ -190,7 +163,7 @@ def _log_sdk_message(message: Message | SDKStreamEvent) -> None:
         )
 
 
-class ClaudeCliDriver:
+class ClaudeCliDriver(DriverInterface):
     """Claude CLI Driver using the claude-agent-sdk.
 
     This driver wraps the Claude CLI via the official SDK, providing both
@@ -390,7 +363,7 @@ class ClaudeCliDriver:
                     # Fallback: try to parse result as JSON
                     # Strip markdown code fences if present (Claude sometimes wraps JSON in ```)
                     try:
-                        stripped_result = _strip_markdown_fences(result_message.result)
+                        stripped_result = strip_markdown_fences(result_message.result)
                         data = json.loads(stripped_result)
                     except json.JSONDecodeError:
                         # Model returned text instead of structured JSON
@@ -414,7 +387,10 @@ class ClaudeCliDriver:
                 else:
                     raise RuntimeError("Claude SDK returned no output for schema request")
 
-                # Fix: If the model expects a wrapped "tasks" list but CLI returns a raw list, wrap it.
+                # Workaround: Some Claude CLI versions return unwrapped lists when the schema
+                # expects {"tasks": [...]}, causing validation to fail. This wraps raw lists
+                # when the schema has a "tasks" field at the root level.
+                # Required for: claude-cli-sdk <= 0.2.x (may be fixed in future versions)
                 if isinstance(data, list) and "tasks" in schema.model_fields:
                     data = {"tasks": data}
 

@@ -4,6 +4,7 @@ from amelia.core.types import SandboxConfig
 from amelia.drivers.api import ApiDriver
 from amelia.drivers.base import DriverInterface
 from amelia.drivers.cli.claude import ClaudeCliDriver
+from amelia.drivers.cli.codex import CodexCliDriver
 
 
 def get_driver(
@@ -18,7 +19,7 @@ def get_driver(
     """Get a concrete driver implementation.
 
     Args:
-        driver_key: Driver identifier ("cli" or "api").
+        driver_key: Driver identifier ("claude", "codex", or "api").
         model: LLM model identifier.
         cwd: Working directory (used by CLI driver).
         sandbox_config: Sandbox configuration for containerized execution.
@@ -32,13 +33,13 @@ def get_driver(
         ValueError: If driver_key is not recognized or incompatible with sandbox.
     """
     if sandbox_config and sandbox_config.mode == "container":
-        if driver_key.startswith("cli"):
+        if driver_key in {"claude", "codex"}:
             raise ValueError(
                 "Container sandbox requires API driver. "
                 "CLI driver containerization is not yet supported."
             )
         if driver_key != "api":
-            raise ValueError(f"Unknown driver key: {driver_key}")
+            raise ValueError(f"Unknown driver key: {driver_key!r}")
         from amelia.sandbox.docker import DockerSandboxProvider  # noqa: PLC0415
         from amelia.sandbox.driver import ContainerDriver  # noqa: PLC0415
 
@@ -50,15 +51,18 @@ def get_driver(
         )
         return ContainerDriver(model=model, provider=provider)
 
-    if driver_key == "cli":
+    if driver_key == "claude":
         return ClaudeCliDriver(model=model, cwd=cwd)
+    elif driver_key == "codex":
+        approval_mode = (options or {}).get("approval_mode", "full-auto")
+        return CodexCliDriver(model=model, cwd=cwd, approval_mode=approval_mode)
     elif driver_key == "api":
         return ApiDriver(provider="openrouter", model=model)
     else:
         raise ValueError(
             f"Unknown driver key: {driver_key!r}. "
-            f"Valid options: 'cli' or 'api'. "
-            f"(Legacy forms 'cli:claude' and 'api:openrouter' are no longer supported.)"
+            "Valid options: 'claude', 'codex', 'api'. "
+            "(Legacy forms 'cli', 'cli:claude', and 'api:openrouter' are no longer supported.)"
         )
 
 
@@ -69,7 +73,7 @@ async def cleanup_driver_session(driver_key: str, session_id: str) -> bool:
     This allows cleaning up sessions without needing a configured driver instance.
 
     Args:
-        driver_key: Driver identifier ("cli" or "api").
+        driver_key: Driver identifier ("claude", "codex", or "api").
         session_id: The driver session ID to clean up.
 
     Returns:
@@ -78,14 +82,14 @@ async def cleanup_driver_session(driver_key: str, session_id: str) -> bool:
     Raises:
         ValueError: If driver_key is not recognized.
     """
-    if driver_key == "cli":
-        return False  # ClaudeCliDriver has no session state to clean
+    if driver_key in {"claude", "codex"}:
+        return False  # CLI drivers have no session state to clean
     elif driver_key == "api":
         async with ApiDriver._sessions_lock_for_loop():
             return ApiDriver._sessions.pop(session_id, None) is not None
     else:
         raise ValueError(
             f"Unknown driver key: {driver_key!r}. "
-            f"Valid options: 'cli' or 'api'. "
-            f"(Legacy forms 'cli:claude' and 'api:openrouter' are no longer supported.)"
+            f"Valid options: 'claude', 'codex', 'api'. "
+            f"(Legacy forms 'cli', 'cli:claude' and 'api:openrouter' are no longer supported.)"
         )

@@ -18,6 +18,8 @@ export function useBrainstormSession() {
     setArtifacts,
     clearMessages,
     setStreaming,
+    clearStaleStreaming,
+    replaceMessageId,
     setDrawerOpen,
     setSessionUsage,
   } = useBrainstormStore();
@@ -72,14 +74,12 @@ export function useBrainstormSession() {
       };
       addMessage(userMessage);
 
-      // Send the user's message directly (no priming needed)
+      // Add optimistic assistant placeholder BEFORE HTTP call
+      const tempAssistantId = nanoid();
       try {
-        setStreaming(true, null);
-        const response = await brainstormApi.sendMessage(session.id, firstMessage);
-
-        // Create assistant placeholder with streaming status
+        clearStaleStreaming();
         const assistantMessage = {
-          id: response.message_id,
+          id: tempAssistantId,
           session_id: session.id,
           sequence: 2,
           role: "assistant" as const,
@@ -89,15 +89,20 @@ export function useBrainstormSession() {
           status: "streaming" as const,
         };
         addMessage(assistantMessage);
+        setStreaming(true, tempAssistantId);
+
+        const response = await brainstormApi.sendMessage(session.id, firstMessage);
+        replaceMessageId(tempAssistantId, response.message_id);
         setStreaming(true, response.message_id);
       } catch (error) {
-        // Rollback optimistic user message
+        // Rollback optimistic messages
+        removeMessage(tempAssistantId);
         removeMessage(userMessage.id);
         setStreaming(false, null);
         throw error;
       }
     },
-    [addSession, setActiveSessionId, setActiveProfile, clearMessages, setArtifacts, setSessionUsage, addMessage, removeMessage, setStreaming]
+    [addSession, setActiveSessionId, setActiveProfile, clearMessages, setArtifacts, setSessionUsage, addMessage, removeMessage, setStreaming, clearStaleStreaming, replaceMessageId]
   );
 
   const sendMessage = useCallback(
@@ -119,16 +124,15 @@ export function useBrainstormSession() {
         created_at: new Date().toISOString(),
       };
 
+      const tempAssistantId = nanoid();
       try {
         addMessage(userMessage);
-        setStreaming(true, null);
-        const response = await brainstormApi.sendMessage(activeSessionId, content);
+        clearStaleStreaming();
 
         // Get updated count after user message was added
         const newLength = useBrainstormStore.getState().messages.length;
-        // Create assistant placeholder with streaming status
         const assistantMessage = {
-          id: response.message_id,
+          id: tempAssistantId,
           session_id: activeSessionId,
           sequence: newLength + 1,
           role: "assistant" as const,
@@ -138,15 +142,20 @@ export function useBrainstormSession() {
           status: "streaming" as const,
         };
         addMessage(assistantMessage);
+        setStreaming(true, tempAssistantId);
+
+        const response = await brainstormApi.sendMessage(activeSessionId, content);
+        replaceMessageId(tempAssistantId, response.message_id);
         setStreaming(true, response.message_id);
       } catch (error) {
-        // Rollback optimistic update
+        // Rollback optimistic messages
+        removeMessage(tempAssistantId);
         removeMessage(optimisticId);
         setStreaming(false, null);
         throw error;
       }
     },
-    [activeSessionId, addMessage, removeMessage, setStreaming]
+    [activeSessionId, addMessage, removeMessage, setStreaming, clearStaleStreaming, replaceMessageId]
   );
 
   const deleteSession = useCallback(

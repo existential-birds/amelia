@@ -23,7 +23,7 @@ async def test_call_developer_node_uses_agent_config(
     profile = mock_profile_factory(
         preset="cli_single",
         agents={
-            "developer": AgentConfig(driver=DriverType.CLI, model="sonnet"),
+            "developer": AgentConfig(driver=DriverType.CLAUDE, model="sonnet"),
         },
     )
 
@@ -62,7 +62,7 @@ async def test_call_developer_node_uses_agent_config(
         assert call_args is not None
         config_arg = call_args[0][0]  # First positional arg
         assert isinstance(config_arg, AgentConfig)
-        assert config_arg.driver == DriverType.CLI
+        assert config_arg.driver == DriverType.CLAUDE
         assert config_arg.model == "sonnet"
 
 
@@ -80,7 +80,7 @@ async def test_call_developer_node_passes_prompts_to_developer(
     profile = mock_profile_factory(
         preset="cli_single",
         agents={
-            "developer": AgentConfig(driver=DriverType.CLI, model="sonnet"),
+            "developer": AgentConfig(driver=DriverType.CLAUDE, model="sonnet"),
         },
     )
     state, _ = mock_execution_state_factory(
@@ -125,7 +125,7 @@ async def test_call_developer_node_passes_workflow_id(
     profile = mock_profile_factory(
         preset="cli_single",
         agents={
-            "developer": AgentConfig(driver=DriverType.CLI, model="sonnet"),
+            "developer": AgentConfig(driver=DriverType.CLAUDE, model="sonnet"),
         },
     )
     state, _ = mock_execution_state_factory(
@@ -179,7 +179,7 @@ async def test_call_developer_node_updates_base_commit(
     profile = mock_profile_factory(
         preset="cli_single",
         agents={
-            "developer": AgentConfig(driver=DriverType.CLI, model="sonnet"),
+            "developer": AgentConfig(driver=DriverType.CLAUDE, model="sonnet"),
         },
     )
     state, _ = mock_execution_state_factory(
@@ -234,7 +234,7 @@ async def test_call_developer_node_keeps_base_commit_on_git_failure(
     profile = mock_profile_factory(
         preset="cli_single",
         agents={
-            "developer": AgentConfig(driver=DriverType.CLI, model="sonnet"),
+            "developer": AgentConfig(driver=DriverType.CLAUDE, model="sonnet"),
         },
     )
     state, _ = mock_execution_state_factory(
