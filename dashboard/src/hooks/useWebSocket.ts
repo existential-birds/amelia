@@ -28,7 +28,7 @@ const askUserQuestionsSchema = z.array(askUserQuestionItemSchema);
  */
 function validateQuestions(data: unknown): AskUserQuestionItem[] | undefined {
   const result = askUserQuestionsSchema.safeParse(data);
-  return result.success ? (result.data as AskUserQuestionItem[]) : undefined;
+  return result.success ? result.data : undefined;
 }
 
 /**
