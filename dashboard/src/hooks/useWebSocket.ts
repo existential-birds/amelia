@@ -15,7 +15,7 @@ import type { AskUserQuestionItem, AskUserOption, BrainstormArtifact, ToolCall, 
 const askUserOptionSchema = z.object({
   label: z.string(),
   description: z.string().optional(),
-}) satisfies z.ZodType<AskUserOption>;
+});
 
 /** Zod schema for AskUserQuestionItem validation (mirrors AskUserQuestionItem type). */
 const askUserQuestionItemSchema = z.object({
@@ -286,7 +286,7 @@ export function handleBrainstormMessage(msg: BrainstormMessage): void {
           ...m,
           content: m.content + (text ?? ''),
           ...(questions ? { askUserQuestions: { questions } } : {}),
-          ...(msg.data.questions && !questions ? { status: 'error', errorMessage: `Question validation failed: ${result.error?.issues.map(i => i.message).join(', ')}` } : {}),
+          ...(msg.data.questions && !questions ? { status: 'error', errorMessage: `Question validation failed: ${result.error?.issues[0]?.message || 'invalid format'}` } : {}),
         }));
       }
       break;
