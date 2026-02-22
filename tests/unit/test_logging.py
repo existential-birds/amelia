@@ -90,6 +90,7 @@ class TestLogTodos:
     def test_panel_title_contains_counter(self) -> None:
         """Panel title should show completed/total count."""
         from rich.panel import Panel
+        from rich.text import Text
 
         from amelia.logging import log_todos
 
@@ -105,13 +106,14 @@ class TestLogTodos:
                 ])
                 printed_arg = mock_console.print.call_args[0][0]
                 assert isinstance(printed_arg, Panel)
-                assert printed_arg.title is not None
+                assert isinstance(printed_arg.title, Text)
                 title_text = printed_arg.title.plain
                 assert "1/3" in title_text
 
     def test_handles_empty_list(self) -> None:
         """log_todos should handle empty todo list gracefully."""
         from rich.panel import Panel
+        from rich.text import Text
 
         from amelia.logging import log_todos
 
@@ -124,6 +126,6 @@ class TestLogTodos:
                 mock_console.print.assert_called_once()
                 printed_arg = mock_console.print.call_args[0][0]
                 assert isinstance(printed_arg, Panel)
-                assert printed_arg.title is not None
+                assert isinstance(printed_arg.title, Text)
                 title_text = printed_arg.title.plain
                 assert "0/0" in title_text  # Still prints panel (empty)
