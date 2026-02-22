@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AskUserQuestionCard } from "../AskUserQuestionCard";
@@ -35,6 +35,10 @@ const multiSelectPayload: AskUserQuestionPayload = {
 };
 
 describe("AskUserQuestionCard", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it("renders question text and header", () => {
     render(
       <AskUserQuestionCard payload={singleSelectPayload} onAnswer={vi.fn()} />
