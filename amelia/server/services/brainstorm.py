@@ -829,6 +829,8 @@ class BrainstormService:
         """
         parts: list[str] = []
         questions = tool_input.get("questions", [])
+        if not isinstance(questions, list):
+            questions = [questions]
         for q in questions:
             question_text = q.get("question", "")
             if question_text:

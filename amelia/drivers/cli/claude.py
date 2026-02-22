@@ -259,7 +259,13 @@ def _get_raw_message_stream(
             "Update amelia to use the new SDK API, or pin claude-agent-sdk to a compatible version."
         )
 
-    return cast("AsyncIterator[dict[str, Any]]", receive_fn())
+    result = receive_fn()
+    if not hasattr(result, "__aiter__"):
+        raise RuntimeError(
+            "Claude SDK internal API changed: _query.receive_messages() no longer returns an async iterator. "
+            "Update amelia to use the new SDK API, or pin claude-agent-sdk to a compatible version."
+        )
+    return cast("AsyncIterator[dict[str, Any]]", result)
 
 
 async def _safe_receive_response(

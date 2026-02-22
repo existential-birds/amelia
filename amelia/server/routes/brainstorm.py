@@ -21,7 +21,12 @@ from amelia.server.models.brainstorm import (
     Message,
     SessionStatus,
 )
-from amelia.server.models.events import EventDomain, EventType, WorkflowEvent
+from amelia.server.models.events import (
+    EPHEMERAL_SEQUENCE,
+    EventDomain,
+    EventType,
+    WorkflowEvent,
+)
 from amelia.server.orchestrator.service import OrchestratorService
 from amelia.server.routes.config import ProfileInfo
 from amelia.server.services.brainstorm import BrainstormService
@@ -321,7 +326,7 @@ async def send_message(
             error_event = WorkflowEvent(
                 id=uuid4(),
                 workflow_id=session_id,
-                sequence=0,
+                sequence=EPHEMERAL_SEQUENCE,
                 timestamp=datetime.now(UTC),
                 agent="brainstormer",
                 event_type=EventType.BRAINSTORM_MESSAGE_FAILED,

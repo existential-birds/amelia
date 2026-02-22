@@ -192,7 +192,7 @@ def test_get_agent_config_preserves_original() -> None:
     assert injected is not original
     assert original.sandbox.mode == SandboxMode.NONE  # Original unchanged
     assert original.profile_name == "default"  # Original unchanged
-    assert injected.sandbox.mode == "container"  # Injected has profile's sandbox
+    assert injected.sandbox.mode == SandboxMode.CONTAINER  # Injected has profile's sandbox
 
 
 class TestAskUserQuestionPayload:
