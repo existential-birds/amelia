@@ -25,7 +25,7 @@ vi.mock("@/api/settings", () => ({
     repo_root: "",
     plan_output_dir: "",
     plan_path_pattern: "",
-    agents: { brainstormer: { driver: "cli", model: "sonnet" } },
+    agents: { brainstormer: { driver: "claude", model: "sonnet" } },
     is_active: true,
   }),
 }));

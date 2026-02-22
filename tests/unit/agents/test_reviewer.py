@@ -18,7 +18,7 @@ from tests.conftest import AsyncIteratorMock
 @pytest.fixture
 def mock_agent_config() -> AgentConfig:
     """Default AgentConfig for tests."""
-    return AgentConfig(driver=DriverType.CLI, model="sonnet", options={})
+    return AgentConfig(driver=DriverType.CLAUDE, model="sonnet", options={})
 
 
 @pytest.fixture
@@ -34,7 +34,7 @@ def create_reviewer(mock_driver: MagicMock) -> Callable[..., Reviewer]:
         agent_name: str = "reviewer",
     ) -> Reviewer:
         with patch("amelia.agents.reviewer.get_driver", return_value=mock_driver):
-            config = AgentConfig(driver=DriverType.CLI, model="sonnet", options={})
+            config = AgentConfig(driver=DriverType.CLAUDE, model="sonnet", options={})
             return Reviewer(config, event_bus=event_bus, prompts=prompts, agent_name=agent_name)
     return _create
 
@@ -45,7 +45,7 @@ class TestReviewerInit:
     def test_reviewer_init_with_agent_config(self) -> None:
         """Reviewer should accept AgentConfig and create its own driver."""
         config = AgentConfig(
-            driver=DriverType.CLI,
+            driver=DriverType.CLAUDE,
             model="sonnet",
             options={"max_iterations": 5},
         )
@@ -57,7 +57,7 @@ class TestReviewerInit:
             reviewer = Reviewer(config)
 
             mock_get_driver.assert_called_once_with(
-                "cli",
+                "claude",
                 model="sonnet",
                 sandbox_config=SandboxConfig(),
                 profile_name="default",

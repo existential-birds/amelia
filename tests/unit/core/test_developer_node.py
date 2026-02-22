@@ -573,7 +573,7 @@ class TestDeveloperTaskBasedExecution:
             name="test",
             repo_root=str(tmp_path),
             agents={
-                "developer": AgentConfig(driver="cli", model="sonnet"),
+                "developer": AgentConfig(driver="claude", model="sonnet"),
             },
         )
 

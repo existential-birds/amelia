@@ -51,7 +51,7 @@ amelia config profile create my-profile \
 
 | Flag | Short | Description |
 |------|-------|-------------|
-| `--driver` | `-d` | LLM driver (`cli` or `api`) |
+| `--driver` | `-d` | LLM driver (`claude`, `codex`, or `api`) |
 | `--model` | `-m` | Model name (required for API drivers) |
 | `--tracker` | `-t` | Issue tracker (`none`, `github`, `jira`) |
 | `--working-dir` | `-w` | Working directory for agent execution |
@@ -82,7 +82,8 @@ How Amelia communicates with LLMs.
 | Value | Description | Requirements |
 |-------|-------------|--------------|
 | `api` | Direct OpenRouter API calls | `OPENROUTER_API_KEY` env var, `model` field |
-| `cli` | Claude CLI wrapper | `claude` CLI installed, authenticated |
+| `claude` | Claude CLI wrapper | `claude` CLI installed and authenticated |
+| `codex` | OpenAI Codex CLI wrapper | `codex` CLI installed and authenticated |
 
 ### Model (required for API drivers)
 
@@ -140,9 +141,9 @@ Agent Configurations
 ┏━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━┓
 ┃ Agent          ┃ Driver         ┃ Model                  ┃
 ┡━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━┩
-│ architect      │ cli            │ opus                   │
-│ developer      │ api            │ qwen/qwen3-coder-flash │
-│ reviewer       │ cli            │ opus                   │
+│ architect      │ claude        │ opus                   │
+│ developer      │ api           │ qwen/qwen3-coder-flash │
+│ reviewer       │ claude        │ opus                   │
 └────────────────┴────────────────┴────────────────────────┘
 ```
 

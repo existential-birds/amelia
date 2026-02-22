@@ -54,10 +54,10 @@ async def setup_test_profile(test_profile_repository: ProfileRepository) -> Prof
         tracker=TrackerType.NOOP,
         repo_root="/tmp/test",  # Will be overridden by worktree_path
         agents={
-            "architect": AgentConfig(driver=DriverType.CLI, model="sonnet"),
-            "developer": AgentConfig(driver=DriverType.CLI, model="sonnet"),
-            "reviewer": AgentConfig(driver=DriverType.CLI, model="sonnet"),
-            "plan_validator": AgentConfig(driver=DriverType.CLI, model="haiku"),
+            "architect": AgentConfig(driver=DriverType.CLAUDE, model="sonnet"),
+            "developer": AgentConfig(driver=DriverType.CLAUDE, model="sonnet"),
+            "reviewer": AgentConfig(driver=DriverType.CLAUDE, model="sonnet"),
+            "plan_validator": AgentConfig(driver=DriverType.CLAUDE, model="haiku"),
         },
     )
     created_profile = await test_profile_repository.create_profile(profile)

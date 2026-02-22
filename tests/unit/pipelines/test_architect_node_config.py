@@ -19,7 +19,7 @@ def profile_with_agents() -> Profile:
         tracker="noop",
         repo_root="/tmp/test",
         agents={
-            "architect": AgentConfig(driver="cli", model="opus"),
+            "architect": AgentConfig(driver="claude", model="opus"),
         },
     )
 
@@ -69,5 +69,5 @@ async def test_call_architect_node_uses_agent_config(
         assert call_args is not None
         config_arg = call_args[0][0]  # First positional arg
         assert isinstance(config_arg, AgentConfig)
-        assert config_arg.driver == "cli"
+        assert config_arg.driver == "claude"
         assert config_arg.model == "opus"

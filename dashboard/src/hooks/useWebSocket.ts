@@ -319,6 +319,9 @@ export function useWebSocket() {
       setConnected(false);
       wsRef.current = null;
 
+      // Mark any streaming messages as errored
+      useBrainstormStore.getState().handleWebSocketDisconnect();
+
       // Reconnect unless it was a normal closure
       if (event.code !== 1000) {
         scheduleReconnect();

@@ -44,7 +44,7 @@ interface LoaderData {
   profiles: Profile[];
 }
 
-type DriverFilter = 'all' | 'api' | 'cli';
+type DriverFilter = 'all' | 'api' | 'claude';
 
 /**
  * Empty state component for first-time setup.
@@ -204,7 +204,7 @@ export default function SettingsProfilesPage() {
     if (driverFilter === 'api' && driver !== 'api') {
       return false;
     }
-    if (driverFilter === 'cli' && driver !== 'cli') {
+    if (driverFilter === 'claude' && driver !== 'claude') {
       return false;
     }
     return true;
@@ -302,9 +302,9 @@ export default function SettingsProfilesPage() {
           <ToggleGroupItem value="all" className="text-xs px-3">
             All
           </ToggleGroupItem>
-          <ToggleGroupItem value="cli" className="text-xs px-3 gap-1.5">
+          <ToggleGroupItem value="claude" className="text-xs px-3 gap-1.5">
             <Terminal className="h-3 w-3" />
-            CLI
+            Claude
           </ToggleGroupItem>
           <ToggleGroupItem value="api" className="text-xs px-3 gap-1.5">
             <Cloud className="h-3 w-3" />

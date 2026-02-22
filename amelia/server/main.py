@@ -234,7 +234,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             logger.warning(
                 "Invalid AMELIA_KNOWLEDGE_TAG_DRIVER value, using default 'api'",
                 provided=tag_driver_raw,
-                valid_values=["api", "cli"],
+                valid_values=[e.value for e in DriverType],
             )
             tag_driver = DriverType.API
 
@@ -373,14 +373,14 @@ def create_app() -> FastAPI:
         profile_repo = get_profile_repository()
         active_profile = await profile_repo.get_active_profile()
         if active_profile is None:
-            # No active profile - use CLI driver as default
-            return factory_get_driver("cli")
+            # No active profile - use Claude CLI driver as default
+            return factory_get_driver("claude")
         try:
             agent_config = active_profile.get_agent_config("brainstormer")
             return factory_get_driver(agent_config.driver, model=agent_config.model)
         except ValueError:
-            # No brainstormer config - fallback to CLI driver
-            return factory_get_driver("cli")
+            # No brainstormer config - fallback to Claude CLI driver
+            return factory_get_driver("claude")
 
     application.dependency_overrides[get_driver] = get_brainstorm_driver
 
