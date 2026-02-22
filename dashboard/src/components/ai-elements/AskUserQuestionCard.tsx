@@ -21,28 +21,31 @@ export function AskUserQuestionCard({
   isSubmitting = false,
   answered = false,
 }: AskUserQuestionCardProps) {
-  const [selections, setSelections] = useState<Selections>({});
-  const [otherTexts, setOtherTexts] = useState<Record<string, string>>({});
+  const [state, setState] = useState<{ selections: Selections; otherTexts: Record<string, string> }>({
+    selections: {},
+    otherTexts: {},
+  });
 
   const isDisabled = isSubmitting || answered;
 
   const handleSelect = useCallback((question: string, label: string, multiSelect: boolean) => {
     if (isDisabled) return;
-    setSelections((prev) => {
+    setState((prev) => {
+      const selections = prev.selections;
       if (multiSelect) {
-        const current = (prev[question] as string[] | undefined) ?? [];
+        const current = (selections[question] as string[] | undefined) ?? [];
         const next = current.includes(label)
           ? current.filter((l) => l !== label)
           : [...current, label];
-        return { ...prev, [question]: next };
+        return { ...prev, selections: { ...selections, [question]: next } };
       }
-      return { ...prev, [question]: label };
+      return { ...prev, selections: { ...selections, [question]: label } };
     });
   }, [isDisabled]);
 
   const handleOtherChange = useCallback((question: string, text: string) => {
     if (isDisabled) return;
-    setOtherTexts((prev) => ({ ...prev, [question]: text }));
+    setState((prev) => ({ ...prev, otherTexts: { ...prev.otherTexts, [question]: text } }));
   }, [isDisabled]);
 
   // Merge selections and "Other" text input into final answers
@@ -51,23 +54,19 @@ export function AskUserQuestionCard({
   //   - single-select: Other replaces any selected option
   // Only use selections if no Other text is provided
   const answers = useMemo((): Selections => {
-    const result: Selections = {};
-    for (const q of payload.questions) {
-      const selected = selections[q.question];
-      const other = otherTexts[q.question]?.trim();
+    return payload.questions.reduce<Selections>((acc, q) => {
+      const selected = state.selections[q.question];
+      const other = state.otherTexts[q.question]?.trim();
       if (other) {
-        if (q.multi_select) {
-          const arr = (selected as string[] | undefined) ?? [];
-          result[q.question] = [...arr, other];
-        } else {
-          result[q.question] = other;
-        }
+        acc[q.question] = q.multi_select
+          ? [...((selected as string[] | undefined) ?? []), other]
+          : other;
       } else if (selected !== undefined) {
-        result[q.question] = selected;
+        acc[q.question] = selected;
       }
-    }
-    return result;
-  }, [payload.questions, selections, otherTexts]);
+      return acc;
+    }, {});
+  }, [payload.questions, state.selections, state.otherTexts]);
 
   const hasAnswers = Object.keys(answers).length > 0;
 
@@ -77,7 +76,7 @@ export function AskUserQuestionCard({
   };
 
   const isSelected = (question: string, label: string, multiSelect: boolean): boolean => {
-    const sel = selections[question];
+    const sel = state.selections[question];
     if (multiSelect) return ((sel as string[] | undefined) ?? []).includes(label);
     return sel === label;
   };
@@ -86,7 +85,7 @@ export function AskUserQuestionCard({
     <div className={cn("flex flex-col gap-4 rounded-lg border p-4", answered && "border-border/60 bg-card/60")}>
 
       {payload.questions.map((q) => (
-        <fieldset key={q.question} className="flex flex-col gap-2">
+        <fieldset key={q.question} className="flex flex-col gap-2" disabled={isDisabled}>
           <legend className="flex items-center gap-2">
             {q.header && (
               <Badge variant="secondary" className="text-xs">
@@ -105,6 +104,7 @@ export function AskUserQuestionCard({
                 onClick={() => handleSelect(q.question, opt.label, q.multi_select)}
                 className="flex flex-col items-start h-auto py-2 px-3"
                 aria-pressed={q.multi_select ? isSelected(q.question, opt.label, q.multi_select) : undefined}
+                aria-label={`${opt.label}${opt.description ? `: ${opt.description}` : ""}`}
               >
                 <span className="font-medium">{opt.label}</span>
                 {opt.description && (
@@ -118,7 +118,7 @@ export function AskUserQuestionCard({
             <Input
               id={`other-${q.question}`}
               placeholder="Other..."
-              value={otherTexts[q.question] ?? ""}
+              value={state.otherTexts[q.question] ?? ""}
               onChange={(e) => handleOtherChange(q.question, e.target.value)}
               disabled={isDisabled}
               className="text-sm"

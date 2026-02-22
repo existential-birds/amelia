@@ -15,7 +15,7 @@ import type { AskUserQuestionItem, AskUserOption, BrainstormArtifact, ToolCall, 
 const askUserOptionSchema = z.object({
   label: z.string(),
   description: z.string().optional(),
-}) satisfies z.ZodType<AskUserOption>;
+}) as const satisfies z.ZodType<AskUserOption>;
 
 /** Zod schema for AskUserQuestionItem validation (mirrors AskUserQuestionItem type). */
 const askUserQuestionItemSchema = z.object({
@@ -270,6 +270,8 @@ export function handleBrainstormMessage(msg: BrainstormMessage): void {
                 : tc
             ),
           }));
+        } else {
+          console.error('tool_result dropped: tool_call_id validation failed', { data: msg.data });
         }
       }
       break;
@@ -283,6 +285,7 @@ export function handleBrainstormMessage(msg: BrainstormMessage): void {
           ...m,
           content: m.content + (text ?? ''),
           ...(questions ? { askUserQuestions: { questions } } : {}),
+          ...(msg.data.questions && !questions ? { status: 'error', errorMessage: 'Invalid question data received' } : {}),
         }));
       }
       break;

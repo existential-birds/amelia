@@ -52,6 +52,9 @@ import {
 import type { BrainstormArtifact } from "@/types/api";
 import type { ConfigProfileInfo } from "@/types";
 
+// Markdown bold syntax used for formatting question answers
+const ANSWER_BOLD_WRAPPER = "**";
+
 // Extract profile info from config, preferring brainstormer agent config
 async function fetchProfileInfo(
   activeProfile: string | null,
@@ -121,6 +124,7 @@ function SpecBuilderPageContent() {
   const [configProfileInfo, setConfigProfileInfo] = useState<ConfigProfileInfo | null>(null);
   const activeProfileRef = useRef<string>("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const mountedRef = useRef(true);
 
   // Load sessions and config on mount
   useEffect(() => {
@@ -164,6 +168,7 @@ function SpecBuilderPageContent() {
 
     return () => {
       mounted = false;
+      mountedRef.current = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only init: loadSessions is stable from useBrainstormSession
   }, []);
@@ -203,7 +208,7 @@ function SpecBuilderPageContent() {
         const answerText = Array.isArray(answer)
           ? answer.join(", ")
           : answer;
-        return `**${question}**: ${answerText}`;
+        return `${ANSWER_BOLD_WRAPPER}${question}${ANSWER_BOLD_WRAPPER}: ${answerText}`;
       });
       const content = lines.join("\n");
 
@@ -219,10 +224,14 @@ function SpecBuilderPageContent() {
       } catch (err) {
         // Revert state on failure
         logger.error("Failed to send question answer", err, { messageId });
-        updateMessage(messageId, (m) => ({ ...m, questionAnswered: false }));
-        toast.error("Failed to send answer");
+        if (mountedRef.current) {
+          updateMessage(messageId, (m) => ({ ...m, questionAnswered: false }));
+          toast.error("Failed to send answer");
+        }
       } finally {
-        setAnsweringQuestionId(null);
+        if (mountedRef.current) {
+          setAnsweringQuestionId(null);
+        }
       }
     },
     [updateMessage, sendMessage]
