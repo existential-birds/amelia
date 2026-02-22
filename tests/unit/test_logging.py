@@ -124,4 +124,4 @@ class TestLogTodos:
                 printed_arg = mock_console.print.call_args[0][0]
                 assert isinstance(printed_arg, Panel)
                 title_text = printed_arg.title.plain  # type: ignore[union-attr]
-                assert "0/0" in title_text  # Still prints table (empty)
+                assert "0/0" in title_text  # Still prints panel (empty)
