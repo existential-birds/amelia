@@ -6,11 +6,13 @@ and agentic execution capabilities.
 import asyncio
 import json
 from collections.abc import AsyncIterator
+from enum import StrEnum
 from typing import Any
 
 from loguru import logger
 from pydantic import BaseModel, ValidationError
 
+from amelia.core.constants import READONLY_TOOLS, ToolName
 from amelia.core.exceptions import ModelProviderError
 from amelia.drivers.base import (
     AgenticMessage,
@@ -20,6 +22,14 @@ from amelia.drivers.base import (
     GenerateResult,
 )
 from amelia.drivers.cli.utils import strip_markdown_fences
+
+
+class CodexApprovalMode(StrEnum):
+    """Codex CLI sandbox mode controlling what the agent can do autonomously."""
+
+    FULL_AUTO = "full-auto"
+    AUTO_EDIT = "auto-edit"
+    SUGGEST = "suggest"
 
 
 class CodexStreamEvent(BaseModel):
@@ -35,7 +45,8 @@ class CodexStreamEvent(BaseModel):
     tool_name: str | None = None
     tool_call_id: str | None = None
     item: dict[str, Any] | None = None
-    text: str | None = None  # nested item for item.completed events
+    text: str | None = None
+    thread_id: str | None = None  # nested item for item.completed events
 
 
 class CodexCliDriver(DriverInterface):
@@ -47,15 +58,43 @@ class CodexCliDriver(DriverInterface):
 
     PROVIDER_NAME = "codex-cli"
 
-    def __init__(self, model: str = "", cwd: str | None = None) -> None:
+    def __init__(
+        self,
+        model: str = "",
+        cwd: str | None = None,
+        approval_mode: str | CodexApprovalMode = CodexApprovalMode.FULL_AUTO,
+    ) -> None:
         """Initialize CodexCliDriver.
 
         Args:
             model: LLM model identifier.
             cwd: Working directory for command execution.
+            approval_mode: Sandbox mode ("full-auto", "auto-edit", or "suggest").
         """
         self.model = model
         self.cwd = cwd
+        self.approval_mode = CodexApprovalMode(approval_mode)
+
+    def _resolve_approval_mode(
+        self, allowed_tools: list[str] | None,
+    ) -> CodexApprovalMode:
+        """Map allowed_tools to the coarsest matching codex sandbox mode.
+
+        Args:
+            allowed_tools: Tool allowlist from the caller, or None for all tools.
+
+        Returns:
+            The resolved approval mode.
+        """
+        if allowed_tools is None:
+            return self.approval_mode
+        tool_set = set(allowed_tools)
+        readonly_set = {t.value for t in READONLY_TOOLS}
+        if tool_set <= readonly_set:
+            return CodexApprovalMode.SUGGEST
+        if ToolName.RUN_SHELL_COMMAND in tool_set:
+            return CodexApprovalMode.FULL_AUTO
+        return CodexApprovalMode.AUTO_EDIT
 
     async def _run_codex(self, prompt: str) -> str:
         """Run codex CLI command and return output.
@@ -101,7 +140,11 @@ class CodexCliDriver(DriverInterface):
         return stdout.decode()
 
     async def _run_codex_stream(
-        self, prompt: str, cwd: str | None = None
+        self,
+        prompt: str,
+        cwd: str | None = None,
+        session_id: str | None = None,
+        approval_mode: CodexApprovalMode | None = None,
     ) -> AsyncIterator[CodexStreamEvent]:
         """Run codex CLI command and stream NDJSON events.
 
@@ -111,6 +154,7 @@ class CodexCliDriver(DriverInterface):
         Args:
             prompt: The prompt to send to codex.
             cwd: Working directory override (falls back to self.cwd).
+            session_id: Optional session ID to resume an existing conversation.
 
         Yields:
             CodexStreamEvent instances parsed from codex CLI NDJSON output.
@@ -118,10 +162,19 @@ class CodexCliDriver(DriverInterface):
         Raises:
             ModelProviderError: If codex CLI exits with non-zero status.
         """
-        cmd = ["codex", "exec", "--json"]
+        if session_id:
+            cmd = ["codex", "exec", "resume", session_id, "--json"]
+        else:
+            cmd = ["codex", "exec", "--json"]
 
         if self.model:
             cmd.extend(["--model", self.model])
+
+        if approval_mode == CodexApprovalMode.FULL_AUTO:
+            cmd.extend(["--full-auto"])
+        elif approval_mode == CodexApprovalMode.AUTO_EDIT:
+            cmd.extend(["--auto-edit"])
+        # SUGGEST = no flag (codex default)
 
         cmd.extend(["--", prompt])
 
@@ -335,23 +388,18 @@ class CodexCliDriver(DriverInterface):
         if instructions:
             full_prompt = f"{instructions}\n\n{prompt}"
 
-        # session_id and allowed_tools are required by the DriverInterface but
-        # Codex CLI handles these differently: sessions require `codex resume`, and
-        # permissions are managed via sandbox modes (--full-auto, --auto-edit).
-        if session_id is not None:
-            logger.warning(
-                "CodexCliDriver does not support session_id; parameter ignored. "
-                "Use `codex resume` subcommand for session continuity.",
-                session_id=session_id,
-            )
-        if allowed_tools is not None:
-            logger.warning(
-                "CodexCliDriver does not support allowed_tools; parameter ignored. "
-                "Use sandbox flags (--full-auto, --auto-edit) for tool restrictions.",
-            )
+        resolved_mode = self._resolve_approval_mode(allowed_tools)
+
+        captured_thread_id: str | None = None
 
         # Use streaming mode - iterate asynchronously
-        async for event in self._run_codex_stream(full_prompt, cwd=cwd):
+        async for event in self._run_codex_stream(
+            full_prompt, cwd=cwd, session_id=session_id, approval_mode=resolved_mode,
+        ):
+            # Capture thread_id from thread.started events for session continuity
+            if event.type == "thread.started" and event.thread_id:
+                captured_thread_id = event.thread_id
+
             if event.type in ("reasoning", "thinking"):
                 yield AgenticMessage(
                     type=AgenticMessageType.THINKING,
@@ -379,6 +427,7 @@ class CodexCliDriver(DriverInterface):
                 yield AgenticMessage(
                     type=AgenticMessageType.RESULT,
                     content=content,
+                    session_id=captured_thread_id,
                 )
             elif event.type == "item.completed" and event.item:
                 item = event.item
@@ -392,6 +441,7 @@ class CodexCliDriver(DriverInterface):
                         yield AgenticMessage(
                             type=AgenticMessageType.RESULT,
                             content=text,
+                            session_id=captured_thread_id,
                         )
                 elif item_type == "command_execution":
                     # Codex CLI: command execution with command, aggregated_output, exit_code
@@ -441,7 +491,7 @@ class CodexCliDriver(DriverInterface):
                         )
                 # else: skip unknown item types
             else:
-                # Skip lifecycle events (thread.started, turn.started, etc.)
+                # Skip lifecycle events (turn.started, etc.)
                 logger.debug("Skipping unhandled codex event", event_type=event.type)
 
     async def cleanup_session(self, session_id: str) -> bool:

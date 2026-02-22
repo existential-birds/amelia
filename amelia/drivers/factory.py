@@ -54,7 +54,8 @@ def get_driver(
     if driver_key == "claude":
         return ClaudeCliDriver(model=model, cwd=cwd)
     elif driver_key == "codex":
-        return CodexCliDriver(model=model, cwd=cwd)
+        approval_mode = (options or {}).get("approval_mode", "full-auto")
+        return CodexCliDriver(model=model, cwd=cwd, approval_mode=approval_mode)
     elif driver_key == "api":
         return ApiDriver(provider="openrouter", model=model)
     else:
