@@ -31,15 +31,14 @@ export function AskUserQuestionCard({
   const handleSelect = useCallback((question: string, label: string, multiSelect: boolean) => {
     if (isDisabled) return;
     setState((prev) => {
-      const selections = prev.selections;
       if (multiSelect) {
-        const current = (selections[question] as string[] | undefined) ?? [];
+        const current = (prev.selections[question] as string[] | undefined) ?? [];
         const next = current.includes(label)
           ? current.filter((l) => l !== label)
           : [...current, label];
-        return { ...prev, selections: { ...selections, [question]: next } };
+        return { ...prev, selections: { ...prev.selections, [question]: next } };
       }
-      return { ...prev, selections: { ...selections, [question]: label } };
+      return { ...prev, selections: { ...prev.selections, [question]: label } };
     });
   }, [isDisabled]);
 

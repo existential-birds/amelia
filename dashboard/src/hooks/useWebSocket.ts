@@ -15,7 +15,7 @@ import type { AskUserQuestionItem, AskUserOption, BrainstormArtifact, ToolCall, 
 const askUserOptionSchema = z.object({
   label: z.string(),
   description: z.string().optional(),
-}) as const satisfies z.ZodType<AskUserOption>;
+}) satisfies z.ZodType<AskUserOption>;
 
 /** Zod schema for AskUserQuestionItem validation (mirrors AskUserQuestionItem type). */
 const askUserQuestionItemSchema = z.object({
@@ -271,7 +271,7 @@ export function handleBrainstormMessage(msg: BrainstormMessage): void {
             ),
           }));
         } else {
-          console.error('tool_result dropped: tool_call_id validation failed', { data: msg.data });
+          console.warn('tool_result dropped: tool_call_id validation failed', { data: msg.data });
         }
       }
       break;
@@ -279,13 +279,14 @@ export function handleBrainstormMessage(msg: BrainstormMessage): void {
 
     case 'ask_user': {
       if (msg.message_id) {
-        const questions = validateQuestions(msg.data.questions);
+        const result = askUserQuestionsSchema.safeParse(msg.data.questions);
+        const questions = result.success ? result.data : undefined;
         const text = validateText(msg.data.text);
         state.updateMessage(msg.message_id, (m) => ({
           ...m,
           content: m.content + (text ?? ''),
           ...(questions ? { askUserQuestions: { questions } } : {}),
-          ...(msg.data.questions && !questions ? { status: 'error', errorMessage: 'Invalid question data received' } : {}),
+          ...(msg.data.questions && !questions ? { status: 'error', errorMessage: `Question validation failed: ${result.error?.issues.map(i => i.message).join(', ')}` } : {}),
         }));
       }
       break;

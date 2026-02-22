@@ -124,8 +124,8 @@ describe("AskUserQuestionCard", () => {
       />
     );
     expect(screen.getByRole("button", { name: /submit/i })).toBeDisabled();
-    expect(screen.getByText("Option A")).toHaveAttribute("data-disabled", "true");
-    expect(screen.getByText("Option B")).toHaveAttribute("data-disabled", "true");
+    expect(screen.getByRole("button", { name: /option a/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /option b/i })).toBeDisabled();
     expect(screen.getByPlaceholderText("Other...")).toBeDisabled();
   });
 

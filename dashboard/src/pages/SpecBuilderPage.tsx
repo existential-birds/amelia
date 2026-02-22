@@ -124,7 +124,6 @@ function SpecBuilderPageContent() {
   const [configProfileInfo, setConfigProfileInfo] = useState<ConfigProfileInfo | null>(null);
   const activeProfileRef = useRef<string>("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const mountedRef = useRef(true);
 
   // Load sessions and config on mount
   useEffect(() => {
@@ -168,7 +167,6 @@ function SpecBuilderPageContent() {
 
     return () => {
       mounted = false;
-      mountedRef.current = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only init: loadSessions is stable from useBrainstormSession
   }, []);
@@ -224,14 +222,10 @@ function SpecBuilderPageContent() {
       } catch (err) {
         // Revert state on failure
         logger.error("Failed to send question answer", err, { messageId });
-        if (mountedRef.current) {
-          updateMessage(messageId, (m) => ({ ...m, questionAnswered: false }));
-          toast.error("Failed to send answer");
-        }
+        updateMessage(messageId, (m) => ({ ...m, questionAnswered: false }));
+        toast.error("Failed to send answer");
       } finally {
-        if (mountedRef.current) {
-          setAnsweringQuestionId(null);
-        }
+        setAnsweringQuestionId(null);
       }
     },
     [updateMessage, sendMessage]
