@@ -219,23 +219,27 @@ async def list_files(
     if not resolved_dir.is_dir():
         return FileListResponse(files=[], directory=directory)
 
-    # List files matching pattern
-    entries = []
-    for path in resolved_dir.glob(glob_pattern):
-        if not path.is_file():
-            continue
-        stat = path.stat()
-        entries.append(
-            FileEntry(
-                name=path.name,
-                relative_path=str(path.relative_to(base_dir_resolved)),
-                size_bytes=stat.st_size,
-                modified_at=datetime.fromtimestamp(stat.st_mtime, tz=UTC).isoformat(),
+    def _list_files_sync() -> list[FileEntry]:
+        """List files synchronously (runs in thread pool)."""
+        result = []
+        for path in resolved_dir.glob(glob_pattern):
+            if not path.is_file():
+                continue
+            stat = path.stat()
+            result.append(
+                FileEntry(
+                    name=path.name,
+                    relative_path=str(path.relative_to(base_dir_resolved)),
+                    size_bytes=stat.st_size,
+                    modified_at=datetime.fromtimestamp(stat.st_mtime, tz=UTC).isoformat(),
+                )
             )
-        )
+        # Sort by modification time, newest first
+        result.sort(key=lambda e: e.modified_at, reverse=True)
+        return result
 
-    # Sort by modification time, newest first
-    entries.sort(key=lambda e: e.modified_at, reverse=True)
+    # Run file listing in thread pool to avoid blocking event loop
+    entries = await asyncio.to_thread(_list_files_sync)
 
     return FileListResponse(files=entries, directory=directory)
 
