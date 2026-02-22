@@ -1,3 +1,8 @@
+---
+title: Agentic AI Concepts
+description: Core concepts behind Amelia's multi-agent system — agents, orchestration, tool use, drivers, and human-in-the-loop approval gates explained.
+---
+
 # Agentic AI Concepts
 
 This document explains the core concepts behind Amelia's agentic architecture for engineers new to agentic AI systems.

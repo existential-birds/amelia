@@ -1,13 +1,13 @@
 <template>
-  <section class="amelia-section capabilities-research">
+  <section class="amelia-section capabilities-research" aria-label="Agent orchestration capabilities">
     <h2 class="section-heading">What You Can Do With It</h2>
-    <div class="capabilities-grid">
-      <div v-for="item in items" :key="item.capability" class="capability">
-        <span class="capability-name">{{ item.capability }}</span>
+    <ul class="capabilities-grid" role="list">
+      <li v-for="item in items" :key="item.capability" class="capability">
+        <strong class="capability-name">{{ item.capability }}</strong>
         <span class="capability-detail">{{ item.detail }}</span>
-      </div>
-    </div>
-    <a href="/architecture/inspiration" class="research-link">
+      </li>
+    </ul>
+    <a href="/amelia/architecture/inspiration" class="research-link" aria-label="View full research foundations">
       Full research foundations &rarr;
     </a>
   </section>

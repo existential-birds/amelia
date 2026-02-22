@@ -1,10 +1,12 @@
 ---
 layout: home
+title: Open-Source Agent Orchestration Framework
+description: Amelia is an open-source agent orchestration framework that coordinates AI agents to plan, build, review, and ship code using multi-agent workflows.
 
 hero:
   name: "Amelia"
-  text: "Multi-Agent Research Platform"
-  tagline: An open-source laboratory for experimenting with agentic workflows.
+  text: "Open-Source Agent Orchestration"
+  tagline: Coordinate AI agents to plan, build, review, and ship code.
   actions:
     - theme: brand
       text: Get Started

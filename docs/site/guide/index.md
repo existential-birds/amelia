@@ -1,3 +1,8 @@
+---
+title: Getting Started
+description: Install Amelia and run your first multi-agent workflow in minutes. Open-source agent orchestration for software development teams.
+---
+
 # User Guide
 
 Install, configure, and run your first multi-agent workflow in under five minutes.

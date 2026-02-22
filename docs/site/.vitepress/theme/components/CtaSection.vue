@@ -9,11 +9,11 @@
         GitHub
       </a>
       <span class="cta-sep" aria-hidden="true">/</span>
-      <a href="/architecture/inspiration" class="cta-link">
+      <a href="/amelia/architecture/inspiration" class="cta-link">
         Architecture
       </a>
       <span class="cta-sep" aria-hidden="true">/</span>
-      <a href="/guide/usage" class="cta-link">
+      <a href="/amelia/guide/usage" class="cta-link">
         Get Started
       </a>
     </div>

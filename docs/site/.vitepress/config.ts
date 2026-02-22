@@ -1,5 +1,9 @@
 import { defineConfig } from 'vitepress'
 
+const siteUrl = 'https://existential-birds.github.io'
+const basePath = '/amelia/'
+const fullUrl = `${siteUrl}${basePath}`
+
 /**
  * Guide sidebar - combines user documentation and architecture.
  * Used for both /guide/ and /architecture/ URL prefixes.
@@ -47,13 +51,23 @@ const aboutSidebar = [
  */
 export default defineConfig({
   title: 'Amelia',
-  description: 'Documentation for the Amelia agentic coding orchestrator',
+  titleTemplate: ':title | Amelia – Open-Source Agent Orchestrator',
+  description: 'Amelia is an open-source agent orchestration framework. Plan, build, review, and ship code with multi-agent AI workflows.',
+
+  lang: 'en-US',
+  cleanUrls: true,
+  lastUpdated: true,
 
   // Base path for deployment
-  base: '/amelia/',
+  base: basePath,
 
   // Dark mode as default
   appearance: 'dark',
+
+  // Sitemap generation
+  sitemap: {
+    hostname: fullUrl
+  },
 
   // Theme configuration
   themeConfig: {
@@ -111,9 +125,80 @@ export default defineConfig({
     }
   },
 
-  // Head configuration
+  // Head configuration - static global tags
   head: [
     ['link', { rel: 'icon', type: 'image/svg+xml', href: '/amelia/favicon.svg' }],
-    ['link', { rel: 'stylesheet', href: '/amelia/fonts/fonts.css' }]
-  ]
+    ['link', { rel: 'stylesheet', href: '/amelia/fonts/fonts.css' }],
+    // Open Graph - static
+    ['meta', { property: 'og:type', content: 'website' }],
+    ['meta', { property: 'og:site_name', content: 'Amelia' }],
+    // Twitter Card - static
+    ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
+  ],
+
+  // Dynamic per-page meta tags
+  transformPageData(pageData, ctx) {
+    const canonicalUrl = `${fullUrl}${pageData.relativePath.replace(/index\.md$/, '').replace(/\.md$/, '')}`
+    const pageTitle = pageData.frontmatter.title ?? pageData.title
+    const title = pageTitle ? `${pageTitle} | Amelia` : ctx.siteConfig.site.title
+    const description = pageData.frontmatter.description ?? ctx.siteConfig.site.description
+
+    pageData.frontmatter.head ??= []
+    pageData.frontmatter.head.push(
+      // Canonical URL
+      ['link', { rel: 'canonical', href: canonicalUrl }],
+      // Open Graph - per-page
+      ['meta', { property: 'og:title', content: title }],
+      ['meta', { property: 'og:description', content: description }],
+      ['meta', { property: 'og:url', content: canonicalUrl }],
+      // Twitter Card - per-page
+      ['meta', { name: 'twitter:title', content: title }],
+      ['meta', { name: 'twitter:description', content: description }],
+    )
+
+    // JSON-LD: SoftwareApplication on homepage
+    if (pageData.relativePath === 'index.md') {
+      pageData.frontmatter.head.push([
+        'script',
+        { type: 'application/ld+json' },
+        JSON.stringify({
+          '@context': 'https://schema.org',
+          '@type': 'SoftwareApplication',
+          name: 'Amelia',
+          description: 'Open-source agent orchestration framework for multi-agent AI coding workflows.',
+          applicationCategory: 'DeveloperApplication',
+          operatingSystem: 'Linux, macOS',
+          offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+          author: {
+            '@type': 'Organization',
+            name: 'existential-birds',
+            url: 'https://github.com/existential-birds'
+          },
+          codeRepository: 'https://github.com/existential-birds/amelia',
+          license: 'https://opensource.org/licenses/Apache-2.0'
+        })
+      ])
+    }
+
+    // JSON-LD: Article on documentation pages
+    if (pageData.relativePath !== 'index.md' && pageData.frontmatter.layout !== 'home') {
+      pageData.frontmatter.head.push([
+        'script',
+        { type: 'application/ld+json' },
+        JSON.stringify({
+          '@context': 'https://schema.org',
+          '@type': 'TechArticle',
+          headline: pageTitle,
+          description,
+          url: canonicalUrl,
+          ...(pageData.lastUpdated ? { dateModified: new Date(pageData.lastUpdated).toISOString() } : {}),
+          author: {
+            '@type': 'Organization',
+            name: 'existential-birds',
+            url: 'https://github.com/existential-birds'
+          }
+        })
+      ])
+    }
+  }
 })
