@@ -41,7 +41,7 @@ export function ArtifactCard({
       <CardFooter className="gap-2">
         <Button variant="secondary" size="sm" asChild>
           <a
-            href={`/api/files/${artifact.path}`}
+            href={`/api/files/${encodeURIComponent(artifact.path)}`}
             target="_blank"
             rel="noopener noreferrer"
           >

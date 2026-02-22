@@ -81,7 +81,7 @@ def _validate_and_resolve_path(user_path: str, working_dir: Path) -> Path:
 class FileReadRequest(BaseModel):
     """Request model for reading a file."""
 
-    path: str = Field(description="Absolute path to the file to read")
+    path: str = Field(description="Absolute or relative path to the file to read")
 
 
 class FileReadResponse(BaseModel):
