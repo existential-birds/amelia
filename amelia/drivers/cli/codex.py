@@ -34,6 +34,7 @@ class CodexStreamEvent(BaseModel):
     tool_output: str | None = None
     tool_name: str | None = None
     tool_call_id: str | None = None
+    item: dict[str, Any] | None = None  # nested item for item.completed events
 
 
 class CodexCliDriver(DriverInterface):
@@ -378,16 +379,56 @@ class CodexCliDriver(DriverInterface):
                     type=AgenticMessageType.RESULT,
                     content=content,
                 )
+            elif event.type == "item.completed" and event.item:
+                item = event.item
+                item_type = item.get("type")
+                if item_type == "message":
+                    # Extract text from content parts
+                    parts = item.get("content", [])
+                    text = "".join(
+                        p.get("text", "") for p in parts if p.get("type") == "output_text"
+                    )
+                    if text:
+                        if schema:
+                            text = self._validate_schema(text, schema, text)
+                        yield AgenticMessage(
+                            type=AgenticMessageType.RESULT,
+                            content=text,
+                        )
+                elif item_type == "function_call":
+                    yield AgenticMessage(
+                        type=AgenticMessageType.TOOL_CALL,
+                        content="",
+                        tool_name=item.get("name", ""),
+                        tool_input=json.loads(item.get("arguments", "{}"))
+                        if isinstance(item.get("arguments"), str)
+                        else item.get("arguments", {}),
+                        tool_call_id=item.get("call_id") or item.get("id", ""),
+                    )
+                elif item_type == "function_call_output":
+                    yield AgenticMessage(
+                        type=AgenticMessageType.TOOL_RESULT,
+                        tool_output=item.get("output", ""),
+                        tool_name=item.get("name", ""),
+                        tool_call_id=item.get("call_id") or item.get("id", ""),
+                    )
+                elif item_type == "reasoning":
+                    # Extract reasoning summary text
+                    summary_parts = item.get("summary", [])
+                    text = "".join(
+                        p.get("text", "")
+                        for p in summary_parts
+                        if p.get("type") == "summary_text"
+                    )
+                    if text:
+                        yield AgenticMessage(
+                            type=AgenticMessageType.THINKING,
+                            content=text,
+                        )
+                # else: skip unknown item types
             else:
-                # Default to result
-                raw_dict = event.model_dump(exclude_none=True)
-                content = json.dumps(raw_dict)
-                if schema:
-                    content = self._validate_schema(raw_dict, schema, content)
-                yield AgenticMessage(
-                    type=AgenticMessageType.RESULT,
-                    content=content,
-                )
+                # Skip lifecycle events (thread.started, turn.started, etc.)
+                logger.debug("Skipping unhandled codex event", event_type=event.type)
 
     async def cleanup_session(self, session_id: str) -> bool:
         """Clean up a driver session.

@@ -188,3 +188,146 @@ async def test_run_codex_stream_raises_on_nonzero_exit() -> None:
         pytest.raises(ModelProviderError, match="Codex CLI streaming failed"),
     ):
         _ = [e async for e in driver._run_codex_stream("do something", cwd="/tmp")]
+
+
+@pytest.mark.asyncio
+async def test_execute_agentic_skips_lifecycle_events() -> None:
+    driver = CodexCliDriver(model="gpt-5-codex", cwd="/tmp")
+
+    async def mock_run_codex_stream(
+        prompt: str, **kwargs: Any
+    ) -> AsyncIterator[CodexStreamEvent]:
+        events: list[CodexStreamEvent] = [
+            CodexStreamEvent(type="thread.started"),
+            CodexStreamEvent(type="turn.started"),
+            CodexStreamEvent(type="item.started"),
+            CodexStreamEvent(type="turn.completed"),
+        ]
+        for event in events:
+            yield event
+
+    with patch.object(driver, "_run_codex_stream", mock_run_codex_stream):
+        msgs = [m async for m in driver.execute_agentic("task", cwd="/tmp")]
+
+    assert msgs == []
+
+
+@pytest.mark.asyncio
+async def test_execute_agentic_extracts_message_from_item_completed() -> None:
+    driver = CodexCliDriver(model="gpt-5-codex", cwd="/tmp")
+
+    async def mock_run_codex_stream(
+        prompt: str, **kwargs: Any
+    ) -> AsyncIterator[CodexStreamEvent]:
+        events: list[CodexStreamEvent] = [
+            CodexStreamEvent(
+                type="item.completed",
+                item={
+                    "type": "message",
+                    "content": [
+                        {"type": "output_text", "text": "Hello "},
+                        {"type": "output_text", "text": "world"},
+                    ],
+                },
+            ),
+        ]
+        for event in events:
+            yield event
+
+    with patch.object(driver, "_run_codex_stream", mock_run_codex_stream):
+        msgs = [m async for m in driver.execute_agentic("task", cwd="/tmp")]
+
+    assert len(msgs) == 1
+    assert msgs[0].type == AgenticMessageType.RESULT
+    assert msgs[0].content == "Hello world"
+
+
+@pytest.mark.asyncio
+async def test_execute_agentic_extracts_tool_call_from_item_completed() -> None:
+    driver = CodexCliDriver(model="gpt-5-codex", cwd="/tmp")
+
+    async def mock_run_codex_stream(
+        prompt: str, **kwargs: Any
+    ) -> AsyncIterator[CodexStreamEvent]:
+        events: list[CodexStreamEvent] = [
+            CodexStreamEvent(
+                type="item.completed",
+                item={
+                    "type": "function_call",
+                    "name": "read_file",
+                    "arguments": '{"path": "a.py"}',
+                    "call_id": "fc_1",
+                },
+            ),
+        ]
+        for event in events:
+            yield event
+
+    with patch.object(driver, "_run_codex_stream", mock_run_codex_stream):
+        msgs = [m async for m in driver.execute_agentic("task", cwd="/tmp")]
+
+    assert len(msgs) == 1
+    assert msgs[0].type == AgenticMessageType.TOOL_CALL
+    assert msgs[0].tool_name == "read_file"
+    assert msgs[0].tool_input == {"path": "a.py"}
+    assert msgs[0].tool_call_id == "fc_1"
+
+
+@pytest.mark.asyncio
+async def test_execute_agentic_extracts_tool_result_from_item_completed() -> None:
+    driver = CodexCliDriver(model="gpt-5-codex", cwd="/tmp")
+
+    async def mock_run_codex_stream(
+        prompt: str, **kwargs: Any
+    ) -> AsyncIterator[CodexStreamEvent]:
+        events: list[CodexStreamEvent] = [
+            CodexStreamEvent(
+                type="item.completed",
+                item={
+                    "type": "function_call_output",
+                    "output": "file contents here",
+                    "name": "read_file",
+                    "call_id": "fc_1",
+                },
+            ),
+        ]
+        for event in events:
+            yield event
+
+    with patch.object(driver, "_run_codex_stream", mock_run_codex_stream):
+        msgs = [m async for m in driver.execute_agentic("task", cwd="/tmp")]
+
+    assert len(msgs) == 1
+    assert msgs[0].type == AgenticMessageType.TOOL_RESULT
+    assert msgs[0].tool_output == "file contents here"
+    assert msgs[0].tool_name == "read_file"
+    assert msgs[0].tool_call_id == "fc_1"
+
+
+@pytest.mark.asyncio
+async def test_execute_agentic_extracts_reasoning_from_item_completed() -> None:
+    driver = CodexCliDriver(model="gpt-5-codex", cwd="/tmp")
+
+    async def mock_run_codex_stream(
+        prompt: str, **kwargs: Any
+    ) -> AsyncIterator[CodexStreamEvent]:
+        events: list[CodexStreamEvent] = [
+            CodexStreamEvent(
+                type="item.completed",
+                item={
+                    "type": "reasoning",
+                    "summary": [
+                        {"type": "summary_text", "text": "Let me think about this"},
+                    ],
+                },
+            ),
+        ]
+        for event in events:
+            yield event
+
+    with patch.object(driver, "_run_codex_stream", mock_run_codex_stream):
+        msgs = [m async for m in driver.execute_agentic("task", cwd="/tmp")]
+
+    assert len(msgs) == 1
+    assert msgs[0].type == AgenticMessageType.THINKING
+    assert msgs[0].content == "Let me think about this"
