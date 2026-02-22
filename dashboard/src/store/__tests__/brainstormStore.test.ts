@@ -131,6 +131,47 @@ describe("useBrainstormStore", () => {
       );
     });
 
+    it("replaces a message ID", () => {
+      const message: BrainstormMessage = {
+        id: "temp-1",
+        session_id: "s1",
+        sequence: 1,
+        role: "assistant",
+        content: "",
+        parts: null,
+        created_at: "2026-01-18T00:00:00Z",
+        status: "streaming",
+      };
+      useBrainstormStore.getState().addMessage(message);
+
+      useBrainstormStore.getState().replaceMessageId("temp-1", "real-uuid");
+
+      const messages = useBrainstormStore.getState().messages;
+      expect(messages).toHaveLength(1);
+      expect(messages[0]!.id).toBe("real-uuid");
+      expect(messages[0]!.content).toBe("");
+      expect(messages[0]!.status).toBe("streaming");
+    });
+
+    it("also updates streamingMessageId when replacing message ID", () => {
+      const message: BrainstormMessage = {
+        id: "temp-1",
+        session_id: "s1",
+        sequence: 1,
+        role: "assistant",
+        content: "",
+        parts: null,
+        created_at: "2026-01-18T00:00:00Z",
+        status: "streaming",
+      };
+      useBrainstormStore.getState().addMessage(message);
+      useBrainstormStore.getState().setStreaming(true, "temp-1");
+
+      useBrainstormStore.getState().replaceMessageId("temp-1", "real-uuid");
+
+      expect(useBrainstormStore.getState().streamingMessageId).toBe("real-uuid");
+    });
+
     it("clears messages", () => {
       useBrainstormStore.getState().addMessage({
         id: "m1",

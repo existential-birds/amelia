@@ -45,6 +45,7 @@ interface BrainstormState {
   ) => void;
   updateMessageContent: (messageId: string, content: string) => void;
   appendMessageContent: (messageId: string, content: string) => void;
+  replaceMessageId: (oldId: string, newId: string) => void;
   clearMessages: () => void;
 
   // Artifact actions
@@ -127,6 +128,15 @@ export const useBrainstormStore = create<BrainstormState>()((set) => ({
       messages: state.messages.map((m) =>
         m.id === messageId ? { ...m, content: m.content + content } : m
       ),
+    })),
+
+  replaceMessageId: (oldId, newId) =>
+    set((state) => ({
+      messages: state.messages.map((m) =>
+        m.id === oldId ? { ...m, id: newId } : m
+      ),
+      streamingMessageId:
+        state.streamingMessageId === oldId ? newId : state.streamingMessageId,
     })),
 
   clearMessages: () => set({ messages: [], artifacts: [] }),
