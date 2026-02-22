@@ -190,6 +190,33 @@ def _log_sdk_message(message: Message | SDKStreamEvent) -> None:
         )
 
 
+def _handle_parse_error(e: MessageParseError) -> None:
+    """Handle unparseable SDK messages, escalating rate-limit problems."""
+    data = e.data or {}
+    msg_type = data.get("type")
+
+    if msg_type == "rate_limit_event":
+        info = data.get("rate_limit_info", {})
+        status = info.get("status")
+        if status == "allowed":
+            logger.debug("Rate limit check passed", rate_limit_info=info)
+        else:
+            logger.warning(
+                "Rate limit restriction active",
+                status=status,
+                rate_limit_type=info.get("rateLimitType"),
+                resets_at=info.get("resetsAt"),
+                overage_status=info.get("overageStatus"),
+            )
+        return
+
+    logger.debug(
+        "Skipping unknown SDK message type",
+        error_message=str(e),
+        raw_data=data,
+    )
+
+
 class ClaudeCliDriver:
     """Claude CLI Driver using the claude-agent-sdk.
 
@@ -356,7 +383,7 @@ class ClaudeCliDriver:
                     except StopAsyncIteration:
                         break
                     except MessageParseError as e:
-                        logger.debug("Ignoring unknown SDK message type", error_type=type(e).__name__)
+                        _handle_parse_error(e)
                         continue
                     _log_sdk_message(message)
 
@@ -512,10 +539,7 @@ class ClaudeCliDriver:
                         except StopAsyncIteration:
                             break
                         except MessageParseError as e:
-                            logger.warning(
-                                "Skipping unparseable SDK message in agentic execution",
-                                error_type=type(e).__name__,
-                            )
+                            _handle_parse_error(e)
                             continue
                         _log_sdk_message(message)
 
