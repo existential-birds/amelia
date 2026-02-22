@@ -28,8 +28,8 @@ const askUserQuestionItemSchema = z.object({
 /** Zod schema for validating an array of AskUserQuestionItem. */
 const askUserQuestionsSchema = z.array(askUserQuestionItemSchema);
 
-/** Zod schema for validating optional text field with empty string fallback. */
-const optionalTextSchema = z.string().optional().default('');
+/** Zod schema for validating optional text field. */
+const optionalTextSchema = z.string().optional();
 
 /** Zod schema for MessageUsage validation (mirrors MessageUsage type). */
 const messageUsageSchema = z.object({
