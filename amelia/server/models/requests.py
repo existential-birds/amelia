@@ -230,7 +230,7 @@ class CreateWorkflowRequest(BaseModel):
         """Validate driver format.
 
         Accepts either:
-        - Simple format: 'api' or 'cli' (standard driver types)
+        - Simple format: 'claude', 'codex', or 'api' (standard driver types)
         - Extended format: 'type:name' for custom drivers (e.g., sdk:claude)
 
         Args:
