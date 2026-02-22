@@ -3,7 +3,10 @@
 from typing import Any
 from unittest.mock import MagicMock, patch
 
-from amelia.logging import _plain_log_format
+from rich.panel import Panel
+from rich.text import Text
+
+from amelia.logging import _plain_log_format, log_todos
 
 
 def _make_record(**extra: Any) -> MagicMock:
@@ -60,21 +63,17 @@ class TestPlainLogFormatBraceEscaping:
 
 
 class TestLogTodos:
-    """log_todos renders rich table on TTY, no-op on piped stderr."""
+    """log_todos renders a Rich Panel on TTY, no-op on piped stderr."""
 
     def test_no_output_when_not_tty(self) -> None:
         """log_todos should be a no-op when stderr is not a TTY."""
-        from amelia.logging import log_todos
-
         with patch("sys.stderr") as mock_stderr:
             mock_stderr.isatty.return_value = False
             log_todos([{"content": "Fix bug", "status": "completed"}])
             mock_stderr.write.assert_not_called()
 
-    def test_renders_on_tty(self) -> None:
-        """log_todos should write to stderr when it is a TTY."""
-        from amelia.logging import log_todos
-
+    def test_renders_panel_on_tty(self) -> None:
+        """log_todos should print a Rich Panel to stderr when it is a TTY."""
         with patch("sys.stderr") as mock_stderr:
             mock_stderr.isatty.return_value = True
             with patch("amelia.logging.Console") as mock_console_cls:
@@ -82,15 +81,62 @@ class TestLogTodos:
                 mock_console_cls.return_value = mock_console
                 log_todos([{"content": "Fix bug", "status": "completed"}])
                 mock_console.print.assert_called_once()
+                printed_arg = mock_console.print.call_args[0][0]
+                assert isinstance(printed_arg, Panel)
+
+    def test_panel_title_contains_counter(self) -> None:
+        """Panel title should show completed/total count."""
+        with patch("sys.stderr") as mock_stderr:
+            mock_stderr.isatty.return_value = True
+            with patch("amelia.logging.Console") as mock_console_cls:
+                mock_console = MagicMock()
+                mock_console_cls.return_value = mock_console
+                log_todos([
+                    {"content": "Done task", "status": "completed"},
+                    {"content": "Active task", "status": "in_progress"},
+                    {"content": "Todo task", "status": "pending"},
+                ])
+                printed_arg = mock_console.print.call_args[0][0]
+                assert isinstance(printed_arg, Panel)
+                assert isinstance(printed_arg.title, Text)
+                title_text = printed_arg.title.plain
+                assert "1/3" in title_text
 
     def test_handles_empty_list(self) -> None:
         """log_todos should handle empty todo list gracefully."""
-        from amelia.logging import log_todos
-
         with patch("sys.stderr") as mock_stderr:
             mock_stderr.isatty.return_value = True
             with patch("amelia.logging.Console") as mock_console_cls:
                 mock_console = MagicMock()
                 mock_console_cls.return_value = mock_console
                 log_todos([])
-                mock_console.print.assert_called_once()  # Still prints table (empty)
+                mock_console.print.assert_called_once()
+                printed_arg = mock_console.print.call_args[0][0]
+                assert isinstance(printed_arg, Panel)
+                assert isinstance(printed_arg.title, Text)
+                title_text = printed_arg.title.plain
+                assert "0/0" in title_text  # Still prints panel (empty)
+
+    def test_unknown_status_logs_warning_and_renders_question_mark(self) -> None:
+        """Unknown status should log warning and render with '?' icon."""
+        with patch("sys.stderr") as mock_stderr:
+            mock_stderr.isatty.return_value = True
+            with patch("amelia.logging.Console") as mock_console_cls:
+                mock_console = MagicMock()
+                mock_console_cls.return_value = mock_console
+                with patch("amelia.logging.logger") as mock_logger:
+                    log_todos([{"content": "Mystery task", "status": "unknown_status"}])
+                    # Verify warning was logged
+                    mock_logger.warning.assert_called_once_with(
+                        "Unknown todo status",
+                        status="unknown_status",
+                        content="Mystery task",
+                    )
+                    # Verify panel was rendered with '?' icon
+                    mock_console.print.assert_called_once()
+                    printed_arg = mock_console.print.call_args[0][0]
+                    assert isinstance(printed_arg, Panel)
+                    # The panel renderable is a Text object containing the '?' icon
+                    panel_text = printed_arg.renderable
+                    assert isinstance(panel_text, Text)
+                    assert "?" in panel_text.plain
