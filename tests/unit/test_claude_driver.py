@@ -16,7 +16,7 @@ from pydantic import BaseModel
 
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
 from amelia.drivers.cli.claude import (
-    _NESTED_SESSION_ENV_VARS,
+    _NESTED_SESSION_OVERRIDES,
     ClaudeCliDriver,
     _build_sanitized_env,
     _is_clarification_request,
@@ -116,7 +116,11 @@ class MockResultMessage:
 
 
 def _patch_sdk_types() -> contextlib.AbstractContextManager[None]:
-    """Create a context manager that patches SDK types for isinstance checks."""
+    """Create a context manager that patches SDK types for isinstance checks.
+
+    Also patches _sdk_parse_message to be a passthrough since test messages
+    are already mock objects (not raw dicts that need parsing).
+    """
     return patch.multiple(
         "amelia.drivers.cli.claude",
         AssistantMessage=MockAssistantMessage,
@@ -125,6 +129,7 @@ def _patch_sdk_types() -> contextlib.AbstractContextManager[None]:
         TextBlock=MockTextBlock,
         ToolUseBlock=MockToolUseBlock,
         ToolResultBlock=MockToolResultBlock,
+        _sdk_parse_message=lambda raw: raw,  # passthrough for mock objects
     )
 
 
@@ -152,7 +157,9 @@ def create_mock_sdk_client(messages: list[Any]) -> MagicMock:
     The mock supports the async context manager pattern and provides:
     - __aenter__ / __aexit__ for `async with` support
     - query() method for sending prompts
-    - receive_response() async iterator for receiving messages
+    - _query.receive_messages() async iterator for raw message dicts
+      (used by _safe_receive_response to bypass parse_message generator death)
+    - receive_response() async iterator (legacy, not used by current driver)
     """
     mock_client = MagicMock()
     mock_client.query = AsyncMock()
@@ -162,6 +169,18 @@ def create_mock_sdk_client(messages: list[Any]) -> MagicMock:
             yield msg
 
     mock_client.receive_response = mock_receive_response
+
+    # _safe_receive_response reads raw dicts from _query.receive_messages()
+    # and calls parse_message itself.  In tests the messages are already
+    # mock objects, so we yield them as-is and patch parse_message to be
+    # a no-op passthrough (see _patch_sdk_types).
+    async def mock_raw_receive() -> AsyncIterator[Any]:
+        for msg in messages:
+            yield msg
+
+    mock_query = MagicMock()
+    mock_query.receive_messages = mock_raw_receive
+    mock_client._query = mock_query
 
     # Create the class mock that returns the client instance
     mock_class = MagicMock()
@@ -599,36 +618,46 @@ class TestClaudeCliDriverAgentic:
         class _InjectErrorIterator:
             """Async iterator that injects a MessageParseError between real messages."""
 
-            def __init__(self) -> None:
-                self._items: list[Any] = [
-                    MockAssistantMessage([MockTextBlock("Working")]),
-                    MessageParseError("Unknown message type: rate_limit_event"),
-                    MockResultMessage(result="Done", session_id="sess_rate_agentic"),
-                ]
-                self._index = 0
+        # _safe_receive_response reads from _query.receive_messages() (raw dicts)
+        # and calls _sdk_parse_message on each. We inject a sentinel that makes
+        # the parse function raise MessageParseError, simulating an unknown type.
+        _UNPARSEABLE = {"type": "rate_limit_event", "info": {}}
+        good_msg_1 = MockAssistantMessage([MockTextBlock("Working")])
+        good_msg_2 = MockResultMessage(result="Done", session_id="sess_rate_agentic")
 
-            def __aiter__(self) -> "_InjectErrorIterator":
-                return self
+        raw_items = [good_msg_1, _UNPARSEABLE, good_msg_2]
 
-            async def __anext__(self) -> Any:
-                if self._index >= len(self._items):
-                    raise StopAsyncIteration
-                item = self._items[self._index]
-                self._index += 1
-                if isinstance(item, Exception):
-                    raise item
-                return item
+        def _mock_parse(raw: Any) -> Any:
+            if raw is _UNPARSEABLE:
+                raise MessageParseError("Unknown message type: rate_limit_event")
+            return raw
+
+        async def mock_raw_receive() -> AsyncIterator[Any]:
+            for item in raw_items:
+                yield item
+
+        mock_query_obj = MagicMock()
+        mock_query_obj.receive_messages = mock_raw_receive
 
         mock_client = MagicMock()
         mock_client.query = AsyncMock()
-        mock_client.receive_response = lambda: _InjectErrorIterator()
+        mock_client._query = mock_query_obj
 
         mock_sdk_class = MagicMock()
         mock_sdk_class.return_value.__aenter__ = AsyncMock(return_value=mock_client)
         mock_sdk_class.return_value.__aexit__ = AsyncMock(return_value=None)
 
         with (
-            _patch_sdk_types(),
+            patch.multiple(
+                "amelia.drivers.cli.claude",
+                AssistantMessage=MockAssistantMessage,
+                UserMessage=MockUserMessage,
+                ResultMessage=MockResultMessage,
+                TextBlock=MockTextBlock,
+                ToolUseBlock=MockToolUseBlock,
+                ToolResultBlock=MockToolResultBlock,
+                _sdk_parse_message=_mock_parse,
+            ),
             patch("amelia.drivers.cli.claude.ClaudeSDKClient", mock_sdk_class),
         ):
             collected = [msg async for msg in driver.execute_agentic("Do something", "/workspace")]
@@ -1298,41 +1327,41 @@ class TestExecuteAgenticAllowedTools:
 
 
 class TestNestedSessionEnvSanitization:
-    """Tests for env sanitization that prevents nested Claude CLI sessions."""
+    """Tests for env sanitization that prevents nested Claude CLI sessions.
 
-    def test_build_sanitized_env_removes_claudecode(self) -> None:
-        """CLAUDECODE env var must be stripped to prevent nested-session guard."""
-        with patch.dict("os.environ", {"CLAUDECODE": "1", "HOME": "/home/test"}, clear=True):
-            env = _build_sanitized_env()
-            assert "CLAUDECODE" not in env
-            assert env["HOME"] == "/home/test"
+    The SDK merges options.env on top of os.environ, so _build_sanitized_env
+    returns explicit empty-string overrides rather than omitting keys.
+    """
 
-    def test_build_sanitized_env_removes_claude_code_entrypoint(self) -> None:
-        """CLAUDE_CODE_ENTRYPOINT env var must also be stripped."""
-        with patch.dict("os.environ", {"CLAUDE_CODE_ENTRYPOINT": "cli", "PATH": "/usr/bin"}, clear=True):
-            env = _build_sanitized_env()
-            assert "CLAUDE_CODE_ENTRYPOINT" not in env
-            assert env["PATH"] == "/usr/bin"
+    def test_build_sanitized_env_blanks_guard_vars(self) -> None:
+        """Overrides must blank CLAUDECODE and CLAUDE_CODE_ENTRYPOINT."""
+        env = _build_sanitized_env()
+        assert env["CLAUDECODE"] == ""
+        assert env["CLAUDE_CODE_ENTRYPOINT"] == ""
 
-    def test_build_sanitized_env_removes_both_vars(self) -> None:
-        """Both nested-session vars should be removed simultaneously."""
+    def test_build_sanitized_env_only_contains_overrides(self) -> None:
+        """Returned dict contains only override keys, not full os.environ."""
+        env = _build_sanitized_env()
+        assert set(env.keys()) == set(_NESTED_SESSION_OVERRIDES.keys())
+
+    def test_sdk_merge_neutralises_guard_vars(self) -> None:
+        """Simulates the SDK merge to verify guard vars are neutralised."""
         with patch.dict(
             "os.environ",
             {"CLAUDECODE": "1", "CLAUDE_CODE_ENTRYPOINT": "cli", "USER": "test"},
             clear=True,
         ):
-            env = _build_sanitized_env()
-            assert not _NESTED_SESSION_ENV_VARS.intersection(env)
-            assert env["USER"] == "test"
+            import os
 
-    def test_build_sanitized_env_no_op_when_vars_absent(self) -> None:
-        """When nested-session vars are absent, env should pass through unchanged."""
-        with patch.dict("os.environ", {"HOME": "/home/test", "PATH": "/usr/bin"}, clear=True):
-            env = _build_sanitized_env()
-            assert env == {"HOME": "/home/test", "PATH": "/usr/bin"}
+            overrides = _build_sanitized_env()
+            # SDK does: {**os.environ, **options.env, ...}
+            merged = {**os.environ, **overrides}
+            assert merged["CLAUDECODE"] == ""
+            assert merged["CLAUDE_CODE_ENTRYPOINT"] == ""
+            assert merged["USER"] == "test"
 
     def test_build_options_includes_sanitized_env(self) -> None:
-        """_build_options must pass sanitized env to ClaudeAgentOptions."""
+        """_build_options must pass override env to ClaudeAgentOptions."""
         driver = ClaudeCliDriver()
         with patch.dict(
             "os.environ",
@@ -1341,6 +1370,5 @@ class TestNestedSessionEnvSanitization:
         ):
             options = driver._build_options(cwd="/workspace")
 
-        assert "CLAUDECODE" not in options.env
-        assert "CLAUDE_CODE_ENTRYPOINT" not in options.env
-        assert options.env["HOME"] == "/home/test"
+        assert options.env["CLAUDECODE"] == ""
+        assert options.env["CLAUDE_CODE_ENTRYPOINT"] == ""
