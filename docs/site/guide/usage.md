@@ -1,3 +1,8 @@
+---
+title: Usage Guide
+description: CLI and REST API reference for Amelia's open-source multi-agent orchestration — start workflows, approve plans, and manage agents.
+---
+
 # Usage Guide
 
 Complete reference for using Amelia in your projects.

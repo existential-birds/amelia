@@ -1,3 +1,8 @@
+---
+title: Research Foundations
+description: The research papers and industry insights behind Amelia's multi-agent orchestration — MetaGPT, HULA, ReAct, Reflexion, and 12-Factor Agents.
+---
+
 # Research Foundations
 
 Amelia is an experimentation platform for agent-based software engineering. Each architectural decision traces back to specific research or industry insight — the multi-agent pipeline, iterative refinement loops, LLM-as-a-Judge review cycles, context management, human-in-the-loop gates, and driver abstractions all implement ideas from the literature. The Oracle and Knowledge Library systems extend this further, providing long-horizon agent memory grounded in retrieval research.

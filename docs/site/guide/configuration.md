@@ -1,3 +1,8 @@
+---
+title: Configuration Reference
+description: Configure Amelia's agent orchestration profiles, LLM drivers, issue trackers, and server settings for your development environment.
+---
+
 # Configuration Reference
 
 Complete reference for Amelia's configuration system.

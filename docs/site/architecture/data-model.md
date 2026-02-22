@@ -1,3 +1,8 @@
+---
+title: Data Model
+description: Complete reference for Amelia's Pydantic data structures — workflow state, agent events, streaming types, and orchestration entities.
+---
+
 # Data Model: Amelia Agentic Orchestrator
 
 This document describes the core data structures used throughout the Amelia orchestrator.

@@ -1,3 +1,8 @@
+---
+title: Roadmap
+description: Amelia's open-source agent orchestration roadmap — completed features, planned phases, and 12-Factor Agents compliance for multi-agent workflows.
+---
+
 # Amelia Roadmap
 
 > **Goal:** Agent orchestration for software development. Workflow control from issue to PR with security, observability, and automated quality gates.
