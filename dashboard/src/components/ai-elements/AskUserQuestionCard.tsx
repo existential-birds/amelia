@@ -41,9 +41,9 @@ export function AskUserQuestionCard({
   }, [isDisabled]);
 
   const handleOtherChange = useCallback((question: string, text: string) => {
-    if (isSubmitting || answered) return;
+    if (isDisabled) return;
     setOtherTexts((prev) => ({ ...prev, [question]: text }));
-  }, [isSubmitting, answered]);
+  }, [isDisabled]);
 
   // Merge selections and "Other" text input into final answers
   // Precedence rule: If "Other" text exists, it takes priority:
