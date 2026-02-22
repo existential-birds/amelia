@@ -5,6 +5,7 @@ Provides endpoints for session lifecycle management and chat functionality.
 
 import os
 import uuid
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Annotated
 from uuid import uuid4
 
@@ -20,6 +21,7 @@ from amelia.server.models.brainstorm import (
     Message,
     SessionStatus,
 )
+from amelia.server.models.events import EventDomain, EventType, WorkflowEvent
 from amelia.server.orchestrator.service import OrchestratorService
 from amelia.server.routes.config import ProfileInfo
 from amelia.server.services.brainstorm import BrainstormService
@@ -309,12 +311,29 @@ async def send_message(
                 assistant_message_id=str(message_id),
             ):
                 pass
-        except Exception:
+        except Exception as e:
             logger.exception(
                 "Brainstorm message processing failed",
                 session_id=str(session_id),
                 message_id=str(message_id),
             )
+            # Emit error event to notify frontend
+            error_event = WorkflowEvent(
+                id=uuid4(),
+                workflow_id=session_id,
+                sequence=0,
+                timestamp=datetime.now(UTC),
+                agent="brainstormer",
+                event_type=EventType.BRAINSTORM_MESSAGE_FAILED,
+                message=f"Message processing failed: {e}",
+                data={
+                    "session_id": str(session_id),
+                    "message_id": str(message_id),
+                    "error": str(e),
+                },
+                domain=EventDomain.BRAINSTORM,
+            )
+            service._event_bus.emit(error_event)
 
     background_tasks.add_task(_process_message)
 

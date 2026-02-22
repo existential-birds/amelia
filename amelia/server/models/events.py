@@ -130,6 +130,7 @@ class EventType(StrEnum):
     BRAINSTORM_MESSAGE_COMPLETE = "brainstorm_message_complete"
     BRAINSTORM_ARTIFACT_CREATED = "brainstorm_artifact_created"
     BRAINSTORM_SESSION_COMPLETED = "brainstorm_session_completed"
+    BRAINSTORM_MESSAGE_FAILED = "brainstorm_message_failed"
 
     # Oracle consultation events
     ORACLE_CONSULTATION_STARTED = "oracle_consultation_started"
@@ -188,6 +189,7 @@ PERSISTED_TYPES: frozenset[EventType] = frozenset({
     EventType.BRAINSTORM_SESSION_CREATED,
     EventType.BRAINSTORM_SESSION_COMPLETED,
     EventType.BRAINSTORM_ARTIFACT_CREATED,
+    EventType.BRAINSTORM_MESSAGE_FAILED,
     # Knowledge ingestion
     EventType.DOCUMENT_INGESTION_STARTED,
     EventType.DOCUMENT_INGESTION_COMPLETED,
@@ -204,6 +206,7 @@ _ERROR_TYPES: frozenset[EventType] = frozenset({
     EventType.ORACLE_CONSULTATION_FAILED,
     EventType.DOCUMENT_INGESTION_FAILED,
     EventType.PLAN_VALIDATION_FAILED,
+    EventType.BRAINSTORM_MESSAGE_FAILED,
 })
 
 _WARNING_TYPES: frozenset[EventType] = frozenset({

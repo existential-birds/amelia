@@ -890,7 +890,7 @@ class BrainstormService:
                             "session_id": str(session_id),
                             "message_id": str(message_id),
                             "text": formatted,
-                            "questions": payload.model_dump()["questions"],
+                            "questions": [q.model_dump() for q in payload.questions],
                         },
                     )
                 except ValidationError:

@@ -1814,16 +1814,13 @@ class TestAskUserQuestionConversion(TestBrainstormService):
         service: BrainstormService,
     ) -> None:
         """Malformed ask_user_question payload should fall back to BRAINSTORM_TEXT."""
-        from unittest.mock import patch
-
-        from amelia.core.types import AskUserQuestionPayload
         from amelia.drivers.base import AgenticMessageType
         from amelia.server.models.events import EventType
 
         sess_id = uuid4()
         msg_id = uuid4()
 
-        # Valid tool_input that formats fine, but we mock Pydantic to reject it
+        # Actually malformed: options items missing required "label" field
         agentic_msg = AgenticMessage(
             type=AgenticMessageType.TOOL_CALL,
             tool_name="ask_user_question",
@@ -1832,24 +1829,13 @@ class TestAskUserQuestionConversion(TestBrainstormService):
                 "questions": [
                     {
                         "question": "Pick one?",
-                        "options": [{"label": "Yes"}, {"label": "No"}],
+                        "options": [{"not_label": "Yes"}, {"not_label": "No"}],
                     }
                 ]
             },
         )
 
-        from pydantic import ValidationError
-
-        def raise_validation(*args: object, **kwargs: object) -> None:
-            raise ValidationError.from_exception_data(
-                "AskUserQuestionPayload",
-                [],
-            )
-
-        with patch.object(
-            AskUserQuestionPayload, "__init__", side_effect=raise_validation
-        ):
-            event = service._agentic_message_to_event(agentic_msg, sess_id, msg_id)
+        event = service._agentic_message_to_event(agentic_msg, sess_id, msg_id)
 
         assert event.event_type == EventType.BRAINSTORM_TEXT
         assert "Pick one?" in (event.message or "")

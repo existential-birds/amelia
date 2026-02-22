@@ -19,8 +19,8 @@ class TestEventFilteringEdgeCases:
     def test_persisted_types_count(self):
         """Verify expected count of persisted types."""
         # 5 lifecycle + 2 stage + 3 approval + 3 artifact + 3 review
-        # + 3 task + 2 system + 3 oracle + 3 brainstorm + 3 knowledge + 2 plan validation = 32
-        assert len(PERSISTED_TYPES) == 32
+        # + 3 task + 2 system + 3 oracle + 4 brainstorm + 3 knowledge + 2 plan validation = 33
+        assert len(PERSISTED_TYPES) == 33
 
     @pytest.mark.parametrize(
         "event_type",

@@ -243,7 +243,13 @@ async def _safe_receive_response(
     """
     # Access the internal query's raw message stream (yields plain dicts).
     # We call parse_message ourselves so a failure doesn't kill the generator.
-    raw_messages = client._query.receive_messages()  # type: ignore[union-attr]
+    try:
+        raw_messages = client._query.receive_messages()  # type: ignore[union-attr]
+    except AttributeError as e:
+        raise RuntimeError(
+            "Claude SDK private API changed: _query.receive_messages() no longer exists. "
+            "This driver requires an SDK version with this internal API."
+        ) from e
     raw_iter = raw_messages.__aiter__()
     try:
         while True:
