@@ -22,6 +22,7 @@ from amelia.client.api import (
 )
 from amelia.client.git import get_worktree_context
 from amelia.client.models import BatchStartResponse, CreateWorkflowResponse, WorkflowSummary
+from amelia.client.streaming import stream_workflow_events
 from amelia.core.types import Issue, Profile
 from amelia.pipelines.implementation.state import ImplementationState
 from amelia.trackers.factory import create_tracker
@@ -113,6 +114,10 @@ def start_command(
         bool,
         typer.Option("--plan", help="Run Architect before queueing (requires --queue)"),
     ] = False,
+    stream: Annotated[
+        bool,
+        typer.Option("--stream", "-s", help="Stream workflow events to terminal until completion. Press Ctrl+C to disconnect (workflow continues running)."),
+    ] = False,
 ) -> None:
     """Start a new workflow for an issue in the current worktree.
 
@@ -126,6 +131,7 @@ def start_command(
         description: Optional task description (requires --title to be set).
         queue: If True, queue workflow without starting immediately.
         plan: If True, run Architect before queueing (requires --queue).
+        stream: If True, stream workflow events to terminal until completion.
     """
     # Validate --description requires --title
     if description and not title:
@@ -167,12 +173,22 @@ def start_command(
         console.print(f"  Status: {workflow.status}")
         console.print("\n[dim]View in dashboard: http://127.0.0.1:8420[/dim]")
 
+        if stream and not queue:
+            try:
+                asyncio.run(stream_workflow_events(workflow.id))
+            except KeyboardInterrupt:
+                console.print("\n[dim]Disconnected from stream. Workflow continues running.[/dim]")
+
     except (ServerUnreachableError, WorkflowConflictError, RateLimitError, InvalidRequestError) as e:
         _handle_workflow_api_error(e, worktree_path=worktree_path)
 
 
 def reject_command(
     reason: str,
+    stream: Annotated[
+        bool,
+        typer.Option("--stream", "-s", help="Stream workflow events to terminal after rejection. Press Ctrl+C to disconnect."),
+    ] = False,
 ) -> None:
     """Reject the workflow plan in the current worktree with feedback.
 
@@ -192,7 +208,7 @@ def reject_command(
     # Find workflow in this worktree
     client = AmeliaClient()
 
-    async def _reject() -> None:
+    async def _reject() -> str:
         # Get workflows for this worktree
         result = await client.get_active_workflows(worktree_path=worktree_path)
 
@@ -213,15 +229,27 @@ def reject_command(
             console.print(f"[red]Error:[/red] {e}")
             raise typer.Exit(1) from None
 
+        return str(workflow.id)
+
     try:
-        asyncio.run(_reject())
+        workflow_id = asyncio.run(_reject())
+        if stream:
+            try:
+                asyncio.run(stream_workflow_events(workflow_id))
+            except KeyboardInterrupt:
+                console.print("\n[dim]Disconnected from stream. Workflow continues running.[/dim]")
     except ServerUnreachableError as e:
         console.print(f"[red]Error:[/red] {e}")
         console.print("\n[yellow]Start the server:[/yellow] amelia server")
         raise typer.Exit(1) from None
 
 
-def approve_command() -> None:
+def approve_command(
+    stream: Annotated[
+        bool,
+        typer.Option("--stream", "-s", help="Stream workflow events to terminal after approval. Press Ctrl+C to disconnect."),
+    ] = False,
+) -> None:
     """Approve the workflow plan in the current worktree.
 
     Auto-detects the active workflow from the current git worktree context
@@ -237,7 +265,7 @@ def approve_command() -> None:
     # Find workflow in this worktree
     client = AmeliaClient()
 
-    async def _approve() -> None:
+    async def _approve() -> str:
         # Get workflows for this worktree
         result = await client.get_active_workflows(worktree_path=worktree_path)
 
@@ -260,8 +288,15 @@ def approve_command() -> None:
             console.print(f"  Status: {workflow.status} (not blocked)")
             raise typer.Exit(1) from None
 
+        return str(workflow.id)
+
     try:
-        asyncio.run(_approve())
+        workflow_id = asyncio.run(_approve())
+        if stream:
+            try:
+                asyncio.run(stream_workflow_events(workflow_id))
+            except KeyboardInterrupt:
+                console.print("\n[dim]Disconnected from stream. Workflow continues running.[/dim]")
     except ServerUnreachableError as e:
         console.print(f"[red]Error:[/red] {e}")
         console.print("\n[yellow]Start the server:[/yellow] amelia server")
@@ -478,7 +513,7 @@ async def _get_profile_from_server(profile_name: str | None) -> Profile:
             return Profile(
                 name=data["id"],
                 tracker=data["tracker"],
-                working_dir=data["working_dir"],
+                repo_root=data["repo_root"],
                 plan_output_dir=data["plan_output_dir"],
                 plan_path_pattern=data["plan_path_pattern"],
                 agents=agents,
@@ -528,7 +563,7 @@ def plan_command(
         profile = await _get_profile_from_server(profile_name)
 
         # Update profile with worktree path
-        profile = profile.model_copy(update={"working_dir": worktree_path})
+        profile = profile.model_copy(update={"repo_root": worktree_path})
 
         # Get issue: construct directly if title provided with noop tracker, else use tracker
         if title is not None and profile.tracker == "noop":

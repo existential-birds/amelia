@@ -24,7 +24,7 @@ class TestImportExternalPlan:
         return Profile(
             name="test",
             tracker="noop",
-            working_dir=str(tmp_path / "worktree"),
+            repo_root=str(tmp_path / "worktree"),
             agents={
                 "plan_validator": AgentConfig(driver="claude", model="sonnet"),
             },
@@ -37,7 +37,7 @@ class TestImportExternalPlan:
         from amelia.pipelines.implementation.external_plan import import_external_plan
 
         # Create worktree directory
-        worktree = Path(mock_profile.working_dir)
+        worktree = Path(mock_profile.repo_root)
         worktree.mkdir(parents=True, exist_ok=True)
 
         plan_file = worktree / "plan.md"
@@ -84,7 +84,7 @@ Create the auth module.
         from amelia.pipelines.implementation.external_plan import import_external_plan
 
         # Create worktree directory
-        worktree = Path(mock_profile.working_dir)
+        worktree = Path(mock_profile.repo_root)
         worktree.mkdir(parents=True, exist_ok=True)
 
         plan_content = """# Implementation Plan
@@ -125,7 +125,7 @@ Fix it.
         from amelia.pipelines.implementation.external_plan import import_external_plan
 
         # Create worktree directory
-        worktree = Path(mock_profile.working_dir)
+        worktree = Path(mock_profile.repo_root)
         worktree.mkdir(parents=True, exist_ok=True)
 
         # Target path must be within working directory (security constraint)
@@ -148,7 +148,7 @@ Fix it.
         from amelia.pipelines.implementation.external_plan import import_external_plan
 
         # Create worktree directory
-        worktree = Path(mock_profile.working_dir)
+        worktree = Path(mock_profile.repo_root)
         worktree.mkdir(parents=True, exist_ok=True)
 
         # Target path must be within working directory (security constraint)
@@ -179,7 +179,7 @@ Fix it.
         profile = Profile(
             name="test",
             tracker="noop",
-            working_dir=str(worktree),
+            repo_root=str(worktree),
             agents={
                 "plan_validator": AgentConfig(driver="claude", model="sonnet"),
             },
@@ -214,7 +214,7 @@ Fix it.
         from amelia.pipelines.implementation.external_plan import import_external_plan
 
         # Create worktree directory
-        worktree = Path(mock_profile.working_dir)
+        worktree = Path(mock_profile.repo_root)
         worktree.mkdir(parents=True, exist_ok=True)
 
         plan_content = """# Implementation Plan
@@ -258,7 +258,7 @@ Content here.
         from amelia.pipelines.implementation.external_plan import import_external_plan
 
         # Create worktree directory
-        worktree = Path(mock_profile.working_dir)
+        worktree = Path(mock_profile.repo_root)
         worktree.mkdir(parents=True, exist_ok=True)
 
         # Target path within working directory
@@ -281,7 +281,7 @@ Content here.
         from amelia.pipelines.implementation.external_plan import import_external_plan
 
         # Create worktree directory
-        worktree = Path(mock_profile.working_dir)
+        worktree = Path(mock_profile.repo_root)
         worktree.mkdir(parents=True, exist_ok=True)
 
         # Attempt path traversal with target_path outside worktree
@@ -303,7 +303,7 @@ Content here.
         from amelia.pipelines.implementation.external_plan import import_external_plan
 
         # Create worktree directory
-        worktree = Path(mock_profile.working_dir)
+        worktree = Path(mock_profile.repo_root)
         worktree.mkdir(parents=True, exist_ok=True)
 
         # Create plan file outside worktree
@@ -334,7 +334,7 @@ Content here.
         from amelia.pipelines.implementation.external_plan import import_external_plan
 
         # Create worktree directory
-        worktree = Path(mock_profile.working_dir)
+        worktree = Path(mock_profile.repo_root)
         worktree.mkdir(parents=True, exist_ok=True)
 
         # Create plan file at the target location
@@ -376,7 +376,7 @@ Content here.
         from amelia.pipelines.implementation.external_plan import import_external_plan
 
         # Create worktree directory
-        worktree = Path(mock_profile.working_dir)
+        worktree = Path(mock_profile.repo_root)
         worktree.mkdir(parents=True, exist_ok=True)
 
         # Create plan file at the target location

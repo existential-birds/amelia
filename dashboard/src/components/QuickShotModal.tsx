@@ -189,7 +189,7 @@ export function QuickShotModal({ open, onOpenChange, defaults }: QuickShotModalP
       try {
         const config = await api.getConfig();
         if (!mounted) return;
-        serverDir = config.working_dir;
+        serverDir = config.repo_root;
         activeProfile = config.active_profile;
         setServerWorkingDir(serverDir);
       } catch (error) {

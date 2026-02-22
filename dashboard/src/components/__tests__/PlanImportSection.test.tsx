@@ -368,7 +368,7 @@ Add new feature.
       await user.type(screen.getByPlaceholderText(/relative path/i), 'docs/plan.md');
       await user.click(screen.getByRole('button', { name: /preview/i }));
 
-      expect(api.readFile).toHaveBeenCalledWith('/path/to/repo/docs/plan.md');
+      expect(api.readFile).toHaveBeenCalledWith('/path/to/repo/docs/plan.md', '/path/to/repo');
     });
 
     it('uses filePath directly when it starts with /', async () => {
@@ -385,7 +385,7 @@ Add new feature.
       await user.type(screen.getByPlaceholderText(/relative path/i), '/absolute/path/plan.md');
       await user.click(screen.getByRole('button', { name: /preview/i }));
 
-      expect(api.readFile).toHaveBeenCalledWith('/absolute/path/plan.md');
+      expect(api.readFile).toHaveBeenCalledWith('/absolute/path/plan.md', '/path/to/repo');
     });
 
     it('shows plan preview card after successful file read', async () => {
@@ -499,7 +499,7 @@ Add new feature.
       );
 
       await waitFor(() => {
-        expect(api.listFiles).toHaveBeenCalledWith('docs/plans');
+        expect(api.listFiles).toHaveBeenCalledWith('docs/plans', '*.md', '/tmp/project');
       });
     });
 

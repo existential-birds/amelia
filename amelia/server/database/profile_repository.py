@@ -19,7 +19,7 @@ class ProfileRecord(BaseModel):
 
     id: str
     tracker: str
-    working_dir: str
+    repo_root: str
     plan_output_dir: str = "docs/plans"
     plan_path_pattern: str = "docs/plans/{date}-{issue_key}.md"
     agents: str  # JSON blob of dict[str, AgentConfig]
@@ -100,12 +100,12 @@ class ProfileRepository:
 
         await self._db.execute(
             """INSERT INTO profiles (
-                id, tracker, working_dir, plan_output_dir, plan_path_pattern,
+                id, tracker, repo_root, plan_output_dir, plan_path_pattern,
                 agents, sandbox, is_active
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)""",
             profile.name,
             profile.tracker,
-            profile.working_dir,
+            profile.repo_root,
             profile.plan_output_dir,
             profile.plan_path_pattern,
             agents_data,
@@ -134,7 +134,7 @@ class ProfileRepository:
         """
         valid_fields = {
             "tracker",
-            "working_dir",
+            "repo_root",
             "plan_output_dir",
             "plan_path_pattern",
             "agents",
@@ -234,7 +234,7 @@ class ProfileRepository:
         return Profile(
             name=row["id"],
             tracker=row["tracker"],
-            working_dir=row["working_dir"],
+            repo_root=row["repo_root"],
             plan_output_dir=row["plan_output_dir"],
             plan_path_pattern=row["plan_path_pattern"],
             agents=agents,

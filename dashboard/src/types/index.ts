@@ -829,8 +829,8 @@ export interface ConfigProfileInfo {
  * Provides server configuration for dashboard.
  */
 export interface ConfigResponse {
-  /** Working directory for file access. */
-  working_dir: string;
+  /** Repository root directory for file access. */
+  repo_root: string;
 
   /** Maximum concurrent workflows. */
   max_concurrent: number;

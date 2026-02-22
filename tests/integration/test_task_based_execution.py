@@ -128,7 +128,7 @@ def integration_profile(tmp_path: Path) -> Profile:
         name="test-task-execution",
         driver="api",
         model="openrouter:anthropic/claude-sonnet-4-20250514",
-        working_dir=str(tmp_path),
+        repo_root=str(tmp_path),
         plan_output_dir=str(tmp_path / "plans"),
         max_task_review_iterations=2,
     )
@@ -381,7 +381,7 @@ class TestNextTaskNodeTransition:
             name="test-task-execution",
             driver="api",
             model="openrouter:anthropic/claude-sonnet-4-20250514",
-            working_dir=str(git_repo),
+            repo_root=str(git_repo),
             plan_output_dir=str(git_repo / "plans"),
             max_task_review_iterations=2,
         )
@@ -426,7 +426,7 @@ class TestNextTaskNodeTransition:
             name="test-task-execution",
             driver="api",
             model="openrouter:anthropic/claude-sonnet-4-20250514",
-            working_dir=str(git_repo),
+            repo_root=str(git_repo),
             plan_output_dir=str(git_repo / "plans"),
             max_task_review_iterations=2,
         )

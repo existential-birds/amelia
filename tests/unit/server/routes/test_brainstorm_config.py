@@ -21,7 +21,7 @@ class TestBrainstormDriverConfig:
         profile = Profile(
             name="test",
             tracker="noop",
-            working_dir="/tmp/test",
+            repo_root="/tmp/test",
             agents={
                 "brainstormer": AgentConfig(driver="claude", model="sonnet"),
             },
@@ -106,7 +106,7 @@ class TestProfileInfoWithAgentConfig:
         profile = Profile(
             name="test",
             tracker="noop",
-            working_dir="/tmp/test",
+            repo_root="/tmp/test",
             agents={
                 "brainstormer": AgentConfig(driver="api", model="gpt-4o"),
             },

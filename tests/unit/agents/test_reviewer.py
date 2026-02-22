@@ -429,6 +429,101 @@ Rationale: Critical security issue must be fixed.
         assert len(result.comments) == 2
         assert session_id == "session-critical"
 
+    async def test_agentic_review_retries_on_no_output(
+        self,
+        mock_driver: MagicMock,
+        create_reviewer: Callable[..., Reviewer],
+        mock_execution_state_factory: Callable[..., tuple[ImplementationState, Profile]],
+    ) -> None:
+        """Test that agentic_review retries when first call produces no RESULT message."""
+        state, profile = mock_execution_state_factory(goal="Implement feature")
+
+        beagle_review_output = """## Review Summary
+
+Code looks good.
+
+## Issues
+
+### Critical (Blocking)
+
+### Major (Should Fix)
+
+### Minor (Nice to Have)
+
+## Good Patterns
+
+- Good code
+
+## Verdict
+
+Ready: Yes
+Rationale: No issues found.
+"""
+        # First call: no RESULT message. Second call: proper approved RESULT.
+        first_call_messages = [
+            AgenticMessage(type=AgenticMessageType.THINKING, content="Analyzing..."),
+        ]
+        second_call_messages = [
+            AgenticMessage(
+                type=AgenticMessageType.RESULT,
+                content=beagle_review_output,
+                session_id="session-retry",
+            ),
+        ]
+
+        mock_driver.execute_agentic = MagicMock(
+            side_effect=[
+                AsyncIteratorMock(first_call_messages),
+                AsyncIteratorMock(second_call_messages),
+            ]
+        )
+
+        reviewer = create_reviewer()
+        with patch("asyncio.sleep") as mock_sleep:
+            result, session_id = await reviewer.agentic_review(
+                state,
+                base_commit="abc123",
+                profile=profile,
+                workflow_id=uuid4(),
+            )
+
+        assert mock_driver.execute_agentic.call_count == 2
+        mock_sleep.assert_awaited_once()
+        assert result.approved is True
+        assert session_id == "session-retry"
+
+    async def test_agentic_review_auto_approves_after_all_retries_exhausted(
+        self,
+        mock_driver: MagicMock,
+        create_reviewer: Callable[..., Reviewer],
+        mock_execution_state_factory: Callable[..., tuple[ImplementationState, Profile]],
+    ) -> None:
+        """Test that agentic_review auto-approves when all retry attempts produce no output."""
+        state, profile = mock_execution_state_factory(goal="Implement feature")
+
+        # Both calls yield no RESULT message
+        mock_driver.execute_agentic = MagicMock(
+            side_effect=[
+                AsyncIteratorMock([AgenticMessage(type=AgenticMessageType.THINKING, content="...")]),
+                AsyncIteratorMock([AgenticMessage(type=AgenticMessageType.THINKING, content="...")]),
+            ]
+        )
+
+        reviewer = create_reviewer()
+        with patch("asyncio.sleep"):
+            result, session_id = await reviewer.agentic_review(
+                state,
+                base_commit="abc123",
+                profile=profile,
+                workflow_id=uuid4(),
+            )
+
+        assert mock_driver.execute_agentic.call_count == 2
+        assert result.approved is True
+        assert result.severity == Severity.NONE
+        assert result.comments == []
+        assert session_id is None
+
     async def test_agentic_review_no_sdk_type_imports(self) -> None:
         """Verify agentic_review doesn't import SDK-specific types for message handling.
 
@@ -797,6 +892,20 @@ There are problems to address.
         result = reviewer._parse_review_result(output, workflow_id=uuid4())
         assert result.approved is False
         assert len(result.comments) >= 1
+
+    def test_no_output_defaults_to_approved(self, create_reviewer: Callable[..., Reviewer]) -> None:
+        """No output (None or empty string) should default to approved=True with no comments."""
+        reviewer = create_reviewer()
+
+        result_none = reviewer._parse_review_result(None, workflow_id=uuid4())
+        assert result_none.approved is True
+        assert result_none.comments == []
+        assert result_none.severity == Severity.NONE
+
+        result_empty = reviewer._parse_review_result("", workflow_id=uuid4())
+        assert result_empty.approved is True
+        assert result_empty.comments == []
+        assert result_empty.severity == Severity.NONE
 
 
 class TestExtractTaskContext:

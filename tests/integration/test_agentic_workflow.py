@@ -51,7 +51,7 @@ class TestArchitectNodeIntegration:
 
         profile = make_profile(
             plan_output_dir=str(plans_dir),
-            working_dir=str(tmp_path),
+            repo_root=str(tmp_path),
         )
         issue = make_issue(id="TEST-1", title="Add feature X", description="Add a new feature X to the system")
         state = make_execution_state(issue=issue, profile=profile)
@@ -90,7 +90,7 @@ class TestArchitectNodeIntegration:
 
     async def test_architect_node_requires_issue(self, tmp_path: Path) -> None:
         """Architect node should raise error if no issue provided."""
-        profile = make_profile(working_dir=str(tmp_path))
+        profile = make_profile(repo_root=str(tmp_path))
         state = make_execution_state(issue=None, profile=profile)
         config = make_config(thread_id="test-wf-1", profile=profile)
 
@@ -108,7 +108,7 @@ class TestDeveloperNodeIntegration:
         Real components: get_driver, ApiDriver, Developer
         Mock boundary: ApiDriver.execute_agentic (HTTP/LLM call)
         """
-        profile = make_profile(working_dir=str(tmp_path))
+        profile = make_profile(repo_root=str(tmp_path))
         state = make_execution_state(
             profile=profile,
             goal="Create a hello.txt file with 'Hello World'",
@@ -137,7 +137,7 @@ class TestDeveloperNodeIntegration:
 
     async def test_developer_node_requires_goal(self, tmp_path: Path) -> None:
         """Developer node should raise error if no goal set."""
-        profile = make_profile(working_dir=str(tmp_path))
+        profile = make_profile(repo_root=str(tmp_path))
         state = make_execution_state(profile=profile, goal=None)
         config = make_config(thread_id="test-wf-3", profile=profile)
 
@@ -155,7 +155,7 @@ class TestReviewerNodeIntegration:
         Real components: get_driver, ApiDriver, Reviewer
         Mock boundary: ApiDriver.execute_agentic (LLM call)
         """
-        profile = make_profile(working_dir=str(tmp_path))
+        profile = make_profile(repo_root=str(tmp_path))
         state = make_execution_state(
             profile=profile,
             goal="Add logging to the application",
@@ -181,7 +181,7 @@ class TestReviewerNodeIntegration:
         Real components: get_driver, ApiDriver, Reviewer
         Mock boundary: ApiDriver.execute_agentic (LLM call)
         """
-        profile = make_profile(working_dir=str(tmp_path))
+        profile = make_profile(repo_root=str(tmp_path))
         state = make_execution_state(
             profile=profile,
             goal="Implement secure authentication",
@@ -214,7 +214,7 @@ class TestReviewerNodeIntegration:
         Real components: get_driver, ApiDriver, Reviewer
         Mock boundary: ApiDriver.execute_agentic (LLM call)
         """
-        profile = make_profile(working_dir=str(tmp_path), max_review_iterations=3)
+        profile = make_profile(repo_root=str(tmp_path), max_review_iterations=3)
         state = make_execution_state(
             profile=profile,
             goal="Fix the bug",
@@ -256,7 +256,7 @@ class TestReviewerNodeIntegration:
         Real components: get_driver, ApiDriver, Reviewer
         Mock boundary: ApiDriver.execute_agentic (LLM call)
         """
-        profile = make_profile(working_dir=str(tmp_path), max_review_iterations=3)
+        profile = make_profile(repo_root=str(tmp_path), max_review_iterations=3)
         state = make_execution_state(
             profile=profile,
             goal="Fix the bug",
@@ -345,7 +345,7 @@ class TestArchitectValidatorFlowIntegration:
 
         profile = make_profile(
             plan_output_dir=str(plans_dir),
-            working_dir=str(tmp_path),
+            repo_root=str(tmp_path),
         )
         issue = make_issue(
             id="TEST-FLOW-1",
@@ -482,7 +482,7 @@ Add comprehensive tests for the authentication flow.
 
         profile = make_profile(
             plan_output_dir=str(plans_dir),
-            working_dir=str(tmp_path),
+            repo_root=str(tmp_path),
         )
         issue = make_issue(id="TEST-MISSING-1")
         state = make_execution_state(
@@ -505,7 +505,7 @@ Add comprehensive tests for the authentication flow.
 
         profile = make_profile(
             plan_output_dir=str(plans_dir),
-            working_dir=str(tmp_path),
+            repo_root=str(tmp_path),
         )
         issue = make_issue(id="TEST-EMPTY-1")
         state = make_execution_state(issue=issue, profile=profile)

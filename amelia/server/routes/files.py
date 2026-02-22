@@ -91,14 +91,14 @@ class FileReadResponse(BaseModel):
     filename: str = Field(description="Filename without path")
 
 
-async def _get_working_dir(profile_repo: ProfileRepository) -> Path:
-    """Get working directory from active profile.
+async def _get_repo_root(profile_repo: ProfileRepository) -> Path:
+    """Get repository root from active profile.
 
     Args:
         profile_repo: Profile repository instance.
 
     Returns:
-        Working directory path.
+        Repository root path.
 
     Raises:
         FileOperationError: If no active profile is set.
@@ -106,7 +106,7 @@ async def _get_working_dir(profile_repo: ProfileRepository) -> Path:
     active_profile = await profile_repo.get_active_profile()
     if active_profile is None:
         raise FileOperationError("No active profile set", "NO_ACTIVE_PROFILE")
-    return Path(active_profile.working_dir)
+    return Path(active_profile.repo_root)
 
 
 @router.post("/read", response_model=FileReadResponse)
@@ -144,7 +144,7 @@ async def read_file(
                 "WORKTREE_NOT_FOUND",
             )
     else:
-        base_dir = await _get_working_dir(profile_repo)
+        base_dir = await _get_repo_root(profile_repo)
 
     # Validate and resolve path - returns only after all security checks pass
     resolved_path = _validate_and_resolve_path(request.path, base_dir)
@@ -198,7 +198,7 @@ async def list_files(
                 "WORKTREE_NOT_FOUND",
             )
     else:
-        base_dir = await _get_working_dir(profile_repo)
+        base_dir = await _get_repo_root(profile_repo)
 
     base_dir_resolved = base_dir.resolve()
     resolved_dir = (base_dir / directory).resolve()
@@ -275,7 +275,7 @@ async def get_file(
                 "WORKTREE_NOT_FOUND",
             )
     else:
-        base_dir = await _get_working_dir(profile_repo)
+        base_dir = await _get_repo_root(profile_repo)
 
     # Validate and resolve path - returns only after all security checks pass
     resolved_path = _validate_and_resolve_path(file_path, base_dir)

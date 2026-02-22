@@ -15,15 +15,15 @@ from amelia.server.routes.files import router
 from amelia.server.routes.workflows import configure_exception_handlers
 
 
-def _create_mock_profile_repo(working_dir: Path) -> MagicMock:
-    """Create a mock profile repository with an active profile pointing to working_dir."""
+def _create_mock_profile_repo(repo_root: Path) -> MagicMock:
+    """Create a mock profile repository with an active profile pointing to repo_root."""
     repo = MagicMock()
     agent_config = AgentConfig(driver="claude", model="claude-3-5-sonnet")
     repo.get_active_profile = AsyncMock(
         return_value=Profile(
             name="test",
             tracker="noop",
-            working_dir=str(working_dir),
+            repo_root=str(repo_root),
             agents={
                 "architect": agent_config,
                 "developer": agent_config,
@@ -39,7 +39,7 @@ class TestReadFile:
 
     @pytest.fixture
     def mock_profile_repo(self, tmp_path: Path) -> MagicMock:
-        """Create a mock profile repo with working_dir set to tmp_path (allows all temp files)."""
+        """Create a mock profile repo with repo_root set to tmp_path (allows all temp files)."""
         # Use /tmp (or platform equivalent) to allow access to temp files created by tests
         return _create_mock_profile_repo(Path(tempfile.gettempdir()))
 
@@ -79,8 +79,8 @@ class TestReadFile:
         assert data["filename"].endswith(".md")
 
     def test_returns_404_for_missing_file(self, client: TestClient) -> None:
-        """Should return 404 when file doesn't exist (within working_dir)."""
-        # Path must be inside working_dir (tempdir) to get 404 instead of 400
+        """Should return 404 when file doesn't exist (within repo_root)."""
+        # Path must be inside repo_root (tempdir) to get 404 instead of 400
         missing_file = Path(tempfile.gettempdir()) / "nonexistent_file_12345.md"
         response = client.post("/api/files/read", json={"path": str(missing_file)})
 
@@ -94,11 +94,11 @@ class TestReadFile:
         assert response.status_code == 400
         assert "absolute" in response.json()["error"].lower()
 
-    def test_returns_400_for_path_outside_working_dir(
+    def test_returns_400_for_path_outside_repo_root(
         self, app: FastAPI, temp_file: str
     ) -> None:
-        """Should return 400 when path is outside working_dir."""
-        # Override with a different working_dir
+        """Should return 400 when path is outside repo_root."""
+        # Override with a different repo_root
         mock_profile_repo = _create_mock_profile_repo(Path("/some/other/directory"))
         app.dependency_overrides[get_profile_repository] = lambda: mock_profile_repo
 
@@ -108,15 +108,15 @@ class TestReadFile:
         assert response.status_code == 400
         assert "not accessible" in response.json()["error"].lower()
 
-    def test_allows_path_within_working_dir(self, app: FastAPI) -> None:
-        """Should allow paths within working_dir subtree."""
+    def test_allows_path_within_repo_root(self, app: FastAPI) -> None:
+        """Should allow paths within repo_root subtree."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            # Create file inside working_dir
+            # Create file inside repo_root
             file_path = Path(tmpdir) / "docs" / "design.md"
             file_path.parent.mkdir(parents=True, exist_ok=True)
             file_path.write_text("# Test Design\n\nContent here.")
 
-            # Override with matching working_dir
+            # Override with matching repo_root
             mock_profile_repo = _create_mock_profile_repo(Path(tmpdir))
             app.dependency_overrides[get_profile_repository] = lambda: mock_profile_repo
 
@@ -138,17 +138,17 @@ class TestReadFile:
         assert response.status_code == 400
         assert "no active profile" in response.json()["error"].lower()
 
-    def test_worktree_path_overrides_working_dir(
+    def test_worktree_path_overrides_repo_root(
         self, app: FastAPI, tmp_path: Path
     ) -> None:
-        """Should use worktree_path as base directory instead of active profile's working_dir."""
-        # Create active profile with a specific working_dir
-        profile_working_dir = tmp_path / "profile-dir"
-        profile_working_dir.mkdir()
-        mock_profile_repo = _create_mock_profile_repo(profile_working_dir)
+        """Should use worktree_path as base directory instead of active profile's repo_root."""
+        # Create active profile with a specific repo_root
+        profile_repo_root = tmp_path / "profile-dir"
+        profile_repo_root.mkdir()
+        mock_profile_repo = _create_mock_profile_repo(profile_repo_root)
         app.dependency_overrides[get_profile_repository] = lambda: mock_profile_repo
 
-        # Create a separate worktree with a file (OUTSIDE profile's working_dir)
+        # Create a separate worktree with a file (OUTSIDE profile's repo_root)
         worktree = tmp_path / "worktree"
         worktree_docs = worktree / "docs" / "plans"
         worktree_docs.mkdir(parents=True)
@@ -198,7 +198,7 @@ class TestReadFile:
     def test_backward_compatibility_without_worktree_path(
         self, client: TestClient, temp_file: str
     ) -> None:
-        """Should still use active profile's working_dir when worktree_path is not provided."""
+        """Should still use active profile's repo_root when worktree_path is not provided."""
         response = client.post("/api/files/read", json={"path": temp_file})
 
         assert response.status_code == 200
@@ -211,7 +211,7 @@ class TestGetFile:
 
     @pytest.fixture
     def mock_profile_repo(self, tmp_path: Path) -> MagicMock:
-        """Create a mock profile repo with working_dir set to tmp_path."""
+        """Create a mock profile repo with repo_root set to tmp_path."""
         return _create_mock_profile_repo(Path(tempfile.gettempdir()))
 
     @pytest.fixture
@@ -258,10 +258,10 @@ class TestGetFile:
         assert response.status_code == 404
         assert "not found" in response.json()["error"].lower()
 
-    def test_returns_400_for_path_outside_working_dir(
+    def test_returns_400_for_path_outside_repo_root(
         self, app: FastAPI
     ) -> None:
-        """Should return 400 when path is outside working_dir."""
+        """Should return 400 when path is outside repo_root."""
         mock_profile_repo = _create_mock_profile_repo(Path("/some/restricted/directory"))
         app.dependency_overrides[get_profile_repository] = lambda: mock_profile_repo
 
@@ -283,17 +283,17 @@ class TestGetFile:
         assert response.status_code == 400
         assert "no active profile" in response.json()["error"].lower()
 
-    def test_worktree_path_overrides_working_dir(
+    def test_worktree_path_overrides_repo_root(
         self, app: FastAPI, tmp_path: Path
     ) -> None:
-        """Should use worktree_path as base directory instead of active profile's working_dir."""
-        # Create active profile with a specific working_dir
-        profile_working_dir = tmp_path / "profile-dir"
-        profile_working_dir.mkdir()
-        mock_profile_repo = _create_mock_profile_repo(profile_working_dir)
+        """Should use worktree_path as base directory instead of active profile's repo_root."""
+        # Create active profile with a specific repo_root
+        profile_repo_root = tmp_path / "profile-dir"
+        profile_repo_root.mkdir()
+        mock_profile_repo = _create_mock_profile_repo(profile_repo_root)
         app.dependency_overrides[get_profile_repository] = lambda: mock_profile_repo
 
-        # Create a separate worktree with a file (OUTSIDE profile's working_dir)
+        # Create a separate worktree with a file (OUTSIDE profile's repo_root)
         worktree = tmp_path / "worktree"
         worktree_docs = worktree / "docs" / "plans"
         worktree_docs.mkdir(parents=True)
@@ -338,7 +338,7 @@ class TestGetFile:
     def test_backward_compatibility_without_worktree_path(
         self, client: TestClient, temp_file: str
     ) -> None:
-        """Should still use active profile's working_dir when worktree_path is not provided."""
+        """Should still use active profile's repo_root when worktree_path is not provided."""
         response = client.get(f"/api/files/{temp_file}")
 
         assert response.status_code == 200

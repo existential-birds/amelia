@@ -11,14 +11,14 @@ from amelia.server.orchestrator.service import OrchestratorService
 def _make_test_profile(
     name: str = "dev",
     tracker: TrackerType = TrackerType.NOOP,
-    working_dir: str = "/repo",
+    repo_root: str = "/repo",
 ) -> Profile:
     """Create a test Profile with default agents configuration."""
     agent_config = AgentConfig(driver="claude", model="opus")
     return Profile(
         name=name,
         tracker=tracker,
-        working_dir=working_dir,
+        repo_root=repo_root,
         agents={
             "architect": agent_config,
             "developer": agent_config,
@@ -49,7 +49,7 @@ class TestOrchestratorProfileLoading:
         mock_repository.get_max_event_sequence.return_value = 0
         mock_profile_repo = AsyncMock()
         mock_profile_repo.get_profile.return_value = _make_test_profile(
-            working_dir="/repo",
+            repo_root="/repo",
         )
 
         service = OrchestratorService(
@@ -66,8 +66,8 @@ class TestOrchestratorProfileLoading:
 
         assert profile is not None
         assert profile.name == "dev"
-        # working_dir should be set to worktree_path
-        assert profile.working_dir == "/some/worktree"
+        # repo_root should be set to worktree_path
+        assert profile.repo_root == "/some/worktree"
         mock_profile_repo.get_profile.assert_called_once_with("dev")
 
     async def test_get_profile_or_fail_profile_not_found(self):
@@ -98,8 +98,8 @@ class TestOrchestratorProfileLoading:
         assert call_args[0][1] == WorkflowStatus.FAILED
         assert "nonexistent" in call_args[1]["failure_reason"]
 
-    async def test_update_profile_working_dir_conversion(self):
-        """Verify Profile working_dir is correctly overridden."""
+    async def test_update_profile_repo_root_conversion(self):
+        """Verify Profile repo_root is correctly overridden."""
         mock_event_bus = MagicMock()
         mock_repository = AsyncMock()
         mock_repository.get_max_event_sequence.return_value = 0
@@ -111,12 +111,12 @@ class TestOrchestratorProfileLoading:
             profile_repo=mock_profile_repo,
         )
 
-        # Create a profile with original working_dir
+        # Create a profile with original repo_root
         agent_config = AgentConfig(driver="api", model="gpt-4")
         profile = Profile(
             name="test-profile",
             tracker="github",
-            working_dir="/original/dir",
+            repo_root="/original/dir",
             plan_output_dir="custom/plans",
             plan_path_pattern="custom/{date}-{issue_key}.md",
             agents={
@@ -126,12 +126,12 @@ class TestOrchestratorProfileLoading:
             },
         )
 
-        updated_profile = service._update_profile_working_dir(profile, worktree_path="/override/dir")
+        updated_profile = service._update_profile_repo_root(profile, worktree_path="/override/dir")
 
         assert updated_profile.name == "test-profile"
         assert updated_profile.tracker == "github"
-        # working_dir should be overridden by worktree_path
-        assert updated_profile.working_dir == "/override/dir"
+        # repo_root should be overridden by worktree_path
+        assert updated_profile.repo_root == "/override/dir"
         assert updated_profile.plan_output_dir == "custom/plans"
         assert updated_profile.plan_path_pattern == "custom/{date}-{issue_key}.md"
         assert updated_profile.agents["developer"].driver == "api"

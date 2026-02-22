@@ -388,14 +388,14 @@ def create_app() -> FastAPI:
     async def get_brainstorm_cwd() -> str:
         """Get working directory from active profile in database.
 
-        Fetches the active profile and returns its working_dir.
-        Falls back to os.getcwd() if no active profile or working_dir not set.
+        Fetches the active profile and returns its repo_root.
+        Falls back to os.getcwd() if no active profile or repo_root not set.
         """
         profile_repo = get_profile_repository()
         active_profile = await profile_repo.get_active_profile()
-        if active_profile is None or not active_profile.working_dir:
+        if active_profile is None or not active_profile.repo_root:
             return os.getcwd()
-        return active_profile.working_dir
+        return active_profile.repo_root
 
     application.dependency_overrides[get_cwd] = get_brainstorm_cwd
 

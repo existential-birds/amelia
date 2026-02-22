@@ -139,18 +139,18 @@ class TestArchitectPlanAsyncGenerator:
 class TestArchitectCwdPassing:
     """Tests for working directory passing to execute_agentic."""
 
-    async def test_plan_passes_working_dir_as_cwd(
+    async def test_plan_passes_repo_root_as_cwd(
         self,
         mock_driver,
         mock_issue_factory,
         mock_profile_factory,
         tmp_path,
     ) -> None:
-        """Architect.plan() should pass profile.working_dir as cwd to execute_agentic."""
+        """Architect.plan() should pass profile.repo_root as cwd to execute_agentic."""
         issue = mock_issue_factory()
-        # Use tmp_path as working_dir to verify it's passed correctly
+        # Use tmp_path as repo_root to verify it's passed correctly
         expected_cwd = str(tmp_path)
-        profile = mock_profile_factory(working_dir=expected_cwd)
+        profile = mock_profile_factory(repo_root=expected_cwd)
         state = ImplementationState(
             workflow_id=uuid4(),
             created_at=datetime.now(UTC),
@@ -181,7 +181,7 @@ class TestArchitectCwdPassing:
 
         assert captured_cwd == expected_cwd, (
             f"Expected cwd={expected_cwd}, got cwd={captured_cwd}. "
-            "Architect is not passing working_dir correctly to execute_agentic."
+            "Architect is not passing repo_root correctly to execute_agentic."
         )
 
 

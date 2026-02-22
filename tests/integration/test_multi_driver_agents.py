@@ -71,7 +71,7 @@ class TestDeveloperMultiDriver:
         profile = make_profile(
             driver=driver_key,
             model=model,
-            working_dir=str(tmp_path),
+            repo_root=str(tmp_path),
         )
         state = make_execution_state(
             profile=profile,
@@ -117,7 +117,7 @@ class TestDeveloperMultiDriver:
         profile = make_profile(
             driver=driver_key,
             model=model,
-            working_dir=str(tmp_path),
+            repo_root=str(tmp_path),
         )
         state = make_execution_state(
             profile=profile,
@@ -185,7 +185,7 @@ class TestReviewerMultiDriver:
         profile = make_profile(
             driver=driver_key,
             model=model,
-            working_dir=str(tmp_path),
+            repo_root=str(tmp_path),
         )
         state = make_execution_state(
             profile=profile,
@@ -225,7 +225,7 @@ class TestReviewerMultiDriver:
         profile = make_profile(
             driver=driver_key,
             model=model,
-            working_dir=str(tmp_path),
+            repo_root=str(tmp_path),
         )
         state = make_execution_state(
             profile=profile,

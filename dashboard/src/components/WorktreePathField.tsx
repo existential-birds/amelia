@@ -46,7 +46,7 @@ interface RecentPath {
   label: string;
   /** When this path was last used. */
   lastUsed?: Date;
-  /** Whether this is the server's working_dir. */
+  /** Whether this is the server's repo_root. */
   isServerDefault?: boolean;
 }
 
@@ -59,7 +59,7 @@ interface WorktreePathFieldProps {
   error?: string;
   /** Whether the field is disabled. */
   disabled?: boolean;
-  /** Server working_dir for default suggestion. */
+  /** Server repo_root for default suggestion. */
   serverWorkingDir: string;
   /** Recent worktree paths from workflow history. */
   recentPaths?: string[];
@@ -131,7 +131,7 @@ export function WorktreePathField({
   // Build the list of path suggestions
   const suggestions: RecentPath[] = [];
 
-  // Add server working_dir as primary suggestion (if not empty)
+  // Add server repo_root as primary suggestion (if not empty)
   if (serverWorkingDir) {
     suggestions.push({
       path: serverWorkingDir,

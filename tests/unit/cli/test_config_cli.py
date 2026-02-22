@@ -74,7 +74,7 @@ class TestProfileList:
             Profile(
                 name="test-profile",
                 tracker="noop",
-                working_dir="/tmp/test",
+                repo_root="/tmp/test",
                 agents={
                     "architect": AgentConfig(driver="claude", model="sonnet"),
                     "developer": AgentConfig(driver="claude", model="sonnet"),
@@ -84,7 +84,7 @@ class TestProfileList:
             Profile(
                 name="prod-profile",
                 tracker="github",
-                working_dir="/home/user/project",
+                repo_root="/home/user/project",
                 agents={
                     "architect": AgentConfig(driver="api", model="anthropic/claude-sonnet-4-20250514"),
                     "developer": AgentConfig(driver="api", model="anthropic/claude-sonnet-4-20250514"),
@@ -144,7 +144,7 @@ class TestProfileShow:
         mock_profile = Profile(
             name="my-profile",
             tracker="github",
-            working_dir="/home/user/code",
+            repo_root="/home/user/code",
             plan_output_dir="docs/plans",
             agents={
                 "architect": AgentConfig(driver="claude", model="sonnet"),
@@ -192,7 +192,7 @@ class TestProfileCreate:
         created_profile = Profile(
             name="new-profile",
             tracker="noop",
-            working_dir="/tmp",
+            repo_root="/tmp",
             agents={
                 "architect": AgentConfig(driver="claude", model="sonnet"),
                 "developer": AgentConfig(driver="claude", model="sonnet"),
@@ -212,7 +212,7 @@ class TestProfileCreate:
                 "--driver", "claude",
                 "--model", "sonnet",
                 "--tracker", "noop",
-                "--working-dir", "/tmp",
+                "--repo-root", "/tmp",
             ])
 
         assert result.exit_code == 0
@@ -227,7 +227,7 @@ class TestProfileCreate:
         existing_profile = Profile(
             name="existing",
             tracker="noop",
-            working_dir="/tmp",
+            repo_root="/tmp",
             agents={
                 "architect": AgentConfig(driver="claude", model="sonnet"),
                 "developer": AgentConfig(driver="claude", model="sonnet"),
@@ -245,7 +245,7 @@ class TestProfileCreate:
                 "--driver", "claude",
                 "--model", "sonnet",
                 "--tracker", "none",
-                "--working-dir", "/tmp",
+                "--repo-root", "/tmp",
             ])
 
         assert result.exit_code == 1
@@ -258,7 +258,7 @@ class TestProfileCreate:
         created_profile = Profile(
             name="codex-profile",
             tracker="noop",
-            working_dir="/tmp",
+            repo_root="/tmp",
             agents={
                 "architect": AgentConfig(driver="codex", model="gpt-5-codex"),
                 "developer": AgentConfig(driver="codex", model="gpt-5-codex"),
@@ -278,7 +278,7 @@ class TestProfileCreate:
                 "--driver", "codex",
                 "--model", "gpt-5-codex",
                 "--tracker", "noop",
-                "--working-dir", "/tmp",
+                "--repo-root", "/tmp",
             ])
 
         assert result.exit_code == 0
@@ -299,7 +299,7 @@ class TestProfileCreate:
                 "--driver", "cli",
                 "--model", "sonnet",
                 "--tracker", "noop",
-                "--working-dir", "/tmp",
+                "--repo-root", "/tmp",
             ])
 
         assert result.exit_code == 2
@@ -330,7 +330,7 @@ class TestProfileCreateDriverAwareDefaults:
         created_profile = Profile(
             name="interactive-claude",
             tracker="noop",
-            working_dir="/tmp",
+            repo_root="/tmp",
             agents={
                 "architect": AgentConfig(driver="claude", model="sonnet"),
             },
@@ -363,7 +363,7 @@ class TestProfileCreateDriverAwareDefaults:
         created_profile = Profile(
             name="interactive-codex",
             tracker="noop",
-            working_dir="/tmp",
+            repo_root="/tmp",
             agents={
                 "architect": AgentConfig(driver="codex", model="gpt-5.3-codex"),
             },

@@ -252,9 +252,7 @@ async def import_external_plan(
         ValueError: If validation fails, content is empty, or path traversal detected.
     """
     # Establish working directory as security boundary
-    working_dir = (
-        Path(profile.working_dir) if profile.working_dir else Path(".")
-    ).expanduser().resolve()
+    working_dir = Path(profile.repo_root).expanduser().resolve()
 
     # Read content
     content = await read_plan_content(

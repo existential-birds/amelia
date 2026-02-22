@@ -61,7 +61,7 @@ def mock_profile_repo() -> AsyncMock:
     default_profile = Profile(
         name="test",
         tracker="noop",
-        working_dir="/default/repo",
+        repo_root="/default/repo",
         agents={
             "architect": agent_config,
             "developer": agent_config,

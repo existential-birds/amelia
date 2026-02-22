@@ -44,7 +44,7 @@ class TestRouteAfterTaskReview:
         """Profile with task_reviewer max_iterations=2."""
         return Profile(
             name="test",
-            working_dir="/tmp/test",
+            repo_root="/tmp/test",
             agents={
                 "task_reviewer": AgentConfig(
                     driver=DriverType.CLAUDE, model="sonnet", options={"max_iterations": 2}

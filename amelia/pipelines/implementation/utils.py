@@ -292,7 +292,7 @@ async def commit_task_changes(state: ImplementationState, config: RunnableConfig
     profile: Profile | None = config.get("configurable", {}).get("profile")
     if not profile:
         raise ValueError("profile is required in config.configurable")
-    working_dir = Path(profile.working_dir) if profile.working_dir else Path.cwd()
+    working_dir = Path(profile.repo_root)
 
     task_number = state.current_task_index + 1
 

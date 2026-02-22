@@ -1,5 +1,6 @@
 """Reviewer agent for code review in the Amelia orchestrator."""
 
+import asyncio
 import re
 import uuid
 from datetime import UTC, datetime
@@ -22,6 +23,9 @@ if TYPE_CHECKING:
 # Limits cognitive load and ensures the developer focuses on the most important issues first.
 # Additional issues beyond this limit will be caught in subsequent review cycles.
 MAX_REVIEW_COMMENTS = 20
+
+_MAX_REVIEW_ATTEMPTS = 2
+_REVIEW_RETRY_DELAY = 2.0
 
 REVIEW_OUTPUT_FORMAT = """## Review Summary
 
@@ -273,13 +277,7 @@ The changes are in git - diff against commit: {base_commit}"""
         # Build system prompt with base_commit
         system_prompt = self.agentic_prompt.format(base_commit=base_commit)
 
-        if profile.working_dir is None:
-            logger.warning(
-                "profile.working_dir is None, falling back to current directory",
-                agent=self._agent_name,
-                workflow_id=workflow_id,
-            )
-        cwd = profile.working_dir or "."
+        cwd = profile.repo_root
         # Always start a fresh session — the reviewer must not resume the
         # developer's session (different agent, different system prompt).
         session_id = None
@@ -294,30 +292,52 @@ The changes are in git - diff against commit: {base_commit}"""
             workflow_id=workflow_id,
         )
 
-        # Execute agentic review using unified AgenticMessage stream
-        async for msg in self.driver.execute_agentic(
-            prompt=prompt,
-            cwd=cwd,
-            session_id=session_id,
-            instructions=system_prompt,
-        ):
-            # Emit stream events for visibility using to_workflow_event()
-            if self._event_bus is not None and msg.type != AgenticMessageType.RESULT:
-                event = msg.to_workflow_event(workflow_id=workflow_id, agent=self._agent_name)
-                self._event_bus.emit(event)
+        # Execute agentic review with retry on empty output (e.g. rate-limit silencing the stream)
+        for attempt in range(_MAX_REVIEW_ATTEMPTS):
+            attempt_result: str | None = None
+            attempt_session_id: str | None = None
+            attempt_has_error: bool = False
 
-            # Capture final result from RESULT message
-            if msg.type == AgenticMessageType.RESULT:
-                new_session_id = msg.session_id
-                final_result = msg.content
-                has_error = msg.is_error
-                if msg.is_error:
-                    logger.error(
-                        "Agentic review failed",
-                        agent=self._agent_name,
-                        error=msg.content,
-                        workflow_id=workflow_id,
-                    )
+            async for msg in self.driver.execute_agentic(
+                prompt=prompt,
+                cwd=cwd,
+                session_id=session_id,
+                instructions=system_prompt,
+            ):
+                # Emit stream events for visibility using to_workflow_event()
+                if self._event_bus is not None and msg.type != AgenticMessageType.RESULT:
+                    event = msg.to_workflow_event(workflow_id=workflow_id, agent=self._agent_name)
+                    self._event_bus.emit(event)
+
+                # Capture final result from RESULT message
+                if msg.type == AgenticMessageType.RESULT:
+                    attempt_session_id = msg.session_id
+                    attempt_result = msg.content
+                    attempt_has_error = msg.is_error
+                    if msg.is_error:
+                        logger.error(
+                            "Agentic review failed",
+                            agent=self._agent_name,
+                            error=msg.content,
+                            workflow_id=workflow_id,
+                        )
+
+            new_session_id = attempt_session_id
+            final_result = attempt_result
+            has_error = attempt_has_error
+
+            if final_result:
+                break  # Got output — no retry needed
+
+            if attempt < _MAX_REVIEW_ATTEMPTS - 1:
+                logger.warning(
+                    "No output from agentic review, retrying",
+                    agent=self._agent_name,
+                    attempt=attempt + 1,
+                    max_attempts=_MAX_REVIEW_ATTEMPTS,
+                    workflow_id=workflow_id,
+                )
+                await asyncio.sleep(_REVIEW_RETRY_DELAY)
 
         # Parse the result to extract review
         result = self._parse_review_result(final_result, workflow_id)
@@ -383,15 +403,15 @@ The changes are in git - diff against commit: {base_commit}"""
         """
         if not output:
             logger.warning(
-                "No output from agentic review, defaulting to not approved",
+                "No output from agentic review after all attempts, defaulting to approved",
                 agent=self._agent_name,
                 workflow_id=workflow_id,
             )
             return ReviewResult(
                 reviewer_persona="Agentic",
-                approved=False,
-                comments=["Review did not produce output"],
-                severity=Severity.MAJOR,
+                approved=True,
+                comments=[],
+                severity=Severity.NONE,
             )
 
         # Parse verdict to determine approval

@@ -399,7 +399,7 @@ def mock_profile_repo() -> AsyncMock:
     profile = Profile(
         name="test",
         tracker="noop",
-        working_dir="/tmp/test",
+        repo_root="/tmp/test",
         agents={
             "architect": AgentConfig(driver="claude", model="sonnet"),
             "developer": AgentConfig(driver="claude", model="sonnet"),
@@ -650,7 +650,7 @@ async def active_test_profile(
     profile = Profile(
         name="test",
         tracker="noop",
-        working_dir=valid_worktree,
+        repo_root=valid_worktree,
         agents={
             "architect": agent_config,
             "developer": agent_config,

@@ -160,7 +160,7 @@ class TestExtractConfigParams:
         profile = Profile(
             name="test",
             tracker="noop",
-            working_dir="/tmp/test",
+            repo_root="/tmp/test",
             agents={
                 "architect": AgentConfig(driver="claude", model="sonnet"),
                 "developer": AgentConfig(driver="claude", model="sonnet"),
@@ -186,7 +186,7 @@ class TestExtractConfigParams:
         profile = Profile(
             name="test",
             tracker="noop",
-            working_dir="/tmp/test",
+            repo_root="/tmp/test",
             agents={
                 "architect": AgentConfig(driver="claude", model="sonnet"),
                 "developer": AgentConfig(driver="claude", model="sonnet"),

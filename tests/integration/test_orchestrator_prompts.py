@@ -49,7 +49,7 @@ class TestOrchestratorPromptInjection:
 
         profile = make_profile(
             plan_output_dir=str(plans_dir),
-            working_dir=str(tmp_path),
+            repo_root=str(tmp_path),
         )
         issue = make_issue(id="TEST-1", title="Test feature")
         state = make_execution_state(issue=issue, profile=profile)
@@ -84,7 +84,7 @@ class TestOrchestratorPromptInjection:
         custom_agentic_prompt = "Custom agentic review prompt with {base_commit}..."
         prompts = {"reviewer.agentic": custom_agentic_prompt}
 
-        profile = make_profile(working_dir=str(tmp_path))
+        profile = make_profile(repo_root=str(tmp_path))
         state = make_execution_state(
             profile=profile,
             goal="Test goal",
@@ -115,7 +115,7 @@ class TestOrchestratorPromptInjection:
         custom_developer_prompt = "Custom Amelia developer system prompt"
         prompts = {"developer.system": custom_developer_prompt}
 
-        profile = make_profile(working_dir=str(tmp_path))
+        profile = make_profile(repo_root=str(tmp_path))
         state = make_execution_state(
             profile=profile,
             goal="Implement feature",
@@ -150,7 +150,7 @@ class TestOrchestratorPromptInjection:
 
         profile = make_profile(
             plan_output_dir=str(plans_dir),
-            working_dir=str(tmp_path),
+            repo_root=str(tmp_path),
         )
         issue = make_issue(id="TEST-1", title="Test feature")
         state = make_execution_state(issue=issue, profile=profile)
@@ -185,7 +185,7 @@ class TestOrchestratorPromptInjection:
 
         profile = make_profile(
             plan_output_dir=str(plans_dir),
-            working_dir=str(tmp_path),
+            repo_root=str(tmp_path),
         )
         issue = make_issue(id="TEST-1", title="Test feature")
         state = make_execution_state(issue=issue, profile=profile)
@@ -221,7 +221,7 @@ class TestOrchestratorPromptInjection:
         custom_system_prompt = "Custom evaluator system prompt..."
         prompts = {"evaluator.system": custom_system_prompt}
 
-        profile = make_profile(working_dir=str(tmp_path))
+        profile = make_profile(repo_root=str(tmp_path))
         # Evaluator requires last_review with comments
         review_result = ReviewResult(
             reviewer_persona="General",
@@ -266,7 +266,7 @@ class TestOrchestratorPromptInjection:
 
     async def test_evaluator_uses_default_prompt_when_not_configured(self, tmp_path: Path) -> None:
         """Verify Evaluator uses default prompt when no custom prompt configured."""
-        profile = make_profile(working_dir=str(tmp_path))
+        profile = make_profile(repo_root=str(tmp_path))
         review_result = ReviewResult(
             reviewer_persona="General",
             approved=False,

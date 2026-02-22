@@ -55,7 +55,7 @@ class TestServerCLI:
 
             assert "Warning" in result.stdout or "warning" in result.stdout.lower()
 
-    def test_working_dir_option_sets_env_var(self, runner: CliRunner) -> None:
+    def test_repo_root_option_sets_env_var(self, runner: CliRunner) -> None:
         """--working-dir should set AMELIA_WORKING_DIR env var before uvicorn starts."""
         # Clear any existing env var to ensure isolation
         original_env = os.environ.pop("AMELIA_WORKING_DIR", None)

@@ -24,8 +24,8 @@ class ProfileInfo(BaseModel):
 class ConfigResponse(BaseModel):
     """Response model for server configuration."""
 
-    working_dir: str = Field(
-        description="Working directory for file access"
+    repo_root: str = Field(
+        description="Repository root directory for file access"
     )
     max_concurrent: int = Field(
         description="Maximum concurrent workflows"
@@ -47,7 +47,7 @@ async def get_server_config(
     """Get server configuration for dashboard.
 
     Returns:
-        Server configuration including working_dir, max_concurrent, active_profile,
+        Server configuration including repo_root, max_concurrent, active_profile,
         and active_profile_info.
     """
     # Get server settings for max_concurrent
@@ -59,7 +59,7 @@ async def get_server_config(
     # Build response based on whether there's an active profile
     if active_profile is None:
         return ConfigResponse(
-            working_dir="",
+            repo_root="",
             max_concurrent=server_settings.max_concurrent,
             active_profile="",
             active_profile_info=None,
@@ -82,7 +82,7 @@ async def get_server_config(
     )
 
     return ConfigResponse(
-        working_dir=active_profile.working_dir,
+        repo_root=active_profile.repo_root,
         max_concurrent=server_settings.max_concurrent,
         active_profile=active_profile.name,
         active_profile_info=profile_info,

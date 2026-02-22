@@ -54,7 +54,7 @@ class TestOracleConsultRoute:
         work_dir = str(tmp_path)
         mock_profile = Profile(
             name="test",
-            working_dir=work_dir,
+            repo_root=work_dir,
             agents={"oracle": AgentConfig(driver="claude", model="sonnet")},
         )
         mock_profile_repo.get_active_profile.return_value = mock_profile
@@ -86,13 +86,13 @@ class TestOracleConsultRoute:
 
         assert response.status_code == 200
 
-    def test_consult_validates_working_dir(
+    def test_consult_validates_repo_root(
         self, client: TestClient, mock_profile_repo: AsyncMock
     ):
-        """Consult should reject working_dir outside profile root."""
+        """Consult should reject repo_root outside profile root."""
         mock_profile = Profile(
             name="test",
-            working_dir="/home/user/projects",
+            repo_root="/home/user/projects",
             agents={"oracle": AgentConfig(driver="claude", model="sonnet")},
         )
         mock_profile_repo.get_active_profile.return_value = mock_profile
@@ -111,7 +111,7 @@ class TestOracleConsultRoute:
         work_dir = str(tmp_path)
         mock_profile = Profile(
             name="test",
-            working_dir=work_dir,
+            repo_root=work_dir,
             agents={},
         )
         mock_profile_repo.get_active_profile.return_value = mock_profile

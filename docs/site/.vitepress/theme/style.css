@@ -86,10 +86,10 @@
  * -------------------------------------------------------------------------- */
 
 .dark {
-  /* Base colors - MUCH DARKER */
-  --vp-c-bg: #050A07;
-  --vp-c-bg-alt: #0A1410;
-  --vp-c-bg-elv: #12201A;
+  /* Base colors - True black for terminal contrast */
+  --vp-c-bg: #000000;
+  --vp-c-bg-alt: #060D09;
+  --vp-c-bg-elv: #0D1A12;
   --vp-c-text-1: #E8F0DC;
   --vp-c-text-2: #6B8A78;
   --vp-c-text-3: #465C4E;
@@ -239,12 +239,6 @@ html:not(.dark) {
     var(--vp-c-brand-1) 30%,
     var(--vp-c-info-1)
   );
-  --vp-home-hero-image-background-image: linear-gradient(
-    -45deg,
-    var(--vp-c-brand-soft) 50%,
-    var(--vp-c-info-soft) 50%
-  );
-  --vp-home-hero-image-filter: blur(40px);
 }
 
 /* Light mode hero gradient - forest green to gold for cohesive feel */
@@ -256,39 +250,10 @@ html:not(.dark) {
   );
 }
 
-/**
- * Component: Home Hero Layout Adjustments
- * Make space for the animated workflow diagram
- * -------------------------------------------------------------------------- */
-
-/* Adjust hero container for side-by-side layout on larger screens */
-@media (min-width: 960px) {
-  .VPHero .container {
-    display: flex;
-    align-items: center;
-    gap: 2rem;
-  }
-
-  .VPHero .main {
-    flex: 1;
-    max-width: 600px;
-  }
-
-  .VPHero .image {
-    flex: 0 0 400px;
-  }
-}
-
-/* Ensure the animated diagram scales nicely */
-.VPHero .image-container {
-  max-width: 400px;
-  margin: 0 auto;
-}
-
-/* Add subtle gradient background to hero area */
+/* Subtle gradient background on hero area */
 .VPHome .VPHero {
   background: radial-gradient(
-    ellipse at 70% 30%,
+    ellipse at 50% 30%,
     var(--vp-c-brand-soft) 0%,
     transparent 50%
   );
@@ -296,7 +261,7 @@ html:not(.dark) {
 
 .dark .VPHome .VPHero {
   background: radial-gradient(
-    ellipse at 70% 30%,
+    ellipse at 50% 30%,
     rgba(255, 200, 87, 0.03) 0%,
     transparent 50%
   );
@@ -388,6 +353,45 @@ html:not(.dark) {
     linear-gradient(90deg, var(--grid-line-color) 1px, transparent 1px);
   background-size: 48px 48px;
   background-position: -1px -1px;
+}
+
+/**
+ * Component: Landing Page Sections
+ * Shared layout utilities for custom landing page components
+ * -------------------------------------------------------------------------- */
+
+.amelia-section {
+  max-width: 688px;
+  margin: 0 auto;
+  padding-left: 24px;
+  padding-right: 24px;
+}
+
+.amelia-section--alt {
+  max-width: 100%;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.amelia-section--alt > * {
+  max-width: 688px;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 24px;
+  padding-right: 24px;
+}
+
+.amelia-section--alt > .table-wrapper {
+  max-width: 688px;
+}
+
+.amelia-label {
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--vp-c-text-3);
 }
 
 /* Enhanced hero with gradient + subtle noise texture */

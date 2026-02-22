@@ -20,7 +20,7 @@ class TestFirstRunDetection:
         existing_profile = Profile(
             name="existing",
             tracker=TrackerType.NOOP,
-            working_dir="/tmp",
+            repo_root="/tmp",
             agents={
                 "architect": AgentConfig(driver=DriverType.CLAUDE, model="sonnet"),
                 "developer": AgentConfig(driver=DriverType.CLAUDE, model="sonnet"),
@@ -48,7 +48,7 @@ class TestFirstRunDetection:
         created_profile = Profile(
             name="dev",
             tracker=TrackerType.NOOP,
-            working_dir="/tmp",
+            repo_root="/tmp",
             agents={
                 "architect": AgentConfig(driver=DriverType.CLAUDE, model="opus"),
                 "developer": AgentConfig(driver=DriverType.CLAUDE, model="opus"),
@@ -92,7 +92,7 @@ class TestFirstRunProfileCreation:
         created_profile = Profile(
             name="myprofile",
             tracker=TrackerType.NOOP,
-            working_dir="/home/user/project",
+            repo_root="/home/user/project",
             agents={
                 "architect": AgentConfig(driver=DriverType.API, model="sonnet"),
                 "developer": AgentConfig(driver=DriverType.API, model="sonnet"),
@@ -124,7 +124,7 @@ class TestFirstRunProfileCreation:
 
         assert created_profile_arg.name == "myprofile"
         assert created_profile_arg.tracker == "github"
-        assert created_profile_arg.working_dir == "/home/user/project"
+        assert created_profile_arg.repo_root == "/home/user/project"
         # Check that agents were created with correct driver/model
         assert "architect" in created_profile_arg.agents
         assert created_profile_arg.agents["architect"].driver == "api"
@@ -135,7 +135,7 @@ class TestFirstRunProfileCreation:
         created_profile = Profile(
             name="testprofile",
             tracker=TrackerType.NOOP,
-            working_dir="/tmp",
+            repo_root="/tmp",
             agents={
                 "architect": AgentConfig(driver=DriverType.CLAUDE, model="opus"),
                 "developer": AgentConfig(driver=DriverType.CLAUDE, model="opus"),
@@ -168,7 +168,7 @@ class TestFirstRunProfileCreation:
         created_profile = Profile(
             name="dev",
             tracker=TrackerType.NOOP,
-            working_dir="/tmp",
+            repo_root="/tmp",
             agents={
                 "architect": AgentConfig(driver=DriverType.CLAUDE, model="opus"),
                 "developer": AgentConfig(driver=DriverType.CLAUDE, model="opus"),
@@ -197,7 +197,7 @@ class TestFirstRunProfileCreation:
         existing_profile = Profile(
             name="existing",
             tracker=TrackerType.NOOP,
-            working_dir="/tmp",
+            repo_root="/tmp",
             agents={
                 "architect": AgentConfig(driver=DriverType.CLAUDE, model="sonnet"),
                 "developer": AgentConfig(driver=DriverType.CLAUDE, model="sonnet"),

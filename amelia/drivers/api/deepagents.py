@@ -36,7 +36,7 @@ from amelia.drivers.base import (
     DriverUsage,
     GenerateResult,
 )
-from amelia.logging import log_todos
+from amelia.logging import log_claude_result, log_todos
 
 
 # Maximum output size before truncation (100KB)
@@ -649,6 +649,7 @@ class ApiDriver(DriverInterface):
                                         content=thinking_text,
                                         model=self.model,
                                     )
+                                    log_claude_result(result_type="assistant", content=thinking_text)
                                 # Also check for 'thinking' type blocks (some models use this)
                                 elif isinstance(block, dict) and block.get("type") == "thinking":
                                     thinking_text = block.get("thinking", "") or block.get("text", "")
@@ -663,6 +664,7 @@ class ApiDriver(DriverInterface):
                                         content=thinking_text,
                                         model=self.model,
                                     )
+                                    log_claude_result(result_type="assistant", content=thinking_text)
 
                         # Tool calls
                         for tool_call in message.tool_calls or []:
@@ -696,6 +698,7 @@ class ApiDriver(DriverInterface):
                                 tool_call_id=tool_call.get("id"),
                                 model=self.model,
                             )
+                            log_claude_result(result_type="tool_use", tool_name=tool_normalized, tool_input=tool_args)
 
                     elif isinstance(message, ToolMessage):
                         # Normalize tool name to standard format
@@ -847,6 +850,13 @@ class ApiDriver(DriverInterface):
                     session_id=current_session_id,
                     model=self.model,
                 )
+                log_claude_result(
+                    result_type="result",
+                    result_text=final_content,
+                    session_id=current_session_id,
+                    duration_ms=duration_ms,
+                    cost_usd=total_cost if total_cost > 0 else None,
+                )
             else:
                 # Always yield RESULT per interface contract
                 yield AgenticMessage(
@@ -856,6 +866,7 @@ class ApiDriver(DriverInterface):
                     is_error=True,
                     model=self.model,
                 )
+                log_claude_result(result_type="error", content="Agent produced no output")
 
         except ValueError as e:
             if _is_model_provider_error(e):

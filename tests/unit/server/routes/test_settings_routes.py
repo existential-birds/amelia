@@ -115,7 +115,7 @@ def profile_client(profile_app: FastAPI) -> TestClient:
 def make_test_profile(
     name: str = "test-profile",
     tracker: TrackerType = TrackerType.NOOP,
-    working_dir: str = "/path/to/repo",
+    repo_root: str = "/path/to/repo",
     driver: DriverType = DriverType.CLAUDE,
     model: str = "opus",
 ) -> Profile:
@@ -124,7 +124,7 @@ def make_test_profile(
     Args:
         name: Profile name.
         tracker: Tracker type.
-        working_dir: Working directory.
+        repo_root: Repository root directory.
         driver: Default driver for all agents.
         model: Default model for all agents.
 
@@ -144,7 +144,7 @@ def make_test_profile(
     return Profile(
         name=name,
         tracker=tracker,
-        working_dir=working_dir,
+        repo_root=repo_root,
         agents=agents,
     )
 
@@ -193,7 +193,7 @@ class TestProfileRoutes:
             "/api/profiles",
             json={
                 "id": "new-profile",
-                "working_dir": "/path/to/repo",
+                "repo_root": "/path/to/repo",
                 "agents": {
                     "architect": {"driver": "claude", "model": "opus"},
                     "developer": {"driver": "claude", "model": "opus"},
@@ -217,7 +217,7 @@ class TestProfileRoutes:
         mock_profile_repo.create_profile.return_value = Profile(
             name="full-profile",
             tracker=tracker,
-            working_dir="/custom/path",
+            repo_root="/custom/path",
             plan_output_dir="custom/plans",
             plan_path_pattern="custom/{date}.md",
             agents={
@@ -230,7 +230,7 @@ class TestProfileRoutes:
             json={
                 "id": "full-profile",
                 "tracker": "jira",
-                "working_dir": "/custom/path",
+                "repo_root": "/custom/path",
                 "plan_output_dir": "custom/plans",
                 "plan_path_pattern": "custom/{date}.md",
                 "agents": {
@@ -288,7 +288,7 @@ class TestProfileRoutes:
         mock_profile_repo.update_profile.return_value = Profile(
             name="dev",
             tracker=tracker,
-            working_dir="/new/path",
+            repo_root="/new/path",
             agents={
                 "developer": AgentConfig(driver=driver, model="gpt-4"),
             },
@@ -370,7 +370,7 @@ class TestProfileRoutes:
             "/api/profiles",
             json={
                 "id": "bad-profile",
-                "working_dir": "/path/to/repo",
+                "repo_root": "/path/to/repo",
                 "agents": {
                     "architect": {"driver": "claude", "model": "opus"},
                     "developer": {"driver": "claude", "model": "opus"},
@@ -398,15 +398,15 @@ class TestProfileRoutes:
         detail = response.json()["detail"]
         assert any("Missing required agents" in str(e) for e in detail)
 
-    def test_create_profile_relative_working_dir_returns_422(
+    def test_create_profile_relative_repo_root_returns_422(
         self, profile_client: TestClient, mock_profile_repo: MagicMock
     ) -> None:
-        """POST /api/profiles with relative working_dir returns 422."""
+        """POST /api/profiles with relative repo_root returns 422."""
         response = profile_client.post(
             "/api/profiles",
             json={
                 "id": "bad-profile",
-                "working_dir": "relative/path",
+                "repo_root": "relative/path",
                 "agents": {
                     "architect": {"driver": "claude", "model": "opus"},
                     "developer": {"driver": "claude", "model": "opus"},
@@ -420,19 +420,19 @@ class TestProfileRoutes:
         )
         assert response.status_code == 422
         detail = response.json()["detail"]
-        assert any("working_dir must be an absolute path" in str(e) for e in detail)
+        assert any("repo_root must be an absolute path" in str(e) for e in detail)
 
-    def test_update_profile_relative_working_dir_returns_422(
+    def test_update_profile_relative_repo_root_returns_422(
         self, profile_client: TestClient, mock_profile_repo: MagicMock
     ) -> None:
-        """PUT /api/profiles/{id} with relative working_dir returns 422."""
+        """PUT /api/profiles/{id} with relative repo_root returns 422."""
         response = profile_client.put(
             "/api/profiles/dev",
-            json={"working_dir": "./relative"},
+            json={"repo_root": "./relative"},
         )
         assert response.status_code == 422
         detail = response.json()["detail"]
-        assert any("working_dir must be an absolute path" in str(e) for e in detail)
+        assert any("repo_root must be an absolute path" in str(e) for e in detail)
 
     def test_create_profile_extra_agents_accepted(
         self, profile_client: TestClient, mock_profile_repo: MagicMock
@@ -446,7 +446,7 @@ class TestProfileRoutes:
             "/api/profiles",
             json={
                 "id": "extra-profile",
-                "working_dir": "/path/to/repo",
+                "repo_root": "/path/to/repo",
                 "agents": {
                     "architect": {"driver": "claude", "model": "opus"},
                     "developer": {"driver": "claude", "model": "opus"},

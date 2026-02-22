@@ -568,10 +568,10 @@ class TestDeveloperTaskBasedExecution:
     """Tests for task-based execution in call_developer_node."""
 
     @pytest.fixture
-    def mock_profile_with_working_dir(self, tmp_path: Any) -> Profile:
+    def mock_profile_with_repo_root(self, tmp_path: Any) -> Profile:
         return Profile(
             name="test",
-            working_dir=str(tmp_path),
+            repo_root=str(tmp_path),
             agents={
                 "developer": AgentConfig(driver="claude", model="sonnet"),
             },
@@ -614,13 +614,13 @@ Step 1: Build the thing
     async def test_developer_node_clears_session_for_task_execution(
         self,
         multi_task_state: ImplementationState,
-        mock_profile_with_working_dir: Profile,
+        mock_profile_with_repo_root: Profile,
     ) -> None:
         """Developer node should clear driver_session_id for fresh task sessions."""
         config: RunnableConfig = {
             "configurable": {
                 "thread_id": str(uuid4()),
-                "profile": mock_profile_with_working_dir,
+                "profile": mock_profile_with_repo_root,
             }
         }
 
@@ -648,7 +648,7 @@ Step 1: Build the thing
     async def test_developer_node_preserves_full_plan_markdown(
         self,
         multi_task_state: ImplementationState,
-        mock_profile_with_working_dir: Profile,
+        mock_profile_with_repo_root: Profile,
     ) -> None:
         """Developer node should pass full plan_markdown to Developer.
 
@@ -658,7 +658,7 @@ Step 1: Build the thing
         config: RunnableConfig = {
             "configurable": {
                 "thread_id": str(uuid4()),
-                "profile": mock_profile_with_working_dir,
+                "profile": mock_profile_with_repo_root,
             }
         }
 
@@ -688,7 +688,7 @@ Step 1: Build the thing
 
     async def test_developer_node_clears_session_for_single_task(
         self,
-        mock_profile_with_working_dir: Profile,
+        mock_profile_with_repo_root: Profile,
     ) -> None:
         """Developer node should clear session_id even when total_tasks is 1."""
         state = ImplementationState(
@@ -704,7 +704,7 @@ Step 1: Build the thing
         config: RunnableConfig = {
             "configurable": {
                 "thread_id": str(uuid4()),
-                "profile": mock_profile_with_working_dir,
+                "profile": mock_profile_with_repo_root,
             }
         }
 

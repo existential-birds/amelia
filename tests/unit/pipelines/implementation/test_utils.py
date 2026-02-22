@@ -154,7 +154,7 @@ class TestCommitTaskChanges:
         profile = Profile(
             name="test",
             tracker="noop",
-            working_dir=str(tmp_path),
+            repo_root=str(tmp_path),
             agents=agents,
         )
 

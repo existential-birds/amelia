@@ -37,7 +37,7 @@ const mockProfiles = [
   {
     id: 'dev',
     is_active: true,
-    working_dir: '/repo',
+    repo_root: '/repo',
     tracker: 'noop',
     plan_output_dir: 'docs/plans',
     plan_path_pattern: 'docs/plans/{date}-{issue_key}.md',
@@ -50,7 +50,7 @@ const mockProfiles = [
   {
     id: 'prod',
     is_active: false,
-    working_dir: '/prod',
+    repo_root: '/prod',
     tracker: 'jira',
     plan_output_dir: 'docs/plans',
     plan_path_pattern: 'docs/plans/{date}-{issue_key}.md',
