@@ -5,19 +5,19 @@ import { useBrainstormStore } from '../store/brainstormStore';
 import type { WebSocketMessage, WorkflowEvent, BrainstormMessage } from '../types';
 import type { AskUserQuestionItem, BrainstormArtifact, ToolCall, MessageUsage, SessionUsageSummary } from '../types/api';
 
-/** Zod schema for AskUserOption validation. */
+/** Zod schema for AskUserOption validation (mirrors AskUserOption type). */
 const askUserOptionSchema = z.object({
   label: z.string(),
   description: z.string().optional(),
-});
+}) satisfies z.ZodType<{ label: string; description?: string }>;
 
-/** Zod schema for AskUserQuestionItem validation. */
+/** Zod schema for AskUserQuestionItem validation (mirrors AskUserQuestionItem type). */
 const askUserQuestionItemSchema = z.object({
   question: z.string(),
   header: z.string().optional(),
   options: z.array(askUserOptionSchema),
   multi_select: z.boolean(),
-});
+}) satisfies z.ZodType<AskUserQuestionItem>;
 
 /** Zod schema for validating an array of AskUserQuestionItem. */
 const askUserQuestionsSchema = z.array(askUserQuestionItemSchema);
@@ -28,7 +28,7 @@ const askUserQuestionsSchema = z.array(askUserQuestionItemSchema);
  */
 function validateQuestions(data: unknown): AskUserQuestionItem[] | undefined {
   const result = askUserQuestionsSchema.safeParse(data);
-  return result.success ? result.data : undefined;
+  return result.success ? (result.data as AskUserQuestionItem[]) : undefined;
 }
 
 /**
