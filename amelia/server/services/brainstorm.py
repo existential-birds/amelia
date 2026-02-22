@@ -599,7 +599,6 @@ class BrainstormService:
             # Invoke driver and stream events
             assistant_content_parts: list[str] = []
             driver_session_id: str | None = None
-            pending_write_files: dict[str, str] = {}  # tool_call_id -> path
             suppressed_tool_ids: set[str] = set()  # tool calls converted to text
 
             # Resolve plan path from profile settings
