@@ -1815,10 +1815,9 @@ class TestAskUserQuestionConversion(TestBrainstormService):
         """Malformed ask_user_question payload should fall back to BRAINSTORM_TEXT."""
         from unittest.mock import patch
 
+        from amelia.core.types import AskUserQuestionPayload
         from amelia.drivers.base import AgenticMessageType
         from amelia.server.models.events import EventType
-
-        from amelia.core.types import AskUserQuestionPayload
 
         sess_id = uuid4()
         msg_id = uuid4()
