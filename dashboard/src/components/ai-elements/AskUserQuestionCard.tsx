@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import type { AskUserQuestionPayload } from "@/types/api";
 import { CheckIcon } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 export interface AskUserQuestionCardProps {
   payload: AskUserQuestionPayload;
@@ -45,30 +45,29 @@ export function AskUserQuestionCard({
     setOtherTexts((prev) => ({ ...prev, [question]: text }));
   };
 
-  const buildAnswers = (): Selections => {
-    const answers: Selections = {};
+  const answers = useMemo((): Selections => {
+    const result: Selections = {};
     for (const q of payload.questions) {
       const selected = selections[q.question];
       const other = otherTexts[q.question]?.trim();
       if (other) {
         if (q.multi_select) {
           const arr = (selected as string[] | undefined) ?? [];
-          answers[q.question] = [...arr, other];
+          result[q.question] = [...arr, other];
         } else {
-          answers[q.question] = other;
+          result[q.question] = other;
         }
       } else if (selected !== undefined) {
-        answers[q.question] = selected;
+        result[q.question] = selected;
       }
     }
-    return answers;
-  };
+    return result;
+  }, [payload.questions, selections, otherTexts]);
 
-  const hasAnswers = Object.keys(buildAnswers()).length > 0;
+  const hasAnswers = Object.keys(answers).length > 0;
 
   const handleSubmit = () => {
     if (isDisabled) return;
-    const answers = buildAnswers();
     if (Object.keys(answers).length === 0) return;
     onAnswer(answers);
   };

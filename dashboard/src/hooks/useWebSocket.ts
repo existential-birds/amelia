@@ -1,33 +1,34 @@
 import { useCallback, useEffect, useRef } from 'react';
+import { z } from 'zod';
 import { useWorkflowStore } from '../store/workflowStore';
 import { useBrainstormStore } from '../store/brainstormStore';
 import type { WebSocketMessage, WorkflowEvent, BrainstormMessage } from '../types';
 import type { AskUserQuestionItem, BrainstormArtifact, ToolCall, MessageUsage, SessionUsageSummary } from '../types/api';
 
+/** Zod schema for AskUserOption validation. */
+const askUserOptionSchema = z.object({
+  label: z.string(),
+  description: z.string().optional(),
+});
+
+/** Zod schema for AskUserQuestionItem validation. */
+const askUserQuestionItemSchema = z.object({
+  question: z.string(),
+  header: z.string().optional(),
+  options: z.array(askUserOptionSchema),
+  multi_select: z.boolean(),
+});
+
+/** Zod schema for validating an array of AskUserQuestionItem. */
+const askUserQuestionsSchema = z.array(askUserQuestionItemSchema);
+
 /**
- * Validates that a value conforms to AskUserQuestionItem[] structure.
+ * Validates that a value conforms to AskUserQuestionItem[] structure using Zod.
  * Returns the validated array or undefined if validation fails.
  */
 function validateQuestions(data: unknown): AskUserQuestionItem[] | undefined {
-  if (!Array.isArray(data)) return undefined;
-
-  for (const item of data) {
-    if (typeof item !== 'object' || item === null) return undefined;
-    if (typeof item.question !== 'string') return undefined;
-    if (typeof item.multi_select !== 'boolean') return undefined;
-    if (!Array.isArray(item.options)) return undefined;
-
-    for (const opt of item.options) {
-      if (typeof opt !== 'object' || opt === null) return undefined;
-      if (typeof opt.label !== 'string') return undefined;
-      // description is optional but must be string if present
-      if (opt.description !== undefined && typeof opt.description !== 'string') return undefined;
-    }
-    // header is optional but must be string if present
-    if (item.header !== undefined && typeof item.header !== 'string') return undefined;
-  }
-
-  return data as AskUserQuestionItem[];
+  const result = askUserQuestionsSchema.safeParse(data);
+  return result.success ? result.data : undefined;
 }
 
 /**

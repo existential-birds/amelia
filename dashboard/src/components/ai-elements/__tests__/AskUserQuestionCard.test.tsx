@@ -127,4 +127,11 @@ describe("AskUserQuestionCard", () => {
     }
     expect(screen.getByPlaceholderText("Other...")).toBeDisabled();
   });
+
+  it("disables submit button when no selection made", () => {
+    render(
+      <AskUserQuestionCard payload={singleSelectPayload} onAnswer={vi.fn()} />
+    );
+    expect(screen.getByRole("button", { name: /submit/i })).toBeDisabled();
+  });
 });
