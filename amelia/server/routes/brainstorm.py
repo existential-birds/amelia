@@ -300,14 +300,21 @@ async def send_message(
 
     async def _process_message() -> None:
         """Background task to process the message."""
-        async for _ in service.send_message(
-            session_id=session_id,
-            content=request.content,
-            driver=driver,
-            cwd=cwd,
-            assistant_message_id=str(message_id),
-        ):
-            pass
+        try:
+            async for _ in service.send_message(
+                session_id=session_id,
+                content=request.content,
+                driver=driver,
+                cwd=cwd,
+                assistant_message_id=str(message_id),
+            ):
+                pass
+        except Exception:
+            logger.exception(
+                "Brainstorm message processing failed",
+                session_id=str(session_id),
+                message_id=str(message_id),
+            )
 
     background_tasks.add_task(_process_message)
 

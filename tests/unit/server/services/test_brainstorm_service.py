@@ -1587,3 +1587,176 @@ class TestSendMessagePlanPath:
         instructions = captured[0]
         assert instructions is not None
         assert "plans/existing-plan.md" in instructions
+
+
+class TestAskUserQuestionConversion(TestBrainstormService):
+    """Test that ask_user_question tool calls are converted to text events."""
+
+    @pytest.fixture
+    def mock_driver_with_ask(self) -> MagicMock:
+        """Create mock driver that yields an ask_user_question tool call."""
+        from amelia.drivers.base import AgenticMessageType
+
+        driver = MagicMock()
+
+        async def mock_execute_agentic(
+            *args: object, **kwargs: object
+        ) -> AsyncIterator[AgenticMessage]:
+            yield AgenticMessage(
+                type=AgenticMessageType.THINKING,
+                content="Let me ask a question...",
+            )
+            yield AgenticMessage(
+                type=AgenticMessageType.TOOL_CALL,
+                tool_name="ask_user_question",
+                tool_call_id="tc_ask_1",
+                tool_input={
+                    "questions": [
+                        {
+                            "question": "What's your primary goal?",
+                            "header": "Goal",
+                            "options": [
+                                {"label": "Performance", "description": "Make it fast"},
+                                {"label": "Simplicity", "description": "Keep it simple"},
+                            ],
+                        }
+                    ]
+                },
+            )
+            yield AgenticMessage(
+                type=AgenticMessageType.TOOL_RESULT,
+                tool_name="ask_user_question",
+                tool_call_id="tc_ask_1",
+                tool_output="Tool denied",
+                is_error=True,
+            )
+            yield AgenticMessage(
+                type=AgenticMessageType.RESULT,
+                content="",
+                session_id="claude-sess-ask",
+            )
+
+        driver.execute_agentic = mock_execute_agentic
+        driver.get_usage = MagicMock(return_value=None)
+        return driver
+
+    async def test_ask_user_question_emitted_as_text(
+        self,
+        service: BrainstormService,
+        mock_repository: MagicMock,
+        mock_event_bus: MagicMock,
+        mock_driver_with_ask: MagicMock,
+    ) -> None:
+        """ask_user_question tool call should be emitted as BRAINSTORM_TEXT."""
+        from amelia.server.models.events import EventType
+
+        now = datetime.now(UTC)
+        sess_id = uuid4()
+        mock_session = BrainstormingSession(
+            id=sess_id,
+            profile_id="work",
+            status=SessionStatus.ACTIVE,
+            created_at=now,
+            updated_at=now,
+        )
+        mock_repository.get_session.return_value = mock_session
+        mock_repository.get_max_sequence.return_value = 0
+
+        events = []
+        async for event in service.send_message(
+            session_id=sess_id,
+            content="Design something",
+            driver=mock_driver_with_ask,
+            cwd="/tmp/project",
+        ):
+            events.append(event)
+
+        # Find text events (excluding message_complete)
+        text_events = [
+            e for e in events if e.event_type == EventType.BRAINSTORM_TEXT
+        ]
+        # The ask_user_question should produce a text event with formatted question
+        assert any("What's your primary goal?" in (e.message or "") for e in text_events)
+        assert any("Performance" in (e.message or "") for e in text_events)
+        assert any("Simplicity" in (e.message or "") for e in text_events)
+
+    async def test_ask_user_question_tool_result_suppressed(
+        self,
+        service: BrainstormService,
+        mock_repository: MagicMock,
+        mock_event_bus: MagicMock,
+        mock_driver_with_ask: MagicMock,
+    ) -> None:
+        """tool_result for ask_user_question should not be emitted."""
+        from amelia.server.models.events import EventType
+
+        now = datetime.now(UTC)
+        sess_id = uuid4()
+        mock_session = BrainstormingSession(
+            id=sess_id,
+            profile_id="work",
+            status=SessionStatus.ACTIVE,
+            created_at=now,
+            updated_at=now,
+        )
+        mock_repository.get_session.return_value = mock_session
+        mock_repository.get_max_sequence.return_value = 0
+
+        events = []
+        async for event in service.send_message(
+            session_id=sess_id,
+            content="Design something",
+            driver=mock_driver_with_ask,
+            cwd="/tmp/project",
+        ):
+            events.append(event)
+
+        # No tool_call or tool_result events should exist
+        tool_events = [
+            e for e in events
+            if e.event_type in (
+                EventType.BRAINSTORM_TOOL_CALL,
+                EventType.BRAINSTORM_TOOL_RESULT,
+            )
+        ]
+        assert len(tool_events) == 0
+
+    def test_format_ask_user_question_with_descriptions(self) -> None:
+        """Should format question with option descriptions."""
+        result = BrainstormService._format_ask_user_question({
+            "questions": [
+                {
+                    "question": "Which approach?",
+                    "options": [
+                        {"label": "Option A", "description": "First approach"},
+                        {"label": "Option B", "description": "Second approach"},
+                    ],
+                }
+            ]
+        })
+        assert "Which approach?" in result
+        assert "Option A" in result
+        assert "First approach" in result
+        assert "Option B" in result
+
+    def test_format_ask_user_question_without_descriptions(self) -> None:
+        """Should format question without descriptions."""
+        result = BrainstormService._format_ask_user_question({
+            "questions": [
+                {
+                    "question": "Pick one?",
+                    "options": [
+                        {"label": "Yes"},
+                        {"label": "No"},
+                    ],
+                }
+            ]
+        })
+        assert "Pick one?" in result
+        assert "Yes" in result
+        assert "No" in result
+
+    def test_format_ask_user_question_empty_input(self) -> None:
+        """Should return empty string for empty input."""
+        result = BrainstormService._format_ask_user_question({})
+        assert result == ""

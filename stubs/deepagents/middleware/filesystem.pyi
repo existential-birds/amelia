@@ -1,6 +1,6 @@
 """Type stubs for deepagents.middleware.filesystem module."""
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import Any, TypedDict
 
 from deepagents.backends.protocol import BackendProtocol
@@ -13,17 +13,18 @@ class FilesystemState(TypedDict, total=False):
     files: dict[str, Any]
 
 
-def validate_path(file_path: str) -> str:
+def validate_path(path: str, *, allowed_prefixes: Sequence[str] | None = None) -> str:
     """Validate and normalize a file path.
 
     Args:
-        file_path: Path to validate.
+        path: Path to validate.
+        allowed_prefixes: If provided, the normalized path must start with one of these.
 
     Returns:
         Validated path string.
 
     Raises:
-        ValueError: If path is invalid.
+        ValueError: If path is invalid or not under allowed prefixes.
     """
     ...
 
