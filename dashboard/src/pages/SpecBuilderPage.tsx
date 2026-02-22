@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { Menu, Lightbulb, Bot, Cpu } from "lucide-react";
 import { api } from "@/api/client";
 import { getProfile } from "@/api/settings";
-import { formatDriver, formatModel } from "@/lib/utils";
+import { formatDriver, formatModel, formatQuestionAnswers } from "@/lib/utils";
 import { logger } from "@/lib/logger";
 import {
   Conversation,
@@ -51,9 +51,6 @@ import {
 } from "@/components/brainstorm";
 import type { BrainstormArtifact } from "@/types/api";
 import type { ConfigProfileInfo } from "@/types";
-
-// Markdown bold syntax used for formatting question answers
-const ANSWER_BOLD_WRAPPER = "**";
 
 // Extract profile info from config, preferring brainstormer agent config
 async function fetchProfileInfo(
@@ -202,13 +199,7 @@ function SpecBuilderPageContent() {
   const handleQuestionAnswer = useCallback(
     async (messageId: string, answers: Record<string, string | string[]>) => {
       // Format answers as readable text
-      const lines = Object.entries(answers).map(([question, answer]) => {
-        const answerText = Array.isArray(answer)
-          ? answer.join(", ")
-          : answer;
-        return `${ANSWER_BOLD_WRAPPER}${question}${ANSWER_BOLD_WRAPPER}: ${answerText}`;
-      });
-      const content = lines.join("\n");
+      const content = formatQuestionAnswers(answers);
 
       // Disable card during submission to prevent double-submits
       setAnsweringQuestionId(messageId);

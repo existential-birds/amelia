@@ -271,7 +271,13 @@ export function handleBrainstormMessage(msg: BrainstormMessage): void {
         const questions = result.success ? result.data : undefined;
         const text = validateText(msg.data.text);
         if (!result.success && msg.data.questions !== undefined) {
-          console.warn('AskUserQuestions validation failed:', result.error.format(), { data: msg.data.questions });
+          console.error('AskUserQuestions validation failed:', result.error.format(), { data: msg.data.questions });
+          state.updateMessage(msg.message_id, (m) => ({
+            ...m,
+            status: 'error',
+            errorMessage: 'Invalid question format received from server',
+          }));
+          break;
         }
         state.updateMessage(msg.message_id, (m) => ({
           ...m,

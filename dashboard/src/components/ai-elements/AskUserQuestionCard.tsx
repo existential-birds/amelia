@@ -83,8 +83,8 @@ export function AskUserQuestionCard({
   return (
     <div className={cn("flex flex-col gap-4 rounded-lg border p-4", answered && "bg-card/60")}>
 
-      {payload.questions.map((q) => (
-        <fieldset key={q.question} className="flex flex-col gap-2" disabled={isDisabled}>
+      {payload.questions.map((q, idx) => (
+        <fieldset key={`question-${idx}`} className="flex flex-col gap-2" disabled={isDisabled}>
           <legend className="flex items-center gap-2">
             {q.header && (
               <Badge variant="secondary" className="text-xs">

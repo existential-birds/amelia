@@ -151,3 +151,32 @@ export async function copyToClipboard(text: string): Promise<boolean> {
   document.body.removeChild(textArea);
   return success;
 }
+
+/**
+ * Formats question answers into markdown-formatted text.
+ *
+ * Takes a record of questions and their answers (which can be single values
+ * or arrays) and formats them with markdown bold syntax for the question text.
+ * Array answers are joined with commas.
+ *
+ * @param answers - Record mapping questions to their answers
+ * @returns Formatted string with one line per question-answer pair
+ *
+ * @example
+ * ```ts
+ * formatQuestionAnswers({
+ *   "What's your name?": "Alice",
+ *   "Favorite colors?": ["blue", "green"]
+ * })
+ * // => "**What's your name?**: Alice\n**Favorite colors?**: blue, green"
+ * ```
+ */
+export function formatQuestionAnswers(
+  answers: Record<string, string | string[]>
+): string {
+  const lines = Object.entries(answers).map(([question, answer]) => {
+    const answerText = Array.isArray(answer) ? answer.join(', ') : answer;
+    return `**${question}**: ${answerText}`;
+  });
+  return lines.join('\n');
+}
