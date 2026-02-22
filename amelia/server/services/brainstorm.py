@@ -880,7 +880,7 @@ class BrainstormService:
                         "Valid ask_user_question payload produced empty output",
                         session_id=session_id,
                     )
-                if formatted:
+                else:
                     logger.debug(
                         "Emitting interactive ask_user event",
                         session_id=session_id,
