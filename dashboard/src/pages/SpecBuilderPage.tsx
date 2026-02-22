@@ -397,7 +397,7 @@ function SpecBuilderPageContent() {
                             payload={message.askUserQuestions}
                             onAnswer={(answers) => handleQuestionAnswer(message.id, answers)}
                             answered={message.questionAnswered}
-                            disabled={answeringQuestionId === message.id}
+                            isSubmitting={answeringQuestionId === message.id}
                           />
                         )}
                         {message.status === "error" && (

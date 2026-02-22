@@ -3,6 +3,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AskUserQuestionCard } from "../AskUserQuestionCard";
 import type { AskUserQuestionPayload } from "@/types/api";
+import type { Selections } from "../AskUserQuestionCard";
 
 const singleSelectPayload: AskUserQuestionPayload = {
   questions: [
@@ -79,7 +80,7 @@ describe("AskUserQuestionCard", () => {
     await user.click(screen.getByRole("button", { name: /submit/i }));
 
     expect(onAnswer).toHaveBeenCalled();
-    const call = onAnswer.mock.calls[0]![0] as Record<string, string | string[]>;
+    const call = onAnswer.mock.calls[0]![0] as Selections;
     expect(call["Which features do you want?"]).toEqual(
       expect.arrayContaining(["Auth", "Caching"])
     );
@@ -114,12 +115,12 @@ describe("AskUserQuestionCard", () => {
     expect(screen.queryByRole("button", { name: /submit/i })).not.toBeInTheDocument();
   });
 
-  it("disables interactions when disabled", () => {
+  it("disables interactions when isSubmitting", () => {
     render(
       <AskUserQuestionCard
         payload={singleSelectPayload}
         onAnswer={vi.fn()}
-        disabled
+        isSubmitting
       />
     );
     const buttons = screen.getAllByRole("button");
@@ -154,5 +155,105 @@ describe("AskUserQuestionCard", () => {
     expect(onAnswer).toHaveBeenCalledWith({
       "Which approach do you prefer?": "Custom answer",
     });
+  });
+
+  it("multi-select: Other text is appended to selected options", async () => {
+    const user = userEvent.setup();
+    const onAnswer = vi.fn();
+    render(
+      <AskUserQuestionCard payload={multiSelectPayload} onAnswer={onAnswer} />
+    );
+
+    await user.click(screen.getByText("Auth"));
+    await user.click(screen.getByText("Caching"));
+    const otherInput = screen.getByPlaceholderText("Other...");
+    await user.type(otherInput, "Custom feature");
+    await user.click(screen.getByRole("button", { name: /submit/i }));
+
+    expect(onAnswer).toHaveBeenCalled();
+    const call = onAnswer.mock.calls[0]![0] as Selections;
+    expect(call["Which features do you want?"]).toEqual(
+      expect.arrayContaining(["Auth", "Caching", "Custom feature"])
+    );
+    expect(call["Which features do you want?"]).toHaveLength(3);
+  });
+
+  it("multi-select: toggling option off removes it from selection", async () => {
+    const user = userEvent.setup();
+    const onAnswer = vi.fn();
+    render(
+      <AskUserQuestionCard payload={multiSelectPayload} onAnswer={onAnswer} />
+    );
+
+    await user.click(screen.getByText("Auth"));
+    await user.click(screen.getByText("Caching"));
+    await user.click(screen.getByText("Auth")); // Toggle off
+    await user.click(screen.getByRole("button", { name: /submit/i }));
+
+    expect(onAnswer).toHaveBeenCalledWith({
+      "Which features do you want?": ["Caching"],
+    });
+  });
+
+  it("handles multiple questions", async () => {
+    const user = userEvent.setup();
+    const onAnswer = vi.fn();
+    const payload: AskUserQuestionPayload = {
+      questions: [
+        {
+          question: "Which approach?",
+          header: "Approach",
+          options: [
+            { label: "A" },
+            { label: "B" },
+          ],
+          multi_select: false,
+        },
+        {
+          question: "Which features?",
+          header: "Features",
+          options: [
+            { label: "Auth" },
+            { label: "Caching" },
+          ],
+          multi_select: true,
+        },
+      ],
+    };
+
+    render(<AskUserQuestionCard payload={payload} onAnswer={onAnswer} />);
+
+    await user.click(screen.getByText("A"));
+    await user.click(screen.getByText("Auth"));
+    await user.click(screen.getByText("Caching"));
+    await user.click(screen.getByRole("button", { name: /submit/i }));
+
+    expect(onAnswer).toHaveBeenCalledWith({
+      "Which approach?": "A",
+      "Which features?": expect.arrayContaining(["Auth", "Caching"]),
+    });
+  });
+
+  it("handles options without descriptions", () => {
+    const payload: AskUserQuestionPayload = {
+      questions: [
+        {
+          question: "Choose one",
+          header: "Choice",
+          options: [
+            { label: "First" },
+            { label: "Second" },
+          ],
+          multi_select: false,
+        },
+      ],
+    };
+
+    render(<AskUserQuestionCard payload={payload} onAnswer={vi.fn()} />);
+
+    expect(screen.getByText("First")).toBeInTheDocument();
+    expect(screen.getByText("Second")).toBeInTheDocument();
+    // Ensure no description elements are rendered
+    expect(screen.queryByText(/approach/i)).not.toBeInTheDocument();
   });
 });

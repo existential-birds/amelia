@@ -4,29 +4,29 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import type { AskUserQuestionPayload } from "@/types/api";
 import { CheckIcon } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 export interface AskUserQuestionCardProps {
   payload: AskUserQuestionPayload;
   onAnswer: (answers: Record<string, string | string[]>) => void;
-  disabled?: boolean;
+  isSubmitting?: boolean;
   answered?: boolean;
 }
 
-type Selections = Record<string, string | string[]>;
+export type Selections = Record<string, string | string[]>;
 
 export function AskUserQuestionCard({
   payload,
   onAnswer,
-  disabled = false,
+  isSubmitting = false,
   answered = false,
 }: AskUserQuestionCardProps) {
   const [selections, setSelections] = useState<Selections>({});
   const [otherTexts, setOtherTexts] = useState<Record<string, string>>({});
 
-  const isDisabled = disabled || answered;
+  const isDisabled = isSubmitting || answered;
 
-  const handleSelect = (question: string, label: string, multiSelect: boolean) => {
+  const handleSelect = useCallback((question: string, label: string, multiSelect: boolean) => {
     if (isDisabled) return;
     setSelections((prev) => {
       if (multiSelect) {
@@ -38,13 +38,18 @@ export function AskUserQuestionCard({
       }
       return { ...prev, [question]: label };
     });
-  };
+  }, [isDisabled]);
 
-  const handleOtherChange = (question: string, text: string) => {
+  const handleOtherChange = useCallback((question: string, text: string) => {
     if (isDisabled) return;
     setOtherTexts((prev) => ({ ...prev, [question]: text }));
-  };
+  }, [isDisabled]);
 
+  // Merge selections and "Other" text input into final answers
+  // Precedence rule: If "Other" text exists, it takes priority:
+  //   - multi-select: append Other to selected options array
+  //   - single-select: Other replaces any selected option
+  // Only use selections if no Other text is provided
   const answers = useMemo((): Selections => {
     const result: Selections = {};
     for (const q of payload.questions) {

@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { useWorkflowStore } from '../store/workflowStore';
 import { useBrainstormStore } from '../store/brainstormStore';
 import type { WebSocketMessage, WorkflowEvent, BrainstormMessage } from '../types';
-import type { AskUserQuestionItem, BrainstormArtifact, ToolCall, MessageUsage, SessionUsageSummary } from '../types/api';
+import type { AskUserQuestionItem, AskUserOption, BrainstormArtifact, ToolCall, MessageUsage, SessionUsageSummary } from '../types/api';
 
 /**
  * Zod schemas intentionally duplicate TypeScript types for runtime validation.
@@ -15,7 +15,7 @@ import type { AskUserQuestionItem, BrainstormArtifact, ToolCall, MessageUsage, S
 const askUserOptionSchema = z.object({
   label: z.string(),
   description: z.string().optional(),
-}) satisfies z.ZodType<{ label: string; description?: string }>;
+}) satisfies z.ZodType<AskUserOption>;
 
 /** Zod schema for AskUserQuestionItem validation (mirrors AskUserQuestionItem type). */
 const askUserQuestionItemSchema = z.object({
@@ -37,6 +37,9 @@ const optionalTextSchema = z.string().optional().default('');
  */
 function validateQuestions(data: unknown): AskUserQuestionItem[] | undefined {
   const result = askUserQuestionsSchema.safeParse(data);
+  if (!result.success) {
+    console.warn('Question validation failed:', result.error.format(), { data });
+  }
   return result.success ? result.data : undefined;
 }
 
@@ -45,6 +48,9 @@ function validateQuestions(data: unknown): AskUserQuestionItem[] | undefined {
  */
 function validateText(data: unknown): string {
   const result = optionalTextSchema.safeParse(data);
+  if (!result.success) {
+    console.warn('Text validation failed:', result.error.format(), { data });
+  }
   return result.success ? result.data : '';
 }
 
