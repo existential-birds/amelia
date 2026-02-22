@@ -338,4 +338,52 @@ describe("useBrainstormStore", () => {
       expect(useBrainstormStore.getState().artifacts).toHaveLength(2);
     });
   });
+
+  describe("stale streaming cleanup", () => {
+    it("clears streaming status from all messages", () => {
+      useBrainstormStore.getState().addMessage({
+        id: "m1",
+        session_id: "s1",
+        sequence: 1,
+        role: "assistant",
+        content: "Old response",
+        parts: null,
+        created_at: "2026-01-18T00:00:00Z",
+        status: "streaming",
+      });
+      useBrainstormStore.getState().addMessage({
+        id: "m2",
+        session_id: "s1",
+        sequence: 2,
+        role: "user",
+        content: "Next question",
+        parts: null,
+        created_at: "2026-01-18T00:00:01Z",
+      });
+
+      useBrainstormStore.getState().clearStaleStreaming();
+
+      const messages = useBrainstormStore.getState().messages;
+      expect(messages[0]!.status).toBeUndefined();
+      expect(messages[1]!.status).toBeUndefined();
+    });
+
+    it("does not affect error status", () => {
+      useBrainstormStore.getState().addMessage({
+        id: "m1",
+        session_id: "s1",
+        sequence: 1,
+        role: "assistant",
+        content: "",
+        parts: null,
+        created_at: "2026-01-18T00:00:00Z",
+        status: "error",
+        errorMessage: "Something broke",
+      });
+
+      useBrainstormStore.getState().clearStaleStreaming();
+
+      expect(useBrainstormStore.getState().messages[0]!.status).toBe("error");
+    });
+  });
 });
