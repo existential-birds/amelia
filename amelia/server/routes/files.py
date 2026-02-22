@@ -29,7 +29,7 @@ def _validate_and_resolve_path(user_path: str, working_dir: Path) -> Path:
 
     Returns:
         Resolved Path object that has been validated to be:
-        - An absolute path
+        - An absolute path (relative paths are resolved against working_dir)
         - Within the working directory (after symlink resolution)
         - An existing file
 
@@ -38,9 +38,9 @@ def _validate_and_resolve_path(user_path: str, working_dir: Path) -> Path:
     """
     path = Path(user_path)
 
-    # Validate absolute path
+    # Resolve relative paths against the working directory
     if not path.is_absolute():
-        raise FileOperationError("Path must be absolute", "INVALID_PATH")
+        path = working_dir / path
 
     # Resolve to handle symlinks and ..
     try:
@@ -251,7 +251,7 @@ async def get_file(
     """Get file content by path.
 
     Args:
-        file_path: Absolute path to the file.
+        file_path: Absolute or relative path to the file.
         worktree_path: Optional worktree path to use as base directory.
                       If not provided, uses active profile's working_dir.
         profile_repo: Profile repository for getting active profile.
