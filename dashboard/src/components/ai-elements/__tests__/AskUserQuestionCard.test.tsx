@@ -7,6 +7,7 @@ import type { AskUserQuestionPayload } from "@/types/api";
 const singleSelectPayload: AskUserQuestionPayload = {
   questions: [
     {
+      id: "q1",
       question: "Which approach do you prefer?",
       header: "Approach",
       options: [
@@ -21,6 +22,7 @@ const singleSelectPayload: AskUserQuestionPayload = {
 const multiSelectPayload: AskUserQuestionPayload = {
   questions: [
     {
+      id: "q2",
       question: "Which features do you want?",
       header: "Features",
       options: [
@@ -199,6 +201,7 @@ describe("AskUserQuestionCard", () => {
     const payload: AskUserQuestionPayload = {
       questions: [
         {
+          id: "q3",
           question: "Which approach?",
           header: "Approach",
           options: [
@@ -208,6 +211,7 @@ describe("AskUserQuestionCard", () => {
           multi_select: false,
         },
         {
+          id: "q4",
           question: "Which features?",
           header: "Features",
           options: [
@@ -236,6 +240,7 @@ describe("AskUserQuestionCard", () => {
     const payload: AskUserQuestionPayload = {
       questions: [
         {
+          id: "q5",
           question: "Choose one",
           header: "Choice",
           options: [
