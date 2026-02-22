@@ -116,3 +116,27 @@ class TestLogTodos:
                 assert isinstance(printed_arg.title, Text)
                 title_text = printed_arg.title.plain
                 assert "0/0" in title_text  # Still prints panel (empty)
+
+    def test_unknown_status_logs_warning_and_renders_question_mark(self) -> None:
+        """Unknown status should log warning and render with '?' icon."""
+        with patch("sys.stderr") as mock_stderr:
+            mock_stderr.isatty.return_value = True
+            with patch("amelia.logging.Console") as mock_console_cls:
+                mock_console = MagicMock()
+                mock_console_cls.return_value = mock_console
+                with patch("amelia.logging.logger") as mock_logger:
+                    log_todos([{"content": "Mystery task", "status": "unknown_status"}])
+                    # Verify warning was logged
+                    mock_logger.warning.assert_called_once_with(
+                        "Unknown todo status",
+                        status="unknown_status",
+                        content="Mystery task",
+                    )
+                    # Verify panel was rendered with '?' icon
+                    mock_console.print.assert_called_once()
+                    printed_arg = mock_console.print.call_args[0][0]
+                    assert isinstance(printed_arg, Panel)
+                    # The panel renderable is a Text object containing the '?' icon
+                    panel_text = printed_arg.renderable
+                    assert isinstance(panel_text, Text)
+                    assert "?" in panel_text.plain
