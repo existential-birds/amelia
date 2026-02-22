@@ -2,7 +2,33 @@ import { useCallback, useEffect, useRef } from 'react';
 import { useWorkflowStore } from '../store/workflowStore';
 import { useBrainstormStore } from '../store/brainstormStore';
 import type { WebSocketMessage, WorkflowEvent, BrainstormMessage } from '../types';
-import type { AskUserQuestionPayload, BrainstormArtifact, ToolCall, MessageUsage, SessionUsageSummary } from '../types/api';
+import type { AskUserQuestionItem, BrainstormArtifact, ToolCall, MessageUsage, SessionUsageSummary } from '../types/api';
+
+/**
+ * Validates that a value conforms to AskUserQuestionItem[] structure.
+ * Returns the validated array or undefined if validation fails.
+ */
+function validateQuestions(data: unknown): AskUserQuestionItem[] | undefined {
+  if (!Array.isArray(data)) return undefined;
+
+  for (const item of data) {
+    if (typeof item !== 'object' || item === null) return undefined;
+    if (typeof item.question !== 'string') return undefined;
+    if (typeof item.multi_select !== 'boolean') return undefined;
+    if (!Array.isArray(item.options)) return undefined;
+
+    for (const opt of item.options) {
+      if (typeof opt !== 'object' || opt === null) return undefined;
+      if (typeof opt.label !== 'string') return undefined;
+      // description is optional but must be string if present
+      if (opt.description !== undefined && typeof opt.description !== 'string') return undefined;
+    }
+    // header is optional but must be string if present
+    if (item.header !== undefined && typeof item.header !== 'string') return undefined;
+  }
+
+  return data as AskUserQuestionItem[];
+}
 
 /**
  * Derive WebSocket URL from window.location.
@@ -150,7 +176,7 @@ export function handleBrainstormMessage(msg: BrainstormMessage): void {
 
     case 'ask_user': {
       if (msg.message_id) {
-        const questions = msg.data.questions as AskUserQuestionPayload['questions'] | undefined;
+        const questions = validateQuestions(msg.data.questions);
         const text = (msg.data.text as string) ?? '';
         state.updateMessage(msg.message_id, (m) => ({
           ...m,

@@ -45,8 +45,7 @@ export function AskUserQuestionCard({
     setOtherTexts((prev) => ({ ...prev, [question]: text }));
   };
 
-  const handleSubmit = () => {
-    if (isDisabled) return;
+  const buildAnswers = (): Selections => {
     const answers: Selections = {};
     for (const q of payload.questions) {
       const selected = selections[q.question];
@@ -62,6 +61,15 @@ export function AskUserQuestionCard({
         answers[q.question] = selected;
       }
     }
+    return answers;
+  };
+
+  const hasAnswers = Object.keys(buildAnswers()).length > 0;
+
+  const handleSubmit = () => {
+    if (isDisabled) return;
+    const answers = buildAnswers();
+    if (Object.keys(answers).length === 0) return;
     onAnswer(answers);
   };
 
@@ -84,9 +92,9 @@ export function AskUserQuestionCard({
             <span className="text-sm font-medium">{q.question}</span>
           </div>
           <div className="flex flex-wrap gap-2">
-            {q.options.map((opt) => (
+            {q.options.map((opt, optIndex) => (
               <Button
-                key={opt.label}
+                key={`${index}-${optIndex}`}
                 variant={isSelected(q.question, opt.label, q.multi_select) ? "default" : "outline"}
                 size="sm"
                 disabled={isDisabled}
@@ -118,7 +126,7 @@ export function AskUserQuestionCard({
       ) : (
         <Button
           onClick={handleSubmit}
-          disabled={isDisabled}
+          disabled={isDisabled || !hasAnswers}
           size="sm"
           className="self-start"
         >

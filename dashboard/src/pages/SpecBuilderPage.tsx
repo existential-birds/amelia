@@ -117,6 +117,7 @@ function SpecBuilderPageContent() {
   const [handoffArtifact, setHandoffArtifact] = useState<BrainstormArtifact | null>(null);
   const [isHandingOff, setIsHandingOff] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [answeringQuestionId, setAnsweringQuestionId] = useState<string | null>(null);
   const [configProfileInfo, setConfigProfileInfo] = useState<ConfigProfileInfo | null>(null);
   const activeProfileRef = useRef<string>("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -204,6 +205,9 @@ function SpecBuilderPageContent() {
       });
       const content = lines.join("\n");
 
+      // Disable card during submission to prevent double-submits
+      setAnsweringQuestionId(messageId);
+
       // Mark question as answered in store
       updateMessage(messageId, (m) => ({ ...m, questionAnswered: true }));
 
@@ -214,6 +218,8 @@ function SpecBuilderPageContent() {
         // Revert state on failure
         updateMessage(messageId, (m) => ({ ...m, questionAnswered: false }));
         toast.error("Failed to send answer");
+      } finally {
+        setAnsweringQuestionId(null);
       }
     },
     [updateMessage, sendMessage]
@@ -390,6 +396,7 @@ function SpecBuilderPageContent() {
                             payload={message.askUserQuestions}
                             onAnswer={(answers) => handleQuestionAnswer(message.id, answers)}
                             answered={message.questionAnswered}
+                            disabled={answeringQuestionId === message.id}
                           />
                         )}
                         {message.status === "error" && (
