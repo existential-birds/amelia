@@ -285,6 +285,7 @@ class TestPersistedTypes:
             EventType.BRAINSTORM_TOOL_CALL,
             EventType.BRAINSTORM_TOOL_RESULT,
             EventType.BRAINSTORM_TEXT,
+            EventType.BRAINSTORM_ASK_USER,
             EventType.BRAINSTORM_MESSAGE_COMPLETE,
             EventType.STREAM,
             EventType.AGENT_MESSAGE,

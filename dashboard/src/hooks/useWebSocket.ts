@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { useWorkflowStore } from '../store/workflowStore';
 import { useBrainstormStore } from '../store/brainstormStore';
 import type { WebSocketMessage, WorkflowEvent, BrainstormMessage } from '../types';
-import type { BrainstormArtifact, ToolCall, MessageUsage, SessionUsageSummary } from '../types/api';
+import type { AskUserQuestionPayload, BrainstormArtifact, ToolCall, MessageUsage, SessionUsageSummary } from '../types/api';
 
 /**
  * Derive WebSocket URL from window.location.
@@ -143,6 +143,19 @@ export function handleBrainstormMessage(msg: BrainstormMessage): void {
                 }
               : tc
           ),
+        }));
+      }
+      break;
+    }
+
+    case 'ask_user': {
+      if (msg.message_id) {
+        const questions = msg.data.questions as AskUserQuestionPayload['questions'] | undefined;
+        const text = (msg.data.text as string) ?? '';
+        state.updateMessage(msg.message_id, (m) => ({
+          ...m,
+          content: m.content + text,
+          ...(questions ? { askUserQuestions: { questions } } : {}),
         }));
       }
       break;

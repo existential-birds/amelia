@@ -2,7 +2,15 @@
 
 from pathlib import Path
 
-from amelia.core.types import Design
+import pytest
+from pydantic import ValidationError
+
+from amelia.core.types import (
+    AskUserOption,
+    AskUserQuestionItem,
+    AskUserQuestionPayload,
+    Design,
+)
 
 
 def test_agent_config_creation():
@@ -182,3 +190,64 @@ def test_get_agent_config_preserves_original():
     assert original.sandbox.mode == "none"  # Original unchanged
     assert original.profile_name == "default"  # Original unchanged
     assert injected.sandbox.mode == "container"  # Injected has profile's sandbox
+
+
+class TestAskUserQuestionPayload:
+    """Tests for AskUser* models."""
+
+    def test_valid_payload(self) -> None:
+        payload = AskUserQuestionPayload(
+            questions=[
+                AskUserQuestionItem(
+                    question="Which approach?",
+                    header="Approach",
+                    options=[
+                        AskUserOption(label="A", description="First"),
+                        AskUserOption(label="B"),
+                    ],
+                    multi_select=True,
+                )
+            ]
+        )
+        assert len(payload.questions) == 1
+        assert payload.questions[0].question == "Which approach?"
+        assert payload.questions[0].header == "Approach"
+        assert payload.questions[0].multi_select is True
+        assert len(payload.questions[0].options) == 2
+        assert payload.questions[0].options[0].description == "First"
+        assert payload.questions[0].options[1].description is None
+
+    def test_minimal_payload(self) -> None:
+        payload = AskUserQuestionPayload(
+            questions=[AskUserQuestionItem(question="Ready?")]
+        )
+        assert payload.questions[0].header is None
+        assert payload.questions[0].options == []
+        assert payload.questions[0].multi_select is False
+
+    def test_from_dict(self) -> None:
+        data = {
+            "questions": [
+                {
+                    "question": "Pick one?",
+                    "options": [{"label": "Yes"}, {"label": "No"}],
+                }
+            ]
+        }
+        payload = AskUserQuestionPayload(**data)
+        assert payload.questions[0].options[1].label == "No"
+
+    def test_invalid_questions_type(self) -> None:
+        with pytest.raises(ValidationError):
+            AskUserQuestionPayload(questions="not-a-list")  # type: ignore[arg-type]
+
+    def test_invalid_options_type(self) -> None:
+        with pytest.raises(ValidationError):
+            AskUserQuestionPayload(
+                questions=[
+                    AskUserQuestionItem(
+                        question="Q?",
+                        options="not-a-list",  # type: ignore[arg-type]
+                    )
+                ]
+            )

@@ -35,6 +35,7 @@ import {
   ReasoningContent,
 } from "@/components/ai-elements/reasoning";
 import { ToolExecutionStrip } from "@/components/ai-elements/tool-execution-strip";
+import { AskUserQuestionCard } from "@/components/ai-elements/AskUserQuestionCard";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/PageHeader";
@@ -89,6 +90,7 @@ function SpecBuilderPageContent() {
     isStreaming,
     setDrawerOpen,
     sessionUsage,
+    updateMessage,
   } = useBrainstormStore(useShallow((state) => ({
     activeSessionId: state.activeSessionId,
     activeProfile: state.activeProfile,
@@ -98,6 +100,7 @@ function SpecBuilderPageContent() {
     isStreaming: state.isStreaming,
     setDrawerOpen: state.setDrawerOpen,
     sessionUsage: state.sessionUsage,
+    updateMessage: state.updateMessage,
   })));
 
   const {
@@ -190,6 +193,24 @@ function SpecBuilderPageContent() {
       }
     },
     [isSubmitting, activeSessionId, sendMessage, createSession, textInput]
+  );
+
+  const handleQuestionAnswer = useCallback(
+    (messageId: string, answers: Record<string, string | string[]>) => {
+      // Format answers as readable text
+      const lines = Object.entries(answers).map(([question, answer]) => {
+        const answerText = Array.isArray(answer) ? answer.join(", ") : answer;
+        return `**${question}**: ${answerText}`;
+      });
+      const content = lines.join("\n");
+
+      // Mark question as answered in store
+      updateMessage(messageId, (m) => ({ ...m, questionAnswered: true }));
+
+      // Send formatted answer as a chat message
+      sendMessage(content);
+    },
+    [updateMessage, sendMessage]
   );
 
   const handleSelectSession = useCallback(
@@ -357,6 +378,13 @@ function SpecBuilderPageContent() {
                           <Shimmer className="text-muted-foreground">Thinking...</Shimmer>
                         ) : (
                           <MessageResponse>{message.content}</MessageResponse>
+                        )}
+                        {message.askUserQuestions && (
+                          <AskUserQuestionCard
+                            payload={message.askUserQuestions}
+                            onAnswer={(answers) => handleQuestionAnswer(message.id, answers)}
+                            answered={message.questionAnswered}
+                          />
                         )}
                         {message.status === "error" && (
                           <div className="text-red-500 text-sm mt-2 flex items-center gap-1">

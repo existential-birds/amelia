@@ -1721,14 +1721,14 @@ class TestAskUserQuestionConversion(TestBrainstormService):
         driver.get_usage = MagicMock(return_value=None)
         return driver
 
-    async def test_ask_user_question_emitted_as_text(
+    async def test_ask_user_question_emits_ask_user_event_type(
         self,
         service: BrainstormService,
         mock_repository: MagicMock,
         mock_event_bus: MagicMock,
         mock_driver_with_ask: MagicMock,
     ) -> None:
-        """ask_user_question tool call should be emitted as BRAINSTORM_TEXT."""
+        """ask_user_question tool call should be emitted as BRAINSTORM_ASK_USER."""
         from amelia.server.models.events import EventType
 
         now = datetime.now(UTC)
@@ -1752,14 +1752,108 @@ class TestAskUserQuestionConversion(TestBrainstormService):
         ):
             events.append(event)
 
-        # Find text events (excluding message_complete)
-        text_events = [
-            e for e in events if e.event_type == EventType.BRAINSTORM_TEXT
+        ask_user_events = [
+            e for e in events if e.event_type == EventType.BRAINSTORM_ASK_USER
         ]
-        # The ask_user_question should produce a text event with formatted question
-        assert any("What's your primary goal?" in (e.message or "") for e in text_events)
-        assert any("Performance" in (e.message or "") for e in text_events)
-        assert any("Simplicity" in (e.message or "") for e in text_events)
+        assert len(ask_user_events) == 1
+        assert "What's your primary goal?" in (ask_user_events[0].message or "")
+        assert "Performance" in (ask_user_events[0].message or "")
+        assert "Simplicity" in (ask_user_events[0].message or "")
+
+    async def test_ask_user_question_data_contains_structured_questions(
+        self,
+        service: BrainstormService,
+        mock_repository: MagicMock,
+        mock_event_bus: MagicMock,
+        mock_driver_with_ask: MagicMock,
+    ) -> None:
+        """ask_user event data should contain structured questions payload."""
+        from amelia.server.models.events import EventType
+
+        now = datetime.now(UTC)
+        sess_id = uuid4()
+        mock_session = BrainstormingSession(
+            id=sess_id,
+            profile_id="work",
+            status=SessionStatus.ACTIVE,
+            created_at=now,
+            updated_at=now,
+        )
+        mock_repository.get_session.return_value = mock_session
+        mock_repository.get_max_sequence.return_value = 0
+
+        events = []
+        async for event in service.send_message(
+            session_id=sess_id,
+            content="Design something",
+            driver=mock_driver_with_ask,
+            cwd="/tmp/project",
+        ):
+            events.append(event)
+
+        ask_user_events = [
+            e for e in events if e.event_type == EventType.BRAINSTORM_ASK_USER
+        ]
+        assert len(ask_user_events) == 1
+        data = ask_user_events[0].data
+        assert "questions" in data
+        questions = data["questions"]
+        assert len(questions) == 1
+        assert questions[0]["question"] == "What's your primary goal?"
+        assert questions[0]["header"] == "Goal"
+        assert len(questions[0]["options"]) == 2
+        assert questions[0]["options"][0]["label"] == "Performance"
+        assert questions[0]["options"][0]["description"] == "Make it fast"
+        assert questions[0]["options"][1]["label"] == "Simplicity"
+        # Also has markdown fallback text
+        assert "text" in data
+
+    def test_ask_user_question_malformed_falls_back_to_text(
+        self,
+        service: BrainstormService,
+    ) -> None:
+        """Malformed ask_user_question payload should fall back to BRAINSTORM_TEXT."""
+        from unittest.mock import patch
+
+        from amelia.drivers.base import AgenticMessageType
+        from amelia.server.models.events import EventType
+
+        from amelia.core.types import AskUserQuestionPayload
+
+        sess_id = uuid4()
+        msg_id = uuid4()
+
+        # Valid tool_input that formats fine, but we mock Pydantic to reject it
+        agentic_msg = AgenticMessage(
+            type=AgenticMessageType.TOOL_CALL,
+            tool_name="ask_user_question",
+            tool_call_id="tc_bad",
+            tool_input={
+                "questions": [
+                    {
+                        "question": "Pick one?",
+                        "options": [{"label": "Yes"}, {"label": "No"}],
+                    }
+                ]
+            },
+        )
+
+        from pydantic import ValidationError
+
+        def raise_validation(*args: object, **kwargs: object) -> None:
+            raise ValidationError.from_exception_data(
+                "AskUserQuestionPayload",
+                [],
+            )
+
+        with patch.object(
+            AskUserQuestionPayload, "__init__", side_effect=raise_validation
+        ):
+            event = service._agentic_message_to_event(agentic_msg, sess_id, msg_id)
+
+        assert event.event_type == EventType.BRAINSTORM_TEXT
+        assert "Pick one?" in (event.message or "")
+        assert "questions" not in event.data
 
     async def test_ask_user_question_tool_result_suppressed(
         self,

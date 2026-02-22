@@ -126,6 +126,7 @@ class EventType(StrEnum):
     BRAINSTORM_TOOL_CALL = "brainstorm_tool_call"
     BRAINSTORM_TOOL_RESULT = "brainstorm_tool_result"
     BRAINSTORM_TEXT = "brainstorm_text"
+    BRAINSTORM_ASK_USER = "brainstorm_ask_user"
     BRAINSTORM_MESSAGE_COMPLETE = "brainstorm_message_complete"
     BRAINSTORM_ARTIFACT_CREATED = "brainstorm_artifact_created"
     BRAINSTORM_SESSION_COMPLETED = "brainstorm_session_completed"

@@ -27,8 +27,11 @@ from langchain_core.tools import BaseTool, StructuredTool
 from langgraph.types import Command
 from loguru import logger
 
+from pydantic import ValidationError
+
 from amelia.core.constants import resolve_plan_path
 from amelia.core.text import slugify
+from amelia.core.types import AskUserQuestionPayload
 from amelia.drivers.base import (
     AgenticMessage,
     AgenticMessageType,
@@ -858,11 +861,9 @@ class BrainstormService:
 
         event_type = type_mapping.get(agentic_msg.type, EventType.BRAINSTORM_TEXT)
 
-        # Intercept ask_user_question tool calls: the CLI driver's model may
-        # try to use AskUserQuestion, but the brainstormer has no interactive
-        # terminal.  Convert the question into a BRAINSTORM_TEXT event so the
-        # user sees the question as readable chat text instead of a hidden
-        # tool-strip entry.
+        # Intercept ask_user_question tool calls and emit as interactive
+        # BRAINSTORM_ASK_USER events with structured question payload.
+        # Falls back to plain BRAINSTORM_TEXT if the payload is malformed.
         if (
             agentic_msg.type == AgenticMessageType.TOOL_CALL
             and agentic_msg.tool_name == "ask_user_question"
@@ -870,26 +871,50 @@ class BrainstormService:
         ):
             formatted = self._format_ask_user_question(agentic_msg.tool_input)
             if formatted:
-                logger.debug(
-                    "Converted ask_user_question tool call to text event",
-                    session_id=session_id,
-                )
-                return WorkflowEvent(
-                    id=uuid4(),
-                    workflow_id=session_id,
-                    sequence=0,
-                    timestamp=datetime.now(UTC),
-                    agent="brainstormer",
-                    event_type=EventType.BRAINSTORM_TEXT,
-                    message=formatted,
-                    model=agentic_msg.model,
-                    domain=EventDomain.BRAINSTORM,
-                    data={
-                        "session_id": session_id,
-                        "message_id": message_id,
-                        "text": formatted,
-                    },
-                )
+                try:
+                    payload = AskUserQuestionPayload(**agentic_msg.tool_input)
+                    logger.debug(
+                        "Emitting interactive ask_user event",
+                        session_id=session_id,
+                    )
+                    return WorkflowEvent(
+                        id=uuid4(),
+                        workflow_id=session_id,
+                        sequence=0,
+                        timestamp=datetime.now(UTC),
+                        agent="brainstormer",
+                        event_type=EventType.BRAINSTORM_ASK_USER,
+                        message=formatted,
+                        model=agentic_msg.model,
+                        domain=EventDomain.BRAINSTORM,
+                        data={
+                            "session_id": session_id,
+                            "message_id": message_id,
+                            "text": formatted,
+                            "questions": payload.model_dump()["questions"],
+                        },
+                    )
+                except ValidationError:
+                    logger.warning(
+                        "Malformed ask_user_question payload, falling back to text",
+                        session_id=session_id,
+                    )
+                    return WorkflowEvent(
+                        id=uuid4(),
+                        workflow_id=session_id,
+                        sequence=0,
+                        timestamp=datetime.now(UTC),
+                        agent="brainstormer",
+                        event_type=EventType.BRAINSTORM_TEXT,
+                        message=formatted,
+                        model=agentic_msg.model,
+                        domain=EventDomain.BRAINSTORM,
+                        data={
+                            "session_id": session_id,
+                            "message_id": message_id,
+                            "text": formatted,
+                        },
+                    )
 
         # Build message from content
         message = agentic_msg.content or ""
