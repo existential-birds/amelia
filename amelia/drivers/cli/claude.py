@@ -30,12 +30,13 @@ from amelia.drivers.base import AgenticMessage, AgenticMessageType, DriverUsage,
 from amelia.logging import log_claude_result
 
 
-# Env vars that trigger Claude CLI's nested-session guard.
-# When Amelia runs inside a Claude Code session these are inherited by the
-# subprocess, causing an immediate exit-code-1 failure.
+# Claude Code sets CLAUDECODE and CLAUDE_CODE_ENTRYPOINT in its shell env.
+# If a developer runs Amelia from inside Claude Code, these vars leak into
+# the SDK subprocess, which thinks it's a nested Claude Code session and
+# immediately exits with code 1.
 #
-# The SDK merges options.env *on top* of os.environ ({**os.environ, **options.env}),
-# so simply omitting a key doesn't remove it — we must explicitly blank it.
+# We blank them explicitly because the SDK merges options.env on top of
+# os.environ — omitting a key doesn't remove it.
 _NESTED_SESSION_OVERRIDES = {"CLAUDECODE": "", "CLAUDE_CODE_ENTRYPOINT": ""}
 
 
