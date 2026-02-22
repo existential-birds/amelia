@@ -16,7 +16,7 @@ from amelia.server.models.events import (
 class TestEventFilteringEdgeCases:
     """Edge cases for event persistence classification."""
 
-    def test_persisted_types_count(self):
+    def test_persisted_types_count(self) -> None:
         """Verify expected count of persisted types."""
         # 5 lifecycle + 2 stage + 3 approval + 3 artifact + 3 review
         # + 3 task + 2 system + 3 oracle + 4 brainstorm + 3 knowledge + 2 plan validation = 33
@@ -27,12 +27,12 @@ class TestEventFilteringEdgeCases:
         list(PERSISTED_TYPES),
         ids=lambda et: et.value,
     )
-    def test_persisted_event_has_valid_level(self, event_type: EventType):
+    def test_persisted_event_has_valid_level(self, event_type: EventType) -> None:
         """Every persisted event type must map to a level accepted by workflow_log CHECK constraint."""
         level = get_event_level(event_type)
         assert level.value in {"info", "warning", "error", "debug"}
 
-    def test_workflow_event_with_none_agent_is_valid(self):
+    def test_workflow_event_with_none_agent_is_valid(self) -> None:
         """workflow_log allows NULL agent — verify model accepts None."""
         event = WorkflowEvent(
             id=uuid4(),
