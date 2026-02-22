@@ -309,6 +309,14 @@ class BrainstormService:
         self._driver_cleanup = driver_cleanup
         self._profile_repo = profile_repo
 
+    def emit_event(self, event: WorkflowEvent) -> None:
+        """Emit a workflow event to the event bus.
+
+        Args:
+            event: The event to emit.
+        """
+        self._event_bus.emit(event)
+
     def _get_session_lock(self, session_id: uuid.UUID) -> asyncio.Lock:
         """Get or create a lock for a session.
 

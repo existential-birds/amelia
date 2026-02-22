@@ -5,7 +5,7 @@ providing both single-turn generation and agentic execution capabilities.
 """
 import json
 from collections.abc import AsyncIterator
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient, ProcessError, query
 from claude_agent_sdk._errors import MessageParseError  # private API, pinned to >=0.1.38
@@ -226,6 +226,42 @@ def _handle_parse_error(e: MessageParseError) -> None:
     )
 
 
+def _get_raw_message_stream(
+    client: ClaudeSDKClient,
+) -> "AsyncIterator[dict[str, Any]]":
+    """Get the raw (unparsed) message stream from the SDK client.
+
+    Returns the internal message stream that yields raw dicts before parsing.
+    This is needed because the public receive_messages() API parses inside the
+    async generator, and parse errors permanently exhaust the generator.
+
+    This function encapsulates the private API access to make it easier to
+    update if/when the SDK provides a public alternative.
+
+    Raises:
+        RuntimeError: If the SDK internal API has changed.
+    """
+    # Try to access the raw message stream. The SDK doesn't expose a public API
+    # for this, so we access the internal _query attribute.
+    # Tracked for SDK improvement: ideally receive_messages() would have an
+    # option to yield raw dicts, or handle parse errors gracefully.
+    query = getattr(client, "_query", None)
+    if query is None:
+        raise RuntimeError(
+            "Claude SDK internal API changed: ClaudeSDKClient no longer has _query attribute. "
+            "Update amelia to use the new SDK API, or pin claude-agent-sdk to a compatible version."
+        )
+
+    receive_fn = getattr(query, "receive_messages", None)
+    if receive_fn is None:
+        raise RuntimeError(
+            "Claude SDK internal API changed: _query.receive_messages() no longer exists. "
+            "Update amelia to use the new SDK API, or pin claude-agent-sdk to a compatible version."
+        )
+
+    return cast("AsyncIterator[dict[str, Any]]", receive_fn())
+
+
 async def _safe_receive_response(
     client: ClaudeSDKClient,
 ) -> AsyncIterator[Message | SDKStreamEvent]:
@@ -237,19 +273,10 @@ async def _safe_receive_response(
     That means our outer try/except never sees a second message — the stream dies.
 
     This helper bypasses the problem by reading raw dicts from the transport
-    layer (``client._query.receive_messages()``) and calling ``parse_message``
-    ourselves *outside* the generator body.  Parse failures are logged and
-    skipped without killing the underlying stream.
+    layer and calling ``parse_message`` ourselves *outside* the generator body.
+    Parse failures are logged and skipped without killing the underlying stream.
     """
-    # Access the internal query's raw message stream (yields plain dicts).
-    # We call parse_message ourselves so a failure doesn't kill the generator.
-    try:
-        raw_messages = client._query.receive_messages()  # type: ignore[union-attr]
-    except AttributeError as e:
-        raise RuntimeError(
-            "Claude SDK private API changed: _query.receive_messages() no longer exists. "
-            "This driver requires an SDK version with this internal API."
-        ) from e
+    raw_messages = _get_raw_message_stream(client)
     raw_iter = raw_messages.__aiter__()
     try:
         while True:

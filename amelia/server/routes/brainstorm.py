@@ -333,7 +333,7 @@ async def send_message(
                 },
                 domain=EventDomain.BRAINSTORM,
             )
-            service._event_bus.emit(error_event)
+            service.emit_event(error_event)
 
     background_tasks.add_task(_process_message)
 
