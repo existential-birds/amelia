@@ -607,10 +607,19 @@ class BrainstormService:
                 if profile is not None:
                     plan_path_pattern = profile.plan_path_pattern
 
-            topic_slug = slugify(session.topic) if session.topic else ""
-            if not topic_slug:
-                topic_slug = f"brainstorm-{str(session_id)[:8]}"
-            plan_path = resolve_plan_path(plan_path_pattern, topic_slug)
+            if is_first_message or not session.output_artifact_path:
+                sid_prefix = str(session_id)[:8]
+                topic_slug = slugify(session.topic) if session.topic else ""
+                if topic_slug:
+                    topic_slug = f"{topic_slug}-{sid_prefix}"
+                else:
+                    topic_slug = f"brainstorm-{sid_prefix}"
+                plan_path = resolve_plan_path(plan_path_pattern, topic_slug)
+                session.output_artifact_path = plan_path
+                session.updated_at = datetime.now(UTC)
+                await self._repository.update_session(session)
+            else:
+                plan_path = session.output_artifact_path
             instructions = _build_brainstormer_instructions(plan_path)
 
             # Create restricted middleware for brainstormer

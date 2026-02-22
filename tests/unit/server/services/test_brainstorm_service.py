@@ -1481,6 +1481,13 @@ class TestSendMessagePlanPath:
         assert "caching-layer" in instructions
         assert "-design.md" in instructions
 
+        # Verify output_artifact_path was persisted on session
+        update_calls = mock_repository.update_session.call_args_list
+        # First update_session call stores the artifact path
+        updated_session = update_calls[0][0][0]
+        assert updated_session.output_artifact_path is not None
+        assert "caching-layer" in updated_session.output_artifact_path
+
     async def test_instructions_use_session_id_fallback_when_no_topic(
         self,
         mock_repository: MagicMock,
@@ -1510,6 +1517,12 @@ class TestSendMessagePlanPath:
         assert instructions is not None
         assert "brainstorm-abcd1234" in instructions
 
+        # Verify output_artifact_path was persisted on session
+        update_calls = mock_repository.update_session.call_args_list
+        updated_session = update_calls[0][0][0]
+        assert updated_session.output_artifact_path is not None
+        assert "brainstorm-abcd1234" in updated_session.output_artifact_path
+
     async def test_instructions_use_default_pattern_without_profile_repo(
         self,
         mock_repository: MagicMock,
@@ -1537,3 +1550,40 @@ class TestSendMessagePlanPath:
         # Default pattern: docs/plans/{date}-{issue_key}.md
         assert "docs/plans/" in instructions
         assert "auth-system" in instructions
+
+        # Verify output_artifact_path was persisted on session
+        update_calls = mock_repository.update_session.call_args_list
+        updated_session = update_calls[0][0][0]
+        assert updated_session.output_artifact_path is not None
+        assert "auth-system" in updated_session.output_artifact_path
+
+    async def test_reuses_stored_path_on_subsequent_messages(
+        self,
+        mock_repository: MagicMock,
+        mock_event_bus: MagicMock,
+        mock_profile_repo: MagicMock,
+        _make_session: object,
+    ) -> None:
+        """On subsequent messages, should reuse stored output_artifact_path."""
+        service = BrainstormService(
+            mock_repository, mock_event_bus, profile_repo=mock_profile_repo
+        )
+        session = _make_session(topic="caching layer")  # type: ignore[operator]
+        session.output_artifact_path = "plans/existing-plan.md"
+        mock_repository.get_session.return_value = session
+        mock_repository.get_max_sequence.return_value = 1  # Not first message
+
+        driver, captured = self._make_driver()
+
+        async for _ in service.send_message(
+            session_id=session.id,
+            content="continue please",
+            driver=driver,
+            cwd="/tmp/project",
+        ):
+            pass
+
+        assert len(captured) == 1
+        instructions = captured[0]
+        assert instructions is not None
+        assert "plans/existing-plan.md" in instructions
