@@ -34,7 +34,8 @@ class CodexStreamEvent(BaseModel):
     tool_output: str | None = None
     tool_name: str | None = None
     tool_call_id: str | None = None
-    item: dict[str, Any] | None = None  # nested item for item.completed events
+    item: dict[str, Any] | None = None
+    text: str | None = None  # nested item for item.completed events
 
 
 class CodexCliDriver(DriverInterface):
@@ -382,12 +383,9 @@ class CodexCliDriver(DriverInterface):
             elif event.type == "item.completed" and event.item:
                 item = event.item
                 item_type = item.get("type")
-                if item_type == "message":
-                    # Extract text from content parts
-                    parts = item.get("content", [])
-                    text = "".join(
-                        p.get("text", "") for p in parts if p.get("type") == "output_text"
-                    )
+                if item_type == "agent_message":
+                    # Codex CLI: item has a top-level "text" field
+                    text = item.get("text", "")
                     if text:
                         if schema:
                             text = self._validate_schema(text, schema, text)
@@ -395,31 +393,47 @@ class CodexCliDriver(DriverInterface):
                             type=AgenticMessageType.RESULT,
                             content=text,
                         )
-                elif item_type == "function_call":
-                    yield AgenticMessage(
-                        type=AgenticMessageType.TOOL_CALL,
-                        content="",
-                        tool_name=item.get("name", ""),
-                        tool_input=json.loads(item.get("arguments", "{}"))
-                        if isinstance(item.get("arguments"), str)
-                        else item.get("arguments", {}),
-                        tool_call_id=item.get("call_id") or item.get("id", ""),
-                    )
-                elif item_type == "function_call_output":
-                    yield AgenticMessage(
-                        type=AgenticMessageType.TOOL_RESULT,
-                        tool_output=item.get("output", ""),
-                        tool_name=item.get("name", ""),
-                        tool_call_id=item.get("call_id") or item.get("id", ""),
-                    )
+                elif item_type == "command_execution":
+                    # Codex CLI: command execution with command, aggregated_output, exit_code
+                    if item.get("status") == "completed" or item.get("exit_code") is not None:
+                        yield AgenticMessage(
+                            type=AgenticMessageType.TOOL_RESULT,
+                            tool_output=item.get("aggregated_output", ""),
+                            tool_name="command_execution",
+                            tool_call_id=item.get("id", ""),
+                        )
+                    else:
+                        yield AgenticMessage(
+                            type=AgenticMessageType.TOOL_CALL,
+                            content="",
+                            tool_name="command_execution",
+                            tool_input={"command": item.get("command", "")},
+                            tool_call_id=item.get("id", ""),
+                        )
+                elif item_type == "mcp_tool_call":
+                    # Codex CLI: MCP tool invocation with server, tool, arguments, result
+                    tool_name = item.get("tool", "")
+                    server = item.get("server", "")
+                    if server:
+                        tool_name = f"{server}/{tool_name}"
+                    if item.get("result") is not None:
+                        yield AgenticMessage(
+                            type=AgenticMessageType.TOOL_RESULT,
+                            tool_output=str(item.get("result", "")),
+                            tool_name=tool_name,
+                            tool_call_id=item.get("id", ""),
+                        )
+                    else:
+                        yield AgenticMessage(
+                            type=AgenticMessageType.TOOL_CALL,
+                            content="",
+                            tool_name=tool_name,
+                            tool_input=item.get("arguments", {}),
+                            tool_call_id=item.get("id", ""),
+                        )
                 elif item_type == "reasoning":
-                    # Extract reasoning summary text
-                    summary_parts = item.get("summary", [])
-                    text = "".join(
-                        p.get("text", "")
-                        for p in summary_parts
-                        if p.get("type") == "summary_text"
-                    )
+                    # Codex CLI: reasoning with top-level "text" field
+                    text = item.get("text", "")
                     if text:
                         yield AgenticMessage(
                             type=AgenticMessageType.THINKING,

@@ -223,11 +223,9 @@ async def test_execute_agentic_extracts_message_from_item_completed() -> None:
             CodexStreamEvent(
                 type="item.completed",
                 item={
-                    "type": "message",
-                    "content": [
-                        {"type": "output_text", "text": "Hello "},
-                        {"type": "output_text", "text": "world"},
-                    ],
+                    "type": "agent_message",
+                    "id": "msg_1",
+                    "text": "Hello world",
                 },
             ),
         ]
@@ -253,10 +251,12 @@ async def test_execute_agentic_extracts_tool_call_from_item_completed() -> None:
             CodexStreamEvent(
                 type="item.completed",
                 item={
-                    "type": "function_call",
-                    "name": "read_file",
-                    "arguments": '{"path": "a.py"}',
-                    "call_id": "fc_1",
+                    "type": "command_execution",
+                    "id": "cmd_1",
+                    "command": "cat a.py",
+                    "aggregated_output": "",
+                    "exit_code": None,
+                    "status": "in_progress",
                 },
             ),
         ]
@@ -268,9 +268,9 @@ async def test_execute_agentic_extracts_tool_call_from_item_completed() -> None:
 
     assert len(msgs) == 1
     assert msgs[0].type == AgenticMessageType.TOOL_CALL
-    assert msgs[0].tool_name == "read_file"
-    assert msgs[0].tool_input == {"path": "a.py"}
-    assert msgs[0].tool_call_id == "fc_1"
+    assert msgs[0].tool_name == "command_execution"
+    assert msgs[0].tool_input == {"command": "cat a.py"}
+    assert msgs[0].tool_call_id == "cmd_1"
 
 
 @pytest.mark.asyncio
@@ -284,10 +284,12 @@ async def test_execute_agentic_extracts_tool_result_from_item_completed() -> Non
             CodexStreamEvent(
                 type="item.completed",
                 item={
-                    "type": "function_call_output",
-                    "output": "file contents here",
-                    "name": "read_file",
-                    "call_id": "fc_1",
+                    "type": "command_execution",
+                    "id": "cmd_1",
+                    "command": "cat a.py",
+                    "aggregated_output": "file contents here",
+                    "exit_code": 0,
+                    "status": "completed",
                 },
             ),
         ]
@@ -300,8 +302,8 @@ async def test_execute_agentic_extracts_tool_result_from_item_completed() -> Non
     assert len(msgs) == 1
     assert msgs[0].type == AgenticMessageType.TOOL_RESULT
     assert msgs[0].tool_output == "file contents here"
-    assert msgs[0].tool_name == "read_file"
-    assert msgs[0].tool_call_id == "fc_1"
+    assert msgs[0].tool_name == "command_execution"
+    assert msgs[0].tool_call_id == "cmd_1"
 
 
 @pytest.mark.asyncio
@@ -316,9 +318,8 @@ async def test_execute_agentic_extracts_reasoning_from_item_completed() -> None:
                 type="item.completed",
                 item={
                     "type": "reasoning",
-                    "summary": [
-                        {"type": "summary_text", "text": "Let me think about this"},
-                    ],
+                    "id": "r_1",
+                    "text": "Let me think about this",
                 },
             ),
         ]
