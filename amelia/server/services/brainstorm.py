@@ -815,33 +815,27 @@ class BrainstormService:
         yield complete_event
 
     @staticmethod
-    def _format_ask_user_question(tool_input: dict[str, Any]) -> str:
+    def _format_ask_user_question(payload: AskUserQuestionPayload) -> str:
         """Format an AskUserQuestion tool call as readable markdown.
 
         Extracts question text and options from the tool input and
         formats them as a markdown list the user can read in the chat.
 
         Args:
-            tool_input: The tool_input dict from the AskUserQuestion call.
+            payload: The typed AskUserQuestionPayload from the tool call.
 
         Returns:
             Markdown-formatted question text.
         """
         parts: list[str] = []
-        questions = tool_input.get("questions", [])
-        if not isinstance(questions, list):
-            questions = [questions]
-        for q in questions:
-            question_text = q.get("question", "")
-            if question_text:
-                parts.append(f"**{question_text}**\n")
-            for opt in q.get("options", []):
-                label = opt.get("label", "")
-                desc = opt.get("description", "")
-                if desc:
-                    parts.append(f"- **{label}** — {desc}")
+        for q in payload.questions:
+            if q.question:
+                parts.append(f"**{q.question}**\n")
+            for opt in q.options:
+                if opt.description:
+                    parts.append(f"- **{opt.label}** — {opt.description}")
                 else:
-                    parts.append(f"- **{label}**")
+                    parts.append(f"- **{opt.label}**")
         return "\n".join(parts)
 
     def _agentic_message_to_event(
@@ -878,10 +872,10 @@ class BrainstormService:
             and agentic_msg.tool_name == "ask_user_question"
             and agentic_msg.tool_input
         ):
-            formatted = self._format_ask_user_question(agentic_msg.tool_input)
-            if formatted:
-                try:
-                    payload = AskUserQuestionPayload(**agentic_msg.tool_input)
+            try:
+                payload = AskUserQuestionPayload(**agentic_msg.tool_input)
+                formatted = self._format_ask_user_question(payload)
+                if formatted:
                     logger.debug(
                         "Emitting interactive ask_user event",
                         session_id=session_id,
@@ -903,27 +897,11 @@ class BrainstormService:
                             "questions": [q.model_dump() for q in payload.questions],
                         },
                     )
-                except ValidationError:
-                    logger.warning(
-                        "Malformed ask_user_question payload, falling back to text",
-                        session_id=session_id,
-                    )
-                    return WorkflowEvent(
-                        id=uuid4(),
-                        workflow_id=session_id,
-                        sequence=0,
-                        timestamp=datetime.now(UTC),
-                        agent="brainstormer",
-                        event_type=EventType.BRAINSTORM_TEXT,
-                        message=formatted,
-                        model=agentic_msg.model,
-                        domain=EventDomain.BRAINSTORM,
-                        data={
-                            "session_id": str(session_id),
-                            "message_id": str(message_id),
-                            "text": formatted,
-                        },
-                    )
+            except ValidationError:
+                logger.warning(
+                    "Malformed ask_user_question payload, falling back to text",
+                    session_id=session_id,
+                )
 
         # Build message from content
         message = agentic_msg.content or ""

@@ -283,27 +283,16 @@ async def _safe_receive_response(
     Parse failures are logged and skipped without killing the underlying stream.
     """
     raw_messages = _get_raw_message_stream(client)
-    raw_iter = raw_messages.__aiter__()
-    try:
-        while True:
-            try:
-                raw = await raw_iter.__anext__()
-            except StopAsyncIteration:
-                break
+    async for raw in raw_messages:
+        try:
+            message = _sdk_parse_message(raw)
+        except MessageParseError as e:
+            _handle_parse_error(e)
+            continue
 
-            try:
-                message = _sdk_parse_message(raw)
-            except MessageParseError as e:
-                _handle_parse_error(e)
-                continue
-
-            yield message
-            if isinstance(message, ResultMessage):
-                return
-    finally:
-        aclose = getattr(raw_iter, "aclose", None)
-        if aclose is not None:
-            await aclose()
+        yield message
+        if isinstance(message, ResultMessage):
+            return
 
 
 class ClaudeCliDriver:

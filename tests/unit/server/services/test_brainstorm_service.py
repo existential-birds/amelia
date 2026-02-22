@@ -7,6 +7,11 @@ from uuid import UUID, uuid4
 
 import pytest
 
+from amelia.core.types import (
+    AskUserOption,
+    AskUserQuestionItem,
+    AskUserQuestionPayload,
+)
 from amelia.drivers.base import AgenticMessage
 from amelia.server.models.brainstorm import (
     Artifact,
@@ -1591,6 +1596,7 @@ class TestSendMessagePlanPath:
         service = BrainstormService(
             mock_repository, mock_event_bus, profile_repo=mock_profile_repo
         )
+        # _make_session fixture typed as object but is callable factory
         session = _make_session(topic="caching layer")  # type: ignore[operator]
         mock_repository.get_session.return_value = session
 
@@ -1623,7 +1629,10 @@ class TestSendMessagePlanPath:
         service = BrainstormService(
             mock_repository, mock_event_bus, profile_repo=mock_profile_repo
         )
-        session = _make_session(topic=None, session_id="abcd1234-0000-0000-0000-000000000000")  # type: ignore[operator]
+        # _make_session fixture typed as object but is callable factory
+        session = _make_session(  # type: ignore[operator]
+            topic=None, session_id="abcd1234-0000-0000-0000-000000000000"
+        )
         mock_repository.get_session.return_value = session
 
         driver, captured = self._make_driver()
@@ -1649,6 +1658,7 @@ class TestSendMessagePlanPath:
     ) -> None:
         """Without profile_repo, falls back to default pattern."""
         service = BrainstormService(mock_repository, mock_event_bus)
+        # _make_session fixture typed as object but is callable factory
         session = _make_session(topic="auth system")  # type: ignore[operator]
         mock_repository.get_session.return_value = session
 
@@ -1809,11 +1819,11 @@ class TestAskUserQuestionConversion(TestBrainstormService):
         # Also has markdown fallback text
         assert "text" in data
 
-    def test_ask_user_question_malformed_falls_back_to_text(
+    def test_ask_user_question_malformed_falls_back_to_tool_call(
         self,
         service: BrainstormService,
     ) -> None:
-        """Malformed ask_user_question payload should fall back to BRAINSTORM_TEXT."""
+        """Malformed ask_user_question payload should fall back to BRAINSTORM_TOOL_CALL."""
         from amelia.drivers.base import AgenticMessageType
         from amelia.server.models.events import EventType
 
@@ -1837,8 +1847,9 @@ class TestAskUserQuestionConversion(TestBrainstormService):
 
         event = service._agentic_message_to_event(agentic_msg, sess_id, msg_id)
 
-        assert event.event_type == EventType.BRAINSTORM_TEXT
-        assert "Pick one?" in (event.message or "")
+        # Malformed payload can't be parsed, so it falls through to generic tool_call handling
+        assert event.event_type == EventType.BRAINSTORM_TOOL_CALL
+        assert event.tool_name == "ask_user_question"
         assert event.data is None or "questions" not in (event.data or {})
 
     async def test_ask_user_question_tool_result_suppressed(
@@ -1884,17 +1895,18 @@ class TestAskUserQuestionConversion(TestBrainstormService):
 
     def test_format_ask_user_question_with_descriptions(self) -> None:
         """Should format question with option descriptions."""
-        result = BrainstormService._format_ask_user_question({
-            "questions": [
-                {
-                    "question": "Which approach?",
-                    "options": [
-                        {"label": "Option A", "description": "First approach"},
-                        {"label": "Option B", "description": "Second approach"},
+        payload = AskUserQuestionPayload(
+            questions=[
+                AskUserQuestionItem(
+                    question="Which approach?",
+                    options=[
+                        AskUserOption(label="Option A", description="First approach"),
+                        AskUserOption(label="Option B", description="Second approach"),
                     ],
-                }
+                )
             ]
-        })
+        )
+        result = BrainstormService._format_ask_user_question(payload)
         assert "Which approach?" in result
         assert "Option A" in result
         assert "First approach" in result
@@ -1902,22 +1914,24 @@ class TestAskUserQuestionConversion(TestBrainstormService):
 
     def test_format_ask_user_question_without_descriptions(self) -> None:
         """Should format question without descriptions."""
-        result = BrainstormService._format_ask_user_question({
-            "questions": [
-                {
-                    "question": "Pick one?",
-                    "options": [
-                        {"label": "Yes"},
-                        {"label": "No"},
+        payload = AskUserQuestionPayload(
+            questions=[
+                AskUserQuestionItem(
+                    question="Pick one?",
+                    options=[
+                        AskUserOption(label="Yes"),
+                        AskUserOption(label="No"),
                     ],
-                }
+                )
             ]
-        })
+        )
+        result = BrainstormService._format_ask_user_question(payload)
         assert "Pick one?" in result
         assert "Yes" in result
         assert "No" in result
 
     def test_format_ask_user_question_empty_input(self) -> None:
         """Should return empty string for empty input."""
-        result = BrainstormService._format_ask_user_question({})
+        payload = AskUserQuestionPayload(questions=[])
+        result = BrainstormService._format_ask_user_question(payload)
         assert result == ""
