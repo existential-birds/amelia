@@ -202,7 +202,7 @@ function SpecBuilderPageContent() {
       const lines = Object.entries(answers).map(([question, answer]) => {
         const answerText = Array.isArray(answer)
           ? answer.map(a => `"${a}"`).join(", ")
-          : answer;
+          : `"${answer}"`;
         return `**${question}**: ${answerText}`;
       });
       const content = lines.join("\n");

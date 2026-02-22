@@ -83,7 +83,8 @@ export function AskUserQuestionCard({
   };
 
   return (
-    <div className={cn("flex flex-col gap-4 rounded-lg border p-4", answered && "border-opacity-60 bg-opacity-60")}>
+    <div className={cn("flex flex-col gap-4 rounded-lg border p-4", answered && "border-border/60 bg-card/60")}>
+
       {payload.questions.map((q) => (
         <div key={q.question} className="flex flex-col gap-2">
           <div className="flex items-center gap-2">
@@ -111,9 +112,10 @@ export function AskUserQuestionCard({
               </Button>
             ))}
           </div>
-          <label className="flex flex-col gap-1 max-w-xs">
+          <label htmlFor={`other-${q.question}`} className="flex flex-col gap-1 max-w-xs">
             <span className="text-xs text-muted-foreground">Other</span>
             <Input
+              id={`other-${q.question}`}
               placeholder="Other..."
               value={otherTexts[q.question] ?? ""}
               onChange={(e) => handleOtherChange(q.question, e.target.value)}
