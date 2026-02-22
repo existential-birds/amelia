@@ -1,3 +1,7 @@
+<script setup lang="ts">
+import { withBase } from 'vitepress'
+</script>
+
 <template>
   <section class="amelia-section cta-section">
     <h2 class="cta-heading">Start Experimenting</h2>
@@ -9,11 +13,11 @@
         GitHub
       </a>
       <span class="cta-sep" aria-hidden="true">/</span>
-      <a href="/amelia/architecture/inspiration" class="cta-link">
+      <a :href="withBase('/architecture/inspiration')" class="cta-link">
         Architecture
       </a>
       <span class="cta-sep" aria-hidden="true">/</span>
-      <a href="/amelia/guide/usage" class="cta-link">
+      <a :href="withBase('/guide/usage')" class="cta-link">
         Get Started
       </a>
     </div>

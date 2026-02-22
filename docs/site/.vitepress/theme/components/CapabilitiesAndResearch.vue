@@ -7,13 +7,15 @@
         <span class="capability-detail">{{ item.detail }}</span>
       </li>
     </ul>
-    <a href="/amelia/architecture/inspiration" class="research-link" aria-label="View full research foundations">
+    <a :href="withBase('/architecture/inspiration')" class="research-link" aria-label="View full research foundations">
       Full research foundations &rarr;
     </a>
   </section>
 </template>
 
 <script setup lang="ts">
+import { withBase } from 'vitepress'
+
 const items = [
   { capability: 'Plan, approve, build, review', detail: 'Architect decomposes the task, you approve, Developer writes code, Reviewer checks it. From MetaGPT and HULA.' },
   { capability: 'Iterate until it works', detail: 'Developer-Reviewer loop cycles on feedback until the code passes. Based on AgentCoder and Reflexion.' },
