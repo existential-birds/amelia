@@ -129,7 +129,7 @@ class TestGetSession(TestBrainstormService):
         ]
         mock_repository.get_artifacts.return_value = []
 
-        result = await service.get_session_with_history(str(sess_id))
+        result = await service.get_session_with_history(sess_id)
 
         assert result is not None
         assert result["session"].id == sess_id
@@ -174,7 +174,7 @@ class TestUpdateSessionStatus(TestBrainstormService):
         )
         mock_repository.get_session.return_value = mock_session
 
-        await service.update_session_status(str(sess_id), SessionStatus.READY_FOR_HANDOFF)
+        await service.update_session_status(sess_id, SessionStatus.READY_FOR_HANDOFF)
 
         mock_repository.update_session.assert_called_once()
         updated = mock_repository.update_session.call_args[0][0]
@@ -1796,6 +1796,7 @@ class TestAskUserQuestionConversion(TestBrainstormService):
         ]
         assert len(ask_user_events) == 1
         data = ask_user_events[0].data
+        assert data is not None
         assert "questions" in data
         questions = data["questions"]
         assert len(questions) == 1
@@ -1852,7 +1853,7 @@ class TestAskUserQuestionConversion(TestBrainstormService):
 
         assert event.event_type == EventType.BRAINSTORM_TEXT
         assert "Pick one?" in (event.message or "")
-        assert "questions" not in event.data
+        assert event.data is None or "questions" not in (event.data or {})
 
     async def test_ask_user_question_tool_result_suppressed(
         self,

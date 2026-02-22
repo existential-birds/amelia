@@ -41,6 +41,13 @@ class TrackerType(StrEnum):
     NOOP = "noop"
 
 
+class SandboxMode(StrEnum):
+    """Sandbox execution mode."""
+
+    NONE = "none"
+    CONTAINER = "container"
+
+
 class SandboxConfig(BaseModel):
     """Sandbox execution configuration for a profile.
 
@@ -53,7 +60,7 @@ class SandboxConfig(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    mode: Literal["none", "container"] = "none"
+    mode: SandboxMode = SandboxMode.NONE
     image: str = "amelia-sandbox:latest"
     network_allowlist_enabled: bool = False
     network_allowed_hosts: tuple[str, ...] = Field(

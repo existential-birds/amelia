@@ -9,7 +9,9 @@ from typing import Any, Literal
 
 from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient, ProcessError, query
 from claude_agent_sdk._errors import MessageParseError  # private API, pinned to >=0.1.38
-from claude_agent_sdk._internal.message_parser import parse_message as _sdk_parse_message
+from claude_agent_sdk._internal.message_parser import (  # private API, pinned to >=0.1.38
+    parse_message as _sdk_parse_message,
+)
 from claude_agent_sdk.types import (
     AssistantMessage,
     Message,

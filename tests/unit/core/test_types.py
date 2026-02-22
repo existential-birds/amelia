@@ -10,25 +10,28 @@ from amelia.core.types import (
     AskUserQuestionItem,
     AskUserQuestionPayload,
     Design,
+    DriverType,
+    SandboxMode,
+    TrackerType,
 )
 
 
-def test_agent_config_creation():
+def test_agent_config_creation() -> None:
     """AgentConfig should store driver, model, and optional options."""
     from amelia.core.types import AgentConfig
 
-    config = AgentConfig(driver="cli", model="sonnet")
-    assert config.driver == "cli"
+    config = AgentConfig(driver=DriverType.CLI, model="sonnet")
+    assert config.driver == DriverType.CLI
     assert config.model == "sonnet"
     assert config.options == {}
 
 
-def test_agent_config_with_options():
+def test_agent_config_with_options() -> None:
     """AgentConfig should accept arbitrary options dict."""
     from amelia.core.types import AgentConfig
 
     config = AgentConfig(
-        driver="api",
+        driver=DriverType.API,
         model="anthropic/claude-sonnet-4",
         options={"max_iterations": 5, "temperature": 0.7},
     )
@@ -36,33 +39,33 @@ def test_agent_config_with_options():
     assert config.options["temperature"] == 0.7
 
 
-def test_profile_with_agents_dict():
+def test_profile_with_agents_dict() -> None:
     """Profile should accept agents dict configuration."""
     from amelia.core.types import AgentConfig, Profile
 
     profile = Profile(
         name="test",
-        tracker="noop",
+        tracker=TrackerType.NOOP,
         repo_root="/tmp/test",
         agents={
-            "architect": AgentConfig(driver="cli", model="opus"),
-            "developer": AgentConfig(driver="cli", model="sonnet"),
+            "architect": AgentConfig(driver=DriverType.CLI, model="opus"),
+            "developer": AgentConfig(driver=DriverType.CLI, model="sonnet"),
         },
     )
     assert profile.agents["architect"].model == "opus"
     assert profile.agents["developer"].model == "sonnet"
 
 
-def test_profile_get_agent_config():
+def test_profile_get_agent_config() -> None:
     """Profile.get_agent_config should return config or raise if missing."""
     from amelia.core.types import AgentConfig, Profile
 
     profile = Profile(
         name="test",
-        tracker="noop",
+        tracker=TrackerType.NOOP,
         repo_root="/tmp/test",
         agents={
-            "architect": AgentConfig(driver="cli", model="opus"),
+            "architect": AgentConfig(driver=DriverType.CLI, model="opus"),
         },
     )
 
@@ -106,80 +109,80 @@ class TestDesign:
         assert design.content == "content"
 
 
-def test_agent_config_sandbox_default():
+def test_agent_config_sandbox_default() -> None:
     """AgentConfig should default sandbox to SandboxConfig() with mode='none'."""
     from amelia.core.types import AgentConfig, SandboxConfig
 
-    config = AgentConfig(driver="cli", model="sonnet")
+    config = AgentConfig(driver=DriverType.CLI, model="sonnet")
     assert config.sandbox == SandboxConfig()
     assert config.sandbox.mode == "none"
 
 
-def test_agent_config_profile_name_default():
+def test_agent_config_profile_name_default() -> None:
     """AgentConfig should default profile_name to 'default'."""
     from amelia.core.types import AgentConfig
 
-    config = AgentConfig(driver="cli", model="sonnet")
+    config = AgentConfig(driver=DriverType.CLI, model="sonnet")
     assert config.profile_name == "default"
 
 
-def test_agent_config_with_sandbox_config():
+def test_agent_config_with_sandbox_config() -> None:
     """AgentConfig should accept explicit SandboxConfig."""
     from amelia.core.types import AgentConfig, SandboxConfig
 
-    sandbox = SandboxConfig(mode="container", image="custom:latest")
+    sandbox = SandboxConfig(mode=SandboxMode.CONTAINER, image="custom:latest")
     config = AgentConfig(
-        driver="api", model="test-model",
+        driver=DriverType.API, model="test-model",
         sandbox=sandbox, profile_name="work",
     )
-    assert config.sandbox.mode == "container"
+    assert config.sandbox.mode == SandboxMode.CONTAINER
     assert config.sandbox.image == "custom:latest"
     assert config.profile_name == "work"
 
 
-def test_get_agent_config_injects_sandbox():
+def test_get_agent_config_injects_sandbox() -> None:
     """get_agent_config should inject profile's sandbox config into AgentConfig."""
     from amelia.core.types import AgentConfig, Profile, SandboxConfig
 
-    sandbox = SandboxConfig(mode="container", image="custom:latest")
+    sandbox = SandboxConfig(mode=SandboxMode.CONTAINER, image="custom:latest")
     profile = Profile(
         name="work",
-        tracker="noop",
+        tracker=TrackerType.NOOP,
         repo_root="/tmp/test",
         sandbox=sandbox,
-        agents={"architect": AgentConfig(driver="api", model="opus")},
+        agents={"architect": AgentConfig(driver=DriverType.API, model="opus")},
     )
 
     config = profile.get_agent_config("architect")
-    assert config.sandbox.mode == "container"
+    assert config.sandbox.mode == SandboxMode.CONTAINER
     assert config.sandbox.image == "custom:latest"
     assert config.profile_name == "work"
 
 
-def test_get_agent_config_injects_profile_name():
+def test_get_agent_config_injects_profile_name() -> None:
     """get_agent_config should set profile_name to profile.name."""
     from amelia.core.types import AgentConfig, Profile
 
     profile = Profile(
         name="personal",
-        tracker="noop",
+        tracker=TrackerType.NOOP,
         repo_root="/tmp/test",
-        agents={"developer": AgentConfig(driver="cli", model="sonnet")},
+        agents={"developer": AgentConfig(driver=DriverType.CLI, model="sonnet")},
     )
 
     config = profile.get_agent_config("developer")
     assert config.profile_name == "personal"
 
 
-def test_get_agent_config_preserves_original():
+def test_get_agent_config_preserves_original() -> None:
     """get_agent_config should not mutate the stored AgentConfig."""
     from amelia.core.types import AgentConfig, Profile, SandboxConfig
 
-    sandbox = SandboxConfig(mode="container")
-    original = AgentConfig(driver="api", model="opus")
+    sandbox = SandboxConfig(mode=SandboxMode.CONTAINER)
+    original = AgentConfig(driver=DriverType.API, model="opus")
     profile = Profile(
         name="work",
-        tracker="noop",
+        tracker=TrackerType.NOOP,
         repo_root="/tmp/test",
         sandbox=sandbox,
         agents={"architect": original},
@@ -187,7 +190,7 @@ def test_get_agent_config_preserves_original():
 
     injected = profile.get_agent_config("architect")
     assert injected is not original
-    assert original.sandbox.mode == "none"  # Original unchanged
+    assert original.sandbox.mode == SandboxMode.NONE  # Original unchanged
     assert original.profile_name == "default"  # Original unchanged
     assert injected.sandbox.mode == "container"  # Injected has profile's sandbox
 
@@ -234,7 +237,7 @@ class TestAskUserQuestionPayload:
                 }
             ]
         }
-        payload = AskUserQuestionPayload(**data)
+        payload = AskUserQuestionPayload(**data)  # type: ignore[arg-type]
         assert payload.questions[0].options[1].label == "No"
 
     def test_invalid_questions_type(self) -> None:

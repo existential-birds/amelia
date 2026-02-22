@@ -887,8 +887,8 @@ class BrainstormService:
                         model=agentic_msg.model,
                         domain=EventDomain.BRAINSTORM,
                         data={
-                            "session_id": session_id,
-                            "message_id": message_id,
+                            "session_id": str(session_id),
+                            "message_id": str(message_id),
                             "text": formatted,
                             "questions": payload.model_dump()["questions"],
                         },
@@ -909,8 +909,8 @@ class BrainstormService:
                         model=agentic_msg.model,
                         domain=EventDomain.BRAINSTORM,
                         data={
-                            "session_id": session_id,
-                            "message_id": message_id,
+                            "session_id": str(session_id),
+                            "message_id": str(message_id),
                             "text": formatted,
                         },
                     )
@@ -936,8 +936,8 @@ class BrainstormService:
             model=agentic_msg.model,
             domain=EventDomain.BRAINSTORM,
             data={
-                "session_id": session_id,
-                "message_id": message_id,
+                "session_id": str(session_id),
+                "message_id": str(message_id),
                 "text": message,
                 "tool_call_id": agentic_msg.tool_call_id,
                 "tool_name": agentic_msg.tool_name,
