@@ -599,6 +599,7 @@ class BrainstormService:
             assistant_content_parts: list[str] = []
             driver_session_id: str | None = None
             pending_write_files: dict[str, str] = {}  # tool_call_id -> path
+            suppressed_tool_ids: set[str] = set()  # tool calls converted to text
 
             # Resolve plan path from profile settings
             plan_path_pattern = _DEFAULT_PLAN_PATH_PATTERN
@@ -624,6 +625,21 @@ class BrainstormService:
                 instructions=instructions,
                 middleware=brainstormer_middleware,
             ):
+                # Track ask_user_question tool calls that were converted to text
+                if (
+                    agentic_msg.type == AgenticMessageType.TOOL_CALL
+                    and agentic_msg.tool_name == "ask_user_question"
+                    and agentic_msg.tool_call_id
+                ):
+                    suppressed_tool_ids.add(agentic_msg.tool_call_id)
+
+                # Suppress tool_result events for converted ask_user_question calls
+                if (
+                    agentic_msg.type == AgenticMessageType.TOOL_RESULT
+                    and agentic_msg.tool_call_id in suppressed_tool_ids
+                ):
+                    continue
+
                 # Convert to event and emit
                 event = self._agentic_message_to_event(
                     agentic_msg, session_id, resolved_message_id
@@ -788,6 +804,34 @@ class BrainstormService:
         self._event_bus.emit(complete_event)
         yield complete_event
 
+    @staticmethod
+    def _format_ask_user_question(tool_input: dict[str, Any]) -> str:
+        """Format an AskUserQuestion tool call as readable markdown.
+
+        Extracts question text and options from the tool input and
+        formats them as a markdown list the user can read in the chat.
+
+        Args:
+            tool_input: The tool_input dict from the AskUserQuestion call.
+
+        Returns:
+            Markdown-formatted question text.
+        """
+        parts: list[str] = []
+        questions = tool_input.get("questions", [])
+        for q in questions:
+            question_text = q.get("question", "")
+            if question_text:
+                parts.append(f"**{question_text}**\n")
+            for opt in q.get("options", []):
+                label = opt.get("label", "")
+                desc = opt.get("description", "")
+                if desc:
+                    parts.append(f"- **{label}** — {desc}")
+                else:
+                    parts.append(f"- **{label}**")
+        return "\n".join(parts)
+
     def _agentic_message_to_event(
         self,
         agentic_msg: AgenticMessage,
@@ -813,6 +857,39 @@ class BrainstormService:
         }
 
         event_type = type_mapping.get(agentic_msg.type, EventType.BRAINSTORM_TEXT)
+
+        # Intercept ask_user_question tool calls: the CLI driver's model may
+        # try to use AskUserQuestion, but the brainstormer has no interactive
+        # terminal.  Convert the question into a BRAINSTORM_TEXT event so the
+        # user sees the question as readable chat text instead of a hidden
+        # tool-strip entry.
+        if (
+            agentic_msg.type == AgenticMessageType.TOOL_CALL
+            and agentic_msg.tool_name == "ask_user_question"
+            and agentic_msg.tool_input
+        ):
+            formatted = self._format_ask_user_question(agentic_msg.tool_input)
+            if formatted:
+                logger.debug(
+                    "Converted ask_user_question tool call to text event",
+                    session_id=session_id,
+                )
+                return WorkflowEvent(
+                    id=uuid4(),
+                    workflow_id=session_id,
+                    sequence=0,
+                    timestamp=datetime.now(UTC),
+                    agent="brainstormer",
+                    event_type=EventType.BRAINSTORM_TEXT,
+                    message=formatted,
+                    model=agentic_msg.model,
+                    domain=EventDomain.BRAINSTORM,
+                    data={
+                        "session_id": session_id,
+                        "message_id": message_id,
+                        "text": formatted,
+                    },
+                )
 
         # Build message from content
         message = agentic_msg.content or ""
