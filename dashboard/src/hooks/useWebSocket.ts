@@ -5,6 +5,12 @@ import { useBrainstormStore } from '../store/brainstormStore';
 import type { WebSocketMessage, WorkflowEvent, BrainstormMessage } from '../types';
 import type { AskUserQuestionItem, BrainstormArtifact, ToolCall, MessageUsage, SessionUsageSummary } from '../types/api';
 
+/**
+ * Zod schemas intentionally duplicate TypeScript types for runtime validation.
+ * WebSocket data is untrusted - TypeScript only provides compile-time checks,
+ * but we need runtime validation to safely parse incoming messages.
+ */
+
 /** Zod schema for AskUserOption validation (mirrors AskUserOption type). */
 const askUserOptionSchema = z.object({
   label: z.string(),
