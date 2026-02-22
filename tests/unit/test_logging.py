@@ -60,7 +60,7 @@ class TestPlainLogFormatBraceEscaping:
 
 
 class TestLogTodos:
-    """log_todos renders rich table on TTY, no-op on piped stderr."""
+    """log_todos renders a Rich Panel on TTY, no-op on piped stderr."""
 
     def test_no_output_when_not_tty(self) -> None:
         """log_todos should be a no-op when stderr is not a TTY."""
@@ -71,8 +71,10 @@ class TestLogTodos:
             log_todos([{"content": "Fix bug", "status": "completed"}])
             mock_stderr.write.assert_not_called()
 
-    def test_renders_on_tty(self) -> None:
-        """log_todos should write to stderr when it is a TTY."""
+    def test_renders_panel_on_tty(self) -> None:
+        """log_todos should print a Rich Panel to stderr when it is a TTY."""
+        from rich.panel import Panel
+
         from amelia.logging import log_todos
 
         with patch("sys.stderr") as mock_stderr:
@@ -82,9 +84,34 @@ class TestLogTodos:
                 mock_console_cls.return_value = mock_console
                 log_todos([{"content": "Fix bug", "status": "completed"}])
                 mock_console.print.assert_called_once()
+                printed_arg = mock_console.print.call_args[0][0]
+                assert isinstance(printed_arg, Panel)
+
+    def test_panel_title_contains_counter(self) -> None:
+        """Panel title should show completed/total count."""
+        from rich.panel import Panel
+
+        from amelia.logging import log_todos
+
+        with patch("sys.stderr") as mock_stderr:
+            mock_stderr.isatty.return_value = True
+            with patch("amelia.logging.Console") as mock_console_cls:
+                mock_console = MagicMock()
+                mock_console_cls.return_value = mock_console
+                log_todos([
+                    {"content": "Done task", "status": "completed"},
+                    {"content": "Active task", "status": "in_progress"},
+                    {"content": "Todo task", "status": "pending"},
+                ])
+                printed_arg = mock_console.print.call_args[0][0]
+                assert isinstance(printed_arg, Panel)
+                title_text = printed_arg.title.plain  # type: ignore[union-attr]
+                assert "1/3" in title_text
 
     def test_handles_empty_list(self) -> None:
         """log_todos should handle empty todo list gracefully."""
+        from rich.panel import Panel
+
         from amelia.logging import log_todos
 
         with patch("sys.stderr") as mock_stderr:
@@ -93,4 +120,8 @@ class TestLogTodos:
                 mock_console = MagicMock()
                 mock_console_cls.return_value = mock_console
                 log_todos([])
-                mock_console.print.assert_called_once()  # Still prints table (empty)
+                mock_console.print.assert_called_once()
+                printed_arg = mock_console.print.call_args[0][0]
+                assert isinstance(printed_arg, Panel)
+                title_text = printed_arg.title.plain  # type: ignore[union-attr]
+                assert "0/0" in title_text  # Still prints table (empty)
