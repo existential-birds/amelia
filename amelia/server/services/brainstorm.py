@@ -639,6 +639,7 @@ class BrainstormService:
                     agentic_msg.type == AgenticMessageType.TOOL_CALL
                     and agentic_msg.tool_name == "ask_user_question"
                     and agentic_msg.tool_call_id
+                    and agentic_msg.tool_input
                 ):
                     suppressed_tool_ids.add(agentic_msg.tool_call_id)
 

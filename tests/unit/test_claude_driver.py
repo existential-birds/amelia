@@ -615,9 +615,6 @@ class TestClaudeCliDriverAgentic:
         """MessageParseError (e.g. rate_limit_event) is skipped; agentic execution continues."""
         from claude_agent_sdk._errors import MessageParseError
 
-        class _InjectErrorIterator:
-            """Async iterator that injects a MessageParseError between real messages."""
-
         # _safe_receive_response reads from _query.receive_messages() (raw dicts)
         # and calls _sdk_parse_message on each. We inject a sentinel that makes
         # the parse function raise MessageParseError, simulating an unknown type.
