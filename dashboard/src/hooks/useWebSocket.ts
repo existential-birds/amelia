@@ -255,6 +255,7 @@ export function handleBrainstormMessage(msg: BrainstormMessage): void {
         const toolCallId = validateText(msg.data.tool_call_id);
         const output = msg.data.output;
         const errorText = validateText(msg.data.error);
+        // validateText returns empty string only on validation failure, never on success
         if (toolCallId) {
           state.updateMessage(msg.message_id, (m) => ({
             ...m,
