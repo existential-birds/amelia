@@ -201,7 +201,7 @@ function SpecBuilderPageContent() {
       // Format answers as readable text
       const lines = Object.entries(answers).map(([question, answer]) => {
         const answerText = Array.isArray(answer)
-          ? answer.map(a => `"${a}"`).join(", ")
+          ? answer.join(", ")
           : `"${answer}"`;
         return `**${question}**: ${answerText}`;
       });

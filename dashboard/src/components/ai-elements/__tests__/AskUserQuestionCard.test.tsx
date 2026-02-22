@@ -170,11 +170,10 @@ describe("AskUserQuestionCard", () => {
     await user.type(otherInput, "Custom feature");
     await user.click(screen.getByRole("button", { name: /submit/i }));
 
-    expect(onAnswer).toHaveBeenCalled();
+    expect(onAnswer).toHaveBeenCalledWith({
+      "Which features do you want?": expect.arrayContaining(["Auth", "Caching", "Custom feature"]),
+    });
     const [call] = onAnswer.mock.calls[0]!;
-    expect(call["Which features do you want?"]).toEqual(
-      expect.arrayContaining(["Auth", "Caching", "Custom feature"])
-    );
     expect(call["Which features do you want?"]).toHaveLength(3);
   });
 

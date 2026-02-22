@@ -86,15 +86,15 @@ export function AskUserQuestionCard({
     <div className={cn("flex flex-col gap-4 rounded-lg border p-4", answered && "border-border/60 bg-card/60")}>
 
       {payload.questions.map((q) => (
-        <div key={q.question} className="flex flex-col gap-2">
-          <div className="flex items-center gap-2">
+        <fieldset key={q.question} className="flex flex-col gap-2">
+          <legend className="flex items-center gap-2">
             {q.header && (
               <Badge variant="secondary" className="text-xs">
                 {q.header}
               </Badge>
             )}
             <span className="text-sm font-medium">{q.question}</span>
-          </div>
+          </legend>
           <div className="flex flex-wrap gap-2">
             {q.options.map((opt) => (
               <Button
@@ -104,6 +104,7 @@ export function AskUserQuestionCard({
                 disabled={isDisabled}
                 onClick={() => handleSelect(q.question, opt.label, q.multi_select)}
                 className="flex flex-col items-start h-auto py-2 px-3"
+                aria-pressed={q.multi_select ? isSelected(q.question, opt.label, q.multi_select) : undefined}
               >
                 <span className="font-medium">{opt.label}</span>
                 {opt.description && (
@@ -124,7 +125,7 @@ export function AskUserQuestionCard({
               aria-label={`Other answer for: ${q.question}`}
             />
           </label>
-        </div>
+        </fieldset>
       ))}
       {answered ? (
         <div className="flex items-center gap-1.5 text-sm text-muted-foreground">

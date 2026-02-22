@@ -76,14 +76,14 @@ function validateQuestions(data: unknown): AskUserQuestionItem[] | undefined {
 }
 
 /**
- * Validates that a value is a string, returning empty string if invalid.
+ * Validates that a value is a string, returning undefined if invalid.
  */
-function validateText(data: unknown): string {
+function validateText(data: unknown): string | undefined {
   const result = optionalTextSchema.safeParse(data);
   if (!result.success) {
     console.warn('Text validation failed:', result.error.format(), { data });
   }
-  return result.success ? result.data : '';
+  return result.success ? result.data : undefined;
 }
 
 /**
@@ -182,7 +182,7 @@ export function handleBrainstormMessage(msg: BrainstormMessage): void {
         const text = validateText(msg.data.text);
         state.updateMessage(msg.message_id, (m) => ({
           ...m,
-          content: m.content + text,
+          content: m.content + (text ?? ''),
         }));
       }
       break;
@@ -192,7 +192,7 @@ export function handleBrainstormMessage(msg: BrainstormMessage): void {
         const text = validateText(msg.data.text);
         state.updateMessage(msg.message_id, (m) => ({
           ...m,
-          reasoning: (m.reasoning ?? '') + text,
+          reasoning: (m.reasoning ?? '') + (text ?? ''),
         }));
       }
       break;
@@ -255,8 +255,8 @@ export function handleBrainstormMessage(msg: BrainstormMessage): void {
         const toolCallId = validateText(msg.data.tool_call_id);
         const output = msg.data.output;
         const errorText = validateText(msg.data.error);
-        // validateText returns empty string only on validation failure, never on success
-        if (toolCallId) {
+        // validateText returns undefined on validation failure, so check for defined
+        if (toolCallId !== undefined) {
           state.updateMessage(msg.message_id, (m) => ({
             ...m,
             toolCalls: m.toolCalls?.map((tc) =>
@@ -281,7 +281,7 @@ export function handleBrainstormMessage(msg: BrainstormMessage): void {
         const text = validateText(msg.data.text);
         state.updateMessage(msg.message_id, (m) => ({
           ...m,
-          content: m.content + text,
+          content: m.content + (text ?? ''),
           ...(questions ? { askUserQuestions: { questions } } : {}),
         }));
       }
