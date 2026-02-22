@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, waitFor, cleanup } from "@testing-library/react";
+import { act, render, screen, waitFor, cleanup } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { toast } from "sonner";
@@ -353,6 +353,31 @@ describe("SpecBuilderPage", () => {
     expect(
       screen.getByPlaceholderText(/what would you like to design/i)
     ).toBeInTheDocument();
+  });
+
+  it("auto-focuses input when streaming ends", async () => {
+    useBrainstormStore.setState({
+      activeSessionId: "s1",
+      sessions: [{ id: "s1", profile_id: "test", driver_session_id: null, status: "active" as const, topic: "Test", created_at: "2026-01-18T00:00:00Z", updated_at: "2026-01-18T00:00:00Z" }],
+      messages: [{ id: "m1", session_id: "s1", sequence: 1, role: "assistant" as const, content: "", parts: null, created_at: "2026-01-18T00:00:00Z", status: "streaming" as const }],
+      isStreaming: true,
+    });
+
+    renderPage();
+
+    const textarea = screen.getByPlaceholderText(/what would you like to design/i);
+    // While streaming, textarea is disabled and not focused
+    expect(textarea).toBeDisabled();
+
+    // Simulate streaming ending
+    act(() => {
+      useBrainstormStore.setState({ isStreaming: false });
+    });
+
+    await waitFor(() => {
+      expect(textarea).not.toBeDisabled();
+      expect(document.activeElement).toBe(textarea);
+    });
   });
 
   it("falls back to config.active_profile_info when getProfile fails", async () => {
