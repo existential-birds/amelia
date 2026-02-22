@@ -207,8 +207,14 @@ function SpecBuilderPageContent() {
       // Mark question as answered in store
       updateMessage(messageId, (m) => ({ ...m, questionAnswered: true }));
 
-      // Send formatted answer as a chat message
-      await sendMessage(content);
+      try {
+        // Send formatted answer as a chat message
+        await sendMessage(content);
+      } catch {
+        // Revert state on failure
+        updateMessage(messageId, (m) => ({ ...m, questionAnswered: false }));
+        toast.error("Failed to send answer");
+      }
     },
     [updateMessage, sendMessage]
   );
