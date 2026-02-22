@@ -60,7 +60,7 @@ const brainstormArtifactSchema = z.object({
 const toolCallSchema = z.object({
   tool_call_id: z.string(),
   tool_name: z.string(),
-  input: z.unknown(),
+  input: z.unknown().optional(),
 });
 
 /**

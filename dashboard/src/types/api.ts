@@ -143,8 +143,8 @@ export interface ToolCall {
   tool_call_id: string;
   /** Name of the tool being called. */
   tool_name: string;
-  /** Input parameters passed to the tool. */
-  input: unknown;
+  /** Input parameters passed to the tool (may be undefined for tools without params). */
+  input?: unknown;
   /** Output result from the tool (populated when complete). */
   output?: unknown;
   /** Error text if the tool call failed. */
