@@ -78,7 +78,8 @@ describe("AskUserQuestionCard", () => {
     await user.click(screen.getByText("Caching"));
     await user.click(screen.getByRole("button", { name: /submit/i }));
 
-    const call = onAnswer.mock.calls[0][0];
+    expect(onAnswer).toHaveBeenCalled();
+    const call = onAnswer.mock.calls[0]![0] as Record<string, string | string[]>;
     expect(call["Which features do you want?"]).toEqual(
       expect.arrayContaining(["Auth", "Caching"])
     );
