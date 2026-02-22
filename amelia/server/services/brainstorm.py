@@ -19,7 +19,7 @@ from deepagents.backends.protocol import BackendProtocol, WriteResult
 from deepagents.middleware.filesystem import (
     FilesystemMiddleware,
     FilesystemState,
-    _validate_path,
+    validate_path,
 )
 from langchain.tools import ToolRuntime
 from langchain_core.messages import ToolMessage
@@ -90,7 +90,7 @@ def _write_design_doc_tool_generator(
             )
 
         resolved_backend = middleware._get_backend(runtime)
-        validated_path = _validate_path(file_path)
+        validated_path = validate_path(file_path)
         res: WriteResult = resolved_backend.write(validated_path, content)
 
         if res.error:
@@ -123,7 +123,7 @@ def _write_design_doc_tool_generator(
             )
 
         resolved_backend = middleware._get_backend(runtime)
-        validated_path = _validate_path(file_path)
+        validated_path = validate_path(file_path)
         res: WriteResult = await resolved_backend.awrite(validated_path, content)
 
         if res.error:
