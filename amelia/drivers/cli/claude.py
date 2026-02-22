@@ -41,6 +41,43 @@ from amelia.logging import log_claude_result
 # os.environ — omitting a key doesn't remove it.
 _NESTED_SESSION_OVERRIDES = {"CLAUDECODE": "", "CLAUDE_CODE_ENTRYPOINT": ""}
 
+# Flag to track whether SDK internal API has been validated with a real client
+_sdk_internal_api_validated = False
+
+
+def _validate_sdk_internal_api(client: ClaudeSDKClient) -> None:
+    """Validate SDK internal API availability on first use.
+
+    Checks that the private SDK APIs we depend on exist, raising RuntimeError
+    if the SDK has changed incompatibly. Called once on first client use rather
+    than on every message stream access.
+
+    Args:
+        client: An active ClaudeSDKClient instance to validate against.
+
+    Raises:
+        RuntimeError: If the SDK internal API has changed.
+    """
+    global _sdk_internal_api_validated
+    if _sdk_internal_api_validated:
+        return
+
+    client_query = getattr(client, "_query", None)
+    if client_query is None:
+        raise RuntimeError(
+            "Claude SDK internal API changed: ClaudeSDKClient no longer has _query attribute. "
+            "Update amelia to use the new SDK API, or pin claude-agent-sdk to a compatible version."
+        )
+
+    receive_fn = getattr(client_query, "receive_messages", None)
+    if receive_fn is None:
+        raise RuntimeError(
+            "Claude SDK internal API changed: _query.receive_messages() no longer exists. "
+            "Update amelia to use the new SDK API, or pin claude-agent-sdk to a compatible version."
+        )
+
+    _sdk_internal_api_validated = True
+
 
 def _build_sanitized_env() -> dict[str, str]:
     """Return env overrides that neutralise nested-session guard vars.
@@ -238,34 +275,12 @@ def _get_raw_message_stream(
     This function encapsulates the private API access to make it easier to
     update if/when the SDK provides a public alternative.
 
-    Raises:
-        RuntimeError: If the SDK internal API has changed.
+    Requires _validate_sdk_internal_api() to have been called first.
     """
-    # Try to access the raw message stream. The SDK doesn't expose a public API
-    # for this, so we access the internal _query attribute.
-    # Tracked for SDK improvement: ideally receive_messages() would have an
-    # option to yield raw dicts, or handle parse errors gracefully.
-    client_query = getattr(client, "_query", None)
-    if client_query is None:
-        raise RuntimeError(
-            "Claude SDK internal API changed: ClaudeSDKClient no longer has _query attribute. "
-            "Update amelia to use the new SDK API, or pin claude-agent-sdk to a compatible version."
-        )
-
-    receive_fn = getattr(client_query, "receive_messages", None)
-    if receive_fn is None:
-        raise RuntimeError(
-            "Claude SDK internal API changed: _query.receive_messages() no longer exists. "
-            "Update amelia to use the new SDK API, or pin claude-agent-sdk to a compatible version."
-        )
-
-    result = receive_fn()
-    if not hasattr(result, "__aiter__"):
-        raise RuntimeError(
-            "Claude SDK internal API changed: _query.receive_messages() no longer returns an async iterator. "
-            "Update amelia to use the new SDK API, or pin claude-agent-sdk to a compatible version."
-        )
-    return cast("AsyncIterator[dict[str, Any]]", result)
+    # Access validated internal API. The SDK doesn't expose a public API for
+    # raw message streams, so we access the internal _query attribute.
+    # Validation is done once at startup via _validate_sdk_internal_api().
+    return cast("AsyncIterator[dict[str, Any]]", client._query.receive_messages())  # type: ignore[union-attr]
 
 
 async def _safe_receive_response(
@@ -282,6 +297,7 @@ async def _safe_receive_response(
     layer and calling ``parse_message`` ourselves *outside* the generator body.
     Parse failures are logged and skipped without killing the underlying stream.
     """
+    _validate_sdk_internal_api(client)  # Validates once, no-op on subsequent calls
     raw_messages = _get_raw_message_stream(client)
     async for raw in raw_messages:
         try:

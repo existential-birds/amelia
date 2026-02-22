@@ -875,6 +875,11 @@ class BrainstormService:
             try:
                 payload = AskUserQuestionPayload(**agentic_msg.tool_input)
                 formatted = self._format_ask_user_question(payload)
+                if not formatted:
+                    logger.warning(
+                        "Valid ask_user_question payload produced empty output",
+                        session_id=session_id,
+                    )
                 if formatted:
                     logger.debug(
                         "Emitting interactive ask_user event",
