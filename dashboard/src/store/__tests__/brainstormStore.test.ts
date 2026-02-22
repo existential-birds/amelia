@@ -339,6 +339,103 @@ describe("useBrainstormStore", () => {
     });
   });
 
+  describe("handleWebSocketDisconnect", () => {
+    it("marks streaming message as error and resets streaming state", () => {
+      const message: BrainstormMessage = {
+        id: "m1",
+        session_id: "s1",
+        sequence: 1,
+        role: "assistant",
+        content: "Partial response",
+        parts: null,
+        created_at: "2026-01-18T00:00:00Z",
+        status: "streaming",
+      };
+      useBrainstormStore.getState().addMessage(message);
+      useBrainstormStore.getState().setStreaming(true, "m1");
+
+      useBrainstormStore.getState().handleWebSocketDisconnect();
+
+      const state = useBrainstormStore.getState();
+      expect(state.messages[0]!.status).toBe("error");
+      expect(state.messages[0]!.errorMessage).toBe(
+        "Connection lost. Please retry."
+      );
+      expect(state.isStreaming).toBe(false);
+      expect(state.streamingMessageId).toBeNull();
+    });
+
+    it("does nothing when streamingMessageId is null", () => {
+      const message: BrainstormMessage = {
+        id: "m1",
+        session_id: "s1",
+        sequence: 1,
+        role: "user",
+        content: "Hello",
+        parts: null,
+        created_at: "2026-01-18T00:00:00Z",
+      };
+      useBrainstormStore.getState().addMessage(message);
+
+      useBrainstormStore.getState().handleWebSocketDisconnect();
+
+      const state = useBrainstormStore.getState();
+      expect(state.messages).toHaveLength(1);
+      expect(state.messages[0]!.status).toBeUndefined();
+      expect(state.isStreaming).toBe(false);
+      expect(state.streamingMessageId).toBeNull();
+    });
+
+    it("only affects the streaming message, not other messages", () => {
+      const userMsg: BrainstormMessage = {
+        id: "m1",
+        session_id: "s1",
+        sequence: 1,
+        role: "user",
+        content: "Hello",
+        parts: null,
+        created_at: "2026-01-18T00:00:00Z",
+      };
+      const streamingMsg: BrainstormMessage = {
+        id: "m2",
+        session_id: "s1",
+        sequence: 2,
+        role: "assistant",
+        content: "Partial",
+        parts: null,
+        created_at: "2026-01-18T00:00:01Z",
+        status: "streaming",
+      };
+      const completedMsg: BrainstormMessage = {
+        id: "m3",
+        session_id: "s1",
+        sequence: 3,
+        role: "assistant",
+        content: "Done earlier",
+        parts: null,
+        created_at: "2026-01-18T00:00:02Z",
+      };
+      useBrainstormStore.getState().addMessage(userMsg);
+      useBrainstormStore.getState().addMessage(streamingMsg);
+      useBrainstormStore.getState().addMessage(completedMsg);
+      useBrainstormStore.getState().setStreaming(true, "m2");
+
+      useBrainstormStore.getState().handleWebSocketDisconnect();
+
+      const messages = useBrainstormStore.getState().messages;
+      expect(messages).toHaveLength(3);
+      // User message unchanged
+      expect(messages[0]!.content).toBe("Hello");
+      expect(messages[0]!.status).toBeUndefined();
+      // Streaming message got error
+      expect(messages[1]!.status).toBe("error");
+      expect(messages[1]!.errorMessage).toBe("Connection lost. Please retry.");
+      // Completed message unchanged
+      expect(messages[2]!.content).toBe("Done earlier");
+      expect(messages[2]!.status).toBeUndefined();
+    });
+  });
+
   describe("stale streaming cleanup", () => {
     it("clears streaming status from all messages", () => {
       useBrainstormStore.getState().addMessage({
