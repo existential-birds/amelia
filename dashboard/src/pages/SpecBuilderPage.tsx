@@ -196,7 +196,7 @@ function SpecBuilderPageContent() {
   );
 
   const handleQuestionAnswer = useCallback(
-    (messageId: string, answers: Record<string, string | string[]>) => {
+    async (messageId: string, answers: Record<string, string | string[]>) => {
       // Format answers as readable text
       const lines = Object.entries(answers).map(([question, answer]) => {
         const answerText = Array.isArray(answer) ? answer.join(", ") : answer;
@@ -208,7 +208,7 @@ function SpecBuilderPageContent() {
       updateMessage(messageId, (m) => ({ ...m, questionAnswered: true }));
 
       // Send formatted answer as a chat message
-      sendMessage(content);
+      await sendMessage(content);
     },
     [updateMessage, sendMessage]
   );

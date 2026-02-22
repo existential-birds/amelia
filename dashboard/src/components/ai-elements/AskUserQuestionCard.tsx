@@ -73,8 +73,8 @@ export function AskUserQuestionCard({
 
   return (
     <div className={cn("flex flex-col gap-4 rounded-lg border p-4", answered && "opacity-60")}>
-      {payload.questions.map((q) => (
-        <div key={q.question} className="flex flex-col gap-2">
+      {payload.questions.map((q, index) => (
+        <div key={index} className="flex flex-col gap-2">
           <div className="flex items-center gap-2">
             {q.header && (
               <Badge variant="secondary" className="text-xs">
@@ -84,9 +84,9 @@ export function AskUserQuestionCard({
             <span className="text-sm font-medium">{q.question}</span>
           </div>
           <div className="flex flex-wrap gap-2">
-            {q.options.map((opt) => (
+            {q.options.map((opt, optIndex) => (
               <Button
-                key={opt.label}
+                key={optIndex}
                 variant={isSelected(q.question, opt.label, q.multi_select) ? "default" : "outline"}
                 size="sm"
                 disabled={isDisabled}
