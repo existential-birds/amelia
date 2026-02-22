@@ -200,7 +200,9 @@ function SpecBuilderPageContent() {
     async (messageId: string, answers: Record<string, string | string[]>) => {
       // Format answers as readable text
       const lines = Object.entries(answers).map(([question, answer]) => {
-        const answerText = Array.isArray(answer) ? answer.join(", ") : answer;
+        const answerText = Array.isArray(answer)
+          ? answer.map(a => `"${a}"`).join(", ")
+          : answer;
         return `**${question}**: ${answerText}`;
       });
       const content = lines.join("\n");

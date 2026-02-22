@@ -82,12 +82,9 @@ describe("AskUserQuestionCard", () => {
     await user.click(screen.getByText("Caching"));
     await user.click(screen.getByRole("button", { name: /submit/i }));
 
-    expect(onAnswer).toHaveBeenCalled();
-    const [call] = onAnswer.mock.calls[0]!;
-    expect(call["Which features do you want?"]).toEqual(
-      expect.arrayContaining(["Auth", "Caching"])
-    );
-    expect(call["Which features do you want?"]).toHaveLength(2);
+    expect(onAnswer).toHaveBeenCalledWith({
+      "Which features do you want?": ["Auth", "Caching"],
+    });
   });
 
   it("handles 'Other' text input", async () => {

@@ -83,7 +83,7 @@ export function AskUserQuestionCard({
   };
 
   return (
-    <div className={cn("flex flex-col gap-4 rounded-lg border p-4", answered && "opacity-60")}>
+    <div className={cn("flex flex-col gap-4 rounded-lg border p-4", answered && "border-opacity-60 bg-opacity-60")}>
       {payload.questions.map((q) => (
         <div key={q.question} className="flex flex-col gap-2">
           <div className="flex items-center gap-2">
@@ -111,14 +111,17 @@ export function AskUserQuestionCard({
               </Button>
             ))}
           </div>
-          <Input
-            placeholder="Other..."
-            value={otherTexts[q.question] ?? ""}
-            onChange={(e) => handleOtherChange(q.question, e.target.value)}
-            disabled={isDisabled}
-            className="max-w-xs text-sm"
-            aria-label={`Other answer for: ${q.question}`}
-          />
+          <label className="flex flex-col gap-1 max-w-xs">
+            <span className="text-xs text-muted-foreground">Other</span>
+            <Input
+              placeholder="Other..."
+              value={otherTexts[q.question] ?? ""}
+              onChange={(e) => handleOtherChange(q.question, e.target.value)}
+              disabled={isDisabled}
+              className="text-sm"
+              aria-label={`Other answer for: ${q.question}`}
+            />
+          </label>
         </div>
       ))}
       {answered ? (

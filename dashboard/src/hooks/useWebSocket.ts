@@ -67,10 +67,10 @@ const toolCallSchema = z.object({
  * Validates that a value conforms to AskUserQuestionItem[] structure using Zod.
  * Returns the validated array or undefined if validation fails.
  */
-function validateQuestions(data: unknown, context?: { eventType?: string; messageId?: string }): AskUserQuestionItem[] | undefined {
+function validateQuestions(data: unknown): AskUserQuestionItem[] | undefined {
   const result = askUserQuestionsSchema.safeParse(data);
   if (!result.success) {
-    console.warn('Question validation failed:', result.error.format(), { data, context });
+    console.warn('Question validation failed:', result.error.format(), { data });
   }
   return result.success ? result.data : undefined;
 }
@@ -277,7 +277,7 @@ export function handleBrainstormMessage(msg: BrainstormMessage): void {
 
     case 'ask_user': {
       if (msg.message_id) {
-        const questions = validateQuestions(msg.data.questions, { eventType: msg.event_type, messageId: msg.message_id });
+        const questions = validateQuestions(msg.data.questions);
         const text = validateText(msg.data.text);
         state.updateMessage(msg.message_id, (m) => ({
           ...m,
