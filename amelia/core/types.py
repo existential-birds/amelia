@@ -248,6 +248,24 @@ class ReviewResult(BaseModel):
     severity: Severity
 
 
+class PlanValidationResult(BaseModel):
+    """Result from plan structure validation.
+
+    Mirrors ReviewResult but for plan quality checks.
+
+    Attributes:
+        valid: Whether the plan passed all structural checks.
+        issues: Human-readable descriptions of problems found.
+        severity: Overall severity of issues (none if valid).
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    valid: bool
+    issues: list[str]
+    severity: Severity
+
+
 class OracleConsultation(BaseModel):
     """Record of an Oracle consultation for persistence and analytics.
 

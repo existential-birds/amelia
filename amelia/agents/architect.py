@@ -389,4 +389,13 @@ Run the full test suite or linter if relevant to confirm nothing is broken.
 - Test criteria and edge cases
 - Task dependencies and ordering""")
 
+        # Plan revision feedback (mirrors Developer's review feedback injection)
+        if state.plan_validation_result and not state.plan_validation_result.valid:
+            issues = "\n".join(f"- {i}" for i in state.plan_validation_result.issues)
+            parts.append(
+                f"\n\n## Plan Revision Required\n\n"
+                f"Your previous plan had these structural issues:\n{issues}\n\n"
+                "Please revise the plan file to address all issues above."
+            )
+
         return "\n".join(parts)

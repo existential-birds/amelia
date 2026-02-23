@@ -27,7 +27,7 @@ from typing import TYPE_CHECKING, Annotated, Literal
 from pydantic import Field
 
 from amelia.core.agentic_state import AgenticStatus, ToolCall, ToolResult
-from amelia.core.types import Design, Issue, ReviewResult
+from amelia.core.types import Design, Issue, PlanValidationResult, ReviewResult
 from amelia.pipelines.base import BasePipelineState
 
 
@@ -74,6 +74,10 @@ class ImplementationState(BasePipelineState):
 
     # Review iteration tracking
     review_iteration: int = 0
+
+    # Plan validation feedback loop (mirrors last_review + task_review_iteration)
+    plan_validation_result: PlanValidationResult | None = None
+    plan_revision_count: int = 0
 
     # Task-based execution (multi-task plans)
     total_tasks: int = 1

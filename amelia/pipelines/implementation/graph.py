@@ -17,6 +17,7 @@ from amelia.pipelines.implementation.nodes import (
     plan_validator_node,
 )
 from amelia.pipelines.implementation.routing import (
+    route_after_plan_validation,
     route_after_start,
     route_after_task_review,
     route_approval,
@@ -33,6 +34,22 @@ rebuild_implementation_state()
 
 if TYPE_CHECKING:
     from langgraph.checkpoint.base import BaseCheckpointSaver
+
+
+def _route_after_plan_validation(
+    state: ImplementationState, config: RunnableConfig
+) -> Literal["approved", "revise", "escalate"]:
+    """Route after plan validation: approve, revise, or escalate.
+
+    Args:
+        state: Current execution state.
+        config: Runnable config with profile.
+
+    Returns:
+        Routing target.
+    """
+    _, _, profile = extract_config_params(config)
+    return route_after_plan_validation(state, profile)
 
 
 def _route_after_review_or_task(
@@ -96,7 +113,15 @@ def create_implementation_graph(
     # Define edges
     # Architect -> Plan Validator -> Human approval
     workflow.add_edge("architect_node", "plan_validator_node")
-    workflow.add_edge("plan_validator_node", "human_approval_node")
+    workflow.add_conditional_edges(
+        "plan_validator_node",
+        _route_after_plan_validation,
+        {
+            "approved": "human_approval_node",
+            "revise": "architect_node",
+            "escalate": "human_approval_node",
+        }
+    )
 
     # Conditional edge from human_approval_node:
     # - approve: continue to developer_node

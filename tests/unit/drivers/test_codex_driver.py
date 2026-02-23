@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from pydantic import BaseModel
 
-from amelia.core.exceptions import ModelProviderError
+from amelia.core.exceptions import ModelProviderError, SchemaValidationError
 from amelia.drivers.base import AgenticMessageType
 from amelia.drivers.cli.codex import CodexApprovalMode, CodexCliDriver, CodexStreamEvent
 
@@ -587,3 +587,24 @@ async def test_execute_agentic_passes_resolved_mode_to_stream() -> None:
         ]
 
     assert captured_kwargs["approval_mode"] == CodexApprovalMode.SUGGEST
+
+
+@pytest.mark.asyncio
+async def test_generate_schema_validation_raises_schema_error() -> None:
+    """Schema validation failure should raise SchemaValidationError, not ModelProviderError."""
+    driver = CodexCliDriver(model="gpt-5-codex", cwd="/tmp")
+    # Return invalid JSON that won't match _Schema
+    payload = json.dumps({"wrong_field": "value"})
+    with (
+        patch.object(driver, "_run_codex", new=AsyncMock(return_value=payload)),
+        pytest.raises(SchemaValidationError, match="Schema validation failed"),
+    ):
+        await driver.generate("question", schema=_Schema)
+
+
+@pytest.mark.asyncio
+async def test_validate_schema_raises_schema_error() -> None:
+    """_validate_schema should raise SchemaValidationError for invalid data."""
+    driver = CodexCliDriver(model="gpt-5-codex", cwd="/tmp")
+    with pytest.raises(SchemaValidationError, match="Schema validation failed"):
+        driver._validate_schema({"wrong": "data"}, _Schema, "source")

@@ -25,7 +25,7 @@ from loguru import logger
 from pydantic import BaseModel, ValidationError
 
 from amelia.core.constants import CANONICAL_TO_CLI, normalize_tool_name
-from amelia.core.exceptions import ModelProviderError
+from amelia.core.exceptions import ModelProviderError, SchemaValidationError
 from amelia.drivers.base import (
     AgenticMessage,
     AgenticMessageType,
@@ -237,6 +237,7 @@ async def _safe_receive_response(
         aclose = getattr(raw_iter, "aclose", None)
         if aclose is not None:
             await aclose()
+
 
 
 class ClaudeCliDriver(DriverInterface):
@@ -473,7 +474,11 @@ class ClaudeCliDriver(DriverInterface):
                 try:
                     return (schema.model_validate(data), session_id_result)
                 except ValidationError as e:
-                    raise RuntimeError(f"Claude SDK output did not match schema: {e}") from e
+                    raise SchemaValidationError(
+                        f"Claude SDK output did not match schema: {e}",
+                        provider_name="claude",
+                        original_message=str(e),
+                    ) from e
             else:
                 # Return raw text result
                 if result_message.result:
@@ -500,7 +505,7 @@ class ClaudeCliDriver(DriverInterface):
                 original_message=str(e),
             ) from e
         except Exception as e:
-            if isinstance(e, RuntimeError):
+            if isinstance(e, (RuntimeError, SchemaValidationError)):
                 raise
             raise RuntimeError(f"Error executing Claude SDK: {e}") from e
 

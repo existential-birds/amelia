@@ -9,6 +9,7 @@ import pytest
 from langchain_core.runnables.config import RunnableConfig
 
 from amelia.agents.schemas.architect import MarkdownPlanOutput
+from amelia.core.exceptions import SchemaValidationError
 from amelia.core.types import AgentConfig, Issue, Profile
 from amelia.pipelines.implementation.state import ImplementationState
 
@@ -477,3 +478,211 @@ Do implementation.
             result = await plan_validator_node(state, config)
 
         assert result["total_tasks"] == 1
+
+
+class TestPlanValidatorNodeValidation:
+    """Tests for plan validation within plan_validator_node."""
+
+    async def test_returns_valid_result_for_good_plan(
+        self,
+        mock_state: ImplementationState,
+        mock_profile: Profile,
+        tmp_path: Path,
+    ) -> None:
+        """A well-structured plan should pass validation."""
+        from amelia.pipelines.implementation.nodes import plan_validator_node
+
+        plan = """# Feature Implementation Plan
+
+**Goal:** Add user auth
+
+### Task 1: Add login endpoint
+- Create: `src/auth.py`
+- Deliverable: Working /login route
+
+### Task 2: Add tests
+- Create: `tests/test_auth.py`
+- Deliverable: Passing test suite
+
+This plan has enough content to pass the minimum length check.
+It describes the implementation in reasonable detail.
+"""
+        create_plan_file(tmp_path, plan)
+
+        mock_output = MarkdownPlanOutput(
+            goal="Add user auth",
+            plan_markdown=plan,
+            key_files=["src/auth.py"],
+        )
+
+        config = make_config(mock_profile)
+
+        with patch(
+            "amelia.pipelines.implementation.nodes.extract_structured",
+            new_callable=AsyncMock,
+            return_value=mock_output,
+        ):
+            result = await plan_validator_node(mock_state, config)
+
+        assert result["plan_validation_result"].valid is True
+        assert result["plan_validation_result"].issues == []
+        assert result["plan_revision_count"] == 0
+
+    async def test_returns_invalid_for_no_tasks(
+        self,
+        mock_state: ImplementationState,
+        mock_profile: Profile,
+        tmp_path: Path,
+    ) -> None:
+        """A plan with no ### Task headers should fail structural validation."""
+        from amelia.pipelines.implementation.nodes import plan_validator_node
+
+        plan = """# Some Plan
+
+**Goal:** Do something
+
+Just some text with no task structure.
+This plan does not have any task headers at all.
+It is long enough to pass minimum length but
+lacks the required ### Task N: formatting that
+the downstream task processor expects.
+"""
+        create_plan_file(tmp_path, plan)
+
+        mock_output = MarkdownPlanOutput(
+            goal="Do something",
+            plan_markdown=plan,
+            key_files=[],
+        )
+
+        config = make_config(mock_profile)
+
+        with patch(
+            "amelia.pipelines.implementation.nodes.extract_structured",
+            new_callable=AsyncMock,
+            return_value=mock_output,
+        ):
+            result = await plan_validator_node(mock_state, config)
+
+        assert result["plan_validation_result"].valid is False
+        assert any("Task" in i for i in result["plan_validation_result"].issues)
+
+    async def test_increments_revision_count_on_invalid(
+        self,
+        mock_profile: Profile,
+        tmp_path: Path,
+    ) -> None:
+        """Revision count should increment when validation fails."""
+        from amelia.pipelines.implementation.nodes import plan_validator_node
+
+        plan = "short"  # Will fail validation
+        create_plan_file(tmp_path, plan)
+
+        # State already has revision_count=1
+        state = ImplementationState(
+            workflow_id=uuid4(),
+            created_at=datetime.now(UTC),
+            status="running",
+            profile_id="test",
+            issue=Issue(id="TEST-123", title="Test", description="Test"),
+            plan_revision_count=1,
+        )
+
+        mock_output = MarkdownPlanOutput(
+            goal="Implementation plan",
+            plan_markdown=plan,
+            key_files=[],
+        )
+
+        config = make_config(mock_profile)
+
+        with patch(
+            "amelia.pipelines.implementation.nodes.extract_structured",
+            new_callable=AsyncMock,
+            return_value=mock_output,
+        ):
+            result = await plan_validator_node(state, config)
+
+        assert result["plan_revision_count"] == 2
+
+    async def test_does_not_increment_revision_count_on_valid(
+        self,
+        mock_state: ImplementationState,
+        mock_profile: Profile,
+        tmp_path: Path,
+    ) -> None:
+        """Revision count should NOT increment when validation passes."""
+        from amelia.pipelines.implementation.nodes import plan_validator_node
+
+        plan = """# Feature Plan
+
+**Goal:** Add feature
+
+### Task 1: Implement feature
+Detailed implementation steps with enough content to pass validation.
+Create the necessary files and write comprehensive tests.
+
+### Task 2: Add tests
+Write tests covering all edge cases and error paths.
+"""
+        create_plan_file(tmp_path, plan)
+
+        mock_output = MarkdownPlanOutput(
+            goal="Add feature",
+            plan_markdown=plan,
+            key_files=[],
+        )
+
+        config = make_config(mock_profile)
+
+        with patch(
+            "amelia.pipelines.implementation.nodes.extract_structured",
+            new_callable=AsyncMock,
+            return_value=mock_output,
+        ):
+            result = await plan_validator_node(mock_state, config)
+
+        assert result["plan_revision_count"] == 0
+
+
+class TestPlanValidatorNodeSchemaError:
+    """Tests for SchemaValidationError handling in plan_validator_node."""
+
+    async def test_catches_schema_validation_error_and_uses_fallback(
+        self,
+        mock_state: ImplementationState,
+        mock_profile: Profile,
+        tmp_path: Path,
+    ) -> None:
+        """SchemaValidationError from extract_structured should use fallback, not crash."""
+        from amelia.pipelines.implementation.nodes import plan_validator_node
+
+        plan = """# Feature Plan
+
+**Goal:** Add authentication
+
+### Task 1: Setup
+Create auth module.
+
+### Task 2: Tests
+Write tests for auth module with coverage.
+This content is long enough to pass the minimum length validation.
+"""
+        create_plan_file(tmp_path, plan)
+        config = make_config(mock_profile)
+
+        with patch(
+            "amelia.pipelines.implementation.nodes.extract_structured",
+            new_callable=AsyncMock,
+            side_effect=SchemaValidationError(
+                "Schema validation failed",
+                provider_name="codex",
+            ),
+        ):
+            result = await plan_validator_node(mock_state, config)
+
+        # Should fall back to regex extraction, not crash
+        assert result["goal"] is not None
+        assert result["plan_markdown"] is not None
+        # Validation should still run on fallback output
+        assert result["plan_validation_result"] is not None

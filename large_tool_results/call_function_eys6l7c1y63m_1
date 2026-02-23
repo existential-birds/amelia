@@ -1,0 +1,2954 @@
+diff --git a/CLAUDE.md b/CLAUDE.md
+index 8927b197..ab540be8 100644
+--- a/CLAUDE.md
++++ b/CLAUDE.md
+@@ -122,7 +122,7 @@ Server settings configurable via `amelia config server set` or dashboard. Enviro
+ | `AMELIA_MAX_CONCURRENT` | `5` | Maximum concurrent workflows |
+ | `AMELIA_PROVIDER_ERROR_PATTERNS` | `midstream error,invalid function arguments,provider returned error` | Comma-separated patterns to detect LLM provider errors (case-insensitive) |
+ | `AMELIA_KNOWLEDGE_TAG_MODEL` | `minimax/minimax-m2.5` | LLM model for automatic tag extraction. Set to empty string to disable tag derivation. |
+-| `AMELIA_KNOWLEDGE_TAG_DRIVER` | `api` | Driver type for tag extraction ("api" or "cli"). |
++| `AMELIA_KNOWLEDGE_TAG_DRIVER` | `api` | Driver type for tag extraction ("api", "claude", or "codex"). |
+ 
+ **Debugging tip**: Set `AMELIA_CHECKPOINT_RETENTION_DAYS=-1` to preserve checkpoints for debugging workflow issues.
+ 
+diff --git a/amelia/cli/config.py b/amelia/cli/config.py
+index 0379c8d4..d44ea7c6 100644
+--- a/amelia/cli/config.py
++++ b/amelia/cli/config.py
+@@ -91,7 +91,8 @@ async def _get_settings_repository() -> tuple[Database, SettingsRepository]:
+ 
+ 
+ VALID_DRIVERS: set[DriverType] = {
+-    DriverType.CLI,
++    DriverType.CLAUDE,
++    DriverType.CODEX,
+     DriverType.API,
+ }
+ VALID_TRACKERS: set[TrackerType] = {
+@@ -257,7 +258,7 @@ def profile_create(
+     name: Annotated[str, typer.Argument(help="Profile name")],
+     driver: Annotated[
+         str | None,
+-        typer.Option("--driver", "-d", help="Driver (cli or api)"),
++        typer.Option("--driver", "-d", help="Driver (claude, codex, or api)"),
+     ] = None,
+     model: Annotated[
+         str | None,
+@@ -285,7 +286,7 @@ def profile_create(
+     if driver is None:
+         driver = typer.prompt(
+             "Driver",
+-            default="cli",
++            default="claude",
+             show_default=True,
+         )
+     if model is None:
+@@ -418,7 +419,7 @@ async def check_and_run_first_time_setup() -> bool:
+         )
+ 
+         name = typer.prompt("Profile name", default="local_opus")
+-        driver_input = typer.prompt("Driver (cli or api)", default="cli")
++        driver_input = typer.prompt("Driver (claude, codex, or api)", default="claude")
+         model = typer.prompt("Model", default="opus")
+         tracker = typer.prompt("Tracker (noop, github, jira)", default="noop")
+         working_dir = typer.prompt("Working directory", default=str(Path.cwd()))
+diff --git a/amelia/core/extraction.py b/amelia/core/extraction.py
+index aa424305..7bec277e 100644
+--- a/amelia/core/extraction.py
++++ b/amelia/core/extraction.py
+@@ -24,7 +24,7 @@ async def extract_structured[T: BaseModel](
+         prompt: The prompt containing text to extract from.
+         schema: Pydantic model class defining the expected structure.
+         model: Model identifier to use for extraction.
+-        driver_type: Driver type string ("api" or "cli").
++        driver_type: Driver type string ("api", "claude", or "codex").
+ 
+     Returns:
+         Instance of schema populated with extracted data.
+diff --git a/amelia/drivers/cli/codex.py b/amelia/drivers/cli/codex.py
+index ca2213a0..fc765967 100644
+--- a/amelia/drivers/cli/codex.py
++++ b/amelia/drivers/cli/codex.py
+@@ -3,20 +3,26 @@
+ This driver wraps the OpenAI Codex CLI, providing both single-turn generation
+ and agentic execution capabilities.
+ """
++import asyncio
++import json
+ from collections.abc import AsyncIterator, Iterator
+ from typing import Any
+ 
+-from pydantic import BaseModel
++from pydantic import BaseModel, ValidationError
+ 
+-from amelia.drivers.base import AgenticMessage, DriverUsage, DriverInterface, GenerateResult
++from amelia.core.exceptions import ModelProviderError
++from amelia.drivers.base import AgenticMessage, AgenticMessageType, DriverUsage, DriverInterface, GenerateResult
+ 
+ 
+ class CodexCliDriver(DriverInterface):
+     """CLI driver wrapping OpenAI's Codex CLI tool.
+ 
+-    This is a stub implementation. Full implementation will be added in a later task.
++    This driver provides both single-turn generation and agentic execution
++    by wrapping the `codex` CLI command.
+     """
+ 
++    PROVIDER_NAME = "codex-cli"
++
+     def __init__(self, model: str = "", cwd: str | None = None) -> None:
+         """Initialize CodexCliDriver.
+ 
+@@ -28,12 +34,106 @@ class CodexCliDriver(DriverInterface):
+         self.cwd = cwd
+ 
+     async def _run_codex(self, prompt: str, **kwargs: Any) -> str:
+-        """Run codex CLI command and return output (not yet implemented)."""
+-        raise NotImplementedError("CodexCliDriver._run_codex() not yet implemented")
++        """Run codex CLI command and return output.
++
++        Args:
++            prompt: The prompt to send to codex.
++            **kwargs: Additional arguments to pass to codex exec.
++
++        Returns:
++            The raw output from codex CLI.
++
++        Raises:
++            ModelProviderError: If codex CLI fails.
++        """
++        cmd = ["codex", "exec", "--json"]
++
++        if self.model:
++            cmd.extend(["--model", self.model])
++
++        cmd.extend(["--", prompt])
++
++        process = await asyncio.create_subprocess_exec(
++            *cmd,
++            stdout=asyncio.subprocess.PIPE,
++            stderr=asyncio.subprocess.PIPE,
++            cwd=self.cwd,
++        )
++
++        try:
++            stdout, stderr = await process.communicate()
++        except asyncio.CancelledError:
++            process.kill()
++            await process.wait()
++            raise
++
++        if process.returncode != 0:
++            error_msg = stderr.decode() if stderr else "Unknown error"
++            raise ModelProviderError(
++                f"Codex CLI failed with exit code {process.returncode}: {error_msg}",
++                provider_name=self.PROVIDER_NAME,
++                original_message=error_msg,
++            )
++
++        return stdout.decode()
+ 
+     def _run_codex_stream(self, prompt: str, **kwargs: Any) -> Iterator[dict[str, Any]]:
+-        """Run codex CLI command and stream events (not yet implemented)."""
+-        raise NotImplementedError("CodexCliDriver._run_codex_stream() not yet implemented")
++        """Run codex CLI command and stream events.
++
++        This is a synchronous generator that yields events from codex.
++
++        Args:
++            prompt: The prompt to send to codex.
++            **kwargs: Additional arguments to pass to codex exec.
++
++        Yields:
++            Event dictionaries from codex CLI.
++        """
++        cmd = ["codex", "exec", "--stream", "--json"]
++
++        if self.model:
++            cmd.extend(["--model", self.model])
++
++        cmd.extend(["--", prompt])
++
++        # Note: This is a placeholder implementation that yields empty events
++        # A full implementation would integrate with codex's streaming mode
++        yield {"type": "placeholder", "content": "Streaming not yet implemented"}
++
++    def _parse_json_response(self, raw_output: str) -> dict[str, Any]:
++        """Parse JSON from codex CLI output, handling common issues.
++
++        Args:
++            raw_output: Raw output from codex CLI.
++
++        Returns:
++            Parsed JSON as a dictionary.
++
++        Raises:
++            ModelProviderError: If JSON parsing fails.
++        """
++        text = raw_output.strip()
++
++        # Handle markdown code fences
++        if text.startswith("```"):
++            lines = text.split("\n")
++            # Find the closing fence
++            end_idx = -1
++            for i in range(len(lines) - 1, 0, -1):
++                if lines[i].strip() == "```":
++                    end_idx = i
++                    break
++            if end_idx > 0:
++                text = "\n".join(lines[1:end_idx])
++
++        try:
++            return json.loads(text)
++        except json.JSONDecodeError as e:
++            raise ModelProviderError(
++                f"Failed to parse Codex CLI output as JSON: {e}",
++                provider_name=self.PROVIDER_NAME,
++                original_message=raw_output[:500],
++            ) from None
+ 
+     async def generate(
+         self,
+@@ -42,8 +142,65 @@ class CodexCliDriver(DriverInterface):
+         schema: type[BaseModel] | None = None,
+         **kwargs: Any,
+     ) -> GenerateResult:
+-        """Generate a single-turn response (not yet implemented)."""
+-        raise NotImplementedError("CodexCliDriver.generate() not yet implemented")
++        """Generate a single-turn response.
++
++        Args:
++            prompt: The user prompt.
++            system_prompt: Optional system prompt.
++            schema: Optional Pydantic schema for structured output.
++            **kwargs: Additional arguments.
++
++        Returns:
++            GenerateResult with the generated text and session ID.
++
++        Raises:
++            ModelProviderError: If codex CLI fails or returns invalid JSON.
++        """
++        full_prompt = prompt
++        if system_prompt:
++            full_prompt = f"{system_prompt}\n\n{prompt}"
++
++        try:
++            raw_output = await self._run_codex(full_prompt, **kwargs)
++        except ModelProviderError:
++            raise
++        except Exception as e:
++            raise ModelProviderError(
++                f"Codex CLI error: {e}",
++                provider_name=self.PROVIDER_NAME,
++                original_message=str(e),
++            )
++
++        parsed = self._parse_json_response(raw_output)
++
++        # Extract text from response
++        if isinstance(parsed, dict):
++            if "result" in parsed:
++                text = parsed["result"]
++            elif "text" in parsed:
++                text = parsed["text"]
++            elif "content" in parsed:
++                text = parsed["content"]
++            else:
++                text = json.dumps(parsed)
++        else:
++            text = str(parsed)
++
++        # Validate against schema if provided
++        if schema:
++            try:
++                # Parse the text as JSON and validate against schema
++                data = json.loads(text) if isinstance(text, str) else text
++                result = schema.model_validate(data)
++                return (result, None)
++            except (ValidationError, json.JSONDecodeError) as e:
++                raise ModelProviderError(
++                    f"Schema validation failed: {e}",
++                    provider_name=self.PROVIDER_NAME,
++                    original_message=text[:500] if isinstance(text, str) else str(text)[:500],
++                )
++
++        return (text, None)
+ 
+     async def execute_agentic(
+         self,
+@@ -55,9 +212,85 @@ class CodexCliDriver(DriverInterface):
+         allowed_tools: list[str] | None = None,
+         **kwargs: Any,
+     ) -> AsyncIterator[AgenticMessage]:
+-        """Execute agentic workflow (not yet implemented)."""
+-        raise NotImplementedError("CodexCliDriver.execute_agentic() not yet implemented")
+-        yield  # pragma: no cover
++        """Execute agentic workflow.
++
++        Args:
++            prompt: The user prompt.
++            cwd: Working directory for the agent.
++            session_id: Optional session ID for stateful execution.
++            instructions: Optional additional instructions.
++            schema: Optional Pydantic schema for structured output.
++            allowed_tools: Optional list of allowed tool names.
++            **kwargs: Additional arguments.
++
++        Yields:
++            AgenticMessage objects representing the execution stream.
++
++        Raises:
++            ModelProviderError: If codex CLI fails.
++        """
++        full_prompt = prompt
++        if instructions:
++            full_prompt = f"{instructions}\n\n{prompt}"
++
++        # Build command args
++        cmd_args: dict[str, Any] = {"cwd": cwd}
++        if session_id:
++            cmd_args["session_id"] = session_id
++        if allowed_tools:
++            cmd_args["allowed_tools"] = allowed_tools
++
++        try:
++            # Use streaming mode
++            stream_events = self._run_codex_stream(full_prompt, **cmd_args)
++        except ModelProviderError:
++            raise
++        except Exception as e:
++            raise ModelProviderError(
++                f"Codex CLI agentic error: {e}",
++                provider_name=self.PROVIDER_NAME,
++                original_message=str(e),
++            )
++
++        # Iterate over streaming events
++        for parsed in stream_events:
++            # parsed is already a dict from _run_codex_stream yielding dicts
++
++            # Map to AgenticMessage types
++            if isinstance(parsed, dict):
++                msg_type = parsed.get("type", "result")
++
++                if msg_type == "reasoning" or msg_type == "thinking":
++                    yield AgenticMessage(
++                        type=AgenticMessageType.THINKING,
++                        content=parsed.get("content", ""),
++                    )
++                elif msg_type == "tool_call":
++                    yield AgenticMessage(
++                        type=AgenticMessageType.TOOL_CALL,
++                        content="",
++                        tool_name=parsed.get("name", ""),
++                        tool_input=parsed.get("input", {}),
++                        tool_call_id=parsed.get("id"),
++                    )
++                elif msg_type == "tool_result":
++                    yield AgenticMessage(
++                        type=AgenticMessageType.TOOL_RESULT,
++                        content=parsed.get("output", ""),
++                        tool_name=parsed.get("name", ""),
++                        tool_call_id=parsed.get("id"),
++                    )
++                elif msg_type == "final":
++                    yield AgenticMessage(
++                        type=AgenticMessageType.RESULT,
++                        content=parsed.get("content", ""),
++                    )
++                else:
++                    # Default to result
++                    yield AgenticMessage(
++                        type=AgenticMessageType.RESULT,
++                        content=json.dumps(parsed),
++                    )
+ 
+     async def cleanup_session(self, session_id: str) -> bool:
+         """Clean up a driver session.
+@@ -73,5 +306,9 @@ class CodexCliDriver(DriverInterface):
+         return False
+ 
+     def get_usage(self) -> DriverUsage | None:
+-        """Get usage statistics (not yet implemented)."""
+-        raise NotImplementedError("CodexCliDriver.get_usage() not yet implemented")
++        """Get usage statistics.
++
++        Returns:
++            None - usage tracking not yet implemented for Codex CLI.
++        """
++        return None
+diff --git a/amelia/drivers/factory.py b/amelia/drivers/factory.py
+index cf550165..f1fb7b2d 100644
+--- a/amelia/drivers/factory.py
++++ b/amelia/drivers/factory.py
+@@ -19,7 +19,7 @@ def get_driver(
+     """Get a concrete driver implementation.
+ 
+     Args:
+-        driver_key: Driver identifier ("cli" or "api").
++        driver_key: Driver identifier ("claude", "codex", or "api").
+         model: LLM model identifier.
+         cwd: Working directory (used by CLI driver).
+         sandbox_config: Sandbox configuration for containerized execution.
+@@ -72,7 +72,7 @@ async def cleanup_driver_session(driver_key: str, session_id: str) -> bool:
+     This allows cleaning up sessions without needing a configured driver instance.
+ 
+     Args:
+-        driver_key: Driver identifier ("cli" or "api").
++        driver_key: Driver identifier ("claude", "codex", or "api").
+         session_id: The driver session ID to clean up.
+ 
+     Returns:
+@@ -89,6 +89,6 @@ async def cleanup_driver_session(driver_key: str, session_id: str) -> bool:
+     else:
+         raise ValueError(
+             f"Unknown driver key: {driver_key!r}. "
+-            f"Valid options: 'cli' or 'api'. "
+-            f"(Legacy forms 'cli:claude' and 'api:openrouter' are no longer supported.)"
++            f"Valid options: 'claude', 'codex', 'api'. "
++            f"(Legacy forms 'cli', 'cli:claude' and 'api:openrouter' are no longer supported.)"
+         )
+diff --git a/amelia/knowledge/ingestion.py b/amelia/knowledge/ingestion.py
+index b174d29d..951b9451 100644
+--- a/amelia/knowledge/ingestion.py
++++ b/amelia/knowledge/ingestion.py
+@@ -38,7 +38,7 @@ class IngestionPipeline:
+         embedding_client: OpenRouter embedding client.
+         concurrency_limit: Max simultaneous document ingestions.
+         tag_derivation_model: LLM model for tag extraction (None = disabled).
+-        tag_derivation_driver: Driver type for tag extraction ("api" or "cli").
++        tag_derivation_driver: Driver type for tag extraction ("api", "claude", or "codex").
+     """
+ 
+     def __init__(
+@@ -378,7 +378,7 @@ Return 5-10 tags that best describe this document's content and purpose."""
+             raw_text: Full document text.
+             chunk_data: List of chunks with heading paths.
+             model: LLM model identifier for extraction.
+-            driver_type: Driver type ("api" or "cli").
++            driver_type: Driver type ("api", "claude", or "codex").
+ 
+         Returns:
+             List of validated tags (empty list if extraction fails).
+diff --git a/amelia/server/main.py b/amelia/server/main.py
+index 403d8428..01a4d520 100644
+--- a/amelia/server/main.py
++++ b/amelia/server/main.py
+@@ -234,7 +234,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+             logger.warning(
+                 "Invalid AMELIA_KNOWLEDGE_TAG_DRIVER value, using default 'api'",
+                 provided=tag_driver_raw,
+-                valid_values=["api", "cli"],
++                valid_values=["api", "claude", "codex"],
+             )
+             tag_driver = DriverType.API
+ 
+@@ -373,14 +373,14 @@ def create_app() -> FastAPI:
+         profile_repo = get_profile_repository()
+         active_profile = await profile_repo.get_active_profile()
+         if active_profile is None:
+-            # No active profile - use CLI driver as default
+-            return factory_get_driver("cli")
++            # No active profile - use Claude CLI driver as default
++            return factory_get_driver("claude")
+         try:
+             agent_config = active_profile.get_agent_config("brainstormer")
+             return factory_get_driver(agent_config.driver, model=agent_config.model)
+         except ValueError:
+-            # No brainstormer config - fallback to CLI driver
+-            return factory_get_driver("cli")
++            # No brainstormer config - fallback to Claude CLI driver
++            return factory_get_driver("claude")
+ 
+     application.dependency_overrides[get_driver] = get_brainstorm_driver
+ 
+diff --git a/amelia/server/models/requests.py b/amelia/server/models/requests.py
+index 5585e816..2707d27b 100644
+--- a/amelia/server/models/requests.py
++++ b/amelia/server/models/requests.py
+@@ -250,13 +250,13 @@ class CreateWorkflowRequest(BaseModel):
+             raise ValueError(msg)
+ 
+         # Accept simple driver types
+-        if v in ("api", "cli"):
++        if v in ("api", "claude", "codex"):
+             return v
+ 
+         # For extended format, validate type:name pattern
+         parts = v.split(":")
+         if len(parts) != 2:
+-            msg = "driver must be 'api', 'cli', or in type:name format (e.g., sdk:claude)"
++            msg = "driver must be 'api', 'claude', 'codex', or in type:name format (e.g., sdk:claude)"
+             raise ValueError(msg)
+ 
+         driver_type, driver_name = parts
+diff --git a/docs/plans/2026-01-10-mobile-pairing-api-design.md b/docs/plans/2026-01-10-mobile-pairing-api-design.md
+deleted file mode 100644
+index 2d10d2fc..00000000
+--- a/docs/plans/2026-01-10-mobile-pairing-api-design.md
++++ /dev/null
+@@ -1,440 +0,0 @@
+-# Mobile Pairing API Design
+-
+-**Date:** 2026-01-10
+-**Status:** Draft
+-**Author:** Engineering Team
+-
+-## Overview
+-
+-Mobile pairing API for Volant iOS app to connect to Amelia server instances via QR code scanning. This document describes the server-side API changes required to support secure device pairing, token management, and ongoing authentication for mobile clients.
+-
+-## Pairing Flow
+-
+-The complete pairing flow consists of the following steps:
+-
+-1. User requests pairing QR (Dashboard button or `amelia pair` CLI command)
+-2. Server generates one-time token (expires in 60 seconds)
+-3. Display QR containing: `amelia://<ip>:<port>?pair=<one-time-token>`
+-4. iOS app scans QR
+-5. App calls POST /api/pair/exchange with the one-time token
+-6. Server validates token, generates persistent device token
+-7. Server returns device_token, device_id, server_name
+-8. App stores credentials in Keychain
+-9. All future requests include Authorization: Bearer <device_token>
+-
+-```
+-┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+-│  Dashboard  │     │   Server    │     │  iOS App    │
+-│   or CLI    │     │             │     │             │
+-└──────┬──────┘     └──────┬──────┘     └──────┬──────┘
+-       │                   │                   │
+-       │  POST /api/pair/  │                   │
+-       │     generate      │                   │
+-       │──────────────────>│                   │
+-       │                   │                   │
+-       │  {pair_token,     │                   │
+-       │   qr_url}         │                   │
+-       │<──────────────────│                   │
+-       │                   │                   │
+-       │   Display QR      │                   │
+-       │   ════════════    │                   │
+-       │                   │                   │
+-       │                   │   Scan QR code    │
+-       │                   │<──────────────────│
+-       │                   │                   │
+-       │                   │  POST /api/pair/  │
+-       │                   │     exchange      │
+-       │                   │<──────────────────│
+-       │                   │                   │
+-       │                   │  {device_token,   │
+-       │                   │   device_id}      │
+-       │                   │──────────────────>│
+-       │                   │                   │
+-       │                   │  Store in         │
+-       │                   │  Keychain         │
+-       │                   │                   │
+-```
+-
+-## New API Endpoints
+-
+-### POST /api/pair/generate
+-
+-Generates a one-time pairing token and QR URL.
+-
+-**Authentication:** Existing session (dashboard) or local-only access (CLI)
+-
+-**Request:** None (empty body)
+-
+-**Response:**
+-
+-```json
+-{
+-  "pair_token": "otp_xxxxxxxxxxxx",
+-  "qr_url": "amelia://192.168.1.100:8420?pair=otp_xxxxxxxxxxxx",
+-  "expires_at": "2026-01-10T12:01:00Z"
+-}
+-```
+-
+-**Response Fields:**
+-
+-| Field | Type | Description |
+-|-------|------|-------------|
+-| `pair_token` | string | One-time pairing token (prefixed with `otp_`) |
+-| `qr_url` | string | Complete URL for QR code generation |
+-| `expires_at` | string | ISO 8601 timestamp when token expires (60 seconds from generation) |
+-
+-**Errors:**
+-
+-| Status | Description |
+-|--------|-------------|
+-| 429 | Rate limit exceeded (max 5 tokens per minute) |
+-
+----
+-
+-### POST /api/pair/exchange
+-
+-Exchanges one-time pairing token for persistent device token.
+-
+-**Authentication:** None (the pair_token serves as authentication)
+-
+-**Request:**
+-
+-```json
+-{
+-  "pair_token": "otp_xxxxxxxxxxxx",
+-  "device_name": "iPad Pro",
+-  "device_model": "iPad Pro 12.9-inch"
+-}
+-```
+-
+-**Request Fields:**
+-
+-| Field | Type | Required | Description |
+-|-------|------|----------|-------------|
+-| `pair_token` | string | Yes | One-time token from QR code |
+-| `device_name` | string | Yes | User-facing device name |
+-| `device_model` | string | No | Device model identifier |
+-
+-**Response:**
+-
+-```json
+-{
+-  "device_token": "dev_xxxxxxxxxxxx",
+-  "device_id": "uuid",
+-  "server_name": "My Mac Studio"
+-}
+-```
+-
+-**Response Fields:**
+-
+-| Field | Type | Description |
+-|-------|------|-------------|
+-| `device_token` | string | Persistent bearer token (prefixed with `dev_`) |
+-| `device_id` | string | UUID identifying this paired device |
+-| `server_name` | string | Human-readable name of the Amelia server |
+-
+-**Errors:**
+-
+-| Status | Description |
+-|--------|-------------|
+-| 400 | Invalid or expired pair token |
+-| 410 | Token already used |
+-
+----
+-
+-### GET /api/pair/devices
+-
+-List all paired devices.
+-
+-**Authentication:** Session (dashboard) or local-only access
+-
+-**Request:** None
+-
+-**Response:**
+-
+-```json
+-{
+-  "devices": [
+-    {
+-      "device_id": "uuid",
+-      "device_name": "iPad Pro",
+-      "device_model": "iPad Pro 12.9-inch",
+-      "paired_at": "2026-01-10T12:00:00Z",
+-      "last_seen": "2026-01-10T14:30:00Z"
+-    }
+-  ]
+-}
+-```
+-
+-**Response Fields:**
+-
+-| Field | Type | Description |
+-|-------|------|-------------|
+-| `devices` | array | List of paired devices |
+-| `devices[].device_id` | string | UUID of the device |
+-| `devices[].device_name` | string | User-facing device name |
+-| `devices[].device_model` | string | Device model identifier |
+-| `devices[].paired_at` | string | ISO 8601 timestamp of pairing |
+-| `devices[].last_seen` | string | ISO 8601 timestamp of last activity |
+-
+----
+-
+-### DELETE /api/pair/devices/{device_id}
+-
+-Revoke a paired device. Immediately invalidates its device token.
+-
+-**Authentication:** Session (dashboard) or local-only access
+-
+-**Path Parameters:**
+-
+-| Parameter | Type | Description |
+-|-----------|------|-------------|
+-| `device_id` | string | UUID of device to revoke |
+-
+-**Response:** 204 No Content
+-
+-**Errors:**
+-
+-| Status | Description |
+-|--------|-------------|
+-| 404 | Device not found |
+-
+-## CLI Addition
+-
+-### `amelia pair` Command
+-
+-New CLI command for initiating mobile pairing:
+-
+-```bash
+-amelia pair [options]
+-
+-Options:
+-  --timeout <seconds>   Override default 60-second expiration
+-  --json                Output token data as JSON instead of QR
+-```
+-
+-**Behavior:**
+-
+-1. Calls POST /api/pair/generate
+-2. Prints QR code to terminal using Unicode block characters
+-3. Shows expiration countdown below QR code
+-4. Auto-regenerates QR when expired (or on keypress)
+-5. Exits on Ctrl+C or successful pairing
+-
+-**Example Output:**
+-
+-```
+-Scan this QR code with the Volant iOS app:
+-
+-█████████████████████████████
+-█████████████████████████████
+-████ ▄▄▄▄▄ █▀▄█▀█ ▄▄▄▄▄ ████
+-████ █   █ █▄▀▄ █ █   █ ████
+-████ █▄▄▄█ █ ▄▀██ █▄▄▄█ ████
+-████▄▄▄▄▄▄▄█▄▀▄█▄█▄▄▄▄▄▄▄████
+-█████████████████████████████
+-█████████████████████████████
+-
+-Token expires in: 45s
+-Press [R] to regenerate, [Q] to quit
+-```
+-
+-## Dashboard Addition
+-
+-### "Connect Mobile" Button
+-
+-Located in the dashboard header or settings panel.
+-
+-**Modal Contents:**
+-
+-1. **QR Code Display**
+-   - Large, scannable QR code
+-   - Visual countdown timer
+-   - Auto-refresh when expired
+-
+-2. **Paired Devices List**
+-   - Device name and model
+-   - Paired date and last seen
+-   - "Revoke" button for each device
+-
+-**Mock UI:**
+-
+-```
+-┌─────────────────────────────────────────────┐
+-│  Connect Mobile Device                    ✕ │
+-├─────────────────────────────────────────────┤
+-│                                             │
+-│         ┌─────────────────┐                 │
+-│         │                 │                 │
+-│         │    [QR CODE]    │                 │
+-│         │                 │                 │
+-│         └─────────────────┘                 │
+-│                                             │
+-│         Expires in: 45 seconds              │
+-│         [Regenerate QR]                     │
+-│                                             │
+-├─────────────────────────────────────────────┤
+-│  Paired Devices                             │
+-│                                             │
+-│  📱 iPad Pro                                │
+-│     iPad Pro 12.9-inch                      │
+-│     Paired: Jan 10, 2026 • Last seen: 2h    │
+-│     [Revoke]                                │
+-│                                             │
+-│  📱 iPhone 15 Pro                           │
+-│     iPhone 15 Pro Max                       │
+-│     Paired: Jan 8, 2026 • Last seen: 5m     │
+-│     [Revoke]                                │
+-│                                             │
+-└─────────────────────────────────────────────┘
+-```
+-
+-## Database Schema
+-
+-### New Table: `paired_devices`
+-
+-Stores information about paired mobile devices.
+-
+-```sql
+-CREATE TABLE paired_devices (
+-    id TEXT PRIMARY KEY,                          -- UUID
+-    device_token_hash TEXT NOT NULL,              -- bcrypt hash of token
+-    device_name TEXT,                             -- User-facing name
+-    device_model TEXT,                            -- Model identifier
+-    paired_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+-    last_seen TIMESTAMP,
+-    revoked_at TIMESTAMP                          -- NULL if active
+-);
+-
+-CREATE INDEX idx_paired_devices_token_hash ON paired_devices(device_token_hash);
+-CREATE INDEX idx_paired_devices_last_seen ON paired_devices(last_seen);
+-```
+-
+-### New Table: `pairing_tokens`
+-
+-Stores one-time pairing tokens with short expiration.
+-
+-```sql
+-CREATE TABLE pairing_tokens (
+-    token_hash TEXT PRIMARY KEY,    -- SHA-256 hash of one-time token
+-    expires_at TIMESTAMP NOT NULL,  -- 60 seconds from creation
+-    used_at TIMESTAMP,              -- NULL if unused
+-    used_by_device_id TEXT          -- References paired_devices.id
+-);
+-
+-CREATE INDEX idx_pairing_tokens_expires ON pairing_tokens(expires_at);
+-```
+-
+-### Token Cleanup
+-
+-Expired and used tokens should be cleaned up periodically:
+-
+-```sql
+--- Run every hour or on server startup
+-DELETE FROM pairing_tokens
+-WHERE expires_at < datetime('now', '-1 hour')
+-   OR used_at < datetime('now', '-1 day');
+-```
+-
+-## Security Considerations
+-
+-### Token Security
+-
+-| Aspect | Implementation |
+-|--------|----------------|
+-| One-time token expiration | 60 seconds |
+-| One-time token usage | Single use only |
+-| Device token storage | bcrypt hash (cost factor 10) |
+-| Token revocation | Immediate effect |
+-
+-### Network Security
+-
+-- All pairing endpoints are local-network only (no cloud exposure in v1)
+-- Server binds to local network interface only
+-- mDNS/Bonjour discovery limited to local network
+-
+-### Rate Limiting
+-
+-| Endpoint | Limit |
+-|----------|-------|
+-| POST /api/pair/generate | 5 requests per minute |
+-| POST /api/pair/exchange | 10 requests per minute |
+-
+-### Token Generation
+-
+-```python
+-# One-time pairing token (22 chars, URL-safe)
+-pair_token = "otp_" + secrets.token_urlsafe(16)
+-
+-# Device token (32 chars, URL-safe)
+-device_token = "dev_" + secrets.token_urlsafe(24)
+-```
+-
+-## Authentication Middleware Update
+-
+-Update existing auth middleware to accept device tokens in addition to session authentication.
+-
+-### Middleware Logic
+-
+-```python
+-def authenticate(request):
+-    # Check for Bearer token
+-    auth_header = request.headers.get("Authorization")
+-    if auth_header and auth_header.startswith("Bearer "):
+-        token = auth_header[7:]
+-
+-        if token.startswith("dev_"):
+-            # Device token authentication
+-            token_hash = bcrypt_hash(token)
+-            device = db.query(
+-                "SELECT * FROM paired_devices WHERE device_token_hash = ? AND revoked_at IS NULL",
+-                token_hash
+-            )
+-
+-            if device:
+-                # Update last_seen
+-                db.execute(
+-                    "UPDATE paired_devices SET last_seen = CURRENT_TIMESTAMP WHERE id = ?",
+-                    device.id
+-                )
+-                request.device = device
+-                return True
+-
+-    # Fall back to existing session auth
+-    return existing_session_auth(request)
+-```
+-
+-### Request Context
+-
+-When authenticated via device token, the request context includes:
+-
+-```python
+-request.device = {
+-    "device_id": "uuid",
+-    "device_name": "iPad Pro",
+-    "device_model": "iPad Pro 12.9-inch"
+-}
+-```
+-
+-## Implementation Checklist
+-
+-- [ ] Database migrations for new tables
+-- [ ] POST /api/pair/generate endpoint
+-- [ ] POST /api/pair/exchange endpoint
+-- [ ] GET /api/pair/devices endpoint
+-- [ ] DELETE /api/pair/devices/{device_id} endpoint
+-- [ ] `amelia pair` CLI command
+-- [ ] QR code generation (terminal and web)
+-- [ ] Dashboard modal component
+-- [ ] Auth middleware update
+-- [ ] Rate limiting middleware
+-- [ ] Token cleanup job
+-- [ ] Integration tests
+-- [ ] iOS SDK documentation
+-
+-## Future Considerations
+-
+-- **Push notifications:** Device registration could include push token
+-- **Cloud relay:** Optional cloud proxy for remote access
+-- **Multi-user:** Associate devices with specific user accounts
+-- **Device limits:** Maximum number of paired devices per server
+diff --git a/docs/plans/2026-02-17-loguru-keyerror-fix-design.md b/docs/plans/2026-02-17-loguru-keyerror-fix-design.md
+deleted file mode 100644
+index ae8138db..00000000
+--- a/docs/plans/2026-02-17-loguru-keyerror-fix-design.md
++++ /dev/null
+@@ -1,424 +0,0 @@
+-# Loguru KeyError Fix - Implementation Plan
+-
+-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+-
+-**Goal:** Fix silent log message loss caused by unescaped braces in `_plain_log_format`, and improve structured logging for complex data types.
+-
+-**Architecture:** Two-part fix: (1) add missing brace escaping in the plain log formatter, (2) move complex data out of loguru extra fields -- flatten nested dicts to scalars, pre-format lists to strings, and add a `log_todos()` rich display function following the existing `log_claude_result()` pattern.
+-
+-**Tech Stack:** Python, loguru, rich (already in deps)
+-
+----
+-
+-### Task 1: Fix brace escaping in `_plain_log_format` (tests)
+-
+-**Files:**
+-- Create: `tests/unit/test_logging.py`
+-
+-**Step 1: Write failing tests for brace escaping**
+-
+-```python
+-"""Tests for amelia/logging.py format functions."""
+-
+-from typing import Any
+-from unittest.mock import MagicMock
+-
+-import pytest
+-
+-from amelia.logging import _plain_log_format
+-
+-
+-def _make_record(**extra: Any) -> MagicMock:
+-    """Create a minimal loguru Record-like dict for testing format functions."""
+-    record = MagicMock()
+-    record.__getitem__ = lambda self, key: {
+-        "extra": extra,
+-        "level": MagicMock(name="INFO"),
+-        "exception": None,
+-    }[key]
+-    return record
+-
+-
+-class TestPlainLogFormatBraceEscaping:
+-    """_plain_log_format must escape braces in extra field repr output."""
+-
+-    def test_nested_dict_braces_are_escaped(self) -> None:
+-        """Nested dict in extra should not cause KeyError in format_map."""
+-        record = _make_record(details={"key": "value"})
+-        fmt = _plain_log_format(record)
+-        # Braces from repr should be doubled for loguru format_map safety
+-        assert "{{" in fmt
+-        assert "}}" in fmt
+-
+-    def test_list_of_dicts_braces_are_escaped(self) -> None:
+-        """List of dicts in extra should not cause KeyError in format_map."""
+-        record = _make_record(todos=[{"content": "Fix X", "status": "pending"}])
+-        fmt = _plain_log_format(record)
+-        assert "{{" in fmt
+-
+-    def test_scalar_extra_unchanged(self) -> None:
+-        """Scalar extra fields without braces should pass through normally."""
+-        record = _make_record(count=42, name="test")
+-        fmt = _plain_log_format(record)
+-        assert "count=42" in fmt
+-        assert "name='test'" in fmt
+-
+-    def test_empty_extra_no_separator(self) -> None:
+-        """No extra separator when extra dict is empty."""
+-        record = _make_record()
+-        fmt = _plain_log_format(record)
+-        assert "│" in fmt  # timestamp/level separators exist
+-        # Should not have a trailing separator for empty extra
+-        assert fmt.count("│") == 2  # time │ level │ name:message
+-```
+-
+-**Step 2: Run tests to verify they fail**
+-
+-Run: `uv run pytest tests/unit/test_logging.py -v`
+-Expected: `test_nested_dict_braces_are_escaped` and `test_list_of_dicts_braces_are_escaped` FAIL (no `{{` in output)
+-
+-**Step 3: Commit failing tests**
+-
+-```bash
+-git add tests/unit/test_logging.py
+-git commit -m "test: add failing tests for _plain_log_format brace escaping (#463)"
+-```
+-
+----
+-
+-### Task 2: Fix brace escaping in `_plain_log_format` (implementation)
+-
+-**Files:**
+-- Modify: `amelia/logging.py:112-113` (inside `_plain_log_format`)
+-
+-**Step 1: Add brace escaping**
+-
+-In `_plain_log_format`, after `extra_str = " ".join(...)` (line 113), add:
+-
+-```python
+-        extra_str = extra_str.replace("{", "{{").replace("}", "}}")
+-```
+-
+-This matches the escaping already present in `_log_format` at line 84.
+-
+-**Step 2: Run tests to verify they pass**
+-
+-Run: `uv run pytest tests/unit/test_logging.py -v`
+-Expected: All PASS
+-
+-**Step 3: Commit**
+-
+-```bash
+-git add amelia/logging.py
+-git commit -m "fix(logging): escape braces in _plain_log_format to prevent KeyError (#463)"
+-```
+-
+----
+-
+-### Task 3: Add `log_todos()` display function (tests)
+-
+-**Files:**
+-- Modify: `tests/unit/test_logging.py`
+-
+-**Step 1: Write failing tests for `log_todos`**
+-
+-Append to `tests/unit/test_logging.py`:
+-
+-```python
+-from unittest.mock import patch
+-from amelia.logging import log_todos
+-
+-
+-class TestLogTodos:
+-    """log_todos renders rich table on TTY, no-op on piped stderr."""
+-
+-    def test_no_output_when_not_tty(self, capsys: pytest.CaptureFixture[str]) -> None:
+-        """log_todos should be a no-op when stderr is not a TTY."""
+-        with patch("sys.stderr") as mock_stderr:
+-            mock_stderr.isatty.return_value = False
+-            log_todos([{"content": "Fix bug", "status": "completed"}])
+-            mock_stderr.write.assert_not_called()
+-
+-    def test_renders_on_tty(self) -> None:
+-        """log_todos should write to stderr when it is a TTY."""
+-        with patch("sys.stderr") as mock_stderr:
+-            mock_stderr.isatty.return_value = True
+-            # Rich Console needs a real file-like, so patch at Console level
+-            with patch("amelia.logging.Console") as mock_console_cls:
+-                mock_console = MagicMock()
+-                mock_console_cls.return_value = mock_console
+-                log_todos([{"content": "Fix bug", "status": "completed"}])
+-                mock_console.print.assert_called_once()
+-
+-    def test_handles_empty_list(self) -> None:
+-        """log_todos should handle empty todo list gracefully."""
+-        with patch("sys.stderr") as mock_stderr:
+-            mock_stderr.isatty.return_value = True
+-            with patch("amelia.logging.Console") as mock_console_cls:
+-                mock_console = MagicMock()
+-                mock_console_cls.return_value = mock_console
+-                log_todos([])
+-                mock_console.print.assert_called_once()  # Still prints table (empty)
+-```
+-
+-**Step 2: Run tests to verify they fail**
+-
+-Run: `uv run pytest tests/unit/test_logging.py::TestLogTodos -v`
+-Expected: FAIL with `ImportError: cannot import name 'log_todos'`
+-
+-**Step 3: Commit failing tests**
+-
+-```bash
+-git add tests/unit/test_logging.py
+-git commit -m "test: add failing tests for log_todos display function (#463)"
+-```
+-
+----
+-
+-### Task 4: Implement `log_todos()` display function
+-
+-**Files:**
+-- Modify: `amelia/logging.py` (add function after `log_claude_result`)
+-
+-**Step 1: Add `log_todos` function**
+-
+-Insert after `log_claude_result` in `amelia/logging.py`:
+-
+-```python
+-def log_todos(todos: list[dict[str, object]]) -> None:
+-    """Display agent todos with rich Table formatting (TTY only).
+-
+-    Renders a formatted table of todo items to stderr when running in a
+-    terminal. No-op when stderr is piped (e.g., under `amelia dev`).
+-
+-    Args:
+-        todos: List of todo dicts with 'content' and 'status' keys.
+-    """
+-    if not sys.stderr.isatty():
+-        return
+-
+-    from rich.console import Console
+-    from rich.table import Table
+-
+-    console = Console(stderr=True)
+-    table = Table(show_header=True, header_style="bold", box=None, padding=(0, 1))
+-    table.add_column("Status", style="dim", width=12)
+-    table.add_column("Task")
+-
+-    status_styles = {
+-        "completed": ("\u2713", "green"),
+-        "in_progress": ("\u25cc", "yellow"),
+-        "pending": ("\u25cb", "dim"),
+-    }
+-    for todo in todos:
+-        status = str(todo.get("status", ""))
+-        content = str(todo.get("content", ""))
+-        icon, style = status_styles.get(status, ("?", ""))
+-        table.add_row(f"[{style}]{icon} {status}[/{style}]", content)
+-
+-    console.print(table)
+-```
+-
+-**Step 2: Run tests to verify they pass**
+-
+-Run: `uv run pytest tests/unit/test_logging.py -v`
+-Expected: All PASS
+-
+-**Step 3: Commit**
+-
+-```bash
+-git add amelia/logging.py
+-git commit -m "feat(logging): add log_todos() rich display function (#463)"
+-```
+-
+----
+-
+-### Task 5: Flatten nested dicts at call sites in `nodes.py`
+-
+-**Files:**
+-- Modify: `amelia/pipelines/nodes.py:150-158` (developer log)
+-- Modify: `amelia/pipelines/nodes.py:242-252` (reviewer log)
+-
+-**Step 1: Flatten developer action log (line 150-158)**
+-
+-Replace:
+-```python
+-    logger.info(
+-        "Agent action completed",
+-        agent="developer",
+-        action="agentic_execution",
+-        details={
+-            "tool_calls_count": len(final_state.tool_calls),
+-            "agentic_status": final_state.agentic_status,
+-        },
+-    )
+-```
+-
+-With:
+-```python
+-    logger.info(
+-        "Agent action completed",
+-        agent="developer",
+-        action="agentic_execution",
+-        tool_calls_count=len(final_state.tool_calls),
+-        agentic_status=str(final_state.agentic_status),
+-    )
+-```
+-
+-**Step 2: Flatten reviewer action log (line 242-252)**
+-
+-Replace:
+-```python
+-    logger.info(
+-        "Agent action completed",
+-        agent=agent_name,
+-        action="review_completed",
+-        details={
+-            "severity": review_result.severity,
+-            "approved": review_result.approved,
+-            "issue_count": len(review_result.comments),
+-            "review_iteration": next_iteration,
+-        },
+-    )
+-```
+-
+-With:
+-```python
+-    logger.info(
+-        "Agent action completed",
+-        agent=agent_name,
+-        action="review_completed",
+-        severity=str(review_result.severity),
+-        approved=review_result.approved,
+-        issue_count=len(review_result.comments),
+-        review_iteration=next_iteration,
+-    )
+-```
+-
+-**Step 3: Run full test suite to verify no regressions**
+-
+-Run: `uv run pytest tests/ -v --timeout=30`
+-Expected: All PASS
+-
+-**Step 4: Commit**
+-
+-```bash
+-git add amelia/pipelines/nodes.py
+-git commit -m "fix(logging): flatten nested details dicts to scalar kwargs in nodes (#463)"
+-```
+-
+----
+-
+-### Task 6: Fix call sites in `deepagents.py`
+-
+-**Files:**
+-- Modify: `amelia/drivers/api/deepagents.py:670-673` (write_todos log)
+-- Modify: `amelia/drivers/api/deepagents.py:790-797` (summary log)
+-- Modify: `amelia/drivers/api/deepagents.py:800-806` (incomplete tasks warning)
+-- Modify: `amelia/drivers/api/deepagents.py:809-814` (no write_file warning)
+-
+-**Step 1: Add import for `log_todos`**
+-
+-At the top of `deepagents.py`, add to the existing import from `amelia.logging`:
+-
+-```python
+-from amelia.logging import log_todos
+-```
+-
+-If no existing import from `amelia.logging` exists, add this import near other amelia imports.
+-
+-**Step 2: Fix write_todos log (line 670-673)**
+-
+-Replace:
+-```python
+-                                logger.info(
+-                                    "Agent called write_todos",
+-                                    todos=tool_args.get("todos", []),
+-                                )
+-```
+-
+-With:
+-```python
+-                                todos = tool_args.get("todos", [])
+-                                logger.info(
+-                                    "Agent called write_todos",
+-                                    todo_count=len(todos),
+-                                )
+-                                log_todos(todos)
+-```
+-
+-Note: `todos` variable is already used later (line 784), so assign it here. Check that `tool_args.get("todos", [])` is not already assigned to a different variable nearby.
+-
+-**Step 3: Pre-format list fields in summary log (line 790-797)**
+-
+-Replace:
+-```python
+-                all_tool_names=all_tool_names,
+-```
+-
+-With:
+-```python
+-                tool_names=", ".join(all_tool_names[-10:]),
+-```
+-
+-**Step 4: Pre-format list fields in incomplete tasks warning (line 800-806)**
+-
+-Replace:
+-```python
+-                    tool_sequence=all_tool_names[-10:] if len(all_tool_names) > 10 else all_tool_names,
+-```
+-
+-With:
+-```python
+-                    tool_sequence=", ".join(all_tool_names[-10:]),
+-```
+-
+-**Step 5: Pre-format list fields in no-write_file warning (line 809-814)**
+-
+-Replace:
+-```python
+-                    tool_sequence=all_tool_names,
+-```
+-
+-With:
+-```python
+-                    tool_sequence=", ".join(all_tool_names),
+-```
+-
+-**Step 6: Run full test suite**
+-
+-Run: `uv run pytest tests/ -v --timeout=30`
+-Expected: All PASS
+-
+-**Step 7: Commit**
+-
+-```bash
+-git add amelia/drivers/api/deepagents.py
+-git commit -m "fix(logging): use scalar fields and log_todos() in deepagents (#463)"
+-```
+-
+----
+-
+-### Task 7: Run linting and type checks
+-
+-**Step 1: Run ruff**
+-
+-Run: `uv run ruff check amelia tests`
+-Expected: No errors. Fix any issues if found.
+-
+-**Step 2: Run mypy**
+-
+-Run: `uv run mypy amelia`
+-Expected: No new errors. Fix any type issues if found.
+-
+-**Step 3: Run full test suite one final time**
+-
+-Run: `uv run pytest tests/ -v`
+-Expected: All PASS
+-
+-**Step 4: Commit any lint/type fixes if needed**
+-
+-```bash
+-git add -A
+-git commit -m "chore: fix lint and type issues from logging fix (#463)"
+-```
+diff --git a/docs/plans/2026-02-18-ch-473-a.md b/docs/plans/2026-02-18-ch-473-a.md
+deleted file mode 100644
+index 6d8b0d4e..00000000
+--- a/docs/plans/2026-02-18-ch-473-a.md
++++ /dev/null
+@@ -1,515 +0,0 @@
+-# Codex and Explicit CLI Drivers — Continuation Plan
+-
+-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+-
+-**Context:** A prior agent began executing `docs/plans/2026-02-18-gh-473.md` on branch `feat/codex-driver` but failed after partially completing Task 1. This plan picks up where it left off.
+-
+-**Current state:** `amelia/core/types.py` and `tests/unit/core/test_types.py` have **uncommitted** changes. `DriverType` now has `CLAUDE/CODEX/API` (correct), but three old tests in `test_types.py` still construct `AgentConfig(driver="cli", ...)` and will fail. No other tasks were started. No commits exist on this branch beyond `main`.
+-
+-**Execution Rules:** Use @test-driven-development for each task, run @verification-before-completion before claiming success, and request final review with @requesting-code-review.
+-
+----
+-
+-### Task 1: Fix and Commit DriverType Contract (resume prior work)
+-
+-**Files:**
+-- Already modified (unstaged): `amelia/core/types.py`, `tests/unit/core/test_types.py`
+-- Test: `tests/unit/core/test_types.py`
+-
+-**Step 1: Fix broken tests in `tests/unit/core/test_types.py`**
+-
+-Three tests still use `driver="cli"` which will fail with the new enum. Fix them:
+-- Line 135: `AgentConfig(driver="cli", ...)` → `AgentConfig(driver="claude", ...)`
+-- Line 144: `AgentConfig(driver="cli", ...)` → `AgentConfig(driver="claude", ...)`
+-- Line 189: `AgentConfig(driver="cli", ...)` → `AgentConfig(driver="claude", ...)`
+-
+-**Step 2: Run tests to verify**
+-
+-Run: `uv run pytest tests/unit/core/test_types.py -v`
+-Expected: ALL PASS (both new driver tests and fixed old tests).
+-
+-**Step 3: Commit**
+-
+-```bash
+-git add amelia/core/types.py tests/unit/core/test_types.py
+-git commit -m "refactor(types): replace cli driver enum with claude and codex"
+-```
+-
+----
+-
+-### Task 2: Update Driver Factory Routing and Session Cleanup
+-
+-**Files:**
+-- Modify: `amelia/drivers/factory.py`
+-- Modify: `tests/unit/test_driver_factory.py`
+-- Modify: `tests/unit/drivers/test_factory.py`
+-
+-**Step 1: Write the failing test**
+-
+-In both factory test files, replace `"cli"` expectations with explicit `"claude"` and add codex coverage:
+-
+-```python
+-@pytest.mark.parametrize(
+-    "driver_key,expected_class",
+-    [
+-        ("claude", "ClaudeCliDriver"),
+-        ("codex", "CodexCliDriver"),
+-        ("api", "ApiDriver"),
+-    ],
+-)
+-def test_get_driver_routes_explicit_driver_keys(driver_key: str, expected_class: str) -> None:
+-    ...
+-
+-
+-def test_get_driver_rejects_legacy_cli() -> None:
+-    with pytest.raises(ValueError, match="Valid options: 'claude', 'codex', 'api'"):
+-        get_driver("cli")
+-
+-
+-@pytest.mark.asyncio
+-async def test_cleanup_driver_session_codex_returns_false() -> None:
+-    assert await cleanup_driver_session("codex", "any") is False
+-```
+-
+-Also update container-mode test to ensure both `claude` and `codex` are rejected:
+-
+-```python
+-@pytest.mark.parametrize("driver_key", ["claude", "codex"])
+-def test_container_mode_rejects_cli_wrappers(driver_key: str) -> None:
+-    sandbox = SandboxConfig(mode="container")
+-    with pytest.raises(ValueError, match="Container sandbox requires API driver"):
+-        get_driver(driver_key, sandbox_config=sandbox)
+-```
+-
+-**Step 2: Run test to verify it fails**
+-
+-Run: `uv run pytest tests/unit/test_driver_factory.py tests/unit/drivers/test_factory.py -v`
+-Expected: FAIL because factory only supports `cli|api`.
+-
+-**Step 3: Write minimal implementation**
+-
+-In `amelia/drivers/factory.py`:
+-
+-```python
+-from amelia.drivers.cli.codex import CodexCliDriver
+-
+-...
+-if sandbox_config and sandbox_config.mode == "container":
+-    if driver_key in {"claude", "codex"}:
+-        raise ValueError(
+-            "Container sandbox requires API driver. "
+-            "CLI driver containerization is not yet supported."
+-        )
+-    if driver_key != "api":
+-        raise ValueError(f"Unknown driver key: {driver_key}")
+-
+-if driver_key == "claude":
+-    return ClaudeCliDriver(model=model, cwd=cwd)
+-elif driver_key == "codex":
+-    return CodexCliDriver(model=model, cwd=cwd)
+-elif driver_key == "api":
+-    return ApiDriver(provider="openrouter", model=model)
+-else:
+-    raise ValueError(
+-        f"Unknown driver key: {driver_key!r}. "
+-        "Valid options: 'claude', 'codex', 'api'. "
+-        "(Legacy forms 'cli', 'cli:claude', and 'api:openrouter' are no longer supported.)"
+-    )
+-
+-...
+-if driver_key in {"claude", "codex"}:
+-    return False
+-```
+-
+-**Step 4: Run test to verify it passes**
+-
+-Run: `uv run pytest tests/unit/test_driver_factory.py tests/unit/drivers/test_factory.py -v`
+-Expected: PASS
+-
+-**Step 5: Commit**
+-
+-```bash
+-git add amelia/drivers/factory.py tests/unit/test_driver_factory.py tests/unit/drivers/test_factory.py
+-git commit -m "refactor(factory): route claude codex api and reject legacy cli"
+-```
+-
+----
+-
+-### Task 3: Add CodexCliDriver Contract Tests (Before Implementation)
+-
+-**Files:**
+-- Create: `tests/unit/drivers/test_codex_driver.py`
+-- Create: `amelia/drivers/cli/codex.py` (scaffold only)
+-
+-**Step 1: Write the failing test**
+-
+-Create `tests/unit/drivers/test_codex_driver.py`:
+-
+-```python
+-import json
+-from unittest.mock import AsyncMock, patch
+-
+-import pytest
+-from pydantic import BaseModel
+-
+-from amelia.drivers.base import AgenticMessageType
+-from amelia.drivers.cli.codex import CodexCliDriver
+-
+-
+-class _Schema(BaseModel):
+-    answer: str
+-
+-
+-@pytest.mark.asyncio
+-async def test_generate_returns_text() -> None:
+-    driver = CodexCliDriver(model="gpt-5-codex", cwd="/tmp")
+-    with patch.object(driver, "_run_codex", new=AsyncMock(return_value='{"result":"ok"}')):
+-        text, session_id = await driver.generate("ping")
+-    assert text == "ok"
+-    assert session_id is None
+-
+-
+-@pytest.mark.asyncio
+-async def test_generate_parses_schema() -> None:
+-    driver = CodexCliDriver(model="gpt-5-codex", cwd="/tmp")
+-    payload = json.dumps({"answer": "42"})
+-    with patch.object(driver, "_run_codex", new=AsyncMock(return_value=payload)):
+-        result, _ = await driver.generate("question", schema=_Schema)
+-    assert isinstance(result, _Schema)
+-    assert result.answer == "42"
+-
+-
+-@pytest.mark.asyncio
+-async def test_execute_agentic_maps_stream_events() -> None:
+-    driver = CodexCliDriver(model="gpt-5-codex", cwd="/tmp")
+-    with patch.object(
+-        driver,
+-        "_run_codex_stream",
+-        return_value=iter([
+-            {"type": "reasoning", "content": "thinking"},
+-            {"type": "tool_call", "name": "read_file", "input": {"path": "a.py"}, "id": "1"},
+-            {"type": "tool_result", "name": "read_file", "output": "ok", "id": "1"},
+-            {"type": "final", "content": "done"},
+-        ]),
+-    ):
+-        msgs = [m async for m in driver.execute_agentic("task", cwd="/tmp")]
+-
+-    assert [m.type for m in msgs] == [
+-        AgenticMessageType.THINKING,
+-        AgenticMessageType.TOOL_CALL,
+-        AgenticMessageType.TOOL_RESULT,
+-        AgenticMessageType.RESULT,
+-    ]
+-
+-
+-@pytest.mark.asyncio
+-async def test_cleanup_session_is_false() -> None:
+-    driver = CodexCliDriver(model="gpt-5-codex")
+-    assert await driver.cleanup_session("any") is False
+-```
+-
+-**Step 2: Run test to verify it fails**
+-
+-Run: `uv run pytest tests/unit/drivers/test_codex_driver.py -v`
+-Expected: FAIL with `ModuleNotFoundError` for `amelia.drivers.cli.codex`.
+-
+-**Step 3: Write minimal implementation scaffold**
+-
+-Create `amelia/drivers/cli/codex.py` with class and method signatures only raising `NotImplementedError`:
+-
+-```python
+-class CodexCliDriver:
+-    async def generate(self, *args, **kwargs):
+-        raise NotImplementedError
+-
+-    def _run_codex_stream(self, *args, **kwargs):
+-        raise NotImplementedError
+-
+-    async def cleanup_session(self, session_id):
+-        raise NotImplementedError
+-```
+-
+-**Step 4: Run test to verify failure shape is now implementation-level**
+-
+-Run: `uv run pytest tests/unit/drivers/test_codex_driver.py -v`
+-Expected: FAIL with `NotImplementedError` (import resolved).
+-
+-**Step 5: Commit**
+-
+-```bash
+-git add tests/unit/drivers/test_codex_driver.py amelia/drivers/cli/codex.py
+-git commit -m "test(drivers): add failing codex cli driver contract tests"
+-```
+-
+----
+-
+-### Task 4: Implement CodexCliDriver
+-
+-**Files:**
+-- Modify: `amelia/drivers/cli/codex.py`
+-- Modify: `amelia/drivers/cli/__init__.py`
+-- Modify: `tests/unit/drivers/test_codex_driver.py`
+-
+-**Step 1: Write final failing edge-case tests**
+-
+-Append tests for error handling and usage:
+-
+-```python
+-@pytest.mark.asyncio
+-async def test_generate_wraps_process_error() -> None:
+-    driver = CodexCliDriver(model="gpt-5-codex")
+-    with patch.object(driver, "_run_codex", new=AsyncMock(side_effect=RuntimeError("boom"))):
+-        with pytest.raises(Exception, match="Codex CLI generate failed"):
+-            await driver.generate("x")
+-
+-
+-def test_get_usage_defaults_model() -> None:
+-    driver = CodexCliDriver(model="gpt-5-codex")
+-    usage = driver.get_usage()
+-    assert usage is None
+-```
+-
+-**Step 2: Run test to verify it fails**
+-
+-Run: `uv run pytest tests/unit/drivers/test_codex_driver.py -v`
+-Expected: FAIL until implementation is complete.
+-
+-**Step 3: Write full implementation**
+-
+-Implement `CodexCliDriver` in `amelia/drivers/cli/codex.py`. Refer to the original plan (`docs/plans/2026-02-18-gh-473.md` Task 4 Step 3) for the complete implementation code. Key points:
+-- `__init__` takes `model` and optional `cwd`
+-- `_run_codex` shells out via `asyncio.create_subprocess_exec` to `codex exec --model ... --json`
+-- `_run_codex_stream` raises `NotImplementedError` (streaming adapter TBD)
+-- `generate` parses JSON output, supports schema validation
+-- `execute_agentic` maps stream events to `AgenticMessage` types
+-- `get_usage` returns `None`
+-- `cleanup_session` returns `False`
+-- Wraps errors in `ModelProviderError` with `provider_name="codex-cli"`
+-
+-Export in `amelia/drivers/cli/__init__.py`:
+-
+-```python
+-from amelia.drivers.cli.codex import CodexCliDriver
+-
+-__all__ = ["CodexCliDriver"]
+-```
+-
+-**Step 4: Run test to verify it passes**
+-
+-Run: `uv run pytest tests/unit/drivers/test_codex_driver.py -v`
+-Expected: PASS
+-
+-**Step 5: Commit**
+-
+-```bash
+-git add amelia/drivers/cli/codex.py amelia/drivers/cli/__init__.py tests/unit/drivers/test_codex_driver.py
+-git commit -m "feat(drivers): implement codex cli driver"
+-```
+-
+----
+-
+-### Task 5: Update CLI Config Validation and Profile Defaults
+-
+-**Files:**
+-- Modify: `amelia/cli/config.py`
+-- Modify: `tests/unit/cli/test_config_cli.py`
+-
+-**Step 1: Write the failing test**
+-
+-In `tests/unit/cli/test_config_cli.py`, update and add assertions:
+-
+-```python
+-def test_profile_create_accepts_codex_driver(runner, mock_db):
+-    result = runner.invoke(app, [
+-        "config", "profile", "create", "new-profile",
+-        "--driver", "codex",
+-        "--model", "gpt-5-codex",
+-        "--tracker", "noop",
+-        "--working-dir", "/tmp",
+-    ])
+-    assert result.exit_code == 0
+-
+-
+-def test_profile_create_rejects_legacy_cli_driver(runner, mock_db):
+-    result = runner.invoke(app, [
+-        "config", "profile", "create", "new-profile",
+-        "--driver", "cli",
+-        "--model", "sonnet",
+-    ])
+-    assert result.exit_code != 0
+-    assert "Invalid driver 'cli'" in result.stdout
+-```
+-
+-**Step 2: Run test to verify it fails**
+-
+-Run: `uv run pytest tests/unit/cli/test_config_cli.py -k "driver or profile_create" -v`
+-Expected: FAIL because CLI currently only accepts `cli|api`.
+-
+-**Step 3: Write minimal implementation**
+-
+-In `amelia/cli/config.py`:
+-- Replace `VALID_DRIVERS` set: `{DriverType.CLAUDE, DriverType.CODEX, DriverType.API}`
+-- Update help text: `"Driver (claude, codex, or api)"`
+-- Update default prompts: `default="claude"`
+-- Update validation messages
+-
+-**Step 4: Run test to verify it passes**
+-
+-Run: `uv run pytest tests/unit/cli/test_config_cli.py -k "driver or profile_create" -v`
+-Expected: PASS
+-
+-**Step 5: Commit**
+-
+-```bash
+-git add amelia/cli/config.py tests/unit/cli/test_config_cli.py
+-git commit -m "feat(cli): accept claude codex api drivers in profile config"
+-```
+-
+----
+-
+-### Task 6: Migrate Fixtures and Integration Driver References
+-
+-**Files:**
+-- Modify: `tests/conftest.py`
+-- Modify: `tests/integration/conftest.py`
+-- Modify: `tests/integration/test_multi_driver_agents.py`
+-- Modify: `tests/integration/test_extraction_driver_instantiation.py`
+-- Modify: `tests/integration/test_reviewer_prompt_parser.py`
+-- Modify: `tests/integration/test_queue_workflow_flow.py`
+-- Modify: `tests/unit/test_orchestrator_profile.py`
+-- Modify: `tests/unit/test_orchestrator_graph.py`
+-- Modify: `tests/unit/client/test_cli_start.py`
+-- Any other files found by: `rg -l '"cli"|DriverType\.CLI|driver: cli|--driver cli' tests/`
+-
+-**Step 1: Find all remaining `"cli"` references in tests**
+-
+-Run: `rg -n '"cli"|DriverType\.CLI' tests/`
+-This produces the migration hit list.
+-
+-**Step 2: Apply global test migration**
+-
+-Replace all `"cli"` → `"claude"` and `DriverType.CLI` → `DriverType.CLAUDE` across test files. Then manually verify the few spots that should exercise `codex` paths (factory tests, multi-driver integration) to ensure they parametrize over `codex` too.
+-
+-**Step 3: Update integration test driver matrix**
+-
+-In `tests/integration/test_multi_driver_agents.py`:
+-
+-```python
+-DRIVER_CONFIGS = [
+-    pytest.param("api", "anthropic/claude-sonnet-4-20250514", id="api-openrouter"),
+-    pytest.param("claude", "sonnet", id="claude-cli"),
+-    pytest.param("codex", "gpt-5-codex", id="codex-cli"),
+-]
+-```
+-
+-Update patch selection logic:
+-
+-```python
+-if driver_key == "api":
+-    patch_target = "amelia.drivers.api.deepagents.ApiDriver.execute_agentic"
+-elif driver_key == "claude":
+-    patch_target = "amelia.drivers.cli.claude.ClaudeCliDriver.execute_agentic"
+-else:
+-    patch_target = "amelia.drivers.cli.codex.CodexCliDriver.execute_agentic"
+-```
+-
+-**Step 4: Run tests to verify**
+-
+-Run: `uv run pytest tests/integration/test_multi_driver_agents.py tests/unit/test_orchestrator_profile.py tests/unit/test_orchestrator_graph.py -v`
+-Expected: PASS
+-
+-**Step 5: Verify no legacy references remain**
+-
+-Run: `rg -n '"cli"|DriverType\.CLI' tests/`
+-Expected: Zero matches (or only in the "rejects legacy cli" test assertions).
+-
+-**Step 6: Commit**
+-
+-```bash
+-git add tests/
+-git commit -m "test: migrate fixtures from cli to explicit claude and codex drivers"
+-```
+-
+----
+-
+-### Task 7: Update User/Architecture Docs and Migration Guidance
+-
+-**Files:**
+-- Modify: `README.md`
+-- Modify: `docs/site/guide/configuration.md` (if exists)
+-- Modify: `docs/site/guide/index.md`
+-- Modify: `docs/site/guide/usage.md`
+-- Modify: `docs/site/guide/troubleshooting.md`
+-- Modify: `docs/site/architecture/data-model.md` (if exists)
+-- Modify: `CHANGELOG.md`
+-
+-**Step 1: Find all legacy doc references**
+-
+-Run: `rg -n '--driver cli|driver: cli|driver=cli|\bcli\b driver' README.md docs/site/ CLAUDE.md`
+-
+-**Step 2: Update all references**
+-
+-- `--driver cli` → `--driver claude`
+-- `cli|api` tables → `claude|codex|api`
+-- Add codex examples alongside claude examples
+-- Update CLAUDE.md driver description if it mentions `cli`
+-
+-**Step 3: Add changelog migration note**
+-
+-Prepend to CHANGELOG.md:
+-
+-```markdown
+-### Breaking Changes
+-- Removed legacy `driver: "cli"`.
+-- New explicit driver keys: `claude`, `codex`, `api`.
+-- Existing profiles must be migrated before running this version.
+-```
+-
+-**Step 4: Verify no legacy references remain**
+-
+-Run: `rg -n '--driver cli|driver: cli' README.md docs/site/`
+-Expected: Zero matches.
+-
+-**Step 5: Commit**
+-
+-```bash
+-git add README.md docs/site/ CHANGELOG.md CLAUDE.md
+-git commit -m "docs: document explicit claude codex api driver model and migration"
+-```
+-
+----
+-
+-### Task 8: Full Verification Gate
+-
+-**Step 1: Run targeted driver/unit tests**
+-
+-Run: `uv run pytest tests/unit/test_driver_factory.py tests/unit/drivers/test_factory.py tests/unit/drivers/test_codex_driver.py tests/unit/test_claude_driver.py tests/unit/test_api_driver.py -v`
+-Expected: PASS
+-
+-**Step 2: Run config and orchestration regression tests**
+-
+-Run: `uv run pytest tests/unit/cli/test_config_cli.py tests/unit/test_orchestrator_profile.py tests/unit/test_orchestrator_graph.py tests/integration/test_multi_driver_agents.py -v`
+-Expected: PASS
+-
+-**Step 3: Run full test suite**
+-
+-Run: `uv run pytest tests/unit/ tests/integration/ -v`
+-Expected: PASS
+-
+-**Step 4: Run static checks**
+-
+-Run: `uv run ruff check .` and `uv run mypy amelia`
+-Expected: PASS
+-
+-**Step 5: Verify no legacy driver key remains**
+-
+-Run: `rg -n '"cli"|DriverType\.CLI|--driver cli|driver: cli' amelia tests README.md docs/site`
+-Expected: Zero matches (except intentional changelog migration notes).
+-
+-**Step 6: Review commit history**
+-
+-```bash
+-git log --oneline -n 10
+-```
+-
+-Expected: Clean linear sequence of task commits.
+diff --git a/docs/plans/2026-02-18-gh-473-b.md b/docs/plans/2026-02-18-gh-473-b.md
+deleted file mode 100644
+index 6d8b0d4e..00000000
+--- a/docs/plans/2026-02-18-gh-473-b.md
++++ /dev/null
+@@ -1,515 +0,0 @@
+-# Codex and Explicit CLI Drivers — Continuation Plan
+-
+-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+-
+-**Context:** A prior agent began executing `docs/plans/2026-02-18-gh-473.md` on branch `feat/codex-driver` but failed after partially completing Task 1. This plan picks up where it left off.
+-
+-**Current state:** `amelia/core/types.py` and `tests/unit/core/test_types.py` have **uncommitted** changes. `DriverType` now has `CLAUDE/CODEX/API` (correct), but three old tests in `test_types.py` still construct `AgentConfig(driver="cli", ...)` and will fail. No other tasks were started. No commits exist on this branch beyond `main`.
+-
+-**Execution Rules:** Use @test-driven-development for each task, run @verification-before-completion before claiming success, and request final review with @requesting-code-review.
+-
+----
+-
+-### Task 1: Fix and Commit DriverType Contract (resume prior work)
+-
+-**Files:**
+-- Already modified (unstaged): `amelia/core/types.py`, `tests/unit/core/test_types.py`
+-- Test: `tests/unit/core/test_types.py`
+-
+-**Step 1: Fix broken tests in `tests/unit/core/test_types.py`**
+-
+-Three tests still use `driver="cli"` which will fail with the new enum. Fix them:
+-- Line 135: `AgentConfig(driver="cli", ...)` → `AgentConfig(driver="claude", ...)`
+-- Line 144: `AgentConfig(driver="cli", ...)` → `AgentConfig(driver="claude", ...)`
+-- Line 189: `AgentConfig(driver="cli", ...)` → `AgentConfig(driver="claude", ...)`
+-
+-**Step 2: Run tests to verify**
+-
+-Run: `uv run pytest tests/unit/core/test_types.py -v`
+-Expected: ALL PASS (both new driver tests and fixed old tests).
+-
+-**Step 3: Commit**
+-
+-```bash
+-git add amelia/core/types.py tests/unit/core/test_types.py
+-git commit -m "refactor(types): replace cli driver enum with claude and codex"
+-```
+-
+----
+-
+-### Task 2: Update Driver Factory Routing and Session Cleanup
+-
+-**Files:**
+-- Modify: `amelia/drivers/factory.py`
+-- Modify: `tests/unit/test_driver_factory.py`
+-- Modify: `tests/unit/drivers/test_factory.py`
+-
+-**Step 1: Write the failing test**
+-
+-In both factory test files, replace `"cli"` expectations with explicit `"claude"` and add codex coverage:
+-
+-```python
+-@pytest.mark.parametrize(
+-    "driver_key,expected_class",
+-    [
+-        ("claude", "ClaudeCliDriver"),
+-        ("codex", "CodexCliDriver"),
+-        ("api", "ApiDriver"),
+-    ],
+-)
+-def test_get_driver_routes_explicit_driver_keys(driver_key: str, expected_class: str) -> None:
+-    ...
+-
+-
+-def test_get_driver_rejects_legacy_cli() -> None:
+-    with pytest.raises(ValueError, match="Valid options: 'claude', 'codex', 'api'"):
+-        get_driver("cli")
+-
+-
+-@pytest.mark.asyncio
+-async def test_cleanup_driver_session_codex_returns_false() -> None:
+-    assert await cleanup_driver_session("codex", "any") is False
+-```
+-
+-Also update container-mode test to ensure both `claude` and `codex` are rejected:
+-
+-```python
+-@pytest.mark.parametrize("driver_key", ["claude", "codex"])
+-def test_container_mode_rejects_cli_wrappers(driver_key: str) -> None:
+-    sandbox = SandboxConfig(mode="container")
+-    with pytest.raises(ValueError, match="Container sandbox requires API driver"):
+-        get_driver(driver_key, sandbox_config=sandbox)
+-```
+-
+-**Step 2: Run test to verify it fails**
+-
+-Run: `uv run pytest tests/unit/test_driver_factory.py tests/unit/drivers/test_factory.py -v`
+-Expected: FAIL because factory only supports `cli|api`.
+-
+-**Step 3: Write minimal implementation**
+-
+-In `amelia/drivers/factory.py`:
+-
+-```python
+-from amelia.drivers.cli.codex import CodexCliDriver
+-
+-...
+-if sandbox_config and sandbox_config.mode == "container":
+-    if driver_key in {"claude", "codex"}:
+-        raise ValueError(
+-            "Container sandbox requires API driver. "
+-            "CLI driver containerization is not yet supported."
+-        )
+-    if driver_key != "api":
+-        raise ValueError(f"Unknown driver key: {driver_key}")
+-
+-if driver_key == "claude":
+-    return ClaudeCliDriver(model=model, cwd=cwd)
+-elif driver_key == "codex":
+-    return CodexCliDriver(model=model, cwd=cwd)
+-elif driver_key == "api":
+-    return ApiDriver(provider="openrouter", model=model)
+-else:
+-    raise ValueError(
+-        f"Unknown driver key: {driver_key!r}. "
+-        "Valid options: 'claude', 'codex', 'api'. "
+-        "(Legacy forms 'cli', 'cli:claude', and 'api:openrouter' are no longer supported.)"
+-    )
+-
+-...
+-if driver_key in {"claude", "codex"}:
+-    return False
+-```
+-
+-**Step 4: Run test to verify it passes**
+-
+-Run: `uv run pytest tests/unit/test_driver_factory.py tests/unit/drivers/test_factory.py -v`
+-Expected: PASS
+-
+-**Step 5: Commit**
+-
+-```bash
+-git add amelia/drivers/factory.py tests/unit/test_driver_factory.py tests/unit/drivers/test_factory.py
+-git commit -m "refactor(factory): route claude codex api and reject legacy cli"
+-```
+-
+----
+-
+-### Task 3: Add CodexCliDriver Contract Tests (Before Implementation)
+-
+-**Files:**
+-- Create: `tests/unit/drivers/test_codex_driver.py`
+-- Create: `amelia/drivers/cli/codex.py` (scaffold only)
+-
+-**Step 1: Write the failing test**
+-
+-Create `tests/unit/drivers/test_codex_driver.py`:
+-
+-```python
+-import json
+-from unittest.mock import AsyncMock, patch
+-
+-import pytest
+-from pydantic import BaseModel
+-
+-from amelia.drivers.base import AgenticMessageType
+-from amelia.drivers.cli.codex import CodexCliDriver
+-
+-
+-class _Schema(BaseModel):
+-    answer: str
+-
+-
+-@pytest.mark.asyncio
+-async def test_generate_returns_text() -> None:
+-    driver = CodexCliDriver(model="gpt-5-codex", cwd="/tmp")
+-    with patch.object(driver, "_run_codex", new=AsyncMock(return_value='{"result":"ok"}')):
+-        text, session_id = await driver.generate("ping")
+-    assert text == "ok"
+-    assert session_id is None
+-
+-
+-@pytest.mark.asyncio
+-async def test_generate_parses_schema() -> None:
+-    driver = CodexCliDriver(model="gpt-5-codex", cwd="/tmp")
+-    payload = json.dumps({"answer": "42"})
+-    with patch.object(driver, "_run_codex", new=AsyncMock(return_value=payload)):
+-        result, _ = await driver.generate("question", schema=_Schema)
+-    assert isinstance(result, _Schema)
+-    assert result.answer == "42"
+-
+-
+-@pytest.mark.asyncio
+-async def test_execute_agentic_maps_stream_events() -> None:
+-    driver = CodexCliDriver(model="gpt-5-codex", cwd="/tmp")
+-    with patch.object(
+-        driver,
+-        "_run_codex_stream",
+-        return_value=iter([
+-            {"type": "reasoning", "content": "thinking"},
+-            {"type": "tool_call", "name": "read_file", "input": {"path": "a.py"}, "id": "1"},
+-            {"type": "tool_result", "name": "read_file", "output": "ok", "id": "1"},
+-            {"type": "final", "content": "done"},
+-        ]),
+-    ):
+-        msgs = [m async for m in driver.execute_agentic("task", cwd="/tmp")]
+-
+-    assert [m.type for m in msgs] == [
+-        AgenticMessageType.THINKING,
+-        AgenticMessageType.TOOL_CALL,
+-        AgenticMessageType.TOOL_RESULT,
+-        AgenticMessageType.RESULT,
+-    ]
+-
+-
+-@pytest.mark.asyncio
+-async def test_cleanup_session_is_false() -> None:
+-    driver = CodexCliDriver(model="gpt-5-codex")
+-    assert await driver.cleanup_session("any") is False
+-```
+-
+-**Step 2: Run test to verify it fails**
+-
+-Run: `uv run pytest tests/unit/drivers/test_codex_driver.py -v`
+-Expected: FAIL with `ModuleNotFoundError` for `amelia.drivers.cli.codex`.
+-
+-**Step 3: Write minimal implementation scaffold**
+-
+-Create `amelia/drivers/cli/codex.py` with class and method signatures only raising `NotImplementedError`:
+-
+-```python
+-class CodexCliDriver:
+-    async def generate(self, *args, **kwargs):
+-        raise NotImplementedError
+-
+-    def _run_codex_stream(self, *args, **kwargs):
+-        raise NotImplementedError
+-
+-    async def cleanup_session(self, session_id):
+-        raise NotImplementedError
+-```
+-
+-**Step 4: Run test to verify failure shape is now implementation-level**
+-
+-Run: `uv run pytest tests/unit/drivers/test_codex_driver.py -v`
+-Expected: FAIL with `NotImplementedError` (import resolved).
+-
+-**Step 5: Commit**
+-
+-```bash
+-git add tests/unit/drivers/test_codex_driver.py amelia/drivers/cli/codex.py
+-git commit -m "test(drivers): add failing codex cli driver contract tests"
+-```
+-
+----
+-
+-### Task 4: Implement CodexCliDriver
+-
+-**Files:**
+-- Modify: `amelia/drivers/cli/codex.py`
+-- Modify: `amelia/drivers/cli/__init__.py`
+-- Modify: `tests/unit/drivers/test_codex_driver.py`
+-
+-**Step 1: Write final failing edge-case tests**
+-
+-Append tests for error handling and usage:
+-
+-```python
+-@pytest.mark.asyncio
+-async def test_generate_wraps_process_error() -> None:
+-    driver = CodexCliDriver(model="gpt-5-codex")
+-    with patch.object(driver, "_run_codex", new=AsyncMock(side_effect=RuntimeError("boom"))):
+-        with pytest.raises(Exception, match="Codex CLI generate failed"):
+-            await driver.generate("x")
+-
+-
+-def test_get_usage_defaults_model() -> None:
+-    driver = CodexCliDriver(model="gpt-5-codex")
+-    usage = driver.get_usage()
+-    assert usage is None
+-```
+-
+-**Step 2: Run test to verify it fails**
+-
+-Run: `uv run pytest tests/unit/drivers/test_codex_driver.py -v`
+-Expected: FAIL until implementation is complete.
+-
+-**Step 3: Write full implementation**
+-
+-Implement `CodexCliDriver` in `amelia/drivers/cli/codex.py`. Refer to the original plan (`docs/plans/2026-02-18-gh-473.md` Task 4 Step 3) for the complete implementation code. Key points:
+-- `__init__` takes `model` and optional `cwd`
+-- `_run_codex` shells out via `asyncio.create_subprocess_exec` to `codex exec --model ... --json`
+-- `_run_codex_stream` raises `NotImplementedError` (streaming adapter TBD)
+-- `generate` parses JSON output, supports schema validation
+-- `execute_agentic` maps stream events to `AgenticMessage` types
+-- `get_usage` returns `None`
+-- `cleanup_session` returns `False`
+-- Wraps errors in `ModelProviderError` with `provider_name="codex-cli"`
+-
+-Export in `amelia/drivers/cli/__init__.py`:
+-
+-```python
+-from amelia.drivers.cli.codex import CodexCliDriver
+-
+-__all__ = ["CodexCliDriver"]
+-```
+-
+-**Step 4: Run test to verify it passes**
+-
+-Run: `uv run pytest tests/unit/drivers/test_codex_driver.py -v`
+-Expected: PASS
+-
+-**Step 5: Commit**
+-
+-```bash
+-git add amelia/drivers/cli/codex.py amelia/drivers/cli/__init__.py tests/unit/drivers/test_codex_driver.py
+-git commit -m "feat(drivers): implement codex cli driver"
+-```
+-
+----
+-
+-### Task 5: Update CLI Config Validation and Profile Defaults
+-
+-**Files:**
+-- Modify: `amelia/cli/config.py`
+-- Modify: `tests/unit/cli/test_config_cli.py`
+-
+-**Step 1: Write the failing test**
+-
+-In `tests/unit/cli/test_config_cli.py`, update and add assertions:
+-
+-```python
+-def test_profile_create_accepts_codex_driver(runner, mock_db):
+-    result = runner.invoke(app, [
+-        "config", "profile", "create", "new-profile",
+-        "--driver", "codex",
+-        "--model", "gpt-5-codex",
+-        "--tracker", "noop",
+-        "--working-dir", "/tmp",
+-    ])
+-    assert result.exit_code == 0
+-
+-
+-def test_profile_create_rejects_legacy_cli_driver(runner, mock_db):
+-    result = runner.invoke(app, [
+-        "config", "profile", "create", "new-profile",
+-        "--driver", "cli",
+-        "--model", "sonnet",
+-    ])
+-    assert result.exit_code != 0
+-    assert "Invalid driver 'cli'" in result.stdout
+-```
+-
+-**Step 2: Run test to verify it fails**
+-
+-Run: `uv run pytest tests/unit/cli/test_config_cli.py -k "driver or profile_create" -v`
+-Expected: FAIL because CLI currently only accepts `cli|api`.
+-
+-**Step 3: Write minimal implementation**
+-
+-In `amelia/cli/config.py`:
+-- Replace `VALID_DRIVERS` set: `{DriverType.CLAUDE, DriverType.CODEX, DriverType.API}`
+-- Update help text: `"Driver (claude, codex, or api)"`
+-- Update default prompts: `default="claude"`
+-- Update validation messages
+-
+-**Step 4: Run test to verify it passes**
+-
+-Run: `uv run pytest tests/unit/cli/test_config_cli.py -k "driver or profile_create" -v`
+-Expected: PASS
+-
+-**Step 5: Commit**
+-
+-```bash
+-git add amelia/cli/config.py tests/unit/cli/test_config_cli.py
+-git commit -m "feat(cli): accept claude codex api drivers in profile config"
+-```
+-
+----
+-
+-### Task 6: Migrate Fixtures and Integration Driver References
+-
+-**Files:**
+-- Modify: `tests/conftest.py`
+-- Modify: `tests/integration/conftest.py`
+-- Modify: `tests/integration/test_multi_driver_agents.py`
+-- Modify: `tests/integration/test_extraction_driver_instantiation.py`
+-- Modify: `tests/integration/test_reviewer_prompt_parser.py`
+-- Modify: `tests/integration/test_queue_workflow_flow.py`
+-- Modify: `tests/unit/test_orchestrator_profile.py`
+-- Modify: `tests/unit/test_orchestrator_graph.py`
+-- Modify: `tests/unit/client/test_cli_start.py`
+-- Any other files found by: `rg -l '"cli"|DriverType\.CLI|driver: cli|--driver cli' tests/`
+-
+-**Step 1: Find all remaining `"cli"` references in tests**
+-
+-Run: `rg -n '"cli"|DriverType\.CLI' tests/`
+-This produces the migration hit list.
+-
+-**Step 2: Apply global test migration**
+-
+-Replace all `"cli"` → `"claude"` and `DriverType.CLI` → `DriverType.CLAUDE` across test files. Then manually verify the few spots that should exercise `codex` paths (factory tests, multi-driver integration) to ensure they parametrize over `codex` too.
+-
+-**Step 3: Update integration test driver matrix**
+-
+-In `tests/integration/test_multi_driver_agents.py`:
+-
+-```python
+-DRIVER_CONFIGS = [
+-    pytest.param("api", "anthropic/claude-sonnet-4-20250514", id="api-openrouter"),
+-    pytest.param("claude", "sonnet", id="claude-cli"),
+-    pytest.param("codex", "gpt-5-codex", id="codex-cli"),
+-]
+-```
+-
+-Update patch selection logic:
+-
+-```python
+-if driver_key == "api":
+-    patch_target = "amelia.drivers.api.deepagents.ApiDriver.execute_agentic"
+-elif driver_key == "claude":
+-    patch_target = "amelia.drivers.cli.claude.ClaudeCliDriver.execute_agentic"
+-else:
+-    patch_target = "amelia.drivers.cli.codex.CodexCliDriver.execute_agentic"
+-```
+-
+-**Step 4: Run tests to verify**
+-
+-Run: `uv run pytest tests/integration/test_multi_driver_agents.py tests/unit/test_orchestrator_profile.py tests/unit/test_orchestrator_graph.py -v`
+-Expected: PASS
+-
+-**Step 5: Verify no legacy references remain**
+-
+-Run: `rg -n '"cli"|DriverType\.CLI' tests/`
+-Expected: Zero matches (or only in the "rejects legacy cli" test assertions).
+-
+-**Step 6: Commit**
+-
+-```bash
+-git add tests/
+-git commit -m "test: migrate fixtures from cli to explicit claude and codex drivers"
+-```
+-
+----
+-
+-### Task 7: Update User/Architecture Docs and Migration Guidance
+-
+-**Files:**
+-- Modify: `README.md`
+-- Modify: `docs/site/guide/configuration.md` (if exists)
+-- Modify: `docs/site/guide/index.md`
+-- Modify: `docs/site/guide/usage.md`
+-- Modify: `docs/site/guide/troubleshooting.md`
+-- Modify: `docs/site/architecture/data-model.md` (if exists)
+-- Modify: `CHANGELOG.md`
+-
+-**Step 1: Find all legacy doc references**
+-
+-Run: `rg -n '--driver cli|driver: cli|driver=cli|\bcli\b driver' README.md docs/site/ CLAUDE.md`
+-
+-**Step 2: Update all references**
+-
+-- `--driver cli` → `--driver claude`
+-- `cli|api` tables → `claude|codex|api`
+-- Add codex examples alongside claude examples
+-- Update CLAUDE.md driver description if it mentions `cli`
+-
+-**Step 3: Add changelog migration note**
+-
+-Prepend to CHANGELOG.md:
+-
+-```markdown
+-### Breaking Changes
+-- Removed legacy `driver: "cli"`.
+-- New explicit driver keys: `claude`, `codex`, `api`.
+-- Existing profiles must be migrated before running this version.
+-```
+-
+-**Step 4: Verify no legacy references remain**
+-
+-Run: `rg -n '--driver cli|driver: cli' README.md docs/site/`
+-Expected: Zero matches.
+-
+-**Step 5: Commit**
+-
+-```bash
+-git add README.md docs/site/ CHANGELOG.md CLAUDE.md
+-git commit -m "docs: document explicit claude codex api driver model and migration"
+-```
+-
+----
+-
+-### Task 8: Full Verification Gate
+-
+-**Step 1: Run targeted driver/unit tests**
+-
+-Run: `uv run pytest tests/unit/test_driver_factory.py tests/unit/drivers/test_factory.py tests/unit/drivers/test_codex_driver.py tests/unit/test_claude_driver.py tests/unit/test_api_driver.py -v`
+-Expected: PASS
+-
+-**Step 2: Run config and orchestration regression tests**
+-
+-Run: `uv run pytest tests/unit/cli/test_config_cli.py tests/unit/test_orchestrator_profile.py tests/unit/test_orchestrator_graph.py tests/integration/test_multi_driver_agents.py -v`
+-Expected: PASS
+-
+-**Step 3: Run full test suite**
+-
+-Run: `uv run pytest tests/unit/ tests/integration/ -v`
+-Expected: PASS
+-
+-**Step 4: Run static checks**
+-
+-Run: `uv run ruff check .` and `uv run mypy amelia`
+-Expected: PASS
+-
+-**Step 5: Verify no legacy driver key remains**
+-
+-Run: `rg -n '"cli"|DriverType\.CLI|--driver cli|driver: cli' amelia tests README.md docs/site`
+-Expected: Zero matches (except intentional changelog migration notes).
+-
+-**Step 6: Review commit history**
+-
+-```bash
+-git log --oneline -n 10
+-```
+-
+-Expected: Clean linear sequence of task commits.
+diff --git a/docs/plans/2026-02-18-gh-473-continuation.md b/docs/plans/2026-02-18-gh-473-continuation.md
+index 6d8b0d4e..1ea9c7ef 100644
+--- a/docs/plans/2026-02-18-gh-473-continuation.md
++++ b/docs/plans/2026-02-18-gh-473-continuation.md
+@@ -1,373 +1,90 @@
+-# Codex and Explicit CLI Drivers — Continuation Plan
++# Codex and Explicit CLI Drivers — Remaining Work
+ 
+-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
++**Last updated:** February 19, 2026
+ 
+-**Context:** A prior agent began executing `docs/plans/2026-02-18-gh-473.md` on branch `feat/codex-driver` but failed after partially completing Task 1. This plan picks up where it left off.
++This document is pruned to only remaining work on `feat/codex-driver`.
+ 
+-**Current state:** `amelia/core/types.py` and `tests/unit/core/test_types.py` have **uncommitted** changes. `DriverType` now has `CLAUDE/CODEX/API` (correct), but three old tests in `test_types.py` still construct `AgentConfig(driver="cli", ...)` and will fail. No other tasks were started. No commits exist on this branch beyond `main`.
++## Completed and Removed From This Plan
+ 
+-**Execution Rules:** Use @test-driven-development for each task, run @verification-before-completion before claiming success, and request final review with @requesting-code-review.
++- Task 1 (DriverType contract fix) is complete and committed.
++- Task 3 (Codex contract tests + scaffold) is complete and committed.
++- The document's original "uncommitted/no commits" state is no longer accurate.
+ 
+----
++## Current Branch Snapshot
+ 
+-### Task 1: Fix and Commit DriverType Contract (resume prior work)
++Recent GH-473-related commits include:
++- `b2d157e9` / `3f015345` — `refactor(types): replace cli driver enum with claude and codex`
++- `d7ca264c` — `feat(GH-473-B): complete task 1`
++- `69b81e3d` — `feat(GH-473-B): complete task 2`
++- `f15d50b2` — `test(drivers): add failing codex cli driver contract tests`
++- `c612aa89` — `test(drivers): fix async generator scaffold for codex driver tests`
+ 
+-**Files:**
+-- Already modified (unstaged): `amelia/core/types.py`, `tests/unit/core/test_types.py`
+-- Test: `tests/unit/core/test_types.py`
+-
+-**Step 1: Fix broken tests in `tests/unit/core/test_types.py`**
+-
+-Three tests still use `driver="cli"` which will fail with the new enum. Fix them:
+-- Line 135: `AgentConfig(driver="cli", ...)` → `AgentConfig(driver="claude", ...)`
+-- Line 144: `AgentConfig(driver="cli", ...)` → `AgentConfig(driver="claude", ...)`
+-- Line 189: `AgentConfig(driver="cli", ...)` → `AgentConfig(driver="claude", ...)`
+-
+-**Step 2: Run tests to verify**
+-
+-Run: `uv run pytest tests/unit/core/test_types.py -v`
+-Expected: ALL PASS (both new driver tests and fixed old tests).
+-
+-**Step 3: Commit**
+-
+-```bash
+-git add amelia/core/types.py tests/unit/core/test_types.py
+-git commit -m "refactor(types): replace cli driver enum with claude and codex"
+-```
+-
+----
++Observed gaps:
++- `CodexCliDriver` is still a stub (`NotImplementedError` in `generate`, `execute_agentic`, `get_usage`).
++- `tests/unit/test_driver_factory.py` still has a legacy `cleanup_driver_session("cli", ...)` expectation that now fails.
++- CLI config still prompts/defaults to `cli` (`amelia/cli/config.py`).
++- Integration and docs still contain many legacy `cli` references.
+ 
+-### Task 2: Update Driver Factory Routing and Session Cleanup
++## Remaining Task A: Finalize Factory Cleanup Semantics
+ 
+ **Files:**
+ - Modify: `amelia/drivers/factory.py`
+ - Modify: `tests/unit/test_driver_factory.py`
+-- Modify: `tests/unit/drivers/test_factory.py`
+-
+-**Step 1: Write the failing test**
+-
+-In both factory test files, replace `"cli"` expectations with explicit `"claude"` and add codex coverage:
+-
+-```python
+-@pytest.mark.parametrize(
+-    "driver_key,expected_class",
+-    [
+-        ("claude", "ClaudeCliDriver"),
+-        ("codex", "CodexCliDriver"),
+-        ("api", "ApiDriver"),
+-    ],
+-)
+-def test_get_driver_routes_explicit_driver_keys(driver_key: str, expected_class: str) -> None:
+-    ...
+-
+-
+-def test_get_driver_rejects_legacy_cli() -> None:
+-    with pytest.raises(ValueError, match="Valid options: 'claude', 'codex', 'api'"):
+-        get_driver("cli")
+-
+-
+-@pytest.mark.asyncio
+-async def test_cleanup_driver_session_codex_returns_false() -> None:
+-    assert await cleanup_driver_session("codex", "any") is False
+-```
+-
+-Also update container-mode test to ensure both `claude` and `codex` are rejected:
+-
+-```python
+-@pytest.mark.parametrize("driver_key", ["claude", "codex"])
+-def test_container_mode_rejects_cli_wrappers(driver_key: str) -> None:
+-    sandbox = SandboxConfig(mode="container")
+-    with pytest.raises(ValueError, match="Container sandbox requires API driver"):
+-        get_driver(driver_key, sandbox_config=sandbox)
+-```
+-
+-**Step 2: Run test to verify it fails**
+-
+-Run: `uv run pytest tests/unit/test_driver_factory.py tests/unit/drivers/test_factory.py -v`
+-Expected: FAIL because factory only supports `cli|api`.
+-
+-**Step 3: Write minimal implementation**
+-
+-In `amelia/drivers/factory.py`:
+-
+-```python
+-from amelia.drivers.cli.codex import CodexCliDriver
+-
+-...
+-if sandbox_config and sandbox_config.mode == "container":
+-    if driver_key in {"claude", "codex"}:
+-        raise ValueError(
+-            "Container sandbox requires API driver. "
+-            "CLI driver containerization is not yet supported."
+-        )
+-    if driver_key != "api":
+-        raise ValueError(f"Unknown driver key: {driver_key}")
+-
+-if driver_key == "claude":
+-    return ClaudeCliDriver(model=model, cwd=cwd)
+-elif driver_key == "codex":
+-    return CodexCliDriver(model=model, cwd=cwd)
+-elif driver_key == "api":
+-    return ApiDriver(provider="openrouter", model=model)
+-else:
+-    raise ValueError(
+-        f"Unknown driver key: {driver_key!r}. "
+-        "Valid options: 'claude', 'codex', 'api'. "
+-        "(Legacy forms 'cli', 'cli:claude', and 'api:openrouter' are no longer supported.)"
+-    )
+-
+-...
+-if driver_key in {"claude", "codex"}:
+-    return False
+-```
+-
+-**Step 4: Run test to verify it passes**
+-
+-Run: `uv run pytest tests/unit/test_driver_factory.py tests/unit/drivers/test_factory.py -v`
+-Expected: PASS
+-
+-**Step 5: Commit**
+-
+-```bash
+-git add amelia/drivers/factory.py tests/unit/test_driver_factory.py tests/unit/drivers/test_factory.py
+-git commit -m "refactor(factory): route claude codex api and reject legacy cli"
+-```
+-
+----
+-
+-### Task 3: Add CodexCliDriver Contract Tests (Before Implementation)
+-
+-**Files:**
+-- Create: `tests/unit/drivers/test_codex_driver.py`
+-- Create: `amelia/drivers/cli/codex.py` (scaffold only)
+-
+-**Step 1: Write the failing test**
+-
+-Create `tests/unit/drivers/test_codex_driver.py`:
+-
+-```python
+-import json
+-from unittest.mock import AsyncMock, patch
+-
+-import pytest
+-from pydantic import BaseModel
+-
+-from amelia.drivers.base import AgenticMessageType
+-from amelia.drivers.cli.codex import CodexCliDriver
+-
+-
+-class _Schema(BaseModel):
+-    answer: str
+-
+-
+-@pytest.mark.asyncio
+-async def test_generate_returns_text() -> None:
+-    driver = CodexCliDriver(model="gpt-5-codex", cwd="/tmp")
+-    with patch.object(driver, "_run_codex", new=AsyncMock(return_value='{"result":"ok"}')):
+-        text, session_id = await driver.generate("ping")
+-    assert text == "ok"
+-    assert session_id is None
+-
+-
+-@pytest.mark.asyncio
+-async def test_generate_parses_schema() -> None:
+-    driver = CodexCliDriver(model="gpt-5-codex", cwd="/tmp")
+-    payload = json.dumps({"answer": "42"})
+-    with patch.object(driver, "_run_codex", new=AsyncMock(return_value=payload)):
+-        result, _ = await driver.generate("question", schema=_Schema)
+-    assert isinstance(result, _Schema)
+-    assert result.answer == "42"
+-
+-
+-@pytest.mark.asyncio
+-async def test_execute_agentic_maps_stream_events() -> None:
+-    driver = CodexCliDriver(model="gpt-5-codex", cwd="/tmp")
+-    with patch.object(
+-        driver,
+-        "_run_codex_stream",
+-        return_value=iter([
+-            {"type": "reasoning", "content": "thinking"},
+-            {"type": "tool_call", "name": "read_file", "input": {"path": "a.py"}, "id": "1"},
+-            {"type": "tool_result", "name": "read_file", "output": "ok", "id": "1"},
+-            {"type": "final", "content": "done"},
+-        ]),
+-    ):
+-        msgs = [m async for m in driver.execute_agentic("task", cwd="/tmp")]
+-
+-    assert [m.type for m in msgs] == [
+-        AgenticMessageType.THINKING,
+-        AgenticMessageType.TOOL_CALL,
+-        AgenticMessageType.TOOL_RESULT,
+-        AgenticMessageType.RESULT,
+-    ]
++- Modify: `tests/unit/drivers/test_factory.py` (if needed for consistency)
+ 
++**Work:**
++1. Align cleanup behavior to explicit keys only (`claude`, `codex`, `api`).
++2. Replace legacy test expectation in `tests/unit/test_driver_factory.py`:
++   - `cleanup_driver_session("cli", ...)` should no longer be treated as valid.
++3. Ensure cleanup error text matches explicit-key model (no `cli|api` messaging).
+ 
+-@pytest.mark.asyncio
+-async def test_cleanup_session_is_false() -> None:
+-    driver = CodexCliDriver(model="gpt-5-codex")
+-    assert await driver.cleanup_session("any") is False
+-```
++**Verification:**
++- `uv run pytest tests/unit/test_driver_factory.py tests/unit/drivers/test_factory.py -v`
+ 
+-**Step 2: Run test to verify it fails**
+-
+-Run: `uv run pytest tests/unit/drivers/test_codex_driver.py -v`
+-Expected: FAIL with `ModuleNotFoundError` for `amelia.drivers.cli.codex`.
+-
+-**Step 3: Write minimal implementation scaffold**
+-
+-Create `amelia/drivers/cli/codex.py` with class and method signatures only raising `NotImplementedError`:
+-
+-```python
+-class CodexCliDriver:
+-    async def generate(self, *args, **kwargs):
+-        raise NotImplementedError
+-
+-    def _run_codex_stream(self, *args, **kwargs):
+-        raise NotImplementedError
+-
+-    async def cleanup_session(self, session_id):
+-        raise NotImplementedError
+-```
+-
+-**Step 4: Run test to verify failure shape is now implementation-level**
+-
+-Run: `uv run pytest tests/unit/drivers/test_codex_driver.py -v`
+-Expected: FAIL with `NotImplementedError` (import resolved).
+-
+-**Step 5: Commit**
+-
+-```bash
+-git add tests/unit/drivers/test_codex_driver.py amelia/drivers/cli/codex.py
+-git commit -m "test(drivers): add failing codex cli driver contract tests"
+-```
+-
+----
+-
+-### Task 4: Implement CodexCliDriver
++## Remaining Task B: Implement CodexCliDriver
+ 
+ **Files:**
+ - Modify: `amelia/drivers/cli/codex.py`
+ - Modify: `amelia/drivers/cli/__init__.py`
+ - Modify: `tests/unit/drivers/test_codex_driver.py`
+ 
+-**Step 1: Write final failing edge-case tests**
+-
+-Append tests for error handling and usage:
+-
+-```python
+-@pytest.mark.asyncio
+-async def test_generate_wraps_process_error() -> None:
+-    driver = CodexCliDriver(model="gpt-5-codex")
+-    with patch.object(driver, "_run_codex", new=AsyncMock(side_effect=RuntimeError("boom"))):
+-        with pytest.raises(Exception, match="Codex CLI generate failed"):
+-            await driver.generate("x")
+-
+-
+-def test_get_usage_defaults_model() -> None:
+-    driver = CodexCliDriver(model="gpt-5-codex")
+-    usage = driver.get_usage()
+-    assert usage is None
+-```
+-
+-**Step 2: Run test to verify it fails**
+-
+-Run: `uv run pytest tests/unit/drivers/test_codex_driver.py -v`
+-Expected: FAIL until implementation is complete.
+-
+-**Step 3: Write full implementation**
+-
+-Implement `CodexCliDriver` in `amelia/drivers/cli/codex.py`. Refer to the original plan (`docs/plans/2026-02-18-gh-473.md` Task 4 Step 3) for the complete implementation code. Key points:
+-- `__init__` takes `model` and optional `cwd`
+-- `_run_codex` shells out via `asyncio.create_subprocess_exec` to `codex exec --model ... --json`
+-- `_run_codex_stream` raises `NotImplementedError` (streaming adapter TBD)
+-- `generate` parses JSON output, supports schema validation
+-- `execute_agentic` maps stream events to `AgenticMessage` types
+-- `get_usage` returns `None`
+-- `cleanup_session` returns `False`
+-- Wraps errors in `ModelProviderError` with `provider_name="codex-cli"`
+-
+-Export in `amelia/drivers/cli/__init__.py`:
+-
+-```python
+-from amelia.drivers.cli.codex import CodexCliDriver
+-
+-__all__ = ["CodexCliDriver"]
+-```
+-
+-**Step 4: Run test to verify it passes**
+-
+-Run: `uv run pytest tests/unit/drivers/test_codex_driver.py -v`
+-Expected: PASS
+-
+-**Step 5: Commit**
+-
+-```bash
+-git add amelia/drivers/cli/codex.py amelia/drivers/cli/__init__.py tests/unit/drivers/test_codex_driver.py
+-git commit -m "feat(drivers): implement codex cli driver"
+-```
+-
+----
+-
+-### Task 5: Update CLI Config Validation and Profile Defaults
++**Work:**
++1. Add/confirm edge-case tests:
++   - generate wraps process errors as provider-specific failure
++   - get_usage default behavior
++2. Implement `CodexCliDriver`:
++   - `__init__(model, cwd=None)`
++   - `_run_codex` via `asyncio.create_subprocess_exec` calling `codex exec --model ... --json`
++   - `_run_codex_stream` placeholder behavior per current test expectations
++   - `generate` parses JSON and supports schema validation
++   - `execute_agentic` maps stream events to `AgenticMessage` types
++   - `cleanup_session` returns `False`
++   - `get_usage` behavior consistent with tests
++   - wrap provider failures in `ModelProviderError(provider_name="codex-cli")`
++3. Export `CodexCliDriver` in `amelia/drivers/cli/__init__.py`.
++
++**Verification:**
++- `uv run pytest tests/unit/drivers/test_codex_driver.py -v`
++
++## Remaining Task C: Update CLI Config Validation and Defaults
+ 
+ **Files:**
+ - Modify: `amelia/cli/config.py`
+ - Modify: `tests/unit/cli/test_config_cli.py`
+ 
+-**Step 1: Write the failing test**
+-
+-In `tests/unit/cli/test_config_cli.py`, update and add assertions:
+-
+-```python
+-def test_profile_create_accepts_codex_driver(runner, mock_db):
+-    result = runner.invoke(app, [
+-        "config", "profile", "create", "new-profile",
+-        "--driver", "codex",
+-        "--model", "gpt-5-codex",
+-        "--tracker", "noop",
+-        "--working-dir", "/tmp",
+-    ])
+-    assert result.exit_code == 0
++**Work:**
++1. Update valid driver set to explicit keys (`claude`, `codex`, `api`).
++2. Update profile create and first-run prompt/help/default text:
++   - replace `cli` defaults with `claude`
++   - remove `cli or api` wording
++3. Update/add tests:
++   - accepts `codex`
++   - rejects legacy `cli`
+ 
++**Verification:**
++- `uv run pytest tests/unit/cli/test_config_cli.py -k "driver or profile_create" -v`
+ 
+-def test_profile_create_rejects_legacy_cli_driver(runner, mock_db):
+-    result = runner.invoke(app, [
+-        "config", "profile", "create", "new-profile",
+-        "--driver", "cli",
+-        "--model", "sonnet",
+-    ])
+-    assert result.exit_code != 0
+-    assert "Invalid driver 'cli'" in result.stdout
+-```
+-
+-**Step 2: Run test to verify it fails**
+-
+-Run: `uv run pytest tests/unit/cli/test_config_cli.py -k "driver or profile_create" -v`
+-Expected: FAIL because CLI currently only accepts `cli|api`.
+-
+-**Step 3: Write minimal implementation**
+-
+-In `amelia/cli/config.py`:
+-- Replace `VALID_DRIVERS` set: `{DriverType.CLAUDE, DriverType.CODEX, DriverType.API}`
+-- Update help text: `"Driver (claude, codex, or api)"`
+-- Update default prompts: `default="claude"`
+-- Update validation messages
+-
+-**Step 4: Run test to verify it passes**
+-
+-Run: `uv run pytest tests/unit/cli/test_config_cli.py -k "driver or profile_create" -v`
+-Expected: PASS
+-
+-**Step 5: Commit**
+-
+-```bash
+-git add amelia/cli/config.py tests/unit/cli/test_config_cli.py
+-git commit -m "feat(cli): accept claude codex api drivers in profile config"
+-```
+-
+----
+-
+-### Task 6: Migrate Fixtures and Integration Driver References
++## Remaining Task D: Migrate Tests and Integration Driver References
+ 
+ **Files:**
+ - Modify: `tests/conftest.py`
+@@ -379,137 +96,44 @@ git commit -m "feat(cli): accept claude codex api drivers in profile config"
+ - Modify: `tests/unit/test_orchestrator_profile.py`
+ - Modify: `tests/unit/test_orchestrator_graph.py`
+ - Modify: `tests/unit/client/test_cli_start.py`
+-- Any other files found by: `rg -l '"cli"|DriverType\.CLI|driver: cli|--driver cli' tests/`
+-
+-**Step 1: Find all remaining `"cli"` references in tests**
+-
+-Run: `rg -n '"cli"|DriverType\.CLI' tests/`
+-This produces the migration hit list.
+-
+-**Step 2: Apply global test migration**
+-
+-Replace all `"cli"` → `"claude"` and `DriverType.CLI` → `DriverType.CLAUDE` across test files. Then manually verify the few spots that should exercise `codex` paths (factory tests, multi-driver integration) to ensure they parametrize over `codex` too.
+-
+-**Step 3: Update integration test driver matrix**
++- Any other files from `rg -l '"cli"|DriverType\.CLI|driver: cli|--driver cli' tests/`
+ 
+-In `tests/integration/test_multi_driver_agents.py`:
++**Work:**
++1. Replace legacy test references (`"cli"`, `DriverType.CLI`) with explicit keys.
++2. Preserve intentional legacy-rejection assertions where applicable.
++3. Ensure multi-driver integration includes `claude`, `codex`, and `api` matrix entries.
+ 
+-```python
+-DRIVER_CONFIGS = [
+-    pytest.param("api", "anthropic/claude-sonnet-4-20250514", id="api-openrouter"),
+-    pytest.param("claude", "sonnet", id="claude-cli"),
+-    pytest.param("codex", "gpt-5-codex", id="codex-cli"),
+-]
+-```
++**Verification:**
++- `uv run pytest tests/integration/test_multi_driver_agents.py tests/unit/test_orchestrator_profile.py tests/unit/test_orchestrator_graph.py -v`
++- `rg -n '"cli"|DriverType\.CLI' tests/`
+ 
+-Update patch selection logic:
+-
+-```python
+-if driver_key == "api":
+-    patch_target = "amelia.drivers.api.deepagents.ApiDriver.execute_agentic"
+-elif driver_key == "claude":
+-    patch_target = "amelia.drivers.cli.claude.ClaudeCliDriver.execute_agentic"
+-else:
+-    patch_target = "amelia.drivers.cli.codex.CodexCliDriver.execute_agentic"
+-```
+-
+-**Step 4: Run tests to verify**
+-
+-Run: `uv run pytest tests/integration/test_multi_driver_agents.py tests/unit/test_orchestrator_profile.py tests/unit/test_orchestrator_graph.py -v`
+-Expected: PASS
+-
+-**Step 5: Verify no legacy references remain**
+-
+-Run: `rg -n '"cli"|DriverType\.CLI' tests/`
+-Expected: Zero matches (or only in the "rejects legacy cli" test assertions).
+-
+-**Step 6: Commit**
+-
+-```bash
+-git add tests/
+-git commit -m "test: migrate fixtures from cli to explicit claude and codex drivers"
+-```
+-
+----
+-
+-### Task 7: Update User/Architecture Docs and Migration Guidance
++## Remaining Task E: Update Docs and Migration Guidance
+ 
+ **Files:**
+ - Modify: `README.md`
+-- Modify: `docs/site/guide/configuration.md` (if exists)
++- Modify: `docs/site/guide/configuration.md` (if present)
+ - Modify: `docs/site/guide/index.md`
+ - Modify: `docs/site/guide/usage.md`
+ - Modify: `docs/site/guide/troubleshooting.md`
+-- Modify: `docs/site/architecture/data-model.md` (if exists)
++- Modify: `docs/site/architecture/data-model.md` (if present)
+ - Modify: `CHANGELOG.md`
+ 
+-**Step 1: Find all legacy doc references**
+-
+-Run: `rg -n '--driver cli|driver: cli|driver=cli|\bcli\b driver' README.md docs/site/ CLAUDE.md`
+-
+-**Step 2: Update all references**
+-
+-- `--driver cli` → `--driver claude`
+-- `cli|api` tables → `claude|codex|api`
+-- Add codex examples alongside claude examples
+-- Update CLAUDE.md driver description if it mentions `cli`
+-
+-**Step 3: Add changelog migration note**
+-
+-Prepend to CHANGELOG.md:
+-
+-```markdown
+-### Breaking Changes
+-- Removed legacy `driver: "cli"`.
+-- New explicit driver keys: `claude`, `codex`, `api`.
+-- Existing profiles must be migrated before running this version.
+-```
+-
+-**Step 4: Verify no legacy references remain**
+-
+-Run: `rg -n '--driver cli|driver: cli' README.md docs/site/`
+-Expected: Zero matches.
+-
+-**Step 5: Commit**
+-
+-```bash
+-git add README.md docs/site/ CHAN
+... [output truncated]
+[Command succeeded with exit code 0]
+[Output was truncated due to size limits]

@@ -112,3 +112,47 @@ def route_after_task_review(
         route="developer",
     )
     return "developer"
+
+
+def route_after_plan_validation(
+    state: ImplementationState,
+    profile: Profile,
+) -> Literal["approved", "revise", "escalate"]:
+    """Route after plan validation: approve, revise, or escalate to human.
+
+    Follows the same pattern as route_after_task_review:
+    check result -> check iteration count -> route.
+
+    Args:
+        state: Current state with plan_validation_result and plan_revision_count.
+        profile: Profile with plan_validator agent config for max_iterations.
+
+    Returns:
+        "approved" if valid (or no result for backward compat).
+        "revise" if invalid and revisions remain.
+        "escalate" if max revisions exhausted (let human decide).
+    """
+    result = state.plan_validation_result
+    if result is None or result.valid:
+        return "approved"
+
+    max_iterations = 3
+    if "plan_validator" in profile.agents:
+        max_iterations = profile.agents["plan_validator"].options.get("max_iterations", 3)
+
+    if state.plan_revision_count >= max_iterations:
+        logger.warning(
+            "Plan validation failed after max revisions, escalating to human",
+            revision_count=state.plan_revision_count,
+            max_iterations=max_iterations,
+            issues=result.issues,
+        )
+        return "escalate"
+
+    logger.debug(
+        "Plan validation failed, routing to architect for revision",
+        revision_count=state.plan_revision_count,
+        max_iterations=max_iterations,
+        issues=result.issues,
+    )
+    return "revise"

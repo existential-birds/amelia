@@ -13,7 +13,7 @@ from loguru import logger
 from pydantic import BaseModel, ValidationError
 
 from amelia.core.constants import READONLY_TOOLS, ToolName
-from amelia.core.exceptions import ModelProviderError
+from amelia.core.exceptions import ModelProviderError, SchemaValidationError
 from amelia.drivers.base import (
     AgenticMessage,
     AgenticMessageType,
@@ -251,7 +251,7 @@ class CodexCliDriver(DriverInterface):
             validated = schema.model_validate(data)
             return validated.model_dump_json()
         except (ValidationError, json.JSONDecodeError) as e:
-            raise ModelProviderError(
+            raise SchemaValidationError(
                 f"Schema validation failed: {e}",
                 provider_name=self.PROVIDER_NAME,
                 original_message=str(source_content)[:500],
@@ -351,7 +351,7 @@ class CodexCliDriver(DriverInterface):
                 result = schema.model_validate(data)
                 return (result, None)
             except (ValidationError, json.JSONDecodeError) as e:
-                raise ModelProviderError(
+                raise SchemaValidationError(
                     f"Schema validation failed: {e}",
                     provider_name=self.PROVIDER_NAME,
                     original_message=str(data)[:500],

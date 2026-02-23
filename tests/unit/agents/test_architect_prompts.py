@@ -8,7 +8,7 @@ import pytest
 
 from amelia.agents.architect import Architect
 from amelia.agents.schemas.architect import MarkdownPlanOutput
-from amelia.core.types import AgentConfig, Profile
+from amelia.core.types import AgentConfig, PlanValidationResult, Profile, Severity
 from amelia.drivers.base import AgenticMessage, AgenticMessageType
 from amelia.pipelines.implementation.state import ImplementationState
 
@@ -124,3 +124,45 @@ class TestArchitectPromptInjection:
             architect_default = Architect(config)
             assert architect_default.plan_prompt
             assert len(architect_default.plan_prompt) > 50
+
+
+class TestArchitectValidationFeedback:
+    """Tests for validation feedback in architect prompts."""
+
+    async def test_prompt_includes_validation_feedback(
+        self,
+        mock_driver: MagicMock,
+        mock_execution_state_factory: Callable[..., tuple[ImplementationState, Profile]],
+    ) -> None:
+        """When plan_validation_result has issues, prompt should include them."""
+        state, profile = mock_execution_state_factory(
+            plan_validation_result=PlanValidationResult(
+                valid=False,
+                issues=["No ### Task headers found", "Goal section missing"],
+                severity=Severity.MAJOR,
+            ),
+        )
+        config = AgentConfig(driver="claude", model="sonnet")
+
+        with patch("amelia.agents.architect.get_driver", return_value=mock_driver):
+            architect = Architect(config)
+            prompt = architect._build_agentic_prompt(state, profile)
+
+        assert "No ### Task headers found" in prompt
+        assert "Goal section missing" in prompt
+
+    async def test_prompt_no_feedback_when_valid(
+        self,
+        mock_driver: MagicMock,
+        mock_execution_state_factory: Callable[..., tuple[ImplementationState, Profile]],
+    ) -> None:
+        """When no validation issues, prompt should not include revision section."""
+        state, profile = mock_execution_state_factory()
+        config = AgentConfig(driver="claude", model="sonnet")
+
+        with patch("amelia.agents.architect.get_driver", return_value=mock_driver):
+            architect = Architect(config)
+            prompt = architect._build_agentic_prompt(state, profile)
+
+        assert "plan validator" not in prompt.lower()
+        assert "structural issues" not in prompt.lower()
