@@ -27,6 +27,7 @@ from amelia.pipelines.implementation.utils import (
     _looks_like_plan,
     commit_task_changes,
     extract_task_count,
+    validate_plan_structure,
 )
 from amelia.pipelines.nodes import _save_token_usage
 from amelia.pipelines.utils import extract_config_params
@@ -105,6 +106,20 @@ async def plan_validator_node(
     # Parse task count from plan markdown
     total_tasks = extract_task_count(plan_content)
 
+    # Run structural validation (on both happy path and fallback output)
+    validation_result = validate_plan_structure(goal, plan_markdown)
+
+    revision_count = state.plan_revision_count
+    if not validation_result.valid:
+        revision_count += 1
+        logger.warning(
+            "Plan structural validation failed",
+            issues=validation_result.issues,
+            severity=validation_result.severity.value,
+            revision_count=revision_count,
+            workflow_id=workflow_id,
+        )
+
     logger.info(
         "Plan validated",
         goal=goal,
@@ -119,6 +134,8 @@ async def plan_validator_node(
         "plan_path": plan_path,
         "key_files": key_files,
         "total_tasks": total_tasks,
+        "plan_validation_result": validation_result,
+        "plan_revision_count": revision_count,
     }
 
 
