@@ -6,7 +6,7 @@ from uuid import uuid4
 import pytest
 from pydantic import ValidationError
 
-from amelia.core.types import Design, Issue
+from amelia.core.types import Design, Issue, PlanValidationResult, Severity
 from amelia.pipelines.base import BasePipelineState
 from amelia.pipelines.implementation.state import (
     ImplementationState,
@@ -92,6 +92,32 @@ class TestImplementationState:
         assert state.total_tasks == 5
         assert state.current_task_index == 2
         assert state.task_review_iteration == 1
+
+    def test_plan_validation_fields_defaults(self) -> None:
+        """Should have plan validation fields with correct defaults."""
+        state = ImplementationState(
+            workflow_id=uuid4(),
+            profile_id="default",
+            created_at=datetime.now(UTC),
+            status="pending",
+        )
+        assert state.plan_validation_result is None
+        assert state.plan_revision_count == 0
+
+    def test_plan_validation_fields_set(self) -> None:
+        """Should accept plan validation result and revision count."""
+        result = PlanValidationResult(valid=False, issues=["no tasks"], severity=Severity.MAJOR)
+        state = ImplementationState(
+            workflow_id=uuid4(),
+            profile_id="default",
+            created_at=datetime.now(UTC),
+            status="running",
+            plan_validation_result=result,
+            plan_revision_count=1,
+        )
+        assert state.plan_validation_result is not None
+        assert not state.plan_validation_result.valid
+        assert state.plan_revision_count == 1
 
     def test_state_is_frozen(self) -> None:
         """ImplementationState should be immutable."""
