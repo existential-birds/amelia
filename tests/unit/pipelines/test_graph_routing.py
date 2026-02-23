@@ -68,3 +68,19 @@ class TestGraphExternalPlanRouting:
             external_plan=False,
         )
         assert route_after_start(normal_state) == "architect"
+
+    def test_graph_has_plan_validation_conditional_routing(self) -> None:
+        """Graph should have conditional routing from plan_validator_node."""
+        graph = create_implementation_graph()
+        graph_dict = graph.get_graph().to_json()
+
+        # Find plan_validator_node edges
+        validator_edges = [
+            edge for edge in graph_dict["edges"]
+            if edge["source"] == "plan_validator_node"
+        ]
+
+        # Should have conditional edges to human_approval_node AND architect_node
+        target_nodes = {edge["target"] for edge in validator_edges}
+        assert "human_approval_node" in target_nodes, "plan_validator should route to human_approval"
+        assert "architect_node" in target_nodes, "plan_validator should route back to architect"
