@@ -9,6 +9,7 @@ import sys
 from typing import TYPE_CHECKING
 
 from loguru import logger
+from rich.box import ROUNDED
 from rich.console import Console
 
 
@@ -330,10 +331,10 @@ def log_claude_result(
 
 
 def log_todos(todos: list[dict[str, object]]) -> None:
-    """Display agent todos with rich Table formatting (TTY only).
+    """Display agent todos as a styled Rich Panel (TTY only).
 
-    Renders a formatted table of todo items to stderr when running in a
-    terminal. No-op when stderr is piped (e.g., under `amelia dev`).
+    Renders a bordered panel with a task counter title and per-status
+    styling to stderr when running in a terminal.
 
     Args:
         todos: List of todo dicts with 'content' and 'status' keys.
@@ -341,22 +342,34 @@ def log_todos(todos: list[dict[str, object]]) -> None:
     if not sys.stderr.isatty():
         return
 
-    from rich.table import Table  # noqa: PLC0415
+    from rich.panel import Panel  # noqa: PLC0415
+    from rich.text import Text  # noqa: PLC0415
 
     console = Console(stderr=True)
-    table = Table(show_header=True, header_style="bold", box=None, padding=(0, 1))
-    table.add_column("Status", style="dim", width=12)
-    table.add_column("Task")
 
-    status_styles = {
-        "completed": ("\u2713", "green"),
-        "in_progress": ("\u25cc", "yellow"),
-        "pending": ("\u25cb", "dim"),
+    status_styles: dict[str, tuple[str, str, str]] = {
+        "completed": ("\u2713", "green", "dim"),
+        "in_progress": ("\u25b8", "yellow bold", ""),
+        "pending": ("\u25cb", "dim", "dim"),
     }
-    for todo in todos:
+
+    completed = sum(1 for t in todos if t.get("status") == "completed")
+    total = len(todos)
+
+    lines = Text()
+    for i, todo in enumerate(todos):
         status = str(todo.get("status", ""))
         content = str(todo.get("content", ""))
-        icon, style = status_styles.get(status, ("?", ""))
-        table.add_row(f"[{style}]{icon} {status}[/{style}]", content)
+        if status in status_styles:
+            icon, icon_style, text_style = status_styles[status]
+        else:
+            icon, icon_style, text_style = ("?", "red", "")
+            logger.warning("Unknown todo status", status=status, content=content)
+        lines.append(f" {icon} ", style=icon_style)
+        lines.append(content, style=text_style)
+        if i < len(todos) - 1:
+            lines.append("\n")
 
-    console.print(table)
+    title = Text.assemble(("Tasks", "bold"), f"  {completed}/{total}")
+    panel = Panel(lines, title=title, title_align="left", box=ROUNDED, padding=(0, 1))
+    console.print(panel)

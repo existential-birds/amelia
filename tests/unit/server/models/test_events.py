@@ -1,5 +1,6 @@
 """Tests for event models."""
 
+from collections.abc import Callable
 from datetime import UTC, datetime
 from uuid import uuid4
 
@@ -19,10 +20,10 @@ class TestEventLevel:
 
     def test_event_level_values(self) -> None:
         """EventLevel has info, warning, debug, error values."""
-        assert EventLevel.INFO == "info"
-        assert EventLevel.WARNING == "warning"
-        assert EventLevel.DEBUG == "debug"
-        assert EventLevel.ERROR == "error"
+        assert EventLevel.INFO.value == "info"
+        assert EventLevel.WARNING.value == "warning"
+        assert EventLevel.DEBUG.value == "debug"
+        assert EventLevel.ERROR.value == "error"
 
     @pytest.mark.parametrize(
         "event_type,expected_level",
@@ -86,7 +87,7 @@ class TestEventLevel:
 class TestWorkflowEvent:
     """Tests for WorkflowEvent model."""
 
-    def test_create_event_with_all_fields(self, event_factory) -> None:
+    def test_create_event_with_all_fields(self, event_factory: Callable[..., WorkflowEvent]) -> None:
         """Event can be created with all fields including optional ones."""
         event = event_factory(
             agent="developer",
@@ -223,11 +224,11 @@ class TestWorkflowEvent:
 class TestPersistedTypes:
     """Tests for PERSISTED_TYPES classification."""
 
-    def test_persisted_types_is_frozenset(self):
+    def test_persisted_types_is_frozenset(self) -> None:
         """PERSISTED_TYPES must be immutable."""
         assert isinstance(PERSISTED_TYPES, frozenset)
 
-    def test_lifecycle_events_are_persisted(self):
+    def test_lifecycle_events_are_persisted(self) -> None:
         """All lifecycle events must be persisted."""
         lifecycle = {
             EventType.WORKFLOW_CREATED,
@@ -238,7 +239,7 @@ class TestPersistedTypes:
         }
         assert lifecycle <= PERSISTED_TYPES
 
-    def test_trace_events_are_not_persisted(self):
+    def test_trace_events_are_not_persisted(self) -> None:
         """Trace events must NOT be persisted."""
         trace_types = {
             EventType.CLAUDE_THINKING,
@@ -251,12 +252,12 @@ class TestPersistedTypes:
         }
         assert trace_types.isdisjoint(PERSISTED_TYPES)
 
-    def test_stream_events_are_not_persisted(self):
+    def test_stream_events_are_not_persisted(self) -> None:
         """Stream and agent_message events must NOT be persisted."""
         stream_types = {EventType.STREAM, EventType.AGENT_MESSAGE}
         assert stream_types.isdisjoint(PERSISTED_TYPES)
 
-    def test_brainstorm_trace_events_are_not_persisted(self):
+    def test_brainstorm_trace_events_are_not_persisted(self) -> None:
         """Brainstorm trace events must NOT be persisted."""
         brainstorm_trace = {
             EventType.BRAINSTORM_REASONING,
@@ -267,7 +268,7 @@ class TestPersistedTypes:
         }
         assert brainstorm_trace.isdisjoint(PERSISTED_TYPES)
 
-    def test_every_event_type_is_classified(self):
+    def test_every_event_type_is_classified(self) -> None:
         """Every EventType must be either persisted or explicitly stream-only.
 
         Guards against new event types being added without classification.
@@ -285,6 +286,7 @@ class TestPersistedTypes:
             EventType.BRAINSTORM_TOOL_CALL,
             EventType.BRAINSTORM_TOOL_RESULT,
             EventType.BRAINSTORM_TEXT,
+            EventType.BRAINSTORM_ASK_USER,
             EventType.BRAINSTORM_MESSAGE_COMPLETE,
             EventType.STREAM,
             EventType.AGENT_MESSAGE,

@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { Menu, Lightbulb, Bot, Cpu } from "lucide-react";
 import { api } from "@/api/client";
 import { getProfile } from "@/api/settings";
-import { formatDriver, formatModel } from "@/lib/utils";
+import { formatDriver, formatModel, formatQuestionAnswers } from "@/lib/utils";
 import { logger } from "@/lib/logger";
 import {
   Conversation,
@@ -35,6 +35,7 @@ import {
   ReasoningContent,
 } from "@/components/ai-elements/reasoning";
 import { ToolExecutionStrip } from "@/components/ai-elements/tool-execution-strip";
+import { AskUserQuestionCard } from "@/components/ai-elements/AskUserQuestionCard";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/PageHeader";
@@ -89,6 +90,7 @@ function SpecBuilderPageContent() {
     isStreaming,
     setDrawerOpen,
     sessionUsage,
+    updateMessage,
   } = useBrainstormStore(useShallow((state) => ({
     activeSessionId: state.activeSessionId,
     activeProfile: state.activeProfile,
@@ -98,6 +100,7 @@ function SpecBuilderPageContent() {
     isStreaming: state.isStreaming,
     setDrawerOpen: state.setDrawerOpen,
     sessionUsage: state.sessionUsage,
+    updateMessage: state.updateMessage,
   })));
 
   const {
@@ -114,9 +117,23 @@ function SpecBuilderPageContent() {
   const [handoffArtifact, setHandoffArtifact] = useState<BrainstormArtifact | null>(null);
   const [isHandingOff, setIsHandingOff] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [answeringQuestionId, setAnsweringQuestionId] = useState<string | null>(null);
   const [configProfileInfo, setConfigProfileInfo] = useState<ConfigProfileInfo | null>(null);
   const activeProfileRef = useRef<string>("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const prevIsStreamingRef = useRef(isStreaming);
+
+  // Auto-focus input when agent finishes responding
+  // Skip if the last message has askUserQuestions — focus should go to the question card instead
+  useEffect(() => {
+    if (prevIsStreamingRef.current && !isStreaming) {
+      const lastMessage = messages[messages.length - 1];
+      if (!lastMessage || !('askUserQuestions' in lastMessage)) {
+        textareaRef.current?.focus();
+      }
+    }
+    prevIsStreamingRef.current = isStreaming;
+  }, [isStreaming, messages]);
 
   // Load sessions and config on mount
   useEffect(() => {
@@ -190,6 +207,32 @@ function SpecBuilderPageContent() {
       }
     },
     [isSubmitting, activeSessionId, sendMessage, createSession, textInput]
+  );
+
+  const handleQuestionAnswer = useCallback(
+    async (messageId: string, answers: Record<string, string | string[]>) => {
+      // Format answers as readable text
+      const content = formatQuestionAnswers(answers);
+
+      // Disable card during submission to prevent double-submits
+      setAnsweringQuestionId(messageId);
+
+      // Mark question as answered in store
+      updateMessage(messageId, (m) => ({ ...m, questionAnswered: true }));
+
+      try {
+        // Send formatted answer as a chat message
+        await sendMessage(content);
+      } catch (err) {
+        // Revert state on failure
+        logger.error("Failed to send question answer", err, { messageId });
+        updateMessage(messageId, (m) => ({ ...m, questionAnswered: false }));
+        toast.error("Failed to send answer");
+      } finally {
+        setAnsweringQuestionId(null);
+      }
+    },
+    [updateMessage, sendMessage]
   );
 
   const handleSelectSession = useCallback(
@@ -357,6 +400,14 @@ function SpecBuilderPageContent() {
                           <Shimmer className="text-muted-foreground">Thinking...</Shimmer>
                         ) : (
                           <MessageResponse>{message.content}</MessageResponse>
+                        )}
+                        {message.askUserQuestions && (
+                          <AskUserQuestionCard
+                            payload={message.askUserQuestions}
+                            onAnswer={(answers) => handleQuestionAnswer(message.id, answers)}
+                            answered={message.questionAnswered}
+                            isSubmitting={answeringQuestionId === message.id}
+                          />
                         )}
                         {message.status === "error" && (
                           <div className="text-red-500 text-sm mt-2 flex items-center gap-1">

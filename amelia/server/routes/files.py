@@ -29,7 +29,7 @@ def _validate_and_resolve_path(user_path: str, working_dir: Path) -> Path:
 
     Returns:
         Resolved Path object that has been validated to be:
-        - An absolute path
+        - An absolute path (relative paths are resolved against working_dir)
         - Within the working directory (after symlink resolution)
         - An existing file
 
@@ -38,9 +38,9 @@ def _validate_and_resolve_path(user_path: str, working_dir: Path) -> Path:
     """
     path = Path(user_path)
 
-    # Validate absolute path
+    # Resolve relative paths against the working directory
     if not path.is_absolute():
-        raise FileOperationError("Path must be absolute", "INVALID_PATH")
+        path = working_dir / path
 
     # Resolve to handle symlinks and ..
     try:
@@ -81,7 +81,7 @@ def _validate_and_resolve_path(user_path: str, working_dir: Path) -> Path:
 class FileReadRequest(BaseModel):
     """Request model for reading a file."""
 
-    path: str = Field(description="Absolute path to the file to read")
+    path: str = Field(description="Absolute or relative path to the file to read")
 
 
 class FileReadResponse(BaseModel):
@@ -219,23 +219,27 @@ async def list_files(
     if not resolved_dir.is_dir():
         return FileListResponse(files=[], directory=directory)
 
-    # List files matching pattern
-    entries = []
-    for path in resolved_dir.glob(glob_pattern):
-        if not path.is_file():
-            continue
-        stat = path.stat()
-        entries.append(
-            FileEntry(
-                name=path.name,
-                relative_path=str(path.relative_to(base_dir_resolved)),
-                size_bytes=stat.st_size,
-                modified_at=datetime.fromtimestamp(stat.st_mtime, tz=UTC).isoformat(),
+    def _list_files_sync() -> list[FileEntry]:
+        """List files synchronously (runs in thread pool)."""
+        result = []
+        for path in resolved_dir.glob(glob_pattern):
+            if not path.is_file():
+                continue
+            stat = path.stat()
+            result.append(
+                FileEntry(
+                    name=path.name,
+                    relative_path=str(path.relative_to(base_dir_resolved)),
+                    size_bytes=stat.st_size,
+                    modified_at=datetime.fromtimestamp(stat.st_mtime, tz=UTC).isoformat(),
+                )
             )
-        )
+        # Sort by modification time, newest first
+        result.sort(key=lambda e: e.modified_at, reverse=True)
+        return result
 
-    # Sort by modification time, newest first
-    entries.sort(key=lambda e: e.modified_at, reverse=True)
+    # Run file listing in thread pool to avoid blocking event loop
+    entries = await asyncio.to_thread(_list_files_sync)
 
     return FileListResponse(files=entries, directory=directory)
 
@@ -251,7 +255,7 @@ async def get_file(
     """Get file content by path.
 
     Args:
-        file_path: Absolute path to the file.
+        file_path: Absolute or relative path to the file.
         worktree_path: Optional worktree path to use as base directory.
                       If not provided, uses active profile's working_dir.
         profile_repo: Profile repository for getting active profile.

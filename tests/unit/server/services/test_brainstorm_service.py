@@ -7,6 +7,11 @@ from uuid import UUID, uuid4
 
 import pytest
 
+from amelia.core.types import (
+    AskUserOption,
+    AskUserQuestionItem,
+    AskUserQuestionPayload,
+)
 from amelia.drivers.base import AgenticMessage
 from amelia.server.models.brainstorm import (
     Artifact,
@@ -129,7 +134,7 @@ class TestGetSession(TestBrainstormService):
         ]
         mock_repository.get_artifacts.return_value = []
 
-        result = await service.get_session_with_history(str(sess_id))
+        result = await service.get_session_with_history(sess_id)
 
         assert result is not None
         assert result["session"].id == sess_id
@@ -174,7 +179,7 @@ class TestUpdateSessionStatus(TestBrainstormService):
         )
         mock_repository.get_session.return_value = mock_session
 
-        await service.update_session_status(str(sess_id), SessionStatus.READY_FOR_HANDOFF)
+        await service.update_session_status(sess_id, SessionStatus.READY_FOR_HANDOFF)
 
         mock_repository.update_session.assert_called_once()
         updated = mock_repository.update_session.call_args[0][0]
@@ -1460,6 +1465,7 @@ class TestSendMessagePlanPath:
         service = BrainstormService(
             mock_repository, mock_event_bus, profile_repo=mock_profile_repo
         )
+        # _make_session fixture typed as object but is callable factory
         session = _make_session(topic="caching layer")  # type: ignore[operator]
         mock_repository.get_session.return_value = session
 
@@ -1499,7 +1505,10 @@ class TestSendMessagePlanPath:
         service = BrainstormService(
             mock_repository, mock_event_bus, profile_repo=mock_profile_repo
         )
-        session = _make_session(topic=None, session_id="abcd1234-0000-0000-0000-000000000000")  # type: ignore[operator]
+        # _make_session fixture typed as object but is callable factory
+        session = _make_session(  # type: ignore[operator]
+            topic=None, session_id="abcd1234-0000-0000-0000-000000000000"
+        )
         mock_repository.get_session.return_value = session
 
         driver, captured = self._make_driver()
@@ -1531,6 +1540,7 @@ class TestSendMessagePlanPath:
     ) -> None:
         """Without profile_repo, falls back to default pattern."""
         service = BrainstormService(mock_repository, mock_event_bus)
+        # _make_session fixture typed as object but is callable factory
         session = _make_session(topic="auth system")  # type: ignore[operator]
         mock_repository.get_session.return_value = session
 
@@ -1587,3 +1597,261 @@ class TestSendMessagePlanPath:
         instructions = captured[0]
         assert instructions is not None
         assert "plans/existing-plan.md" in instructions
+
+
+
+class TestAskUserQuestionConversion(TestBrainstormService):
+    """Test that ask_user_question tool calls are converted to text events."""
+
+    @pytest.fixture
+    def mock_driver_with_ask(self) -> MagicMock:
+        """Create mock driver that yields an ask_user_question tool call."""
+        from amelia.drivers.base import AgenticMessageType
+
+        driver = MagicMock()
+
+        async def mock_execute_agentic(
+            *args: object, **kwargs: object
+        ) -> AsyncIterator[AgenticMessage]:
+            yield AgenticMessage(
+                type=AgenticMessageType.THINKING,
+                content="Let me ask a question...",
+            )
+            yield AgenticMessage(
+                type=AgenticMessageType.TOOL_CALL,
+                tool_name="ask_user_question",
+                tool_call_id="tc_ask_1",
+                tool_input={
+                    "questions": [
+                        {
+                            "question": "What's your primary goal?",
+                            "header": "Goal",
+                            "options": [
+                                {"label": "Performance", "description": "Make it fast"},
+                                {"label": "Simplicity", "description": "Keep it simple"},
+                            ],
+                        }
+                    ]
+                },
+            )
+            yield AgenticMessage(
+                type=AgenticMessageType.TOOL_RESULT,
+                tool_name="ask_user_question",
+                tool_call_id="tc_ask_1",
+                tool_output="Tool denied",
+                is_error=True,
+            )
+            yield AgenticMessage(
+                type=AgenticMessageType.RESULT,
+                content="",
+                session_id="claude-sess-ask",
+            )
+
+        driver.execute_agentic = mock_execute_agentic
+        driver.get_usage = MagicMock(return_value=None)
+        return driver
+
+    async def test_ask_user_question_emits_ask_user_event_type(
+        self,
+        service: BrainstormService,
+        mock_repository: MagicMock,
+        mock_event_bus: MagicMock,
+        mock_driver_with_ask: MagicMock,
+    ) -> None:
+        """ask_user_question tool call should be emitted as BRAINSTORM_ASK_USER."""
+        from amelia.server.models.events import EventType
+
+        now = datetime.now(UTC)
+        sess_id = uuid4()
+        mock_session = BrainstormingSession(
+            id=sess_id,
+            profile_id="work",
+            status=SessionStatus.ACTIVE,
+            created_at=now,
+            updated_at=now,
+        )
+        mock_repository.get_session.return_value = mock_session
+        mock_repository.get_max_sequence.return_value = 0
+
+        events = []
+        async for event in service.send_message(
+            session_id=sess_id,
+            content="Design something",
+            driver=mock_driver_with_ask,
+            cwd="/tmp/project",
+        ):
+            events.append(event)
+
+        ask_user_events = [
+            e for e in events if e.event_type == EventType.BRAINSTORM_ASK_USER
+        ]
+        assert len(ask_user_events) == 1
+        assert "What's your primary goal?" in (ask_user_events[0].message or "")
+        assert "Performance" in (ask_user_events[0].message or "")
+        assert "Simplicity" in (ask_user_events[0].message or "")
+
+    async def test_ask_user_question_data_contains_structured_questions(
+        self,
+        service: BrainstormService,
+        mock_repository: MagicMock,
+        mock_event_bus: MagicMock,
+        mock_driver_with_ask: MagicMock,
+    ) -> None:
+        """ask_user event data should contain structured questions payload."""
+        from amelia.server.models.events import EventType
+
+        now = datetime.now(UTC)
+        sess_id = uuid4()
+        mock_session = BrainstormingSession(
+            id=sess_id,
+            profile_id="work",
+            status=SessionStatus.ACTIVE,
+            created_at=now,
+            updated_at=now,
+        )
+        mock_repository.get_session.return_value = mock_session
+        mock_repository.get_max_sequence.return_value = 0
+
+        events = []
+        async for event in service.send_message(
+            session_id=sess_id,
+            content="Design something",
+            driver=mock_driver_with_ask,
+            cwd="/tmp/project",
+        ):
+            events.append(event)
+
+        ask_user_events = [
+            e for e in events if e.event_type == EventType.BRAINSTORM_ASK_USER
+        ]
+        assert len(ask_user_events) == 1
+        data = ask_user_events[0].data
+        assert data is not None
+        assert "questions" in data
+        questions = data["questions"]
+        assert len(questions) == 1
+        assert questions[0]["question"] == "What's your primary goal?"
+        assert questions[0]["header"] == "Goal"
+        assert len(questions[0]["options"]) == 2
+        assert questions[0]["options"][0]["label"] == "Performance"
+        assert questions[0]["options"][0]["description"] == "Make it fast"
+        assert questions[0]["options"][1]["label"] == "Simplicity"
+        # Also has markdown fallback text
+        assert "text" in data
+
+    def test_ask_user_question_malformed_falls_back_to_tool_call(
+        self,
+        service: BrainstormService,
+    ) -> None:
+        """Malformed ask_user_question payload should fall back to BRAINSTORM_TOOL_CALL."""
+        from amelia.drivers.base import AgenticMessageType
+        from amelia.server.models.events import EventType
+
+        sess_id = uuid4()
+        msg_id = uuid4()
+
+        # Actually malformed: options items missing required "label" field
+        agentic_msg = AgenticMessage(
+            type=AgenticMessageType.TOOL_CALL,
+            tool_name="ask_user_question",
+            tool_call_id="tc_bad",
+            tool_input={
+                "questions": [
+                    {
+                        "question": "Pick one?",
+                        "options": [{"not_label": "Yes"}, {"not_label": "No"}],
+                    }
+                ]
+            },
+        )
+
+        event = service._agentic_message_to_event(agentic_msg, sess_id, msg_id)
+
+        # Malformed payload can't be parsed, so it falls through to generic tool_call handling
+        assert event.event_type == EventType.BRAINSTORM_TOOL_CALL
+        assert event.tool_name == "ask_user_question"
+        assert event.data is None or "questions" not in (event.data or {})
+
+    async def test_ask_user_question_tool_result_suppressed(
+        self,
+        service: BrainstormService,
+        mock_repository: MagicMock,
+        mock_event_bus: MagicMock,
+        mock_driver_with_ask: MagicMock,
+    ) -> None:
+        """tool_result for ask_user_question should not be emitted."""
+        from amelia.server.models.events import EventType
+
+        now = datetime.now(UTC)
+        sess_id = uuid4()
+        mock_session = BrainstormingSession(
+            id=sess_id,
+            profile_id="work",
+            status=SessionStatus.ACTIVE,
+            created_at=now,
+            updated_at=now,
+        )
+        mock_repository.get_session.return_value = mock_session
+        mock_repository.get_max_sequence.return_value = 0
+
+        events = []
+        async for event in service.send_message(
+            session_id=sess_id,
+            content="Design something",
+            driver=mock_driver_with_ask,
+            cwd="/tmp/project",
+        ):
+            events.append(event)
+
+        # No tool_call or tool_result events should exist
+        tool_events = [
+            e for e in events
+            if e.event_type in (
+                EventType.BRAINSTORM_TOOL_CALL,
+                EventType.BRAINSTORM_TOOL_RESULT,
+            )
+        ]
+        assert len(tool_events) == 0
+
+    def test_format_ask_user_question_with_descriptions(self) -> None:
+        """Should format question with option descriptions."""
+        payload = AskUserQuestionPayload(
+            questions=[
+                AskUserQuestionItem(
+                    question="Which approach?",
+                    options=[
+                        AskUserOption(label="Option A", description="First approach"),
+                        AskUserOption(label="Option B", description="Second approach"),
+                    ],
+                )
+            ]
+        )
+        result = BrainstormService._format_ask_user_question(payload)
+        assert "Which approach?" in result
+        assert "Option A" in result
+        assert "First approach" in result
+        assert "Option B" in result
+
+    def test_format_ask_user_question_without_descriptions(self) -> None:
+        """Should format question without descriptions."""
+        payload = AskUserQuestionPayload(
+            questions=[
+                AskUserQuestionItem(
+                    question="Pick one?",
+                    options=[
+                        AskUserOption(label="Yes"),
+                        AskUserOption(label="No"),
+                    ],
+                )
+            ]
+        )
+        result = BrainstormService._format_ask_user_question(payload)
+        assert "Pick one?" in result
+        assert "Yes" in result
+        assert "No" in result
+
+    def test_format_ask_user_question_empty_input(self) -> None:
+        """Should return empty string for empty input."""
+        payload = AskUserQuestionPayload(questions=[])
+        result = BrainstormService._format_ask_user_question(payload)
+        assert result == ""

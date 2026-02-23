@@ -1,3 +1,8 @@
+---
+title: Troubleshooting
+description: Fix common issues with Amelia's multi-agent orchestration — server startup, workflow conflicts, driver errors, and configuration problems.
+---
+
 # Troubleshooting
 
 Comprehensive troubleshooting guide organized by user scenario. For configuration details, see [Configuration](/guide/configuration).

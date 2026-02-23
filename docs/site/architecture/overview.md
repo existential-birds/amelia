@@ -1,3 +1,8 @@
+---
+title: Architecture & Data Flow
+description: Deep dive into Amelia's open-source multi-agent architecture — LangGraph orchestration, agent pipeline, real-time events, and server design.
+---
+
 # Architecture & Data Flow
 
 Technical deep dive into Amelia's architecture, components, and data flow.

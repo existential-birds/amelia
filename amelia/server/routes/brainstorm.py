@@ -5,6 +5,7 @@ Provides endpoints for session lifecycle management and chat functionality.
 
 import os
 import uuid
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Annotated
 from uuid import uuid4
 
@@ -19,6 +20,12 @@ from amelia.server.models.brainstorm import (
     BrainstormingSession,
     Message,
     SessionStatus,
+)
+from amelia.server.models.events import (
+    EPHEMERAL_SEQUENCE,
+    EventDomain,
+    EventType,
+    WorkflowEvent,
 )
 from amelia.server.orchestrator.service import OrchestratorService
 from amelia.server.routes.config import ProfileInfo
@@ -300,14 +307,38 @@ async def send_message(
 
     async def _process_message() -> None:
         """Background task to process the message."""
-        async for _ in service.send_message(
-            session_id=session_id,
-            content=request.content,
-            driver=driver,
-            cwd=cwd,
-            assistant_message_id=str(message_id),
-        ):
-            pass
+        try:
+            async for _ in service.send_message(
+                session_id=session_id,
+                content=request.content,
+                driver=driver,
+                cwd=cwd,
+                assistant_message_id=str(message_id),
+            ):
+                pass
+        except Exception as e:
+            logger.exception(
+                "Brainstorm message processing failed",
+                session_id=str(session_id),
+                message_id=str(message_id),
+            )
+            # Emit error event to notify frontend
+            error_event = WorkflowEvent(
+                id=uuid4(),
+                workflow_id=session_id,
+                sequence=EPHEMERAL_SEQUENCE,
+                timestamp=datetime.now(UTC),
+                agent="brainstormer",
+                event_type=EventType.BRAINSTORM_MESSAGE_FAILED,
+                message=f"Message processing failed: {e}",
+                data={
+                    "session_id": str(session_id),
+                    "message_id": str(message_id),
+                    "error": str(e),
+                },
+                domain=EventDomain.BRAINSTORM,
+            )
+            service.emit_event(error_event)
 
     background_tasks.add_task(_process_message)
 

@@ -4,12 +4,12 @@ This driver wraps the Claude CLI via the official claude-agent-sdk package,
 providing both single-turn generation and agentic execution capabilities.
 """
 import json
-import os
 from collections.abc import AsyncIterator
 from typing import Any, Literal
 
 from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient, ProcessError, query
 from claude_agent_sdk._errors import MessageParseError  # private API, pinned to >=0.1.38
+from claude_agent_sdk._internal.message_parser import parse_message as _sdk_parse_message
 from claude_agent_sdk.types import (
     AssistantMessage,
     Message,
@@ -37,16 +37,23 @@ from amelia.drivers.cli.utils import strip_markdown_fences
 from amelia.logging import log_claude_result
 
 
-# Env vars that trigger Claude CLI's nested-session guard.
-# When Amelia runs inside a Claude Code session these are inherited by the
-# subprocess, causing an immediate exit-code-1 failure.  We strip them so the
-# child process starts cleanly.
-_NESTED_SESSION_ENV_VARS = frozenset({"CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT"})
+# Claude Code sets CLAUDECODE and CLAUDE_CODE_ENTRYPOINT in its shell env.
+# If a developer runs Amelia from inside Claude Code, these vars leak into
+# the SDK subprocess, which thinks it's a nested Claude Code session and
+# immediately exits with code 1.
+#
+# We blank them explicitly because the SDK merges options.env on top of
+# os.environ — omitting a key doesn't remove it.
+_NESTED_SESSION_OVERRIDES = {"CLAUDECODE": "", "CLAUDE_CODE_ENTRYPOINT": ""}
 
 
 def _build_sanitized_env() -> dict[str, str]:
-    """Return a copy of the current process env without nested-session vars."""
-    return {k: v for k, v in os.environ.items() if k not in _NESTED_SESSION_ENV_VARS}
+    """Return env overrides that neutralise nested-session guard vars.
+
+    The claude-agent-sdk merges these on top of os.environ, so we return
+    only the keys that need overriding rather than a full copy of the env.
+    """
+    return dict(_NESTED_SESSION_OVERRIDES)
 
 
 def _sanitize_stderr(stderr: str, max_len: int = 1000) -> str:
@@ -161,6 +168,76 @@ def _log_sdk_message(message: Message | SDKStreamEvent) -> None:
             num_turns=message.num_turns,
             cost_usd=message.total_cost_usd,
         )
+
+
+def _handle_parse_error(e: MessageParseError) -> None:
+    """Handle unparseable SDK messages, escalating rate-limit problems."""
+    data = e.data or {}
+    msg_type = data.get("type")
+
+    if msg_type == "rate_limit_event":
+        info = data.get("rate_limit_info", {})
+        status = info.get("status")
+        if status == "allowed":
+            logger.debug("Rate limit check passed", rate_limit_info=info)
+        else:
+            logger.warning(
+                "Rate limit restriction active",
+                status=status,
+                rate_limit_type=info.get("rateLimitType"),
+                resets_at=info.get("resetsAt"),
+                overage_status=info.get("overageStatus"),
+            )
+        return
+
+    logger.debug(
+        "Skipping unknown SDK message type",
+        error_message=str(e),
+        raw_data=data,
+    )
+
+
+
+async def _safe_receive_response(
+    client: ClaudeSDKClient,
+) -> AsyncIterator[Message | SDKStreamEvent]:
+    """Iterate over SDK messages, skipping unparseable ones without killing the stream.
+
+    The SDK's ``receive_messages()`` calls ``parse_message()`` inside an
+    async-generator body.  If ``parse_message`` raises ``MessageParseError``,
+    the generator is **permanently exhausted** (Python async-generator semantics).
+    That means our outer try/except never sees a second message — the stream dies.
+
+    This helper bypasses the problem by reading raw dicts from the transport
+    layer (``client._query.receive_messages()``) and calling ``parse_message``
+    ourselves *outside* the generator body.  Parse failures are logged and
+    skipped without killing the underlying stream.
+    """
+    # Access the internal query's raw message stream (yields plain dicts).
+    # We call parse_message ourselves so a failure doesn't kill the generator.
+    raw_messages = client._query.receive_messages()  # type: ignore[union-attr]
+    raw_iter = raw_messages.__aiter__()
+    try:
+        while True:
+            try:
+                raw = await raw_iter.__anext__()
+            except StopAsyncIteration:
+                break
+
+            try:
+                message = _sdk_parse_message(raw)
+            except MessageParseError as e:
+                _handle_parse_error(e)
+                continue
+
+            yield message
+            if isinstance(message, ResultMessage):
+                return
+    finally:
+        aclose = getattr(raw_iter, "aclose", None)
+        if aclose is not None:
+            await aclose()
+
 
 
 class ClaudeCliDriver(DriverInterface):
@@ -329,7 +406,7 @@ class ClaudeCliDriver(DriverInterface):
                     except StopAsyncIteration:
                         break
                     except MessageParseError as e:
-                        logger.debug("Ignoring unknown SDK message type", error_type=type(e).__name__)
+                        _handle_parse_error(e)
                         continue
                     _log_sdk_message(message)
 
@@ -482,53 +559,61 @@ class ClaudeCliDriver(DriverInterface):
         try:
             async with ClaudeSDKClient(options=options) as client:
                 await client.query(prompt)
-                # Manual iteration to catch MessageParseError from unknown SDK
-                # message types (e.g. rate_limit_event) without aborting the stream.
-                _response_iter = client.receive_response().__aiter__()
-                try:
-                    while True:
-                        try:
-                            message = await _response_iter.__anext__()
-                        except StopAsyncIteration:
-                            break
-                        except MessageParseError as e:
-                            logger.warning(
-                                "Skipping unparseable SDK message in agentic execution",
-                                error_type=type(e).__name__,
-                            )
-                            continue
-                        _log_sdk_message(message)
+                # Use _safe_receive_response to skip unparseable messages
+                # (e.g. rate_limit_event) without killing the stream.
+                # See docstring for why client.receive_response() doesn't work.
+                async for message in _safe_receive_response(client):
+                    _log_sdk_message(message)
 
-                        # Skip SDK StreamEvent objects - they are progress updates
-                        # that don't need to be passed to the developer agent
-                        if isinstance(message, SDKStreamEvent):
-                            continue
+                    # Skip SDK StreamEvent objects - they are progress updates
+                    # that don't need to be passed to the developer agent
+                    if isinstance(message, SDKStreamEvent):
+                        continue
 
-                        if isinstance(message, AssistantMessage):
+                    if isinstance(message, AssistantMessage):
+                        for block in message.content:
+                            if isinstance(block, TextBlock):
+                                yield AgenticMessage(
+                                    type=AgenticMessageType.THINKING,
+                                    content=block.text,
+                                    model=self.model,
+                                )
+                            elif isinstance(block, ToolUseBlock):
+                                # Track tool calls in history
+                                self.tool_call_history.append(block)
+                                last_tool_name = block.name
+                                # Normalize tool name to standard format
+                                normalized_name = normalize_tool_name(block.name)
+                                yield AgenticMessage(
+                                    type=AgenticMessageType.TOOL_CALL,
+                                    tool_name=normalized_name,
+                                    tool_input=block.input,
+                                    tool_call_id=block.id,
+                                    model=self.model,
+                                )
+                            elif isinstance(block, ToolResultBlock):
+                                content = block.content if isinstance(block.content, str) else str(block.content)
+                                # Normalize tool name to standard format
+                                result_tool_name: str | None = None
+                                if last_tool_name:
+                                    result_tool_name = normalize_tool_name(last_tool_name)
+                                yield AgenticMessage(
+                                    type=AgenticMessageType.TOOL_RESULT,
+                                    tool_name=result_tool_name,
+                                    tool_call_id=block.tool_use_id,
+                                    tool_output=content,
+                                    is_error=block.is_error or False,
+                                    model=self.model,
+                                )
+
+                    elif isinstance(message, UserMessage):
+                        # SDK delivers ToolResultBlock inside UserMessage
+                        if isinstance(message.content, list):
                             for block in message.content:
-                                if isinstance(block, TextBlock):
-                                    yield AgenticMessage(
-                                        type=AgenticMessageType.THINKING,
-                                        content=block.text,
-                                        model=self.model,
-                                    )
-                                elif isinstance(block, ToolUseBlock):
-                                    # Track tool calls in history
-                                    self.tool_call_history.append(block)
-                                    last_tool_name = block.name
-                                    # Normalize tool name to standard format
-                                    normalized_name = normalize_tool_name(block.name)
-                                    yield AgenticMessage(
-                                        type=AgenticMessageType.TOOL_CALL,
-                                        tool_name=normalized_name,
-                                        tool_input=block.input,
-                                        tool_call_id=block.id,
-                                        model=self.model,
-                                    )
-                                elif isinstance(block, ToolResultBlock):
+                                if isinstance(block, ToolResultBlock):
                                     content = block.content if isinstance(block.content, str) else str(block.content)
                                     # Normalize tool name to standard format
-                                    result_tool_name: str | None = None
+                                    result_tool_name = None
                                     if last_tool_name:
                                         result_tool_name = normalize_tool_name(last_tool_name)
                                     yield AgenticMessage(
@@ -540,47 +625,24 @@ class ClaudeCliDriver(DriverInterface):
                                         model=self.model,
                                     )
 
-                        elif isinstance(message, UserMessage):
-                            # SDK delivers ToolResultBlock inside UserMessage
-                            if isinstance(message.content, list):
-                                for block in message.content:
-                                    if isinstance(block, ToolResultBlock):
-                                        content = block.content if isinstance(block.content, str) else str(block.content)
-                                        # Normalize tool name to standard format
-                                        result_tool_name = None
-                                        if last_tool_name:
-                                            result_tool_name = normalize_tool_name(last_tool_name)
-                                        yield AgenticMessage(
-                                            type=AgenticMessageType.TOOL_RESULT,
-                                            tool_name=result_tool_name,
-                                            tool_call_id=block.tool_use_id,
-                                            tool_output=content,
-                                            is_error=block.is_error or False,
-                                            model=self.model,
-                                        )
-
-                        elif isinstance(message, ResultMessage):
-                            # Store ResultMessage for token usage extraction
-                            self.last_result_message = message
-                            if not message.result:
-                                logger.debug(
-                                    "Claude CLI ResultMessage has empty content",
-                                    session_id=message.session_id,
-                                    is_error=message.is_error,
-                                    stderr_lines_count=len(stderr_lines),
-                                    stderr_tail=stderr_lines[-5:] if stderr_lines else [],
-                                )
-                            yield AgenticMessage(
-                                type=AgenticMessageType.RESULT,
-                                content=message.result,
+                    elif isinstance(message, ResultMessage):
+                        # Store ResultMessage for token usage extraction
+                        self.last_result_message = message
+                        if not message.result:
+                            logger.debug(
+                                "Claude CLI ResultMessage has empty content",
                                 session_id=message.session_id,
                                 is_error=message.is_error,
-                                model=self.model,
+                                stderr_lines_count=len(stderr_lines),
+                                stderr_tail=stderr_lines[-5:] if stderr_lines else [],
                             )
-                finally:
-                    aclose = getattr(_response_iter, "aclose", None)
-                    if aclose is not None:
-                        await aclose()
+                        yield AgenticMessage(
+                            type=AgenticMessageType.RESULT,
+                            content=message.result,
+                            session_id=message.session_id,
+                            is_error=message.is_error,
+                            model=self.model,
+                        )
 
         except ProcessError as e:
             exit_code = getattr(e, "exit_code", None)

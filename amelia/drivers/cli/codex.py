@@ -305,8 +305,12 @@ class CodexCliDriver(DriverInterface):
             GenerateResult with the generated text and session ID.
 
         Raises:
+            ValueError: If prompt is empty.
             ModelProviderError: If codex CLI fails or returns invalid JSON.
         """
+        if not prompt or not prompt.strip():
+            raise ValueError("Prompt cannot be empty")
+
         full_prompt = prompt
         if system_prompt:
             full_prompt = f"{system_prompt}\n\n{prompt}"
@@ -382,8 +386,12 @@ class CodexCliDriver(DriverInterface):
             AgenticMessage objects representing the execution stream.
 
         Raises:
+            ValueError: If prompt is empty.
             ModelProviderError: If codex CLI fails.
         """
+        if not prompt or not prompt.strip():
+            raise ValueError("Prompt cannot be empty")
+
         full_prompt = prompt
         if instructions:
             full_prompt = f"{instructions}\n\n{prompt}"

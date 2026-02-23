@@ -87,12 +87,16 @@ class TestReadFile:
         assert response.status_code == 404
         assert "not found" in response.json()["error"].lower()
 
-    def test_returns_400_for_relative_path(self, client: TestClient) -> None:
-        """Should return 400 when path is not absolute."""
-        response = client.post("/api/files/read", json={"path": "relative/path.md"})
+    def test_resolves_relative_path_against_working_dir(
+        self, client: TestClient
+    ) -> None:
+        """Should resolve relative paths against working dir (returns 404 if not found)."""
+        response = client.post(
+            "/api/files/read", json={"path": "relative/path.md"}
+        )
 
-        assert response.status_code == 400
-        assert "absolute" in response.json()["error"].lower()
+        assert response.status_code == 404
+        assert "not found" in response.json()["error"].lower()
 
     def test_returns_400_for_path_outside_repo_root(
         self, app: FastAPI, temp_file: str

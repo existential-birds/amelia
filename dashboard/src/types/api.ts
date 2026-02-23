@@ -143,8 +143,8 @@ export interface ToolCall {
   tool_call_id: string;
   /** Name of the tool being called. */
   tool_name: string;
-  /** Input parameters passed to the tool. */
-  input: unknown;
+  /** Input parameters passed to the tool (may be undefined for tools without params). */
+  input?: unknown;
   /** Output result from the tool (populated when complete). */
   output?: unknown;
   /** Error text if the tool call failed. */
@@ -173,6 +173,29 @@ export interface BrainstormMessage {
   toolCalls?: ToolCall[];
   /** Token usage for this message. */
   usage?: MessageUsage;
+  /** Structured ask-user questions payload (set by BRAINSTORM_ASK_USER events). */
+  askUserQuestions?: AskUserQuestionPayload;
+  /** Whether the user has already answered the ask-user question. */
+  questionAnswered?: boolean;
+}
+
+/** A single selectable option in an ask-user question. */
+export interface AskUserOption {
+  label: string;
+  description?: string;
+}
+
+/** A single question with optional header and selectable options. */
+export interface AskUserQuestionItem {
+  question: string;
+  header?: string;
+  options: AskUserOption[];
+  multi_select: boolean;
+}
+
+/** Structured payload for interactive ask-user questions. */
+export interface AskUserQuestionPayload {
+  questions: AskUserQuestionItem[];
 }
 
 /** An artifact generated during a brainstorming session. */
