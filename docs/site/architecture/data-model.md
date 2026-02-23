@@ -12,7 +12,7 @@ This document describes the core data structures used throughout the Amelia orch
 | Type | Definition | Description |
 |------|------------|-------------|
 | `DriverType` | `"claude" \| "codex" \| "api"` | LLM driver type. |
-| `TrackerType` | `"jira" \| "github" \| "none"` | Issue tracker type. |
+| `TrackerType` | `"jira" \| "github" \| "noop"` | Issue tracker type. |
 | `AgenticStatus` | `"running" \| "awaiting_approval" \| "completed" \| "failed" \| "cancelled"` | Agentic execution status. |
 | `Severity` | `"low" \| "medium" \| "high" \| "critical"` | Review issue severity. |
 
@@ -37,14 +37,13 @@ Defines the runtime environment and constraints.
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `name` | `str` | — | Profile name (e.g., "work", "personal"). |
-| `driver` | `DriverType` | — | LLM driver type (e.g., "api", "claude", "codex"). |
-| `model` | `str \| None` | `None` | LLM model identifier. Required for API drivers (e.g., "minimax/minimax-m2"). |
-| `tracker` | `TrackerType` | `"none"` | Issue tracker type. |
-| `working_dir` | `str \| None` | `None` | Working directory for agentic execution. |
+| `tracker` | `TrackerType` | `"noop"` | Issue tracker type. |
+| `repo_root` | `str` | — | Root directory of the repository this profile targets. |
 | `plan_output_dir` | `str` | `"docs/plans"` | Directory for saving implementation plans. |
+| `plan_path_pattern` | `str` | `"docs/plans/{date}-{issue_key}.md"` | Path pattern for plan files with `{date}` and `{issue_key}` placeholders. |
 | `retry` | `RetryConfig` | `RetryConfig()` | Retry configuration for transient failures. |
-| `max_review_iterations` | `int` | `3` | Maximum review-fix loop iterations before terminating. |
-| `max_task_review_iterations` | `int` | `5` | Per-task review iteration limit for task-based execution. |
+| `agents` | `dict[str, AgentConfig]` | `{}` | Per-agent driver and model configuration. |
+| `sandbox` | `SandboxConfig` | `SandboxConfig()` | Sandbox execution configuration. |
 
 **Location:** `amelia/core/types.py`
 
@@ -240,7 +239,8 @@ class StreamEventType(StrEnum):
 Unified real-time streaming event from agent execution. This is the common message format across all drivers (CLI and API), enabling consistent UI rendering and logging regardless of the underlying LLM driver.
 
 Drivers convert their native message types to `StreamEvent` using conversion functions:
-- CLI driver: `convert_to_stream_event()` in `amelia/drivers/cli/claude.py`
+- Claude CLI driver: `convert_to_stream_event()` in `amelia/drivers/cli/claude.py`
+- Codex CLI driver: Conversion in `amelia/drivers/cli/codex.py`
 - API driver: Similar conversion in the API driver implementation
 
 | Field | Type | Default | Description |

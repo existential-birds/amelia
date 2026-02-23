@@ -26,7 +26,7 @@ const items = [
   { capability: 'Swap drivers per agent', detail: 'Choose Claude Code CLI or API SDK per role. Implements SWE-agent\'s agent-computer interface principle.' },
   { capability: 'Resume from checkpoints', detail: 'Pick up failed workflows where they stopped. Uses Context Folding branch/return primitives.' },
   { capability: 'One model per role', detail: 'Assign different LLMs to Architect, Developer, and Reviewer. ReAct-style reasoning and acting per agent.' },
-  { capability: 'Configure via YAML profiles', detail: 'Prompts, tools, models, and context per profile. Stateless, immutable, append-only state design.' },
+  { capability: 'Configure via profiles', detail: 'Prompts, tools, models, and context per profile. Database-backed, immutable, append-only state design.' },
   { capability: 'Generate specs from issues', detail: 'Spec Builder turns GitHub/Linear issues into structured implementation plans.' },
   { capability: 'Watch it run in real time', detail: 'WebSocket-powered React dashboard shows agent progress as it happens.' },
 ]

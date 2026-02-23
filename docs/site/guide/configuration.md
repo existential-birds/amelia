@@ -45,7 +45,7 @@ amelia config profile create my-profile \
   --driver api \
   --model "minimax/minimax-m2" \
   --tracker github \
-  --working-dir /path/to/project \
+  --repo-root /path/to/project \
   --activate
 ```
 
@@ -54,7 +54,7 @@ amelia config profile create my-profile \
 | `--driver` | `-d` | LLM driver (`claude`, `codex`, or `api`) |
 | `--model` | `-m` | Model name (required for API drivers) |
 | `--tracker` | `-t` | Issue tracker (`none`, `github`, `jira`) |
-| `--working-dir` | `-w` | Working directory for agent execution |
+| `--repo-root` | `-w` | Repository root path for agent execution |
 | `--activate` | `-a` | Set as active profile after creation |
 
 ### Activate Profile
@@ -94,7 +94,7 @@ Common models:
 - `google/gemini-2.5-flash` - Gemini 2.5 Flash (cost-effective)
 - `minimax/minimax-m2` - MiniMax M2
 
-For CLI drivers, model is optional but helps with clarity.
+For `claude` and `codex` drivers, model is optional but helps with clarity.
 
 ### Tracker
 
@@ -106,9 +106,9 @@ Where Amelia fetches issue details from.
 | `jira` | Jira issues | `JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN` env vars |
 | `none` | No tracker | None (use `--task` for ad-hoc tasks) |
 
-### Working Directory
+### Repository Root
 
-The directory where agents execute. When set, the Developer agent operates from this path.
+The root directory of the repository this profile targets. When set, the Developer agent operates from this path.
 
 Default: Current working directory where commands are run.
 
@@ -126,7 +126,7 @@ Default: `false`
 
 ## Per-Agent Configuration
 
-Each profile can configure individual agents with different drivers and models. This allows mixing CLI and API drivers within a single profile, or using different models for different agents.
+Each profile can configure individual agents with different drivers and models. This allows mixing `claude`, `codex`, and `api` drivers within a single profile, or using different models for different agents.
 
 View agent configurations:
 
@@ -230,8 +230,8 @@ The dashboard provides a visual interface for managing configuration at `/settin
 
 ### Profiles Tab
 
-- View all profiles as cards showing driver, agents, and working directory
-- Filter profiles by CLI or API driver type
+- View all profiles as cards showing driver, agents, and repository root
+- Filter profiles by driver type (`claude`, `codex`, or `api`)
 - Create new profiles with the "+ Create Profile" button
 - Click a profile card to edit its settings
 - Set active profile
@@ -250,7 +250,7 @@ amelia config profile create myproject \
   --driver api \
   --model "minimax/minimax-m2" \
   --tracker github \
-  --working-dir /path/to/myproject \
+  --repo-root /path/to/myproject \
   --activate
 
 # Verify the profile

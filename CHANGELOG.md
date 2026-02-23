@@ -7,9 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-02-22
+
+### Added
+
+- **pipeline:** Add plan validation feedback loop that automatically re-validates plans after architect revisions ([#493](https://github.com/existential-birds/amelia/pull/493))
+- **brainstorm:** Render `ask_user_question` tool calls as interactive cards in the dashboard ([#489](https://github.com/existential-birds/amelia/pull/489))
+- **drivers:** Add `CodexCliDriver` for OpenAI Codex CLI integration with subprocess-based NDJSON streaming ([#477](https://github.com/existential-birds/amelia/pull/477))
+
 ### Changed
 
-- **Breaking:** Replace legacy `cli` driver with explicit `claude` and `codex` drivers ([#473](https://github.com/existential-birds/amelia/issues/473))
+- **Breaking:** Replace legacy `cli` driver with explicit `claude` and `codex` drivers ([#477](https://github.com/existential-birds/amelia/pull/477))
 
   The generic `driver: "cli"` value has been split into explicit driver keys:
   - `claude` — wraps the Claude CLI binary
@@ -18,9 +26,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   **Migration:** Update all profiles that use `driver: "cli"` to `driver: "claude"`. Legacy `cli` values are now rejected at startup. Recreate profiles with `amelia config profile create <name> --driver claude`.
 
-### Added
+- **Breaking:** Rename `Profile.working_dir` to `Profile.repo_root` for clarity ([#479](https://github.com/existential-birds/amelia/pull/479))
 
-- **drivers:** Add `CodexCliDriver` for OpenAI Codex CLI integration with subprocess-based NDJSON streaming
+  **Migration:** Update any code or configuration referencing `working_dir` to use `repo_root` instead. A database migration handles the column rename automatically.
+
+### Fixed
+
+- **architect:** Remove git commit step from plan template that caused unnecessary commit attempts during planning ([#494](https://github.com/existential-birds/amelia/pull/494))
+- **logging:** Replace todo table with styled Rich Panel widget to fix rendering issues ([#492](https://github.com/existential-birds/amelia/pull/492))
+- **dashboard:** Auto-focus input field when agent finishes responding for smoother interaction ([#491](https://github.com/existential-birds/amelia/pull/491))
+- **drivers:** Handle `rate_limit_event` and unknown SDK message types gracefully instead of crashing ([#475](https://github.com/existential-birds/amelia/pull/475))
+- **drivers:** Improve SDK stream handling robustness for edge cases ([#483](https://github.com/existential-birds/amelia/pull/483))
 
 ## [0.16.0] - 2026-02-18
 

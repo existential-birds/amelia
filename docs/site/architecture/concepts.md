@@ -183,7 +183,7 @@ Developer marks execution complete
 
 ### Unified Streaming with StreamEvent
 
-Amelia uses a unified `StreamEvent` type for real-time streaming across all drivers. Regardless of whether you use the API driver or CLI driver, tool execution progress is communicated through the same event format.
+Amelia uses a unified `StreamEvent` type for real-time streaming across all drivers. Regardless of whether you use the API driver, Claude driver, or Codex driver, tool execution progress is communicated through the same event format.
 
 **StreamEventType** (the event categories):
 
@@ -209,7 +209,7 @@ Amelia uses a unified `StreamEvent` type for real-time streaming across all driv
 Each driver converts its native message types to `StreamEvent`:
 
 ```python
-# CLI driver converts SDK messages via convert_to_stream_event()
+# Claude CLI driver converts SDK messages via convert_to_stream_event()
 stream_event = convert_to_stream_event(sdk_message, agent="developer", workflow_id="...")
 
 # The UI and logging systems consume StreamEvent uniformly
@@ -222,7 +222,7 @@ This abstraction allows the dashboard and logging systems to display real-time p
 
 Drivers abstract how Amelia communicates with LLMs. This separation enables flexibility across different environments.
 
-### Why Two Drivers?
+### Why Multiple Drivers?
 
 | Driver | Use Case | Requirements |
 |--------|----------|--------------|
@@ -232,7 +232,7 @@ Drivers abstract how Amelia communicates with LLMs. This separation enables flex
 
 ### Driver Interface
 
-Both drivers implement a simple prompt-based interface:
+All drivers implement a simple prompt-based interface:
 
 ```python
 class DriverInterface(Protocol):
@@ -257,7 +257,7 @@ class DriverInterface(Protocol):
 
 ### Why This Matters
 
-Some environments prohibit direct API calls due to data retention policies. The CLI driver wraps existing approved tools (like `claude` CLI) that:
+Some environments prohibit direct API calls due to data retention policies. The CLI drivers wrap existing approved tools (`claude` and `codex` CLIs) that:
 - Inherit SSO authentication
 - Comply with data policies
 - Use existing security approvals

@@ -9,7 +9,7 @@ Technical deep dive into Amelia's architecture, components, and data flow.
 
 ## What Amelia Does Today
 
-**Phase 1 (Complete):** Multi-agent orchestration with the **Architect -> Developer -> Reviewer** loop. Issues flow through planning, execution, and review stages with human approval gates before any code ships. Supports both API-based (DeepAgents/LangChain) and CLI-based (Claude) LLM drivers, with Jira and GitHub issue tracker integrations.
+**Phase 1 (Complete):** Multi-agent orchestration with the **Architect -> Developer -> Reviewer** loop. Issues flow through planning, execution, and review stages with human approval gates before any code ships. Supports both API-based (DeepAgents/LangChain) and CLI-based (Claude, Codex) LLM drivers, with Jira and GitHub issue tracker integrations.
 
 ```
 Issue → [Queue] → Architect (plan) → Human Approval → Developer (execute) ↔ Reviewer (review) → Done
@@ -96,7 +96,7 @@ See [`amelia/pipelines/implementation/nodes.py`](https://github.com/existential-
 
 **Node: `call_architect_node`** - Gets driver, calls `Architect.plan()` to generate markdown plan with goal extraction, updates state with plan content.
 
-**Node: `plan_validator_node`** - Validates plan file and extracts structured fields (goal, plan_markdown, key_files) using lightweight LLM extraction.
+**Node: `plan_validator_node`** - Validates plan file and extracts structured fields (goal, plan_markdown, key_files) using lightweight LLM extraction. Runs in a feedback loop: if validation fails, the Architect revises the plan and re-validation occurs automatically.
 
 **Node: `human_approval_node`** - In server mode: emits `APPROVAL_REQUIRED` event and uses LangGraph interrupt to block. In CLI mode: prompts user directly via typer.
 
@@ -108,7 +108,7 @@ See [`amelia/pipelines/implementation/nodes.py`](https://github.com/existential-
 
 ### Why the Driver Abstraction?
 
-Some environments prohibit direct API calls due to data retention policies. The CLI driver wraps existing approved tools (like `claude` CLI) that inherit SSO authentication and comply with policies. Users can switch between API (fast prototyping) and CLI (policy compliance) without code changes.
+Some environments prohibit direct API calls due to data retention policies. The CLI drivers wrap existing approved tools (`claude` and `codex` CLIs) that inherit SSO authentication and comply with policies. Users can switch between API (fast prototyping) and CLI (policy compliance) without code changes.
 
 ### Why Separate Agents Instead of One Big Prompt?
 

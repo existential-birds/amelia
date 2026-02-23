@@ -32,7 +32,7 @@ LangGraph state machine coordinating specialized agents with human approval gate
 
 - Agent orchestration (Architect → Developer → Reviewer loop)
 - Human approval gates before execution
-- Multi-driver support (API via OpenRouter, CLI via Claude)
+- Multi-driver support (API via OpenRouter, Claude CLI, Codex CLI)
 - GitHub and Jira issue tracker integrations (read-only)
 - Phased execution for Developer agent with per-task context isolation ([#188](https://github.com/existential-birds/amelia/issues/188))
 - Per-agent driver configuration ([#279](https://github.com/existential-birds/amelia/issues/279))
@@ -86,6 +86,13 @@ Document-assisted design tool for synthesizing specifications from research and 
 - Handoff from brainstorming to implementation pipeline via `Design` state
 - Token usage and cost tracking per message
 - Tool execution visualization (tool calls, results, reasoning blocks)
+- Interactive `ask_user_question` cards for structured user input during brainstorming ([#489](https://github.com/existential-birds/amelia/pull/489))
+
+### Plan Validation
+
+Automated plan quality enforcement with feedback loops.
+
+- Plan validation feedback loop: automatic re-validation after architect revisions ([#493](https://github.com/existential-birds/amelia/pull/493))
 
 ### Parallel Execution Foundation
 

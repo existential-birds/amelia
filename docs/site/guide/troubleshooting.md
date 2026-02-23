@@ -311,7 +311,7 @@ Plan file not found after architect completed
    amelia config profile activate dev-strong
    ```
 
-2. Or switch to the CLI driver (recommended for reliability):
+2. Or switch to the Claude driver (recommended for reliability):
    ```bash
    amelia config profile create dev-cli --driver claude
    amelia config profile activate dev-cli
@@ -408,7 +408,7 @@ Error: No profiles configured. Run 'amelia config profile create' to add one.
 
 1. Create a profile with CLI commands:
    ```bash
-   # Create a profile with CLI driver (recommended for getting started)
+   # Create a profile with Claude driver (recommended for getting started)
    amelia config profile create dev --driver claude --tracker none
 
    # Or with API driver
@@ -439,6 +439,7 @@ Error: OPENROUTER_API_KEY environment variable not set
 **Driver → Required Credentials:**
 - `api` → `OPENROUTER_API_KEY`
 - `claude` → Claude CLI authenticated (`claude auth login`)
+- `codex` → Codex CLI authenticated
 
 1. Set API key:
    ```bash
@@ -562,7 +563,7 @@ PathTraversalError: Path '../../../etc/passwd' resolves to '/etc/passwd' which i
 
 **Cause:** An agent tried to read or write a file outside the allowed directory (the worktree root).
 
-**What to do:** Agents are sandboxed to the working directory. If you need files outside the project, copy them into the worktree before starting the workflow.
+**What to do:** Agents are sandboxed to the repository root. If you need files outside the project, copy them into the worktree before starting the workflow.
 
 ---
 
