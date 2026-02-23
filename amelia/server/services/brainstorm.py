@@ -635,14 +635,6 @@ class BrainstormService:
                 instructions=instructions,
                 middleware=brainstormer_middleware,
             ):
-                # Track ask_user_question tool calls that were converted to text
-                if (
-                    agentic_msg.type == AgenticMessageType.TOOL_CALL
-                    and agentic_msg.tool_name == "ask_user_question"
-                    and agentic_msg.tool_call_id
-                ):
-                    suppressed_tool_ids.add(agentic_msg.tool_call_id)
-
                 # Suppress tool_result events for converted ask_user_question calls
                 if (
                     agentic_msg.type == AgenticMessageType.TOOL_RESULT
@@ -654,6 +646,16 @@ class BrainstormService:
                 event = self._agentic_message_to_event(
                     agentic_msg, session_id, resolved_message_id
                 )
+
+                # Only suppress tool results after successful ask_user conversion
+                if (
+                    agentic_msg.type == AgenticMessageType.TOOL_CALL
+                    and agentic_msg.tool_name == "ask_user_question"
+                    and agentic_msg.tool_call_id
+                    and event.event_type == EventType.BRAINSTORM_ASK_USER
+                ):
+                    suppressed_tool_ids.add(agentic_msg.tool_call_id)
+
                 self._event_bus.emit(event)
                 yield event
 
