@@ -65,10 +65,10 @@ def validate_plan_structure(
     issues: list[str] = []
 
     # Check for task headers (reuses same pattern as extract_task_count)
-    task_pattern = re.compile(r"^### Task \d+", re.MULTILINE)
+    task_pattern = re.compile(r"^### Task \d+(\.\d+)?:", re.MULTILINE)
     if not task_pattern.search(plan_markdown):
         issues.append(
-            "No '### Task N:' headers found. Plan must have structured tasks "
+            "No '### Task N:' headers found. Plan must have structured task headers "
             "with headers like '### Task 1: Component Name'."
         )
 

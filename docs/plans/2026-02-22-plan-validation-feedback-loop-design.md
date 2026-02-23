@@ -49,7 +49,7 @@ class PlanValidationResult(BaseModel):
     model_config = ConfigDict(frozen=True)
     valid: bool
     issues: list[str]
-    severity: Literal["error", "warning"]
+    severity: Severity  # critical | major | minor | none
 ```
 
 ## State Changes — `amelia/pipelines/implementation/state.py`
