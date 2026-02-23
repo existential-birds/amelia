@@ -641,7 +641,8 @@ export type BrainstormEventType =
   | 'message_complete'
   | 'artifact_created'
   | 'session_created'
-  | 'session_completed';
+  | 'session_completed'
+  | 'ask_user';
 
 /**
  * Brainstorm streaming message from the server.

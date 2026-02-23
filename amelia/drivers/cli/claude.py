@@ -197,6 +197,7 @@ def _handle_parse_error(e: MessageParseError) -> None:
     )
 
 
+
 async def _safe_receive_response(
     client: ClaudeSDKClient,
 ) -> AsyncIterator[Message | SDKStreamEvent]:

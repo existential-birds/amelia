@@ -2,7 +2,18 @@
 
 from pathlib import Path
 
-from amelia.core.types import Design
+import pytest
+from pydantic import ValidationError
+
+from amelia.core.types import (
+    AskUserOption,
+    AskUserQuestionItem,
+    AskUserQuestionPayload,
+    Design,
+    DriverType,
+    SandboxMode,
+    TrackerType,
+)
 
 
 def test_agent_config_accepts_claude_driver() -> None:
@@ -36,7 +47,7 @@ def test_agent_config_rejects_legacy_cli_driver() -> None:
         AgentConfig(driver="cli", model="sonnet")
 
 
-def test_agent_config_creation():
+def test_agent_config_creation() -> None:
     """AgentConfig should store driver, model, and optional options."""
     from amelia.core.types import AgentConfig
 
@@ -46,7 +57,7 @@ def test_agent_config_creation():
     assert config.options == {}
 
 
-def test_agent_config_with_options():
+def test_agent_config_with_options() -> None:
     """AgentConfig should accept arbitrary options dict."""
     from amelia.core.types import AgentConfig
 
@@ -59,13 +70,13 @@ def test_agent_config_with_options():
     assert config.options["temperature"] == 0.7
 
 
-def test_profile_with_agents_dict():
+def test_profile_with_agents_dict() -> None:
     """Profile should accept agents dict configuration."""
     from amelia.core.types import AgentConfig, Profile
 
     profile = Profile(
         name="test",
-        tracker="noop",
+        tracker=TrackerType.NOOP,
         repo_root="/tmp/test",
         agents={
             "architect": AgentConfig(driver="claude", model="opus"),
@@ -76,13 +87,13 @@ def test_profile_with_agents_dict():
     assert profile.agents["developer"].model == "sonnet"
 
 
-def test_profile_get_agent_config():
+def test_profile_get_agent_config() -> None:
     """Profile.get_agent_config should return config or raise if missing."""
     from amelia.core.types import AgentConfig, Profile
 
     profile = Profile(
         name="test",
-        tracker="noop",
+        tracker=TrackerType.NOOP,
         repo_root="/tmp/test",
         agents={
             "architect": AgentConfig(driver="claude", model="opus"),
@@ -129,7 +140,7 @@ class TestDesign:
         assert design.content == "content"
 
 
-def test_agent_config_sandbox_default():
+def test_agent_config_sandbox_default() -> None:
     """AgentConfig should default sandbox to SandboxConfig() with mode='none'."""
     from amelia.core.types import AgentConfig, SandboxConfig
 
@@ -138,7 +149,7 @@ def test_agent_config_sandbox_default():
     assert config.sandbox.mode == "none"
 
 
-def test_agent_config_profile_name_default():
+def test_agent_config_profile_name_default() -> None:
     """AgentConfig should default profile_name to 'default'."""
     from amelia.core.types import AgentConfig
 
@@ -146,46 +157,46 @@ def test_agent_config_profile_name_default():
     assert config.profile_name == "default"
 
 
-def test_agent_config_with_sandbox_config():
+def test_agent_config_with_sandbox_config() -> None:
     """AgentConfig should accept explicit SandboxConfig."""
     from amelia.core.types import AgentConfig, SandboxConfig
 
-    sandbox = SandboxConfig(mode="container", image="custom:latest")
+    sandbox = SandboxConfig(mode=SandboxMode.CONTAINER, image="custom:latest")
     config = AgentConfig(
-        driver="api", model="test-model",
+        driver=DriverType.API, model="test-model",
         sandbox=sandbox, profile_name="work",
     )
-    assert config.sandbox.mode == "container"
+    assert config.sandbox.mode == SandboxMode.CONTAINER
     assert config.sandbox.image == "custom:latest"
     assert config.profile_name == "work"
 
 
-def test_get_agent_config_injects_sandbox():
+def test_get_agent_config_injects_sandbox() -> None:
     """get_agent_config should inject profile's sandbox config into AgentConfig."""
     from amelia.core.types import AgentConfig, Profile, SandboxConfig
 
-    sandbox = SandboxConfig(mode="container", image="custom:latest")
+    sandbox = SandboxConfig(mode=SandboxMode.CONTAINER, image="custom:latest")
     profile = Profile(
         name="work",
-        tracker="noop",
+        tracker=TrackerType.NOOP,
         repo_root="/tmp/test",
         sandbox=sandbox,
-        agents={"architect": AgentConfig(driver="api", model="opus")},
+        agents={"architect": AgentConfig(driver=DriverType.API, model="opus")},
     )
 
     config = profile.get_agent_config("architect")
-    assert config.sandbox.mode == "container"
+    assert config.sandbox.mode == SandboxMode.CONTAINER
     assert config.sandbox.image == "custom:latest"
     assert config.profile_name == "work"
 
 
-def test_get_agent_config_injects_profile_name():
+def test_get_agent_config_injects_profile_name() -> None:
     """get_agent_config should set profile_name to profile.name."""
     from amelia.core.types import AgentConfig, Profile
 
     profile = Profile(
         name="personal",
-        tracker="noop",
+        tracker=TrackerType.NOOP,
         repo_root="/tmp/test",
         agents={"developer": AgentConfig(driver="claude", model="sonnet")},
     )
@@ -194,15 +205,15 @@ def test_get_agent_config_injects_profile_name():
     assert config.profile_name == "personal"
 
 
-def test_get_agent_config_preserves_original():
+def test_get_agent_config_preserves_original() -> None:
     """get_agent_config should not mutate the stored AgentConfig."""
     from amelia.core.types import AgentConfig, Profile, SandboxConfig
 
-    sandbox = SandboxConfig(mode="container")
-    original = AgentConfig(driver="api", model="opus")
+    sandbox = SandboxConfig(mode=SandboxMode.CONTAINER)
+    original = AgentConfig(driver=DriverType.API, model="opus")
     profile = Profile(
         name="work",
-        tracker="noop",
+        tracker=TrackerType.NOOP,
         repo_root="/tmp/test",
         sandbox=sandbox,
         agents={"architect": original},
@@ -210,6 +221,67 @@ def test_get_agent_config_preserves_original():
 
     injected = profile.get_agent_config("architect")
     assert injected is not original
-    assert original.sandbox.mode == "none"  # Original unchanged
+    assert original.sandbox.mode == SandboxMode.NONE  # Original unchanged
     assert original.profile_name == "default"  # Original unchanged
-    assert injected.sandbox.mode == "container"  # Injected has profile's sandbox
+    assert injected.sandbox.mode == SandboxMode.CONTAINER  # Injected has profile's sandbox
+
+
+class TestAskUserQuestionPayload:
+    """Tests for AskUser* models."""
+
+    def test_valid_payload(self) -> None:
+        payload = AskUserQuestionPayload(
+            questions=[
+                AskUserQuestionItem(
+                    question="Which approach?",
+                    header="Approach",
+                    options=[
+                        AskUserOption(label="A", description="First"),
+                        AskUserOption(label="B"),
+                    ],
+                    multi_select=True,
+                )
+            ]
+        )
+        assert len(payload.questions) == 1
+        assert payload.questions[0].question == "Which approach?"
+        assert payload.questions[0].header == "Approach"
+        assert payload.questions[0].multi_select is True
+        assert len(payload.questions[0].options) == 2
+        assert payload.questions[0].options[0].description == "First"
+        assert payload.questions[0].options[1].description is None
+
+    def test_minimal_payload(self) -> None:
+        payload = AskUserQuestionPayload(
+            questions=[AskUserQuestionItem(question="Ready?")]
+        )
+        assert payload.questions[0].header is None
+        assert payload.questions[0].options == []
+        assert payload.questions[0].multi_select is False
+
+    def test_from_dict(self) -> None:
+        data = {
+            "questions": [
+                {
+                    "question": "Pick one?",
+                    "options": [{"label": "Yes"}, {"label": "No"}],
+                }
+            ]
+        }
+        payload = AskUserQuestionPayload(**data)  # type: ignore[arg-type]
+        assert payload.questions[0].options[1].label == "No"
+
+    def test_invalid_questions_type(self) -> None:
+        with pytest.raises(ValidationError):
+            AskUserQuestionPayload(questions="not-a-list")  # type: ignore[arg-type]
+
+    def test_invalid_options_type(self) -> None:
+        with pytest.raises(ValidationError):
+            AskUserQuestionPayload(
+                questions=[
+                    AskUserQuestionItem(
+                        question="Q?",
+                        options="not-a-list",  # type: ignore[arg-type]
+                    )
+                ]
+            )

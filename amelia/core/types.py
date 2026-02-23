@@ -42,6 +42,13 @@ class TrackerType(StrEnum):
     NOOP = "noop"
 
 
+class SandboxMode(StrEnum):
+    """Sandbox execution mode."""
+
+    NONE = "none"
+    CONTAINER = "container"
+
+
 class SandboxConfig(BaseModel):
     """Sandbox execution configuration for a profile.
 
@@ -54,7 +61,7 @@ class SandboxConfig(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    mode: Literal["none", "container"] = "none"
+    mode: SandboxMode = SandboxMode.NONE
     image: str = "amelia-sandbox:latest"
     network_allowlist_enabled: bool = False
     network_allowed_hosts: tuple[str, ...] = Field(
@@ -269,3 +276,25 @@ class OracleConsultation(BaseModel):
     files_consulted: list[str] = Field(default_factory=list)
     outcome: Literal["success", "error"] = "success"
     error_message: str | None = None
+
+
+class AskUserOption(BaseModel):
+    """A single selectable option in an ask-user question."""
+
+    label: str
+    description: str | None = None
+
+
+class AskUserQuestionItem(BaseModel):
+    """A single question with optional header and selectable options."""
+
+    question: str
+    header: str | None = None
+    options: list[AskUserOption] = Field(default_factory=list)
+    multi_select: bool = False
+
+
+class AskUserQuestionPayload(BaseModel):
+    """Structured payload for interactive ask-user questions."""
+
+    questions: list[AskUserQuestionItem]

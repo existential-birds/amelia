@@ -27,9 +27,11 @@ from langchain_core.messages import ToolMessage
 from langchain_core.tools import BaseTool, StructuredTool
 from langgraph.types import Command
 from loguru import logger
+from pydantic import ValidationError
 
 from amelia.core.constants import resolve_plan_path
 from amelia.core.text import slugify
+from amelia.core.types import AskUserQuestionPayload
 from amelia.drivers.base import (
     AgenticMessage,
     AgenticMessageType,
@@ -307,6 +309,14 @@ class BrainstormService:
         self._session_locks: dict[uuid.UUID, asyncio.Lock] = {}
         self._driver_cleanup = driver_cleanup
         self._profile_repo = profile_repo
+
+    def emit_event(self, event: WorkflowEvent) -> None:
+        """Emit a workflow event to the event bus.
+
+        Args:
+            event: The event to emit.
+        """
+        self._event_bus.emit(event)
 
     def _get_session_lock(self, session_id: uuid.UUID) -> asyncio.Lock:
         """Get or create a lock for a session.
@@ -634,15 +644,6 @@ class BrainstormService:
                 instructions=instructions,
                 middleware=brainstormer_middleware,
             ):
-                # Track ask_user_question tool calls that were converted to text
-                if (
-                    agentic_msg.type == AgenticMessageType.TOOL_CALL
-                    and agentic_msg.tool_name == "ask_user_question"
-                    and agentic_msg.tool_call_id
-                    and agentic_msg.tool_input
-                ):
-                    suppressed_tool_ids.add(agentic_msg.tool_call_id)
-
                 # Suppress tool_result events for converted ask_user_question calls
                 if (
                     agentic_msg.type == AgenticMessageType.TOOL_RESULT
@@ -654,6 +655,16 @@ class BrainstormService:
                 event = self._agentic_message_to_event(
                     agentic_msg, session_id, resolved_message_id
                 )
+
+                # Only suppress tool results after successful ask_user conversion
+                if (
+                    agentic_msg.type == AgenticMessageType.TOOL_CALL
+                    and agentic_msg.tool_name == "ask_user_question"
+                    and agentic_msg.tool_call_id
+                    and event.event_type == EventType.BRAINSTORM_ASK_USER
+                ):
+                    suppressed_tool_ids.add(agentic_msg.tool_call_id)
+
                 self._event_bus.emit(event)
                 yield event
 
@@ -732,31 +743,27 @@ class BrainstormService:
         yield complete_event
 
     @staticmethod
-    def _format_ask_user_question(tool_input: dict[str, Any]) -> str:
+    def _format_ask_user_question(payload: AskUserQuestionPayload) -> str:
         """Format an AskUserQuestion tool call as readable markdown.
 
         Extracts question text and options from the tool input and
         formats them as a markdown list the user can read in the chat.
 
         Args:
-            tool_input: The tool_input dict from the AskUserQuestion call.
+            payload: The typed AskUserQuestionPayload from the tool call.
 
         Returns:
             Markdown-formatted question text.
         """
         parts: list[str] = []
-        questions = tool_input.get("questions", [])
-        for q in questions:
-            question_text = q.get("question", "")
-            if question_text:
-                parts.append(f"**{question_text}**\n")
-            for opt in q.get("options", []):
-                label = opt.get("label", "")
-                desc = opt.get("description", "")
-                if desc:
-                    parts.append(f"- **{label}** — {desc}")
+        for q in payload.questions:
+            if q.question:
+                parts.append(f"**{q.question}**\n")
+            for opt in q.options:
+                if opt.description:
+                    parts.append(f"- **{opt.label}** — {opt.description}")
                 else:
-                    parts.append(f"- **{label}**")
+                    parts.append(f"- **{opt.label}**")
         return "\n".join(parts)
 
     def _agentic_message_to_event(
@@ -785,37 +792,49 @@ class BrainstormService:
 
         event_type = type_mapping.get(agentic_msg.type, EventType.BRAINSTORM_TEXT)
 
-        # Intercept ask_user_question tool calls: the CLI driver's model may
-        # try to use AskUserQuestion, but the brainstormer has no interactive
-        # terminal.  Convert the question into a BRAINSTORM_TEXT event so the
-        # user sees the question as readable chat text instead of a hidden
-        # tool-strip entry.
+        # Intercept ask_user_question tool calls and emit as interactive
+        # BRAINSTORM_ASK_USER events with structured question payload.
+        # Falls back to plain BRAINSTORM_TEXT if the payload is malformed.
         if (
             agentic_msg.type == AgenticMessageType.TOOL_CALL
             and agentic_msg.tool_name == "ask_user_question"
             and agentic_msg.tool_input
         ):
-            formatted = self._format_ask_user_question(agentic_msg.tool_input)
-            if formatted:
-                logger.debug(
-                    "Converted ask_user_question tool call to text event",
+            try:
+                payload = AskUserQuestionPayload(**agentic_msg.tool_input)
+                formatted = self._format_ask_user_question(payload)
+                if not formatted:
+                    logger.warning(
+                        "Valid ask_user_question payload produced empty output",
+                        session_id=session_id,
+                    )
+                else:
+                    logger.debug(
+                        "Emitting interactive ask_user event",
+                        session_id=session_id,
+                    )
+                    return WorkflowEvent(
+                        id=uuid4(),
+                        workflow_id=session_id,
+                        sequence=0,
+                        timestamp=datetime.now(UTC),
+                        agent="brainstormer",
+                        event_type=EventType.BRAINSTORM_ASK_USER,
+                        message=formatted,
+                        model=agentic_msg.model,
+                        domain=EventDomain.BRAINSTORM,
+                        data={
+                            "session_id": str(session_id),
+                            "message_id": str(message_id),
+                            "text": formatted,
+                            "questions": [q.model_dump() for q in payload.questions],
+                        },
+                    )
+            except ValidationError:
+                logger.warning(
+                    "Malformed ask_user_question payload, falling back to text",
                     session_id=session_id,
-                )
-                return WorkflowEvent(
-                    id=uuid4(),
-                    workflow_id=session_id,
-                    sequence=0,
-                    timestamp=datetime.now(UTC),
-                    agent="brainstormer",
-                    event_type=EventType.BRAINSTORM_TEXT,
-                    message=formatted,
-                    model=agentic_msg.model,
-                    domain=EventDomain.BRAINSTORM,
-                    data={
-                        "session_id": session_id,
-                        "message_id": message_id,
-                        "text": formatted,
-                    },
+                    tool_input=agentic_msg.tool_input,
                 )
 
         # Build message from content
@@ -839,8 +858,8 @@ class BrainstormService:
             model=agentic_msg.model,
             domain=EventDomain.BRAINSTORM,
             data={
-                "session_id": session_id,
-                "message_id": message_id,
+                "session_id": str(session_id),
+                "message_id": str(message_id),
                 "text": message,
                 "tool_call_id": agentic_msg.tool_call_id,
                 "tool_name": agentic_msg.tool_name,

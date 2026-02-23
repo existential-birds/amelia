@@ -629,6 +629,7 @@ class TestClaudeCliDriverAgentic:
                 raise MessageParseError("Unknown message type: rate_limit_event")
             return raw
 
+
         async def mock_raw_receive() -> AsyncIterator[Any]:
             for item in raw_items:
                 yield item
