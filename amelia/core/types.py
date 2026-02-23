@@ -287,7 +287,6 @@ class AskUserOption(BaseModel):
 class AskUserQuestionItem(BaseModel):
     """A single question with optional header and selectable options."""
 
-    id: str
     question: str
     header: str | None = None
     options: list[AskUserOption] = Field(default_factory=list)

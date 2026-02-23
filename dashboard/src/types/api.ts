@@ -187,7 +187,6 @@ export interface AskUserOption {
 
 /** A single question with optional header and selectable options. */
 export interface AskUserQuestionItem {
-  id: string;
   question: string;
   header?: string;
   options: AskUserOption[];
