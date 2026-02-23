@@ -32,5 +32,3 @@ amelia dev
 # Run a workflow on an issue
 amelia start 123
 ```
-
-<CtaSection />

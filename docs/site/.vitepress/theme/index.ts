@@ -14,7 +14,6 @@ import './custom.css'
 import ColorComparison from './components/ColorComparison.vue'
 import TerminalHero from './components/TerminalHero.vue'
 import CapabilitiesAndResearch from './components/CapabilitiesAndResearch.vue'
-import CtaSection from './components/CtaSection.vue'
 
 export default {
   extends: DefaultTheme,
@@ -23,6 +22,5 @@ export default {
     app.component('ColorComparison', ColorComparison)
     app.component('TerminalHero', TerminalHero)
     app.component('CapabilitiesAndResearch', CapabilitiesAndResearch)
-    app.component('CtaSection', CtaSection)
   }
 } satisfies Theme
