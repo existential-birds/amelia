@@ -4,8 +4,6 @@
 
 ![Amelia Terminal](docs/design/terminal_screen.jpg)
 
-![Active Workflow](docs/design/amelia_active_workflow.png)
-
 [Amelia](https://en.wikipedia.org/wiki/Amelia_Earhart) is multi-agent orchestration for software development with human-in-the-loop approval gates, defense-in-depth security, and end-to-end observability.
 
 > [!WARNING]
@@ -111,62 +109,6 @@ Issue → Architect (plan) → Human Approval → Developer (execute) ↔ Review
 ```
 
 Architecture is aligned with [12-Factor Agents](https://github.com/humanlayer/12-factor-agents) for reliable LLM-powered software. See [Architecture](https://existential-birds.github.io/amelia/architecture/overview) for data flow and [Concepts](https://existential-birds.github.io/amelia/architecture/concepts) for how agents and drivers work.
-
-## Features
-
-### Quick Shot
-
-Start ad-hoc tasks directly from the sidebar without navigating away from your current workflow.
-
-![Quick Shot](docs/design/quick_shot_feature.png)
-
-### Spec Builder
-
-Brainstorm and refine feature specifications through an interactive chat interface before implementation.
-
-![Spec Builder](docs/design/spec-builder-chat.png)
-
-### Plan View
-
-Review and approve generated implementation plans before execution.
-
-![Plan View](docs/design/hugo_plan.png)
-
-### Prompt Editor
-
-Customize agent prompts directly in the dashboard to tune behavior for your workflow.
-
-![Prompt Editor](docs/design/amelia_prompt_editor.png)
-
-### Streaming Tool Calls and Thinking Tokens
-
-Watch agents work in real-time with streaming tool execution and visible reasoning.
-
-![Streaming Tool Calls](docs/design/hugo_logs_mixed.png)
-
-### Multi-Round Code Review
-
-Iterative review cycles between Developer and Reviewer agents until changes are approved.
-
-![Code Review](docs/design/hugo_logs_filter_agent.png)
-
-### Run Details
-
-Inspect individual agent runs, tool calls, and outputs.
-
-![Details View](docs/design/hugo_details_opus.png)
-
-### Model Comparison
-
-Compare model performance and track token usage across runs.
-
-![Metrics](docs/design/hugo_opus_vs_gemini.jpeg)
-
-### Cost Tracking
-
-Track token usage, costs, and workflow trajectories across all agent runs.
-
-![Costs Overview](docs/design/costs_view.png)
 
 ## CLI Commands
 
