@@ -59,7 +59,7 @@ plan_validation_result: PlanValidationResult | None = None
 plan_revision_count: int = 0
 ```
 
-## Structural Validation — `amelia/pipelines/implementation/nodes.py`
+## Structural Validation — `amelia/pipelines/implementation/utils.py`
 
 Pure function `validate_plan_structure(goal, plan_markdown) -> PlanValidationResult`. Runs on both happy path and regex fallback output.
 
