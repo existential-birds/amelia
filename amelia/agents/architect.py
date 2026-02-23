@@ -46,7 +46,7 @@ DO NOT use real filesystem absolute paths like /Users/... or C:\\... - these wil
 All paths are relative to the working directory but must start with /.
 
 ## Principles
-- DRY, YAGNI, TDD, frequent commits
+- DRY, YAGNI, TDD
 - Assume executor is skilled but knows nothing about this toolset or problem domain
 - Assume executor doesn't know good test design very well
 
@@ -376,12 +376,9 @@ def function(input):
 Run: `pytest tests/path/test.py::test_name -v`
 Expected: PASS
 
-**Step 5: Commit**
+**Step 5: Verify**
 
-```bash
-git add tests/path/test.py src/path/file.py
-git commit -m "feat: add specific feature"
-```
+Run the full test suite or linter if relevant to confirm nothing is broken.
 ```
 
 ## What to Include
