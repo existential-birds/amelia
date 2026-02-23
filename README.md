@@ -2,33 +2,27 @@
 
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/existential-birds/amelia)
 
-![Amelia Terminal](docs/design/terminal_screen.jpg)
-
-![Active Workflow](docs/design/amelia_active_workflow.png)
-
 [Amelia](https://en.wikipedia.org/wiki/Amelia_Earhart) is multi-agent orchestration for software development with human-in-the-loop approval gates, defense-in-depth security, and end-to-end observability.
 
 > [!WARNING]
-> This project is under active development. APIs and configuration may change between releases.
-
-See the [**Roadmap**](https://existential-birds.github.io/amelia/reference/roadmap) for where we're headed.
+> This project is under active development. APIs and configuration may change between releases. See the [Roadmap](https://existential-birds.github.io/amelia/reference/roadmap) for planned changes.
 
 ## Prerequisites
 
-- **Python 3.12+** - Required for type hints and async features
-- **uv** - Fast Python package manager ([install guide](https://docs.astral.sh/uv/getting-started/installation/))
-- **Git** - For version control operations
-- **Beagle plugin** - Claude Code plugin with Amelia skills ([install guide](https://github.com/existential-birds/beagle?tab=readme-ov-file#installation))
-- **LLM access** - Either:
+- **Python 3.12+**
+- **uv** - Python package manager ([install guide](https://docs.astral.sh/uv/getting-started/installation/))
+- **Git**
+- **LLM access** - one of:
   - OpenRouter API key (for `api` driver)
-  - Claude CLI installed (for `claude` driver) or Codex CLI installed (for `codex` driver)
+  - Claude CLI (for `claude` driver)
+  - Codex CLI (for `codex` driver)
 
 > [!NOTE]
-> **Model selection matters.** The API driver requires models with reliable tool-calling capabilities. Models that don't consistently follow tool-calling instructions may fail to complete tasks. See [Troubleshooting](https://existential-birds.github.io/amelia/guide/troubleshooting#api-driver-agent-fails-to-create-plan-file) for details.
+> **Model selection matters.** The `api` driver requires models with reliable tool-calling capabilities. See [Troubleshooting](https://existential-birds.github.io/amelia/guide/troubleshooting#api-driver-agent-fails-to-create-plan-file) for details.
 
 ## Quick Start
 
-### 1. Install
+### 1. Install Amelia
 
 ```bash
 # Install uv (Linux/macOS)
@@ -44,45 +38,40 @@ export OPENROUTER_API_KEY="sk-..."
 > [!IMPORTANT]
 > For Claude Code users: install the [Beagle plugin](https://github.com/existential-birds/beagle?tab=readme-ov-file#installation) for Amelia skills and commands.
 
-### 2. Try It Out
-
-Create a new folder and run a task directly—no issue tracker needed:
+### 2. Run Your First Task
 
 ```bash
 mkdir my-app && cd my-app
 git init
 
-# Create a profile (first run will prompt interactively, or use flags)
+# Create a profile
 amelia config profile create dev --driver api --model "minimax/minimax-m2" --activate
 
 # Start the server (opens dashboard at localhost:8420)
 amelia dev
 ```
 
-In another terminal, run your first task:
+In another terminal:
 
 ```bash
 cd my-app
-
-# Run a task directly with --task
 amelia start --task "Create a Python CLI that fetches weather for a city using wttr.in"
 ```
 
-Watch the Architect plan, approve it in the dashboard, then watch the Developer build it.
+The Architect agent creates a plan. Open the dashboard at `localhost:8420` to review and approve it. Once approved, the Developer agent implements the code.
 
-### 3. Working with Issues
+### 3. Use an Issue Tracker
 
-For real projects, connect to GitHub issues:
+To work from GitHub or Jira issues instead of ad-hoc tasks, create a profile with a tracker:
 
 ```bash
-# Create a profile with GitHub tracker (or edit existing via dashboard)
 amelia config profile create github-dev --driver api --model "minimax/minimax-m2" --tracker github --activate
 
 # Start a workflow for issue #123
 amelia start 123
 ```
 
-See **[Configuration](https://existential-birds.github.io/amelia/guide/configuration)** for all options including Jira integration and per-agent model settings.
+You can also configure profiles in the dashboard at `localhost:8420/settings`. See **[Configuration](https://existential-birds.github.io/amelia/guide/configuration)** for all options including Jira integration and per-agent model settings.
 
 ## Alternative Installation
 
@@ -104,112 +93,55 @@ cd /path/to/your/project
 
 ## How It Works
 
-Amelia orchestrates specialized agents through a LangGraph state machine:
+Amelia orchestrates three specialized agents through a LangGraph state machine:
 
 ```
 Issue → Architect (plan) → Human Approval → Developer (execute) ↔ Reviewer (review) → Done
 ```
 
-Architecture is aligned with [12-Factor Agents](https://github.com/humanlayer/12-factor-agents) for reliable LLM-powered software. See [Architecture](https://existential-birds.github.io/amelia/architecture/overview) for data flow and [Concepts](https://existential-birds.github.io/amelia/architecture/concepts) for how agents and drivers work.
+- **Architect** — reads the issue and produces a step-by-step implementation plan
+- **Developer** — executes the plan, writing code and running commands
+- **Reviewer** — reviews the Developer's changes and requests fixes if needed
 
-## Features
+You approve the Architect's plan before any code is written. The design follows [12-Factor Agents](https://github.com/humanlayer/12-factor-agents) principles for reliable LLM-powered software.
 
-### Quick Shot
-
-Start ad-hoc tasks directly from the sidebar without navigating away from your current workflow.
-
-![Quick Shot](docs/design/quick_shot_feature.png)
-
-### Spec Builder
-
-Brainstorm and refine feature specifications through an interactive chat interface before implementation.
-
-![Spec Builder](docs/design/spec-builder-chat.png)
-
-### Plan View
-
-Review and approve generated implementation plans before execution.
-
-![Plan View](docs/design/hugo_plan.png)
-
-### Prompt Editor
-
-Customize agent prompts directly in the dashboard to tune behavior for your workflow.
-
-![Prompt Editor](docs/design/amelia_prompt_editor.png)
-
-### Streaming Tool Calls and Thinking Tokens
-
-Watch agents work in real-time with streaming tool execution and visible reasoning.
-
-![Streaming Tool Calls](docs/design/hugo_logs_mixed.png)
-
-### Multi-Round Code Review
-
-Iterative review cycles between Developer and Reviewer agents until changes are approved.
-
-![Code Review](docs/design/hugo_logs_filter_agent.png)
-
-### Run Details
-
-Inspect individual agent runs, tool calls, and outputs.
-
-![Details View](docs/design/hugo_details_opus.png)
-
-### Model Comparison
-
-Compare model performance and track token usage across runs.
-
-![Metrics](docs/design/hugo_opus_vs_gemini.jpeg)
-
-### Cost Tracking
-
-Track token usage, costs, and workflow trajectories across all agent runs.
-
-![Costs Overview](docs/design/costs_view.png)
+See [Architecture](https://existential-birds.github.io/amelia/architecture/overview) and [Concepts](https://existential-birds.github.io/amelia/architecture/concepts) for details.
 
 ## CLI Commands
 
-```bash
-# Server commands
-amelia dev                    # Start server + dashboard (port 8420)
-amelia server                 # API server only
+**Server**
 
-# Workflow commands (requires server running)
-amelia start 123              # Start workflow for issue #123
-amelia start --task "desc"    # Run ad-hoc task without issue tracker
-amelia start 123 --queue      # Queue workflow for later execution
-amelia run abc-123            # Start a queued workflow
-amelia status                 # Show active workflows
-amelia approve                # Approve the generated plan
-amelia reject "feedback"      # Reject with feedback
-amelia cancel                 # Cancel active workflow
+| Command | Description |
+|---------|-------------|
+| `amelia dev` | Start server + dashboard (port 8420) |
+| `amelia server` | API server only |
 
-# Local commands (no server required)
-amelia review --local         # Review uncommitted changes
-```
+**Workflows** (requires server running)
 
-See the **[Usage Guide](https://existential-birds.github.io/amelia/guide/usage)** for complete CLI reference, API endpoints, and example workflows.
+| Command | Description |
+|---------|-------------|
+| `amelia start 123` | Start workflow for issue #123 |
+| `amelia start --task "desc"` | Run ad-hoc task without issue tracker |
+| `amelia start 123 --queue` | Queue workflow for later execution |
+| `amelia run abc-123` | Start a queued workflow |
+| `amelia status` | Show active workflows |
+| `amelia approve` | Approve the generated plan |
+| `amelia reject "feedback"` | Reject with feedback |
+| `amelia cancel` | Cancel active workflow |
+
+**Local** (no server required)
+
+| Command | Description |
+|---------|-------------|
+| `amelia review --local` | Review uncommitted changes |
+
+See the **[Usage Guide](https://existential-birds.github.io/amelia/guide/usage)** for the complete CLI reference.
 
 ## Configuration
 
-Configuration is stored in SQLite (`~/.amelia/amelia.db`) and managed via CLI or dashboard:
+Configuration is stored in SQLite (`~/.amelia/amelia.db`) and managed via CLI (`amelia config`) or the dashboard at `localhost:8420/settings`.
 
-```bash
-# Profile management
-amelia config profile list                # List all profiles
-amelia config profile create <name>       # Create new profile (interactive)
-amelia config profile show <name>         # Show profile details
-amelia config profile activate <name>     # Set active profile
-
-# Server settings
-amelia config server show                 # Show server settings
-amelia config server set <key> <value>    # Update a setting
-```
-
-Or use the dashboard at `localhost:8420/settings` to manage profiles and server settings visually.
-
-See [Configuration Reference](https://existential-birds.github.io/amelia/guide/configuration) for full details.
+See [Configuration Reference](https://existential-birds.github.io/amelia/guide/configuration) for profile setup, server settings, and Jira integration.
 
 ## Documentation
 
