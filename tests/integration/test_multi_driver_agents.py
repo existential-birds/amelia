@@ -1,7 +1,7 @@
 """Integration tests verifying agents work correctly with multiple drivers.
 
 This module tests that agents (Developer, Reviewer) produce consistent behavior
-regardless of which driver implementation is used (cli, api).
+regardless of which driver implementation is used (claude, codex, api).
 These tests replace the low-value static import tests in test_agent_imports.py
 by actually verifying the driver abstraction works at runtime.
 """
@@ -9,6 +9,7 @@ by actually verifying the driver abstraction works at runtime.
 from pathlib import Path
 from typing import Any, cast
 from unittest.mock import patch
+from uuid import uuid4
 
 import pytest
 from langchain_core.runnables.config import RunnableConfig
@@ -38,9 +39,14 @@ DRIVER_CONFIGS = [
         id="api-openrouter",
     ),
     pytest.param(
-        "cli",
+        "claude",
         "sonnet",
         id="cli-claude",
+    ),
+    pytest.param(
+        "codex",
+        "gpt-5-codex",
+        id="cli-codex",
     ),
 ]
 
@@ -58,7 +64,7 @@ class TestDeveloperMultiDriver:
     ) -> None:
         """Developer should collect tool calls regardless of driver type.
 
-        Both cli and api drivers yield AgenticMessage objects.
+        All drivers (claude, codex, api) yield AgenticMessage objects.
         The Developer agent processes these uniformly - this test verifies that
         the abstraction works correctly for both driver implementations.
         """
@@ -70,8 +76,9 @@ class TestDeveloperMultiDriver:
         state = make_execution_state(
             profile=profile,
             goal="Create a hello.txt file with 'Hello World'",
+            plan_markdown="# Test Plan\n\n1. Create hello.txt with 'Hello World'",
         )
-        config = make_config(thread_id=f"test-{driver_key}", profile=profile)
+        config = make_config(thread_id=str(uuid4()), profile=profile)
 
         mock_messages = make_agentic_messages(
             final_text="I created hello.txt with the content 'Hello World'"
@@ -83,8 +90,10 @@ class TestDeveloperMultiDriver:
                 yield msg
 
         # Patch at the driver interface level - both drivers use execute_agentic
-        if driver_key.startswith("api:"):
+        if driver_key == "api":
             patch_target = "amelia.drivers.api.deepagents.ApiDriver.execute_agentic"
+        elif driver_key == "codex":
+            patch_target = "amelia.drivers.cli.codex.CodexCliDriver.execute_agentic"
         else:
             patch_target = "amelia.drivers.cli.claude.ClaudeCliDriver.execute_agentic"
 
@@ -113,8 +122,9 @@ class TestDeveloperMultiDriver:
         state = make_execution_state(
             profile=profile,
             goal="Read a non-existent file",
+            plan_markdown="# Test Plan\n\n1. Read non-existent file",
         )
-        config = make_config(thread_id=f"test-error-{driver_key}", profile=profile)
+        config = make_config(thread_id=str(uuid4()), profile=profile)
 
         error_messages = [
             AgenticMessage(
@@ -140,8 +150,10 @@ class TestDeveloperMultiDriver:
             for msg in error_messages:
                 yield msg
 
-        if driver_key.startswith("api:"):
+        if driver_key == "api":
             patch_target = "amelia.drivers.api.deepagents.ApiDriver.execute_agentic"
+        elif driver_key == "codex":
+            patch_target = "amelia.drivers.cli.codex.CodexCliDriver.execute_agentic"
         else:
             patch_target = "amelia.drivers.cli.claude.ClaudeCliDriver.execute_agentic"
 
@@ -180,7 +192,7 @@ class TestReviewerMultiDriver:
             goal="Add logging to the application",
             code_changes_for_review="diff --git a/app.py b/app.py\n+import logging",
         )
-        config = make_config(thread_id=f"test-review-{driver_key}", profile=profile)
+        config = make_config(thread_id=str(uuid4()), profile=profile)
 
         mock_messages = make_reviewer_agentic_messages(approved=True)
 
@@ -189,8 +201,10 @@ class TestReviewerMultiDriver:
                 yield msg
 
         # Mock at driver.execute_agentic() level
-        if driver_key.startswith("api:"):
+        if driver_key == "api":
             patch_target = "amelia.drivers.api.deepagents.ApiDriver.execute_agentic"
+        elif driver_key == "codex":
+            patch_target = "amelia.drivers.cli.codex.CodexCliDriver.execute_agentic"
         else:
             patch_target = "amelia.drivers.cli.claude.ClaudeCliDriver.execute_agentic"
 
@@ -218,7 +232,7 @@ class TestReviewerMultiDriver:
             goal="Implement authentication",
             code_changes_for_review="diff --git a/auth.py\n+password = 'hardcoded'",
         )
-        config = make_config(thread_id=f"test-reject-{driver_key}", profile=profile)
+        config = make_config(thread_id=str(uuid4()), profile=profile)
 
         mock_messages = make_reviewer_agentic_messages(
             approved=False,
@@ -231,8 +245,10 @@ class TestReviewerMultiDriver:
                 yield msg
 
         # Mock at driver.execute_agentic() level
-        if driver_key.startswith("api:"):
+        if driver_key == "api":
             patch_target = "amelia.drivers.api.deepagents.ApiDriver.execute_agentic"
+        elif driver_key == "codex":
+            patch_target = "amelia.drivers.cli.codex.CodexCliDriver.execute_agentic"
         else:
             patch_target = "amelia.drivers.cli.claude.ClaudeCliDriver.execute_agentic"
 

@@ -4,6 +4,7 @@ import pytest
 
 from amelia.drivers.api.deepagents import ApiDriver
 from amelia.drivers.cli.claude import ClaudeCliDriver
+from amelia.drivers.cli.codex import CodexCliDriver
 from amelia.drivers.factory import cleanup_driver_session, get_driver
 
 
@@ -13,8 +14,8 @@ class TestGetDriver:
     @pytest.mark.parametrize(
         "driver_key,expected_type,model,expected_model",
         [
-            ("cli", ClaudeCliDriver, None, None),
-            ("cli", ClaudeCliDriver, None, None),
+            ("claude", ClaudeCliDriver, None, None),
+            ("codex", CodexCliDriver, None, None),
             ("api", ApiDriver, "anthropic/claude-sonnet-4-20250514", "anthropic/claude-sonnet-4-20250514"),
             ("api", ApiDriver, None, None),
         ],
@@ -25,6 +26,10 @@ class TestGetDriver:
         assert isinstance(driver, expected_type)
         if expected_model is not None:
             assert driver.model == expected_model
+
+    def test_get_driver_rejects_legacy_cli(self) -> None:
+        with pytest.raises(ValueError, match="Valid options: 'claude', 'codex', 'api'"):
+            get_driver("cli")
 
     @pytest.mark.parametrize(
         "driver_key,error_match",
@@ -117,9 +122,9 @@ class TestCleanupDriverSession:
         finally:
             ApiDriver._sessions.pop(test_session_id, None)
 
-    async def test_cleanup_cli_driver_session_returns_false(self) -> None:
-        """Should return False for CLI driver (no state)."""
-        result = await cleanup_driver_session("cli", "any-session")
+    async def test_cleanup_claude_driver_session_returns_false(self) -> None:
+        """Should return False for claude driver (no state)."""
+        result = await cleanup_driver_session("claude", "any-session")
         assert result is False
 
     async def test_cleanup_unknown_driver_raises(self) -> None:

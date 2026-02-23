@@ -42,9 +42,9 @@ const mockProfiles = [
     plan_output_dir: 'docs/plans',
     plan_path_pattern: 'docs/plans/{date}-{issue_key}.md',
     agents: {
-      architect: { driver: 'cli', model: 'opus', options: {} },
-      developer: { driver: 'cli', model: 'opus', options: {} },
-      reviewer: { driver: 'cli', model: 'haiku', options: {} },
+      architect: { driver: 'claude', model: 'opus', options: {} },
+      developer: { driver: 'claude', model: 'opus', options: {} },
+      reviewer: { driver: 'claude', model: 'haiku', options: {} },
     },
   },
   {
@@ -127,12 +127,12 @@ describe('SettingsProfilesPage', () => {
       </MemoryRouter>
     );
 
-    // Click the CLI filter
+    // Click the Claude filter
     const user = userEvent.setup();
-    const cliButton = screen.getByRole('radio', { name: 'CLI' });
-    await user.click(cliButton);
+    const claudeButton = screen.getByRole('radio', { name: 'Claude' });
+    await user.click(claudeButton);
 
-    // dev uses cli, should be visible
+    // dev uses claude, should be visible
     expect(screen.getByText('dev')).toBeInTheDocument();
     // prod uses api, should be hidden after animation
     await waitFor(() => {
@@ -173,7 +173,7 @@ describe('SettingsProfilesPage', () => {
     );
 
     // Check that driver badges are rendered
-    expect(await screen.findByText('cli')).toBeInTheDocument();
+    expect(await screen.findByText('claude')).toBeInTheDocument();
     expect(screen.getByText('api')).toBeInTheDocument();
   });
 

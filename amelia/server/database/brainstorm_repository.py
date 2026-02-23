@@ -52,8 +52,8 @@ class BrainstormRepository:
             """
             INSERT INTO brainstorm_sessions (
                 id, profile_id, driver_session_id, driver_type, status, topic,
-                created_at, updated_at
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                output_artifact_path, created_at, updated_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             """,
             session.id,
             session.profile_id,
@@ -61,6 +61,7 @@ class BrainstormRepository:
             session.driver_type,
             session.status,
             session.topic,
+            session.output_artifact_path,
             session.created_at,
             session.updated_at,
         )
@@ -77,7 +78,7 @@ class BrainstormRepository:
         row = await self._db.fetch_one(
             """
             SELECT id, profile_id, driver_session_id, driver_type, status, topic,
-                   created_at, updated_at
+                   output_artifact_path, created_at, updated_at
             FROM brainstorm_sessions WHERE id = $1
             """,
             session_id,
@@ -99,13 +100,15 @@ class BrainstormRepository:
                 driver_type = $2,
                 status = $3,
                 topic = $4,
-                updated_at = $5
-            WHERE id = $6
+                output_artifact_path = $5,
+                updated_at = $6
+            WHERE id = $7
             """,
             session.driver_session_id,
             session.driver_type,
             session.status,
             session.topic,
+            session.output_artifact_path,
             session.updated_at,
             session.id,
         )
@@ -157,7 +160,7 @@ class BrainstormRepository:
         rows = await self._db.fetch_all(
             f"""
             SELECT id, profile_id, driver_session_id, driver_type, status, topic,
-                   created_at, updated_at
+                   output_artifact_path, created_at, updated_at
             FROM brainstorm_sessions
             WHERE {where_clause}
             ORDER BY updated_at DESC
@@ -183,6 +186,7 @@ class BrainstormRepository:
             driver_type=row["driver_type"],
             status=row["status"],
             topic=row["topic"],
+            output_artifact_path=row["output_artifact_path"],
             created_at=row["created_at"],
             updated_at=row["updated_at"],
         )

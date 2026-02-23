@@ -227,7 +227,8 @@ Drivers abstract how Amelia communicates with LLMs. This separation enables flex
 | Driver | Use Case | Requirements |
 |--------|----------|--------------|
 | `api` | Direct API calls, simple setup, fast prototyping | `OPENROUTER_API_KEY` env var |
-| `cli` | Wraps authenticated CLI tools, policy-compliant | `claude` CLI installed |
+| `claude` | Claude CLI wrapper, policy-compliant | `claude` CLI installed and authenticated |
+| `codex` | OpenAI Codex CLI wrapper | `codex` CLI installed and authenticated |
 
 ### Driver Interface
 

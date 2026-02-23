@@ -29,6 +29,7 @@ import {
   Cpu,
   Brain,
   Code,
+  Code2,
   Search,
   ClipboardCheck,
   Scale,
@@ -164,7 +165,8 @@ interface FormData {
 // =============================================================================
 
 const DRIVER_OPTIONS = [
-  { value: 'cli', label: 'Claude CLI', icon: Terminal },
+  { value: 'claude', label: 'Claude CLI', icon: Terminal },
+  { value: 'codex', label: 'Codex CLI', icon: Code2 },
   { value: 'api', label: 'OpenRouter API', icon: Cloud },
 ];
 
@@ -177,9 +179,17 @@ const TRACKER_OPTIONS = [
 /** Default models (Claude CLI) */
 const CLAUDE_MODELS = ['opus', 'sonnet', 'haiku'] as const;
 
+/** Default models (Codex CLI) */
+const CODEX_MODELS = [
+  'gpt-5.3-codex', 'gpt-5.2-codex', 'gpt-5.2', 'gpt-5.1-codex-max',
+  'gpt-5.1-codex', 'gpt-5.1-codex-mini', 'gpt-5.1',
+  'gpt-5-codex', 'gpt-5-codex-mini', 'gpt-5',
+] as const;
+
 /** Model options by driver - API models fetched dynamically via ApiModelSelect */
 const MODEL_OPTIONS_BY_DRIVER: Record<string, readonly string[]> = {
-  'cli': CLAUDE_MODELS,
+  'claude': CLAUDE_MODELS,
+  'codex': CODEX_MODELS,
 };
 
 // =============================================================================
@@ -196,7 +206,7 @@ const buildDefaultAgents = (): Record<string, AgentFormData> => {
   const agents: Record<string, AgentFormData> = {};
   for (const agent of AGENT_DEFINITIONS) {
     agents[agent.key] = {
-      driver: 'cli',
+      driver: 'claude',
       model: agent.defaultModel,
     };
   }
@@ -240,7 +250,7 @@ const profileToFormData = (profile: Profile): FormData => {
 
   for (const agent of AGENT_DEFINITIONS) {
     agents[agent.key] = {
-      driver: profile.agents?.[agent.key]?.driver ?? 'cli',
+      driver: profile.agents?.[agent.key]?.driver ?? 'claude',
       model: profile.agents?.[agent.key]?.model ?? agent.defaultModel,
     };
   }
@@ -306,7 +316,7 @@ function AgentCard({ agent, config, onChange, error }: AgentCardProps) {
         </SelectContent>
       </Select>
 
-      {/* Model select - ApiModelSelect for api driver, simple Select for cli */}
+      {/* Model select - ApiModelSelect for api driver, simple Select for claude */}
       {config.driver === 'api' ? (
         <ApiModelSelect
           agentKey={agent.key}
@@ -345,7 +355,7 @@ interface BulkApplyProps {
 }
 
 function BulkApply({ onApply }: BulkApplyProps) {
-  const [driver, setDriver] = useState('cli');
+  const [driver, setDriver] = useState('claude');
   const [model, setModel] = useState('sonnet');
   const [showSuccess, setShowSuccess] = useState(false);
 
@@ -632,7 +642,7 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
   const handleAgentChange = (agentKey: string, field: 'driver' | 'model', value: string) => {
     setFormData((prev) => {
       const nextAgents = { ...prev.agents };
-      const currentAgent = nextAgents[agentKey] ?? { driver: 'cli', model: 'opus' };
+      const currentAgent = nextAgents[agentKey] ?? { driver: 'claude', model: 'opus' };
       nextAgents[agentKey] = { ...currentAgent, [field]: value };
 
       // When driver changes, reset model to appropriate default
@@ -643,7 +653,7 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
           // Set to empty string until user selects from picker
           updatedAgent.model = '';
         } else {
-          // CLI driver: reset to first available CLI model if current model is invalid
+          // Claude driver: reset to first available Claude model if current model is invalid
           const availableModels = getModelsForDriver(value);
           if (!availableModels.includes(updatedAgent.model)) {
             updatedAgent.model = availableModels[0] ?? '';
@@ -705,7 +715,7 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
     for (const key of ALL_AGENT_KEYS) {
       const agentConfig = formData.agents[key];
       agents[key] = {
-        driver: agentConfig?.driver ?? 'cli',
+        driver: agentConfig?.driver ?? 'claude',
         model: agentConfig?.model ?? '',
       };
     }
@@ -904,7 +914,7 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
                 </div>
                 <div className="grid gap-2 grid-cols-1">
                   {PRIMARY_AGENTS.map((agent) => {
-                    const config = formData.agents[agent.key] ?? { driver: 'cli', model: agent.defaultModel };
+                    const config = formData.agents[agent.key] ?? { driver: 'claude', model: agent.defaultModel };
                     return (
                       <AgentCard
                         key={agent.key}
@@ -937,7 +947,7 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
                 <CollapsibleContent className="pt-3">
                   <div className="grid gap-2 grid-cols-1">
                     {UTILITY_AGENTS.map((agent) => {
-                      const config = formData.agents[agent.key] ?? { driver: 'cli', model: agent.defaultModel };
+                      const config = formData.agents[agent.key] ?? { driver: 'claude', model: agent.defaultModel };
                       return (
                         <AgentCard
                           key={agent.key}

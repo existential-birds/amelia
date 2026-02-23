@@ -5,13 +5,11 @@ providing both single-turn generation and agentic execution capabilities.
 """
 import json
 from collections.abc import AsyncIterator
-from typing import Any, Literal, cast
+from typing import Any, Literal
 
 from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient, ProcessError, query
 from claude_agent_sdk._errors import MessageParseError  # private API, pinned to >=0.1.38
-from claude_agent_sdk._internal.message_parser import (  # private API, pinned to >=0.1.38
-    parse_message as _sdk_parse_message,
-)
+from claude_agent_sdk._internal.message_parser import parse_message as _sdk_parse_message
 from claude_agent_sdk.types import (
     AssistantMessage,
     Message,
@@ -28,7 +26,14 @@ from pydantic import BaseModel, ValidationError
 
 from amelia.core.constants import CANONICAL_TO_CLI, normalize_tool_name
 from amelia.core.exceptions import ModelProviderError
-from amelia.drivers.base import AgenticMessage, AgenticMessageType, DriverUsage, GenerateResult
+from amelia.drivers.base import (
+    AgenticMessage,
+    AgenticMessageType,
+    DriverInterface,
+    DriverUsage,
+    GenerateResult,
+)
+from amelia.drivers.cli.utils import strip_markdown_fences
 from amelia.logging import log_claude_result
 
 
@@ -40,43 +45,6 @@ from amelia.logging import log_claude_result
 # We blank them explicitly because the SDK merges options.env on top of
 # os.environ — omitting a key doesn't remove it.
 _NESTED_SESSION_OVERRIDES = {"CLAUDECODE": "", "CLAUDE_CODE_ENTRYPOINT": ""}
-
-# Flag to track whether SDK internal API has been validated with a real client
-_sdk_internal_api_validated = False
-
-
-def _validate_sdk_internal_api(client: ClaudeSDKClient) -> None:
-    """Validate SDK internal API availability on first use.
-
-    Checks that the private SDK APIs we depend on exist, raising RuntimeError
-    if the SDK has changed incompatibly. Called once on first client use rather
-    than on every message stream access.
-
-    Args:
-        client: An active ClaudeSDKClient instance to validate against.
-
-    Raises:
-        RuntimeError: If the SDK internal API has changed.
-    """
-    global _sdk_internal_api_validated
-    if _sdk_internal_api_validated:
-        return
-
-    client_query = getattr(client, "_query", None)
-    if client_query is None:
-        raise RuntimeError(
-            "Claude SDK internal API changed: ClaudeSDKClient no longer has _query attribute. "
-            "Update amelia to use the new SDK API, or pin claude-agent-sdk to a compatible version."
-        )
-
-    receive_fn = getattr(client_query, "receive_messages", None)
-    if receive_fn is None:
-        raise RuntimeError(
-            "Claude SDK internal API changed: _query.receive_messages() no longer exists. "
-            "Update amelia to use the new SDK API, or pin claude-agent-sdk to a compatible version."
-        )
-
-    _sdk_internal_api_validated = True
 
 
 def _build_sanitized_env() -> dict[str, str]:
@@ -96,40 +64,6 @@ def _sanitize_stderr(stderr: str, max_len: int = 1000) -> str:
     return snippet
 
 
-def _strip_markdown_fences(text: str) -> str:
-    """Strip markdown code fences from text if present.
-
-    Handles common patterns like:
-    - ```json\n{...}\n```
-    - ```\n{...}\n```
-
-    Args:
-        text: Text that may contain markdown code fences.
-
-    Returns:
-        Text with code fences stripped, or original text if no fences found.
-    """
-    stripped = text.strip()
-
-    # Check for fenced code block pattern
-    if stripped.startswith("```"):
-        lines = stripped.split("\n")
-
-        # Find the opening fence (first line starting with ```)
-        if lines and lines[0].startswith("```"):
-            # Find the closing fence
-            end_idx = -1
-            for i in range(len(lines) - 1, 0, -1):
-                if lines[i].strip() == "```":
-                    end_idx = i
-                    break
-
-            if end_idx > 0:
-                # Extract content between fences
-                content_lines = lines[1:end_idx]
-                return "\n".join(content_lines).strip()
-
-    return text
 
 
 # Phrases that indicate Claude is asking for clarification rather than producing output
@@ -259,29 +193,9 @@ def _handle_parse_error(e: MessageParseError) -> None:
     logger.debug(
         "Skipping unknown SDK message type",
         error_message=str(e),
-        raw_type=msg_type,
-        raw_keys=list(data) if isinstance(data, dict) else None,
+        raw_data=data,
     )
 
-
-def _get_raw_message_stream(
-    client: ClaudeSDKClient,
-) -> "AsyncIterator[dict[str, Any]]":
-    """Get the raw (unparsed) message stream from the SDK client.
-
-    Returns the internal message stream that yields raw dicts before parsing.
-    This is needed because the public receive_messages() API parses inside the
-    async generator, and parse errors permanently exhaust the generator.
-
-    This function encapsulates the private API access to make it easier to
-    update if/when the SDK provides a public alternative.
-
-    Requires _validate_sdk_internal_api() to have been called first.
-    """
-    # Access validated internal API. The SDK doesn't expose a public API for
-    # raw message streams, so we access the internal _query attribute.
-    # Validation is done once at startup via _validate_sdk_internal_api().
-    return cast("AsyncIterator[dict[str, Any]]", client._query.receive_messages())  # type: ignore[union-attr]
 
 
 async def _safe_receive_response(
@@ -295,24 +209,37 @@ async def _safe_receive_response(
     That means our outer try/except never sees a second message — the stream dies.
 
     This helper bypasses the problem by reading raw dicts from the transport
-    layer and calling ``parse_message`` ourselves *outside* the generator body.
-    Parse failures are logged and skipped without killing the underlying stream.
+    layer (``client._query.receive_messages()``) and calling ``parse_message``
+    ourselves *outside* the generator body.  Parse failures are logged and
+    skipped without killing the underlying stream.
     """
-    _validate_sdk_internal_api(client)  # Validates once, no-op on subsequent calls
-    raw_messages = _get_raw_message_stream(client)
-    async for raw in raw_messages:
-        try:
-            message = _sdk_parse_message(raw)
-        except MessageParseError as e:
-            _handle_parse_error(e)
-            continue
+    # Access the internal query's raw message stream (yields plain dicts).
+    # We call parse_message ourselves so a failure doesn't kill the generator.
+    raw_messages = client._query.receive_messages()  # type: ignore[union-attr]
+    raw_iter = raw_messages.__aiter__()
+    try:
+        while True:
+            try:
+                raw = await raw_iter.__anext__()
+            except StopAsyncIteration:
+                break
 
-        yield message
-        if isinstance(message, ResultMessage):
-            return
+            try:
+                message = _sdk_parse_message(raw)
+            except MessageParseError as e:
+                _handle_parse_error(e)
+                continue
+
+            yield message
+            if isinstance(message, ResultMessage):
+                return
+    finally:
+        aclose = getattr(raw_iter, "aclose", None)
+        if aclose is not None:
+            await aclose()
 
 
-class ClaudeCliDriver:
+class ClaudeCliDriver(DriverInterface):
     """Claude CLI Driver using the claude-agent-sdk.
 
     This driver wraps the Claude CLI via the official SDK, providing both
@@ -512,7 +439,7 @@ class ClaudeCliDriver:
                     # Fallback: try to parse result as JSON
                     # Strip markdown code fences if present (Claude sometimes wraps JSON in ```)
                     try:
-                        stripped_result = _strip_markdown_fences(result_message.result)
+                        stripped_result = strip_markdown_fences(result_message.result)
                         data = json.loads(stripped_result)
                     except json.JSONDecodeError:
                         # Model returned text instead of structured JSON
@@ -536,7 +463,10 @@ class ClaudeCliDriver:
                 else:
                     raise RuntimeError("Claude SDK returned no output for schema request")
 
-                # Fix: If the model expects a wrapped "tasks" list but CLI returns a raw list, wrap it.
+                # Workaround: Some Claude CLI versions return unwrapped lists when the schema
+                # expects {"tasks": [...]}, causing validation to fail. This wraps raw lists
+                # when the schema has a "tasks" field at the root level.
+                # Required for: claude-cli-sdk <= 0.2.x (may be fixed in future versions)
                 if isinstance(data, list) and "tasks" in schema.model_fields:
                     data = {"tasks": data}
 

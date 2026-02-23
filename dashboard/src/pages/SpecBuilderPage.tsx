@@ -121,6 +121,19 @@ function SpecBuilderPageContent() {
   const [configProfileInfo, setConfigProfileInfo] = useState<ConfigProfileInfo | null>(null);
   const activeProfileRef = useRef<string>("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const prevIsStreamingRef = useRef(isStreaming);
+
+  // Auto-focus input when agent finishes responding
+  // Skip if the last message has askUserQuestions — focus should go to the question card instead
+  useEffect(() => {
+    if (prevIsStreamingRef.current && !isStreaming) {
+      const lastMessage = messages[messages.length - 1];
+      if (!lastMessage || !('askUserQuestions' in lastMessage)) {
+        textareaRef.current?.focus();
+      }
+    }
+    prevIsStreamingRef.current = isStreaming;
+  }, [isStreaming, messages]);
 
   // Load sessions and config on mount
   useEffect(() => {

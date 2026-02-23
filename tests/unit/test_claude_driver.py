@@ -20,8 +20,8 @@ from amelia.drivers.cli.claude import (
     ClaudeCliDriver,
     _build_sanitized_env,
     _is_clarification_request,
-    _strip_markdown_fences,
 )
+from amelia.drivers.cli.utils import strip_markdown_fences
 
 
 # =============================================================================
@@ -615,9 +615,6 @@ class TestClaudeCliDriverAgentic:
         """MessageParseError (e.g. rate_limit_event) is skipped; agentic execution continues."""
         from claude_agent_sdk._errors import MessageParseError
 
-        class _InjectErrorIterator:
-            """Async iterator that injects a MessageParseError between real messages."""
-
         # _safe_receive_response reads from _query.receive_messages() (raw dicts)
         # and calls _sdk_parse_message on each. We inject a sentinel that makes
         # the parse function raise MessageParseError, simulating an unknown type.
@@ -631,6 +628,7 @@ class TestClaudeCliDriverAgentic:
             if raw is _UNPARSEABLE:
                 raise MessageParseError("Unknown message type: rate_limit_event")
             return raw
+
 
         async def mock_raw_receive() -> AsyncIterator[Any]:
             for item in raw_items:
@@ -814,25 +812,25 @@ class TestStripMarkdownFences:
     def test_strip_json_fence(self) -> None:
         """Should strip ```json fences."""
         text = '```json\n{"answer": 4, "explanation": "2+2=4"}\n```'
-        result = _strip_markdown_fences(text)
+        result = strip_markdown_fences(text)
         assert result == '{"answer": 4, "explanation": "2+2=4"}'
 
     def test_strip_plain_fence(self) -> None:
         """Should strip plain ``` fences without language identifier."""
         text = '```\n{"key": "value"}\n```'
-        result = _strip_markdown_fences(text)
+        result = strip_markdown_fences(text)
         assert result == '{"key": "value"}'
 
     def test_strip_fence_with_whitespace(self) -> None:
         """Should handle leading/trailing whitespace."""
         text = '  \n```json\n{"data": true}\n```\n  '
-        result = _strip_markdown_fences(text)
+        result = strip_markdown_fences(text)
         assert result == '{"data": true}'
 
     def test_no_fence_returns_original(self) -> None:
         """Should return original text if no fences present."""
         text = '{"answer": 42}'
-        result = _strip_markdown_fences(text)
+        result = strip_markdown_fences(text)
         assert result == '{"answer": 42}'
 
     def test_multiline_json_content(self) -> None:
@@ -843,7 +841,7 @@ class TestStripMarkdownFences:
     "explanation": "Two plus two equals four"
 }
 ```'''
-        result = _strip_markdown_fences(text)
+        result = strip_markdown_fences(text)
         expected = '''{
     "answer": 4,
     "explanation": "Two plus two equals four"
@@ -853,7 +851,7 @@ class TestStripMarkdownFences:
     def test_fence_without_closing(self) -> None:
         """Should return original if closing fence is missing."""
         text = '```json\n{"incomplete": true}'
-        result = _strip_markdown_fences(text)
+        result = strip_markdown_fences(text)
         assert result == text
 
 

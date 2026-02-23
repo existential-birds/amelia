@@ -29,7 +29,8 @@ DEFAULT_NETWORK_ALLOWED_HOSTS: tuple[str, ...] = (
 class DriverType(StrEnum):
     """LLM driver type for agent configuration."""
 
-    CLI = "cli"
+    CLAUDE = "claude"
+    CODEX = "codex"
     API = "api"
 
 
@@ -72,7 +73,7 @@ class AgentConfig(BaseModel):
     """Per-agent driver and model configuration.
 
     Attributes:
-        driver: LLM driver type ('api' or 'cli').
+        driver: LLM driver type ('claude', 'codex', or 'api').
         model: LLM model identifier.
         options: Agent-specific options (e.g., max_iterations).
         sandbox: Sandbox execution config (injected by Profile.get_agent_config).

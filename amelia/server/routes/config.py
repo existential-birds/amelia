@@ -17,7 +17,7 @@ class ProfileInfo(BaseModel):
     """
 
     name: str = Field(description="Profile name")
-    driver: str = Field(description="Driver type ('api' or 'cli')")
+    driver: str = Field(description="Driver type ('api', 'claude', or 'codex')")
     model: str = Field(description="Model name")
 
 

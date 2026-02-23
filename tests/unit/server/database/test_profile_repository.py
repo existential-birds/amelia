@@ -13,7 +13,7 @@ pytestmark = pytest.mark.integration
 
 
 def _make_agents_json(
-    driver: str = "cli",
+    driver: str = "claude",
     model: str = "opus",
     validator_model: str = "haiku",
 ) -> str:
@@ -26,7 +26,7 @@ def _make_agents_json(
 
 
 def _make_agents(
-    driver: str = "cli",
+    driver: str = "claude",
     model: str = "opus",
     validator_model: str = "haiku",
 ) -> dict[str, AgentConfig]:
@@ -41,8 +41,8 @@ def _make_agents(
 def test_profile_record_with_agents_json():
     """ProfileRecord should store agents as JSON."""
     agents = {
-        "architect": {"driver": "cli", "model": "opus", "options": {}},
-        "developer": {"driver": "cli", "model": "sonnet", "options": {}},
+        "architect": {"driver": "claude", "model": "opus", "options": {}},
+        "developer": {"driver": "claude", "model": "sonnet", "options": {}},
     }
 
     record = ProfileRecord(
@@ -61,8 +61,8 @@ def test_row_to_profile_parses_agents_json():
     """_row_to_profile should parse agents JSONB into AgentConfig dict."""
     # JSONB codec returns dicts directly from asyncpg
     agents_data = {
-        "architect": {"driver": "cli", "model": "opus", "options": {}},
-        "developer": {"driver": "cli", "model": "sonnet", "options": {}},
+        "architect": {"driver": "claude", "model": "opus", "options": {}},
+        "developer": {"driver": "claude", "model": "sonnet", "options": {}},
     }
 
     mock_row = {
@@ -96,7 +96,7 @@ async def test_create_profile_stores_agents_json(db_with_schema):
         tracker="noop",
         repo_root="/tmp/test",
         agents={
-            "architect": AgentConfig(driver="cli", model="opus"),
+            "architect": AgentConfig(driver="claude", model="opus"),
             "developer": AgentConfig(driver="api", model="anthropic/claude-sonnet-4"),
         },
     )
@@ -130,12 +130,12 @@ class TestProfileRepository:
                 name="dev",
                 tracker="noop",
                 repo_root="/path/to/repo",
-                agents=_make_agents(driver="cli", model="opus"),
+                agents=_make_agents(driver="claude", model="opus"),
             )
         )
         # Repository returns Profile (converted from DB)
         assert profile.name == "dev"
-        assert profile.agents["architect"].driver == "cli"
+        assert profile.agents["architect"].driver == "claude"
 
     async def test_get_profile(self, repo: ProfileRepository):
         """Verify profile retrieval."""
@@ -163,7 +163,7 @@ class TestProfileRepository:
                 name="dev",
                 tracker="noop",
                 repo_root="/repo1",
-                agents=_make_agents(driver="cli", model="opus"),
+                agents=_make_agents(driver="claude", model="opus"),
             )
         )
         await repo.create_profile(
@@ -191,9 +191,9 @@ class TestProfileRepository:
         )
         # update_profile accepts dict for agents (JSONB codec handles encoding)
         new_agents = {
-            "architect": {"driver": "cli", "model": "sonnet", "options": {}},
-            "developer": {"driver": "cli", "model": "sonnet", "options": {}},
-            "reviewer": {"driver": "cli", "model": "haiku", "options": {}},
+            "architect": {"driver": "claude", "model": "sonnet", "options": {}},
+            "developer": {"driver": "claude", "model": "sonnet", "options": {}},
+            "reviewer": {"driver": "claude", "model": "haiku", "options": {}},
         }
         updated = await repo.update_profile("dev", {"agents": new_agents})
         assert updated.agents["architect"].model == "sonnet"
@@ -244,7 +244,7 @@ class TestProfileRepository:
                 name="dev",
                 tracker="noop",
                 repo_root="/repo1",
-                agents=_make_agents(driver="cli", model="opus"),
+                agents=_make_agents(driver="claude", model="opus"),
             )
         )
         await repo.create_profile(

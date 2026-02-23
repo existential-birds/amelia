@@ -16,7 +16,7 @@ from amelia.server.routes.workflows import configure_exception_handlers
 def _create_mock_profile_repo(repo_root: Path) -> MagicMock:
     """Create a mock profile repository with an active profile pointing to repo_root."""
     repo = MagicMock()
-    agent_config = AgentConfig(driver="cli", model="claude-3-5-sonnet")
+    agent_config = AgentConfig(driver="claude", model="claude-3-5-sonnet")
     repo.get_active_profile = AsyncMock(
         return_value=Profile(
             name="test",

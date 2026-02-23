@@ -172,7 +172,7 @@ active_profile: test
 profiles:
   test:
     name: test
-    driver: "cli"
+    driver: "claude"
     model: sonnet
     validator_model: sonnet
     tracker: noop
@@ -486,7 +486,7 @@ active_profile: test
 profiles:
   test:
     name: test
-    driver: "cli"
+    driver: "claude"
     model: sonnet
     validator_model: sonnet
     tracker: noop
@@ -554,7 +554,7 @@ active_profile: test
 profiles:
   test:
     name: test
-    driver: "cli"
+    driver: "claude"
     model: sonnet
     validator_model: sonnet
     tracker: noop
@@ -628,7 +628,7 @@ active_profile: test
 profiles:
   test:
     name: test
-    driver: "cli"
+    driver: "claude"
     model: sonnet
     validator_model: sonnet
     tracker: noop
@@ -699,7 +699,7 @@ active_profile: test
 profiles:
   test:
     name: test
-    driver: "cli"
+    driver: "claude"
     model: sonnet
     validator_model: sonnet
     tracker: noop
@@ -777,7 +777,7 @@ active_profile: test
 profiles:
   test:
     name: test
-    driver: "cli"
+    driver: "claude"
     model: sonnet
     validator_model: sonnet
     tracker: noop
@@ -831,7 +831,7 @@ active_profile: test
 profiles:
   test:
     name: test
-    driver: "cli"
+    driver: "claude"
     model: sonnet
     validator_model: sonnet
     tracker: noop
@@ -909,7 +909,7 @@ active_profile: test
 profiles:
   test:
     name: test
-    driver: "cli"
+    driver: "claude"
     model: sonnet
     validator_model: sonnet
     tracker: noop

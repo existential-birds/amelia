@@ -818,7 +818,7 @@ export interface ConfigProfileInfo {
   /** Profile name. */
   name: string;
 
-  /** Driver type ('api' or 'cli'). */
+  /** Driver type ('api', 'claude', or 'codex'). */
   driver: string;
 
   /** Model name. */

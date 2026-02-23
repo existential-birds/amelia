@@ -8,6 +8,7 @@ import asyncio
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 
@@ -608,7 +609,6 @@ class BrainstormService:
             # Invoke driver and stream events
             assistant_content_parts: list[str] = []
             driver_session_id: str | None = None
-            pending_write_files: dict[str, str] = {}  # tool_call_id -> path
             suppressed_tool_ids: set[str] = set()  # tool calls converted to text
 
             # Resolve plan path from profile settings
@@ -618,10 +618,19 @@ class BrainstormService:
                 if profile is not None:
                     plan_path_pattern = profile.plan_path_pattern
 
-            topic_slug = slugify(session.topic) if session.topic else ""
-            if not topic_slug:
-                topic_slug = f"brainstorm-{str(session_id)[:8]}"
-            plan_path = resolve_plan_path(plan_path_pattern, topic_slug)
+            if is_first_message or not session.output_artifact_path:
+                sid_prefix = str(session_id)[:8]
+                topic_slug = slugify(session.topic) if session.topic else ""
+                if topic_slug:
+                    topic_slug = f"{topic_slug}-{sid_prefix}"
+                else:
+                    topic_slug = f"brainstorm-{sid_prefix}"
+                plan_path = resolve_plan_path(plan_path_pattern, topic_slug)
+                session.output_artifact_path = plan_path
+                session.updated_at = datetime.now(UTC)
+                await self._repository.update_session(session)
+            else:
+                plan_path = session.output_artifact_path
             instructions = _build_brainstormer_instructions(plan_path)
 
             # Create restricted middleware for brainstormer
@@ -659,104 +668,21 @@ class BrainstormService:
                 self._event_bus.emit(event)
                 yield event
 
-                # Track write_design_doc tool calls for artifact detection
-                # Also track write_file for backwards compatibility
-                # DEBUG: Log all TOOL_CALL events to diagnose artifact detection
-                if agentic_msg.type == AgenticMessageType.TOOL_CALL:
-                    is_write_tool = agentic_msg.tool_name in (
-                        "write_design_doc",
-                        "write_file",
-                    )
-                    logger.debug(
-                        "Artifact detection: TOOL_CALL received",
-                        tool_name=agentic_msg.tool_name,
-                        tool_call_id=agentic_msg.tool_call_id,
-                        has_tool_input=agentic_msg.tool_input is not None,
-                        tool_input_type=type(agentic_msg.tool_input).__name__,
-                        is_write_tool=is_write_tool,
-                    )
-                    # Log full tool_input for write tools to diagnose parameter issues
-                    if is_write_tool and agentic_msg.tool_input:
-                        logger.debug(
-                            "Artifact detection: write tool_input details",
-                            tool_input=agentic_msg.tool_input,
-                        )
-
-                if (
-                    agentic_msg.type == AgenticMessageType.TOOL_CALL
-                    and agentic_msg.tool_name in ("write_design_doc", "write_file")
-                    and agentic_msg.tool_call_id
-                    and agentic_msg.tool_input
-                ):
-                    # Tool uses file_path parameter
-                    # Also check common variations: filename, filepath, target_path
-                    path = (
-                        agentic_msg.tool_input.get("file_path")
-                        or agentic_msg.tool_input.get("path")
-                        or agentic_msg.tool_input.get("filename")
-                        or agentic_msg.tool_input.get("filepath")
-                        or agentic_msg.tool_input.get("target_path")
-                    )
-                    if path:
-                        pending_write_files[agentic_msg.tool_call_id] = path
-                        logger.debug(
-                            "Artifact detection: tracked write tool call",
-                            tool_name=agentic_msg.tool_name,
-                            tool_call_id=agentic_msg.tool_call_id,
-                            path=path,
-                            tool_input_keys=list(agentic_msg.tool_input.keys()),
-                        )
-                    else:
-                        logger.warning(
-                            "Artifact detection: write tool call missing path",
-                            tool_name=agentic_msg.tool_name,
-                            tool_call_id=agentic_msg.tool_call_id,
-                            tool_input=agentic_msg.tool_input,
-                        )
-
-                # Detect successful write completions and create artifacts
-                if agentic_msg.type == AgenticMessageType.TOOL_RESULT:
-                    pending_ids = list(pending_write_files.keys())
-                    id_match = agentic_msg.tool_call_id in pending_write_files
-                    logger.debug(
-                        "Artifact detection: tool result received",
-                        tool_name=agentic_msg.tool_name,
-                        tool_call_id=agentic_msg.tool_call_id,
-                        is_error=agentic_msg.is_error,
-                        pending_ids=pending_ids,
-                        id_match=id_match,
-                    )
-                    # If IDs don't match but we have pending writes, log for diagnosis
-                    if not id_match and pending_ids:
-                        logger.warning(
-                            "Artifact detection: tool_call_id mismatch",
-                            result_id=agentic_msg.tool_call_id,
-                            pending_ids=pending_ids,
-                            result_id_type=type(agentic_msg.tool_call_id).__name__,
-                        )
-
-                if (
-                    agentic_msg.type == AgenticMessageType.TOOL_RESULT
-                    and agentic_msg.tool_call_id in pending_write_files
-                    and not agentic_msg.is_error
-                ):
-                    path = pending_write_files.pop(agentic_msg.tool_call_id)
-                    logger.info(
-                        "Artifact detection: creating artifact from write result",
-                        tool_call_id=agentic_msg.tool_call_id,
-                        path=path,
-                    )
-                    artifact_event = await self._create_artifact_from_path(
-                        session_id, path
-                    )
-                    yield artifact_event
-
                 # Collect result content and session ID
                 if agentic_msg.type == AgenticMessageType.RESULT:
                     if agentic_msg.content:
                         assistant_content_parts.append(agentic_msg.content)
                     if agentic_msg.session_id:
                         driver_session_id = agentic_msg.session_id
+
+            # Detect artifact by checking if the agent wrote the plan file
+            abs_plan_path = Path(cwd) / plan_path
+            if abs_plan_path.is_file():
+                logger.info("Artifact detected", plan_path=plan_path)
+                artifact_event = await self._create_artifact_from_path(
+                    session_id, plan_path
+                )
+                yield artifact_event
 
             # Update driver session ID if we got one
             if driver_session_id and driver_session_id != session.driver_session_id:

@@ -15,14 +15,13 @@ import {
   Trash2,
   Star,
   Folder,
-  Terminal,
-  Cloud,
   Brain,
   Code,
   Search,
   Shield,
   MoreHorizontal,
 } from 'lucide-react';
+import { getDriverIcon, getDriverStyle } from '@/utils/driver-colors';
 import {
   Tooltip,
   TooltipContent,
@@ -58,11 +57,6 @@ const MODEL_COLORS = {
   haiku: 'text-muted-foreground',
 } as const;
 
-/** Get driver icon component */
-const getDriverIcon = (driver: string) => {
-  return driver.startsWith('cli:') ? Terminal : Cloud;
-};
-
 /** Get model display color */
 const getModelColor = (model: string): string => {
   // Check for known tiers
@@ -89,7 +83,7 @@ export const ProfileCard = forwardRef<HTMLDivElement, ProfileCardProps>(
   const primaryAgents = ['architect', 'developer', 'reviewer'] as const;
   const agentConfigs = primaryAgents.map(key => ({
     key,
-    driver: profile.agents?.[key]?.driver ?? 'cli',
+    driver: profile.agents?.[key]?.driver ?? 'claude',
     model: profile.agents?.[key]?.model ?? 'unknown',
   }));
 
@@ -103,6 +97,7 @@ export const ProfileCard = forwardRef<HTMLDivElement, ProfileCardProps>(
   const firstConfig = agentConfigs[0]!;
   const allSameDriver = agentConfigs.every(a => a.driver === firstConfig.driver);
   const primaryDriver = firstConfig.driver;
+  const primaryDriverStyle = getDriverStyle(primaryDriver);
   const DriverIcon = getDriverIcon(primaryDriver);
 
   const handleCardClick = () => {
@@ -191,12 +186,7 @@ export const ProfileCard = forwardRef<HTMLDivElement, ProfileCardProps>(
           <div className="flex items-center gap-2">
             <Badge
               variant="outline"
-              className={cn(
-                'text-xs',
-                primaryDriver.startsWith('cli:')
-                  ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/30'
-                  : 'bg-blue-500/10 text-blue-500 border-blue-500/30'
-              )}
+              className={cn('text-xs', primaryDriverStyle.bg, primaryDriverStyle.text, primaryDriverStyle.border)}
             >
               <DriverIcon className="mr-1 h-3 w-3" />
               {primaryDriver}

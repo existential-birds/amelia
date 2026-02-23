@@ -23,7 +23,7 @@ class TestBrainstormDriverConfig:
             tracker="noop",
             repo_root="/tmp/test",
             agents={
-                "brainstormer": AgentConfig(driver="cli", model="sonnet"),
+                "brainstormer": AgentConfig(driver="claude", model="sonnet"),
             },
         )
 
@@ -58,7 +58,7 @@ class TestBrainstormDriverConfig:
             result = await get_brainstorm_driver()
 
             # Verify factory_get_driver was called with brainstormer config
-            mock_factory.assert_called_once_with("cli", model="sonnet")
+            mock_factory.assert_called_once_with("claude", model="sonnet")
             assert result is mock_driver
 
     @pytest.mark.asyncio
@@ -91,7 +91,7 @@ class TestBrainstormDriverConfig:
             result = await get_brainstorm_driver()
 
             # Should fallback to cli without model
-            mock_factory.assert_called_once_with("cli")
+            mock_factory.assert_called_once_with("claude")
             assert result is mock_driver
 
 

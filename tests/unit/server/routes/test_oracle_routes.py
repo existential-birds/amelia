@@ -55,7 +55,7 @@ class TestOracleConsultRoute:
         mock_profile = Profile(
             name="test",
             repo_root=work_dir,
-            agents={"oracle": AgentConfig(driver="cli", model="sonnet")},
+            agents={"oracle": AgentConfig(driver="claude", model="sonnet")},
         )
         mock_profile_repo.get_active_profile.return_value = mock_profile
 
@@ -93,7 +93,7 @@ class TestOracleConsultRoute:
         mock_profile = Profile(
             name="test",
             repo_root="/home/user/projects",
-            agents={"oracle": AgentConfig(driver="cli", model="sonnet")},
+            agents={"oracle": AgentConfig(driver="claude", model="sonnet")},
         )
         mock_profile_repo.get_active_profile.return_value = mock_profile
 

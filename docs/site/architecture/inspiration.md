@@ -39,7 +39,7 @@ Industrial framework deployed in JIRA with a three-agent architecture (Planner, 
 
 Introduces a custom agent-computer interface (ACI) designed for LLM agents to navigate repositories, create/edit code, and execute tests. LLM agents benefit from specialized interfaces tailored to their capabilities, not raw terminal access.
 
-**Key influence:** Amelia's driver abstraction (`api` vs `cli`) reflects the same principle — the interface between agent and environment matters as much as agent capability. Profile-based tool configuration lets each agent get the interface it needs.
+**Key influence:** Amelia's driver abstraction (`api` vs `claude` vs `codex`) reflects the same principle — the interface between agent and environment matters as much as agent capability. Profile-based tool configuration lets each agent get the interface it needs.
 
 ### Agent Reasoning & Evaluation
 
@@ -159,7 +159,7 @@ Argues that the filesystem is the most underrated tool for agent memory and coor
 
 Introduced **Harness as a Service (HaaS)**, arguing that agent infrastructure is commoditizing. A harness provides complete runtime environments (context management, tool invocation, permissions, loop control) so developers can focus on domain specialization rather than building infrastructure from scratch.
 
-**Key influence:** Amelia's driver abstraction (`api` vs `cli`), profile-based configuration, and multi-agent architecture (Architect, Developer, Reviewer as specialized subagents).
+**Key influence:** Amelia's driver abstraction (`api` vs `claude` vs `codex`), profile-based configuration, and multi-agent architecture (Architect, Developer, Reviewer as specialized subagents).
 
 ### [Ralph Wiggum as a Software Engineer](https://ghuntley.com/ralph/)
 *by Geoffrey Huntley*

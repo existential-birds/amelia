@@ -345,11 +345,11 @@ class TestSendMessage(TestBrainstormService):
 
 
 class TestArtifactDetection(TestBrainstormService):
-    """Test artifact detection from tool results."""
+    """Test artifact detection via filesystem check after driver completes."""
 
     @pytest.fixture
-    def mock_driver_with_write(self) -> MagicMock:
-        """Create mock driver that writes a file using 'path' key."""
+    def mock_driver_result_only(self) -> MagicMock:
+        """Create mock driver that only yields a RESULT (no tool events)."""
         driver = MagicMock()
 
         async def mock_execute_agentic(
@@ -357,18 +357,6 @@ class TestArtifactDetection(TestBrainstormService):
         ) -> AsyncIterator[AgenticMessage]:
             from amelia.drivers.base import AgenticMessageType
 
-            yield AgenticMessage(
-                type=AgenticMessageType.TOOL_CALL,
-                tool_name="write_file",
-                tool_input={"path": "docs/plans/2026-01-18-cache-design.md"},
-                tool_call_id="call-1",
-            )
-            yield AgenticMessage(
-                type=AgenticMessageType.TOOL_RESULT,
-                tool_name="write_file",
-                tool_output="File written successfully",
-                tool_call_id="call-1",
-            )
             yield AgenticMessage(
                 type=AgenticMessageType.RESULT,
                 content="I've written the design document.",
@@ -378,110 +366,117 @@ class TestArtifactDetection(TestBrainstormService):
         driver.execute_agentic = mock_execute_agentic
         return driver
 
-    @pytest.fixture
-    def mock_cli_driver_with_write(self) -> MagicMock:
-        """Create mock driver simulating CLI driver format with 'file_path' key.
-
-        This matches what the real CLI driver produces when Claude Code's
-        Write tool is used.
-        """
-        driver = MagicMock()
-
-        async def mock_execute_agentic(
-            *args: object, **kwargs: object
-        ) -> AsyncIterator[AgenticMessage]:
-            from amelia.drivers.base import AgenticMessageType
-
-            # CLI driver normalizes "Write" -> "write_file"
-            # CLI driver passes block.input directly: {"file_path": "...", "content": "..."}
-            yield AgenticMessage(
-                type=AgenticMessageType.TOOL_CALL,
-                tool_name="write_file",
-                tool_input={"file_path": "/tmp/test-project/docs/spec.md", "content": "# Spec"},
-                tool_call_id="toolu_01ABC123",
-            )
-            yield AgenticMessage(
-                type=AgenticMessageType.TOOL_RESULT,
-                tool_name="write_file",
-                tool_output="File written successfully",
-                tool_call_id="toolu_01ABC123",
-            )
-            yield AgenticMessage(
-                type=AgenticMessageType.RESULT,
-                content="I've written the spec document.",
-                session_id="sess-cli-xyz",
-            )
-
-        driver.execute_agentic = mock_execute_agentic
-        return driver
-
-    async def test_detects_artifact_from_write_file(
-        self,
-        service: BrainstormService,
-        mock_repository: MagicMock,
-        mock_event_bus: MagicMock,
-        mock_driver_with_write: MagicMock,
-    ) -> None:
-        """Should save artifact when write_file tool is used."""
+    def _make_session(self, sess_id: UUID) -> BrainstormingSession:
         now = datetime.now(UTC)
-        sess_id = uuid4()
-        mock_session = BrainstormingSession(
+        return BrainstormingSession(
             id=sess_id,
             profile_id="work",
             status=SessionStatus.ACTIVE,
             created_at=now,
             updated_at=now,
         )
-        mock_repository.get_session.return_value = mock_session
+
+    async def test_detects_artifact_when_plan_file_exists(
+        self,
+        service: BrainstormService,
+        mock_repository: MagicMock,
+        mock_event_bus: MagicMock,
+        mock_driver_result_only: MagicMock,
+        tmp_path: object,
+    ) -> None:
+        """Should save artifact when the plan file exists on disk after driver completes."""
+        from pathlib import Path
+        from unittest.mock import patch
+
+        sess_id = uuid4()
+        mock_repository.get_session.return_value = self._make_session(sess_id)
         mock_repository.get_max_sequence.return_value = 0
 
-        messages = []
-        async for msg in service.send_message(
-            session_id=sess_id,
-            content="Write the design doc",
-            driver=mock_driver_with_write,
-            cwd="/tmp/project",
-        ):
-            messages.append(msg)
+        # Patch Path.is_file to return True for the plan path
+        original_is_file = Path.is_file
 
-        # Verify artifact was saved
+        def fake_is_file(self: Path) -> bool:
+            if "docs/plans/" in str(self):
+                return True
+            return original_is_file(self)
+
+        with patch.object(Path, "is_file", fake_is_file):
+            messages = []
+            async for msg in service.send_message(
+                session_id=sess_id,
+                content="Design a caching layer",
+                driver=mock_driver_result_only,
+                cwd="/tmp/project",
+            ):
+                messages.append(msg)
+
         mock_repository.save_artifact.assert_called_once()
         artifact = mock_repository.save_artifact.call_args[0][0]
-        assert artifact.path == "docs/plans/2026-01-18-cache-design.md"
-        assert artifact.type == "design"  # Inferred from path
+        assert "docs/plans/" in artifact.path
 
-    async def test_emits_artifact_created_event(
+    async def test_no_artifact_when_plan_file_missing(
         self,
         service: BrainstormService,
         mock_repository: MagicMock,
         mock_event_bus: MagicMock,
-        mock_driver_with_write: MagicMock,
+        mock_driver_result_only: MagicMock,
     ) -> None:
-        """Should emit BRAINSTORM_ARTIFACT_CREATED event."""
-        from amelia.server.models.events import EventType
+        """Should not save artifact when the plan file does not exist on disk."""
+        from pathlib import Path
+        from unittest.mock import patch
 
-        now = datetime.now(UTC)
         sess_id = uuid4()
-        mock_session = BrainstormingSession(
-            id=sess_id,
-            profile_id="work",
-            status=SessionStatus.ACTIVE,
-            created_at=now,
-            updated_at=now,
-        )
-        mock_repository.get_session.return_value = mock_session
+        mock_repository.get_session.return_value = self._make_session(sess_id)
         mock_repository.get_max_sequence.return_value = 0
 
-        messages = []
-        async for msg in service.send_message(
-            session_id=sess_id,
-            content="Write the design doc",
-            driver=mock_driver_with_write,
-            cwd="/tmp/project",
-        ):
-            messages.append(msg)
+        # Path.is_file returns False by default for non-existent paths,
+        # but be explicit
+        with patch.object(Path, "is_file", return_value=False):
+            messages = []
+            async for msg in service.send_message(
+                session_id=sess_id,
+                content="Design a caching layer",
+                driver=mock_driver_result_only,
+                cwd="/tmp/nonexistent",
+            ):
+                messages.append(msg)
 
-        # Find artifact created event
+        mock_repository.save_artifact.assert_not_called()
+
+    async def test_artifact_created_event_emitted(
+        self,
+        service: BrainstormService,
+        mock_repository: MagicMock,
+        mock_event_bus: MagicMock,
+        mock_driver_result_only: MagicMock,
+    ) -> None:
+        """Should emit BRAINSTORM_ARTIFACT_CREATED event when plan file exists."""
+        from pathlib import Path
+        from unittest.mock import patch
+
+        from amelia.server.models.events import EventType
+
+        sess_id = uuid4()
+        mock_repository.get_session.return_value = self._make_session(sess_id)
+        mock_repository.get_max_sequence.return_value = 0
+
+        original_is_file = Path.is_file
+
+        def fake_is_file(self: Path) -> bool:
+            if "docs/plans/" in str(self):
+                return True
+            return original_is_file(self)
+
+        with patch.object(Path, "is_file", fake_is_file):
+            messages = []
+            async for msg in service.send_message(
+                session_id=sess_id,
+                content="Design a caching layer",
+                driver=mock_driver_result_only,
+                cwd="/tmp/project",
+            ):
+                messages.append(msg)
+
         artifact_events = [
             call[0][0]
             for call in mock_event_bus.emit.call_args_list
@@ -490,133 +485,7 @@ class TestArtifactDetection(TestBrainstormService):
         assert len(artifact_events) == 1
         event = artifact_events[0]
         assert event.domain == EventDomain.BRAINSTORM
-        assert event.data["path"] == "docs/plans/2026-01-18-cache-design.md"
-
-    async def test_detects_artifact_from_cli_driver_write(
-        self,
-        service: BrainstormService,
-        mock_repository: MagicMock,
-        mock_event_bus: MagicMock,
-        mock_cli_driver_with_write: MagicMock,
-    ) -> None:
-        """Should save artifact when CLI driver's Write tool uses 'file_path' key.
-
-        This tests the actual format produced by the CLI driver when Claude Code's
-        Write tool is used (file_path key instead of path key).
-        """
-        now = datetime.now(UTC)
-        sess_id = uuid4()
-        mock_session = BrainstormingSession(
-            id=sess_id,
-            profile_id="work",
-            status=SessionStatus.ACTIVE,
-            created_at=now,
-            updated_at=now,
-        )
-        mock_repository.get_session.return_value = mock_session
-        mock_repository.get_max_sequence.return_value = 0
-
-        messages = []
-        async for msg in service.send_message(
-            session_id=sess_id,
-            content="Write the spec",
-            driver=mock_cli_driver_with_write,
-            cwd="/tmp/test-project",
-        ):
-            messages.append(msg)
-
-        # Verify artifact was saved with the file_path key format
-        mock_repository.save_artifact.assert_called_once()
-        artifact = mock_repository.save_artifact.call_args[0][0]
-        assert artifact.path == "/tmp/test-project/docs/spec.md"
-
-    @pytest.fixture
-    def mock_driver_with_separate_tool_messages(self) -> MagicMock:
-        """Create mock driver where TOOL_CALL and TOOL_RESULT come separately.
-
-        This simulates a scenario where the SDK yields ToolUseBlock first,
-        then ToolResultBlock in a subsequent message - both with matching tool_call_id.
-        """
-        driver = MagicMock()
-
-        async def mock_execute_agentic(
-            *args: object, **kwargs: object
-        ) -> AsyncIterator[AgenticMessage]:
-            from amelia.drivers.base import AgenticMessageType
-
-            # Unique tool call ID (realistic format)
-            tool_call_id = "toolu_01XYZ789abc"
-
-            # First: thinking about what to do
-            yield AgenticMessage(
-                type=AgenticMessageType.THINKING,
-                content="I'll write a design document for this feature.",
-            )
-
-            # Second: TOOL_CALL - Claude decides to write a file
-            yield AgenticMessage(
-                type=AgenticMessageType.TOOL_CALL,
-                tool_name="write_file",
-                tool_input={"file_path": "/project/docs/design.md", "content": "# Design\n..."},
-                tool_call_id=tool_call_id,
-            )
-
-            # Third: TOOL_RESULT - Tool execution completes (separate message)
-            yield AgenticMessage(
-                type=AgenticMessageType.TOOL_RESULT,
-                tool_name="write_file",
-                tool_output="File written successfully",
-                tool_call_id=tool_call_id,  # Must match!
-                is_error=False,
-            )
-
-            # Fourth: Final response
-            yield AgenticMessage(
-                type=AgenticMessageType.RESULT,
-                content="I've created the design document.",
-                session_id="claude-sess-separate",
-            )
-
-        driver.execute_agentic = mock_execute_agentic
-        return driver
-
-    async def test_detects_artifact_with_separate_tool_messages(
-        self,
-        service: BrainstormService,
-        mock_repository: MagicMock,
-        mock_event_bus: MagicMock,
-        mock_driver_with_separate_tool_messages: MagicMock,
-    ) -> None:
-        """Should detect artifact when TOOL_CALL and TOOL_RESULT are separate messages.
-
-        This tests the realistic scenario where the SDK streams ToolUseBlock
-        first, then ToolResultBlock later, both with matching tool_call_id.
-        """
-        now = datetime.now(UTC)
-        sess_id = uuid4()
-        mock_session = BrainstormingSession(
-            id=sess_id,
-            profile_id="work",
-            status=SessionStatus.ACTIVE,
-            created_at=now,
-            updated_at=now,
-        )
-        mock_repository.get_session.return_value = mock_session
-        mock_repository.get_max_sequence.return_value = 0
-
-        messages = []
-        async for msg in service.send_message(
-            session_id=sess_id,
-            content="Create a design doc",
-            driver=mock_driver_with_separate_tool_messages,
-            cwd="/project",
-        ):
-            messages.append(msg)
-
-        # Verify artifact was saved
-        mock_repository.save_artifact.assert_called_once()
-        artifact = mock_repository.save_artifact.call_args[0][0]
-        assert artifact.path == "/project/docs/design.md"
+        assert "docs/plans/" in event.data["path"]
 
 
 class TestHandoff(TestBrainstormService):
@@ -992,7 +861,7 @@ class TestDeleteSessionCleanup(TestBrainstormService):
         mock_session = BrainstormingSession(
             id=sess_id,
             profile_id="work",
-            driver_type="cli",
+            driver_type="claude",
             driver_session_id="driver-sess-123",
             status=SessionStatus.ACTIVE,
             created_at=now,
@@ -1002,7 +871,7 @@ class TestDeleteSessionCleanup(TestBrainstormService):
 
         await service_with_cleanup.delete_session(sess_id)
 
-        mock_cleanup.assert_called_once_with("cli", "driver-sess-123")
+        mock_cleanup.assert_called_once_with("claude", "driver-sess-123")
 
     async def test_delete_session_skips_cleanup_without_driver_session(
         self,
@@ -1043,7 +912,7 @@ class TestDeleteSessionCleanup(TestBrainstormService):
         mock_session = BrainstormingSession(
             id=sess_id,
             profile_id="work",
-            driver_type="cli",
+            driver_type="claude",
             driver_session_id="driver-sess-123",
             status=SessionStatus.ACTIVE,
             created_at=now,
@@ -1055,7 +924,7 @@ class TestDeleteSessionCleanup(TestBrainstormService):
         await service_with_cleanup.delete_session(sess_id)
 
         # Verify cleanup was attempted
-        mock_cleanup.assert_called_once_with("cli", "driver-sess-123")
+        mock_cleanup.assert_called_once_with("claude", "driver-sess-123")
         # Verify session was still deleted despite cleanup failure
         mock_repository.delete_session.assert_called_once_with(sess_id)
 
@@ -1077,7 +946,7 @@ class TestUpdateSessionStatusCleanup(TestBrainstormService):
         mock_session = BrainstormingSession(
             id=sess_id,
             profile_id="work",
-            driver_type="cli",
+            driver_type="claude",
             driver_session_id="driver-sess-123",
             status=SessionStatus.ACTIVE,
             created_at=now,
@@ -1087,7 +956,7 @@ class TestUpdateSessionStatusCleanup(TestBrainstormService):
 
         await service_with_cleanup.update_session_status(sess_id, terminal_status)
 
-        mock_cleanup.assert_called_once_with("cli", "driver-sess-123")
+        mock_cleanup.assert_called_once_with("claude", "driver-sess-123")
 
     async def test_cleanup_not_called_on_active_status(
         self,
@@ -1618,6 +1487,13 @@ class TestSendMessagePlanPath:
         assert "caching-layer" in instructions
         assert "-design.md" in instructions
 
+        # Verify output_artifact_path was persisted on session
+        update_calls = mock_repository.update_session.call_args_list
+        # First update_session call stores the artifact path
+        updated_session = update_calls[0][0][0]
+        assert updated_session.output_artifact_path is not None
+        assert "caching-layer" in updated_session.output_artifact_path
+
     async def test_instructions_use_session_id_fallback_when_no_topic(
         self,
         mock_repository: MagicMock,
@@ -1650,6 +1526,12 @@ class TestSendMessagePlanPath:
         assert instructions is not None
         assert "brainstorm-abcd1234" in instructions
 
+        # Verify output_artifact_path was persisted on session
+        update_calls = mock_repository.update_session.call_args_list
+        updated_session = update_calls[0][0][0]
+        assert updated_session.output_artifact_path is not None
+        assert "brainstorm-abcd1234" in updated_session.output_artifact_path
+
     async def test_instructions_use_default_pattern_without_profile_repo(
         self,
         mock_repository: MagicMock,
@@ -1678,6 +1560,44 @@ class TestSendMessagePlanPath:
         # Default pattern: docs/plans/{date}-{issue_key}.md
         assert "docs/plans/" in instructions
         assert "auth-system" in instructions
+
+        # Verify output_artifact_path was persisted on session
+        update_calls = mock_repository.update_session.call_args_list
+        updated_session = update_calls[0][0][0]
+        assert updated_session.output_artifact_path is not None
+        assert "auth-system" in updated_session.output_artifact_path
+
+    async def test_reuses_stored_path_on_subsequent_messages(
+        self,
+        mock_repository: MagicMock,
+        mock_event_bus: MagicMock,
+        mock_profile_repo: MagicMock,
+        _make_session: object,
+    ) -> None:
+        """On subsequent messages, should reuse stored output_artifact_path."""
+        service = BrainstormService(
+            mock_repository, mock_event_bus, profile_repo=mock_profile_repo
+        )
+        session = _make_session(topic="caching layer")  # type: ignore[operator]
+        session.output_artifact_path = "plans/existing-plan.md"
+        mock_repository.get_session.return_value = session
+        mock_repository.get_max_sequence.return_value = 1  # Not first message
+
+        driver, captured = self._make_driver()
+
+        async for _ in service.send_message(
+            session_id=session.id,
+            content="continue please",
+            driver=driver,
+            cwd="/tmp/project",
+        ):
+            pass
+
+        assert len(captured) == 1
+        instructions = captured[0]
+        assert instructions is not None
+        assert "plans/existing-plan.md" in instructions
+
 
 
 class TestAskUserQuestionConversion(TestBrainstormService):

@@ -166,7 +166,7 @@ class TestBrainstormDependencyResolution:
             "profiles": {
                 "test": {
                     "name": "test",
-                    "driver": "cli",
+                    "driver": "claude",
                     "model": "sonnet",
                     "tracker": "noop",
                     "repo_root": str(repo_root),
@@ -335,7 +335,7 @@ class TestBrainstormDependencyResolution:
             "profiles": {
                 "test": {
                     "name": "test",
-                    "driver": "cli",
+                    "driver": "claude",
                     "model": "sonnet",
                     "tracker": "noop",
                     "repo_root": str(repo_root),
