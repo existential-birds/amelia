@@ -28,7 +28,7 @@ from loguru import logger
 from pydantic import BaseModel
 
 from amelia.core.constants import normalize_tool_name
-from amelia.core.exceptions import ModelProviderError
+from amelia.core.exceptions import ModelProviderError, SchemaValidationError
 from amelia.drivers.base import (
     AgenticMessage,
     AgenticMessageType,
@@ -402,10 +402,12 @@ class ApiDriver(DriverInterface):
                         message_count=len(messages),
                         last_message_type=last_msg_type,
                     )
-                    raise RuntimeError(
+                    raise SchemaValidationError(
                         f"Model did not call the {schema.__name__} tool to return structured output. "
                         f"Got {len(messages)} messages, last was {last_msg_type}. "
-                        "Ensure the model supports tool calling and the prompt instructs it to use the schema tool."
+                        "Ensure the model supports tool calling and the prompt instructs it to use the schema tool.",
+                        provider_name="api",
+                        original_message=f"Last message type: {last_msg_type}",
                     )
             else:
                 # No schema - extract text from messages
