@@ -5,7 +5,14 @@ from uuid import uuid4
 
 import pytest
 
-from amelia.core.types import AgentConfig, DriverType, PlanValidationResult, Profile, ReviewResult, Severity
+from amelia.core.types import (
+    AgentConfig,
+    DriverType,
+    PlanValidationResult,
+    Profile,
+    ReviewResult,
+    Severity,
+)
 from amelia.pipelines.implementation.routing import (
     route_after_plan_validation,
     route_after_start,

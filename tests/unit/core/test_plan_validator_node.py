@@ -10,7 +10,7 @@ from langchain_core.runnables.config import RunnableConfig
 
 from amelia.agents.schemas.architect import MarkdownPlanOutput
 from amelia.core.exceptions import SchemaValidationError
-from amelia.core.types import AgentConfig, Issue, PlanValidationResult, Profile, Severity
+from amelia.core.types import AgentConfig, Issue, Profile
 from amelia.pipelines.implementation.state import ImplementationState
 
 

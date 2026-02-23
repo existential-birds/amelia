@@ -40,12 +40,13 @@ class TestGraphEdges:
         assert architect_edges[0].target == "plan_validator_node"
 
     def test_graph_routes_validator_to_human_approval(self) -> None:
-        """Graph should route from plan_validator_node to human_approval_node."""
+        """Graph should route from plan_validator_node conditionally."""
         graph = create_orchestrator_graph()
         edges = graph.get_graph().edges
         validator_edges = [e for e in edges if e.source == "plan_validator_node"]
-        assert len(validator_edges) == 1
-        assert validator_edges[0].target == "human_approval_node"
+        assert len(validator_edges) == 2
+        targets = {e.target for e in validator_edges}
+        assert targets == {"human_approval_node", "architect_node"}
 
     def test_graph_with_checkpoint_saver(self) -> None:
         """Graph should accept checkpoint saver."""
