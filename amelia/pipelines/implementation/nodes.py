@@ -18,6 +18,7 @@ from loguru import logger
 from amelia.agents.architect import Architect
 from amelia.agents.schemas.architect import MarkdownPlanOutput
 from amelia.core.constants import ToolName, resolve_plan_path
+from amelia.core.exceptions import SchemaValidationError
 from amelia.core.extraction import extract_structured
 from amelia.pipelines.implementation.external_plan import build_plan_extraction_prompt
 from amelia.pipelines.implementation.state import ImplementationState
@@ -92,7 +93,7 @@ async def plan_validator_node(
         goal = output.goal
         plan_markdown = output.plan_markdown
         key_files = output.key_files
-    except RuntimeError as e:
+    except (RuntimeError, SchemaValidationError) as e:
         # Fallback: extract what we can from the plan content directly
         logger.warning(
             "Structured extraction failed, using fallback",

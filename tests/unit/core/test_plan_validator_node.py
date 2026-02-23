@@ -9,6 +9,7 @@ import pytest
 from langchain_core.runnables.config import RunnableConfig
 
 from amelia.agents.schemas.architect import MarkdownPlanOutput
+from amelia.core.exceptions import SchemaValidationError
 from amelia.core.types import AgentConfig, Issue, PlanValidationResult, Profile, Severity
 from amelia.pipelines.implementation.state import ImplementationState
 
@@ -642,3 +643,46 @@ Write tests covering all edge cases and error paths.
             result = await plan_validator_node(mock_state, config)
 
         assert result["plan_revision_count"] == 0
+
+
+class TestPlanValidatorNodeSchemaError:
+    """Tests for SchemaValidationError handling in plan_validator_node."""
+
+    async def test_catches_schema_validation_error_and_uses_fallback(
+        self,
+        mock_state: ImplementationState,
+        mock_profile: Profile,
+        tmp_path: Path,
+    ) -> None:
+        """SchemaValidationError from extract_structured should use fallback, not crash."""
+        from amelia.pipelines.implementation.nodes import plan_validator_node
+
+        plan = """# Feature Plan
+
+**Goal:** Add authentication
+
+### Task 1: Setup
+Create auth module.
+
+### Task 2: Tests
+Write tests for auth module with coverage.
+This content is long enough to pass the minimum length validation.
+"""
+        create_plan_file(tmp_path, plan)
+        config = make_config(mock_profile)
+
+        with patch(
+            "amelia.pipelines.implementation.nodes.extract_structured",
+            new_callable=AsyncMock,
+            side_effect=SchemaValidationError(
+                "Schema validation failed",
+                provider_name="codex",
+            ),
+        ):
+            result = await plan_validator_node(mock_state, config)
+
+        # Should fall back to regex extraction, not crash
+        assert result["goal"] is not None
+        assert result["plan_markdown"] is not None
+        # Validation should still run on fallback output
+        assert result["plan_validation_result"] is not None
