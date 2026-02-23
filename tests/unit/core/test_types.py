@@ -2,7 +2,10 @@
 
 from pathlib import Path
 
-from amelia.core.types import Design
+import pytest
+from pydantic import ValidationError
+
+from amelia.core.types import Design, PlanValidationResult, Severity
 
 
 def test_agent_config_accepts_claude_driver() -> None:
@@ -213,3 +216,28 @@ def test_get_agent_config_preserves_original():
     assert original.sandbox.mode == "none"  # Original unchanged
     assert original.profile_name == "default"  # Original unchanged
     assert injected.sandbox.mode == "container"  # Injected has profile's sandbox
+
+
+class TestPlanValidationResult:
+    """Tests for PlanValidationResult model."""
+
+    def test_valid_result(self) -> None:
+        result = PlanValidationResult(valid=True, issues=[], severity=Severity.NONE)
+        assert result.valid is True
+        assert result.issues == []
+        assert result.severity == Severity.NONE
+
+    def test_invalid_result(self) -> None:
+        result = PlanValidationResult(
+            valid=False,
+            issues=["Missing ### Task headers", "Goal section not found"],
+            severity=Severity.MAJOR,
+        )
+        assert result.valid is False
+        assert len(result.issues) == 2
+        assert result.severity == Severity.MAJOR
+
+    def test_is_frozen(self) -> None:
+        result = PlanValidationResult(valid=True, issues=[], severity=Severity.NONE)
+        with pytest.raises(ValidationError):
+            result.valid = False  # type: ignore[misc]
