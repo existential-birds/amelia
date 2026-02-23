@@ -12,7 +12,7 @@ from pathlib import Path
 from langchain_core.runnables.config import RunnableConfig
 from loguru import logger
 
-from amelia.core.types import Profile
+from amelia.core.types import PlanValidationResult, Profile, Severity
 from amelia.pipelines.implementation.state import ImplementationState
 
 
@@ -42,6 +42,55 @@ def extract_task_count(plan_markdown: str) -> int:
     )
 
     return count
+
+
+def validate_plan_structure(
+    goal: str | None,
+    plan_markdown: str,
+) -> PlanValidationResult:
+    """Run structural checks on a plan.
+
+    Checks:
+    - At least one ### Task N: header (simple or hierarchical)
+    - Goal present and not a fallback placeholder
+    - Minimum content length (200 chars)
+
+    Args:
+        goal: Extracted goal string (may be None or fallback placeholder).
+        plan_markdown: The full plan markdown content.
+
+    Returns:
+        PlanValidationResult with valid=True if all checks pass.
+    """
+    issues: list[str] = []
+
+    # Check for task headers (reuses same pattern as extract_task_count)
+    task_pattern = re.compile(r"^### Task \d+", re.MULTILINE)
+    if not task_pattern.search(plan_markdown):
+        issues.append(
+            "No '### Task N:' headers found. Plan must have structured tasks "
+            "with headers like '### Task 1: Component Name'."
+        )
+
+    # Check for goal
+    if not goal or goal == "Implementation plan":
+        issues.append(
+            "No goal found. Plan must include a clear goal statement "
+            "(e.g. '**Goal:** Add user authentication')."
+        )
+
+    # Check minimum content length
+    if len(plan_markdown.strip()) < 200:
+        issues.append(
+            "Plan content is too short to be a complete implementation plan. "
+            "Expected at least 200 characters."
+        )
+
+    if issues:
+        severity = Severity.CRITICAL if len(issues) >= 2 else Severity.MAJOR
+        return PlanValidationResult(valid=False, issues=issues, severity=severity)
+
+    return PlanValidationResult(valid=True, issues=[], severity=Severity.NONE)
 
 
 def extract_task_title(plan_markdown: str, task_index: int) -> str | None:

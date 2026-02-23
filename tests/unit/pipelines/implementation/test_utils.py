@@ -7,9 +7,13 @@ from uuid import uuid4
 
 import pytest
 
-from amelia.core.types import AgentConfig, Issue, Profile
+from amelia.core.types import AgentConfig, Issue, Profile, Severity
 from amelia.pipelines.implementation.state import ImplementationState
-from amelia.pipelines.implementation.utils import _looks_like_plan, commit_task_changes
+from amelia.pipelines.implementation.utils import (
+    _looks_like_plan,
+    commit_task_changes,
+    validate_plan_structure,
+)
 
 
 class TestLooksLikePlan:
@@ -306,3 +310,106 @@ class TestCommitTaskChanges:
 
         assert result is True
         assert mock_exec.call_count == 3  # No retry needed
+
+
+class TestValidatePlanStructure:
+    """Tests for validate_plan_structure function."""
+
+    def test_valid_plan(self) -> None:
+        """A well-structured plan should pass validation."""
+        result = validate_plan_structure(
+            goal="Add user authentication",
+            plan_markdown="""# Implementation Plan
+
+**Goal:** Add user authentication
+
+### Task 1: Add login endpoint
+Create the auth handler with JWT validation.
+Implement token refresh, session management, and proper error handling
+for all authentication edge cases including expired tokens.
+
+### Task 2: Add tests
+Write comprehensive test suite for auth covering unit and integration tests.
+""",
+        )
+        assert result.valid is True
+        assert result.issues == []
+        assert result.severity == Severity.NONE
+
+    def test_missing_task_headers(self) -> None:
+        """A plan with no ### Task N: headers should fail."""
+        result = validate_plan_structure(
+            goal="Add feature",
+            plan_markdown="""# Implementation Plan
+
+**Goal:** Add feature
+
+## Step 1
+Do something.
+
+## Step 2
+Do something else.
+""",
+        )
+        assert result.valid is False
+        assert any("Task" in i for i in result.issues)
+
+    def test_missing_goal(self) -> None:
+        """A plan with no goal should fail."""
+        result = validate_plan_structure(
+            goal=None,
+            plan_markdown="""# Plan
+
+### Task 1: Do something
+Steps here.
+""",
+        )
+        assert result.valid is False
+        assert any("goal" in i.lower() for i in result.issues)
+
+    def test_fallback_goal_detected(self) -> None:
+        """The default fallback goal 'Implementation plan' should count as missing."""
+        result = validate_plan_structure(
+            goal="Implementation plan",
+            plan_markdown="""### Task 1: Something
+Content here that is long enough to pass length check.
+""",
+        )
+        assert result.valid is False
+        assert any("goal" in i.lower() for i in result.issues)
+
+    def test_too_short(self) -> None:
+        """A plan that is too short should fail."""
+        result = validate_plan_structure(
+            goal="Add feature",
+            plan_markdown="### Task 1: Do it",
+        )
+        assert result.valid is False
+        assert any("short" in i.lower() for i in result.issues)
+
+    def test_multiple_issues_severity_critical(self) -> None:
+        """Multiple issues should produce critical severity."""
+        result = validate_plan_structure(
+            goal=None,
+            plan_markdown="short",
+        )
+        assert result.valid is False
+        assert len(result.issues) >= 2
+        assert result.severity == Severity.CRITICAL
+
+    def test_single_issue_severity_major(self) -> None:
+        """A single issue should produce major severity."""
+        result = validate_plan_structure(
+            goal="Add feature",
+            plan_markdown="""# Implementation Plan
+
+**Goal:** Add feature
+
+This is a freeform plan without task headers but with enough content
+to pass the minimum length check. It describes what needs to be done
+in a reasonable amount of detail for the implementation.
+""",
+        )
+        assert result.valid is False
+        assert len(result.issues) == 1
+        assert result.severity == Severity.MAJOR
