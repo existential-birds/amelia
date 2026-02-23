@@ -1,13 +1,13 @@
 ---
 title: Research Foundations
-description: The research papers and industry insights behind Amelia's multi-agent orchestration — MetaGPT, HULA, ReAct, Reflexion, and 12-Factor Agents.
+description: How research on multi-agent systems, iterative reasoning, context management, and retrieval shaped Amelia's architecture.
 ---
 
 # Research Foundations
 
-Amelia is an experimentation platform for agent-based software engineering. Each architectural decision traces back to specific research or industry insight — the multi-agent pipeline, iterative refinement loops, LLM-as-a-Judge review cycles, context management, human-in-the-loop gates, and driver abstractions all implement ideas from the literature. The Oracle and Knowledge Library systems extend this further, providing long-horizon agent memory grounded in retrieval research.
+Amelia is a multi-agent pipeline that takes a GitHub issue and produces a working fix — an Architect plans, a Developer implements, and a Reviewer gates quality. Each stage traces back to specific research: role specialization from MetaGPT, iterative refinement from AgentCoder and Reflexion, human-in-the-loop gating from HULA, and retrieval-augmented memory from RAPTOR. This document maps those connections.
 
-This document maps those connections. Research papers come first since they provide the theoretical foundation, followed by industry commentary that shaped how we applied those ideas, and the framework that ties everything together.
+Research papers come first, followed by industry commentary and the production framework that ties them together.
 
 ## Research Papers
 
@@ -46,7 +46,7 @@ Introduces a custom agent-computer interface (ACI) designed for LLM agents to na
 #### [DeepSeek-R1: Incentivizing Reasoning Capability in LLMs via Reinforcement Learning](https://arxiv.org/abs/2501.12948)
 *DeepSeek-AI, 2025*
 
-Demonstrates that sophisticated reasoning capabilities can emerge from reinforcement learning alone. Introduces GRPO (Group Relative Policy Optimization), which eliminates the critic network by computing advantages relative to group statistics. Shows emergent self-reflection, backtracking, and "aha moment" behaviors from pure RL.
+Shows that reasoning capabilities emerge from reinforcement learning alone. Introduces GRPO (Group Relative Policy Optimization), which eliminates the critic network by computing advantages relative to group statistics. Shows emergent self-reflection, backtracking, and "aha moment" behaviors from pure RL.
 
 **Key influence:** Self-verification patterns, rejection sampling for quality filtering (applies to Reviewer), GRPO's group comparison parallels competitive review strategy, multi-stage training pipeline mirrors Architect-Developer-Reviewer flow.
 
@@ -67,7 +67,7 @@ Introduces verbal reinforcement through self-reflection rather than weight updat
 #### [ReAct: Synergizing Reasoning and Acting in Language Models](https://arxiv.org/abs/2210.03629)
 *Yao et al., ICLR 2023*
 
-Interleaves reasoning traces with task-specific actions, allowing agents to dynamically interface with external tools and environments. Achieves significant improvements on interactive decision-making benchmarks using only 1-2 in-context examples.
+Interleaves reasoning traces with task-specific actions, allowing agents to call external tools as they reason. Outperforms baselines on interactive decision-making benchmarks using only 1-2 in-context examples.
 
 **Key influence:** Foundation for how all Amelia agents interleave planning with tool execution. The reasoning trace pattern appears in the Architect's planning phase and the Developer's implementation steps.
 
@@ -99,7 +99,7 @@ Enables indefinite exploration through periodic context summarization. ReSum-GRP
 
 Addresses "brevity bias" (domain insights dropped for concise summaries) and "context collapse" (iterative rewriting erodes details over time). Treats contexts as evolving "playbooks" that accumulate, refine, and organize strategies through a generate-reflect-curate cycle. Uses natural execution feedback for self-improvement without labeled data, achieving +10.6% improvement on agent benchmarks.
 
-**Key influence:** Directly applicable to the Oracle system and state compression between Developer-Reviewer iterations. The generate-reflect-curate cycle maps to Amelia's iterative refinement loop, and ACE's incremental update approach prevents the information loss that naive context summarization introduces across long-horizon workflows.
+**Key influence:** Directly applicable to the Oracle system and state compression between Developer-Reviewer iterations. The generate-reflect-curate cycle maps to Amelia's iterative refinement loop, and ACE's incremental updates prevent the information loss from naive context summarization.
 
 #### [Recursive Language Models](https://arxiv.org/abs/2512.24601)
 *Zhang, Khattab, Kraska (MIT CSAIL), 2025*
@@ -127,7 +127,7 @@ A critical analysis of SWE-bench revealing that 32.67% of successful patches inv
 #### [LongBench v2: Towards Deeper Understanding and Reasoning on Realistic Long-context Multitasks](https://arxiv.org/abs/2412.15204)
 *Tsinghua University / THUDM, 2024*
 
-A comprehensive long-context benchmark shows reasoning-enhanced models (o1-preview, DeepSeek-R1) significantly outperform standard models. Human experts achieve only 53.7% accuracy, validating benchmark difficulty. Identifies code repository understanding as a distinct skill category.
+A long-context benchmark covering multiple task types shows reasoning-enhanced models (o1-preview, DeepSeek-R1) significantly outperform standard models. Human experts achieve only 53.7% accuracy, validating benchmark difficulty. Identifies code repository understanding as a distinct skill category.
 
 **Key influence:** Invest in extended reasoning for Architect/Reviewer agents, specialized prompting for codebase navigation, use reasoning-enhanced models for planning stages.
 
@@ -152,7 +152,7 @@ A multilingual extension of RULER shows performance degrades significantly at 12
 
 Argues that the filesystem is the most underrated tool for agent memory and coordination. Files provide persistent state, human-readable artifacts, and natural checkpoints. Bash gives agents the same power that developers already use — composable commands over a shared filesystem.
 
-**Key influence:** Amelia treats the working directory as the agent's primary workspace. Plan files, code changes, and review feedback all persist as filesystem artifacts. The Oracle system extends this pattern into structured long-term memory, and the Knowledge Library provides semantic retrieval over accumulated project knowledge.
+**Key influence:** Amelia treats the working directory as the agent's primary workspace. Plan files, code changes, and review feedback all persist as filesystem artifacts. The Oracle stores structured notes across sessions, and the Knowledge Library indexes project files for semantic search.
 
 ### [Claude Code SDK and HaaS](https://www.vtrivedy.com/posts/claude-code-sdk-haas-harness-as-a-service)
 *by Vikram Trivedy*
