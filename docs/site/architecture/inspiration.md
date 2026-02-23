@@ -209,7 +209,7 @@ Production-grade patterns for building reliable agentic systems. Amelia's archit
 | MetaGPT SOP Roles | Architect → Developer ↔ Reviewer pipeline |
 | AgentCoder Iteration | Developer-Reviewer cycle until approval |
 | HULA Plan Approval | Human-in-the-loop approval gates |
-| SWE-agent ACI Design | Driver abstraction (`api` vs `cli`) |
+| SWE-agent ACI Design | Driver abstraction (`api` vs `claude` vs `codex`) |
 | LLM-as-a-Judge | Reviewer agent as automated code critic |
 | Reflexion Verbal RL | Review feedback as reinforcement signal |
 | ReAct Reasoning+Acting | Interleaved planning and tool execution |
