@@ -36,6 +36,10 @@ export function AskUserQuestionCard({
         const next = current.includes(label)
           ? current.filter((l) => l !== label)
           : [...current, label];
+        if (next.length === 0) {
+          const { [question]: _, ...rest } = prev.selections;
+          return { ...prev, selections: rest };
+        }
         return { ...prev, selections: { ...prev.selections, [question]: next } };
       }
       return { ...prev, selections: { ...prev.selections, [question]: label } };

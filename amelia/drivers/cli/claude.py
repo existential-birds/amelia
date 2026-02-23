@@ -259,7 +259,8 @@ def _handle_parse_error(e: MessageParseError) -> None:
     logger.debug(
         "Skipping unknown SDK message type",
         error_message=str(e),
-        raw_data=data,
+        raw_type=msg_type,
+        raw_keys=list(data) if isinstance(data, dict) else None,
     )
 
 
