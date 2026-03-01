@@ -186,10 +186,12 @@ class CodexCliDriver(DriverInterface):
         )
 
         _cancelled = False
-        assert proc.stdout is not None
+        if proc.stdout is None:
+            raise RuntimeError("Codex process stdout is unavailable")
+        stdout = proc.stdout
         try:
             while True:
-                raw_line = await proc.stdout.readline()
+                raw_line = await stdout.readline()
                 if not raw_line:
                     break
                 line = raw_line.decode("utf-8", errors="replace").strip()
