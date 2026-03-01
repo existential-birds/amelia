@@ -1,6 +1,7 @@
 """Unit tests for WebSocket streaming helpers."""
 
 from io import StringIO
+from typing import cast
 
 import pytest
 from rich.console import Console
@@ -16,7 +17,7 @@ def console() -> Console:
 
 def get_output(console: Console) -> str:
     """Extract text output from console buffer."""
-    return console.file.getvalue()  # type: ignore[union-attr]
+    return cast(StringIO, console.file).getvalue()
 
 
 class TestDisplayEventTraceTypes:

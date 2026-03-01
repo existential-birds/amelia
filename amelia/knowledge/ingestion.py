@@ -241,12 +241,10 @@ class IngestionPipeline:
         Returns:
             List of Docling chunk objects.
         """
-        from docling.chunking import (  # type: ignore[attr-defined]  # noqa: PLC0415
-            HierarchicalChunker,
-        )
+        from docling.chunking import HierarchicalChunker  # noqa: PLC0415
 
         chunker = HierarchicalChunker()
-        chunks = await asyncio.to_thread(chunker.chunk, docling_doc)  # type: ignore[arg-type]
+        chunks = await asyncio.to_thread(chunker.chunk, docling_doc)
         return list(chunks)
 
     async def _fail_document(self, document_id: uuid.UUID, error_message: str) -> None:

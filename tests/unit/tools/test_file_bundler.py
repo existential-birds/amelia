@@ -1,7 +1,7 @@
 """Tests for FileBundler utility."""
 
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -40,14 +40,13 @@ class TestBundleFiles:
     @patch("amelia.tools.file_bundler._get_git_tracked_files")
     @patch("amelia.tools.file_bundler._is_git_repo", return_value=True)
     async def test_bundle_single_file(
-        self, mock_is_git: object, mock_tracked: object, tmp_path: Path
+        self, mock_is_git: MagicMock, mock_tracked: MagicMock, tmp_path: Path
     ):
         """bundle_files should gather a single file matching a pattern."""
         repo = tmp_path / "repo"
         repo.mkdir()
         (repo / "hello.py").write_text("print('hello')")
-        mock_tracked.return_value = {"hello.py"}  # type: ignore[union-attr]
-
+        mock_tracked.return_value = {"hello.py"}
         bundle = await bundle_files(
             working_dir=str(repo),
             patterns=["hello.py"],
@@ -61,7 +60,7 @@ class TestBundleFiles:
     @patch("amelia.tools.file_bundler._get_git_tracked_files")
     @patch("amelia.tools.file_bundler._is_git_repo", return_value=True)
     async def test_bundle_glob_pattern(
-        self, mock_is_git: object, mock_tracked: object, tmp_path: Path
+        self, mock_is_git: MagicMock, mock_tracked: MagicMock, tmp_path: Path
     ):
         """bundle_files should resolve glob patterns."""
         repo = tmp_path / "repo"
@@ -71,8 +70,7 @@ class TestBundleFiles:
         (src / "a.py").write_text("a = 1")
         (src / "b.py").write_text("b = 2")
         (repo / "readme.md").write_text("# Readme")
-        mock_tracked.return_value = {"src/a.py", "src/b.py", "readme.md"}  # type: ignore[union-attr]
-
+        mock_tracked.return_value = {"src/a.py", "src/b.py", "readme.md"}
         bundle = await bundle_files(
             working_dir=str(repo),
             patterns=["src/*.py"],
@@ -83,7 +81,7 @@ class TestBundleFiles:
     @patch("amelia.tools.file_bundler._get_git_tracked_files")
     @patch("amelia.tools.file_bundler._is_git_repo", return_value=True)
     async def test_bundle_respects_gitignore(
-        self, mock_is_git: object, mock_tracked: object, tmp_path: Path
+        self, mock_is_git: MagicMock, mock_tracked: MagicMock, tmp_path: Path
     ):
         """bundle_files should exclude gitignored files (via mocked tracked set)."""
         repo = tmp_path / "repo"
@@ -92,8 +90,7 @@ class TestBundleFiles:
         (repo / "included.py").write_text("yes")
         (repo / "ignored.py").write_text("no")
         # Simulate git ls-files output - ignored.py not tracked
-        mock_tracked.return_value = {"included.py", ".gitignore"}  # type: ignore[union-attr]
-
+        mock_tracked.return_value = {"included.py", ".gitignore"}
         bundle = await bundle_files(
             working_dir=str(repo),
             patterns=["*.py"],
@@ -105,15 +102,14 @@ class TestBundleFiles:
     @patch("amelia.tools.file_bundler._get_git_tracked_files")
     @patch("amelia.tools.file_bundler._is_git_repo", return_value=True)
     async def test_bundle_skips_binary_files(
-        self, mock_is_git: object, mock_tracked: object, tmp_path: Path
+        self, mock_is_git: MagicMock, mock_tracked: MagicMock, tmp_path: Path
     ):
         """bundle_files should skip binary files (null bytes detected)."""
         repo = tmp_path / "repo"
         repo.mkdir()
         (repo / "text.py").write_text("x = 1")
         (repo / "binary.bin").write_bytes(b"\x00\x01\x02\x03" * 128)
-        mock_tracked.return_value = {"text.py", "binary.bin"}  # type: ignore[union-attr]
-
+        mock_tracked.return_value = {"text.py", "binary.bin"}
         bundle = await bundle_files(
             working_dir=str(repo),
             patterns=["*"],
@@ -125,13 +121,12 @@ class TestBundleFiles:
     @patch("amelia.tools.file_bundler._get_git_tracked_files")
     @patch("amelia.tools.file_bundler._is_git_repo", return_value=True)
     async def test_bundle_path_traversal_blocked(
-        self, mock_is_git: object, mock_tracked: object, tmp_path: Path
+        self, mock_is_git: MagicMock, mock_tracked: MagicMock, tmp_path: Path
     ):
         """bundle_files should reject paths that escape working_dir."""
         repo = tmp_path / "repo"
         repo.mkdir()
-        mock_tracked.return_value = set()  # type: ignore[union-attr]
-
+        mock_tracked.return_value = set()
         with pytest.raises(ValueError, match="outside working directory"):
             await bundle_files(
                 working_dir=str(repo),
@@ -141,15 +136,14 @@ class TestBundleFiles:
     @patch("amelia.tools.file_bundler._get_git_tracked_files")
     @patch("amelia.tools.file_bundler._is_git_repo", return_value=True)
     async def test_bundle_exclude_patterns(
-        self, mock_is_git: object, mock_tracked: object, tmp_path: Path
+        self, mock_is_git: MagicMock, mock_tracked: MagicMock, tmp_path: Path
     ):
         """bundle_files should respect exclude_patterns."""
         repo = tmp_path / "repo"
         repo.mkdir()
         (repo / "keep.py").write_text("keep")
         (repo / "skip.py").write_text("skip")
-        mock_tracked.return_value = {"keep.py", "skip.py"}  # type: ignore[union-attr]
-
+        mock_tracked.return_value = {"keep.py", "skip.py"}
         bundle = await bundle_files(
             working_dir=str(repo),
             patterns=["*.py"],
@@ -179,13 +173,12 @@ class TestBundleFiles:
     @patch("amelia.tools.file_bundler._get_git_tracked_files")
     @patch("amelia.tools.file_bundler._is_git_repo", return_value=True)
     async def test_bundle_empty_patterns(
-        self, mock_is_git: object, mock_tracked: object, tmp_path: Path
+        self, mock_is_git: MagicMock, mock_tracked: MagicMock, tmp_path: Path
     ):
         """bundle_files with no matching patterns should return empty bundle."""
         repo = tmp_path / "repo"
         repo.mkdir()
-        mock_tracked.return_value = set()  # type: ignore[union-attr]
-
+        mock_tracked.return_value = set()
         bundle = await bundle_files(
             working_dir=str(repo),
             patterns=["*.nonexistent"],

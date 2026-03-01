@@ -142,6 +142,8 @@ class LogRetentionService:
             logger.debug("No checkpointer configured, skipping checkpoint cleanup")
             return 0
 
+        checkpointer = self._checkpointer
+
         # Build query based on retention days
         if retention_days == 0:
             finished = await self._db.fetch_all(
@@ -167,7 +169,7 @@ class LogRetentionService:
         async def delete_checkpoint(workflow_id: str) -> bool:
             """Delete a single checkpoint, returning True on success."""
             try:
-                await self._checkpointer.adelete_thread(workflow_id)  # type: ignore[union-attr]
+                await checkpointer.adelete_thread(workflow_id)
                 return True
             except asyncpg.PostgresError as e:
                 logger.warning(

@@ -186,9 +186,10 @@ class CodexCliDriver(DriverInterface):
         )
 
         _cancelled = False
+        assert proc.stdout is not None
         try:
             while True:
-                raw_line = await proc.stdout.readline()  # type: ignore[union-attr]
+                raw_line = await proc.stdout.readline()
                 if not raw_line:
                     break
                 line = raw_line.decode("utf-8", errors="replace").strip()

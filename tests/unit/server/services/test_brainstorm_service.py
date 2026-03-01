@@ -1,6 +1,6 @@
 """Tests for BrainstormService."""
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 from uuid import UUID, uuid4
@@ -1411,7 +1411,7 @@ class TestSendMessagePlanPath:
         return repo
 
     @pytest.fixture
-    def _make_session(self) -> object:
+    def _make_session(self) -> Callable[..., BrainstormingSession]:
         """Factory for brainstorming sessions."""
 
         def _factory(
@@ -1459,14 +1459,13 @@ class TestSendMessagePlanPath:
         mock_repository: MagicMock,
         mock_event_bus: MagicMock,
         mock_profile_repo: MagicMock,
-        _make_session: object,
+        _make_session: Callable[..., BrainstormingSession],
     ) -> None:
         """With profile and topic, instructions contain the resolved path."""
         service = BrainstormService(
             mock_repository, mock_event_bus, profile_repo=mock_profile_repo
         )
-        # _make_session fixture typed as object but is callable factory
-        session = _make_session(topic="caching layer")  # type: ignore[operator]
+        session = _make_session(topic="caching layer")
         mock_repository.get_session.return_value = session
 
         driver, captured = self._make_driver()
@@ -1499,14 +1498,13 @@ class TestSendMessagePlanPath:
         mock_repository: MagicMock,
         mock_event_bus: MagicMock,
         mock_profile_repo: MagicMock,
-        _make_session: object,
+        _make_session: Callable[..., BrainstormingSession],
     ) -> None:
         """Without topic, path uses brainstorm-{id[:8]} fallback."""
         service = BrainstormService(
             mock_repository, mock_event_bus, profile_repo=mock_profile_repo
         )
-        # _make_session fixture typed as object but is callable factory
-        session = _make_session(  # type: ignore[operator]
+        session = _make_session(
             topic=None, session_id="abcd1234-0000-0000-0000-000000000000"
         )
         mock_repository.get_session.return_value = session
@@ -1536,12 +1534,11 @@ class TestSendMessagePlanPath:
         self,
         mock_repository: MagicMock,
         mock_event_bus: MagicMock,
-        _make_session: object,
+        _make_session: Callable[..., BrainstormingSession],
     ) -> None:
         """Without profile_repo, falls back to default pattern."""
         service = BrainstormService(mock_repository, mock_event_bus)
-        # _make_session fixture typed as object but is callable factory
-        session = _make_session(topic="auth system")  # type: ignore[operator]
+        session = _make_session(topic="auth system")
         mock_repository.get_session.return_value = session
 
         driver, captured = self._make_driver()
@@ -1572,13 +1569,13 @@ class TestSendMessagePlanPath:
         mock_repository: MagicMock,
         mock_event_bus: MagicMock,
         mock_profile_repo: MagicMock,
-        _make_session: object,
+        _make_session: Callable[..., BrainstormingSession],
     ) -> None:
         """On subsequent messages, should reuse stored output_artifact_path."""
         service = BrainstormService(
             mock_repository, mock_event_bus, profile_repo=mock_profile_repo
         )
-        session = _make_session(topic="caching layer")  # type: ignore[operator]
+        session = _make_session(topic="caching layer")
         session.output_artifact_path = "plans/existing-plan.md"
         mock_repository.get_session.return_value = session
         mock_repository.get_max_sequence.return_value = 1  # Not first message
