@@ -11,7 +11,7 @@ For CLI tests, the proper mock boundaries are:
 
 Internal components like Architect should NOT be mocked.
 """
-from collections.abc import Generator
+from collections.abc import AsyncIterator, Generator
 from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -101,7 +101,7 @@ class TestPlanCommand:
         full_plan_path.write_text("# Implementation Plan\n\n1. Step one\n2. Step two")
 
         # Mock driver's execute_agentic to yield messages simulating LLM execution
-        async def mock_execute_agentic(**kwargs):  # type: ignore[no-untyped-def]
+        async def mock_execute_agentic(**kwargs: object) -> AsyncIterator[AgenticMessage]:
             yield AgenticMessage(
                 type=AgenticMessageType.TOOL_CALL,
                 tool_name="write_file",
@@ -173,7 +173,7 @@ class TestPlanCommand:
         full_plan_path.write_text("# Work Plan\n\n1. Do work")
 
         # Mock driver's execute_agentic to yield messages simulating LLM execution
-        async def mock_execute_agentic(**kwargs):  # type: ignore[no-untyped-def]
+        async def mock_execute_agentic(**kwargs: object) -> AsyncIterator[AgenticMessage]:
             yield AgenticMessage(
                 type=AgenticMessageType.TOOL_CALL,
                 tool_name="write_file",

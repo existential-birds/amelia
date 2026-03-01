@@ -215,7 +215,10 @@ async def _safe_receive_response(
     """
     # Access the internal query's raw message stream (yields plain dicts).
     # We call parse_message ourselves so a failure doesn't kill the generator.
-    raw_messages = client._query.receive_messages()  # type: ignore[union-attr]
+    query_client = client._query
+    if query_client is None:
+        raise RuntimeError("Claude SDK query stream is unavailable")
+    raw_messages = query_client.receive_messages()
     raw_iter = raw_messages.__aiter__()
     try:
         while True:
