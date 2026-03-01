@@ -151,7 +151,7 @@ def capture_emit(
         )
 
     def install() -> None:
-        orchestrator._emit = _capture  # type: ignore[method-assign]
+        setattr(orchestrator, "_emit", _capture)  # noqa: B010
 
     return emitted_events, install
 

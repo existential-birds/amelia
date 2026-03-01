@@ -295,7 +295,7 @@ class TestAskUserQuestionPayload:
                 }
             ]
         }
-        payload = AskUserQuestionPayload(**data)  # type: ignore[arg-type]
+        payload = AskUserQuestionPayload.model_validate(data)
         assert payload.questions[0].options[1].label == "No"
 
     def test_invalid_questions_type(self) -> None:

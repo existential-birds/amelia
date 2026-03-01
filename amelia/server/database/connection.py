@@ -8,7 +8,7 @@ from urllib.parse import urlparse, urlunparse
 
 import asyncpg
 from loguru import logger
-from pgvector.asyncpg import register_vector  # type: ignore[import-untyped]
+from pgvector.asyncpg import register_vector
 
 
 def in_clause_placeholders(count: int, start: int = 1) -> str:

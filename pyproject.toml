@@ -89,5 +89,13 @@ module = [
     "langgraph.checkpoint.postgres.aio",
     "psutil",
     "claude_agent_sdk",
+    "pgvector.asyncpg",
 ]
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = [
+    "docling",
+    "docling.*",
+]
+follow_imports = "skip"
