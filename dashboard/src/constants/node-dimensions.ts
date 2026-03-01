@@ -5,14 +5,14 @@
  * Keep these in sync with Tailwind classes in AgentNode.tsx.
  */
 
-/** Node width in pixels (matches lg breakpoint). */
-export const NODE_WIDTH = 120;
+/** Node width in pixels. */
+export const NODE_WIDTH = 80;
 
 /** Node height in pixels (approximate based on content). */
-export const NODE_HEIGHT = 140;
+export const NODE_HEIGHT = 64;
 
 /** Horizontal spacing between nodes in the same rank. */
-export const NODE_SEP = 30;
+export const NODE_SEP = 20;
 
 /** Spacing between ranks (edge length). */
-export const RANK_SEP = 40;
+export const RANK_SEP = 30;

@@ -103,7 +103,7 @@ export function WorkflowCanvas({ pipeline, className }: WorkflowCanvasProps) {
         elementsSelectable={false}
         selectionOnDrag={false}
         fitViewOptions={{ padding: 0.2 }}
-        minZoom={0.5}
+        minZoom={0.3}
         maxZoom={1.5}
       >
         <FitViewOnNodeCountChange nodeCount={layoutedNodes.length} />

@@ -23,7 +23,7 @@ const NODE_DISPLAY_NAMES: Record<string, string> = {
   developer: 'Developer',
   reviewer: 'Reviewer',
   plan_validator: 'Plan Validator',
-  human_approval: 'Human Approval',
+  human_approval: 'Approval',
 };
 
 /** Get display name for a node type. */
@@ -142,30 +142,30 @@ export const AgentNode = memo(function AgentNode({ data }: NodeProps<AgentNodeTy
     <div
       data-status={status}
       className={cn(
-        'w-[100px] lg:w-[120px] rounded-lg border p-2 lg:p-3 transition-all',
+        'w-[80px] rounded-md border p-1.5 transition-all',
         getStatusClasses(status, agentType)
       )}
     >
       <Handle type="target" position={Position.Left} className="!bg-border" />
 
-      <div className="flex flex-col items-center gap-1 lg:gap-1.5 text-center">
-        <Icon className={cn('h-5 w-5 lg:h-6 lg:w-6', getIconClasses(status, agentType))} />
-        <span className="text-sm lg:text-base font-medium">{getNodeDisplayName(agentType)}</span>
-        <p className="text-xs lg:text-sm text-muted-foreground">
+      <div className="flex flex-col items-center gap-0.5 text-center">
+        <Icon className={cn('h-3.5 w-3.5', getIconClasses(status, agentType))} />
+        <span className="text-[11px] font-medium leading-tight">{getNodeDisplayName(agentType)}</span>
+        <p className="text-[9px] leading-tight text-muted-foreground">
           {status === 'active' && 'In progress...'}
           {status === 'completed' && 'Completed'}
           {status === 'pending' && 'Pending'}
           {status === 'blocked' && 'Blocked'}
         </p>
         {iterations.length > 1 && (
-          <Badge variant="secondary" className="text-[10px] lg:text-xs">
+          <Badge variant="secondary" className="text-[9px] px-1 py-0">
             {iterations.length} runs
           </Badge>
         )}
       </div>
 
       {isExpanded && iterations.length > 0 && (
-        <div className="mt-2 space-y-1 text-xs text-center">
+        <div className="mt-1 space-y-0.5 text-[9px] text-center">
           {iterations.map((iter, idx) => (
             <div key={iter.id} className="flex flex-col">
               <span className="text-muted-foreground">Run {idx + 1}</span>
