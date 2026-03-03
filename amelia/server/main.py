@@ -176,6 +176,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     event_bus.set_connection_manager(connection_manager)
     connection_manager.set_repository(repository)
 
+    # Bridge events to server console via loguru
+    from amelia.server.events.log_subscriber import log_event_to_console  # noqa: PLC0415
+
+    event_bus.subscribe(log_event_to_console)
+
     # Create and register orchestrator
     from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 
