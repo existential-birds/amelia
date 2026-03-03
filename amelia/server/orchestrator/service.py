@@ -1172,8 +1172,7 @@ class OrchestratorService:
                 chunk_tuple = cast(tuple[str, Any], chunk)
                 if self._is_interrupt_chunk(chunk_tuple):
                     was_interrupted = True
-                    mode, data = chunk_tuple
-                    interrupt_data = data.get("__interrupt__") if isinstance(data, dict) else None
+                    _mode, _data = chunk_tuple
                     # Sync plan from LangGraph checkpoint to ServerExecutionState
                     # so it's available via REST API while blocked
                     await self._sync_plan_from_checkpoint(workflow_id, graph, config)
