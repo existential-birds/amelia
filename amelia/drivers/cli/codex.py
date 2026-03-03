@@ -5,6 +5,7 @@ and agentic execution capabilities.
 """
 import asyncio
 import json
+import time
 from collections.abc import AsyncIterator
 from enum import StrEnum
 from typing import Any
@@ -47,6 +48,7 @@ class CodexStreamEvent(BaseModel):
     item: dict[str, Any] | None = None
     text: str | None = None
     thread_id: str | None = None  # nested item for item.completed events
+    usage: dict[str, Any] | None = None
 
 
 class CodexCliDriver(DriverInterface):
@@ -74,6 +76,7 @@ class CodexCliDriver(DriverInterface):
         self.model = model
         self.cwd = cwd
         self.approval_mode = CodexApprovalMode(approval_mode)
+        self._usage: DriverUsage | None = None
 
     def _resolve_approval_mode(
         self, allowed_tools: list[str] | None,
@@ -401,6 +404,13 @@ class CodexCliDriver(DriverInterface):
 
         resolved_mode = self._resolve_approval_mode(allowed_tools)
 
+        start_time = time.perf_counter()
+        total_input = 0
+        total_output = 0
+        total_cache_read = 0
+        num_turns = 0
+        self._usage = None
+
         captured_thread_id: str | None = None
 
         # Use streaming mode - iterate asynchronously
@@ -501,9 +511,27 @@ class CodexCliDriver(DriverInterface):
                             content=text,
                         )
                 # else: skip unknown item types
+            elif event.type == "turn.completed" and event.usage:
+                total_input += event.usage.get("input_tokens", 0)
+                total_output += event.usage.get("output_tokens", 0)
+                total_cache_read += event.usage.get("cached_input_tokens", 0)
+                num_turns += 1
             else:
                 # Skip lifecycle events (turn.started, etc.)
                 logger.debug("Skipping unhandled codex event", event_type=event.type)
+
+        duration_ms = int((time.perf_counter() - start_time) * 1000)
+        if num_turns > 0:
+            self._usage = DriverUsage(
+                input_tokens=total_input if total_input > 0 else None,
+                output_tokens=total_output if total_output > 0 else None,
+                cache_read_tokens=total_cache_read if total_cache_read > 0 else None,
+                cache_creation_tokens=None,
+                cost_usd=None,
+                duration_ms=duration_ms,
+                num_turns=num_turns,
+                model=self.model or None,
+            )
 
     async def cleanup_session(self, session_id: str) -> bool:
         """Clean up a driver session.
@@ -519,9 +547,10 @@ class CodexCliDriver(DriverInterface):
         return False
 
     def get_usage(self) -> DriverUsage | None:
-        """Get usage statistics.
+        """Get usage statistics from the most recent execute_agentic call.
 
         Returns:
-            None - usage tracking not yet implemented for Codex CLI.
+            DriverUsage with accumulated token counts, or None if no
+            turn.completed events with usage data were received.
         """
-        return None
+        return self._usage
