@@ -793,8 +793,8 @@ class TestCodexDriverUsageOnException:
         usage = driver.get_usage()
         assert usage is not None
         # At least the first turn's tokens should be captured
-        assert usage.input_tokens >= 100
-        assert usage.output_tokens >= 50
+        assert usage.input_tokens is not None and usage.input_tokens >= 100
+        assert usage.output_tokens is not None and usage.output_tokens >= 50
         assert usage.model == "gpt-5-codex"
 
     @pytest.mark.asyncio
@@ -834,7 +834,7 @@ class TestCodexDriverUsageOnException:
         ) -> AsyncIterator[CodexStreamEvent]:
             raise RuntimeError("immediate failure")
             # Make this a generator (unreachable yield)
-            yield CodexStreamEvent(type="final", content="never")  # type: ignore[unreachable]
+            yield CodexStreamEvent(type="final", content="never")  # type: ignore
 
         with (
             patch.object(driver, "_run_codex_stream", mock_run_codex_stream),
