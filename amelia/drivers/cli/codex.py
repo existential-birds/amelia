@@ -525,16 +525,16 @@ class CodexCliDriver(DriverInterface):
                         )
                 # else: skip unknown item types
             elif event.type == "turn.completed" and event.usage:
-                total_input += event.usage.get("input_tokens", 0)
-                total_output += event.usage.get("output_tokens", 0)
-                total_cache_read += event.usage.get("cached_input_tokens", 0)
+                total_input += int(event.usage.get("input_tokens") or 0)
+                total_output += int(event.usage.get("output_tokens") or 0)
+                total_cache_read += int(event.usage.get("cached_input_tokens") or 0)
                 num_turns += 1
                 # Update usage incrementally so it's available on early exit
                 duration_ms = int((time.perf_counter() - start_time) * 1000)
                 self._usage = DriverUsage(
-                    input_tokens=total_input if total_input > 0 else None,
-                    output_tokens=total_output if total_output > 0 else None,
-                    cache_read_tokens=total_cache_read if total_cache_read > 0 else None,
+                    input_tokens=total_input,
+                    output_tokens=total_output,
+                    cache_read_tokens=total_cache_read,
                     cache_creation_tokens=None,
                     cost_usd=None,
                     duration_ms=duration_ms,
