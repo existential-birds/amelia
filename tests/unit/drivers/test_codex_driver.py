@@ -834,7 +834,7 @@ class TestCodexDriverUsageOnException:
         ) -> AsyncIterator[CodexStreamEvent]:
             raise RuntimeError("immediate failure")
             # Make this a generator (unreachable yield)
-            yield CodexStreamEvent(type="final", content="never")  # type: ignore
+            yield CodexStreamEvent(type="final", content="never")
 
         with (
             patch.object(driver, "_run_codex_stream", mock_run_codex_stream),
