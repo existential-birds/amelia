@@ -414,6 +414,9 @@ class CodexCliDriver(DriverInterface):
         captured_thread_id: str | None = None
 
         # Use streaming mode - iterate asynchronously
+        # Update self._usage incrementally after each turn.completed event
+        # so usage data is available even if the consumer breaks early or
+        # an exception interrupts streaming.
         async for event in self._run_codex_stream(
             full_prompt, cwd=cwd, session_id=session_id, approval_mode=resolved_mode,
         ):
@@ -425,6 +428,7 @@ class CodexCliDriver(DriverInterface):
                 yield AgenticMessage(
                     type=AgenticMessageType.THINKING,
                     content=event.content or "",
+                    model=self.model,
                 )
             elif event.type == "tool_call":
                 yield AgenticMessage(
@@ -433,6 +437,7 @@ class CodexCliDriver(DriverInterface):
                     tool_name=event.name or "",
                     tool_input=event.input or {},
                     tool_call_id=event.id,
+                    model=self.model,
                 )
             elif event.type == "tool_result":
                 yield AgenticMessage(
@@ -440,6 +445,7 @@ class CodexCliDriver(DriverInterface):
                     tool_output=(event.tool_output or event.output or event.content or ""),
                     tool_name=event.tool_name or event.name or "",
                     tool_call_id=event.tool_call_id or event.id,
+                    model=self.model,
                 )
             elif event.type == "final":
                 content = event.content or ""
@@ -449,6 +455,7 @@ class CodexCliDriver(DriverInterface):
                     type=AgenticMessageType.RESULT,
                     content=content,
                     session_id=captured_thread_id,
+                    model=self.model,
                 )
             elif event.type == "item.completed" and event.item:
                 item = event.item
@@ -463,6 +470,7 @@ class CodexCliDriver(DriverInterface):
                             type=AgenticMessageType.RESULT,
                             content=text,
                             session_id=captured_thread_id,
+                            model=self.model,
                         )
                 elif item_type == "command_execution":
                     # Codex CLI: command execution with command, aggregated_output, exit_code
@@ -472,6 +480,7 @@ class CodexCliDriver(DriverInterface):
                             tool_output=item.get("aggregated_output", ""),
                             tool_name="command_execution",
                             tool_call_id=item.get("id", ""),
+                            model=self.model,
                         )
                     else:
                         yield AgenticMessage(
@@ -480,6 +489,7 @@ class CodexCliDriver(DriverInterface):
                             tool_name="command_execution",
                             tool_input={"command": item.get("command", "")},
                             tool_call_id=item.get("id", ""),
+                            model=self.model,
                         )
                 elif item_type == "mcp_tool_call":
                     # Codex CLI: MCP tool invocation with server, tool, arguments, result
@@ -493,6 +503,7 @@ class CodexCliDriver(DriverInterface):
                             tool_output=str(item.get("result", "")),
                             tool_name=tool_name,
                             tool_call_id=item.get("id", ""),
+                            model=self.model,
                         )
                     else:
                         yield AgenticMessage(
@@ -501,6 +512,7 @@ class CodexCliDriver(DriverInterface):
                             tool_name=tool_name,
                             tool_input=item.get("arguments", {}),
                             tool_call_id=item.get("id", ""),
+                            model=self.model,
                         )
                 elif item_type == "reasoning":
                     # Codex CLI: reasoning with top-level "text" field
@@ -509,6 +521,7 @@ class CodexCliDriver(DriverInterface):
                         yield AgenticMessage(
                             type=AgenticMessageType.THINKING,
                             content=text,
+                            model=self.model,
                         )
                 # else: skip unknown item types
             elif event.type == "turn.completed" and event.usage:
@@ -516,22 +529,21 @@ class CodexCliDriver(DriverInterface):
                 total_output += event.usage.get("output_tokens", 0)
                 total_cache_read += event.usage.get("cached_input_tokens", 0)
                 num_turns += 1
+                # Update usage incrementally so it's available on early exit
+                duration_ms = int((time.perf_counter() - start_time) * 1000)
+                self._usage = DriverUsage(
+                    input_tokens=total_input if total_input > 0 else None,
+                    output_tokens=total_output if total_output > 0 else None,
+                    cache_read_tokens=total_cache_read if total_cache_read > 0 else None,
+                    cache_creation_tokens=None,
+                    cost_usd=None,
+                    duration_ms=duration_ms,
+                    num_turns=num_turns,
+                    model=self.model or None,
+                )
             else:
                 # Skip lifecycle events (turn.started, etc.)
                 logger.debug("Skipping unhandled codex event", event_type=event.type)
-
-        duration_ms = int((time.perf_counter() - start_time) * 1000)
-        if num_turns > 0:
-            self._usage = DriverUsage(
-                input_tokens=total_input if total_input > 0 else None,
-                output_tokens=total_output if total_output > 0 else None,
-                cache_read_tokens=total_cache_read if total_cache_read > 0 else None,
-                cache_creation_tokens=None,
-                cost_usd=None,
-                duration_ms=duration_ms,
-                num_turns=num_turns,
-                model=self.model or None,
-            )
 
     async def cleanup_session(self, session_id: str) -> bool:
         """Clean up a driver session.
