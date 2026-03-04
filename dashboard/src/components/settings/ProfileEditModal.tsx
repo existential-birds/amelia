@@ -154,10 +154,17 @@ interface FormData {
   plan_output_dir: string;
   plan_path_pattern: string;
   agents: Record<string, AgentFormData>;
-  sandbox_mode: 'none' | 'container';
+  sandbox_mode: 'none' | 'container' | 'daytona';
   sandbox_image: string;
   sandbox_network_allowlist_enabled: boolean;
   sandbox_network_allowed_hosts: string[];
+  // Daytona-specific
+  sandbox_repo_url: string;
+  sandbox_daytona_api_url: string;
+  sandbox_daytona_target: string;
+  sandbox_daytona_cpu: number;
+  sandbox_daytona_memory: number;
+  sandbox_daytona_disk: number;
 }
 
 // =============================================================================
@@ -224,6 +231,12 @@ const DEFAULT_FORM_DATA: FormData = {
   sandbox_image: 'amelia-sandbox:latest',
   sandbox_network_allowlist_enabled: false,
   sandbox_network_allowed_hosts: [],
+  sandbox_repo_url: '',
+  sandbox_daytona_api_url: 'https://app.daytona.io/api',
+  sandbox_daytona_target: 'us',
+  sandbox_daytona_cpu: 2,
+  sandbox_daytona_memory: 4,
+  sandbox_daytona_disk: 10,
 };
 
 /** Validation rules for profile fields */
@@ -266,6 +279,12 @@ const profileToFormData = (profile: Profile): FormData => {
     sandbox_image: profile.sandbox?.image ?? 'amelia-sandbox:latest',
     sandbox_network_allowlist_enabled: profile.sandbox?.network_allowlist_enabled ?? false,
     sandbox_network_allowed_hosts: profile.sandbox?.network_allowed_hosts ?? [],
+    sandbox_repo_url: profile.sandbox?.repo_url ?? '',
+    sandbox_daytona_api_url: profile.sandbox?.daytona_api_url ?? 'https://app.daytona.io/api',
+    sandbox_daytona_target: profile.sandbox?.daytona_target ?? 'us',
+    sandbox_daytona_cpu: profile.sandbox?.daytona_resources?.cpu ?? 2,
+    sandbox_daytona_memory: profile.sandbox?.daytona_resources?.memory ?? 4,
+    sandbox_daytona_disk: profile.sandbox?.daytona_resources?.disk ?? 10,
   };
 };
 
@@ -603,7 +622,13 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
       formData.sandbox_mode !== original.sandbox_mode ||
       formData.sandbox_image !== original.sandbox_image ||
       formData.sandbox_network_allowlist_enabled !== original.sandbox_network_allowlist_enabled ||
-      JSON.stringify(formData.sandbox_network_allowed_hosts) !== JSON.stringify(original.sandbox_network_allowed_hosts)
+      JSON.stringify(formData.sandbox_network_allowed_hosts) !== JSON.stringify(original.sandbox_network_allowed_hosts) ||
+      formData.sandbox_repo_url !== original.sandbox_repo_url ||
+      formData.sandbox_daytona_api_url !== original.sandbox_daytona_api_url ||
+      formData.sandbox_daytona_target !== original.sandbox_daytona_target ||
+      formData.sandbox_daytona_cpu !== original.sandbox_daytona_cpu ||
+      formData.sandbox_daytona_memory !== original.sandbox_daytona_memory ||
+      formData.sandbox_daytona_disk !== original.sandbox_daytona_disk
     ) {
       return true;
     }
@@ -727,6 +752,16 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
     image: formData.sandbox_image,
     network_allowlist_enabled: formData.sandbox_network_allowlist_enabled,
     network_allowed_hosts: formData.sandbox_network_allowed_hosts,
+    ...(formData.sandbox_mode === 'daytona' && {
+      repo_url: formData.sandbox_repo_url,
+      daytona_api_url: formData.sandbox_daytona_api_url,
+      daytona_target: formData.sandbox_daytona_target,
+      daytona_resources: {
+        cpu: formData.sandbox_daytona_cpu,
+        memory: formData.sandbox_daytona_memory,
+        disk: formData.sandbox_daytona_disk,
+      },
+    }),
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -980,12 +1015,15 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
                   <SelectContent>
                     <SelectItem value="none">None</SelectItem>
                     <SelectItem value="container">Container</SelectItem>
+                    <SelectItem value="daytona">Daytona</SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
                   {formData.sandbox_mode === 'none'
                     ? 'Code runs directly on the host machine.'
-                    : 'Code runs in an isolated Docker container.'}
+                    : formData.sandbox_mode === 'container'
+                      ? 'Code runs in an isolated Docker container.'
+                      : 'Code runs in an ephemeral Daytona cloud sandbox.'}
                 </p>
               </div>
 
@@ -1035,6 +1073,96 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
                       />
                     </div>
                   )}
+                </>
+              )}
+
+              {formData.sandbox_mode === 'daytona' && (
+                <>
+                  {/* Repo URL */}
+                  <div className="space-y-2">
+                    <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+                      Repository URL
+                    </Label>
+                    <Input
+                      value={formData.sandbox_repo_url}
+                      onChange={(e) => handleChange('sandbox_repo_url', e.target.value)}
+                      placeholder="https://github.com/org/repo.git"
+                      className="bg-background/50 hover:border-muted-foreground/30 transition-colors font-mono text-sm"
+                    />
+                  </div>
+
+                  {/* API URL */}
+                  <div className="space-y-2">
+                    <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+                      Daytona API URL
+                    </Label>
+                    <Input
+                      value={formData.sandbox_daytona_api_url}
+                      onChange={(e) => handleChange('sandbox_daytona_api_url', e.target.value)}
+                      placeholder="https://app.daytona.io/api"
+                      className="bg-background/50 hover:border-muted-foreground/30 transition-colors font-mono text-sm"
+                    />
+                  </div>
+
+                  {/* Target Region */}
+                  <div className="space-y-2">
+                    <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+                      Target Region
+                    </Label>
+                    <Select
+                      value={formData.sandbox_daytona_target}
+                      onValueChange={(v) => handleChange('sandbox_daytona_target', v)}
+                    >
+                      <SelectTrigger className="bg-background/50">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="us">US</SelectItem>
+                        <SelectItem value="eu">EU</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Resources */}
+                  <div className="space-y-2">
+                    <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+                      Resources
+                    </Label>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">CPU Cores</Label>
+                        <Input
+                          type="number" min={1} max={16}
+                          value={formData.sandbox_daytona_cpu}
+                          onChange={(e) => handleChange('sandbox_daytona_cpu', parseInt(e.target.value) || 2)}
+                          className="bg-background/50"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">Memory (GB)</Label>
+                        <Input
+                          type="number" min={1} max={64}
+                          value={formData.sandbox_daytona_memory}
+                          onChange={(e) => handleChange('sandbox_daytona_memory', parseInt(e.target.value) || 4)}
+                          className="bg-background/50"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">Disk (GB)</Label>
+                        <Input
+                          type="number" min={1} max={100}
+                          value={formData.sandbox_daytona_disk}
+                          onChange={(e) => handleChange('sandbox_daytona_disk', parseInt(e.target.value) || 10)}
+                          className="bg-background/50"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* API Key note */}
+                  <p className="text-xs text-muted-foreground">
+                    Set the <code className="rounded bg-muted px-1">DAYTONA_API_KEY</code> environment variable before starting Amelia.
+                  </p>
                 </>
               )}
             </TabsContent>
