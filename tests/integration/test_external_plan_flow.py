@@ -246,6 +246,52 @@ class TestExternalPlanAtCreation:
         assert workflow.execution_state is not None
         assert workflow.execution_state.external_plan is False
 
+    async def test_queue_workflow_with_plan_file_does_not_duplicate(
+        self,
+        test_client: TestClient,
+        test_repository: WorkflowRepository,
+        setup_test_profile: Profile,
+        tmp_path: Path,
+    ) -> None:
+        """When plan_file is provided, the file should be used in-place (no copy)."""
+        # Initialize a git repo
+        git_dir = tmp_path / "git-repo"
+        git_dir.mkdir()
+        (git_dir / ".git").mkdir()
+        resolved_path = str(git_dir.resolve())
+
+        # Create plan at a custom location (not the plan_path_pattern location)
+        custom_plan = git_dir / "docs" / "plans" / "my-custom-plan.md"
+        custom_plan.parent.mkdir(parents=True, exist_ok=True)
+        custom_plan.write_text("# Custom plan\n\n### Task 1: Do it\n\nDo the thing.\n")
+
+        with patch(
+            "amelia.pipelines.implementation.external_plan.extract_structured"
+        ) as mock_extract:
+            mock_extract.return_value = create_mock_plan_output()
+
+            response = test_client.post(
+                "/api/workflows",
+                json={
+                    "issue_id": "TEST-999",
+                    "worktree_path": resolved_path,
+                    "profile": setup_test_profile.name,
+                    "task_title": "Test task",
+                    "start": False,
+                    "plan_file": str(custom_plan),
+                },
+            )
+
+        assert response.status_code == status.HTTP_201_CREATED
+
+        # The plan_path_pattern would generate a different filename.
+        # Verify no duplicate was created at the pattern-based location.
+        pattern_based = git_dir / "docs" / "plans" / "2026-03-04-test-999.md"
+        # Only the original custom plan should exist
+        assert custom_plan.exists()
+        # The pattern-based file should NOT exist (no duplicate)
+        assert not pattern_based.exists(), f"Duplicate plan file created at {pattern_based}"
+
     async def test_create_workflow_with_both_plan_file_and_content_returns_422(
         self,
         test_client: TestClient,
