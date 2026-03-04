@@ -150,6 +150,56 @@ class TestDaytonaFullStack:
         assert worktree_path == "/workspace/worktrees/wf-123"
 
     @pytest.mark.asyncio
+    async def test_worktree_manager_detects_existing_clone(self, mock_daytona):
+        """setup_repo should fetch (not clone) when the repo already exists."""
+        from amelia.sandbox.daytona import DaytonaSandboxProvider
+        from amelia.sandbox.worktree import WorktreeManager
+
+        provider = DaytonaSandboxProvider(
+            api_key="test-key",
+            api_url="https://test.daytona.io/api",
+            target="us",
+            repo_url="https://github.com/org/repo.git",
+        )
+        await provider.ensure_running()
+
+        wt = WorktreeManager(
+            provider=provider,
+            repo_url="https://github.com/org/repo.git",
+        )
+
+        # Track commands executed via session streaming
+        executed_commands: list[str] = []
+
+        mock_daytona.process.execute_session_command.return_value = MagicMock(
+            cmd_id="test-cmd-id",
+        )
+        mock_daytona.process.get_session_command.return_value = MagicMock(
+            exit_code=0,
+        )
+
+        async def tracking_logs_async(session_id, cmd_id, on_stdout, on_stderr):
+            exec_call = mock_daytona.process.execute_session_command.call_args
+            cmd_str = exec_call[0][1].command if exec_call else ""
+            executed_commands.append(cmd_str)
+
+            # rev-parse succeeds and returns ".git" (non-bare existing repo)
+            if "rev-parse --git-dir" in cmd_str:
+                await on_stdout(".git\n")
+
+        mock_daytona.process.get_session_command_logs_async.side_effect = (
+            tracking_logs_async
+        )
+
+        await wt.setup_repo()
+
+        # Should have called rev-parse and fetch, but NOT clone --bare
+        assert any("rev-parse --git-dir" in c for c in executed_commands)
+        assert any("fetch origin" in c for c in executed_commands)
+        assert not any("clone --bare" in c for c in executed_commands)
+        assert wt._repo_initialized is True
+
+    @pytest.mark.asyncio
     async def test_factory_creates_daytona_stack(self, mock_daytona):
         """get_driver with daytona mode should produce working ContainerDriver."""
         import os

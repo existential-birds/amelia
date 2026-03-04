@@ -96,6 +96,8 @@ class SandboxConfig(BaseModel):
     daytona_api_url: str = "https://app.daytona.io/api"
     daytona_target: str = "us"
     daytona_resources: DaytonaResources | None = None
+    daytona_image: str = "debian-slim:3.12"
+    daytona_timeout: float = 120.0
 
 
 class AgentConfig(BaseModel):

@@ -165,6 +165,7 @@ interface FormData {
   sandbox_daytona_cpu: number;
   sandbox_daytona_memory: number;
   sandbox_daytona_disk: number;
+  sandbox_daytona_image: string;
 }
 
 // =============================================================================
@@ -237,6 +238,7 @@ const DEFAULT_FORM_DATA: FormData = {
   sandbox_daytona_cpu: 2,
   sandbox_daytona_memory: 4,
   sandbox_daytona_disk: 10,
+  sandbox_daytona_image: 'debian-slim:3.12',
 };
 
 /** Validation rules for profile fields */
@@ -285,6 +287,7 @@ const profileToFormData = (profile: Profile): FormData => {
     sandbox_daytona_cpu: profile.sandbox?.daytona_resources?.cpu ?? 2,
     sandbox_daytona_memory: profile.sandbox?.daytona_resources?.memory ?? 4,
     sandbox_daytona_disk: profile.sandbox?.daytona_resources?.disk ?? 10,
+    sandbox_daytona_image: profile.sandbox?.daytona_image ?? 'debian-slim:3.12',
   };
 };
 
@@ -628,7 +631,8 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
       formData.sandbox_daytona_target !== original.sandbox_daytona_target ||
       formData.sandbox_daytona_cpu !== original.sandbox_daytona_cpu ||
       formData.sandbox_daytona_memory !== original.sandbox_daytona_memory ||
-      formData.sandbox_daytona_disk !== original.sandbox_daytona_disk
+      formData.sandbox_daytona_disk !== original.sandbox_daytona_disk ||
+      formData.sandbox_daytona_image !== original.sandbox_daytona_image
     ) {
       return true;
     }
@@ -724,6 +728,10 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
     const workingDirError = validateField('repo_root', formData.repo_root);
     if (workingDirError) newErrors.repo_root = workingDirError;
 
+    if (formData.sandbox_mode === 'daytona' && !formData.sandbox_repo_url.trim()) {
+      newErrors.sandbox_repo_url = 'Repository URL is required for Daytona mode';
+    }
+
     for (const agent of AGENT_DEFINITIONS) {
       const agentConfig = formData.agents[agent.key];
       if (agentConfig?.driver === 'api' && agentConfig.model === '') {
@@ -756,6 +764,7 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
       repo_url: formData.sandbox_repo_url,
       daytona_api_url: formData.sandbox_daytona_api_url,
       daytona_target: formData.sandbox_daytona_target,
+      daytona_image: formData.sandbox_daytona_image,
       daytona_resources: {
         cpu: formData.sandbox_daytona_cpu,
         memory: formData.sandbox_daytona_memory,
@@ -1078,6 +1087,28 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
 
               {formData.sandbox_mode === 'daytona' && (
                 <>
+                  {/* Network allowlist warning */}
+                  {formData.sandbox_network_allowlist_enabled && (
+                    <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3">
+                      <p className="text-xs text-amber-400">
+                        Network allowlist settings are not available in Daytona mode. Daytona manages network isolation through its own infrastructure.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Daytona Image */}
+                  <div className="space-y-2">
+                    <Label className="text-xs uppercase tracking-wider text-muted-foreground">
+                      Daytona Image
+                    </Label>
+                    <Input
+                      value={formData.sandbox_daytona_image}
+                      onChange={(e) => handleChange('sandbox_daytona_image', e.target.value)}
+                      placeholder="debian-slim:3.12"
+                      className="bg-background/50 hover:border-muted-foreground/30 transition-colors font-mono text-sm"
+                    />
+                  </div>
+
                   {/* Repo URL */}
                   <div className="space-y-2">
                     <Label className="text-xs uppercase tracking-wider text-muted-foreground">
@@ -1089,6 +1120,9 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
                       placeholder="https://github.com/org/repo.git"
                       className="bg-background/50 hover:border-muted-foreground/30 transition-colors font-mono text-sm"
                     />
+                    {errors.sandbox_repo_url && (
+                      <p className="text-xs text-destructive">{errors.sandbox_repo_url}</p>
+                    )}
                   </div>
 
                   {/* API URL */}

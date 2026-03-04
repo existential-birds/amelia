@@ -25,6 +25,8 @@ from daytona_sdk import (
 )
 from loguru import logger
 
+from amelia.core.retry import with_retry
+from amelia.core.types import RetryConfig
 from amelia.sandbox.worktree import REPO_PATH
 
 
@@ -46,6 +48,8 @@ class DaytonaSandboxProvider:
         repo_url: Git remote URL to clone into the sandbox.
         branch: Git branch to clone.
         resources: Optional CPU/memory/disk resource configuration.
+        image: Sandbox image identifier (e.g. "debian-slim:3.12").
+        timeout: Timeout in seconds for sandbox creation and git clone.
     """
 
     def __init__(
@@ -56,6 +60,9 @@ class DaytonaSandboxProvider:
         repo_url: str = "",
         branch: str = "main",
         resources: DaytonaResources | None = None,
+        image: str = "debian-slim:3.12",
+        timeout: float = 120.0,
+        retry_config: RetryConfig | None = None,
     ) -> None:
         self._client = AsyncDaytona(DaytonaConfig(
             api_key=api_key,
@@ -66,6 +73,9 @@ class DaytonaSandboxProvider:
         self._repo_url = repo_url
         self._branch = branch
         self._resources = resources
+        self._image = image
+        self._timeout = timeout
+        self._retry_config = retry_config
         self._sandbox: AsyncSandbox | None = None
 
     async def ensure_running(self) -> None:
@@ -79,25 +89,55 @@ class DaytonaSandboxProvider:
 
         logger.info("Creating Daytona sandbox", target=self._target)
 
-        create_params = CreateSandboxFromImageParams(
-            image=Image.debian_slim("3.12"),
-        )
+        resources = None
         if self._resources:
-            create_params = CreateSandboxFromImageParams(
-                image=Image.debian_slim("3.12"),
-                resources=Resources(
-                    cpu=self._resources.cpu,
-                    memory=self._resources.memory,
-                    disk=self._resources.disk,
-                ),
+            resources = Resources(
+                cpu=self._resources.cpu,
+                memory=self._resources.memory,
+                disk=self._resources.disk,
             )
+        # Parse image string like "debian-slim:3.12" into Image call
+        if "debian-slim" in self._image:
+            version = self._image.split(":")[-1]
+            image = Image.debian_slim(version)  # type: ignore[arg-type]
+        else:
+            image = Image.debian_slim()  # fallback to default debian-slim
 
-        self._sandbox = await self._client.create(create_params)
-        logger.info("Daytona sandbox created", sandbox_id=self._sandbox.id)
+        create_params = CreateSandboxFromImageParams(
+            image=image,
+            resources=resources,
+        )
 
-        if self._repo_url:
-            logger.info("Cloning repo via Daytona git API", url=self._repo_url)
-            await self._sandbox.git.clone(self._repo_url, REPO_PATH)
+        _retryable = (ConnectionError, TimeoutError, OSError)
+
+        try:
+            async with asyncio.timeout(self._timeout):
+                if self._retry_config:
+                    self._sandbox = await with_retry(
+                        lambda: self._client.create(create_params),
+                        self._retry_config,
+                        retryable_exceptions=_retryable,
+                    )
+                else:
+                    self._sandbox = await self._client.create(create_params)
+                logger.info("Daytona sandbox created", sandbox_id=self._sandbox.id)
+
+                if self._repo_url:
+                    logger.info("Cloning repo via Daytona git API", url=self._repo_url)
+                    if self._retry_config:
+                        await with_retry(
+                            lambda: self._sandbox.git.clone(  # type: ignore[union-attr]
+                                self._repo_url, REPO_PATH, branch=self._branch
+                            ),
+                            self._retry_config,
+                            retryable_exceptions=_retryable,
+                        )
+                    else:
+                        await self._sandbox.git.clone(self._repo_url, REPO_PATH, branch=self._branch)
+        except TimeoutError:
+            raise TimeoutError(
+                f"Daytona sandbox creation timed out after {self._timeout}s"
+            ) from None
 
     async def exec_stream(
         self,
@@ -140,72 +180,70 @@ class DaytonaSandboxProvider:
             cmd_str = f"cd {shlex.quote(cwd)} && {cmd_str}"
 
         session_id = f"amelia-{uuid.uuid4().hex[:12]}"
-        try:
-            await sandbox.process.create_session(session_id)
+        await sandbox.process.create_session(session_id)
 
-            resp = await sandbox.process.execute_session_command(
-                session_id,
-                SessionExecuteRequest(command=cmd_str, run_async=True),
-            )
-            cmd_id = resp.cmd_id
+        resp = await sandbox.process.execute_session_command(
+            session_id,
+            SessionExecuteRequest(command=cmd_str, run_async=True),
+        )
+        cmd_id = resp.cmd_id
 
-            queue: asyncio.Queue[str | None] = asyncio.Queue()
+        queue: asyncio.Queue[str | None] = asyncio.Queue()
 
-            async def on_stdout(chunk: str) -> None:
-                await queue.put(chunk)
+        async def on_stdout(chunk: str) -> None:
+            await queue.put(chunk)
 
-            async def on_stderr(chunk: str) -> None:
-                logger.debug("Daytona stderr chunk", content=chunk)
+        async def on_stderr(chunk: str) -> None:
+            logger.debug("Daytona stderr chunk", content=chunk)
 
-            async def stream_logs() -> None:
-                try:
-                    await sandbox.process.get_session_command_logs_async(
-                        session_id, cmd_id, on_stdout, on_stderr,
-                    )
-                finally:
-                    await queue.put(None)
-
-            log_task = asyncio.create_task(stream_logs())
-
-            # Buffer partial lines; yield only complete newline-delimited lines.
-            buf = ""
+        async def stream_logs() -> None:
             try:
-                while True:
-                    chunk = await queue.get()
-                    if chunk is None:
-                        break
-                    buf += chunk
-                    while "\n" in buf:
-                        line, buf = buf.split("\n", 1)
-                        yield line
-                # Yield any remaining partial line.
-                if buf:
-                    yield buf
-            finally:
-                if not log_task.done():
-                    log_task.cancel()
-                    with contextlib.suppress(asyncio.CancelledError):
-                        await log_task
-
-            # Propagate any exception from the log streaming task.
-            if log_task.done():
-                exc = log_task.exception()
-                if exc is not None:
-                    raise exc
-
-            # Check exit code after streaming completes.
-            cmd_info = await sandbox.process.get_session_command(
-                session_id, cmd_id,
-            )
-            if cmd_info.exit_code is not None and cmd_info.exit_code != 0:
-                raise RuntimeError(
-                    f"Command exited with code {cmd_info.exit_code}: {cmd_str}"
+                await sandbox.process.get_session_command_logs_async(
+                    session_id, cmd_id, on_stdout, on_stderr,
                 )
+            finally:
+                await queue.put(None)
+
+        log_task = asyncio.create_task(stream_logs())
+
+        # Buffer partial lines; yield only complete newline-delimited lines.
+        buf = ""
+        try:
+            while True:
+                chunk = await queue.get()
+                if chunk is None:
+                    break
+                buf += chunk
+                while "\n" in buf:
+                    line, buf = buf.split("\n", 1)
+                    yield line
+            # Yield any remaining partial line.
+            if buf:
+                yield buf
         finally:
+            if not log_task.done():
+                log_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await log_task
             try:
                 await sandbox.process.delete_session(session_id)
             except Exception:
                 logger.debug("Failed to delete Daytona session", session_id=session_id)
+
+        # Propagate any exception from the log streaming task.
+        if log_task.done():
+            exc = log_task.exception()
+            if exc is not None:
+                raise exc
+
+        # Check exit code after streaming completes.
+        cmd_info = await sandbox.process.get_session_command(
+            session_id, cmd_id,
+        )
+        if cmd_info.exit_code is not None and cmd_info.exit_code != 0:
+            raise RuntimeError(
+                f"Command exited with code {cmd_info.exit_code}: {cmd_str}"
+            )
 
     async def teardown(self) -> None:
         """Delete the ephemeral Daytona sandbox."""

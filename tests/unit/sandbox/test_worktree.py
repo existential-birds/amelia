@@ -51,11 +51,14 @@ class TestWorktreeManager:
         await manager.setup_repo()
 
         calls = mock_provider.exec_stream.call_args_list
-        # First call should be git clone --bare
-        first_cmd = calls[0][0][0]
-        assert "clone" in first_cmd
-        assert "--bare" in first_cmd
-        assert "https://github.com/org/repo.git" in first_cmd
+        # First call is rev-parse to check for existing repo
+        rev_parse_cmd = calls[0][0][0]
+        assert "rev-parse" in rev_parse_cmd
+        # Second call should be git clone --bare (since mock returns no output)
+        clone_cmd = calls[1][0][0]
+        assert "clone" in clone_cmd
+        assert "--bare" in clone_cmd
+        assert "https://github.com/org/repo.git" in clone_cmd
 
     async def test_setup_repo_fetches_on_subsequent_use(self, manager: WorktreeManager, mock_provider: MagicMock) -> None:
         manager._repo_initialized = True

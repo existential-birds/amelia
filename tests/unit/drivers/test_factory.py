@@ -153,6 +153,9 @@ class TestGetDriverDaytonaBranch:
                 target="eu",
                 repo_url="https://github.com/org/repo.git",
                 resources=None,
+                image="debian-slim:3.12",
+                timeout=120.0,
+                retry_config=None,
             )
             mock_driver_cls.assert_called_once_with(
                 model="test-model",
@@ -171,3 +174,37 @@ class TestGetDriverDaytonaBranch:
         with patch.dict(os.environ, {"DAYTONA_API_KEY": "test-key"}), \
              pytest.raises(ValueError, match="Daytona sandbox requires API driver"):
             get_driver(driver_key, sandbox_config=sandbox, profile_name="test")
+
+    def test_daytona_mode_rejects_network_allowlist(self):
+        """Network allowlist should be rejected for Daytona mode."""
+        sandbox = SandboxConfig(
+            mode="daytona",
+            repo_url="https://github.com/org/repo.git",
+            network_allowlist_enabled=True,
+        )
+        with patch.dict(os.environ, {"DAYTONA_API_KEY": "test-key"}), \
+             pytest.raises(ValueError, match="Network allowlist is not supported with Daytona"):
+            get_driver("api", sandbox_config=sandbox, profile_name="test")
+
+    def test_daytona_mode_passes_image(self):
+        """Custom daytona_image should be forwarded to DaytonaSandboxProvider."""
+        sandbox = SandboxConfig(
+            mode="daytona",
+            repo_url="https://github.com/org/repo.git",
+            daytona_image="ubuntu:22.04",
+        )
+        with patch("amelia.sandbox.daytona.DaytonaSandboxProvider") as mock_provider_cls, \
+             patch("amelia.sandbox.driver.ContainerDriver") as mock_driver_cls, \
+             patch.dict(os.environ, {"DAYTONA_API_KEY": "test-key"}):
+            mock_driver_cls.return_value = MagicMock()
+            get_driver("api", model="test-model", sandbox_config=sandbox, profile_name="work")
+            mock_provider_cls.assert_called_once_with(
+                api_key="test-key",
+                api_url="https://app.daytona.io/api",
+                target="us",
+                repo_url="https://github.com/org/repo.git",
+                resources=None,
+                image="ubuntu:22.04",
+                timeout=120.0,
+                retry_config=None,
+            )

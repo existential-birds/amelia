@@ -60,19 +60,43 @@ class WorktreeManager:
     async def setup_repo(self) -> None:
         """Ensure the bare clone exists and is up to date.
 
-        First call clones the repo. Subsequent calls fetch latest.
+        First call checks whether a git repo already exists at REPO_PATH
+        (e.g. cloned by the sandbox provider). If so, it fetches latest
+        instead of cloning. Subsequent calls just fetch.
         """
-        if not self._repo_initialized:
-            logger.info("Cloning bare repo", url=self._repo_url)
-            await self._run(
-                ["git", "clone", "--bare", self._repo_url, REPO_PATH],
-            )
-            self._repo_initialized = True
-        else:
+        if self._repo_initialized:
             logger.debug("Fetching latest from origin")
             await self._run(
                 ["git", "-C", REPO_PATH, "fetch", "origin"],
             )
+            return
+
+        # Check if a repo already exists (e.g. provider pre-cloned it)
+        try:
+            result = await self._run(
+                ["git", "-C", REPO_PATH, "rev-parse", "--git-dir"],
+            )
+            git_dir = result[0].strip() if result else ""
+            if git_dir in (".", ".git"):
+                logger.info(
+                    "Detected existing repo, fetching",
+                    path=REPO_PATH,
+                    git_dir=git_dir,
+                )
+                await self._run(
+                    ["git", "-C", REPO_PATH, "fetch", "origin"],
+                )
+                self._repo_initialized = True
+                return
+        except RuntimeError:
+            # rev-parse failed — no repo at REPO_PATH, proceed with clone
+            pass
+
+        logger.info("Cloning bare repo", url=self._repo_url)
+        await self._run(
+            ["git", "clone", "--bare", self._repo_url, REPO_PATH],
+        )
+        self._repo_initialized = True
 
     async def create_worktree(
         self, workflow_id: str, base_branch: str = "main"

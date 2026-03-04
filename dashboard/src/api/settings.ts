@@ -73,6 +73,7 @@ export interface SandboxConfig {
   daytona_api_url?: string;
   daytona_target?: string;
   daytona_resources?: DaytonaResources;
+  daytona_image?: string;
 }
 
 /**

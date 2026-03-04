@@ -1,6 +1,6 @@
 from typing import Any
 
-from amelia.core.types import SandboxConfig
+from amelia.core.types import RetryConfig, SandboxConfig
 from amelia.drivers.api import ApiDriver
 from amelia.drivers.base import DriverInterface
 from amelia.drivers.cli.claude import ClaudeCliDriver
@@ -15,6 +15,7 @@ def get_driver(
     sandbox_config: SandboxConfig | None = None,
     profile_name: str = "default",
     options: dict[str, Any] | None = None,
+    retry_config: RetryConfig | None = None,
 ) -> DriverInterface:
     """Get a concrete driver implementation.
 
@@ -25,6 +26,7 @@ def get_driver(
         sandbox_config: Sandbox configuration for containerized execution.
         profile_name: Profile name for container naming.
         options: Driver-specific configuration options.
+        retry_config: Retry configuration for transient sandbox failures.
 
     Returns:
         Configured driver instance.
@@ -66,6 +68,12 @@ def get_driver(
         from amelia.sandbox.daytona import DaytonaSandboxProvider  # noqa: PLC0415
         from amelia.sandbox.driver import ContainerDriver  # noqa: PLC0415
 
+        if sandbox_config.network_allowlist_enabled:
+            raise ValueError(
+                "Network allowlist is not supported with Daytona cloud sandboxes. "
+                "Daytona manages network isolation through its own infrastructure."
+            )
+
         api_key = os.environ.get("DAYTONA_API_KEY")
         if not api_key:
             raise ValueError(
@@ -78,6 +86,9 @@ def get_driver(
             target=sandbox_config.daytona_target,
             repo_url=sandbox_config.repo_url or "",
             resources=sandbox_config.daytona_resources,
+            image=sandbox_config.daytona_image,
+            timeout=sandbox_config.daytona_timeout,
+            retry_config=retry_config,
         )
         return ContainerDriver(model=model, provider=provider)
 

@@ -1,10 +1,11 @@
 """Unit tests for DaytonaSandboxProvider."""
 
+import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from amelia.core.types import DaytonaResources
+from amelia.core.types import DaytonaResources, RetryConfig
 
 
 class TestDaytonaSandboxProviderInit:
@@ -49,6 +50,32 @@ class TestDaytonaSandboxProviderEnsureRunning:
             mock_sandbox.git.clone.assert_called_once_with(
                 "https://github.com/org/repo.git",
                 "/workspace/repo",
+                branch="main",
+            )
+
+    @pytest.mark.asyncio
+    async def test_clones_specified_branch(self):
+        with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
+            from amelia.sandbox.daytona import DaytonaSandboxProvider
+
+            mock_client = AsyncMock()
+            mock_sandbox = AsyncMock()
+            mock_client.create.return_value = mock_sandbox
+            mock_cls.return_value = mock_client
+
+            provider = DaytonaSandboxProvider(
+                api_key="test-key",
+                api_url="https://test.daytona.io/api",
+                target="us",
+                repo_url="https://github.com/org/repo.git",
+                branch="develop",
+            )
+            await provider.ensure_running()
+
+            mock_sandbox.git.clone.assert_called_once_with(
+                "https://github.com/org/repo.git",
+                "/workspace/repo",
+                branch="develop",
             )
 
     @pytest.mark.asyncio
@@ -76,6 +103,75 @@ class TestDaytonaSandboxProviderEnsureRunning:
             assert mock_client.create.call_count == 1
 
     @pytest.mark.asyncio
+    async def test_uses_custom_image(self):
+        with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
+            from amelia.sandbox.daytona import DaytonaSandboxProvider
+
+            mock_client = AsyncMock()
+            mock_sandbox = AsyncMock()
+            mock_client.create.return_value = mock_sandbox
+            mock_cls.return_value = mock_client
+
+            provider = DaytonaSandboxProvider(
+                api_key="test-key",
+                api_url="https://test.daytona.io/api",
+                target="us",
+                repo_url="https://github.com/org/repo.git",
+                image="ubuntu:22.04",
+            )
+            await provider.ensure_running()
+
+            params = mock_client.create.call_args[0][0]
+            # Non-debian-slim image should be passed as Image(name)
+            assert params.image is not None
+
+    @pytest.mark.asyncio
+    async def test_uses_debian_slim_image_with_version(self):
+        with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
+            from amelia.sandbox.daytona import DaytonaSandboxProvider
+
+            mock_client = AsyncMock()
+            mock_sandbox = AsyncMock()
+            mock_client.create.return_value = mock_sandbox
+            mock_cls.return_value = mock_client
+
+            provider = DaytonaSandboxProvider(
+                api_key="test-key",
+                api_url="https://test.daytona.io/api",
+                target="us",
+                repo_url="https://github.com/org/repo.git",
+                image="debian-slim:3.11",
+            )
+            await provider.ensure_running()
+
+            params = mock_client.create.call_args[0][0]
+            assert params.image is not None
+
+    @pytest.mark.asyncio
+    async def test_ensure_running_times_out(self):
+        with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
+            from amelia.sandbox.daytona import DaytonaSandboxProvider
+
+            mock_client = AsyncMock()
+
+            async def hang(*args, **kwargs):
+                await asyncio.sleep(999)
+
+            mock_client.create.side_effect = hang
+            mock_cls.return_value = mock_client
+
+            provider = DaytonaSandboxProvider(
+                api_key="test-key",
+                api_url="https://test.daytona.io/api",
+                target="us",
+                repo_url="https://github.com/org/repo.git",
+                timeout=0.1,
+            )
+
+            with pytest.raises(TimeoutError, match="timed out after 0.1s"):
+                await provider.ensure_running()
+
+    @pytest.mark.asyncio
     async def test_passes_resources_when_configured(self):
         with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
             from amelia.sandbox.daytona import DaytonaSandboxProvider
@@ -95,10 +191,36 @@ class TestDaytonaSandboxProviderEnsureRunning:
             )
             await provider.ensure_running()
 
-            create_args = mock_client.create.call_args
-            # Verify resources were passed through
-            params = create_args[0][0] if create_args[0] else create_args[1].get("params")
-            assert params is not None
+            params = mock_client.create.call_args[0][0]
+            assert params.resources.cpu == 4
+            assert params.resources.memory == 8
+            assert params.resources.disk == 20
+
+
+    @pytest.mark.asyncio
+    async def test_retries_on_transient_failure(self):
+        with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
+            from amelia.sandbox.daytona import DaytonaSandboxProvider
+
+            mock_client = AsyncMock()
+            mock_sandbox = AsyncMock()
+            mock_client.create.side_effect = [
+                ConnectionError("connection reset"),
+                mock_sandbox,
+            ]
+            mock_cls.return_value = mock_client
+
+            provider = DaytonaSandboxProvider(
+                api_key="test-key",
+                api_url="https://test.daytona.io/api",
+                target="us",
+                repo_url="https://github.com/org/repo.git",
+                retry_config=RetryConfig(max_retries=2, base_delay=0.1, max_delay=1.0),
+            )
+            await provider.ensure_running()
+
+            assert mock_client.create.call_count == 2
+            mock_sandbox.git.clone.assert_called_once()
 
 
 def _make_mock_sandbox(stdout_chunks: list[str], exit_code: int = 0):
@@ -274,6 +396,31 @@ class TestDaytonaSandboxProviderExecStream:
 
             async for _ in provider.exec_stream(["echo", "ok"]):
                 pass
+
+            mock_sandbox.process.delete_session.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_exec_stream_cleans_up_on_early_break(self):
+        with patch("amelia.sandbox.daytona.AsyncDaytona") as mock_cls:
+            from amelia.sandbox.daytona import DaytonaSandboxProvider
+
+            mock_client = AsyncMock()
+            mock_sandbox = _make_mock_sandbox(["line1\nline2\nline3\n"])
+            mock_client.create.return_value = mock_sandbox
+            mock_cls.return_value = mock_client
+
+            provider = DaytonaSandboxProvider(
+                api_key="test-key",
+                api_url="https://test.daytona.io/api",
+                target="us",
+                repo_url="https://github.com/org/repo.git",
+            )
+            await provider.ensure_running()
+
+            stream = provider.exec_stream(["echo", "hello"])
+            async for _ in stream:
+                break  # Break after first line
+            await stream.aclose()
 
             mock_sandbox.process.delete_session.assert_called_once()
 
