@@ -27,6 +27,7 @@ dependencies = [
     "tiktoken>=0.7.0",
     "docling>=2.73.0",
     "pgvector>=0.3.7",
+    "daytona-sdk>=0.148.0",
 ]
 
 [project.scripts]
