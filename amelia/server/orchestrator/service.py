@@ -626,18 +626,29 @@ class OrchestratorService:
         # Handle external plan if provided
         plan_cache: PlanCache | None = None
         if request.plan_file is not None or request.plan_content is not None:
-            # Resolve target plan path
-            plan_rel_path = resolve_plan_path(profile.plan_path_pattern, request.issue_id)
             working_dir = Path(profile.repo_root)
-            target_path = working_dir / plan_rel_path
 
-            # Import and validate external plan
+            if request.plan_file is not None:
+                # External plan file: use it in-place (no naming convention copy)
+                source = Path(request.plan_file)
+                if not source.is_absolute():
+                    source = working_dir / request.plan_file
+                target_path = source.expanduser().resolve()
+            else:
+                # Pasted content: generate path from naming convention
+                plan_rel_path = resolve_plan_path(
+                    profile.plan_path_pattern, request.issue_id
+                )
+                target_path = working_dir / plan_rel_path
+
+            # Import and validate external plan (skip LLM for fast queue)
             plan_result = await import_external_plan(
                 plan_file=request.plan_file,
                 plan_content=request.plan_content,
                 target_path=target_path,
                 profile=profile,
                 workflow_id=workflow_id,
+                skip_llm=True,
             )
 
             # Update execution state with plan data and external flag
@@ -2688,9 +2699,20 @@ class OrchestratorService:
         profile = self._update_profile_repo_root(profile, workflow.worktree_path)
 
         # Resolve target plan path
-        plan_rel_path = resolve_plan_path(profile.plan_path_pattern, workflow.issue_id)
         working_dir = Path(profile.repo_root)
-        target_path = working_dir / plan_rel_path
+
+        if plan_file is not None:
+            # External plan file: use it in-place (no naming convention copy)
+            source = Path(plan_file)
+            if not source.is_absolute():
+                source = working_dir / plan_file
+            target_path = source.expanduser().resolve()
+        else:
+            # Pasted content: generate path from naming convention
+            plan_rel_path = resolve_plan_path(
+                profile.plan_path_pattern, workflow.issue_id
+            )
+            target_path = working_dir / plan_rel_path
 
         # Fast path: read content, write to target, count tasks (no LLM)
         content = await read_plan_content(

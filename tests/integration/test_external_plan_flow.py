@@ -26,6 +26,7 @@ from fastapi import status
 from fastapi.testclient import TestClient
 
 from amelia.agents.schemas.architect import MarkdownPlanOutput
+from amelia.core.constants import resolve_plan_path
 from amelia.core.types import AgentConfig, DriverType, Profile, TrackerType
 from amelia.server.database.profile_repository import ProfileRepository
 from amelia.server.database.repository import WorkflowRepository
@@ -246,6 +247,54 @@ class TestExternalPlanAtCreation:
         assert workflow.execution_state is not None
         assert workflow.execution_state.external_plan is False
 
+    async def test_queue_workflow_with_plan_file_does_not_duplicate(
+        self,
+        test_client: TestClient,
+        test_repository: WorkflowRepository,
+        setup_test_profile: Profile,
+        tmp_path: Path,
+    ) -> None:
+        """When plan_file is provided, the file should be used in-place (no copy)."""
+        # Initialize a git repo
+        git_dir = tmp_path / "git-repo"
+        git_dir.mkdir()
+        (git_dir / ".git").mkdir()
+        resolved_path = str(git_dir.resolve())
+
+        # Create plan at a custom location (not the plan_path_pattern location)
+        custom_plan = git_dir / "docs" / "plans" / "my-custom-plan.md"
+        custom_plan.parent.mkdir(parents=True, exist_ok=True)
+        custom_plan.write_text("# Custom plan\n\n### Task 1: Do it\n\nDo the thing.\n")
+
+        with patch(
+            "amelia.pipelines.implementation.external_plan.extract_structured"
+        ) as mock_extract:
+            mock_extract.return_value = create_mock_plan_output()
+
+            response = test_client.post(
+                "/api/workflows",
+                json={
+                    "issue_id": "TEST-999",
+                    "worktree_path": resolved_path,
+                    "profile": setup_test_profile.name,
+                    "task_title": "Test task",
+                    "start": False,
+                    "plan_file": str(custom_plan),
+                },
+            )
+
+        assert response.status_code == status.HTTP_201_CREATED
+
+        # The plan_path_pattern would generate a different filename.
+        # Verify no duplicate was created at the pattern-based location.
+        pattern_based = git_dir / resolve_plan_path(
+            setup_test_profile.plan_path_pattern, "TEST-999"
+        )
+        # Only the original custom plan should exist
+        assert custom_plan.exists()
+        # The pattern-based file should NOT exist (no duplicate)
+        assert not pattern_based.exists(), f"Duplicate plan file created at {pattern_based}"
+
     async def test_create_workflow_with_both_plan_file_and_content_returns_422(
         self,
         test_client: TestClient,
@@ -460,6 +509,57 @@ class TestSetPlanEndpoint:
         assert workflow is not None
         assert workflow.execution_state is not None
         assert workflow.execution_state.goal == "Second thing"
+
+    async def test_set_plan_with_file_does_not_duplicate(
+        self,
+        test_client: TestClient,
+        test_repository: WorkflowRepository,
+        setup_test_profile: Profile,
+        tmp_path: Path,
+    ) -> None:
+        """When setting plan via plan_file, the file should be used in-place."""
+        # Initialize a git repo
+        git_dir = tmp_path / "git-repo"
+        git_dir.mkdir()
+        (git_dir / ".git").mkdir()
+        resolved_path = str(git_dir.resolve())
+
+        # First create a pending workflow (no plan)
+        create_resp = test_client.post(
+            "/api/workflows",
+            json={
+                "issue_id": "TEST-888",
+                "worktree_path": resolved_path,
+                "profile": setup_test_profile.name,
+                "task_title": "Test task",
+                "start": False,
+            },
+        )
+        assert create_resp.status_code == status.HTTP_201_CREATED
+        workflow_id = create_resp.json()["id"]
+
+        # Create custom plan file
+        custom_plan = git_dir / "docs" / "plans" / "custom-set-plan.md"
+        custom_plan.parent.mkdir(parents=True, exist_ok=True)
+        custom_plan.write_text("# Set plan\n\n### Task 1: Do it\n\nDo the thing.\n")
+
+        with patch(
+            "amelia.pipelines.implementation.external_plan.extract_structured"
+        ) as mock_extract:
+            mock_extract.return_value = create_mock_plan_output()
+            response = test_client.post(
+                f"/api/workflows/{workflow_id}/plan",
+                json={"plan_file": str(custom_plan)},
+            )
+
+        assert response.status_code == status.HTTP_200_OK
+
+        # Verify no duplicate at pattern-based location
+        pattern_based = git_dir / resolve_plan_path(
+            setup_test_profile.plan_path_pattern, "TEST-888"
+        )
+        assert custom_plan.exists()
+        assert not pattern_based.exists(), f"Duplicate plan file created at {pattern_based}"
 
 
 @pytest.mark.integration

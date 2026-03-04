@@ -233,6 +233,7 @@ async def import_external_plan(
     target_path: Path,
     profile: Profile,
     workflow_id: str | uuid.UUID,
+    skip_llm: bool = False,
 ) -> ExternalPlanImportResult:
     """Import and validate an external plan.
 
@@ -242,6 +243,7 @@ async def import_external_plan(
         target_path: Where to write the plan (standard plan location).
         profile: Profile for LLM extraction config.
         workflow_id: For logging.
+        skip_llm: If True, skip LLM extraction and use regex fallback only.
 
     Returns:
         ExternalPlanImportResult with goal, plan_markdown, plan_path, key_files,
@@ -278,7 +280,7 @@ async def import_external_plan(
     )
 
     # Extract structured fields
-    result = await extract_plan_fields(content, profile=profile)
+    result = await extract_plan_fields(content, profile=None if skip_llm else profile)
 
     # Resolve target_path for the result
     resolved_target = target_path.expanduser().resolve()
