@@ -32,6 +32,7 @@ describe('DashboardSidebar', () => {
     ['Past Runs', '/history'],
     ['Logs', '/logs'],
     ['Agent Prompts', '/prompts'],
+    ['Costs', '/costs'],
   ])('renders %s navigation link to %s', (label, href) => {
     renderSidebar();
     const link = screen.getByRole('link', { name: new RegExp(label) });
@@ -44,7 +45,6 @@ describe('DashboardSidebar', () => {
     expect(screen.getByText('WORKFLOWS')).toBeInTheDocument();
     expect(screen.getByText('TOOLS')).toBeInTheDocument();
     expect(screen.getByText('AGENT OPS')).toBeInTheDocument();
-    expect(screen.getByText('USAGE')).toBeInTheDocument();
     expect(screen.getByText('CONFIGURE')).toBeInTheDocument();
   });
 
