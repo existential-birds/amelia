@@ -369,6 +369,41 @@ Content here.
         # Verify file was NOT rewritten
         assert target_path.stat().st_mtime == original_mtime
 
+    async def test_import_skip_llm_uses_regex_fallback(
+        self, tmp_path: Path, mock_profile: Profile
+    ) -> None:
+        """When skip_llm=True, extract_plan_fields uses regex fallback (no LLM call)."""
+        from amelia.pipelines.implementation.external_plan import import_external_plan
+
+        worktree = Path(mock_profile.repo_root)
+        worktree.mkdir(parents=True, exist_ok=True)
+
+        plan_file = worktree / "docs" / "plans" / "my-plan.md"
+        plan_file.parent.mkdir(parents=True)
+        plan_file.write_text("# Build the widget\n\n### Task 1: Do it\n\nDo the thing.\n")
+
+        target_path = worktree / "output" / "plan.md"
+
+        with patch(
+            "amelia.pipelines.implementation.external_plan.extract_structured"
+        ) as mock_extract:
+            result = await import_external_plan(
+                plan_file=str(plan_file),
+                plan_content=None,
+                target_path=target_path,
+                profile=mock_profile,
+                workflow_id="test-wf-1",
+                skip_llm=True,
+            )
+
+            # LLM should NOT have been called
+            mock_extract.assert_not_called()
+
+        # Regex fallback should extract the heading as goal (prefixed with "Implement")
+        assert result.goal == "Implement Build the widget"
+        assert result.total_tasks == 1
+        assert result.plan_markdown is not None
+
     async def test_import_returns_markdown_when_file_at_target(
         self, tmp_path: Path, mock_profile: Profile
     ) -> None:
