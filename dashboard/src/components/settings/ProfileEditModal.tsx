@@ -278,8 +278,11 @@ const profileFormSchema = z.object({
   sandbox_network_allowed_hosts: z.array(z.string()),
 });
 
+/** Fields that accept string values and can be validated individually */
+type ValidatableField = 'id' | 'repo_root';
+
 /** Validate individual field using Zod schema */
-const validateField = (field: keyof typeof profileFormSchema.shape, value: string): string | null => {
+const validateField = (field: ValidatableField, value: string): string | null => {
   const fieldSchema = profileFormSchema.shape[field];
   const result = fieldSchema.safeParse(value);
   if (!result.success) {
@@ -686,7 +689,7 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
     });
   };
 
-  const handleBlur = (field: string, value: string) => {
+  const handleBlur = (field: 'id' | 'repo_root', value: string) => {
     const error = validateField(field, value);
     if (error) {
       setErrors((prev) => ({ ...prev, [field]: error }));
@@ -714,14 +717,6 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
           key = issue.path.join('_') || 'general';
         }
         newErrors[key] = issue.message;
-      }
-    }
-
-    // Cross-field: API driver agents must have a model selected
-    for (const agent of AGENT_DEFINITIONS) {
-      const agentConfig = formData.agents[agent.key];
-      if (agentConfig?.driver === 'api' && agentConfig.model === '') {
-        newErrors[`agent_model_${agent.key}`] = 'Model required';
       }
     }
 
