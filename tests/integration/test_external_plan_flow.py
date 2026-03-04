@@ -507,6 +507,55 @@ class TestSetPlanEndpoint:
         assert workflow.execution_state is not None
         assert workflow.execution_state.goal == "Second thing"
 
+    async def test_set_plan_with_file_does_not_duplicate(
+        self,
+        test_client: TestClient,
+        test_repository: WorkflowRepository,
+        setup_test_profile: Profile,
+        tmp_path: Path,
+    ) -> None:
+        """When setting plan via plan_file, the file should be used in-place."""
+        # Initialize a git repo
+        git_dir = tmp_path / "git-repo"
+        git_dir.mkdir()
+        (git_dir / ".git").mkdir()
+        resolved_path = str(git_dir.resolve())
+
+        # First create a pending workflow (no plan)
+        create_resp = test_client.post(
+            "/api/workflows",
+            json={
+                "issue_id": "TEST-888",
+                "worktree_path": resolved_path,
+                "profile": setup_test_profile.name,
+                "task_title": "Test task",
+                "start": False,
+            },
+        )
+        assert create_resp.status_code == status.HTTP_201_CREATED
+        workflow_id = create_resp.json()["id"]
+
+        # Create custom plan file
+        custom_plan = git_dir / "docs" / "plans" / "custom-set-plan.md"
+        custom_plan.parent.mkdir(parents=True, exist_ok=True)
+        custom_plan.write_text("# Set plan\n\n### Task 1: Do it\n\nDo the thing.\n")
+
+        with patch(
+            "amelia.pipelines.implementation.external_plan.extract_structured"
+        ) as mock_extract:
+            mock_extract.return_value = create_mock_plan_output()
+            response = test_client.post(
+                f"/api/workflows/{workflow_id}/plan",
+                json={"plan_file": str(custom_plan)},
+            )
+
+        assert response.status_code == status.HTTP_200_OK
+
+        # Verify no duplicate at pattern-based location
+        pattern_based = git_dir / "docs" / "plans" / "2026-03-04-test-888.md"
+        assert custom_plan.exists()
+        assert not pattern_based.exists(), f"Duplicate plan file created at {pattern_based}"
+
 
 @pytest.mark.integration
 class TestExternalPlanValidation:
