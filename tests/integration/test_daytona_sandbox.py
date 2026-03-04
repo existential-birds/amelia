@@ -193,10 +193,11 @@ class TestDaytonaFullStack:
 
         await wt.setup_repo()
 
-        # Should have called rev-parse and fetch, but NOT clone --bare
+        # Should have called rev-parse (shell) and fetch (SDK), but NOT clone --bare
         assert any("rev-parse --git-dir" in c for c in executed_commands)
-        assert any("fetch origin" in c for c in executed_commands)
         assert not any("clone --bare" in c for c in executed_commands)
+        # Fetch dispatches to SDK git.pull since DaytonaSandboxProvider has git_fetch
+        mock_daytona.git.pull.assert_called_once_with("/workspace/repo")
         assert wt._repo_initialized is True
 
     @pytest.mark.asyncio
