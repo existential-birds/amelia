@@ -204,7 +204,7 @@ const getModelsForDriver = (driver: string): readonly string[] => {
 
 /**
  * Manages driver/model state with automatic model reset on driver change.
- * Used by BulkApply and shared as logic reference for handleAgentChange.
+ * Used by BulkApply for its independent driver/model selection state.
  */
 function useDriverModel(initialDriver = 'claude', initialModel = 'sonnet') {
   const [driver, setDriverRaw] = useState(initialDriver);
@@ -253,7 +253,10 @@ const DEFAULT_FORM_DATA: FormData = {
 const agentFormSchema = z.object({
   driver: z.string().min(1),
   model: z.string(),
-});
+}).refine(
+  (data) => data.driver !== 'api' || data.model !== '',
+  { message: 'Model required for API driver', path: ['model'] }
+);
 
 const profileFormSchema = z.object({
   id: z
@@ -275,22 +278,14 @@ const profileFormSchema = z.object({
   sandbox_network_allowed_hosts: z.array(z.string()),
 });
 
-/** Validation rules for profile fields */
-const validateField = (field: string, value: string): string | null => {
-  switch (field) {
-    case 'id':
-      if (!value.trim()) return 'Profile name is required';
-      if (/\s/.test(value)) return 'Profile name cannot contain spaces';
-      if (!/^[a-zA-Z0-9_-]+$/.test(value)) {
-        return 'Profile name can only contain letters, numbers, underscores, and hyphens';
-      }
-      return null;
-    case 'repo_root':
-      if (!value.trim()) return 'Repository root is required';
-      return null;
-    default:
-      return null;
+/** Validate individual field using Zod schema */
+const validateField = (field: keyof typeof profileFormSchema.shape, value: string): string | null => {
+  const fieldSchema = profileFormSchema.shape[field];
+  const result = fieldSchema.safeParse(value);
+  if (!result.success) {
+    return result.error.issues[0]?.message ?? 'Invalid value';
   }
+  return null;
 };
 
 /** Convert Profile to FormData for comparison */
@@ -709,7 +704,15 @@ export function ProfileEditModal({ open, onOpenChange, profile, onSaved }: Profi
 
     if (!result.success) {
       for (const issue of result.error.issues) {
-        const key = issue.path.join('_') || 'general';
+        // Normalize agent field paths: agents.<key>.model -> agent_model_<key>
+        let key: string;
+        if (issue.path[0] === 'agents' && issue.path.length === 3) {
+          const agentKey = issue.path[1];
+          const field = issue.path[2];
+          key = `agent_${field}_${agentKey}`;
+        } else {
+          key = issue.path.join('_') || 'general';
+        }
         newErrors[key] = issue.message;
       }
     }
